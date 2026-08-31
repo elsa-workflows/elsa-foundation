@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Sqlite;
 using Groundwork.Store;
@@ -120,7 +121,7 @@ internal sealed class DirectActivityDesignSessionSource(
 
 internal sealed class RecordingActivityDesignSession(
     IStorageSession inner,
-    ICollection<QueryRequest> requests) : IStorageSession, IPrivilegedCrossScopeQuerySession
+    ICollection<QueryRequest> requests) : SynchronousStorageSessionTestDouble, IStorageSession, IPrivilegedCrossScopeQuerySession
 {
     public StorageUnit Unit => inner.Unit;
     public StorageAccess Access => inner.Access;

@@ -302,6 +302,7 @@ public sealed class GroundworkV2DistributedStoreTests
         public IReadOnlyList<CapabilityDescriptor> Capabilities => [];
         public IStorageSession OpenSession(StorageUnit unit, StorageAccess access) => inner.OpenSession(unit, access);
         public IStorageSession OpenSession(StorageUnit unit, StorageAccess access, IProviderCommandObserver? observer = null) => inner.OpenSession(unit, access, observer);
+        public IOwnedStorageSession OpenOwnedSession(StorageUnit unit, StorageAccess access, IProviderCommandObserver? observer = null) => inner.OpenOwnedSession(unit, access, observer);
         public IUnitOfWork BeginUnitOfWork(StorageAccess access, params StorageUnit[] units) => inner.BeginUnitOfWork(access, units);
         public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, params StorageUnit[] units) => inner.BeginUnitOfWork(access, options, units);
         public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, IProviderCommandObserver? observer, params StorageUnit[] units) => inner.BeginUnitOfWork(access, options, observer, units);

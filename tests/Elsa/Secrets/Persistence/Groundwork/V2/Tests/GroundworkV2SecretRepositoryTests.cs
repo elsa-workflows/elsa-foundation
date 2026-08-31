@@ -4,6 +4,7 @@ using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Persistence.Groundwork;
 using Elsa.Secrets.Persistence.Groundwork.DependencyInjection;
 using Elsa.Secrets.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Sqlite;
@@ -318,7 +319,7 @@ public sealed class GroundworkV2SecretRepositoryTests
         public StorageUnit Unit(string unitId, string? targetName = null) => session.Unit;
     }
 
-    private sealed class RecordingSession(int catalogRows) : IStorageSession
+    private sealed class RecordingSession(int catalogRows) : SynchronousStorageSessionTestDouble, IStorageSession
     {
         public StorageUnit Unit { get; } = SecretsGroundworkStorageSchema.CreateUnit();
         public StorageAccess Access { get; } = StorageAccess.Scoped(new StorageScope("tenant-a"));

@@ -4,6 +4,7 @@ using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.MongoDb;
 using Groundwork.PostgreSql;
@@ -389,7 +390,7 @@ public sealed class GroundworkV2WorkflowExecutionStateStoreTests
         }
 
         private sealed class RecordingSession(IStorageSession inner, ICollection<QueryRequest> requests)
-            : IStorageSession, IConcurrencyStorageSession
+            : SynchronousStorageSessionTestDouble, IStorageSession, IConcurrencyStorageSession
         {
             public StorageUnit Unit => inner.Unit;
             public StorageAccess Access => inner.Access;

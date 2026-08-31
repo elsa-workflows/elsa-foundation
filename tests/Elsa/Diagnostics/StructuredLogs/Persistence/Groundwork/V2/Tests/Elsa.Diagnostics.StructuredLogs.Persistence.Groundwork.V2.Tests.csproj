@@ -6,7 +6,7 @@
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
     <ImportDirectoryBuildTargets>false</ImportDirectoryBuildTargets>
-    <GroundworkVersion Condition="'$(GroundworkVersion)' == ''">0.3.0-preview.1</GroundworkVersion>
+    <GroundworkVersion Condition="'$(GroundworkVersion)' == ''">0.4.0-preview.1</GroundworkVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -31,6 +31,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../../../../../../../src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\Persistence\Groundwork\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
   </ItemGroup>
 
 </Project>

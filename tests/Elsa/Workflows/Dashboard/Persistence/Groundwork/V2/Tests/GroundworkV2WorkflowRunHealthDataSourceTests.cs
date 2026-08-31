@@ -4,6 +4,7 @@ using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Dashboard;
 using Elsa.Workflows.Dashboard.Persistence.Groundwork.V2;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Sqlite;
@@ -511,7 +512,7 @@ public sealed class GroundworkV2WorkflowRunHealthDataSourceTests : IAsyncDisposa
 
         public StorageUnit Unit(string unitId, string? targetName = null) => inner.Unit(unitId, targetName);
 
-        private sealed class AggregateOnlySession(IStorageSession inner, AggregateOnlySessionSource owner) : IStorageSession
+        private sealed class AggregateOnlySession(IStorageSession inner, AggregateOnlySessionSource owner) : SynchronousStorageSessionTestDouble, IStorageSession
         {
             public StorageUnit Unit => inner.Unit;
             public StorageAccess Access => inner.Access;

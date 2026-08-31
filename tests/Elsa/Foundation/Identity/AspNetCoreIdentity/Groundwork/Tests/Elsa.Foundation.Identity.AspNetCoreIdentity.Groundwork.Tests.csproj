@@ -6,8 +6,8 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
-    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.3.0-preview.1" />
-    <PackageReference Include="Groundwork.Testing" VersionOverride="0.3.0-preview.1" />
+    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.4.0-preview.1" />
+    <PackageReference Include="Groundwork.Testing" VersionOverride="0.4.0-preview.1" />
     <PackageReference Include="CShells.FastEndpoints" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
@@ -27,8 +27,8 @@
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Foundation\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Foundation\Identity\AspNetCoreIdentity\Groundwork\Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Foundation\Identity\Persistence\Groundwork\Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
-    <ProjectReference Include="..\ProcessProbe\Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.ProcessProbe.csproj"
-                      ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\ProcessProbe\Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.ProcessProbe.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\..\Persistence\Groundwork\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -44,9 +44,7 @@
     <ItemGroup>
       <_IdentityProcessProbeArtifact Include="$(MSBuildProjectDirectory)/../ProcessProbe/bin/$(Configuration)/$(TargetFramework)/**/*" />
     </ItemGroup>
-    <Copy SourceFiles="@(_IdentityProcessProbeArtifact)"
-          DestinationFiles="@(_IdentityProcessProbeArtifact->'$(TargetDir)IdentityProcessProbe/%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_IdentityProcessProbeArtifact)" DestinationFiles="@(_IdentityProcessProbeArtifact->'$(TargetDir)IdentityProcessProbe/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

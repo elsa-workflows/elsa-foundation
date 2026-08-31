@@ -2,7 +2,7 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
-    <PackageReference Include="Groundwork.Testing" VersionOverride="0.3.0-preview.1" />
+    <PackageReference Include="Groundwork.Testing" VersionOverride="0.4.0-preview.1" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
@@ -12,6 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Foundation\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Foundation\Identity\Persistence\Groundwork\Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Persistence\Groundwork\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
   </ItemGroup>
 
   <ItemGroup>

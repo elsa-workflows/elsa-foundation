@@ -64,6 +64,7 @@ candidates are flagged for future migration so coverage is never dropped before 
 | `get-endpoints` | integration-candidate | GET status/shape contract; migrate to `WebApplicationFactory` |
 | `write-endpoints` | integration-candidate | CRUD status/shape contract; migrate to `WebApplicationFactory` |
 | `workflow-version-override` | true e2e | exact-version preflight and promotion through live HTTP + persistence |
+| `groundwork` | true e2e | Groundwork release adoption through author/save/reload/publish/execute/resume |
 | `file-deployment` | true e2e | server restart with a mounted definitions folder; startup reconcile + publish-on-reconcile, readiness gate, restart idempotency (spec 147) |
 
 The two integration-candidate suites (`get-endpoints`, `write-endpoints`) mostly assert HTTP status codes and
@@ -100,6 +101,7 @@ response shapes with little runtime behavior — the natural long-term home is a
 | `runtime-alterations/Test-AlterationReplayAndRestart.ps1` | idempotency replay and restart-safe continuation from a durably captured first target page against the real SQLite server |
 | `_ElsaCommon.ps1`           | shared helpers (dot-sourced): login, activity lookup, submit/publish/execute, structures, observability |
 | `workflow-version-override/Test-WorkflowVersionOverride.ps1` | automatic/exact promotion preflight, exact SemVer promotion, immutable version read |
+| `groundwork/Test-GroundworkReleaseLifecycle.ps1` | live Groundwork release path: author/save/reload, publish, suspend at a persisted Event bookmark, resume, complete |
 | `file-deployment/Test-FileBasedDeployment.ps1` | file-based deployment at startup (spec 147): definitions folder composed via env vars (`JsonWorkflowReconciliation` + `PublishOnReconcile`), `/health/ready` gate, imported + published + executable, idempotent restart |
 
 **Events note:** Foundation has no classic `PublishEvent` activity. An `Event` activity is a start trigger;

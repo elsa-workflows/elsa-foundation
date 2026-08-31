@@ -66,21 +66,65 @@ public sealed class GroundworkStorageSessionGate :
 
     public StoredEntry? Read(StorageKey key) => GetSession().Read(key);
 
+    public ValueTask<StoredEntry?> ReadAsync(StorageKey key, CancellationToken cancellationToken = default) =>
+        GetSession().ReadAsync(key, cancellationToken);
+
     public QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null) =>
         GetSession().Query(request, options);
 
+    public ValueTask<QueryMaterializedResult> QueryAsync(
+        QueryRequest request,
+        QueryRenderOptions? options = null,
+        CancellationToken cancellationToken = default) =>
+        GetSession().QueryAsync(request, options, cancellationToken);
+
     public AggregationResult Aggregate(AggregationQuery query) => GetSession().Aggregate(query);
+
+    public ValueTask<AggregationResult> AggregateAsync(
+        AggregationQuery query,
+        CancellationToken cancellationToken = default) =>
+        GetSession().AggregateAsync(query, cancellationToken);
 
     public WriteOutcome Insert(StorageValues values, WriteOptions? options = null) => GetSession().Insert(values, options);
 
+    public ValueTask<WriteOutcome> InsertAsync(
+        StorageValues values,
+        WriteOptions? options = null,
+        CancellationToken cancellationToken = default) =>
+        GetSession().InsertAsync(values, options, cancellationToken);
+
     public WriteOutcome Update(StorageValues values, WriteOptions? options = null) => GetSession().Update(values, options);
+
+    public ValueTask<WriteOutcome> UpdateAsync(
+        StorageValues values,
+        WriteOptions? options = null,
+        CancellationToken cancellationToken = default) =>
+        GetSession().UpdateAsync(values, options, cancellationToken);
 
     public WriteOutcome Upsert(StorageValues values, WriteOptions? options = null) => GetSession().Upsert(values, options);
 
+    public ValueTask<WriteOutcome> UpsertAsync(
+        StorageValues values,
+        WriteOptions? options = null,
+        CancellationToken cancellationToken = default) =>
+        GetSession().UpsertAsync(values, options, cancellationToken);
+
     public WriteOutcome Delete(StorageKey key, WriteOptions? options = null) => GetSession().Delete(key, options);
+
+    public ValueTask<WriteOutcome> DeleteAsync(
+        StorageKey key,
+        WriteOptions? options = null,
+        CancellationToken cancellationToken = default) =>
+        GetSession().DeleteAsync(key, options, cancellationToken);
 
     public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) =>
         GetSession().Append(operationId, values);
+
+    public ValueTask<WriteOutcome> AppendAsync(
+        OperationId operationId,
+        IReadOnlyList<StorageValues> values,
+        CancellationToken cancellationToken = default) =>
+        GetSession().AppendAsync(operationId, values, cancellationToken);
 
     private IStorageSession GetSession()
     {

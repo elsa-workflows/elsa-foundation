@@ -98,6 +98,12 @@ internal sealed class NonDisposingStorageProviderConnection(IStorageProviderConn
     public IStorageSession OpenSession(StorageUnit unit, StorageAccess access, IProviderCommandObserver? observer = null) =>
         inner.OpenSession(unit, access, observer);
 
+    public IOwnedStorageSession OpenOwnedSession(
+        StorageUnit unit,
+        StorageAccess access,
+        IProviderCommandObserver? observer = null) =>
+        inner.OpenOwnedSession(unit, access, observer);
+
     public IUnitOfWork BeginUnitOfWork(StorageAccess access, params StorageUnit[] units) =>
         inner.BeginUnitOfWork(access, units);
 
@@ -140,6 +146,12 @@ internal sealed class SerializingStorageProviderConnection(IStorageProviderConne
 
     public IStorageSession OpenSession(StorageUnit unit, StorageAccess access, IProviderCommandObserver? observer = null) =>
         inner.OpenSession(unit, access, observer);
+
+    public IOwnedStorageSession OpenOwnedSession(
+        StorageUnit unit,
+        StorageAccess access,
+        IProviderCommandObserver? observer = null) =>
+        inner.OpenOwnedSession(unit, access, observer);
 
     public IUnitOfWork BeginUnitOfWork(StorageAccess access, params StorageUnit[] units) =>
         Begin(access, null, null, units);

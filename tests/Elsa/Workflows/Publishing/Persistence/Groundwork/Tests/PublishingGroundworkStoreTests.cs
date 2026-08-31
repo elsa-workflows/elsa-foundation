@@ -2,6 +2,7 @@ using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Store;
@@ -363,7 +364,7 @@ public sealed class PublishingGroundworkStoreTests
     private sealed class RecordingSession(
         IStorageSession inner,
         ICollection<QueryRequest> requests,
-        ICollection<string>? indexHints) : IStorageSession, IConcurrencyStorageSession
+        ICollection<string>? indexHints) : SynchronousStorageSessionTestDouble, IStorageSession, IConcurrencyStorageSession
     {
         public RecordingSession(IStorageSession inner, ICollection<QueryRequest> requests)
             : this(inner, requests, null)

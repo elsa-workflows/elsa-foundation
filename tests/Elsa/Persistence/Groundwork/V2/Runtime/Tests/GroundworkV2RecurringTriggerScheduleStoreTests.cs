@@ -3,6 +3,7 @@ using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.MongoDb;
 using Groundwork.PostgreSql;
@@ -703,7 +704,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStoreTests
         public StorageUnit Unit(string unitId, string? targetName = null) => unit;
     }
 
-    private sealed class EmptySession(StorageUnit unit, ICollection<QueryRequest> requests) : IStorageSession
+    private sealed class EmptySession(StorageUnit unit, ICollection<QueryRequest> requests) : SynchronousStorageSessionTestDouble, IStorageSession
     {
         public StorageUnit Unit { get; } = unit;
         public StorageAccess Access { get; } = StorageAccess.Scoped(new StorageScope("tenant-a"));
@@ -725,7 +726,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStoreTests
     private sealed class CyclingSession(
         StorageUnit unit,
         StorageValues row,
-        IReadOnlyList<string> tokens) : IStorageSession
+        IReadOnlyList<string> tokens) : SynchronousStorageSessionTestDouble, IStorageSession
     {
         public StorageUnit Unit { get; } = unit;
         public StorageAccess Access { get; } = StorageAccess.Scoped(new StorageScope("tenant-a"));
@@ -741,7 +742,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStoreTests
         public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) => throw new NotSupportedException();
     }
 
-    private sealed class InvalidCursorSession(StorageUnit unit) : IStorageSession
+    private sealed class InvalidCursorSession(StorageUnit unit) : SynchronousStorageSessionTestDouble, IStorageSession
     {
         public StorageUnit Unit { get; } = unit;
         public StorageAccess Access { get; } = StorageAccess.Scoped(new StorageScope("tenant-a"));

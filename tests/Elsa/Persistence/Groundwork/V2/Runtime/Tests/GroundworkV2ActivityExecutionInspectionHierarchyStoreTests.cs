@@ -3,6 +3,7 @@ using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.MongoDb;
 using Groundwork.PostgreSql;
@@ -775,7 +776,7 @@ public sealed class GroundworkV2ActivityExecutionInspectionHierarchyStoreTests
     private sealed class ScriptedHierarchySession(
         StorageUnit unit,
         StoredEntry? root,
-        IReadOnlyList<QueryMaterializedResult> pages) : IStorageSession
+        IReadOnlyList<QueryMaterializedResult> pages) : SynchronousStorageSessionTestDouble, IStorageSession
     {
         private int queryIndex;
 

@@ -120,11 +120,13 @@ public sealed class GroundworkStorageAccessMapperTests
                     WriteOptions.Unconditional);
             }
 
+            var observer = new RecordingStorageAccessObserver();
             var mapped = GroundworkStorageAccessMapper.Map(
                 PersistenceAccessContext.PrivilegedAcrossScopes(
                     new PersistenceAccessPurpose("recover-stalled-workflows")),
                 unit.Scope,
-                "elsa-recovery");
+                "elsa-recovery",
+                observer);
             var session = connection.OpenSession(unit, mapped);
             var request = new QueryRequest(
                 new TableId(unit.Name),
@@ -137,6 +139,9 @@ public sealed class GroundworkStorageAccessMapperTests
 
             Assert.Equal(["tenant-a", "tenant-b"], result.Rows.Select(row => row.Scope.Value));
             Assert.All(result.Rows, row => Assert.Equal("same", row.Values["id"]));
+            Assert.Equal(
+                ["query-across-scopes.attempt", "query-across-scopes.success"],
+                observer.Events.Select(candidate => candidate.Operation));
             Assert.Throws<InvalidOperationException>(() => session.Read(
                 new StorageKey(new Dictionary<string, object?> { ["id"] = "same" })));
         }
@@ -148,5 +153,12 @@ public sealed class GroundworkStorageAccessMapperTests
                     File.Delete(candidate);
             }
         }
+    }
+
+    private sealed class RecordingStorageAccessObserver : IStorageAccessObserver
+    {
+        public List<StorageAccessEvent> Events { get; } = [];
+
+        public void Observe(StorageAccessEvent accessEvent) => Events.Add(accessEvent);
     }
 }

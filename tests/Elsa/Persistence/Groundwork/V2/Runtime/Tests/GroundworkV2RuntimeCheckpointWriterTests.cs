@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Sqlite;
@@ -2039,7 +2040,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
             public void Delete(string scope, string unit, string id) => rows.Remove((scope, unit, id));
         }
 
-        private sealed class MemorySession(StorageUnit unit, StorageAccess access, MemoryBacking backing) : IStorageSession
+        private sealed class MemorySession(StorageUnit unit, StorageAccess access, MemoryBacking backing) : SynchronousStorageSessionTestDouble, IStorageSession
         {
             public StorageUnit Unit { get; } = unit;
             public StorageAccess Access { get; } = access;

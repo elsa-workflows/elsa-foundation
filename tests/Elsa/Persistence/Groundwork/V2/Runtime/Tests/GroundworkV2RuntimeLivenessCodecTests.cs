@@ -4,6 +4,7 @@ using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Store;
@@ -141,7 +142,7 @@ public sealed class GroundworkV2RuntimeLivenessCodecTests
         }
     }
 
-    private sealed class MemorySession(StorageUnit unit) : IStorageSession
+    private sealed class MemorySession(StorageUnit unit) : SynchronousStorageSessionTestDouble, IStorageSession
     {
         private StoredEntry? entry;
 

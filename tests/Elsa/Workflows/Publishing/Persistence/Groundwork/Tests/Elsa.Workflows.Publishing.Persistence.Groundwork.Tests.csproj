@@ -4,13 +4,13 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Groundwork.Kernel" />
-    <PackageReference Include="Groundwork.MongoDb" VersionOverride="0.3.0-preview.1" />
-    <PackageReference Include="Groundwork.PostgreSql" VersionOverride="0.3.0-preview.1" />
+    <PackageReference Include="Groundwork.MongoDb" VersionOverride="0.4.0-preview.1" />
+    <PackageReference Include="Groundwork.PostgreSql" VersionOverride="0.4.0-preview.1" />
     <PackageReference Include="Groundwork.Query.Model" />
     <PackageReference Include="Groundwork.Store" />
-    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.3.0-preview.1" />
-    <PackageReference Include="Groundwork.SqlServer" VersionOverride="0.3.0-preview.1" />
-    <PackageReference Include="Groundwork.Testing" VersionOverride="0.3.0-preview.1" />
+    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.4.0-preview.1" />
+    <PackageReference Include="Groundwork.SqlServer" VersionOverride="0.4.0-preview.1" />
+    <PackageReference Include="Groundwork.Testing" VersionOverride="0.4.0-preview.1" />
     <PackageReference Include="Microsoft.Data.SqlClient" VersionOverride="7.0.2" />
     <PackageReference Include="MongoDB.Driver" VersionOverride="3.10.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Workflows\Publishing\Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\V2\Elsa.Persistence.Groundwork.V2.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Persistence\Groundwork\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />

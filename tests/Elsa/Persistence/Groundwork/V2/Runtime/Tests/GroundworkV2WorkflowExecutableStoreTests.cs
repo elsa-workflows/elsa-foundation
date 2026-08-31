@@ -6,6 +6,7 @@ using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.MongoDb;
 using Groundwork.PostgreSql;
@@ -885,7 +886,7 @@ public sealed class GroundworkV2WorkflowExecutableStoreTests
     private sealed class BarrierSession(
         IStorageSession inner,
         Barrier barrier,
-        Func<bool> shouldWait) : IStorageSession, IConcurrencyStorageSession
+        Func<bool> shouldWait) : SynchronousStorageSessionTestDouble, IStorageSession, IConcurrencyStorageSession
     {
         public StorageUnit Unit => inner.Unit;
         public StorageAccess Access => inner.Access;
@@ -909,7 +910,7 @@ public sealed class GroundworkV2WorkflowExecutableStoreTests
             ((IConcurrencyStorageSession)inner).ConditionalUpsert(values, options);
     }
 
-    private sealed class RepeatingContinuationSession(IStorageSession inner) : IStorageSession
+    private sealed class RepeatingContinuationSession(IStorageSession inner) : SynchronousStorageSessionTestDouble, IStorageSession
     {
         public StorageUnit Unit => inner.Unit;
         public StorageAccess Access => inner.Access;
@@ -937,7 +938,7 @@ public sealed class GroundworkV2WorkflowExecutableStoreTests
         public AggregationResult Aggregate(AggregationQuery query) => inner.Aggregate(query);
     }
 
-    private sealed class BeforeReadSession(IStorageSession inner, Action beforeRead) : IStorageSession
+    private sealed class BeforeReadSession(IStorageSession inner, Action beforeRead) : SynchronousStorageSessionTestDouble, IStorageSession
     {
         public StorageUnit Unit => inner.Unit;
         public StorageAccess Access => inner.Access;

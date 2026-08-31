@@ -3,6 +3,7 @@ using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa3.Activities.Design.Import.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Store;
@@ -175,7 +176,7 @@ internal sealed class ImportSessionSource(
     public StorageUnit Unit(string unitId, string? targetName = null) => units[unitId];
 }
 
-internal sealed class ImportStorageSession(IStorageSession inner, Func<bool> throwOnRead) : IStorageSession
+internal sealed class ImportStorageSession(IStorageSession inner, Func<bool> throwOnRead) : SynchronousStorageSessionTestDouble, IStorageSession
 {
     public StorageUnit Unit => inner.Unit;
     public StorageAccess Access => inner.Access;

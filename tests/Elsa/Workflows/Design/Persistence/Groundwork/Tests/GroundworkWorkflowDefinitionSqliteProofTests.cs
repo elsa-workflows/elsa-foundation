@@ -4,6 +4,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Sqlite;
@@ -193,7 +194,7 @@ public sealed class GroundworkWorkflowDefinitionSqliteProofTests
 
         public sealed record RecordedQuery(QueryRequest Request, QueryRenderOptions? Options);
 
-        private sealed class RecordingSession(IStorageSession inner, ICollection<RecordedQuery> queries) : IStorageSession
+        private sealed class RecordingSession(IStorageSession inner, ICollection<RecordedQuery> queries) : SynchronousStorageSessionTestDouble, IStorageSession
         {
             public StorageUnit Unit => inner.Unit;
             public StorageAccess Access => inner.Access;

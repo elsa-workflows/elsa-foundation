@@ -6,7 +6,7 @@
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
     <ImportDirectoryBuildTargets>false</ImportDirectoryBuildTargets>
-    <GroundworkVersion Condition="'$(GroundworkVersion)' == ''">0.3.0-preview.1</GroundworkVersion>
+    <GroundworkVersion Condition="'$(GroundworkVersion)' == ''">0.4.0-preview.1</GroundworkVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Groundwork.Kernel" Version="$(GroundworkVersion)" />
@@ -24,5 +24,6 @@
   <ItemGroup>
     <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Runtime/Attention/Elsa.Workflows.Runtime.Attention.csproj" />
+    <ProjectReference Include="..\..\..\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
   </ItemGroup>
 </Project>

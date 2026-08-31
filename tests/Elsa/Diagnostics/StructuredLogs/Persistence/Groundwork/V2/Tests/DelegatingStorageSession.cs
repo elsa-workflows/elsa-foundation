@@ -1,10 +1,11 @@
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Store;
 
 namespace Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests;
 
-internal abstract class DelegatingStorageSession(IStorageSession inner) : IStorageSession
+internal abstract class DelegatingStorageSession(IStorageSession inner) : SynchronousStorageSessionTestDouble, IStorageSession
 {
     protected IStorageSession Inner { get; } = inner ?? throw new ArgumentNullException(nameof(inner));
 

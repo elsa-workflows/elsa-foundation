@@ -23,6 +23,8 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Design.Validations;
 using Elsa.Workflows.Design.Validations.Core.Events;
+using Groundwork.Kernel.Schema;
+using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Collections.Concurrent;
@@ -120,6 +122,16 @@ internal sealed class SqliteDesignPersistenceContractFixture : IDesignPersistenc
     /// </summary>
     public Task ValidateReadinessAsync(CancellationToken cancellationToken = default) =>
         _services.InitializeGroundworkStoreAsync(cancellationToken);
+
+    internal IReadOnlyList<GroundworkRuntimeSchemaAdmissionStatus> InspectRuntimeAdmission()
+    {
+        var connection = _services.GetRequiredService<IStorageProviderConnection>();
+        return _services.GetRequiredService<GroundworkStorageUnitRegistry>().Registrations
+            .Select(registration => connection.Schema.InspectRuntimeAdmission(
+                registration.Unit,
+                new GroundworkRuntimeSchemaAdmissionOptions { AutoApplyOnStartup = false }).Status)
+            .ToArray();
+    }
 
     public Task StageActivityReconciliationCandidatesAsync(
         string storageScope,

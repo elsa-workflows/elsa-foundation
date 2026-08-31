@@ -35,12 +35,12 @@
     <PackageReference Include="Groundwork.Kernel" />
     <PackageReference Include="Groundwork.Query.Model" />
     <PackageReference Include="Groundwork.Store" />
-    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.3.0-preview.1" />
-    <PackageReference Include="Groundwork.Testing" VersionOverride="0.3.0-preview.1" />
+    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.4.0-preview.1" />
+    <PackageReference Include="Groundwork.Testing" VersionOverride="0.4.0-preview.1" />
     <!-- The native provider drivers the four-provider proof opens directly. -->
-    <PackageReference Include="Groundwork.MongoDb" VersionOverride="0.3.0-preview.1" />
-    <PackageReference Include="Groundwork.PostgreSql" VersionOverride="0.3.0-preview.1" />
-    <PackageReference Include="Groundwork.SqlServer" VersionOverride="0.3.0-preview.1" />
+    <PackageReference Include="Groundwork.MongoDb" VersionOverride="0.4.0-preview.1" />
+    <PackageReference Include="Groundwork.PostgreSql" VersionOverride="0.4.0-preview.1" />
+    <PackageReference Include="Groundwork.SqlServer" VersionOverride="0.4.0-preview.1" />
     <PackageReference Include="Microsoft.Data.SqlClient" VersionOverride="7.0.2" />
     <PackageReference Include="MongoDB.Driver" VersionOverride="3.10.0" />
     <PackageReference Include="Xunit.SkippableFact" />
