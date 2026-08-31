@@ -43,7 +43,8 @@
               "http://localhost:5089"
             ]
           },
-          "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
+          "IdentityGroundworkPersistence": {},
+          "FoundationIdentityAspNetCoreIdentityGroundwork": {
             "IsDevelopmentOrDemo": true,
             "SeedAdminUserName": "admin",
             "SeedAdminPassword": "Password123!",
