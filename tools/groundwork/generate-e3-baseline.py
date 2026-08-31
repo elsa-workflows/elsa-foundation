@@ -26,6 +26,10 @@ V1_PACKAGES = (
     "Groundwork.Sqlite",
     "Groundwork.SqlServer",
 )
+# The frozen E3 source inventory is the 0.0.1-preview.131 Groundwork family.  The
+# provider package ids are intentionally reused by v2, so package-name matching
+# alone would count current v2 references as historical v1 consumers.
+V1_PACKAGE_VERSION = "0.0.1-preview.131"
 
 MANIFEST_SOURCE_PATTERN = re.compile(
     r"\bclass\s+\w*(?:ManifestSource|StorageManifest|StorageSchema)\b"
@@ -105,11 +109,25 @@ def package_inventory(root: Path) -> tuple[dict[str, str], dict[str, list[str]]]
     versions: dict[str, str] = {}
     props_path = root / "Directory.Packages.props"
     props = ET.parse(props_path).getroot()
+    properties: dict[str, str] = {}
+    for group in props.iter():
+        if group.tag.rsplit("}", 1)[-1] != "PropertyGroup":
+            continue
+        for property_element in group:
+            if property_element.tag.rsplit("}", 1)[-1] == "GroundworkVersion":
+                properties["GroundworkVersion"] = property_element.text or ""
+    central_versions: dict[str, str] = {}
     for element in props.iter():
         if element.tag.rsplit("}", 1)[-1] == "PackageVersion":
             package = element.attrib.get("Include")
             if package in V1_PACKAGES:
-                versions[package] = element.attrib.get("Version", "")
+                central_versions[package] = element.attrib.get("Version", "")
+
+    versions = {
+        package: version
+        for package, version in central_versions.items()
+        if version == V1_PACKAGE_VERSION
+    }
 
     consumers = {package: [] for package in V1_PACKAGES}
     for path in sorted(root.rglob("*.csproj")):
@@ -119,13 +137,18 @@ def package_inventory(root: Path) -> tuple[dict[str, str], dict[str, list[str]]]
             project = ET.parse(path).getroot()
         except ET.ParseError as error:
             raise RuntimeError(f"Cannot parse {relative(path, root)}: {error}") from error
-        references = {
-            element.attrib.get("Include")
-            for element in project.iter()
-            if element.tag.rsplit("}", 1)[-1] == "PackageReference"
-        }
-        for package in V1_PACKAGES:
-            if package in references:
+        for element in project.iter():
+            if element.tag.rsplit("}", 1)[-1] != "PackageReference":
+                continue
+            package = element.attrib.get("Include")
+            if package not in V1_PACKAGES:
+                continue
+            version = element.attrib.get("Version") or element.attrib.get("VersionOverride")
+            if version == "$(GroundworkVersion)":
+                version = properties.get("GroundworkVersion", "")
+            if not version:
+                version = central_versions.get(package, "")
+            if version == V1_PACKAGE_VERSION:
                 consumers[package].append(relative(path, root))
     return versions, {package: sorted(paths) for package, paths in consumers.items()}
 
