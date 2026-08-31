@@ -45,7 +45,7 @@ static async Task<int> Run(string[] args)
 {
     var (request, outputDirectory, connectionString) = ParseRun(args, "run");
     var workload = RequireWorkload(request.WorkloadId);
-    await using var adapter = new CheckpointCommitAdapter(request, connectionString, outputDirectory);
+    await using var adapter = BenchmarkAdapterRegistry.Create(request, connectionString, outputDirectory);
     var artifact = await ProcessMeasurement.ExecuteAsync(
         workload, request, BenchmarkProtocol.Acceptance, adapter, outputDirectory, CancellationToken.None);
     ArtifactStore.Write(outputDirectory, artifact);
@@ -61,7 +61,7 @@ static async Task<int> VerifyCorrectness(string[] args)
     var workload = RequireWorkload(request.WorkloadId);
     ArtifactAdmission.ValidateRequest(workload, request);
 
-    await using var adapter = new CheckpointCommitAdapter(request, connectionString, outputDirectory);
+    await using var adapter = BenchmarkAdapterRegistry.Create(request, connectionString, outputDirectory);
     await adapter.PrepareAsync(CancellationToken.None);
     var correctness = await adapter.VerifyCorrectnessAsync(CancellationToken.None);
     ArtifactAdmission.ValidateCorrectness(workload, request, correctness, outputDirectory);

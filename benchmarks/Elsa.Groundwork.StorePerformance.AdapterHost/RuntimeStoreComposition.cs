@@ -13,7 +13,8 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 
 /// <summary>
 /// Composes the Groundwork v2 runtime family over one adapter-owned provider connection and mints the
-/// public store clients the checkpoint workload drives.
+/// public store clients a workload drives. Bookmark lookup creates one composition per logical scope;
+/// both compositions share the adapter-owned observer while retaining independent persistence contexts.
 ///
 /// Three things here are not obvious from the registration surface and are the whole reason this type
 /// exists rather than the leaf calling <c>AddGroundworkV2RuntimeStores</c> inline:
@@ -51,9 +52,10 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
         string providerName,
         string connectionString,
         string persistenceScope,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        WritePathRoundTripObserver? observer = null)
     {
-        var observer = new WritePathRoundTripObserver(providerName);
+        observer ??= new WritePathRoundTripObserver(providerName);
         var connection = ProviderConnections.Open(providerName, connectionString);
         // Held so the catch can dispose it, and cleared once ownership transfers to the composition —
         // after that point DisposeAsync owns both it and the connection.
@@ -153,6 +155,17 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
             services.GetRequiredService<IActivityExecutionStateStore>(),
             services.GetRequiredService<IDurableValueStateStore>(),
             services.GetRequiredService<IRuntimePostCommitOutboxStore>());
+    }
+
+    /// <summary>Mints the bookmark state and stimulus-index contracts from one isolated DI scope.</summary>
+    public RuntimeBookmarkLookupClient CreateBookmarkClient()
+    {
+        var scope = provider.CreateAsyncScope();
+        scopes.Add(scope);
+        var services = scope.ServiceProvider;
+        return new RuntimeBookmarkLookupClient(
+            services.GetRequiredService<IBookmarkStateStore>(),
+            services.GetRequiredService<IBookmarkStimulusIndex>());
     }
 
     public async ValueTask DisposeAsync()
