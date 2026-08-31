@@ -13,6 +13,7 @@ namespace Elsa.Diagnostics.Persistence.Tests;
 
 public sealed partial class DiagnosticsPersistenceArchitectureTests
 {
+    private const string CurrentGroundworkVersion = "0.4.0-preview.1";
     private static string RepoRoot { get; } = FindRepoRoot();
     private static readonly string DiagnosticsSourceRoot = Path.Combine(RepoRoot, "src", "Elsa", "Diagnostics");
     private static readonly string DiagnosticsTestRoot = Path.Combine(RepoRoot, "tests", "Elsa", "Diagnostics");
@@ -57,6 +58,64 @@ public sealed partial class DiagnosticsPersistenceArchitectureTests
                 "Diagnostics core and shared lifecycle public contracts must not expose Groundwork types:" +
                 Environment.NewLine + string.Join(Environment.NewLine, publicSurfaceViolations));
         }
+    }
+
+    [Fact]
+    public void Current_groundwork_family_and_ef_oracle_ledger_are_closeout_ready()
+    {
+        var packageVersions = XDocument.Load(Path.Combine(RepoRoot, "Directory.Packages.props"))
+            .Descendants("PackageVersion")
+            .Where(element => element.Attribute("Include")?.Value.StartsWith("Groundwork", StringComparison.Ordinal) == true)
+            .ToDictionary(
+                element => element.Attribute("Include")!.Value,
+                element => element.Attribute("Version")?.Value,
+                StringComparer.Ordinal);
+
+        Assert.NotEmpty(packageVersions);
+        Assert.All(packageVersions, package => Assert.Equal(CurrentGroundworkVersion, package.Value));
+
+        var explicitProjectVersions = FindDiagnosticsProjects()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .SelectMany(project =>
+            {
+                var document = XDocument.Load(project);
+                var localVersion = document.Descendants("GroundworkVersion")
+                    .Select(element => element.Value)
+                    .FirstOrDefault();
+                return document.Descendants("PackageReference")
+                    .Where(element => element.Attribute("Include")?.Value.StartsWith("Groundwork", StringComparison.Ordinal) == true)
+                    .Select(element =>
+                    {
+                        var version = element.Attribute("Version")?.Value ?? element.Attribute("VersionOverride")?.Value;
+                        return (Path: RelativePath(project), Package: element.Attribute("Include")!.Value,
+                            Version: version == "$(GroundworkVersion)" ? localVersion : version);
+                    });
+            })
+            .Where(reference => reference.Version is not null)
+            .ToArray();
+
+        Assert.NotEmpty(explicitProjectVersions);
+        Assert.All(explicitProjectVersions, reference =>
+            Assert.Equal(CurrentGroundworkVersion, reference.Version));
+
+        var ledger = File.ReadAllLines(Path.Combine(
+            RepoRoot, "specs", "139-groundwork-diagnostics-persistence", "ef-test-removal-ledger.md"));
+        var factRows = ledger
+            .Where(line => line.StartsWith("| `", StringComparison.Ordinal) || line.StartsWith("| .", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.Equal(46, factRows.Length);
+        Assert.Equal(43, factRows.Count(line => line.Contains("covered", StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal(3, factRows.Count(line => line.Contains(
+            "Candidate for architect-approved removal", StringComparison.Ordinal)));
+        Assert.All(factRows, line => Assert.True(
+            line.Contains("covered", StringComparison.OrdinalIgnoreCase) ^
+            line.Contains("Candidate for architect-approved removal", StringComparison.Ordinal),
+            $"Ledger row must have exactly one closeout disposition: {line}"));
+        var ledgerText = string.Join(Environment.NewLine, ledger);
+        Assert.Contains("**Groundwork baseline:** exact `0.4.0-preview.1`", ledgerText, StringComparison.Ordinal);
+        Assert.Contains("Disposition: 43 covered; 3 EF-mechanism-only", ledgerText, StringComparison.Ordinal);
+        Assert.DoesNotContain("one remaining OpenTelemetry test", ledgerText, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

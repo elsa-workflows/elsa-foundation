@@ -510,6 +510,27 @@ only. It does not import a #646 performance verdict, delete either diagnostics
 EF oracle, complete T047/T050-T055/T057, promote a final evidence generation,
 or authorize #642 closure.
 
+## Exact Groundwork 0.4.0-preview.1 closeout checkpoint
+
+The adopted Elsa `main` source is `3e694377ff6a73dc6b80e34991222b1f8cd47509`, and every
+Groundwork package pin is exactly `0.4.0-preview.1` from release SHA
+`701229e0a736670f406140ed7c61f00e10156ffd`. The current receipt is
+[preview0401-closeout-results.json](evidence/preview0401-closeout-results.json).
+
+The focused shared diagnostics suite passed 96/96 before the closeout guard was added. The new
+guard then passed 1/1 and checks package currency, explicit diagnostics project overrides, all 46
+preserved EF facts, the 43 covered / 3 EF-mechanism-only disposition, and removal of the stale
+one-remaining-OpenTelemetry note. The exact current v2 matrices passed SQLite (Structured Logs
+29/29 and OpenTelemetry 8/8); PostgreSQL, SQL Server, and MongoDB were skipped because their
+connection-string environment variables were not configured.
+
+This checkpoint does not promote grouped reduction or native-plan evidence. The current v2 tests
+exercise public provider behavior but do not emit the required exact-0.4 four-provider plan receipt;
+preview.86/.88 and the stale draft PRs #1287/#1294 remain historical inputs. #646 owns the accepted
+diagnostics timing/physical-form verdict and grouped/native promotion. #647 owns explicit
+disposition of the three EF-mechanism-only facts, dependency-ordered EF deletion, and the final
+zero-EF guard. No EF oracle code was deleted by this checkpoint.
+
 ## Final dependency audit
 
 ```bash
