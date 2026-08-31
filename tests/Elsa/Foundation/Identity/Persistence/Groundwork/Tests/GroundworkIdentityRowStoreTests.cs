@@ -1,6 +1,8 @@
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
+using Elsa.Foundation.Identity.Persistence.Groundwork.Exceptions;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Store;
@@ -159,7 +161,7 @@ public sealed class GroundworkIdentityRowStoreTests
         Assert.Equal(5, result.TotalCount);
         Assert.Null(result.NextContinuationToken);
 
-        var boundedError = Assert.Throws<InvalidOperationException>(() => store.QueryAllPages(
+        var boundedError = Assert.Throws<GroundworkIdentityStoreException>(() => store.QueryAllPages(
             IdentityStorageManifest.IdentityRoleDocumentKind,
             new GroundworkIdentityRowQuery(
                 IdentityStorageManifest.TenantIdField,
@@ -229,6 +231,180 @@ public sealed class GroundworkIdentityRowStoreTests
             maximumMaterialization: 4,
             cancellationToken: cancellation.Token));
         Assert.Equal(0, fixture.Source.OpenCalls);
+    }
+
+    [Fact]
+    public void Cursor_query_honors_cancellation_after_the_first_provider_page()
+    {
+        using var fixture = Fixture.Create();
+        using var cancellation = new CancellationTokenSource();
+        var queryCalls = 0;
+        fixture.Source.QueryOverride = _ =>
+        {
+            queryCalls++;
+            cancellation.Cancel();
+            return new QueryMaterializedResult([IdentityValues("r-1")], null, "next");
+        };
+        var store = new GroundworkIdentityRowStore(fixture.Source, fixture.Access);
+
+        Assert.Throws<OperationCanceledException>(() => store.QueryAllPages(
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            new GroundworkIdentityRowQuery(
+                IdentityStorageManifest.TenantIdField,
+                GroundworkIdentityRowComparison.Equal,
+                "tenant-a",
+                IdentityV2StorageManifest.IdField,
+                Take: 1),
+            maximumMaterialization: 4,
+            cancellationToken: cancellation.Token));
+        Assert.Equal(1, queryCalls);
+    }
+
+    [Fact]
+    public void Offset_compatibility_honors_cancellation_before_following_the_next_provider_page()
+    {
+        using var fixture = Fixture.Create();
+        using var cancellation = new CancellationTokenSource();
+        var queryCalls = 0;
+        fixture.Source.QueryOverride = _ =>
+        {
+            queryCalls++;
+            cancellation.Cancel();
+            return new QueryMaterializedResult([IdentityValues("r-1")], null, "next");
+        };
+        var store = new GroundworkIdentityRowStore(fixture.Source, fixture.Access);
+
+        Assert.Throws<OperationCanceledException>(() => store.QueryWithTotalCount(
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            new GroundworkIdentityRowQuery(
+                IdentityStorageManifest.TenantIdField,
+                GroundworkIdentityRowComparison.Equal,
+                "tenant-a",
+                IdentityV2StorageManifest.IdField,
+                Take: 1,
+                Skip: 1),
+            cancellation.Token));
+        Assert.Equal(1, queryCalls);
+    }
+
+    [Fact]
+    public void Cursor_query_rejects_empty_repeated_and_duplicate_identity_progress()
+    {
+        using var emptyFixture = Fixture.Create();
+        emptyFixture.Source.QueryOverride = _ => new QueryMaterializedResult([], null, " ");
+        var emptyError = Assert.Throws<GroundworkIdentityStoreException>(() => new GroundworkIdentityRowStore(
+            emptyFixture.Source,
+            emptyFixture.Access).QueryAllPages(
+                IdentityStorageManifest.IdentityRoleDocumentKind,
+                new GroundworkIdentityRowQuery(
+                    IdentityStorageManifest.TenantIdField,
+                    GroundworkIdentityRowComparison.Equal,
+                    "tenant-a",
+                    IdentityV2StorageManifest.IdField,
+                    Take: 1),
+                maximumMaterialization: 4));
+        Assert.Contains("empty", emptyError.Message, StringComparison.Ordinal);
+
+        using var noProgressFixture = Fixture.Create();
+        noProgressFixture.Source.QueryOverride = _ => new QueryMaterializedResult([], null, "next");
+        var noProgressError = Assert.Throws<GroundworkIdentityStoreException>(() => new GroundworkIdentityRowStore(
+            noProgressFixture.Source,
+            noProgressFixture.Access).QueryAllPages(
+                IdentityStorageManifest.IdentityRoleDocumentKind,
+                new GroundworkIdentityRowQuery(
+                    IdentityStorageManifest.TenantIdField,
+                    GroundworkIdentityRowComparison.Equal,
+                    "tenant-a",
+                    IdentityV2StorageManifest.IdField,
+                    Take: 1),
+                maximumMaterialization: 4));
+        Assert.Contains("forward progress", noProgressError.Message, StringComparison.Ordinal);
+
+        using var repeatedFixture = Fixture.Create();
+        var repeatedCalls = 0;
+        repeatedFixture.Source.QueryOverride = _ => new QueryMaterializedResult(
+            [IdentityValues($"r-{++repeatedCalls}")],
+            null,
+            "repeat");
+        var repeatedError = Assert.Throws<GroundworkIdentityStoreException>(() => new GroundworkIdentityRowStore(
+            repeatedFixture.Source,
+            repeatedFixture.Access).QueryAllPages(
+                IdentityStorageManifest.IdentityRoleDocumentKind,
+                new GroundworkIdentityRowQuery(
+                    IdentityStorageManifest.TenantIdField,
+                    GroundworkIdentityRowComparison.Equal,
+                    "tenant-a",
+                    IdentityV2StorageManifest.IdField,
+                    Take: 1),
+                maximumMaterialization: 4));
+        Assert.Contains("repeated", repeatedError.Message, StringComparison.Ordinal);
+
+        using var duplicateFixture = Fixture.Create();
+        var duplicateCalls = 0;
+        duplicateFixture.Source.QueryOverride = _ =>
+        {
+            duplicateCalls++;
+            return new QueryMaterializedResult(
+                [IdentityValues("r-1")],
+                null,
+                duplicateCalls == 1 ? "next" : null);
+        };
+        var duplicateError = Assert.Throws<GroundworkIdentityStoreException>(() => new GroundworkIdentityRowStore(
+            duplicateFixture.Source,
+            duplicateFixture.Access).QueryAllPages(
+                IdentityStorageManifest.IdentityRoleDocumentKind,
+                new GroundworkIdentityRowQuery(
+                    IdentityStorageManifest.TenantIdField,
+                    GroundworkIdentityRowComparison.Equal,
+                    "tenant-a",
+                    IdentityV2StorageManifest.IdField,
+                    Take: 1),
+                maximumMaterialization: 4));
+        Assert.Contains("repeated row", duplicateError.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Cursor_query_wraps_provider_failure_in_the_identity_store_exception_contract()
+    {
+        using var fixture = Fixture.Create();
+        fixture.Source.QueryOverride = _ => throw new InvalidOperationException("provider failed");
+        var store = new GroundworkIdentityRowStore(fixture.Source, fixture.Access);
+
+        var error = Assert.Throws<GroundworkIdentityStoreException>(() => store.QueryAllPages(
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            new GroundworkIdentityRowQuery(
+                IdentityStorageManifest.TenantIdField,
+                GroundworkIdentityRowComparison.Equal,
+                "tenant-a",
+                IdentityV2StorageManifest.IdField,
+                Take: 1),
+            maximumMaterialization: 4));
+        Assert.Equal("provider failed", error.InnerException?.Message);
+    }
+
+    [Fact]
+    public void Cursor_query_rejects_non_positive_bounds()
+    {
+        using var fixture = Fixture.Create();
+        var store = new GroundworkIdentityRowStore(fixture.Source, fixture.Access);
+        var query = new GroundworkIdentityRowQuery(
+            IdentityStorageManifest.TenantIdField,
+            GroundworkIdentityRowComparison.Equal,
+            "tenant-a",
+            IdentityV2StorageManifest.IdField);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => store.QueryAllPages(
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            query,
+            maximumMaterialization: 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => store.QueryAllPages(
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            query with { Take = 0 },
+            maximumMaterialization: 4));
+        Assert.Throws<ArgumentOutOfRangeException>(() => store.QueryAllPages(
+            IdentityStorageManifest.IdentityRoleDocumentKind,
+            query with { Skip = -1 },
+            maximumMaterialization: 4));
     }
 
     [Fact]
@@ -310,6 +486,14 @@ public sealed class GroundworkIdentityRowStoreTests
             GroundworkIdentityRowWriteCondition.CreateOnly)).Status);
     }
 
+    private static IReadOnlyDictionary<string, object?> IdentityValues(string id) => new Dictionary<string, object?>
+    {
+        [IdentityV2StorageManifest.IdField] = id,
+        [IdentityV2StorageManifest.SchemaVersionField] = IdentityStorageManifest.SchemaVersion,
+        [IdentityV2StorageManifest.ContentField] = "{}",
+        [IdentityStorageManifest.TenantIdField] = "tenant-a"
+    };
+
     private sealed class Fixture : IDisposable
     {
         private Fixture(DirectSessionSource source, MutableAccessAccessor access)
@@ -341,10 +525,13 @@ public sealed class GroundworkIdentityRowStoreTests
 
         public int OpenCalls { get; private set; }
 
+        public Func<QueryRequest, QueryMaterializedResult>? QueryOverride { get; set; }
+
         public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null)
         {
             OpenCalls++;
-            return connection.OpenSession(units[unitId], access);
+            var session = connection.OpenSession(units[unitId], access);
+            return QueryOverride is null ? session : new QueryOverrideSession(session, QueryOverride);
         }
 
         public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, IReadOnlyList<string> unitIds, string? targetName = null)
@@ -380,6 +567,22 @@ public sealed class GroundworkIdentityRowStoreTests
                 connection.Schema.Apply(unit);
             return connection;
         }
+    }
+
+    private sealed class QueryOverrideSession(
+        IStorageSession inner,
+        Func<QueryRequest, QueryMaterializedResult> queryOverride) : SynchronousStorageSessionTestDouble, IStorageSession
+    {
+        public StorageUnit Unit => inner.Unit;
+        public StorageAccess Access => inner.Access;
+        public StoredEntry? Read(StorageKey key) => inner.Read(key);
+        public QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null) => queryOverride(request);
+        public WriteOutcome Insert(StorageValues values, WriteOptions? options = null) => inner.Insert(values, options);
+        public WriteOutcome Update(StorageValues values, WriteOptions? options = null) => inner.Update(values, options);
+        public WriteOutcome Upsert(StorageValues values, WriteOptions? options = null) => inner.Upsert(values, options);
+        public WriteOutcome Delete(StorageKey key, WriteOptions? options = null) => inner.Delete(key, options);
+        public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) => inner.Append(operationId, values);
+        public AggregationResult Aggregate(AggregationQuery query) => inner.Aggregate(query);
     }
 
     private sealed class MutableAccessAccessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor

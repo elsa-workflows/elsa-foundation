@@ -112,6 +112,28 @@ public sealed class IamNormalizedLookupSqliteCorrectnessTests
             await users.AddLoginAsync(candidate, login, CancellationToken.None);
             await users.AddToRoleAsync(candidate, role.NormalizedName!, CancellationToken.None);
 
+            var claimMappings = new GroundworkClaimMappingStore(rows, access);
+            await claimMappings.SaveAsync(new ClaimMappingRule(
+                "native-plan-claim-mapping",
+                IamNormalizedLookupWorkload.TenantId,
+                "oidc",
+                "groups",
+                "operators",
+                new HashSet<string>(["operators"], StringComparer.Ordinal),
+                new HashSet<string>(["identity.users.read"], StringComparer.Ordinal),
+                1,
+                true));
+            var expiry = DateTimeOffset.UtcNow.AddMinutes(-1);
+            Assert.True(rows.Save(new GroundworkIdentityRowWrite(
+                IdentityStorageManifest.IdentityMutationReceiptDocumentKind,
+                "native-plan-expired-receipt",
+                "{}",
+                new Dictionary<string, object?>
+                {
+                    [IdentityStorageManifest.MutationReceiptExpiresAtField] = expiry
+                },
+                GroundworkIdentityRowWriteCondition.CreateOnly)).Succeeded);
+
             SeedNoise(persistence, IdentityStorageManifest.IdentityUserDocumentKind, SeedUserValues);
             SeedNoise(persistence, IdentityStorageManifest.IdentityRoleDocumentKind, SeedRoleValues);
             SeedNoise(persistence, IdentityStorageManifest.UserClaimDocumentKind, SeedUserClaimValues);
@@ -139,6 +161,24 @@ public sealed class IamNormalizedLookupSqliteCorrectnessTests
             var userRoles = await users.GetRolesAsync(candidate, CancellationToken.None);
             var roleUsers = await users.GetUsersInRoleAsync(role.NormalizedName!, CancellationToken.None);
             var logins = await users.GetLoginsAsync(candidate, CancellationToken.None);
+            var claimMappingRows = rows.Query(
+                IdentityStorageManifest.IdentityClaimMappingDocumentKind,
+                new GroundworkIdentityRowQuery(
+                    IdentityStorageManifest.ProviderLookupKeyField,
+                    GroundworkIdentityRowComparison.Equal,
+                    IdentityDocumentId.From(IamNormalizedLookupWorkload.TenantId, "oidc"),
+                    IdentityStorageManifest.ClaimMappingOrderField,
+                    Take: IdentityStorageManifest.MaxMaterializedListEntries,
+                    ExpectedIndex: IdentityV2StorageManifest.ClaimMappingByProviderIndex));
+            var expiredReceiptRows = rows.Query(
+                IdentityStorageManifest.IdentityMutationReceiptDocumentKind,
+                new GroundworkIdentityRowQuery(
+                    IdentityStorageManifest.MutationReceiptExpiresAtField,
+                    GroundworkIdentityRowComparison.LessThanOrEqual,
+                    expiry.AddMinutes(1),
+                    IdentityStorageManifest.MutationReceiptExpiresAtField,
+                    Take: 64,
+                    ExpectedIndex: IdentityV2StorageManifest.MutationReceiptByExpiryIndex));
 
             Assert.Equal(candidate.Id, byName?.Id);
             Assert.Equal(candidate.Id, byEmail?.Id);
@@ -152,6 +192,8 @@ public sealed class IamNormalizedLookupSqliteCorrectnessTests
             Assert.Equal([role.Name!], userRoles);
             Assert.Equal([candidate.Id], roleUsers.Select(user => user.Id));
             Assert.Equal([login.ProviderKey], logins.Select(value => value.ProviderKey));
+            Assert.Single(claimMappingRows);
+            Assert.Single(expiredReceiptRows);
             AssertRouteEvidence(recording.Queries);
             AssertPlanArtifacts(artifactDirectory);
         }
@@ -276,18 +318,20 @@ public sealed class IamNormalizedLookupSqliteCorrectnessTests
 
     private static void AssertRouteEvidence(IReadOnlyList<QueryObservation> observations)
     {
-        var expected = new Dictionary<string, (int Count, int Limit)>(StringComparer.Ordinal)
+        var expected = new Dictionary<string, (int Count, int Limit, bool Range)>(StringComparer.Ordinal)
         {
-            [IdentityV2StorageManifest.UserByNormalizedNameIndex] = (1, 1),
-            [IdentityV2StorageManifest.UserByNormalizedEmailIndex] = (1, 2),
-            [IdentityV2StorageManifest.RoleByNormalizedNameIndex] = (2, 1),
-            [IdentityV2StorageManifest.RoleByTenantIndex] = (1, IdentityStorageManifest.MaxMaterializedListEntries),
-            [IdentityV2StorageManifest.UserClaimByUserIndex] = (1, IdentityStorageManifest.MaxAggregateRelationshipEntries),
-            [IdentityV2StorageManifest.UserClaimByClaimIndex] = (1, IdentityStorageManifest.MaxAggregateRelationshipEntries),
-            [IdentityV2StorageManifest.RoleClaimByRoleIndex] = (1, IdentityStorageManifest.MaxAggregateRelationshipEntries),
-            [IdentityV2StorageManifest.UserRoleByUserIndex] = (1, IdentityStorageManifest.MaxAggregateRelationshipEntries),
-            [IdentityV2StorageManifest.UserRoleByRoleIndex] = (1, IdentityStorageManifest.MaxAggregateRelationshipEntries),
-            [IdentityV2StorageManifest.LoginByUserIndex] = (1, IdentityStorageManifest.MaxAggregateRelationshipEntries)
+            [IdentityV2StorageManifest.UserByNormalizedNameIndex] = (1, 1, false),
+            [IdentityV2StorageManifest.UserByNormalizedEmailIndex] = (1, 2, false),
+            [IdentityV2StorageManifest.RoleByNormalizedNameIndex] = (2, 1, false),
+            [IdentityV2StorageManifest.RoleByTenantIndex] = (1, IdentityStorageManifest.MaxMaterializedListEntries, false),
+            [IdentityV2StorageManifest.UserClaimByUserIndex] = (1, IdentityStorageManifest.MaxAggregateRelationshipEntries, false),
+            [IdentityV2StorageManifest.UserClaimByClaimIndex] = (1, IdentityStorageManifest.MaxAggregateRelationshipEntries, false),
+            [IdentityV2StorageManifest.RoleClaimByRoleIndex] = (1, IdentityStorageManifest.MaxAggregateRelationshipEntries, false),
+            [IdentityV2StorageManifest.UserRoleByUserIndex] = (1, IdentityStorageManifest.MaxAggregateRelationshipEntries, false),
+            [IdentityV2StorageManifest.UserRoleByRoleIndex] = (1, IdentityStorageManifest.MaxAggregateRelationshipEntries, false),
+            [IdentityV2StorageManifest.LoginByUserIndex] = (1, IdentityStorageManifest.MaxAggregateRelationshipEntries, false),
+            [IdentityV2StorageManifest.ClaimMappingByProviderIndex] = (1, IdentityStorageManifest.MaxMaterializedListEntries, false),
+            [IdentityV2StorageManifest.MutationReceiptByExpiryIndex] = (1, 64, true)
         };
         Assert.Equal(expected.Values.Sum(item => item.Count), observations.Count);
         foreach (var (indexName, requirement) in expected)
@@ -301,13 +345,17 @@ public sealed class IamNormalizedLookupSqliteCorrectnessTests
                 Assert.Equal(StorageAccessKind.Scoped, route.Access.Kind);
                 Assert.Equal(IamNormalizedLookupWorkload.TenantId, route.Access.Scope?.Value);
                 Assert.Equal(requirement.Limit, route.Request.Paging.Limit);
-                var order = Assert.Single(route.Request.Order);
-                Assert.Equal(IdentityV2StorageManifest.IdField, order.Column.Name);
-                Assert.Equal(OrderDirection.Ascending, order.Direction);
-                Assert.Equal(NullOrder.Last, order.NullOrder);
-                var predicate = Assert.IsType<Predicate.Equal>(route.Request.Where);
+                Assert.Equal(IdentityV2StorageManifest.IdField, route.Request.Order[^1].Column.Name);
+                Assert.All(route.Request.Order, order =>
+                {
+                    Assert.Equal(OrderDirection.Ascending, order.Direction);
+                    Assert.Equal(NullOrder.Last, order.NullOrder);
+                });
+                var predicateColumn = requirement.Range
+                    ? Assert.IsType<Predicate.Range>(route.Request.Where).Column.Name
+                    : Assert.IsType<Predicate.Equal>(route.Request.Where).Column.Name;
                 var declaration = Assert.Single(route.Options.Indexes, declaration => declaration.Name == indexName);
-                Assert.Equal(predicate.Column.Name, declaration.Columns[0]);
+                Assert.Equal(predicateColumn, declaration.Columns[0]);
                 Assert.Equal(QueryIndexPinning.ProviderDefault, declaration.Pinning);
                 Assert.Equal(indexName, route.Result.SelectedIndex);
                 Assert.False(route.Result.IndexHintApplied);
@@ -319,7 +367,7 @@ public sealed class IamNormalizedLookupSqliteCorrectnessTests
     private static void AssertPlanArtifacts(string artifactDirectory)
     {
         var artifacts = Directory.GetFiles(artifactDirectory, "*.txt");
-        Assert.Equal(11, artifacts.Length);
+        Assert.Equal(13, artifacts.Length);
         Assert.All(artifacts, artifact =>
         {
             Assert.Contains("optimizer-selected", Path.GetFileName(artifact), StringComparison.Ordinal);

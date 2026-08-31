@@ -34,18 +34,18 @@ public sealed class AspNetCoreIdentityMutationGuardTests
     }
 
     [Fact]
-    public void Reviewed_bounded_cursor_pager_is_the_only_QueryAllAsync_surface_allowed()
+    public void Reviewed_bounded_cursor_callers_are_structurally_allow_listed()
     {
         using var fixture = new TemporaryDirectory();
         fixture.Write(
-            "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/ReviewedPager.cs",
+            "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/GroundworkRoleStore.cs",
             """
             namespace Injected;
 
             public sealed class ReviewedPager
             {
                 public Task LoadAsync() =>
-                    BoundedDocumentQueryPager.QueryAllAsync();
+                    rows.QueryAllPages();
             }
             """);
         fixture.Write(
@@ -60,6 +60,28 @@ public sealed class AspNetCoreIdentityMutationGuardTests
             }
             """);
         fixture.Write(
+            "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/SimilarPager.cs",
+            """
+            namespace Injected;
+
+            public sealed class SimilarPager
+            {
+                public Task LoadAsync() =>
+                    similarRows.QueryAllPages();
+            }
+            """);
+        fixture.Write(
+            "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/UnrelatedRowsPager.cs",
+            """
+            namespace Injected;
+
+            public sealed class UnrelatedRowsPager
+            {
+                public Task LoadAsync() =>
+                    rows.QueryAllPages();
+            }
+            """);
+        fixture.Write(
             "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/MixedPager.cs",
             """
             namespace Injected;
@@ -68,7 +90,7 @@ public sealed class AspNetCoreIdentityMutationGuardTests
             {
                 public async Task LoadAsync()
                 {
-                    await BoundedDocumentQueryPager.QueryAllAsync(); await store.QueryAllAsync();
+                    await rows.QueryAllPages(); await store.QueryAllAsync();
                 }
             }
             """);
@@ -89,10 +111,46 @@ public sealed class AspNetCoreIdentityMutationGuardTests
             {
                 Assert.Equal("IDENTITY-UNBOUNDED-QUERY", diagnostic.Code);
                 Assert.Equal(
+                    "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/SimilarPager.cs",
+                    diagnostic.Path);
+                Assert.Equal(6, diagnostic.Line);
+            },
+            diagnostic =>
+            {
+                Assert.Equal("IDENTITY-UNBOUNDED-QUERY", diagnostic.Code);
+                Assert.Equal(
                     "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/UnboundedPager.cs",
                     diagnostic.Path);
                 Assert.Equal(6, diagnostic.Line);
+            },
+            diagnostic =>
+            {
+                Assert.Equal("IDENTITY-UNBOUNDED-QUERY", diagnostic.Code);
+                Assert.Equal(
+                    "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/UnrelatedRowsPager.cs",
+                    diagnostic.Path);
+                Assert.Equal(6, diagnostic.Line);
             });
+    }
+
+    [Fact]
+    public void A_spoofed_identity_row_store_path_cannot_bypass_the_cursor_guard()
+    {
+        using var fixture = new TemporaryDirectory();
+        fixture.Write(
+            "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/Spoof/GroundworkIdentityRowStore.cs",
+            """
+            namespace Injected;
+
+            public sealed class SpoofedStore
+            {
+                public GroundworkIdentityRowQueryResult QueryAllPages() => throw new NotSupportedException();
+            }
+            """);
+
+        var diagnostic = Assert.Single(AspNetCoreIdentityMutationScanner.Scan(fixture.Path));
+
+        Assert.Equal("IDENTITY-UNBOUNDED-QUERY", diagnostic.Code);
     }
 
     public static TheoryData<string, string, string, int> MutationCases => new()
@@ -244,8 +302,18 @@ internal static partial class AspNetCoreIdentityMutationScanner
     ];
     private const string CanonicalDocumentsPath =
         "src/Elsa/Foundation/Identity/Persistence/Groundwork/Documents/IdentityAuthorityDocuments.cs";
+    private const string CanonicalIdentityRowStorePath =
+        "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/GroundworkIdentityRowStore.cs";
     private const string CanonicalRegistrationPath =
         "src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/DependencyInjection/AspNetCoreIdentityGroundworkRegistration.cs";
+    private static readonly string[] ReviewedBoundedCursorCallerPaths =
+    [
+        "src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Stores/GroundworkIdentityRoleStore.cs",
+        "src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Stores/GroundworkIdentityUserStore.cs",
+        "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/GroundworkClaimMappingStore.cs",
+        "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/GroundworkExternalIdentityStore.cs",
+        "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/GroundworkRoleStore.cs"
+    ];
 
     private static readonly string[] UnsupportedCapabilities =
     [
@@ -287,6 +355,12 @@ internal static partial class AspNetCoreIdentityMutationScanner
         IReadOnlyList<string> lines,
         ICollection<AspNetCoreIdentityMutationDiagnostic> diagnostics)
     {
+        var canonicalCursorDeclarationLine = StringComparer.Ordinal.Equals(relativePath, CanonicalIdentityRowStorePath)
+            ? lines.Select((line, index) => (line, index))
+                .FirstOrDefault(candidate => candidate.line.Contains(
+                    "GroundworkIdentityRowQueryResult QueryAllPages",
+                    StringComparison.Ordinal)).index + 1
+            : 0;
         if (!StringComparer.Ordinal.Equals(relativePath, CanonicalRegistrationPath))
         {
             var source = string.Join('\n', lines.Select(StripLineComment));
@@ -324,7 +398,13 @@ internal static partial class AspNetCoreIdentityMutationScanner
                     "Identity user/role authority documents have exactly one canonical definition.");
             }
 
-            var codeWithoutReviewedPager = ReviewedBoundedPagerRegex().Replace(code, string.Empty);
+            var codeWithoutReviewedPager = IsReviewedBoundedCursorCall(
+                    relativePath,
+                    code,
+                    lineNumber,
+                    canonicalCursorDeclarationLine)
+                ? ReviewedBoundedCursorCallRegex().Replace(code, string.Empty)
+                : code;
             if (relativePath.Contains("/Groundwork/", StringComparison.Ordinal) &&
                 UnboundedQueryRegex().IsMatch(codeWithoutReviewedPager))
             {
@@ -349,6 +429,16 @@ internal static partial class AspNetCoreIdentityMutationScanner
         }
     }
 
+    private static bool IsReviewedBoundedCursorCall(
+        string relativePath,
+        string code,
+        int lineNumber,
+        int canonicalCursorDeclarationLine) =>
+        (StringComparer.Ordinal.Equals(relativePath, CanonicalIdentityRowStorePath) &&
+         lineNumber == canonicalCursorDeclarationLine) ||
+        (ReviewedBoundedCursorCallerPaths.Contains(relativePath, StringComparer.Ordinal) &&
+         ReviewedBoundedCursorCallRegex().IsMatch(code));
+
     private static string StripLineComment(string line)
     {
         var comment = line.IndexOf("//", StringComparison.Ordinal);
@@ -372,11 +462,11 @@ internal static partial class AspNetCoreIdentityMutationScanner
     [GeneratedRegex(@"\b(?:record|class)\s+(?:IdentityUserDocument|IdentityRoleDocument)\b", RegexOptions.CultureInvariant)]
     private static partial Regex AuthorityDocumentRegex();
 
-    [GeneratedRegex(@"\b(?:LoadAllAsync|QueryAllAsync)\s*\(", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"\b(?:LoadAllAsync|QueryAllAsync|QueryAllPages)\s*\(", RegexOptions.CultureInvariant)]
     private static partial Regex UnboundedQueryRegex();
 
-    [GeneratedRegex(@"\bBoundedDocumentQueryPager\.QueryAllAsync\s*\(", RegexOptions.CultureInvariant)]
-    private static partial Regex ReviewedBoundedPagerRegex();
+    [GeneratedRegex(@"\brows\.QueryAllPages\s*\(|\bpublic\s+GroundworkIdentityRowQueryResult\s+QueryAllPages\s*\(", RegexOptions.CultureInvariant)]
+    private static partial Regex ReviewedBoundedCursorCallRegex();
 
     [GeneratedRegex(@"\b(?:Paging\.OffsetLimit|for\s*\(\s*var\s+skip\b)|\bnew\s+DocumentQuery\s*\([^)]*,\s*[^,]+,\s*[^,]+,\s*\d+\s*,\s*\d+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex OffsetQueryRegex();

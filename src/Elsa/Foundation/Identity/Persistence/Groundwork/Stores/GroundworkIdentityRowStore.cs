@@ -1,5 +1,6 @@
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Foundation.Identity.Persistence.Groundwork.Exceptions;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Store;
@@ -42,6 +43,16 @@ public sealed class GroundworkIdentityRowStore(
         CancellationToken cancellationToken = default)
         => QueryCore(unitId, query, includeTotalCount: false, cancellationToken).Rows;
 
+    /// <summary>
+    /// Reads a finite cursor sequence for one declared Identity route. Provider failures and
+    /// malformed continuation sequences are surfaced as <see cref="GroundworkIdentityStoreException"/>;
+    /// cancellation is preserved as <see cref="OperationCanceledException"/>.
+    /// </summary>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="query"/> is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="maximumMaterialization"/> is not positive.</exception>
+    /// <exception cref="ArgumentException">Thrown when the initial continuation token is empty.</exception>
+    /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled.</exception>
+    /// <exception cref="GroundworkIdentityStoreException">Thrown when the provider or cursor protocol fails.</exception>
     public GroundworkIdentityRowQueryResult QueryAllPages(
         string unitId,
         GroundworkIdentityRowQuery query,
@@ -50,6 +61,7 @@ public sealed class GroundworkIdentityRowStore(
     {
         ArgumentNullException.ThrowIfNull(query);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumMaterialization);
+        ValidatePaging(query);
 
         var rows = new List<GroundworkIdentityRow>();
         var seenIdentities = new HashSet<string>(StringComparer.Ordinal);
@@ -64,10 +76,9 @@ public sealed class GroundworkIdentityRowStore(
         for (var page = 0; page < maximumMaterialization; page++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var result = QueryCore(
+            var result = QueryPage(
                 unitId,
                 query with { Skip = 0, ContinuationToken = continuation },
-                includeTotalCount: false,
                 cancellationToken);
             totalCount ??= result.TotalCount;
 
@@ -75,22 +86,22 @@ public sealed class GroundworkIdentityRowStore(
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (!seenIdentities.Add(row.Id))
-                    throw new InvalidOperationException($"Identity route '{query.ExpectedIndex ?? unitId}' repeated row '{row.Id}' while following a continuation.");
+                    throw CursorFailure($"Identity route '{query.ExpectedIndex ?? unitId}' repeated row '{row.Id}' while following a continuation.");
                 rows.Add(row);
                 if (rows.Count > maximumMaterialization)
-                    throw new InvalidOperationException($"Identity route '{query.ExpectedIndex ?? unitId}' exceeded its bounded materialization limit.");
+                    throw CursorFailure($"Identity route '{query.ExpectedIndex ?? unitId}' exceeded its bounded materialization limit.");
             }
 
             continuation = result.NextContinuationToken;
             if (continuation is null)
                 return new(rows, totalCount ?? rows.Count);
             if (string.IsNullOrWhiteSpace(continuation) || !seenContinuations.Add(continuation))
-                throw new InvalidOperationException($"Identity route '{query.ExpectedIndex ?? unitId}' returned a repeated or empty continuation.");
+                throw CursorFailure($"Identity route '{query.ExpectedIndex ?? unitId}' returned a repeated or empty continuation.");
             if (result.Rows.Count == 0)
-                throw new InvalidOperationException($"Identity route '{query.ExpectedIndex ?? unitId}' returned a continuation without forward progress.");
+                throw CursorFailure($"Identity route '{query.ExpectedIndex ?? unitId}' returned a continuation without forward progress.");
         }
 
-        throw new InvalidOperationException($"Identity route '{query.ExpectedIndex ?? unitId}' exceeded its bounded page limit.");
+        throw CursorFailure($"Identity route '{query.ExpectedIndex ?? unitId}' exceeded its bounded page limit.");
     }
 
     public GroundworkIdentityRowQueryResult QueryWithTotalCount(
@@ -114,6 +125,7 @@ public sealed class GroundworkIdentityRowStore(
     {
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
+        ValidatePaging(query);
         var plan = Resolve(unitId);
         var table = new TableId(plan.Unit.Name);
         var filterColumn = Column(plan.Unit, table, query.FilterColumn);
@@ -143,13 +155,6 @@ public sealed class GroundworkIdentityRowStore(
             order.Add(new OrderTerm(idColumn, OrderDirection.Ascending, NullOrder.Last));
         }
 
-        if (query.Skip < 0)
-            throw new ArgumentOutOfRangeException(nameof(query.Skip));
-        if (query.Take <= 0)
-            throw new ArgumentOutOfRangeException(nameof(query.Take));
-        if (query.Skip > 0 && query.ContinuationToken is not null)
-            throw new ArgumentException("An identity query cannot combine offset and cursor continuation paging.", nameof(query));
-
         var options = plan.Unit.CreateQueryRenderOptions(query.ExpectedIndex);
         var request = CreateRequest(table, where, order, query, includeTotalCount, query.ContinuationToken);
         var result = plan.Session.Query(request, options);
@@ -165,13 +170,14 @@ public sealed class GroundworkIdentityRowStore(
             var seenContinuations = new HashSet<string>(StringComparer.Ordinal);
             var pagesConsumed = 1;
             if (continuation is not null && string.IsNullOrWhiteSpace(continuation))
-                throw new InvalidOperationException("Identity cursor did not make forward progress while advancing a public page.");
+                throw CursorFailure("Identity cursor did not make forward progress while advancing a public page.");
             while (collected.Count < query.Take)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (result.Rows.Count == 0)
                 {
                     if (continuation is not null)
-                        throw new InvalidOperationException("Identity cursor did not make forward progress while advancing a public page.");
+                        throw CursorFailure("Identity cursor did not make forward progress while advancing a public page.");
                     break;
                 }
 
@@ -188,9 +194,9 @@ public sealed class GroundworkIdentityRowStore(
                 if (collected.Count >= query.Take || continuation is null)
                     break;
                 if (string.IsNullOrWhiteSpace(continuation) || !seenContinuations.Add(continuation))
-                    throw new InvalidOperationException("Identity cursor did not make forward progress while advancing a public page.");
+                    throw CursorFailure("Identity cursor did not make forward progress while advancing a public page.");
                 if (pagesConsumed++ >= IdentityStorageManifest.MaxMaterializedListEntries)
-                    throw new InvalidOperationException("Identity cursor exceeded its bounded page limit while advancing a public page.");
+                    throw CursorFailure("Identity cursor exceeded its bounded page limit while advancing a public page.");
                 request = CreateRequest(
                     table,
                     where,
@@ -198,11 +204,12 @@ public sealed class GroundworkIdentityRowStore(
                     query with { Take = query.Take - collected.Count, Skip = 0 },
                     includeTotalCount,
                     continuation);
+                cancellationToken.ThrowIfCancellationRequested();
                 result = plan.Session.Query(request, options);
                 continuation = result.NextContinuationToken;
                 if (continuation is not null &&
                     (string.IsNullOrWhiteSpace(continuation) || seenContinuations.Contains(continuation)))
-                    throw new InvalidOperationException("Identity cursor did not make forward progress while advancing a public page.");
+                    throw CursorFailure("Identity cursor did not make forward progress while advancing a public page.");
             }
 
             result = new QueryMaterializedResult(collected, totalCount, continuation);
@@ -245,6 +252,44 @@ public sealed class GroundworkIdentityRowStore(
         return includeTotalCount
             ? new QueryRequest(table, where, [.. order], Projection.All, paging, ResultShape.TotalCount.Instance)
             : new QueryRequest(table, where, [.. order], Projection.All, paging);
+    }
+
+    private QueryCoreResult QueryPage(
+        string unitId,
+        GroundworkIdentityRowQuery query,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return QueryCore(unitId, query, includeTotalCount: false, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (GroundworkIdentityStoreException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new GroundworkIdentityStoreException(
+                $"Identity route '{query.ExpectedIndex ?? unitId}' could not read a cursor page.",
+                exception);
+        }
+    }
+
+    private static GroundworkIdentityStoreException CursorFailure(string message) =>
+        new(message);
+
+    private static void ValidatePaging(GroundworkIdentityRowQuery query)
+    {
+        if (query.Skip < 0)
+            throw new ArgumentOutOfRangeException(nameof(query.Skip));
+        if (query.Take <= 0)
+            throw new ArgumentOutOfRangeException(nameof(query.Take));
+        if (query.Skip > 0 && query.ContinuationToken is not null)
+            throw new ArgumentException("An identity query cannot combine offset and cursor continuation paging.", nameof(query));
     }
 
     public GroundworkIdentityWriteResult Save(
