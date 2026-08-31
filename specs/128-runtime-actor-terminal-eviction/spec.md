@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-22
 
-**Status**: Draft (implemented)
+**Status**: Implemented — merged in PR #983
 
 **Spec number note**: `specs/` was scanned before allocation — 128 was free (specs ran to 127; siblings hold 129/130).
 Allocated 128 per the unit brief.

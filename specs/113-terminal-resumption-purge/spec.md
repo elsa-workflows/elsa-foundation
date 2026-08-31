@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-20
 
-**Status**: Draft (characterization complete; fix implemented)
+**Status**: Implemented — merged in PR #894
 
 **Input**: Engine-performance phase-3, Unit B — *"the 10.1s post-completion passivation drain."* Profiling a
 container run (`elsaworkflows/elsa-server`, OTel engine-span bridge live) showed that after a workflow run
