@@ -105,8 +105,13 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
         foreach (var operation in operations)
         {
             await operation.PrepareInvocationAsync(0);
+            var providerCommandsBeforeInvoke = adapter.Shared.ProviderCommandCount;
             await operation.InvokeAsync(0);
+            Assert.True(
+                adapter.Shared.ProviderCommandCount > providerCommandsBeforeInvoke,
+                $"Timed operation '{operation.Id}' did not issue a provider command.");
         }
+        Assert.Equal(3, adapter.OpenedClients.Count);
     }
 
     private sealed class CheckpointAdapter(CheckpointFault fault = CheckpointFault.None) : IRuntimeCheckpointCommitWorkloadAdapter
@@ -160,6 +165,7 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
         public List<RuntimePostCommitOutboxQuery> OutboxRequests { get; } = [];
         public int HeartbeatCount { get; set; }
         public int RootWriteLeaseCount { get; set; }
+        public int ProviderCommandCount { get; set; }
     }
 
     private sealed class CheckpointPublicStore :
@@ -180,6 +186,7 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
         public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            _backing.ProviderCommandCount++;
             lock (_backing.Gate)
             {
                 if (_backing.Markers.TryGetValue(commit.CommitId, out var replay))
@@ -231,6 +238,7 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
         public ValueTask<RuntimeExecutionLease> AcquireAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            _backing.ProviderCommandCount++;
             lock (_backing.Gate)
             {
                 var token = _backing.FenceCounters.GetValueOrDefault(workflowExecutionId) + 1;
@@ -247,6 +255,7 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
         public ValueTask<RuntimeExecutionOwnershipTransitionResult> HeartbeatAsync(RuntimeExecutionLease lease, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            _backing.ProviderCommandCount++;
             lock (_backing.Gate)
             {
                 var current = _backing.Leases.GetValueOrDefault(lease.WorkflowExecutionId);
@@ -305,7 +314,12 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
             return new(state);
         }
 
-        ValueTask<WorkflowExecutionState?> IWorkflowExecutionStateStore.FindAsync(string workflowExecutionId, CancellationToken cancellationToken) => new(_backing.Workflows.GetValueOrDefault(workflowExecutionId));
+        ValueTask<WorkflowExecutionState?> IWorkflowExecutionStateStore.FindAsync(string workflowExecutionId, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _backing.ProviderCommandCount++;
+            return new(_backing.Workflows.GetValueOrDefault(workflowExecutionId));
+        }
         public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) => new((IReadOnlyCollection<WorkflowExecutionState>)_backing.Workflows.Values.ToArray());
         public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default) => new(new WorkflowExecutionStatePage(_backing.Workflows.Values.Where(value => WorkflowExecutionStateHistory.Matches(value, query)).OrderBy(value => value, Comparer<WorkflowExecutionState>.Create(WorkflowExecutionStateHistory.Compare)).Take(query.PageSize).ToArray(), null, false, _backing.Workflows.Count));
         public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) => new((IReadOnlyCollection<string>)_backing.Workflows.Values.Select(value => value.PinnedExecutable.ArtifactId).Distinct(StringComparer.Ordinal).ToArray());

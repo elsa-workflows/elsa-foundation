@@ -206,16 +206,22 @@ public sealed class RuntimeCheckpointCommitWorkload
         var commitBundles = new Dictionary<long, ExpectedBundle>();
         var replayBundles = new Dictionary<long, ExpectedBundle>();
         var staleBundles = new Dictionary<long, ExpectedBundle>();
+        var seededExecutionIds = new Dictionary<long, string>();
         return
         [
             new RuntimeCheckpointCommitWorkloadOperation(
                 scenario.OperationSequence[0],
-                (invocation, token) =>
+                (invocation, _) =>
                 {
-                    var executionId = $"benchmark-seeded-{IdentityKey(invocation)}";
-                    return AcquireAndRequireAsync(primary.Ownership, executionId, token);
+                    seededExecutionIds[invocation] = $"benchmark-seeded-{IdentityKey(invocation)}";
+                    return ValueTask.CompletedTask;
                 },
-                static (_, _) => ValueTask.CompletedTask),
+                async (invocation, token) =>
+                {
+                    if (!seededExecutionIds.TryGetValue(invocation, out var executionId))
+                        throw new InvalidOperationException("The seed-fenced-executions operation was invoked without its prepared execution identity.");
+                    await AcquireAndRequireAsync(primary.Ownership, executionId, token);
+                }),
             new RuntimeCheckpointCommitWorkloadOperation(
                 scenario.OperationSequence[1],
                 async (invocation, token) =>
