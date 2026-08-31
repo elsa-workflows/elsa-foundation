@@ -146,6 +146,43 @@ public sealed class GroundworkActivityDefinitionVersionStoreTests
     }
 
     [Fact]
+    public async Task Version_route_only_omits_id_for_the_canonical_order()
+    {
+        using var harness = await SeededAsync(
+            [Definition("def1")],
+            Version("v1", "def1", "1.0.0"),
+            Version("v2", "def1", "2.0.0"));
+        var clauses = new[]
+        {
+            ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
+                ActivitiesDesignStorageManifest.ActivityDefinitionVersionDefinitionIdField, "def1"))
+        };
+
+        harness.QueryRequests.Clear();
+        harness.Store.Query(new ActivityDesignQuery(
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
+            ActivitiesDesignStorageManifest.ListActivityDefinitionVersionsByDefinitionQuery,
+            clauses,
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionOrder,
+            Take: 1));
+        Assert.Equal(
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionOrder.Select(order => order.Field),
+            harness.QueryRequests.Single().Order.Select(order => order.Column.Name));
+
+        harness.QueryRequests.Clear();
+        harness.Store.Query(new ActivityDesignQuery(
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
+            ActivitiesDesignStorageManifest.ListActivityDefinitionVersionsByDefinitionQuery,
+            clauses,
+            [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDefinitionIdField)],
+            Take: 1));
+        Assert.Equal(
+            [ActivitiesDesignStorageManifest.ActivityDefinitionVersionDefinitionIdField,
+                ActivitiesDesignStorageManifest.IdField],
+            harness.QueryRequests.Single().Order.Select(order => order.Column.Name));
+    }
+
+    [Fact]
     public async Task ListByDefinitionIds_preserves_input_scope_and_deterministic_version_order()
     {
         using var harness = await SeededAsync(
