@@ -19,17 +19,17 @@ public sealed class GroundworkClaimMappingStore(
         CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var result = rows.QueryWithTotalCount(
+        var result = rows.QueryAllPages(
             IdentityStorageManifest.IdentityClaimMappingDocumentKind,
             new GroundworkIdentityRowQuery(
                 IdentityStorageManifest.ProviderLookupKeyField,
                 GroundworkIdentityRowComparison.Equal,
                 IdentityDocumentId.From(tenantId, provider),
                 IdentityStorageManifest.ClaimMappingOrderField,
-                Take: IdentityStorageManifest.MaxMaterializedListEntries,
                 ExpectedIndex: IdentityV2StorageManifest.ClaimMappingByProviderIndex),
+            IdentityStorageManifest.MaxMaterializedListEntries,
             cancellationToken);
-        GroundworkIdentityListGuard.EnsureWithinMaterializationLimit<IPagedClaimMappingStore>(result.TotalCount);
+        GroundworkIdentityListGuard.EnsureWithinMaterializationLimit<IPagedClaimMappingStore>(result.Rows.Count);
         return ValueTask.FromResult<IReadOnlyList<ClaimMappingRule>>(result.Rows
             .Select(Map)
             .ToArray());

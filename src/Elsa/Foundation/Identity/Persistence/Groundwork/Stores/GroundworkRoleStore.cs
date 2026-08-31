@@ -42,17 +42,17 @@ public sealed class GroundworkRoleStore(
     public ValueTask<IReadOnlyList<RoleRecord>> ListAsync(string tenantId, CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var result = rows.QueryWithTotalCount(
+        var result = rows.QueryAllPages(
             IdentityStorageManifest.IdentityRoleDocumentKind,
             new GroundworkIdentityRowQuery(
                 IdentityStorageManifest.TenantIdField,
                 GroundworkIdentityRowComparison.Equal,
                 IdentityCompositeDocumentId.Normalize(tenantId),
                 IdentityV2StorageManifest.IdField,
-                Take: IdentityStorageManifest.MaxMaterializedListEntries,
                 ExpectedIndex: IdentityV2StorageManifest.RoleByTenantIndex),
+            IdentityStorageManifest.MaxMaterializedListEntries,
             cancellationToken);
-        GroundworkIdentityListGuard.EnsureWithinMaterializationLimit<IPagedRoleStore>(result.TotalCount);
+        GroundworkIdentityListGuard.EnsureWithinMaterializationLimit<IPagedRoleStore>(result.Rows.Count);
         return ValueTask.FromResult<IReadOnlyList<RoleRecord>>(result.Rows.Select(Map).ToArray());
     }
 

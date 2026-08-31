@@ -44,17 +44,17 @@ public sealed class GroundworkExternalIdentityStore(
     public ValueTask<IReadOnlyList<ExternalIdentityRecord>> ListForUserAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var result = rows.QueryWithTotalCount(
+        var result = rows.QueryAllPages(
             IdentityStorageManifest.ExternalLoginDocumentKind,
             new GroundworkIdentityRowQuery(
                 IdentityStorageManifest.UserLookupKeyField,
                 GroundworkIdentityRowComparison.Equal,
                 IdentityDocumentId.From(tenantId, userId),
                 IdentityV2StorageManifest.IdField,
-                Take: IdentityStorageManifest.MaxAggregateRelationshipEntries,
                 ExpectedIndex: IdentityV2StorageManifest.LoginByUserIndex),
+            IdentityStorageManifest.MaxAggregateRelationshipEntries,
             cancellationToken);
-        GroundworkIdentityListGuard.EnsureWithinMaterializationLimit<IPagedExternalIdentityStore>(result.TotalCount);
+        GroundworkIdentityListGuard.EnsureWithinMaterializationLimit<IPagedExternalIdentityStore>(result.Rows.Count);
         return ValueTask.FromResult<IReadOnlyList<ExternalIdentityRecord>>(result.Rows.Select(Map).ToArray());
     }
 

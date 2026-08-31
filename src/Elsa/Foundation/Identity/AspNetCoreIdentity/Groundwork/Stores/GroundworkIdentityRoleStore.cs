@@ -188,7 +188,16 @@ public sealed class GroundworkIdentityRoleStore(
         string queryIdentity,
         (string Field, string Value) comparison,
         CancellationToken cancellationToken) =>
-        Query(documentKind, queryIdentity, comparison, MaxRelationshipMaterialization, cancellationToken);
+        rows.QueryAllPages(
+            documentKind,
+            new GroundworkIdentityRowQuery(
+                comparison.Field,
+                GroundworkIdentityRowComparison.Equal,
+                comparison.Value,
+                IdentityV2StorageManifest.IdField,
+                ExpectedIndex: IdentityV2StorageManifest.IndexForQuery(queryIdentity)),
+            MaxRelationshipMaterialization,
+            cancellationToken).Rows;
 
     private IReadOnlyList<GroundworkIdentityRow> Query(
         string documentKind,
