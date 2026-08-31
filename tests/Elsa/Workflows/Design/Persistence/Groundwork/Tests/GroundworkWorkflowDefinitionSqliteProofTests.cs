@@ -73,12 +73,12 @@ public sealed class GroundworkWorkflowDefinitionSqliteProofTests
             Assert.Equal(["sqlite-alpha"], byId.Select(definition => definition.Id));
             var idSearch = Assert.Single(source.Queries, query =>
                 query.Options?.SelectedIndex == WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex);
-            var idPredicate = Assert.IsType<Predicate.Range>(idSearch.Request.Where);
-            Assert.Equal(WorkflowsDesignStorageManifest.DefinitionIdSearchKeyField, idPredicate.Column.Name);
+            var idPredicate = Assert.IsType<Predicate.Equal>(idSearch.Request.Where);
+            Assert.Equal(WorkflowsDesignStorageManifest.DefinitionIdLookupHashField, idPredicate.Column.Name);
             Assert.Equal(WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex, idSearch.Options!.SelectedIndex);
             var idIndex = Assert.Single(idSearch.Options.Indexes);
             Assert.Equal(
-                [WorkflowsDesignStorageManifest.DefinitionIdSearchKeyField],
+                [WorkflowsDesignStorageManifest.DefinitionIdLookupHashField],
                 idIndex.Columns.ToArray());
         }
         finally
@@ -90,7 +90,7 @@ public sealed class GroundworkWorkflowDefinitionSqliteProofTests
     }
 
     [Fact]
-    public async Task SearchTerm_probe_accepts_10000_and_refuses_10001_before_named_routes()
+    public async Task Candidate_probe_accepts_10000_and_refuses_10001_before_residual_filtering()
     {
         var acceptedPath = Path.Combine(Path.GetTempPath(), $"elsa-workflow-design-v2-probe-accepted-{Guid.NewGuid():N}.db");
         var refusalPath = Path.Combine(Path.GetTempPath(), $"elsa-workflow-design-v2-probe-refusal-{Guid.NewGuid():N}.db");
@@ -117,7 +117,7 @@ public sealed class GroundworkWorkflowDefinitionSqliteProofTests
                 var accepted = await store.ListAsync(new WorkflowDefinitionFilter { SearchTerm = "MATCH" });
 
                 Assert.Equal(10_000, accepted.Count);
-                var acceptedProbe = Assert.Single(source.Queries, query => query.Options?.SelectedIndex is null);
+                var acceptedProbe = Assert.Single(source.Queries, query => query.Options?.SelectedIndex == WorkflowsDesignStorageManifest.DefinitionByIdIndex);
                 Assert.Equal(GroundworkDesignStorage.SearchTermProbeAcceptance.Id, acceptedProbe.Request.AcceptedScan?.Id);
                 Assert.Equal(GroundworkDesignStorage.SearchTermProbeLimit, acceptedProbe.Request.Paging.Limit);
             }
@@ -143,7 +143,7 @@ public sealed class GroundworkWorkflowDefinitionSqliteProofTests
                 Assert.Contains("10,000", refusal.Message, StringComparison.Ordinal);
                 Assert.Single(source.Queries);
                 Assert.Equal(GroundworkDesignStorage.SearchTermProbeAcceptance.Id, source.Queries[0].Request.AcceptedScan?.Id);
-                Assert.All(source.Queries, query => Assert.Null(query.Options?.SelectedIndex));
+                Assert.All(source.Queries, query => Assert.Equal(WorkflowsDesignStorageManifest.DefinitionByIdIndex, query.Options?.SelectedIndex));
             }
         }
         finally

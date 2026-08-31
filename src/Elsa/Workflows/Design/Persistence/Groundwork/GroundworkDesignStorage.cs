@@ -1,4 +1,6 @@
 using System.Collections.Immutable;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.Design;
@@ -24,7 +26,7 @@ public sealed class GroundworkDesignStorage(
     public const int SearchTermProbeLimit = SearchTermMaximumMatches + 1;
     public static readonly ScanAcceptance SearchTermProbeAcceptance = ScanAcceptance.Allow(
         "GW-SCAN-ELSA-WORKFLOWS-DESIGN-CATALOG-CARDINALITY",
-        "The workflow-design SearchTerm catalog-cardinality probe is an explicitly bounded candidate read; it refuses above 10,000 candidates before any substring route enumeration.",
+        "The workflow-design catalog candidate probe is an explicitly bounded read; it refuses above 10,000 candidates before residual name, description, or substring filtering.",
         "elsa-workflows-design",
         new DateTimeOffset(2027, 8, 16, 0, 0, 0, TimeSpan.Zero));
     private const QuerySearchKeyPolicy DefinitionIdSearchPolicy = QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase;
@@ -52,6 +54,14 @@ public sealed class GroundworkDesignStorage(
     {
         if (IsCaseInsensitiveField(unitId, field) && value is string text)
         {
+            if (IsDefinitionIdField(field))
+            {
+                var lookupColumn = DefinitionIdLookupHashColumn(unitId);
+                return new Predicate.Equal(
+                    lookupColumn,
+                    QueryConstant.Of(lookupColumn, DefinitionIdLookupHash(text)));
+            }
+
             var searchColumn = SearchColumn(unitId, field);
             var policy = SearchPolicy(unitId, field);
             var lower = QueryConstant.Of(searchColumn, QuerySearchKeys.Encode(text, policy));
@@ -61,17 +71,8 @@ public sealed class GroundworkDesignStorage(
                 Bound.Inclusive(lower),
                 successor is null ? null : Bound.Exclusive(QueryConstant.Of(searchColumn, successor)));
 
-            // Identity lookup stays purely case-folded: definitionIdSearchKey carries a unique index
-            // under the same policy, so case-insensitive identity is an invariant of the catalog
-            // rather than a laxness to correct.
-            if (IsDefinitionIdField(field))
-                return folded;
-
-            // Text equality is ordinal per the design query contract, but the by-name and
-            // by-description indexes are declared over the projected search keys, not the source
-            // columns. The folded range is therefore the index route, not the answer: on its own it
-            // matches a differently-cased sibling, and an empty term has no successor and so spans
-            // the whole catalog. Keep the range for admission and settle the comparison with an
+            // Text equality is ordinal per the design query contract. The folded range is retained
+            // as a provider-neutral candidate predicate; callers settle the comparison with an
             // exact residual on the source column.
             var exact = Column(unitId, field);
             return new Predicate.And([folded, new Predicate.Equal(exact, QueryConstant.Of(exact, text))]);
@@ -306,9 +307,10 @@ public sealed class GroundworkDesignStorage(
     }
 
     /// <summary>
-    /// Executes one bounded provider probe for a public SearchTerm enumeration. It returns only
-    /// the identity projection and never follows a continuation: a full page or a continuation
-    /// proves that the caller-visible search cardinality exceeds the supported bound.
+    /// Executes one bounded provider probe for workflow-definition candidate enumeration. It uses
+    /// the narrow deterministic identity route and never follows a continuation: a full page or a
+    /// continuation proves that the caller-visible candidate cardinality exceeds the supported
+    /// bound. Callers apply exact residual filtering to the returned full rows.
     /// </summary>
     public IReadOnlyList<GroundworkDesignEntry> Probe(
         string unitId,
@@ -328,7 +330,7 @@ public sealed class GroundworkDesignStorage(
             table,
             predicate,
             order.ToImmutableArray(),
-            Projection.ColumnsOnly(id),
+            Projection.All,
             Paging.Keyset(SearchTermProbeLimit),
             acceptedScan: SearchTermProbeAcceptance);
 
@@ -339,7 +341,7 @@ public sealed class GroundworkDesignStorage(
                 "search-cardinality-workflow-design-across-scopes",
                 privileged =>
                 {
-                    var result = privileged.QueryAcrossScopes(request, QueryOptions(unit, null));
+                    var result = privileged.QueryAcrossScopes(request, QueryOptions(unit, WorkflowsDesignStorageManifest.DefinitionByIdIndex));
                     return ProbeRows(unitId, result.Rows.Select(row => (row.Values, (StorageScope?)row.Scope)), result.NextContinuationToken);
                 },
                 cancellationToken);
@@ -349,7 +351,7 @@ public sealed class GroundworkDesignStorage(
         var session = Open(unitId);
         try
         {
-            var result = session.Query(request, QueryOptions(unit, null));
+            var result = session.Query(request, QueryOptions(unit, WorkflowsDesignStorageManifest.DefinitionByIdIndex));
             return ProbeRows(unitId, result.Rows.Select(row => (row, (StorageScope?)null)), result.NextContinuationToken);
         }
         catch (OperationCanceledException)
@@ -511,6 +513,8 @@ public sealed class GroundworkDesignStorage(
                 values[WorkflowsDesignStorageManifest.DefinitionIdField] = definition.Id;
                 values[WorkflowsDesignStorageManifest.DefinitionIdSearchKeyField] =
                     QuerySearchKeys.Encode(definition.Id, DefinitionIdSearchPolicy);
+                values[WorkflowsDesignStorageManifest.DefinitionIdLookupHashField] =
+                    DefinitionIdLookupHash(definition.Id);
                 values[WorkflowsDesignStorageManifest.DefinitionNameField] = definition.Name;
                 values[WorkflowsDesignStorageManifest.DefinitionDescriptionField] = definition.Description;
                 values[WorkflowsDesignStorageManifest.DefinitionDeletedAtField] = definition.DeletedAt;
@@ -830,6 +834,15 @@ public sealed class GroundworkDesignStorage(
             isNullable: source.IsNullable,
             maxLength: source.MaxLength is int maxLength ? maxLength * 7 : null,
             stringComparison: QueryStringComparisonPolicy.Ordinal);
+    }
+
+    private ColumnRef DefinitionIdLookupHashColumn(string unitId) =>
+        Column(unitId, WorkflowsDesignStorageManifest.DefinitionIdLookupHashField);
+
+    private static string DefinitionIdLookupHash(string value)
+    {
+        var searchKey = QuerySearchKeys.Encode(value, DefinitionIdSearchPolicy);
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(searchKey))).ToLowerInvariant();
     }
 
     private static QuerySearchKeyPolicy SearchPolicy(string unitId, string field) =>
