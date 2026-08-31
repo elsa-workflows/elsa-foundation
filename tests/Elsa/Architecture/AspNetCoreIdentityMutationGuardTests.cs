@@ -34,7 +34,7 @@ public sealed class AspNetCoreIdentityMutationGuardTests
     }
 
     [Fact]
-    public void Reviewed_bounded_cursor_pager_is_the_only_all_pages_surface_allowed()
+    public void Reviewed_bounded_cursor_pager_is_the_only_QueryAllAsync_surface_allowed()
     {
         using var fixture = new TemporaryDirectory();
         fixture.Write(
@@ -45,7 +45,7 @@ public sealed class AspNetCoreIdentityMutationGuardTests
             public sealed class ReviewedPager
             {
                 public Task LoadAsync() =>
-                    IdentityBoundedDocumentQueryPager.ReadAllPagesAsync();
+                    BoundedDocumentQueryPager.QueryAllAsync();
             }
             """);
         fixture.Write(
@@ -56,7 +56,7 @@ public sealed class AspNetCoreIdentityMutationGuardTests
             public sealed class UnboundedPager
             {
                 public Task LoadAsync() =>
-                    BoundedDocumentQueryPager.QueryAllAsync();
+                    QueryAllAsync();
             }
             """);
         fixture.Write(
@@ -68,7 +68,7 @@ public sealed class AspNetCoreIdentityMutationGuardTests
             {
                 public async Task LoadAsync()
                 {
-                    await IdentityBoundedDocumentQueryPager.ReadAllPagesAsync(); await store.QueryAllAsync();
+                    await BoundedDocumentQueryPager.QueryAllAsync(); await store.QueryAllAsync();
                 }
             }
             """);
@@ -130,19 +130,6 @@ public sealed class AspNetCoreIdentityMutationGuardTests
             }
             """,
             "IDENTITY-UNBOUNDED-QUERY",
-            5
-        },
-        {
-            "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/OffsetIdentityQuery.cs",
-            """
-            namespace Injected;
-
-            public sealed class OffsetIdentityQuery
-            {
-                public object Create() => new DocumentQuery("kind", "route", skip: 1, take: 1);
-            }
-            """,
-            "IDENTITY-OFFSET-QUERY",
             5
         },
         {
@@ -233,8 +220,6 @@ internal static partial class AspNetCoreIdentityMutationScanner
         "src/Elsa/Foundation/Identity/Persistence/Groundwork/Documents/IdentityAuthorityDocuments.cs";
     private const string CanonicalRegistrationPath =
         "src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/DependencyInjection/AspNetCoreIdentityGroundworkRegistration.cs";
-    private const string CanonicalPagerPath =
-        "src/Elsa/Foundation/Identity/Persistence/Groundwork/Stores/IdentityBoundedDocumentQueryPager.cs";
 
     private static readonly string[] UnsupportedCapabilities =
     [
@@ -322,14 +307,6 @@ internal static partial class AspNetCoreIdentityMutationScanner
             }
 
             if (relativePath.Contains("/Groundwork/", StringComparison.Ordinal) &&
-                !StringComparer.Ordinal.Equals(relativePath, CanonicalPagerPath) &&
-                OffsetQueryRegex().IsMatch(code))
-            {
-                Add(diagnostics, "IDENTITY-OFFSET-QUERY", relativePath, lineNumber,
-                    "Groundwork Identity cursor routes may not issue an offset/skip request outside the reviewed continuation helper.");
-            }
-
-            if (relativePath.Contains("/Groundwork/", StringComparison.Ordinal) &&
                 UnsupportedCapabilities.Any(capability => code.Contains(capability, StringComparison.Ordinal)))
             {
                 Add(diagnostics, "IDENTITY-UNSUPPORTED-CAPABILITY", relativePath, lineNumber,
@@ -365,11 +342,8 @@ internal static partial class AspNetCoreIdentityMutationScanner
     [GeneratedRegex(@"\b(?:LoadAllAsync|QueryAllAsync)\s*\(", RegexOptions.CultureInvariant)]
     private static partial Regex UnboundedQueryRegex();
 
-    [GeneratedRegex(@"\bIdentityBoundedDocumentQueryPager\.ReadAllPagesAsync\s*\(", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"\bBoundedDocumentQueryPager\.QueryAllAsync\s*\(", RegexOptions.CultureInvariant)]
     private static partial Regex ReviewedBoundedPagerRegex();
-
-    [GeneratedRegex(@"\b(?:skip\s*:|for\s*\(\s*var\s+skip\b|\.Page\s*\([^)]*\bskip\b)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex OffsetQueryRegex();
 
     [GeneratedRegex(@"\b(?:Add|TryAdd|Replace)Scoped\s*<\s*(?:IUserStore\s*<\s*AspNetCoreIdentityUser\s*>|IRoleStore\s*<\s*IdentityRole\s*>)", RegexOptions.CultureInvariant)]
     private static partial Regex DuplicateAuthorityRegistrationRegex();
