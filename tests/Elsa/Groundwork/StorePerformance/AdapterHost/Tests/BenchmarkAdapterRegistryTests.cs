@@ -25,15 +25,17 @@ public sealed class BenchmarkAdapterRegistryTests
     }
 
     [Theory]
-    [InlineData("bookmark-lookup", "checkpoint-unit-of-work-with-linked-outbox")]
-    [InlineData("unknown-workload", "document-type-specific-tables")]
-    [InlineData("bookmark-lookup", "unregistered-form")]
+    [InlineData("bookmark-lookup", "document-type-specific-tables", "other-adapter")]
+    [InlineData("bookmark-lookup", "checkpoint-unit-of-work-with-linked-outbox", "groundwork-v2")]
+    [InlineData("unknown-workload", "document-type-specific-tables", "groundwork-v2")]
+    [InlineData("bookmark-lookup", "unregistered-form", "groundwork-v2")]
     public void Refuses_unregistered_workload_adapter_and_physical_form_without_fallback(
         string workloadId,
-        string physicalForm)
+        string physicalForm,
+        string adapter)
     {
         var exception = Assert.Throws<PerformanceContractException>(() =>
-            BenchmarkAdapterRegistry.Create(Request(workloadId, physicalForm), "unused", "unused"));
+            BenchmarkAdapterRegistry.Create(Request(workloadId, physicalForm, adapter: adapter), "unused", "unused"));
 
         Assert.Contains("exact workload/adapter/physical form", exception.Message, StringComparison.Ordinal);
     }
@@ -47,7 +49,7 @@ public sealed class BenchmarkAdapterRegistryTests
         Assert.Contains("exact workload/adapter/physical form", exception.Message, StringComparison.Ordinal);
     }
 
-    private static RunRequest Request(string workloadId, string physicalForm, string workloadVersion = "1.1.0") => new(
+    private static RunRequest Request(string workloadId, string physicalForm, string workloadVersion = "1.1.0", string adapter = BenchmarkAdapterRegistry.GroundworkV2Adapter) => new(
         ComparisonCohortId: "cohort",
         MeasurementSetId: "set",
         WorkloadId: workloadId,
@@ -56,7 +58,7 @@ public sealed class BenchmarkAdapterRegistryTests
         ProviderVersion: "3.46.0",
         ProviderTopology: "file-backed-distinct-connections",
         ProviderConfiguration: new Dictionary<string, string>(StringComparer.Ordinal),
-        Adapter: BenchmarkAdapterRegistry.GroundworkV2Adapter,
+        Adapter: adapter,
         PhysicalForm: physicalForm,
         Scale: "small",
         CommitSha: new string('a', 40),
