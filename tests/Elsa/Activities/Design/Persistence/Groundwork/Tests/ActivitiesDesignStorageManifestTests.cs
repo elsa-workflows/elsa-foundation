@@ -102,7 +102,7 @@ public sealed class ActivitiesDesignStorageManifestTests
     }
 
     [Fact]
-    public void Version_routes_declare_the_composite_indexes_required_by_each_public_query_shape()
+    public void Version_routes_share_one_bounded_composite_index_for_both_public_query_shapes()
     {
         var unit = ActivitiesDesignStorageManifest.Require(
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind);
@@ -114,13 +114,13 @@ public sealed class ActivitiesDesignStorageManifestTests
             unit,
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionIndex,
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionDefinitionIdField,
-            ActivitiesDesignStorageManifest.ActivityDefinitionVersionSemVerSortKeyField,
-            ActivitiesDesignStorageManifest.EntityIdField);
-        AssertIndex(
-            unit,
-            ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionAndSortKeyIndex,
-            ActivitiesDesignStorageManifest.ActivityDefinitionVersionDefinitionIdField,
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionSemVerSortKeyField);
+        Assert.Equal(
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionIndex,
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionAndSortKeyIndex);
+        Assert.Single(
+            unit.Indexes,
+            index => index.Name == ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionIndex);
     }
 
     [Fact]
@@ -128,20 +128,21 @@ public sealed class ActivitiesDesignStorageManifestTests
     {
         const int sqlServerMaxNonclusteredIndexKeyBytes = 1_700;
         const int sqlServerUnicodeBytesPerCodeUnit = 2;
+        const int groundworkScopeMaximumLength = 128;
         var unit = ActivitiesDesignStorageManifest.Require(
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind);
 
         foreach (var index in unit.Indexes.Where(index =>
-                     index.Name is ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionIndex or
-                         ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionAndSortKeyIndex))
+                     index.Name is ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionIndex))
         {
-            var keyBytes = index.Columns
+            var declaredKeyBytes = index.Columns
                 .Select(column => unit.Columns.Single(candidate => candidate.Name == column.Column))
                 .Where(column => column.Type == PortableType.String)
                 .Sum(column => column.MaxLength * sqlServerUnicodeBytesPerCodeUnit);
+            var keyBytes = declaredKeyBytes + groundworkScopeMaximumLength * sqlServerUnicodeBytesPerCodeUnit;
             Assert.True(
                 keyBytes <= sqlServerMaxNonclusteredIndexKeyBytes,
-                $"Index '{index.Name}' declares {keyBytes} bytes, over SQL Server's {sqlServerMaxNonclusteredIndexKeyBytes}-byte limit.");
+                $"Index '{index.Name}' requires {keyBytes} bytes including Groundwork's scoped key, over SQL Server's {sqlServerMaxNonclusteredIndexKeyBytes}-byte limit.");
         }
 
         var definitionUnit = ActivitiesDesignStorageManifest.Require(
@@ -280,11 +281,10 @@ public sealed class ActivitiesDesignStorageManifestTests
             {
                 Assert.DoesNotContain("comparisonKey", index.Columns.Select(column => column.Column));
 
-                // The compound version lookup is an exact (definition, sort-key)
-                // point lookup and is intentionally not a paging route.  All
-                // ordered/paged indexes carry the entity id as their final
-                // deterministic tie-breaker.
-                if (index.Name is not (ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionAndSortKeyIndex
+                // The version index intentionally serves both the ordered list and exact
+                // (definition, sort-key) lookup.  semVerSortKey is unique within a definition,
+                // so the exact lookup does not need the entity id in its physical key.
+                if (index.Name is not (ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionIndex
                     or ActivitiesDesignStorageManifest.ManagementExpiredIndex))
                     Assert.Contains(ActivitiesDesignStorageManifest.EntityIdField,
                         index.Columns.Select(column => column.Column));

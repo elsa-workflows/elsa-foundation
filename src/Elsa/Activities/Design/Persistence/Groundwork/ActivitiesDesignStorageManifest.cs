@@ -54,7 +54,8 @@ public static class ActivitiesDesignStorageManifest
     public const string ActivityDefinitionVersionDefinitionIdField = DefinitionIdField;
     public const string ActivityDefinitionVersionSemVerSortKeyField = "semVerSortKey";
     public const string ActivityDefinitionVersionByDefinitionIndex = "activity_definition_versions_by_definition";
-    public const string ActivityDefinitionVersionByDefinitionAndSortKeyIndex = "activity_definition_version_by_definition_and_sort_key";
+    /// <summary>Compatibility alias; exact version lookup shares the bounded definition index.</summary>
+    public const string ActivityDefinitionVersionByDefinitionAndSortKeyIndex = ActivityDefinitionVersionByDefinitionIndex;
 
     public const string FindActivityDefinitionByIdQuery = "find-activity-definition-by-id";
     public const string ListAllActivityDefinitionsQuery = "list-all-activity-definitions";
@@ -181,11 +182,10 @@ public static class ActivitiesDesignStorageManifest
         ],
         ActivityDefinitionVersionDocumentKind =>
         [
+            // semVerSortKey is unique within a definition.  The entity id remains part of the
+            // query order for deterministic paging, but is not needed in this lookup index.  Keeping
+            // it here would exceed SQL Server's 1,700-byte key budget once the scoped key is added.
             Index(ActivityDefinitionVersionByDefinitionIndex,
-                ActivityDefinitionVersionDefinitionIdField,
-                ActivityDefinitionVersionSemVerSortKeyField,
-                ActivityDefinitionVersionIdField),
-            Index(ActivityDefinitionVersionByDefinitionAndSortKeyIndex,
                 ActivityDefinitionVersionDefinitionIdField,
                 ActivityDefinitionVersionSemVerSortKeyField)
         ],
@@ -261,9 +261,9 @@ public static class ActivitiesDesignStorageManifest
         ManagementSearchField => ManagementSearchMaximumLength,
         // The SemVer encoder emits an 11-code-unit core plus one code unit per
         // prerelease identifier marker.  128 is deliberately large enough for
-        // long, valid prerelease identifiers while keeping the three-column
-        // (definitionId, sortKey, id) index within SQL Server's 1,700-byte key
-        // budget (256 + 128 + 450 UTF-16 code units = 1,668 bytes).
+        // long, valid prerelease identifiers while keeping the scoped
+        // (definitionId, sortKey) index within SQL Server's 1,700-byte key
+        // budget (128 + 256 + 128 UTF-16 code units = 1,024 bytes).
         ActivityDefinitionVersionSemVerSortKeyField => 128,
         ManagementValidFromField or ManagementValidToField or ManagementVisibilityField or
             ManagementSortField or ManagementAuthorityField or ManagementDraftStatusField or

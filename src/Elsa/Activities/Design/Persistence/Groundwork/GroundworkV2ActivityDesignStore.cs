@@ -471,7 +471,7 @@ public sealed class GroundworkV2ActivityDesignStore(
                 ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionIndex,
             (ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
                 ActivitiesDesignStorageManifest.FindActivityDefinitionVersionByDefinitionAndSortKeyQuery) =>
-                ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionAndSortKeyIndex,
+                ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionIndex,
             (_, "list-by-definition") => ActivitiesDesignStorageManifest.ByDefinitionIndex,
             (_, "list-by-head-version") => ActivitiesDesignStorageManifest.ByHeadVersionIndex,
             (_, "list-by-draft") => ActivitiesDesignStorageManifest.ByDraftIndex,
