@@ -1,0 +1,167 @@
+{
+  "schema": "elsa-groundwork-e3-baseline/v1",
+  "baseline_commit": "3e694377ff6a73dc6b80e34991222b1f8cd47509",
+  "scope": {
+    "source_roots": [
+      "src"
+    ],
+    "package_consumer_scope": "repository-wide *.csproj files, excluding .git/bin/obj directories",
+    "fresh_catalog_policy": true,
+    "migration_policy": "clean-break; no v1-to-v2 data migration or compatibility layer"
+  },
+  "v1_package_versions": {},
+  "v1_package_consumers": {
+    "Groundwork.Core": [],
+    "Groundwork.DiagnosticRecords": [],
+    "Groundwork.Documents": [],
+    "Groundwork.MongoDb": [],
+    "Groundwork.PostgreSql": [],
+    "Groundwork.Sqlite": [],
+    "Groundwork.SqlServer": []
+  },
+  "manifest": {
+    "file_count": 16,
+    "line_count": 1907,
+    "line_count_definition": "sum of source lines in src/**/*.cs files containing a manifest-source/storage-manifest/storage-schema declaration or a StorageManifest constructor",
+    "files": [
+      {
+        "path": "src/Elsa/Activities/Design/Persistence/Groundwork/ActivitiesDesignGroundworkStorageManifestSource.cs",
+        "line_count": 21,
+        "source_types": [
+          "ActivitiesDesignGroundworkStorageManifestSource"
+        ]
+      },
+      {
+        "path": "src/Elsa/Activities/Design/Persistence/Groundwork/ActivitiesDesignStorageManifest.cs",
+        "line_count": 275,
+        "source_types": [
+          "ActivitiesDesignStorageManifest"
+        ]
+      },
+      {
+        "path": "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2OpenTelemetryStorageSchema.cs",
+        "line_count": 182,
+        "source_types": [
+          "V2OpenTelemetryStorageSchema"
+        ]
+      },
+      {
+        "path": "src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/StructuredLogsGroundworkStorageSchema.cs",
+        "line_count": 59,
+        "source_types": [
+          "StructuredLogsGroundworkStorageSchema"
+        ]
+      },
+      {
+        "path": "src/Elsa/Foundation/Identity/Persistence/Groundwork/IdentityStorageManifest.cs",
+        "line_count": 65,
+        "source_types": [
+          "IdentityStorageManifest"
+        ]
+      },
+      {
+        "path": "src/Elsa/Foundation/Identity/Persistence/Groundwork/IdentityV2StorageManifest.cs",
+        "line_count": 222,
+        "source_types": [
+          "IdentityV2StorageManifest"
+        ]
+      },
+      {
+        "path": "src/Elsa/Persistence/Groundwork/V2/Runtime/ElsaRuntimeV2StorageManifest.cs",
+        "line_count": 445,
+        "source_types": [
+          "ElsaRuntimeV2StorageManifest"
+        ]
+      },
+      {
+        "path": "src/Elsa/Secrets/Persistence/Groundwork/SecretsGroundworkStorageSchema.cs",
+        "line_count": 42,
+        "source_types": [
+          "SecretsGroundworkStorageSchema"
+        ]
+      },
+      {
+        "path": "src/Elsa/Studio/Preferences/Persistence/Groundwork/StudioPreferencesGroundworkStorageSchema.cs",
+        "line_count": 20,
+        "source_types": [
+          "StudioPreferencesGroundworkStorageSchema"
+        ]
+      },
+      {
+        "path": "src/Elsa/Workflows/Design/Persistence/Groundwork/WorkflowsDesignGroundworkStorageManifestSource.cs",
+        "line_count": 21,
+        "source_types": [
+          "WorkflowsDesignGroundworkStorageManifestSource"
+        ]
+      },
+      {
+        "path": "src/Elsa/Workflows/Design/Persistence/Groundwork/WorkflowsDesignStorageManifest.cs",
+        "line_count": 202,
+        "source_types": [
+          "WorkflowsDesignStorageManifest"
+        ]
+      },
+      {
+        "path": "src/Elsa/Workflows/Publishing/Persistence/Groundwork/PublishingGroundworkStorageManifest.cs",
+        "line_count": 143,
+        "source_types": [
+          "PublishingGroundworkStorageManifest"
+        ]
+      },
+      {
+        "path": "src/Elsa/Workflows/Publishing/Persistence/Groundwork/PublishingGroundworkStorageManifestSource.cs",
+        "line_count": 21,
+        "source_types": [
+          "PublishingGroundworkStorageManifestSource"
+        ]
+      },
+      {
+        "path": "src/Elsa/Workflows/Runtime/Distributed/DistributedRuntimeStorageManifest.cs",
+        "line_count": 37,
+        "source_types": [
+          "DistributedRuntimeStorageManifest"
+        ]
+      },
+      {
+        "path": "src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/DistributedGroundworkStorageManifest.cs",
+        "line_count": 97,
+        "source_types": [
+          "DistributedGroundworkStorageManifest"
+        ]
+      },
+      {
+        "path": "src/Elsa3/Activities/Design/Import/Persistence/Groundwork/Elsa3ImportStorageManifest.cs",
+        "line_count": 55,
+        "source_types": [
+          "Elsa3ImportStorageManifest"
+        ]
+      }
+    ]
+  },
+  "logical_index_declaration_sites": {
+    "count": 0,
+    "sites": []
+  },
+  "bounded_query_declaration_sites": {
+    "count": 0,
+    "historical_issue_baseline": 28,
+    "sites": []
+  },
+  "accept_scan_markers": {
+    "count": 3,
+    "sites": [
+      {
+        "path": "src/Elsa/Activities/Design/Persistence/Groundwork/AcceptedScans.cs",
+        "line": 3
+      },
+      {
+        "path": "src/Elsa/Secrets/Persistence/Groundwork/AcceptedScans.cs",
+        "line": 3
+      },
+      {
+        "path": "src/Elsa/Workflows/Design/Persistence/Groundwork/AcceptedScans.cs",
+        "line": 3
+      }
+    ]
+  }
+}
