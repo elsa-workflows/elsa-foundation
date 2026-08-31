@@ -3,6 +3,7 @@ using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Sqlite;
@@ -338,7 +339,7 @@ public sealed class GroundworkV2WorkflowDispatchStoreTests
         }
     }
 
-    private sealed class CountingSession(IStorageSession inner, ICollection<QueryRequest> requests) : IStorageSession, IConcurrencyStorageSession
+    private sealed class CountingSession(IStorageSession inner, ICollection<QueryRequest> requests) : SynchronousStorageSessionTestDouble, IStorageSession, IConcurrencyStorageSession
     {
         public StorageUnit Unit => inner.Unit;
         public StorageAccess Access => inner.Access;
@@ -390,7 +391,7 @@ public sealed class GroundworkV2WorkflowDispatchStoreTests
         public StorageUnit Unit(string unitId, string? targetName = null) => unit;
     }
 
-    private sealed class RecordingSession(StorageUnit unit) : IStorageSession
+    private sealed class RecordingSession(StorageUnit unit) : SynchronousStorageSessionTestDouble, IStorageSession
     {
         public StorageUnit Unit { get; } = unit;
         public StorageAccess Access => StorageAccess.Scoped(new StorageScope("tenant-a"));

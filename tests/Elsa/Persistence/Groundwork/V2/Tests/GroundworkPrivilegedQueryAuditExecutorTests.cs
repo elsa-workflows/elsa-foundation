@@ -1,6 +1,7 @@
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Store;
@@ -314,7 +315,7 @@ public sealed class GroundworkPrivilegedQueryAuditExecutorTests
         }
     }
 
-    private sealed class NoOpSession(StorageUnit unit, StorageAccess access) : IStorageSession
+    private sealed class NoOpSession(StorageUnit unit, StorageAccess access) : SynchronousStorageSessionTestDouble, IStorageSession
     {
         public StorageUnit Unit { get; } = unit;
         public StorageAccess Access { get; } = access;
@@ -329,7 +330,7 @@ public sealed class GroundworkPrivilegedQueryAuditExecutorTests
 
     }
 
-    private sealed class QueryCapableSession(StorageUnit unit, StorageAccess access) : IStorageSession, IPrivilegedCrossScopeQuerySession
+    private sealed class QueryCapableSession(StorageUnit unit, StorageAccess access) : SynchronousStorageSessionTestDouble, IStorageSession, IPrivilegedCrossScopeQuerySession
     {
         public StorageUnit Unit { get; } = unit;
         public StorageAccess Access { get; } = access;

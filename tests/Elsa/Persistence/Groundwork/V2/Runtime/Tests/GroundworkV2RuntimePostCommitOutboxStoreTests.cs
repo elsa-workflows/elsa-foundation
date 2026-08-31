@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Sqlite;
@@ -618,7 +619,7 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStoreTests
             unitId == unit.Id.Value ? unit : ElsaRuntimeV2StorageManifest.Require(unitId);
     }
 
-    private sealed class NoIoSession(StorageUnit unit) : IStorageSession
+    private sealed class NoIoSession(StorageUnit unit) : SynchronousStorageSessionTestDouble, IStorageSession
     {
         public StorageUnit Unit { get; } = unit;
         public StorageAccess Access => StorageAccess.Scoped(new StorageScope("tenant-a"));
@@ -763,7 +764,7 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStoreTests
                 : ElsaRuntimeV2StorageManifest.Require(unitId);
     }
 
-    private sealed class RecordingSession(StorageUnit unit, ICollection<QueryRequest> requests) : IStorageSession
+    private sealed class RecordingSession(StorageUnit unit, ICollection<QueryRequest> requests) : SynchronousStorageSessionTestDouble, IStorageSession
     {
         public StorageUnit Unit { get; } = unit;
         public StorageAccess Access => StorageAccess.Scoped(new StorageScope("tenant-a"));

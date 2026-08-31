@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork.Runtime;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Store;
@@ -136,7 +137,7 @@ public sealed class GroundworkRuntimeRowStoreTests
         Assert.Throws<NotSupportedException>(() => rows.ConditionalUpsert("bookmark-1", "1.0.0", "{}", 41));
     }
 
-    private class MemorySession(StorageUnit unit) : IStorageSession
+    private class MemorySession(StorageUnit unit) : SynchronousStorageSessionTestDouble, IStorageSession
     {
         private readonly Dictionary<string, StoredEntry> entries = new(StringComparer.Ordinal);
 

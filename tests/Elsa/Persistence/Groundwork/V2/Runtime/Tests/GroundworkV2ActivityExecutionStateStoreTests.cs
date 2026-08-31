@@ -3,6 +3,7 @@ using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.MongoDb;
 using Groundwork.PostgreSql;
@@ -316,7 +317,7 @@ public sealed class GroundworkV2ActivityExecutionStateStoreTests
     }
 
     private sealed class RecordingSession(IStorageSession inner, ICollection<QueryRequest> requests)
-        : IStorageSession, IConcurrencyStorageSession
+        : SynchronousStorageSessionTestDouble, IStorageSession, IConcurrencyStorageSession
     {
         public StorageUnit Unit => inner.Unit;
         public StorageAccess Access => inner.Access;
@@ -367,7 +368,7 @@ public sealed class GroundworkV2ActivityExecutionStateStoreTests
         }
     }
 
-    private sealed class InterleavingSession(StorageUnit unit) : IStorageSession, IConcurrencyStorageSession
+    private sealed class InterleavingSession(StorageUnit unit) : SynchronousStorageSessionTestDouble, IStorageSession, IConcurrencyStorageSession
     {
         private readonly Dictionary<string, StoredEntry> entries = new(StringComparer.Ordinal);
 

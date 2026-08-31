@@ -5,6 +5,7 @@ using Elsa.Foundation.Identity.Persistence.Groundwork.Exceptions;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Sqlite;
@@ -635,8 +636,7 @@ public sealed class AspNetCoreIdentityReconciliationTests
         });
     }
 
-    private sealed class ControlledStorageSession(IStorageSession inner, ControlledSessionState state) :
-        IStorageSession,
+    private sealed class ControlledStorageSession(IStorageSession inner, ControlledSessionState state) : SynchronousStorageSessionTestDouble, IStorageSession,
         IConcurrencyStorageSession
     {
         public StorageUnit Unit => inner.Unit;

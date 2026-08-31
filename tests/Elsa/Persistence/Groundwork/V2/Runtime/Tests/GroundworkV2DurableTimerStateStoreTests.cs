@@ -3,6 +3,7 @@ using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Sqlite;
@@ -387,7 +388,7 @@ public sealed class GroundworkV2DurableTimerStateStoreTests
         }
     }
 
-    private sealed class RecordingSession(StorageUnit unit, ICollection<QueryRequest> requests) : IStorageSession
+    private sealed class RecordingSession(StorageUnit unit, ICollection<QueryRequest> requests) : SynchronousStorageSessionTestDouble, IStorageSession
     {
         public StorageUnit Unit { get; } = unit;
         public StorageAccess Access => StorageAccess.Scoped(new StorageScope("tenant-a"));
@@ -421,7 +422,7 @@ public sealed class GroundworkV2DurableTimerStateStoreTests
         }
     }
 
-    private sealed class InterleavingSession(StorageUnit unit) : IStorageSession, IConcurrencyStorageSession
+    private sealed class InterleavingSession(StorageUnit unit) : SynchronousStorageSessionTestDouble, IStorageSession, IConcurrencyStorageSession
     {
         private readonly Dictionary<string, StoredEntry> entries = new(StringComparer.Ordinal);
         public StorageUnit Unit { get; } = unit;

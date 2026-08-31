@@ -3,6 +3,7 @@ using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.MongoDb;
 using Groundwork.PostgreSql;
@@ -396,7 +397,7 @@ public sealed class GroundworkV2WorkflowSchedulerPoisonStoreTests
         public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, IReadOnlyList<string> unitIds, string? targetName = null) => throw new NotSupportedException();
         public StorageUnit Unit(string unitId, string? targetName = null) => unit;
 
-        private sealed class RecordingSession(IStorageSession inner, ICollection<QueryRequest> requests) : IStorageSession, IConcurrencyStorageSession
+        private sealed class RecordingSession(IStorageSession inner, ICollection<QueryRequest> requests) : SynchronousStorageSessionTestDouble, IStorageSession, IConcurrencyStorageSession
         {
             public StorageUnit Unit => inner.Unit;
             public StorageAccess Access => inner.Access;
@@ -413,7 +414,7 @@ public sealed class GroundworkV2WorkflowSchedulerPoisonStoreTests
         }
     }
 
-    private sealed class InterleavingSession(StorageUnit unit) : IStorageSession, IConcurrencyStorageSession
+    private sealed class InterleavingSession(StorageUnit unit) : SynchronousStorageSessionTestDouble, IStorageSession, IConcurrencyStorageSession
     {
         private readonly Dictionary<string, StoredEntry> entries = new(StringComparer.Ordinal);
         public StorageUnit Unit { get; } = unit;
@@ -457,7 +458,7 @@ public sealed class GroundworkV2WorkflowSchedulerPoisonStoreTests
         private static string Id(StorageValues values) => (string)values.Values[ElsaRuntimeV2StorageManifest.IdField]!;
     }
 
-    private sealed class CyclingSession(StorageUnit unit, StorageValues row, IReadOnlyList<string> tokens) : IStorageSession
+    private sealed class CyclingSession(StorageUnit unit, StorageValues row, IReadOnlyList<string> tokens) : SynchronousStorageSessionTestDouble, IStorageSession
     {
         public StorageUnit Unit { get; } = unit;
         public StorageAccess Access { get; } = StorageAccess.Scoped(new StorageScope("tenant-a"));

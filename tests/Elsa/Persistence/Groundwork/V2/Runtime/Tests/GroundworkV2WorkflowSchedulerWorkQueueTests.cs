@@ -3,6 +3,7 @@ using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Sqlite;
@@ -606,7 +607,7 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueueTests
     private sealed class RecordingSession(
         IStorageSession inner,
         ICollection<QueryRequest>? queryRequests,
-        Action? beforeFencedDelete) : IStorageSession, IConcurrencyStorageSession, ICompareAndDeleteStorageSession
+        Action? beforeFencedDelete) : SynchronousStorageSessionTestDouble, IStorageSession, IConcurrencyStorageSession, ICompareAndDeleteStorageSession
     {
         private Action? beforeFencedDelete = beforeFencedDelete;
 

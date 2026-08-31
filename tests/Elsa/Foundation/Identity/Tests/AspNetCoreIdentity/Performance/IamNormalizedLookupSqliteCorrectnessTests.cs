@@ -9,6 +9,7 @@ using Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Store;
@@ -346,7 +347,7 @@ public sealed class IamNormalizedLookupSqliteCorrectnessTests
 
     private sealed class RecordingSession(
         IStorageSession inner,
-        ICollection<QueryObservation> observations) : IStorageSession, IConcurrencyStorageSession
+        ICollection<QueryObservation> observations) : SynchronousStorageSessionTestDouble, IStorageSession, IConcurrencyStorageSession
     {
         public StorageUnit Unit => inner.Unit;
         public StorageAccess Access => inner.Access;

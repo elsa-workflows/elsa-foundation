@@ -1,5 +1,6 @@
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.MongoDb;
 using Groundwork.PostgreSql;
@@ -289,7 +290,7 @@ public sealed class GroundworkActivitiesDesignV2ProviderMatrixTests
 
         private sealed class RecordingSession(
             IStorageSession inner,
-            ICollection<QueryRequest> queryRequests) : IStorageSession, IPrivilegedCrossScopeQuerySession
+            ICollection<QueryRequest> queryRequests) : SynchronousStorageSessionTestDouble, IStorageSession, IPrivilegedCrossScopeQuerySession
         {
             public StorageUnit Unit => inner.Unit;
             public StorageAccess Access => inner.Access;

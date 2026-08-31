@@ -3,6 +3,7 @@ using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Primitives.Entities;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Store;
@@ -184,7 +185,7 @@ internal sealed class DesignGroundworkTestPersistence : IGroundworkStorageSessio
         public string? IndexName => Options?.SelectedIndex;
     }
 
-    private sealed class RecordingStorageSession(IStorageSession inner, ICollection<RecordedQuery> queries) : IStorageSession
+    private sealed class RecordingStorageSession(IStorageSession inner, ICollection<RecordedQuery> queries) : SynchronousStorageSessionTestDouble, IStorageSession
     {
         public StorageUnit Unit => inner.Unit;
         public StorageAccess Access => inner.Access;
