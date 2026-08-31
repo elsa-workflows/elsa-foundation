@@ -22,7 +22,7 @@
     },
     {
       "purpose": "Closeout guard for exact package family and all preserved EF facts",
-      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj --no-restore --no-build --filter FullyQualifiedName~Current_groundwork_family_and_ef_oracle_ledger_are_deletion_ready --logger 'console;verbosity=minimal'",
+      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj --no-restore --no-build --filter FullyQualifiedName~Current_groundwork_family_and_ef_oracle_ledger_are_closeout_ready --logger 'console;verbosity=minimal'",
       "passed": 1,
       "failed": 0,
       "skipped": 0,
