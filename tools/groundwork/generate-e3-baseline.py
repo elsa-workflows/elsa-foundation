@@ -26,10 +26,11 @@ V1_PACKAGES = (
     "Groundwork.Sqlite",
     "Groundwork.SqlServer",
 )
-# The frozen E3 source inventory is the 0.0.1-preview.131 Groundwork family.  The
-# provider package ids are intentionally reused by v2, so package-name matching
-# alone would count current v2 references as historical v1 consumers.
-V1_PACKAGE_VERSION = "0.0.1-preview.131"
+# Groundwork v1 packages all use the 0.0.1-preview.* version family. Provider
+# package ids are intentionally reused by v2, so package-name matching alone
+# would count current v2 references as historical v1 consumers, while matching
+# only the frozen .131 pin would miss an older stray v1 reference.
+V1_PACKAGE_VERSION_PREFIX = "0.0.1-preview."
 
 MANIFEST_SOURCE_PATTERN = re.compile(
     r"\bclass\s+\w*(?:ManifestSource|StorageManifest|StorageSchema)\b"
@@ -58,6 +59,10 @@ def source_files(root: Path) -> list[Path]:
 
 def read_source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def is_v1_package_version(version: str) -> bool:
+    return version.startswith(V1_PACKAGE_VERSION_PREFIX)
 
 
 def line_sites(root: Path, pattern: re.Pattern[str]) -> list[dict[str, Any]]:
@@ -126,7 +131,7 @@ def package_inventory(root: Path) -> tuple[dict[str, str], dict[str, list[str]]]
     versions = {
         package: version
         for package, version in central_versions.items()
-        if version == V1_PACKAGE_VERSION
+        if is_v1_package_version(version)
     }
 
     consumers = {package: [] for package in V1_PACKAGES}
@@ -148,7 +153,7 @@ def package_inventory(root: Path) -> tuple[dict[str, str], dict[str, list[str]]]
                 version = properties.get("GroundworkVersion", "")
             if not version:
                 version = central_versions.get(package, "")
-            if version == V1_PACKAGE_VERSION:
+            if is_v1_package_version(version):
                 consumers[package].append(relative(path, root))
     return versions, {package: sorted(paths) for package, paths in consumers.items()}
 
