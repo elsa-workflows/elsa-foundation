@@ -109,15 +109,24 @@ public sealed class ActivitiesDesignStorageManifestTests
         Assert.Equal(
             128,
             unit.Columns.Single(column => column.Name == ActivitiesDesignStorageManifest.ActivityDefinitionVersionSemVerSortKeyField).MaxLength);
+        Assert.False(unit.Columns.Single(column =>
+            column.Name == ActivitiesDesignStorageManifest.ActivityDefinitionVersionDefinitionIdField).IsNullable);
+        Assert.False(unit.Columns.Single(column =>
+            column.Name == ActivitiesDesignStorageManifest.ActivityDefinitionVersionSemVerSortKeyField).IsNullable);
 
-        AssertIndex(
+        var versionIndex = AssertIndex(
             unit,
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionIndex,
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionDefinitionIdField,
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionSemVerSortKeyField);
+        Assert.True(versionIndex.IsUnique);
         Assert.Equal(
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionIndex,
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionAndSortKeyIndex);
+        Assert.Equal(
+            [ActivitiesDesignStorageManifest.ActivityDefinitionVersionDefinitionIdField,
+                ActivitiesDesignStorageManifest.ActivityDefinitionVersionSemVerSortKeyField],
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionOrder.Select(order => order.Field));
         Assert.Single(
             unit.Indexes,
             index => index.Name == ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionIndex);
@@ -292,9 +301,10 @@ public sealed class ActivitiesDesignStorageManifestTests
         }
     }
 
-    private static void AssertIndex(StorageUnit unit, string name, params string[] columns)
+    private static IndexDefinition AssertIndex(StorageUnit unit, string name, params string[] columns)
     {
         var index = Assert.Single(unit.Indexes, candidate => candidate.Name == name);
         Assert.Equal(columns, index.Columns.Select(column => column.Column));
+        return index;
     }
 }

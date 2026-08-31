@@ -137,7 +137,7 @@ public static class ActivitiesDesignStorageManifest
     public static IReadOnlyList<ActivityDesignQueryOrder> ActivityDefinitionDescriptionOrder =>
         [new(ActivityDefinitionDescriptionField), new(EntityIdField)];
     public static IReadOnlyList<ActivityDesignQueryOrder> ActivityDefinitionVersionOrder =>
-        [new(ActivityDefinitionVersionDefinitionIdField), new(ActivityDefinitionVersionSemVerSortKeyField), new(EntityIdField)];
+        [new(ActivityDefinitionVersionDefinitionIdField), new(ActivityDefinitionVersionSemVerSortKeyField)];
 
 
     public static IReadOnlyList<StorageUnit> CreateUnits() => UnitNames.Select(pair => CreateUnit(pair.Id, pair.Name)).ToArray();
@@ -160,14 +160,25 @@ public static class ActivitiesDesignStorageManifest
         {
             if (field is IdField or SchemaVersionField or ContentField or RevisionField or UpdatedAtField or ScopeField or TenantIdField)
                 continue;
-            declaration.String(field, ProjectionLength(field));
+            if (id == ActivityDefinitionVersionDocumentKind &&
+                field is ActivityDefinitionVersionDefinitionIdField or ActivityDefinitionVersionSemVerSortKeyField)
+                declaration.String(field, ProjectionLength(field), column => column.Required());
+            else
+                declaration.String(field, ProjectionLength(field));
         }
         foreach (var index in IndexesFor(id))
-            declaration.Index(index.Name, configure =>
+        {
+            void Configure(IndexBuilder configure)
             {
                 foreach (var column in index.Columns)
                     configure.Column(column);
-            });
+            }
+
+            if (index.Unique)
+                declaration.UniqueIndex(index.Name, Configure);
+            else
+                declaration.Index(index.Name, Configure);
+        }
         return declaration.Scoped().Build() with { SchemaVersion = StorageSchemaVersion };
     }
 
@@ -182,12 +193,13 @@ public static class ActivitiesDesignStorageManifest
         ],
         ActivityDefinitionVersionDocumentKind =>
         [
-            // semVerSortKey is unique within a definition.  The entity id remains part of the
-            // query order for deterministic paging, but is not needed in this lookup index.  Keeping
-            // it here would exceed SQL Server's 1,700-byte key budget once the scoped key is added.
+            // semVerSortKey is unique within a definition.  The bounded route therefore uses the
+            // unique domain tuple directly for ordering and lookup; adding the entity id would
+            // exceed SQL Server's 1,700-byte key budget once the scoped key is added.
             Index(ActivityDefinitionVersionByDefinitionIndex,
                 ActivityDefinitionVersionDefinitionIdField,
-                ActivityDefinitionVersionSemVerSortKeyField)
+                ActivityDefinitionVersionSemVerSortKeyField,
+                unique: true)
         ],
         ActivityDefinitionAuthoringStateDocumentKind => [Index(ByDefinitionIndex, DefinitionIdField, IdField), Index(ByHeadVersionIndex, HeadVersionIdField, IdField)],
         ActivityDefinitionDraftDocumentKind => [Index(ByDefinitionIndex, DefinitionIdField, IdField)],
@@ -250,7 +262,10 @@ public static class ActivitiesDesignStorageManifest
         (DesignOperationDocumentKind, "elsa_activity_design_operations")
     ];
 
-    private static IndexSpec Index(string name, params string[] columns) => new(name, columns);
+    private static IndexSpec Index(string name, params string[] columns) => new(name, columns, false);
+
+    private static IndexSpec Index(string name, string column, string secondColumn, bool unique) =>
+        new(name, [column, secondColumn], unique);
 
     private static int ProjectionLength(string field) => field switch
     {
@@ -271,5 +286,5 @@ public static class ActivitiesDesignStorageManifest
         _ => MaximumProjectionLength
     };
 
-    private sealed record IndexSpec(string Name, IReadOnlyList<string> Columns);
+    private sealed record IndexSpec(string Name, IReadOnlyList<string> Columns, bool Unique);
 }
