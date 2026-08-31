@@ -2,14 +2,21 @@
 
 **Work unit:** `139-groundwork-diagnostics-persistence`
 **Scope:** pending T053/T054 only; no EF project or test deletion is authorized by this intake.
-**Captured:** 2026-07-24 on `codex/642-groundwork-diagnostics-replay` (`46f276651`).
+**Captured:** 2026-08-31 on `codex/642-diagnostics-closeout`, against Elsa `main` `3e694377f`.
+**Groundwork baseline:** exact `0.4.0-preview.1` (release SHA `701229e0a736670f406140ed7c61f00e10156ffd`).
 
 This follows Spec 093's source-method ledger and its shared-host addendum. It inventories every
 `[Fact]` in the two EF test projects, including the SQLite feature/host tests that a token-only
 EF scan can miss. A row is not deletion approval: framework §2.21.1 requires explicit recorded
 architect approval before the original test can be removed. `Covered` means a named Groundwork or
-provider-neutral test has been inspected and exercises the objective; `blocked` means a pending
-Groundwork contract test is explicitly retained and T054 cannot delete the oracle yet.
+provider-neutral test has been inspected and exercises the objective. `EF-mechanism-only` means the
+behavior is an implementation detail of the EF oracle with no provider-neutral contract to preserve.
+Neither label is deletion approval: the two mechanism-only rows still require explicit architect
+disposition before T053/T054.
+
+**Disposition: 44 covered; 2 EF-mechanism-only.** Every one of the 46 original EF facts has an
+explicit row and named outcome; the ledger is mechanically checked by
+`DiagnosticsPersistenceArchitectureTests`.
 
 ## Structured Logs — 30 facts
 
@@ -72,13 +79,15 @@ Groundwork contract test is explicitly retained and T054 cannot delete the oracl
 The two project trees contain exactly **46 facts**: 30 Structured Logs and 16 OpenTelemetry.
 Support-only EF sources were opened as part of the reachability review: `StructuredLogsTestHost`,
 `OpenTelemetryTestHost`, `OpenTelemetryPersistenceTestContext`, and the fault-injecting factories.
-The added shared-host lifecycle test is the resulting non-token-scan coverage.
+The added shared-host lifecycle test is the resulting non-token-scan coverage. The repeated-trace
+Groundwork conformance row is covered on the current adapter head; the former Groundwork #130
+blocker is historical and is not a reason to delete or retain a test by itself.
 
 Before T053/T054 can be approved and performed:
 
-1. Resolve the one remaining OpenTelemetry test above without broad client-side evaluation, then
-   rerun its Groundwork suite and the four-provider conformance relevant to the repaired behavior.
-2. Obtain explicit recorded architect approval for every original EF-test removal, including the two
-   EF-mechanism-only factory/sentinel rows.
-3. Satisfy the existing T050-T052 performance/remediation gates and the uncompleted T047/T057 final
-   architecture and zero-EF checks. This ledger does not mark any task complete.
+1. The 44 covered rows must remain green in the exact current-family certification and preserved
+   provider-neutral suites; the two EF-mechanism-only rows require explicit recorded architect
+   disposition before their source tests are removed.
+2. Satisfy the existing T050-T052 performance/remediation gates and the uncompleted T047/T057 final
+   architecture and zero-EF checks. #646 owns the accepted diagnostics verdict and #647 owns the
+   dependency-ordered deletion. This ledger does not authorize or mark either deletion task complete.
