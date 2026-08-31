@@ -221,38 +221,54 @@ public sealed class ProtocolAndGateTests
             GatePolicy.DefaultFor(GateClass.RuntimeHotPath).MaxP95Milliseconds);
     }
 
-    /// <summary>
-    /// The counterpart to the test above: the ratified bounded-read ceiling binds nothing, because
-    /// <c>DefaultFor</c> keys on gate class rather than workload. That is a recorded gap awaiting a
-    /// ratification decision (#1176), not a live gate, so it is pinned rather than fixed here — wiring it
-    /// fails this test, which is the point: the constant's documentation must be corrected in the same
-    /// change that makes it enforce something.
-    /// </summary>
-    [Fact]
-    public void Ratified_bounded_read_ceiling_is_declared_but_enforced_by_no_construction_path()
+    [Theory]
+    [InlineData("bookmark-lookup", WorkloadBudgetClass.BoundedRead, 40d)]
+    [InlineData("recovery-scan", WorkloadBudgetClass.BoundedRead, 40d)]
+    [InlineData("due-timer-selection", WorkloadBudgetClass.BoundedRead, 40d)]
+    [InlineData("recurring-schedule-selection", WorkloadBudgetClass.BoundedRead, 40d)]
+    [InlineData("trigger-binding-stimulus-lookup", WorkloadBudgetClass.BoundedRead, 40d)]
+    [InlineData("checkpoint-commit", WorkloadBudgetClass.DurableWrite, 150d)]
+    [InlineData("command-send-lease-ack", WorkloadBudgetClass.DurableWrite, 150d)]
+    [InlineData("diagnostics-durable-history", WorkloadBudgetClass.DurableWrite, 150d)]
+    [InlineData("iam-normalized-lookup-update", WorkloadBudgetClass.DurableWrite, 150d)]
+    [InlineData("outbox-drain", WorkloadBudgetClass.DurableWrite, 150d)]
+    [InlineData("placement-takeover", WorkloadBudgetClass.DurableWrite, 150d)]
+    [InlineData("queue-drain", WorkloadBudgetClass.DurableWrite, 150d)]
+    [InlineData("secret-create-read-list", WorkloadBudgetClass.DurableWrite, 150d)]
+    public void Every_catalog_workload_has_an_explicit_ratified_budget(
+        string workloadId,
+        WorkloadBudgetClass expectedClass,
+        double expectedCeiling)
     {
-        var review = new GateReview("w", "1.0.0", "proposer", "reviewer", "ref", "2026-08-04T00:00:00Z");
-        double?[] ceilings =
-        [
-            GatePolicy.DefaultFor(GateClass.RuntimeHotPath).MaxP95Milliseconds,
-            GatePolicy.DefaultFor(GateClass.OrdinaryStore).MaxP95Milliseconds,
-            GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, review).MaxP95Milliseconds
-        ];
+        var policy = GatePolicy.ForWorkload(workloadId, GateClass.RuntimeHotPath);
 
-        Assert.DoesNotContain(GatePolicy.RatifiedBoundedReadPathP95Milliseconds, ceilings);
+        Assert.Equal(workloadId, policy.WorkloadId);
+        Assert.Equal(expectedClass, policy.BudgetClass);
+        Assert.Equal(expectedCeiling, policy.MaxP95Milliseconds);
+    }
 
-        // Behavior alone would miss a workload-aware overload added alongside the existing one, so also
-        // hold the harness to referencing the constant nowhere but its own declaration.
-        var references = Directory
-            .EnumerateFiles(
-                Path.Combine(Repository.Root(), "benchmarks", "Elsa.Groundwork.StorePerformance.Benchmarks"),
-                "*.cs",
-                SearchOption.AllDirectories)
-            .SelectMany(File.ReadAllLines)
-            .Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal))
-            .Count(line => line.Contains(nameof(GatePolicy.RatifiedBoundedReadPathP95Milliseconds), StringComparison.Ordinal));
+    [Fact]
+    public void Unknown_workload_budget_fails_closed_as_a_blocked_gate()
+    {
+        var comparison = new ComparisonResult(
+            1,
+            new string('a', 64),
+            "unknown-workload",
+            "1.0.0",
+            "sqlite",
+            "100k",
+            "sqlite/ef/store",
+            "sqlite/groundwork/store",
+            true,
+            true,
+            [],
+            [],
+            null);
 
-        Assert.Equal(1, references);
+        var gate = GateEvaluator.Evaluate(GatePolicy.DefaultFor(GateClass.RuntimeHotPath), comparison);
+
+        Assert.Equal(PerformanceVerdict.Blocked, gate.Verdict);
+        Assert.Contains("no ratified absolute latency budget", gate.Reason, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -268,6 +284,12 @@ public sealed class ProtocolAndGateTests
         Assert.Equal(40d, explicitCeiling.MaxP95Milliseconds);
         Assert.Throws<PerformanceContractException>(() =>
             GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, review, 0d));
+
+        var boundedReview = review with { WorkloadId = "bookmark-lookup", ReviewReference = "bounded-read-review" };
+        var boundedDefault = GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, boundedReview).ForWorkload("bookmark-lookup");
+        var boundedOverride = GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, boundedReview, 25d).ForWorkload("bookmark-lookup");
+        Assert.Equal(40d, boundedDefault.MaxP95Milliseconds);
+        Assert.Equal(25d, boundedOverride.MaxP95Milliseconds);
     }
 
     [Fact]

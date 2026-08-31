@@ -11,10 +11,12 @@ public static class BenchmarkAdapterAdmission
     public const string IamWorkloadId = "iam-normalized-lookup-update";
     public const string IamMappingRequiredReason = "iam.adapter-form.ratification-required";
 
-    // Deliberately empty: Spec 094 names candidate forms, not EF/Groundwork adapter bindings. A mapping
-    // may only be added with the separate IAM admission decision; no adapter identity is inferred here.
     private static readonly IReadOnlySet<AdapterFormMapping> RatifiedIamProductionMappings =
-        new HashSet<AdapterFormMapping>();
+        new HashSet<AdapterFormMapping>
+        {
+            new(IamWorkloadId, "1.1.0", "ef-aspnetcore-identity", "ef-identity-relational-schema"),
+            new(IamWorkloadId, "1.1.0", "groundwork-aspnetcore-identity", "entity-type-specific-physical-tables-current-identity-shape")
+        };
 
     public static void RequireAdmitted(PerformanceWorkload workload, string adapter, string physicalForm)
     {

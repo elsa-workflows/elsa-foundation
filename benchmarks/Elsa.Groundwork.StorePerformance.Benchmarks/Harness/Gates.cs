@@ -6,6 +6,7 @@ using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 
 public enum GateClass { RuntimeHotPath, OrdinaryStore }
+public enum WorkloadBudgetClass { BoundedRead, DurableWrite }
 public enum PerformanceVerdict { Pass, Redesign, Blocked, NotHotPath }
 public sealed record GateReview(string WorkloadId, string WorkloadVersion, string ProposedBy, string ReviewedBy, string ReviewReference, string ReviewedAtUtc);
 /// <summary>
@@ -20,29 +21,58 @@ public sealed record GatePolicy(GateClass GateClass, double MaxP95Ratio, double 
     /// path applies; see the bounded-read constant below for the one that does not.</summary>
     public const double RatifiedDurableWritePathP95Milliseconds = 150d;
 
-    /// <summary>
-    /// Ratified 2026-08-04 for the five bounded-read runtime workloads — bookmark-lookup, recovery-scan,
-    /// due-timer-selection, recurring-schedule-selection, trigger-binding-stimulus-lookup — and
-    /// <b>enforced by nothing</b>. <see cref="DefaultFor"/> keys on <see cref="GateClass"/>, not on
-    /// workload, so those five carry the 150 ms durable-write ceiling instead: 3.75x looser than ratified.
-    /// A bounded read regressing from 5 ms to 140 ms passes the default gate. Only a reviewed policy file
-    /// naming the value per workload (<see cref="Replacement"/>) enforces it today.
-    /// Whether to wire this or supersede it once measured per-workload ceilings land is an open
-    /// ratification decision — issue #1176, and the "the bounded-read ceiling is not enforced" correction
-    /// in specs/094-harden-groundwork-stores/contracts/runtime-absolute-budget-basis.md. Do not read this
-    /// declaration as a live gate.
-    /// </summary>
+    /// <summary>Ratified 2026-08-04 for bounded-read workloads.</summary>
     public const double RatifiedBoundedReadPathP95Milliseconds = 40d;
 
-    /// <summary>
-    /// The runtime hot path carries an absolute ceiling as well as its ratios. Leaving it unset would let a
-    /// workload inside its relative comparison sail past the latency budget the ceiling exists to enforce.
-    /// The ceiling applied is the durable-write one for <i>every</i> runtime workload, bounded reads
-    /// included; this method has no workload argument to distinguish them.
-    /// </summary>
+    /// <summary>Optional workload binding used to ensure gate evaluation has an explicit ratified budget.</summary>
+    public string? WorkloadId { get; init; }
+    public WorkloadBudgetClass? BudgetClass { get; init; }
+    private bool HasExplicitP95Ceiling { get; init; }
+
+    /// <summary>The class default remains available for callers that have not yet bound a workload.</summary>
     public static GatePolicy DefaultFor(GateClass gateClass) => gateClass == GateClass.RuntimeHotPath
         ? new(gateClass, 1.10, .90, 2.0, null, RatifiedDurableWritePathP95Milliseconds)
         : new(gateClass, 1.25, .80, 2.0, null);
+
+    /// <summary>Returns the ratified policy for a catalog workload, or an unbudgeted policy that evaluates blocked.</summary>
+    public static GatePolicy ForWorkload(string workloadId, GateClass gateClass) =>
+        DefaultFor(gateClass).ForWorkload(workloadId);
+
+    public GatePolicy ForWorkload(string workloadId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workloadId);
+        if (!WorkloadBudgets.TryGetValue(workloadId, out var budgetClass))
+            return this with { WorkloadId = workloadId, BudgetClass = null, MaxP95Milliseconds = null };
+
+        return this with
+        {
+            WorkloadId = workloadId,
+            BudgetClass = budgetClass,
+            MaxP95Milliseconds = HasExplicitP95Ceiling ? MaxP95Milliseconds : CeilingFor(budgetClass)
+        };
+    }
+
+    private static double CeilingFor(WorkloadBudgetClass budgetClass) => budgetClass == WorkloadBudgetClass.BoundedRead
+        ? RatifiedBoundedReadPathP95Milliseconds
+        : RatifiedDurableWritePathP95Milliseconds;
+
+    private static readonly IReadOnlyDictionary<string, WorkloadBudgetClass> WorkloadBudgets =
+        new Dictionary<string, WorkloadBudgetClass>(StringComparer.Ordinal)
+        {
+            ["bookmark-lookup"] = WorkloadBudgetClass.BoundedRead,
+            ["recovery-scan"] = WorkloadBudgetClass.BoundedRead,
+            ["due-timer-selection"] = WorkloadBudgetClass.BoundedRead,
+            ["recurring-schedule-selection"] = WorkloadBudgetClass.BoundedRead,
+            ["trigger-binding-stimulus-lookup"] = WorkloadBudgetClass.BoundedRead,
+            ["checkpoint-commit"] = WorkloadBudgetClass.DurableWrite,
+            ["command-send-lease-ack"] = WorkloadBudgetClass.DurableWrite,
+            ["diagnostics-durable-history"] = WorkloadBudgetClass.DurableWrite,
+            ["iam-normalized-lookup-update"] = WorkloadBudgetClass.DurableWrite,
+            ["outbox-drain"] = WorkloadBudgetClass.DurableWrite,
+            ["placement-takeover"] = WorkloadBudgetClass.DurableWrite,
+            ["queue-drain"] = WorkloadBudgetClass.DurableWrite,
+            ["secret-create-read-list"] = WorkloadBudgetClass.DurableWrite
+        };
 
     public static GatePolicy Replacement(GateClass gateClass, double maxP95Ratio, double minThroughputRatio, double maxP99Ratio, GateReview review, double? maxP95Milliseconds = null)
     {
@@ -51,7 +81,10 @@ public sealed record GatePolicy(GateClass GateClass, double MaxP95Ratio, double 
         if (maxP95Milliseconds is <= 0) throw new PerformanceContractException("An absolute p95 ceiling must be positive when supplied.");
         // A replacement that omits the ceiling inherits the class default rather than silently dropping
         // it; removing a ratified budget must be a deliberate act, not an omission in a policy file.
-        return new GatePolicy(gateClass, maxP95Ratio, minThroughputRatio, maxP99Ratio, review, maxP95Milliseconds ?? DefaultFor(gateClass).MaxP95Milliseconds);
+        return new GatePolicy(gateClass, maxP95Ratio, minThroughputRatio, maxP99Ratio, review, maxP95Milliseconds ?? DefaultFor(gateClass).MaxP95Milliseconds)
+        {
+            HasExplicitP95Ceiling = maxP95Milliseconds.HasValue
+        };
     }
 }
 public sealed record ReviewedGateReplacement(int SchemaVersion, string WorkloadId, string WorkloadVersion, GateClass GateClass, double MaxP95Ratio, double MinThroughputRatio, double MaxP99Ratio, GateReview Review, double? MaxP95Milliseconds = null);
@@ -73,7 +106,7 @@ public static class GatePolicyFile
         try { document = JsonSerializer.Deserialize<ReviewedGateReplacement>(bytes, Options) ?? throw new PerformanceContractException("Reviewed replacement gate input is invalid."); }
         catch (JsonException exception) { throw new PerformanceContractException($"Reviewed replacement gate JSON is invalid: {exception.Message}"); }
         if (document.SchemaVersion != 1 || document.Review is null || document.WorkloadId != workloadId || document.WorkloadVersion != workloadVersion || document.Review.WorkloadId != workloadId || document.Review.WorkloadVersion != workloadVersion) throw new PerformanceContractException("Reviewed replacement gate does not match the comparison workload/version.");
-        return GatePolicy.Replacement(document.GateClass, document.MaxP95Ratio, document.MinThroughputRatio, document.MaxP99Ratio, document.Review, document.MaxP95Milliseconds);
+        return GatePolicy.Replacement(document.GateClass, document.MaxP95Ratio, document.MinThroughputRatio, document.MaxP99Ratio, document.Review, document.MaxP95Milliseconds).ForWorkload(workloadId);
     }
     public static string Hash(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
 }
@@ -82,6 +115,11 @@ public static class GateEvaluator
 {
     public static GateResult Evaluate(GatePolicy policy, ComparisonResult comparison)
     {
+        policy = policy.WorkloadId is null
+            ? policy.ForWorkload(comparison.WorkloadId)
+            : policy;
+        if (policy.BudgetClass is null || !string.Equals(policy.WorkloadId, comparison.WorkloadId, StringComparison.Ordinal))
+            return Blocked(policy, comparison, $"Workload '{comparison.WorkloadId}' has no ratified absolute latency budget.");
         if (BenchmarkAdapterAdmission.TryGetComparisonBlockedReason(comparison, out var adapterBlockedReason))
             return Blocked(
                 policy,

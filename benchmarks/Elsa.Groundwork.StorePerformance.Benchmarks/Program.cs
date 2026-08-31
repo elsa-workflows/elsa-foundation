@@ -66,7 +66,9 @@ internal static class BenchmarkCli
         ResultStore.Write(Option(args, "--comparison-result") ?? Path.Combine(output, "comparison.from-gate.v1.json"), comparison);
         var requestedClass = string.Equals(Option(args, "--class"), "runtime", StringComparison.OrdinalIgnoreCase) ? GateClass.RuntimeHotPath : GateClass.OrdinaryStore;
         var replacement = Option(args, "--replacement");
-        var policy = !comparison.Complete || !comparison.CorrectnessEqual || replacement is null ? GatePolicy.DefaultFor(requestedClass) : GatePolicyFile.Load(replacement, comparison.WorkloadId, comparison.WorkloadVersion);
+        var policy = !comparison.Complete || !comparison.CorrectnessEqual || replacement is null
+            ? GatePolicy.ForWorkload(comparison.WorkloadId, requestedClass)
+            : GatePolicyFile.Load(replacement, comparison.WorkloadId, comparison.WorkloadVersion);
         if (replacement is not null && policy.GateClass != requestedClass && Option(args, "--class") is not null) return Fail("The reviewed replacement gate class does not match --class.");
         var verdict = GateEvaluator.Evaluate(policy, comparison);
         var result = ResultStore.Write(Option(args, "--result") ?? Path.Combine(output, "gate.v1.json"), new GateReport(verdict, replacement is null || !comparison.Complete || !comparison.CorrectnessEqual ? null : GatePolicyFile.Hash(replacement)));
