@@ -510,7 +510,38 @@ only. It does not import a #646 performance verdict, delete either diagnostics
 EF oracle, complete T047/T050-T055/T057, promote a final evidence generation,
 or authorize #642 closure.
 
-## Exact Groundwork 0.4.0-preview.1 closeout checkpoint
+## Exact Groundwork 0.4.0-preview.3 recertification checkpoint
+
+The current Elsa source head for this focused recertification is `8b92d34b7832271daa1ef24986311401c5d56e20`.
+The Groundwork package family resolves exactly to `0.4.0-preview.3`, from tag `v0.4.0-preview.3`
+and release SHA `9de7aa0e6271c311536d2a78a1e6c1f0260e1fda`. The current receipt is
+[preview0403-recertification-results.json](evidence/preview0403-recertification-results.json).
+
+The shared diagnostics persistence correctness and architecture suite passed 97/97. The initial local
+v2 Structured Logs matrix passed 29/32 and the OpenTelemetry matrix passed 8/11, with SQLite executed
+and the three unavailable server providers skipped. Groundwork aggregate feature composition passed
+3/3. The Structured Logs v2 test project was corrected to declare `IsTestProject`, so the 29/32 result
+is an executed test result rather than a build-only result. Build output continues to report the existing
+NU1903 SSH.NET warning.
+
+Hosted CI run [33498592159](https://github.com/elsa-workflows/elsa-foundation/actions/runs/33498592159)
+then passed the `Groundwork v2 native provider matrix` job at exact head
+`ebce7a70e157ea788f191c48ac68b062b5d6478d`. Its diagnostics step executes both v2 provider-matrix
+projects against SQLite, PostgreSQL 17.6, SQL Server 2022 CU21, and a transaction-capable MongoDB
+7.0.24 replica set. This is current four-provider correctness evidence; the lane deliberately does not
+promote grouped reduction or native query plans.
+
+The three EF-mechanism-only ledger facts are explicitly retired at the Groundwork boundary: both
+`DbContextFactory` lifetime facts have no Groundwork equivalent, while the reserved high-water
+sentinel is replaced by the provider-neutral lifetime high-water invariant with no reserved visible
+data row. The EF oracle source remains intact; #647 still owns deletion and the final zero-EF guard.
+
+This is current-v2 correctness and package evidence, including the hosted four-provider functional
+matrix. It does not import a #646 performance verdict, assert numeric budgets, promote grouped/native-plan evidence,
+complete T050/T051/T052/T053/T054/T055/T057, or authorize #642 closure. The earlier preview.1
+closeout receipt below remains historical and immutable.
+
+## Historical exact Groundwork 0.4.0-preview.1 closeout checkpoint (immutable)
 
 The adopted Elsa `main` source is `3e694377ff6a73dc6b80e34991222b1f8cd47509`, and every
 Groundwork package pin is exactly `0.4.0-preview.1` from release SHA

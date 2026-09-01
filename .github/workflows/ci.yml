@@ -218,6 +218,22 @@ jobs:
           --filter 'FullyQualifiedName~GroundworkV2RuntimeRegistrationTests|FullyQualifiedName~GroundworkV2WorkflowTestScopeStoreTests|FullyQualifiedName~GroundworkV2WorkflowExecutableStoreTests|FullyQualifiedName~GroundworkV2ExecutableActivityTemplateStoreTests|FullyQualifiedName~GroundworkV2WorkflowExecutableSourceReferenceStoreTests|FullyQualifiedName~GroundworkV2WorkflowRuntimeAttentionQueryTests|FullyQualifiedName~GroundworkV2WorkflowAlterationStoreTests'
           -p:WarningsNotAsErrors=NU1603
 
+      - name: Restore diagnostics v2 native proofs
+        run: |
+          dotnet restore tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests.csproj -p:WarningsNotAsErrors=NU1603
+          dotnet restore tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests.csproj -p:WarningsNotAsErrors=NU1603
+
+      # The container-free lane executes SQLite and skips the three server providers. Reuse this job's
+      # already-running transactional databases so diagnostics certification cannot silently report a
+      # four-provider matrix made of one execution and three skips.
+      - name: Prove diagnostics v2 stores on every native provider
+        env:
+          GROUNDWORK_V2_POSTGRESQL_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
+          GROUNDWORK_V2_MONGODB_CONNECTION_STRING: mongodb://127.0.0.1:27017/elsa_v2_diagnostics?replicaSet=groundworkv2&directConnection=true
+        run: |
+          dotnet test tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests.csproj -c Release --no-restore --filter 'FullyQualifiedName~GroundworkV2ProviderMatrixTests' -p:WarningsNotAsErrors=NU1603
+          dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests.csproj -c Release --no-restore --filter 'FullyQualifiedName~GroundworkV2OpenTelemetryProviderMatrixTests' -p:WarningsNotAsErrors=NU1603
+
       - name: Restore the publishing v2 provider proof
         run: dotnet restore tests/Elsa/Workflows/Publishing/Persistence/Groundwork/Tests/Elsa.Workflows.Publishing.Persistence.Groundwork.Tests.csproj -p:WarningsNotAsErrors=NU1603
 

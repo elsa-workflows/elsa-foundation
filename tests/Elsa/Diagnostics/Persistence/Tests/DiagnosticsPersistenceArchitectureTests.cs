@@ -14,7 +14,6 @@ namespace Elsa.Diagnostics.Persistence.Tests;
 public sealed partial class DiagnosticsPersistenceArchitectureTests
 {
     private const string CurrentGroundworkVersion = "0.4.0-preview.3";
-    private const string DiagnosticsLedgerGroundworkVersion = "0.4.0-preview.1";
     private static string RepoRoot { get; } = FindRepoRoot();
     private static readonly string DiagnosticsSourceRoot = Path.Combine(RepoRoot, "src", "Elsa", "Diagnostics");
     private static readonly string DiagnosticsTestRoot = Path.Combine(RepoRoot, "tests", "Elsa", "Diagnostics");
@@ -108,14 +107,28 @@ public sealed partial class DiagnosticsPersistenceArchitectureTests
         Assert.Equal(46, factRows.Length);
         Assert.Equal(43, factRows.Count(line => line.Contains("covered", StringComparison.OrdinalIgnoreCase)));
         Assert.Equal(3, factRows.Count(line => line.Contains(
-            "Candidate for architect-approved removal", StringComparison.Ordinal)));
+            "Retired at the Groundwork boundary", StringComparison.Ordinal)));
         Assert.All(factRows, line => Assert.True(
             line.Contains("covered", StringComparison.OrdinalIgnoreCase) ^
-            line.Contains("Candidate for architect-approved removal", StringComparison.Ordinal),
+            line.Contains("Retired at the Groundwork boundary", StringComparison.Ordinal),
             $"Ledger row must have exactly one closeout disposition: {line}"));
+        var currentTestSources = Directory.EnumerateFiles(DiagnosticsTestRoot, "*.cs", SearchOption.AllDirectories)
+            .Select(File.ReadAllText)
+            .ToArray();
+        foreach (var row in factRows.Where(line => line.Contains("covered", StringComparison.OrdinalIgnoreCase)))
+        {
+            var evidenceColumn = row.Split('|')[3];
+            var evidence = LedgerEvidencePattern().Matches(evidenceColumn)
+                .Select(match => (Class: match.Groups["class"].Value, Method: match.Groups["method"].Value))
+                .ToArray();
+            Assert.NotEmpty(evidence);
+            Assert.All(evidence, reference => Assert.Contains(currentTestSources, source =>
+                Regex.IsMatch(source, $@"\bclass\s+{Regex.Escape(reference.Class)}\b", RegexOptions.CultureInvariant) &&
+                Regex.IsMatch(source, $@"\b{Regex.Escape(reference.Method)}\s*\(", RegexOptions.CultureInvariant)));
+        }
         var ledgerText = string.Join(Environment.NewLine, ledger);
-        Assert.Contains($"**Groundwork baseline:** exact `{DiagnosticsLedgerGroundworkVersion}`", ledgerText, StringComparison.Ordinal);
-        Assert.Contains("Disposition: 43 covered; 3 EF-mechanism-only", ledgerText, StringComparison.Ordinal);
+        Assert.Contains($"**Groundwork baseline:** exact `{CurrentGroundworkVersion}`", ledgerText, StringComparison.Ordinal);
+        Assert.Contains("Disposition: 43 covered; 3 EF-mechanism-only facts retired at the Groundwork boundary", ledgerText, StringComparison.Ordinal);
         Assert.DoesNotContain("one remaining OpenTelemetry test", ledgerText, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -563,4 +576,7 @@ public sealed partial class DiagnosticsPersistenceArchitectureTests
 
     [GeneratedRegex(@"\b(?:using\s+Groundwork(?:\.|\s*;)|Groundwork\.)", RegexOptions.CultureInvariant)]
     private static partial Regex GroundworkSourcePattern();
+
+    [GeneratedRegex(@"`(?<class>[A-Za-z0-9_]+Tests)\.(?<method>[A-Za-z0-9_]+)`", RegexOptions.CultureInvariant)]
+    private static partial Regex LedgerEvidencePattern();
 }
