@@ -168,6 +168,18 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
             services.GetRequiredService<IBookmarkStimulusIndex>());
     }
 
+    /// <summary>Mints the scheduler queue and poison-store contracts from one isolated DI scope.</summary>
+    public RuntimeQueueDrainClient CreateQueueClient()
+    {
+        var scope = provider.CreateAsyncScope();
+        scopes.Add(scope);
+        var services = scope.ServiceProvider;
+        return new RuntimeQueueDrainClient(
+            services.GetRequiredService<IWorkflowSchedulerWorkQueue>(),
+            services.GetRequiredService<IWorkflowSchedulerPoisonStore>(),
+            services.GetRequiredService<IWorkflowSchedulerWorkClaimInspection>());
+    }
+
     public async ValueTask DisposeAsync()
     {
         foreach (var scope in scopes)

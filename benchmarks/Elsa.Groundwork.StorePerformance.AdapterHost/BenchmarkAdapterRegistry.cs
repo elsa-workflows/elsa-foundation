@@ -26,6 +26,8 @@ internal static class BenchmarkAdapterRegistry
                 new CheckpointCommitAdapter(request, connectionString, outputDirectory),
             { WorkloadId: RuntimeBookmarkLookupWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: GroundworkV2Adapter, PhysicalForm: BookmarkLookupAdapter.PhysicalForm } =>
                 new BookmarkLookupAdapter(request, connectionString, outputDirectory),
+            { WorkloadId: RuntimeQueueDrainWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: GroundworkV2Adapter, PhysicalForm: QueueDrainAdapter.PhysicalForm } =>
+                new QueueDrainAdapter(request, connectionString, outputDirectory),
             _ => throw new PerformanceContractException(
                 $"No Groundwork adapter is registered for exact workload/adapter/physical form '{request.WorkloadId}/{request.Adapter}/{request.PhysicalForm}'.")
         };
