@@ -1,9 +1,10 @@
-# Proposal: an absolute-budget basis for the runtime coverage-ledger rows
+# Absolute-budget basis for the runtime coverage-ledger rows
 
-Status: **RATIFIED 2026-08-04.**
-Proposed by the #646 analysis; reviewed and accepted by **Sipke Schoorstra** (maintainer), who set the
-durable-write ceiling at 150 ms. Proposer and reviewer are distinct, satisfying `GatePolicy.Replacement`'s
-independence requirement.
+Status: **RATIFIED in two decisions: durable-write 2026-08-04; bounded-read 2026-09-01 (#1176).**
+Proposed by the #646 analysis; the durable-write ceiling was reviewed and accepted by **Sipke Schoorstra**
+(maintainer), who set it at 150 ms. Issue #1176 subsequently ratified the 40 ms bounded-read value as the
+executable backstop. The proposer and durable-write reviewer are distinct, satisfying
+`GatePolicy.Replacement`'s independence requirement; later replacements retain that same requirement.
 
 ## The problem
 
@@ -75,7 +76,7 @@ Applied to the eight runtime workloads:
 | `outbox-drain` | 1 | 3 × measured p95 |
 | `due-timer-selection` | 1 | 3 × measured p95 |
 
-### Recommended provisional ceilings
+### Adopted interim ceilings
 
 One number here is derived from measurement; the rest are reasoned bounds, and the difference is stated
 rather than blurred.
@@ -85,12 +86,12 @@ p95 versus 1 commit/request at 38.529 ms p95. The marginal cost of one durable S
 **≈ 35.7 ms p95** (≈ 18.8 ms p50). *Caveat: a p95 of a sum is not a sum of p95s, so treat this as an
 order-of-magnitude anchor, not an exact per-commit figure.*
 
-**Recommendation: two classes, not eight invented numbers.**
+**Policy shape: two classes, not eight invented numbers.**
 
 | class | workloads | ceiling | basis |
 |---|---|---|---|
 | **Durable write path** | `checkpoint-commit`, `queue-drain`, `outbox-drain` | **150 ms p95** | ratified value; ~4× the 35.7 ms measured SQLite commit cost, widened from the proposed 100 ms to absorb slower CI hardware and remote providers |
-| **Bounded read path** | `bookmark-lookup`, `recovery-scan`, `due-timer-selection`, `recurring-schedule-selection`, `trigger-binding-stimulus-lookup` | **40 ms p95** | reads perform no fsync and all non-commit work in the reference trace is single-digit ms. Raised from the proposed 25 ms in the same proportion as the write class, because a **remote** provider adds a network round trip to a read that local SQLite never pays. Flagged as a proposer judgment call, not part of the stated ratification — revert to 25 ms if unwanted |
+| **Bounded read path** | `bookmark-lookup`, `recovery-scan`, `due-timer-selection`, `recurring-schedule-selection`, `trigger-binding-stimulus-lookup` | **40 ms p95** | ratified as the #1176 executable backstop; reads perform no fsync and all non-commit work in the reference trace is single-digit ms. Raised from the proposed 25 ms because a **remote** provider adds a network round trip to a read that local SQLite never pays |
 
 Two classes rather than eight per-workload numbers because there is exactly one measurement. Inventing
 eight would dress up a single data point as eight.
@@ -120,16 +121,16 @@ Groundwork's four provider leaves are `sqlite`, `postgresql`, `sqlserver` and `m
 Oracle provider; anything running on Oracle would fall outside both this budget and the conformance
 matrix.
 
-**Original position, retained:** the numbers below were deliberately withheld pending measurement. The
-above supplies them as *provisional with a stated sunset*, which is the weaker claim and the honest one.
+**Historical note:** Earlier drafts deliberately withheld literal values pending measurement. The class
+ceilings above are now adopted executable backstops with a stated sunset; production-representative
+measurements may replace them only through an independent ratification.
 
-**Deliberately not stated as literal millisecond numbers here.** The store-performance harness has never
-run a full runtime matrix at the current Groundwork version — `specs/094-harden-groundwork-stores/versions/`
-stops at `preview.88` while the repo consumes `preview.103`. Writing invented millisecond constants into a
-ratified contract would be exactly the failure mode this whole programme exists to avoid. The first
-Tier B action is to **run the matrix once at the current version and populate the ceilings from it**, which
-also resolves the missing-evidence-generation defect recorded in
-[spec 144's quickstart](../../144-zero-ef-final-removal/quickstart.md).
+**Why these are class values rather than measured per-workload values.** The store-performance harness has
+not run a full runtime matrix at the current Groundwork version — `specs/094-harden-groundwork-stores/versions/`
+stops at `preview.88` while the repo consumes `preview.103`. The 150 ms and 40 ms values are therefore
+ratified class backstops, not invented per-workload measurements. The first Tier B action remains to
+**run the matrix once at the current version and populate replacement ceilings from it**, which also
+resolves the missing-evidence-generation defect recorded in [spec 144's quickstart](../../144-zero-ef-final-removal/quickstart.md).
 
 ### Update (2026-08-08): the first measurement exists, for one workload
 
@@ -141,7 +142,8 @@ PostgreSQL at `preview.103`. Per-operation medians and the derived `p95 × 3` ce
 Scope, precisely: **one of the eight runtime workloads**, and no `performanceVerdict` — `compare` and `gate`
 were run and correctly refused, because a verdict needs the two-form comparison the correction below shows
 is unavailable. The class ceilings in this document are therefore **unchanged**; the measured numbers are
-recorded, not ratified, and superseding 150 ms / 40 ms still needs an independent ratifier. Nothing measured
+recorded, not replacement ceilings, and superseding the standing 150 ms / 40 ms values still needs an
+independent ratifier. Nothing measured
 so far breaches either: the durable write path came in at 75 ms (SQLite) and 94 ms (PostgreSQL) p95.
 
 Two observations bear on the reasoning above. Per-provider numbers do diverge, and not uniformly in one
@@ -223,7 +225,7 @@ ms. A bounded read regressing from 5 ms to 140 ms passed the default gate silent
 
 The original recommendation was to supersede rather than wire the provisional value. That left a live
 window in which a bounded read could regress from 5 ms to 140 ms and still pass. Issue #1176 therefore
-made `DefaultFor` workload-aware and applies the already-ratified 40 ms ceiling to the five bounded-read
+made `DefaultFor` workload-aware and applies the ratified 40 ms ceiling to the five bounded-read
 workloads. Durable writes retain 150 ms. Reviewed per-workload policies still supersede these class
 ceilings under the existing sunset condition; enforcement now protects the interval before those
 measurements exist.

@@ -458,7 +458,7 @@ public sealed class ComparisonIntegrityTests
         fixture.Bind();
 
         var comparison = fixture.Compare();
-        var verdict = GateEvaluator.Evaluate(GatePolicy.DefaultFor(GateClass.OrdinaryStore, comparison.WorkloadId), comparison);
+        var verdict = GateEvaluator.Evaluate(GatePolicy.DefaultFor(comparison.WorkloadId), comparison);
 
         var row = Assert.Single(verdict.Rows);
         Assert.True(double.IsFinite(row.P50Ratio));
@@ -469,18 +469,6 @@ public sealed class ComparisonIntegrityTests
     [Fact]
     public void Bounded_read_absolute_ceiling_rejects_a_ratio_neutral_140_millisecond_regression()
     {
-        static OperationSample At140Milliseconds(OperationSample operation)
-        {
-            var latencies = Enumerable.Repeat(140d, operation.RawLatenciesMilliseconds.Count).ToArray();
-            return operation with
-            {
-                P50Milliseconds = 140d,
-                P95Milliseconds = 140d,
-                P99Milliseconds = 140d,
-                RawLatenciesMilliseconds = latencies
-            };
-        }
-
         using var fixture = ArtifactFixture.Create();
         fixture.WriteTarget("ef", "store", operations: ["read"], transform: At140Milliseconds);
         fixture.WriteTarget("groundwork", "store", operations: ["read"], transform: At140Milliseconds);
@@ -499,6 +487,45 @@ public sealed class ComparisonIntegrityTests
         Assert.Equal(GatePolicy.RatifiedBoundedReadPathP95Milliseconds, row.MaxP95Milliseconds);
         Assert.Equal(140d, row.P95Milliseconds);
         Assert.False(row.Pass);
+    }
+
+    [Fact]
+    public void Gate_evaluator_rejects_a_forged_ordinary_policy_for_a_bounded_read()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ["read"], transform: At140Milliseconds);
+        fixture.WriteTarget("groundwork", "store", operations: ["read"], transform: At140Milliseconds);
+        fixture.Bind();
+
+        var comparison = fixture.Compare();
+        var verdict = GateEvaluator.Evaluate(
+            new GatePolicy(GateClass.OrdinaryStore, 1.25, .80, 2.0, null),
+            comparison);
+
+        Assert.Equal(PerformanceVerdict.Blocked, verdict.Verdict);
+        Assert.Contains("gate class", verdict.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Gate_evaluator_preserves_a_valid_reviewed_threshold_at_the_comparison_boundary()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ["read"]);
+        fixture.WriteTarget("groundwork", "store", operations: ["read"]);
+        fixture.Bind();
+
+        var comparison = fixture.Compare();
+        var policy = new GatePolicy(
+            GateClass.RuntimeHotPath,
+            1.01,
+            .99,
+            1.10,
+            new GateReview(comparison.WorkloadId, comparison.WorkloadVersion, "proposer", "reviewer", "review-42", "2026-07-24T00:00:00Z"),
+            17d);
+        var verdict = GateEvaluator.Evaluate(policy, comparison);
+
+        Assert.Equal(PerformanceVerdict.Pass, verdict.Verdict);
+        Assert.Equal(17d, Assert.Single(verdict.Rows).MaxP95Milliseconds);
     }
 
     [Fact]
@@ -535,6 +562,18 @@ public sealed class ComparisonIntegrityTests
         using var document = JsonDocument.Parse(File.ReadAllText(path));
         Assert.Equal(1, document.RootElement.GetProperty("SchemaVersion").GetInt32());
         Assert.Matches("^[0-9a-f]{64}$", document.RootElement.GetProperty("PayloadSha256").GetString()!);
+    }
+
+    private static OperationSample At140Milliseconds(OperationSample operation)
+    {
+        var latencies = Enumerable.Repeat(140d, operation.RawLatenciesMilliseconds.Count).ToArray();
+        return operation with
+        {
+            P50Milliseconds = 140d,
+            P95Milliseconds = 140d,
+            P99Milliseconds = 140d,
+            RawLatenciesMilliseconds = latencies
+        };
     }
 }
 

@@ -23,8 +23,7 @@ internal static class BenchmarkCli
                 _ => Fail($"Unknown command '{command}'.")
             };
         }
-        catch (PerformanceContractException exception) { return Fail(exception.Message); }
-        catch (WorkloadContractException exception) { return Fail(exception.Message); }
+        catch (Exception exception) { return FailCommand(args, exception.Message); }
     }
 
     private static async Task<int> MatrixAsync(string[] args)
@@ -77,9 +76,9 @@ internal static class BenchmarkCli
         };
         var replacement = Option(args, "--replacement");
         if (replacement is null && requestedClass != defaultPolicy.GateClass)
-            return Fail($"Workload '{comparison.WorkloadId}' requires gate class '{defaultPolicy.GateClass}'; an unreviewed --class override is not permitted.");
+            throw new PerformanceContractException($"Workload '{comparison.WorkloadId}' requires gate class '{defaultPolicy.GateClass}'; an unreviewed --class override is not permitted.");
         var policy = !comparison.Complete || !comparison.CorrectnessEqual || replacement is null ? defaultPolicy : GatePolicyFile.Load(replacement, comparison.WorkloadId, comparison.WorkloadVersion);
-        if (replacement is not null && policy.GateClass != requestedClass && Option(args, "--class") is not null) return Fail("The reviewed replacement gate class does not match --class.");
+        if (replacement is not null && policy.GateClass != requestedClass && Option(args, "--class") is not null) throw new PerformanceContractException("The reviewed replacement gate class does not match --class.");
         var verdict = GateEvaluator.Evaluate(policy, comparison);
         var result = ResultStore.Write(Option(args, "--result") ?? Path.Combine(output, "gate.v1.json"), new GateReport(verdict, replacement is null || !comparison.Complete || !comparison.CorrectnessEqual ? null : GatePolicyFile.Hash(replacement)));
         Console.WriteLine($"Gate result: {result}");
@@ -101,5 +100,24 @@ internal static class BenchmarkCli
     private static int HostFingerprintCommand() { Console.WriteLine(HostFingerprint.CaptureSha256()); return 0; }
     private static int WorkloadVectorsCommand() { Console.WriteLine(ReproducibleWorkloadScenarioCatalog.SerializeDefinitionSummary()); return 0; }
     private static int Help() { Console.WriteLine("#646 store performance harness\n  host-fingerprint\n  workload-vectors (prints reproducible contract definitions; it does not execute adapters)\n  matrix <scale> --cohort <safe-id> --measurement-set <safe-id> --workload <id> --provider <provider> --provider-version <version> --provider-setting <name=value> --adapter <adapter> --form <physical-form> --commit <40-hex-sha> --composition <64-hex-fingerprint> --package <name=version> --native-plan <identity> --native-plan-evidence <safe-top-level.json> --native-plan-sha256 <64-hex-content-digest> --out <artifact-directory> --child-command <adapter-host>\n  compare --out <artifact-directory> --oracle <provider/adapter/form> --target <provider/adapter/form> [--result <comparison.json>]\n  gate --out <artifact-directory> --oracle <provider/adapter/form> --target <provider/adapter/form> [--class runtime|ordinary] [--replacement <reviewed-gate.v1.json>] [--comparison-result <comparison.json>] [--result <gate.json>]"); return 0; }
+    private static int FailCommand(string[] args, string message)
+    {
+        if (string.Equals(args.FirstOrDefault(), "gate", StringComparison.Ordinal) && Option(args, "--out") is { Length: > 0 } output)
+            TryWriteBlockedGateReport(output, message);
+        return Fail(message);
+    }
+
+    private static void TryWriteBlockedGateReport(string output, string reason)
+    {
+        try
+        {
+            ResultStore.Write(Path.Combine(output, "gate.v1.json"), new GateReport(GateEvaluator.BlockedForContractFailure(reason), null));
+        }
+        catch
+        {
+            // Preserve the original CLI failure when the requested output path cannot be written.
+        }
+    }
+
     private static int Fail(string message) { Console.Error.WriteLine($"error: {message}"); return 2; }
 }

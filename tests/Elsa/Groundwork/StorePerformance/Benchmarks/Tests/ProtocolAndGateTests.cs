@@ -598,6 +598,30 @@ public sealed class ProtocolAndGateTests
     }
 
     [Fact]
+    public void Gate_evaluator_rejects_a_complete_comparison_with_no_operations()
+    {
+        var comparison = new ComparisonResult(
+            1,
+            new string('c', 64),
+            "bookmark-lookup",
+            "1.1.0",
+            "sqlite",
+            "100k",
+            "sqlite/ef/document-type-specific-tables",
+            "sqlite/groundwork/document-type-specific-tables",
+            true,
+            true,
+            [],
+            [],
+            null);
+
+        var verdict = GateEvaluator.Evaluate(GatePolicy.DefaultFor("bookmark-lookup"), comparison);
+
+        Assert.Equal(PerformanceVerdict.Blocked, verdict.Verdict);
+        Assert.Contains("operation", verdict.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Gate_cli_reports_incomplete_artifacts_as_blocked_instead_of_throwing_for_empty_workload_identity()
     {
         using var fixture = ArtifactFixture.Create();
@@ -617,6 +641,24 @@ public sealed class ProtocolAndGateTests
         Assert.True(File.Exists(reportPath));
         using var report = JsonDocument.Parse(File.ReadAllBytes(reportPath));
         Assert.Equal((int)PerformanceVerdict.Blocked, report.RootElement.GetProperty("Payload").GetProperty("Verdict").GetProperty("Verdict").GetInt32());
+    }
+
+    [Fact]
+    public async Task Gate_cli_writes_a_blocked_report_when_the_manifest_is_missing()
+    {
+        using var fixture = ArtifactFixture.Create();
+        Directory.CreateDirectory(fixture.Directory);
+
+        var exitCode = await BenchmarkCli.RunAsync(
+        [
+            "gate",
+            "--out", fixture.Directory,
+            "--oracle", "sqlite/ef/document-type-specific-tables",
+            "--target", "sqlite/groundwork/document-type-specific-tables"
+        ]);
+
+        Assert.Equal(2, exitCode);
+        Assert.Equal((int)PerformanceVerdict.Blocked, ReadGateVerdict(fixture.Directory));
     }
 
     [Fact]
@@ -673,6 +715,26 @@ public sealed class ProtocolAndGateTests
         ]);
 
         Assert.Equal(2, exitCode);
+        Assert.Equal((int)PerformanceVerdict.Blocked, ReadGateVerdict(fixture.Directory));
+    }
+
+    [Fact]
+    public async Task Gate_cli_writes_a_blocked_report_for_malformed_json()
+    {
+        using var fixture = ArtifactFixture.Create();
+        Directory.CreateDirectory(fixture.Directory);
+        File.WriteAllText(Path.Combine(fixture.Directory, "artifact-manifest.v2.json"), "{");
+
+        var exitCode = await BenchmarkCli.RunAsync(
+        [
+            "gate",
+            "--out", fixture.Directory,
+            "--oracle", "sqlite/ef/document-type-specific-tables",
+            "--target", "sqlite/groundwork/document-type-specific-tables"
+        ]);
+
+        Assert.Equal(2, exitCode);
+        Assert.Equal((int)PerformanceVerdict.Blocked, ReadGateVerdict(fixture.Directory));
     }
 
     [Fact]
@@ -713,6 +775,12 @@ public sealed class ProtocolAndGateTests
 
     private static PerformanceWorkload Workload() =>
         WorkloadCatalog.Load(Repository.Root()).Workloads["bookmark-lookup"];
+
+    private static int ReadGateVerdict(string outputDirectory)
+    {
+        using var report = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(outputDirectory, "gate.v1.json")));
+        return report.RootElement.GetProperty("Payload").GetProperty("Verdict").GetProperty("Verdict").GetInt32();
+    }
 
     private static ProcessArtifact ArtifactFor(RunRequest request)
     {
