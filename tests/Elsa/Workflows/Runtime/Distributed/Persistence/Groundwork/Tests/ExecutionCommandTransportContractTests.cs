@@ -1,4 +1,13 @@
+using Elsa.Persistence.Core;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
+using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
+using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
+using Groundwork.Kernel;
+using Groundwork.Query.Model;
+using Groundwork.Sqlite;
+using Groundwork.Store;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests;
@@ -110,6 +119,47 @@ public sealed class ExecutionCommandTransportContractTests
     }
 
     [Fact]
+    public async Task ConcurrentSqliteLeasesReplenishAContendedPageUntilBothCallsFill()
+    {
+        await using var fixture = await QueryBarrierFixture.CreateAsync();
+        const int visibleCommands = 20;
+        const int requestedPerTransport = 10;
+        for (var index = 0; index < visibleCommands; index++)
+            await fixture.First.SendAsync(ExecutionId, Envelope($"env-{index:D2}"), Now);
+
+        fixture.ArmQueryBarrier();
+        var first = fixture.First;
+        var second = fixture.Second;
+        var claims = await Task.WhenAll(
+            Task.Run(() => first.LeaseAsync(ExecutionId, NodeA, Now, LeaseDuration, requestedPerTransport).AsTask()),
+            Task.Run(() => second.LeaseAsync(ExecutionId, NodeB, Now, LeaseDuration, requestedPerTransport).AsTask()));
+
+        Assert.All(claims, batch =>
+        {
+            Assert.Equal(requestedPerTransport, batch.Count);
+            Assert.Equal(batch.Select(item => item.Sequence).Order(), batch.Select(item => item.Sequence));
+        });
+        Assert.Equal(
+            Enumerable.Range(1, visibleCommands).Select(index => (long)index),
+            claims.SelectMany(batch => batch).Select(item => item.Sequence).Order());
+        Assert.Equal(
+            visibleCommands,
+            claims.SelectMany(batch => batch).Select(item => item.TransportItemId).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public async Task CancelledLeaseStopsBeforeScanningTheFirstPage()
+    {
+        await using var harness = await DistributedStoreHarness.CreateAsync(DistributedStoreHarness.GroundworkSqlite);
+        await harness.Transport.SendAsync(ExecutionId, Envelope("env-cancel"), Now);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            harness.Transport.LeaseAsync(ExecutionId, NodeA, Now, LeaseDuration, 10, cancellation.Token).AsTask());
+    }
+
+    [Fact]
     public async Task SqlitePreservesMaximumIdentityAndOrdinalUnicodeOrdering()
     {
         await using var harness = await DistributedStoreHarness.CreateAsync(DistributedStoreHarness.GroundworkSqlite);
@@ -129,4 +179,134 @@ public sealed class ExecutionCommandTransportContractTests
         string envelopeId,
         string executionId = ExecutionId) =>
         DistributedStoreHarness.Envelope(executionId, envelopeId, Now);
+
+    private sealed class QueryBarrierFixture : IAsyncDisposable
+    {
+        private readonly string databasePath;
+        private readonly IStorageProviderConnection connection;
+        private readonly QueryBarrierSessionSource source;
+
+        private QueryBarrierFixture(
+            string databasePath,
+            IStorageProviderConnection connection,
+            QueryBarrierSessionSource source,
+            IExecutionCommandTransport first,
+            IExecutionCommandTransport second)
+        {
+            this.databasePath = databasePath;
+            this.connection = connection;
+            this.source = source;
+            First = first;
+            Second = second;
+        }
+
+        public IExecutionCommandTransport First { get; }
+        public IExecutionCommandTransport Second { get; }
+
+        public static ValueTask<QueryBarrierFixture> CreateAsync()
+        {
+            var path = Path.Join(Path.GetTempPath(), $"elsa-command-lease-replenishment-{Guid.NewGuid():N}.db");
+            var connection = new SqliteProviderFactory().Create($"Data Source={path}");
+            var units = DistributedGroundworkStorageManifest.CreateUnits();
+            foreach (var unit in units)
+                connection.Schema.Apply(unit);
+            var source = new QueryBarrierSessionSource(connection, units);
+            var first = new GroundworkExecutionCommandTransport(source, new FixedAccessor());
+            var second = new GroundworkExecutionCommandTransport(source, new FixedAccessor());
+            return ValueTask.FromResult(new QueryBarrierFixture(path, connection, source, first, second));
+        }
+
+        public void ArmQueryBarrier() => source.ArmQueryBarrier();
+
+        public ValueTask DisposeAsync()
+        {
+            connection.Dispose();
+            foreach (var candidate in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" })
+                if (File.Exists(candidate))
+                    File.Delete(candidate);
+            return ValueTask.CompletedTask;
+        }
+
+        private sealed class QueryBarrierSessionSource(
+            IStorageProviderConnection connection,
+            IReadOnlyList<StorageUnit> units) : IGroundworkStorageSessionSource
+        {
+            private readonly Dictionary<string, StorageUnit> unitsById =
+                units.ToDictionary(unit => unit.Id.Value, StringComparer.Ordinal);
+
+            private Barrier? queryBarrier;
+            private int queryBarrierCalls;
+
+            public void ArmQueryBarrier()
+            {
+                Volatile.Write(ref queryBarrierCalls, 0);
+                Volatile.Write(ref queryBarrier, new Barrier(2));
+            }
+
+            public bool AwaitInitialQueries()
+            {
+                var barrier = Volatile.Read(ref queryBarrier);
+                if (barrier is null || Interlocked.Increment(ref queryBarrierCalls) > 2)
+                    return true;
+                return barrier.SignalAndWait(TimeSpan.FromSeconds(10));
+            }
+
+            public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null)
+            {
+                var session = connection.OpenSession(unitsById[unitId], access);
+                return unitId == DistributedGroundworkStorageManifest.CommandTransportUnitId
+                    ? new QueryBarrierStorageSession(session, this)
+                    : session;
+            }
+
+            public IUnitOfWork BeginUnitOfWork(
+                StorageAccess access,
+                BatchWriteOptions options,
+                IReadOnlyList<string> unitIds,
+                string? targetName = null) =>
+                connection.BeginUnitOfWork(access, options, unitIds.Select(unitId => unitsById[unitId]).ToArray());
+
+            public StorageUnit Unit(string unitId, string? targetName = null) => unitsById[unitId];
+        }
+
+        private sealed class QueryBarrierStorageSession(
+            IStorageSession inner,
+            QueryBarrierSessionSource source) : IStorageSession, IConcurrencyStorageSession
+        {
+            public StorageUnit Unit => inner.Unit;
+            public StorageAccess Access => inner.Access;
+
+            public StoredEntry? Read(StorageKey key) => inner.Read(key);
+            public ValueTask<StoredEntry?> ReadAsync(StorageKey key, CancellationToken cancellationToken = default) => inner.ReadAsync(key, cancellationToken);
+
+            public QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null)
+            {
+                var result = inner.Query(request, options);
+                if (!source.AwaitInitialQueries())
+                    throw new TimeoutException("The SQLite query contention barrier did not observe both lease queries.");
+                return result;
+            }
+
+            public ValueTask<QueryMaterializedResult> QueryAsync(QueryRequest request, QueryRenderOptions? options = null, CancellationToken cancellationToken = default) => inner.QueryAsync(request, options, cancellationToken);
+            public AggregationResult Aggregate(AggregationQuery query) => inner.Aggregate(query);
+            public ValueTask<AggregationResult> AggregateAsync(AggregationQuery query, CancellationToken cancellationToken = default) => inner.AggregateAsync(query, cancellationToken);
+            public WriteOutcome Insert(StorageValues values, WriteOptions? options = null) => inner.Insert(values, options);
+            public ValueTask<WriteOutcome> InsertAsync(StorageValues values, WriteOptions? options = null, CancellationToken cancellationToken = default) => inner.InsertAsync(values, options, cancellationToken);
+            public WriteOutcome Update(StorageValues values, WriteOptions? options = null) => inner.Update(values, options);
+            public ValueTask<WriteOutcome> UpdateAsync(StorageValues values, WriteOptions? options = null, CancellationToken cancellationToken = default) => inner.UpdateAsync(values, options, cancellationToken);
+            public WriteOutcome Upsert(StorageValues values, WriteOptions? options = null) => inner.Upsert(values, options);
+            public ValueTask<WriteOutcome> UpsertAsync(StorageValues values, WriteOptions? options = null, CancellationToken cancellationToken = default) => inner.UpsertAsync(values, options, cancellationToken);
+            public WriteOutcome Delete(StorageKey key, WriteOptions? options = null) => inner.Delete(key, options);
+            public ValueTask<WriteOutcome> DeleteAsync(StorageKey key, WriteOptions? options = null, CancellationToken cancellationToken = default) => inner.DeleteAsync(key, options, cancellationToken);
+            public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) => inner.Append(operationId, values);
+            public ValueTask<WriteOutcome> AppendAsync(OperationId operationId, IReadOnlyList<StorageValues> values, CancellationToken cancellationToken = default) => inner.AppendAsync(operationId, values, cancellationToken);
+            public WriteOutcome ConditionalUpsert(StorageValues values, WriteOptions? options = null) => ((IConcurrencyStorageSession)inner).ConditionalUpsert(values, options);
+            public ValueTask<WriteOutcome> ConditionalUpsertAsync(StorageValues values, WriteOptions? options = null, CancellationToken cancellationToken = default) => ((IConcurrencyStorageSession)inner).ConditionalUpsertAsync(values, options, cancellationToken);
+        }
+
+        private sealed class FixedAccessor : IPersistenceAccessContextAccessor
+        {
+            public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(PersistenceScope.DefaultValue));
+        }
+    }
 }
