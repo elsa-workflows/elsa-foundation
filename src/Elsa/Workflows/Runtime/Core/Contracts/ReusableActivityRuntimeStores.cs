@@ -49,6 +49,17 @@ public interface IWorkflowExecutableSourceReferenceReader
     ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(
         WorkflowExecutableSourceReferencePageQuery query,
         CancellationToken cancellationToken = default);
+
+    /// <summary>One finite page of references minted for a definition version, in every scope.</summary>
+    /// <remarks>
+    /// The default is a correct residual filter for in-process reader doubles. Durable stores override it with
+    /// a declared by-definition-version route so export does not scan the complete source-reference table.
+    /// </remarks>
+    ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByDefinitionVersionPageAsync(
+        WorkflowExecutableSourceReferenceDefinitionVersionPageQuery query,
+        CancellationToken cancellationToken = default) =>
+        WorkflowExecutableSourceReferenceReaderDefaults.ListByDefinitionVersionPageAsync(this, query, cancellationToken);
+
     ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(
         WorkflowExecutableArtifactCandidateBatch candidates,
         DateTimeOffset now,

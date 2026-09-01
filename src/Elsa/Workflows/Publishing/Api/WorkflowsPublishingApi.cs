@@ -46,8 +46,9 @@ public static class WorkflowsPublishingApi
         // Export is intentionally a plain Minimal API operation. It returns bytes produced by a target rather
         // than a JSON response object, so it does not fit the request/response endpoint-class scanner's typed
         // operation shape. The producer and target remain replaceable through the engine/API feature seams.
-        endpoints.MapGet(RouteConstants.WorkflowExecutableExport, (RequestDelegate)HandleExportExecutableClosureAsync)
-            .WithModuleOperation(
+        ElsaEndpointConventions.WithModuleOperation(
+                endpoints.MapGet(RouteConstants.WorkflowExecutableExport, (RequestDelegate)HandleExportExecutableClosureAsync)
+                    .WithEndpointGroup(OwnerId),
                 "ElsaWorkflowsPublishingApiEndpointsExportWorkflowExecutableClosureEndpoint",
                 OwnerId,
                 typeof(WorkflowArtifactClosure))

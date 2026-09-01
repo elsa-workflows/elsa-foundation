@@ -20,6 +20,11 @@ namespace Elsa.Workflows.Publishing.Services;
 /// which is what <c>LoadClosureAsync</c> does and what an export of one workflow should not need.
 /// </para>
 /// <para>
+/// <b>Every source-reference read is narrowed at the store.</b> Root selection uses the declared
+/// by-definition-version page route, and carried references use the by-artifact route once per closure member.
+/// The provider therefore hands over only references relevant to this export rather than the complete history.
+/// </para>
+/// <para>
 /// <b>Determinism.</b> Every collection the envelope carries is ordinally sorted before it is returned, and the
 /// dependency walk visits edges in ordinal order. Two exports of the same store state therefore produce
 /// byte-identical envelopes, which is what makes an exported file diffable and a round-trip test meaningful.
@@ -41,12 +46,12 @@ public sealed class WorkflowArtifactClosureFactory(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(definitionVersionId);
 
-        var allReferences = await ReadAsync(
+        var versionReferences = await ReadAsync(
             definitionVersionId,
-            "read the executable source references",
-            async () => await sourceReferenceReader.ListAllAsync(cancellationToken: cancellationToken));
+            "read the executable source references of the definition version",
+            async () => await sourceReferenceReader.ListAllByDefinitionVersionAsync(definitionVersionId, cancellationToken));
 
-        var rootReference = SelectRootReference(definitionVersionId, allReferences);
+        var rootReference = SelectRootReference(definitionVersionId, versionReferences);
 
         var root = await ReadAsync(
             definitionVersionId,
@@ -78,13 +83,9 @@ public sealed class WorkflowArtifactClosureFactory(
     /// </summary>
     private static WorkflowExecutableSourceReference SelectRootReference(
         string definitionVersionId,
-        IReadOnlyCollection<WorkflowExecutableSourceReference> allReferences)
+        IReadOnlyCollection<WorkflowExecutableSourceReference> versionReferences)
     {
-        var versionReferences = allReferences
-            .Where(reference => StringComparer.Ordinal.Equals(reference.DefinitionVersionId, definitionVersionId))
-            .ToArray();
-
-        if (versionReferences.Length == 0)
+        if (versionReferences.Count == 0)
         {
             throw new WorkflowArtifactClosureSourceNotFoundException(
                 definitionVersionId,

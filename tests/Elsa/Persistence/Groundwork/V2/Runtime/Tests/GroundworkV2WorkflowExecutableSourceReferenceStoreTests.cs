@@ -49,6 +49,11 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStoreTests
         };
         var retired = Reference("ref-retired", "artifact-b", WorkflowExecutableReferenceScope.Published)
             .Retire(now.AddMinutes(-2), "replaced");
+        var neighbouringVersion = Reference(
+            "ref-neighbour",
+            "artifact-d",
+            WorkflowExecutableReferenceScope.Published,
+            definitionVersionId: "definition-version-2");
 
         await store.SaveAsync(live);
         await store.SaveAsync(expired);
@@ -82,6 +87,25 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStoreTests
             (await store.ListPageAsync(new WorkflowExecutableSourceReferencePageQuery(
                 liveOnly: true,
                 now: now))).Items.Select(reference => reference.SourceReferenceId));
+        await store.SaveAsync(neighbouringVersion);
+        var versionFirst = await store.ListByDefinitionVersionPageAsync(
+            new WorkflowExecutableSourceReferenceDefinitionVersionPageQuery("definition-version-1", limit: 1));
+        Assert.Equal(["ref-expired"], versionFirst.Items.Select(reference => reference.SourceReferenceId));
+        Assert.NotNull(versionFirst.NextContinuationToken);
+        var versionSecond = await store.ListByDefinitionVersionPageAsync(
+            new WorkflowExecutableSourceReferenceDefinitionVersionPageQuery(
+                "definition-version-1", limit: 1, versionFirst.NextContinuationToken));
+        Assert.Equal(["ref-live"], versionSecond.Items.Select(reference => reference.SourceReferenceId));
+        Assert.NotNull(versionSecond.NextContinuationToken);
+        var versionThird = await store.ListByDefinitionVersionPageAsync(
+            new WorkflowExecutableSourceReferenceDefinitionVersionPageQuery(
+                "definition-version-1", limit: 1, versionSecond.NextContinuationToken));
+        Assert.Equal(["ref-retired"], versionThird.Items.Select(reference => reference.SourceReferenceId));
+        Assert.Null(versionThird.NextContinuationToken);
+        Assert.DoesNotContain(
+            "ref-neighbour",
+            (await store.ListAllByDefinitionVersionAsync("definition-version-1"))
+                .Select(reference => reference.SourceReferenceId));
         Assert.Equal(
             ["artifact-b", "artifact-c"],
             await store.ListUnreferencedArtifactIdsAsync(
@@ -315,7 +339,8 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStoreTests
     private static WorkflowExecutableSourceReference Reference(
         string id,
         string artifactId,
-        WorkflowExecutableReferenceScope scope) =>
+        WorkflowExecutableReferenceScope scope,
+        string definitionVersionId = "definition-version-1") =>
         new(
             id,
             artifactId,
@@ -323,7 +348,7 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStoreTests
             $"source-{id}",
             "1",
             "definition-1",
-            "definition-version-1",
+            definitionVersionId,
             "artifact-version-1",
             new DateTimeOffset(2026, 8, 17, 10, 0, 0, TimeSpan.Zero),
             scope == WorkflowExecutableReferenceScope.Published

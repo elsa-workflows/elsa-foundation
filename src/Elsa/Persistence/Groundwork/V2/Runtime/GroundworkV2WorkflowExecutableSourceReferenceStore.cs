@@ -111,6 +111,26 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
         return ValueTask.FromResult(Page(query, result));
     }
 
+    public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByDefinitionVersionPageAsync(
+        WorkflowExecutableSourceReferenceDefinitionVersionPageQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
+        var table = new TableId(unit.Name);
+        var definitionVersion = Column(
+            table,
+            ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDefinitionVersionIdField);
+        var sourceReference = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceIdField);
+        var result = Open().Query(new QueryRequest(
+            table,
+            Equal(definitionVersion, query.DefinitionVersionId),
+            [new OrderTerm(sourceReference, OrderDirection.Ascending, NullOrder.Last)],
+            Projection.All,
+            PagingFor(query.Limit, query.ContinuationToken)));
+        return ValueTask.FromResult(Page(query, result));
+    }
+
     public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(
         WorkflowExecutableSourceReferencePageQuery query,
         CancellationToken cancellationToken = default)

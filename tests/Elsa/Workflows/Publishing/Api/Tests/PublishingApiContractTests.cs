@@ -51,7 +51,7 @@ public sealed class PublishingApiContractTests
     private const string Owner = "Elsa.Workflows.Publishing.Api";
 
     [Fact]
-    public void Publishing_mapper_exposes_exactly_the_current_21_operation_manifest()
+    public void Publishing_mapper_exposes_exactly_the_current_22_operation_manifest()
     {
         using var provider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(provider);
@@ -59,9 +59,9 @@ public sealed class PublishingApiContractTests
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
 
         var manifest = EndpointManifestBuilder.Capture(routes.DataSources);
-        Assert.Equal(21, manifest.Entries.Count);
+        Assert.Equal(22, manifest.Entries.Count);
         Assert.Equal(
-            PublishingCompatibilityCases.Manifest
+            PublishingCurrentSurface.Manifest
                 .Select(route => route.Endpoint.ToString())
                 .Order(StringComparer.Ordinal),
             manifest.Entries
@@ -87,15 +87,15 @@ public sealed class PublishingApiContractTests
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
 
         var endpoints = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
-        Assert.Equal(21, endpoints.Length);
-        Assert.Equal(21, endpoints.Select(endpoint => endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName)
+        Assert.Equal(22, endpoints.Length);
+        Assert.Equal(22, endpoints.Select(endpoint => endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName)
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Distinct(StringComparer.Ordinal)
             .Count());
 
         foreach (var endpoint in endpoints)
         {
-            var route = PublishingCompatibilityCases.Manifest.Single(candidate =>
+            var route = PublishingCurrentSurface.Manifest.Single(candidate =>
                 candidate.Endpoint.Method.Value == endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()!.HttpMethods.Single() &&
                 RouteMatches(candidate.Endpoint.Route.Value, endpoint.RoutePattern.RawText!));
             var name = endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName;
@@ -122,9 +122,10 @@ public sealed class PublishingApiContractTests
             var success = endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>()
                 .Single(response => response.StatusCode == StatusCodes.Status200OK);
             var responseType = success.Type?.FullName ?? success.Type?.Name ?? string.Empty;
-            var responseLeaf = route.Response.Contains('<', StringComparison.Ordinal)
-                ? route.Response[(route.Response.LastIndexOf('<') + 1)..^1]
-                : route.Response;
+            var declaredResponse = PublishingCurrentSurface.ResponseFor(route);
+            var responseLeaf = declaredResponse.Contains('<', StringComparison.Ordinal)
+                ? declaredResponse[(declaredResponse.LastIndexOf('<') + 1)..^1]
+                : declaredResponse;
             Assert.Contains(responseLeaf, responseType, StringComparison.Ordinal);
             Assert.Contains(endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>(), response =>
                 response.StatusCode == StatusCodes.Status401Unauthorized);
@@ -158,7 +159,7 @@ public sealed class PublishingApiContractTests
             .Where(operation => operation.Endpoint.Route.Value.StartsWith("/publishing/", StringComparison.Ordinal) ||
                                 operation.Endpoint.Route.Value.StartsWith("/design/activities/", StringComparison.Ordinal))
             .ToArray();
-        Assert.Equal(21, publishingOperations.Length);
+        Assert.Equal(22, publishingOperations.Length);
 
         var beforeHttp = BaselineFile.Load<HttpCompatibilityObservation[]>(Path.Join(BaselineDirectory, "publishing-http-fastendpoints.json"));
         var beforeOpenApi = BaselineFile.Load<OpenApiEvidenceDocument>(Path.Join(BaselineDirectory, "publishing-openapi-fastendpoints.json"));
@@ -203,9 +204,9 @@ public sealed class PublishingApiContractTests
 
         // The FastEndpoints-to-Minimal-API migration reviewed one OpenAPI difference per operation.
         var approvals = allApprovals.Where(approval => approval.Case == "openapi").ToArray();
-        Assert.Equal(46, approvals.Length);
-        Assert.Equal(23, approvals.Count(approval => !approval.Reverse));
-        Assert.Equal(23, approvals.Count(approval => approval.Reverse));
+        Assert.Equal(48, approvals.Length);
+        Assert.Equal(24, approvals.Count(approval => !approval.Reverse));
+        Assert.Equal(24, approvals.Count(approval => approval.Reverse));
         Assert.All(approvals, approval => Assert.Equal(CompatibilityFacet.OpenApi, approval.Facet));
 
         // Handler absorption reviewed the cases whose frozen rows only ever described the capture
@@ -356,6 +357,7 @@ public sealed class PublishingApiContractTests
     private static bool HasRequestMetadata(PublishingRoute route) => route.Id is not
         ("IncidentStrategies.List" or
         "ValueConversionProfiles.List" or
+        "WorkflowExecutable.Export" or
         "ActivityPublications.GetReceipt" or
         "ActivityTestRuns.Get" or
         "ActivityTestRuns.GetByIdempotencyKey" or
