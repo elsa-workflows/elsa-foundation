@@ -192,7 +192,7 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
         return true;
     }
 
-    public async ValueTask<bool> TryRestoreAsync(
+    public ValueTask<bool> TryRestoreAsync(
         WorkflowExecutableSourceReference expectedRetiredReference,
         WorkflowExecutableSourceReference restoredReference,
         CancellationToken cancellationToken = default)
@@ -204,18 +204,18 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
         cancellationToken.ThrowIfCancellationRequested();
         if (expectedRetiredReference.DeletedAt is null ||
             restoredReference.DeletedAt is not null ||
-            !SameReferenceIdentity(expectedRetiredReference, restoredReference))
-            return false;
+            !WorkflowExecutableSourceReferenceComparer.SameIdentity(expectedRetiredReference, restoredReference))
+            return ValueTask.FromResult(false);
 
         var session = Open();
         var key = GroundworkRuntimeRowStore.Key(expectedRetiredReference.SourceReferenceId);
         var existing = session.Read(key);
         if (existing is null)
-            return false;
+            return ValueTask.FromResult(false);
 
         var current = Deserialize(existing.Values.Values);
-        if (!SameReferenceSnapshot(current, expectedRetiredReference))
-            return false;
+        if (!WorkflowExecutableSourceReferenceComparer.SameSnapshot(current, expectedRetiredReference))
+            return ValueTask.FromResult(false);
 
         var revision = existing.Version ?? throw new InvalidDataException(
             $"Groundwork source-reference row '{expectedRetiredReference.SourceReferenceId}' did not expose an optimistic revision.");
@@ -224,14 +224,14 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
             GroundworkV2WorkflowExecutableSourceReferenceStorageConventions.Values(restoredReference),
             revision);
         if (result.Status is WriteOutcomeStatus.ConcurrencyConflict or WriteOutcomeStatus.NotFound)
-            return false;
+            return ValueTask.FromResult(false);
         if (!IsSaved(result.Status))
         {
             throw new InvalidOperationException(
                 $"Groundwork source-reference restoration for '{expectedRetiredReference.SourceReferenceId}' failed with status '{result.Status}'.");
         }
 
-        return true;
+        return ValueTask.FromResult(true);
     }
 
     public ValueTask<bool> DeleteAsync(
@@ -418,32 +418,6 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
                 "The selected Groundwork provider does not advertise optimistic source-reference concurrency.");
         return concurrency.ConditionalUpsert(values, WriteOptions.IfVersion(revision));
     }
-
-    private static bool SameReferenceSnapshot(
-        WorkflowExecutableSourceReference current,
-        WorkflowExecutableSourceReference expected) =>
-        SameReferenceIdentity(current, expected) &&
-        current.DeletedAt == expected.DeletedAt &&
-        StringComparer.Ordinal.Equals(current.DeletedReason, expected.DeletedReason);
-
-    private static bool SameReferenceIdentity(
-        WorkflowExecutableSourceReference current,
-        WorkflowExecutableSourceReference expected) =>
-        StringComparer.Ordinal.Equals(current.SourceReferenceId, expected.SourceReferenceId) &&
-        StringComparer.Ordinal.Equals(current.ArtifactId, expected.ArtifactId) &&
-        StringComparer.Ordinal.Equals(current.SourceKind, expected.SourceKind) &&
-        StringComparer.Ordinal.Equals(current.SourceId, expected.SourceId) &&
-        StringComparer.Ordinal.Equals(current.SourceVersion, expected.SourceVersion) &&
-        StringComparer.Ordinal.Equals(current.DefinitionId, expected.DefinitionId) &&
-        StringComparer.Ordinal.Equals(current.DefinitionVersionId, expected.DefinitionVersionId) &&
-        StringComparer.Ordinal.Equals(current.ArtifactVersion, expected.ArtifactVersion) &&
-        current.CreatedAt == expected.CreatedAt &&
-        current.PublishedAt == expected.PublishedAt &&
-        current.Scope == expected.Scope &&
-        current.ExpiresAt == expected.ExpiresAt &&
-        StringComparer.Ordinal.Equals(current.ActivationId, expected.ActivationId) &&
-        StringComparer.Ordinal.Equals(current.SlotId, expected.SlotId) &&
-        StringComparer.Ordinal.Equals(current.TenantId, expected.TenantId);
 
     private ColumnRef Column(TableId table, string name)
     {

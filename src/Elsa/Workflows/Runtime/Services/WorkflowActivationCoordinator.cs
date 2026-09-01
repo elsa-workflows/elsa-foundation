@@ -580,32 +580,15 @@ public sealed class WorkflowActivationCoordinator(
         var current = await sourceReferenceStore.FindAsync(predecessorReference.SourceReferenceId, CancellationToken.None);
         if (current is not { DeletedAt: not null } ||
             !StringComparer.Ordinal.Equals(current.DeletedReason, ReplacedRetireReason) ||
-            !IsSameReference(current, predecessorReference))
+            !WorkflowExecutableSourceReferenceComparer.SameIdentity(current, predecessorReference))
             return;
 
         // The writer owns the compare-and-restore operation. It must condition the write on this exact retired
         // snapshot, so a superseding writer that wins between the read above and compensation is left untouched.
-        await sourceReferenceStore.TryRestoreAsync(current, predecessorReference, CancellationToken.None);
+        if (!await sourceReferenceStore.TryRestoreAsync(current, predecessorReference, CancellationToken.None))
+            throw new InvalidOperationException(
+                $"The predecessor source reference '{predecessorReference.SourceReferenceId}' could not be restored because it changed or the store does not support compare-and-restore.");
     }
-
-    private static bool IsSameReference(
-        WorkflowExecutableSourceReference current,
-        WorkflowExecutableSourceReference captured) =>
-        StringComparer.Ordinal.Equals(current.SourceReferenceId, captured.SourceReferenceId) &&
-        StringComparer.Ordinal.Equals(current.ArtifactId, captured.ArtifactId) &&
-        StringComparer.Ordinal.Equals(current.SourceKind, captured.SourceKind) &&
-        StringComparer.Ordinal.Equals(current.SourceId, captured.SourceId) &&
-        StringComparer.Ordinal.Equals(current.SourceVersion, captured.SourceVersion) &&
-        StringComparer.Ordinal.Equals(current.DefinitionId, captured.DefinitionId) &&
-        StringComparer.Ordinal.Equals(current.DefinitionVersionId, captured.DefinitionVersionId) &&
-        StringComparer.Ordinal.Equals(current.ArtifactVersion, captured.ArtifactVersion) &&
-        current.CreatedAt == captured.CreatedAt &&
-        current.PublishedAt == captured.PublishedAt &&
-        current.Scope == captured.Scope &&
-        current.ExpiresAt == captured.ExpiresAt &&
-        StringComparer.Ordinal.Equals(current.ActivationId, captured.ActivationId) &&
-        StringComparer.Ordinal.Equals(current.SlotId, captured.SlotId) &&
-        StringComparer.Ordinal.Equals(current.TenantId, captured.TenantId);
 
     private async ValueTask<WorkflowActivationTransition?> InferActivationTransitionAfterCancellationAsync(
         WorkflowActivationCommand command,

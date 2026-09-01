@@ -164,6 +164,24 @@ public sealed class WorkflowActivationCoordinatorTests
     }
 
     [Fact]
+    public async Task Failed_predecessor_retirement_reports_fail_closed_restore_compensation()
+    {
+        var harness = new Harness();
+        var incumbent = await harness.ActivateAsync("incumbent", "artifact-1");
+        harness.References.ThrowAfterRetire = new InvalidOperationException("retirement response failed");
+        harness.References.FailRestore = true;
+
+        var result = await harness.ActivateAsync("candidate", "artifact-2", expectedRevision: incumbent.Slot.Revision);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(WorkflowActivationStep.PredecessorReferenceRetirement, result.FailedStep);
+        Assert.Contains("Predecessor reference compensation failed", result.CompensationDiagnostic!, StringComparison.Ordinal);
+        var predecessor = await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("incumbent"));
+        Assert.Equal(WorkflowActivationCoordinator.ReplacedRetireReason, predecessor!.DeletedReason);
+        Assert.NotNull(predecessor.DeletedAt);
+    }
+
+    [Fact]
     public async Task Deactivation_removes_serving_projection_and_is_idempotent()
     {
         var harness = new Harness();
@@ -385,6 +403,56 @@ public sealed class WorkflowActivationCoordinatorTests
         var current = await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("incumbent"));
         Assert.Equal("artifact-raced", current!.ArtifactId);
         Assert.Equal("raced", current.ActivationId);
+        Assert.Null(current.DeletedAt);
+    }
+
+    [Fact]
+    public async Task Cancellation_after_predecessor_reference_snapshot_conflict_leaves_sidecar_only_superseding_reference()
+    {
+        var harness = new Harness();
+        var incumbent = await harness.ActivateAsync("incumbent", "artifact-1");
+        var predecessor = await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("incumbent"));
+        using var cancellation = new CancellationTokenSource();
+        var replacement = predecessor! with
+        {
+            Layout = [new WorkflowExecutableLayoutRecord("node-start", 42, 43, 120, 80, JsonSerializer.SerializeToElement(new { sidecar = true }))],
+            LayoutSidecar = new ExecutableLayoutSidecar([
+                new ExecutableLayoutBoundarySegment(
+                    "boundary-1",
+                    new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.TemplateBoundary, "boundary-1")]),
+                    "template-v2",
+                    [new ExecutableActivityLayoutRecord(
+                        "template-node",
+                        "authored-node-start",
+                        "node-start",
+                        42,
+                        43,
+                        ActivityType: "test/activity",
+                        ActivityTypeVersion: "2.0.0",
+                        HasPinnedGeometry: false)],
+                    [new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.NestedPlacement, "nested-1")])])
+            ]),
+            AuthoredInputs = [new WorkflowExecutableAuthoredInputRecord(
+                "node-start",
+                "input",
+                "json",
+                JsonSerializer.SerializeToElement(new { value = 1 }))],
+            ActivityPresentation = [new WorkflowExecutableActivityPresentationRecord("node-start", "New display", "New description")],
+            DeletedAt = null,
+            DeletedReason = null
+        };
+        harness.References.ReplaceBeforeRestore = replacement;
+        harness.References.CancelAfterRetire = cancellation;
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await harness.Coordinator.ActivateAsync(
+                harness.Command("candidate", "artifact-2", expectedRevision: incumbent.Slot.Revision), cancellation.Token));
+
+        var current = await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("incumbent"));
+        Assert.Equal(replacement.Layout, current!.Layout);
+        Assert.Equal(replacement.LayoutSidecar, current.LayoutSidecar);
+        Assert.Equal(replacement.AuthoredInputs, current.AuthoredInputs);
+        Assert.Equal(replacement.ActivityPresentation, current.ActivityPresentation);
         Assert.Null(current.DeletedAt);
     }
 
@@ -668,6 +736,8 @@ public sealed class WorkflowActivationCoordinatorTests
     private sealed class RecordingReferenceStore(IWorkflowExecutableSourceReferenceStore inner, List<string> calls) : IWorkflowExecutableSourceReferenceStore
     {
         public bool ThrowOnRetire { get; set; }
+        public Exception? ThrowAfterRetire { get; set; }
+        public bool FailRestore { get; set; }
         public CancellationTokenSource? CancelAfterSave { get; set; }
         public CancellationTokenSource? CancelAfterRetire { get; set; }
         public WorkflowExecutableSourceReference? ReplaceAfterRetire { get; set; }
@@ -701,6 +771,11 @@ public sealed class WorkflowActivationCoordinatorTests
                 ReplaceAfterRetire = null;
                 await inner.SaveAsync(replacement, cancellationToken);
             }
+            if (ThrowAfterRetire is { } failure && reason == WorkflowActivationCoordinator.ReplacedRetireReason)
+            {
+                ThrowAfterRetire = null;
+                throw failure;
+            }
             if (CancelAfterRetire is { } source)
             {
                 CancelAfterRetire = null;
@@ -715,6 +790,11 @@ public sealed class WorkflowActivationCoordinatorTests
             WorkflowExecutableSourceReference restoredReference,
             CancellationToken cancellationToken = default)
         {
+            if (FailRestore)
+            {
+                FailRestore = false;
+                return false;
+            }
             if (ReplaceBeforeRestore is { } replacement)
             {
                 ReplaceBeforeRestore = null;

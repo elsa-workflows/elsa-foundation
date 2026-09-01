@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
@@ -198,7 +199,32 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStoreTests
         Assert.True(await store.RetireAsync(original.SourceReferenceId, retiredAt.AddMinutes(1), "activation-replaced"));
         var expected = await store.FindAsync(original.SourceReferenceId);
         var raw = source.Open(unit.Id.Value, StorageAccess.Scoped(new StorageScope("tenant-a")));
-        var changed = expected! with { DeletedReason = "superseding-writer" };
+        var changed = expected! with
+        {
+            Layout = [new WorkflowExecutableLayoutRecord("node-1", 42, 43, 120, 80, JsonSerializer.SerializeToElement(new { changed = true }))],
+            LayoutSidecar = new ExecutableLayoutSidecar([
+                new ExecutableLayoutBoundarySegment(
+                    "boundary-1",
+                    new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.TemplateBoundary, "boundary-1")]),
+                    "template-v2",
+                    [new ExecutableActivityLayoutRecord(
+                        "template-node",
+                        "authored-node-1",
+                        "node-1",
+                        42,
+                        43,
+                        ActivityType: "test/activity",
+                        ActivityTypeVersion: "2.0.0",
+                        HasPinnedGeometry: false)],
+                    [new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.NestedPlacement, "nested-1")])])
+            ]),
+            AuthoredInputs = [new WorkflowExecutableAuthoredInputRecord(
+                "node-1",
+                "input",
+                "json",
+                JsonSerializer.SerializeToElement(new { value = 1 }))],
+            ActivityPresentation = [new WorkflowExecutableActivityPresentationRecord("node-1", "Changed display", "Changed description")]
+        };
         Assert.True(raw.Update(
                 GroundworkV2WorkflowExecutableSourceReferenceStorageConventions.Values(changed),
                 WriteOptions.Unconditional)
@@ -206,7 +232,8 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStoreTests
 
         Assert.False(await store.TryRestoreAsync(expected!, original));
         var stillRetired = await store.FindAsync(original.SourceReferenceId);
-        Assert.Equal("superseding-writer", stillRetired!.DeletedReason);
+        Assert.Equal(expected.DeletedReason, stillRetired!.DeletedReason);
+        Assert.True(WorkflowExecutableSourceReferenceComparer.SameIdentity(changed, stillRetired));
         Assert.NotNull(stillRetired.DeletedAt);
     }
 
