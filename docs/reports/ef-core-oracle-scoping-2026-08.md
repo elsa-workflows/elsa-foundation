@@ -53,7 +53,7 @@ persistence seam**:
 | `src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/` | `EfCoreOpenTelemetryStore` — a real `IOpenTelemetryStore` implementation. |
 | `src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/` | `EfCoreStructuredLogStore` — a real `IStructuredLogStore` implementation. |
 | `src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/` | `ApplicationIdentityDbContext` + framework identity stores + `TenantMembershipEntity`. |
-| `src/Elsa/Foundation/Identity/OpenIddict/EntityFrameworkCore/` | OpenIddict's own EF store. **No Groundwork counterpart exists** — this lane is EF-only. |
+| `src/Apps/Elsa.Workbench/OpenIddict/` | Workbench's explicit third-party OpenIddict EF vendor store. The reusable Elsa OpenIddict package is provider-neutral. |
 
 `src/Elsa/Persistence/EFCore/` contains no implementation of any runtime store contract. A search
 for the runtime seam interfaces across that tree returns nothing:
