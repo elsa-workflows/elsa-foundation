@@ -92,7 +92,7 @@ public sealed class DispatchWorkflowDesignTests
         Assert.Equal(source.DefinitionId, pin.Source.DefinitionId);
         Assert.Equal(source.DefinitionVersionId, pin.Source.DefinitionVersionId);
         Assert.Equal(source.ArtifactVersion, pin.Source.ArtifactVersion);
-        Assert.Equal(source.PublicationId, pin.Source.PublicationId);
+        Assert.Equal(source.ActivationId, pin.Source.PublicationId);
         Assert.Equal(source.SlotId, pin.Source.SlotId);
         var dependency = Assert.Single(compileContribution.Dependencies);
         Assert.Equal(node.ExecutableNodeId, dependency.ExecutableNodeId);

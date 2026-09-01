@@ -32,9 +32,9 @@ public sealed class EndpointRoutingConflictException(
         WorkflowTriggerBinding conflicting) =>
         new(
             DescribeEndpoint(candidate),
-            candidate.PublicationId,
+            candidate.ActivationId,
             candidate.SlotId,
-            conflicting.PublicationId,
+            conflicting.ActivationId,
             conflicting.SlotId);
 
     /// <summary>Formats a binding's endpoint as <c>METHOD template</c> from its routing metadata (unknowns called out).</summary>

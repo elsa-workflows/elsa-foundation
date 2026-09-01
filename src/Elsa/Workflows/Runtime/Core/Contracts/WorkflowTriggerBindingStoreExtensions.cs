@@ -7,16 +7,16 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 public static class WorkflowTriggerBindingStoreExtensions
 {
-    public static ValueTask<IReadOnlyList<WorkflowTriggerBinding>> ListAllByPublicationAsync(
+    public static ValueTask<IReadOnlyList<WorkflowTriggerBinding>> ListAllByActivationAsync(
         this IWorkflowTriggerBindingStore store,
-        string publicationId,
+        string activationId,
         CancellationToken cancellationToken = default) =>
         TraverseAsync(
             store,
-            continuationToken => store.ListByPublicationAsync(
-                new WorkflowTriggerBindingPublicationPageQuery(
-                    publicationId,
-                    WorkflowTriggerBindingPublicationPageQuery.MaximumLimit,
+            continuationToken => store.ListByActivationAsync(
+                new WorkflowTriggerBindingActivationPageQuery(
+                    activationId,
+                    WorkflowTriggerBindingActivationPageQuery.MaximumLimit,
                     continuationToken),
                 cancellationToken));
 

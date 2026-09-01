@@ -14,8 +14,8 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// <summary>Current-only Groundwork v2 recurring-trigger schedule store.</summary>
 /// <remarks>
 /// Schedule rows use the escaped logical schedule identity as their stable row key and retain the complete
-/// current schedule in the JSON envelope. Publication preparation and activation use the schedule and
-/// publication-projection units in one evidenced atomic unit of work. Serving queries are bounded provider
+/// current schedule in the JSON envelope. Activation preparation and activation use the schedule and
+/// activation-projection units in one evidenced atomic unit of work. Serving queries are bounded provider
 /// queries over the declared projections; this adapter has no v1 document-store or migration path.
 /// </remarks>
 public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTriggerScheduleStore
@@ -59,13 +59,13 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
             : GroundworkV2RecurringTriggerScheduleStorageConventions.Deserialize(existing.Values.Values);
         if (previous is not null)
             EnsureIdentity(previous, schedule.ScheduleId);
-        if (DirectSaveTargetsManagedPublication(schedule, previous))
+        if (DirectSaveTargetsManagedActivation(schedule, previous))
         {
             if (previous is not null && SchedulesEqual(previous, schedule))
                 return ValueTask.FromResult(previous);
 
             throw new InvalidOperationException(
-                $"Recurring-trigger schedule '{schedule.ScheduleId}' is managed by a publication projection and cannot be changed through direct save.");
+                $"Recurring-trigger schedule '{schedule.ScheduleId}' is managed by an activation projection and cannot be changed through direct save.");
         }
 
         var result = existing is null
@@ -97,30 +97,30 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
             $"Recurring-trigger schedule '{schedule.ScheduleId}' changed concurrently and was not overwritten.");
     }
 
-    private bool DirectSaveTargetsManagedPublication(
+    private bool DirectSaveTargetsManagedActivation(
         RecurringTriggerSchedule proposed,
         RecurringTriggerSchedule? previous)
     {
-        var publicationIds = new HashSet<string>(StringComparer.Ordinal);
-        if (proposed.PublicationId is not null)
-            publicationIds.Add(proposed.PublicationId);
-        if (previous?.PublicationId is not null)
-            publicationIds.Add(previous.PublicationId);
+        var activationIds = new HashSet<string>(StringComparer.Ordinal);
+        if (proposed.ActivationId is not null)
+            activationIds.Add(proposed.ActivationId);
+        if (previous?.ActivationId is not null)
+            activationIds.Add(previous.ActivationId);
 
-        foreach (var publicationId in publicationIds)
+        foreach (var activationId in activationIds)
         {
-            var state = ReadProjectionState(OpenProjectionStateSession(), publicationId);
+            var state = ReadProjectionState(OpenProjectionStateSession(), activationId);
             if (state is null)
                 continue;
 
             if (previous is null ||
-                !StringComparer.Ordinal.Equals(previous.PublicationId, publicationId) ||
+                !StringComparer.Ordinal.Equals(previous.ActivationId, activationId) ||
                 previous.IsActive != state.Value.State.IsActive ||
                 !state.Value.State.ScheduleFingerprints.TryGetValue(previous.ScheduleId, out var expectedFingerprint) ||
                 !StringComparer.Ordinal.Equals(expectedFingerprint, ImmutableFingerprint(previous)))
             {
                 throw new InvalidDataException(
-                    $"Recurring-trigger schedule '{proposed.ScheduleId}' does not match its publication-managed state.");
+                    $"Recurring-trigger schedule '{proposed.ScheduleId}' does not match its activation-managed state.");
             }
 
             return true;
@@ -129,12 +129,12 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         return false;
     }
 
-    public async ValueTask PreparePublicationAsync(
-        string publicationId,
+    public async ValueTask PrepareActivationAsync(
+        string activationId,
         IReadOnlyCollection<RecurringTriggerSchedule> schedules,
         CancellationToken cancellationToken = default)
     {
-        ValidatePublication(publicationId, schedules);
+        ValidateActivation(activationId, schedules);
         cancellationToken.ThrowIfCancellationRequested();
         _ = Access;
         RequireAtomicCommit();
@@ -142,8 +142,8 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         using var unitOfWork = BeginUnitOfWork();
         var scheduleSession = unitOfWork.OpenSession(scheduleUnit);
         var stateSession = unitOfWork.OpenSession(projectionStateUnit);
-        var existingState = ReadProjectionState(stateSession, publicationId);
-        var existingRows = ListAllByPublication(scheduleSession, publicationId, cancellationToken);
+        var existingState = ReadProjectionState(stateSession, activationId);
+        var existingRows = ListAllByActivation(scheduleSession, activationId, cancellationToken);
         var prepared = schedules.Select(schedule => schedule with { IsActive = false }).ToArray();
 
         if (existingState is not null)
@@ -156,7 +156,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
             }
 
             throw new InvalidOperationException(
-                $"Recurring-schedule publication projection '{publicationId}' is already prepared with different state.");
+                $"Recurring-schedule activation projection '{activationId}' is already prepared with different state.");
         }
 
         var existingById = existingRows.ToDictionary(row => row.Schedule.ScheduleId, StringComparer.Ordinal);
@@ -174,7 +174,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
 
         StageProjectionState(
             unitOfWork,
-            ProjectionState(publicationId, prepared, isActive: false),
+            ProjectionState(activationId, prepared, isActive: false),
             expectedVersion: null,
             createOnly: true);
         try
@@ -187,8 +187,8 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
             // acknowledgement arrived. Reconcile only exact convergence; never hide a different winner.
             try
             {
-                var stateAfter = ReadProjectionState(OpenProjectionStateSession(), publicationId);
-                var rowsAfter = ListAllByPublication(OpenScheduleSession(), publicationId, cancellationToken);
+                var stateAfter = ReadProjectionState(OpenProjectionStateSession(), activationId);
+                var rowsAfter = ListAllByActivation(OpenScheduleSession(), activationId, cancellationToken);
                 if (stateAfter is { State.IsActive: false } &&
                     ProjectionMatches(stateAfter.Value.State, rowsAfter) &&
                     ProjectionsEqual(rowsAfter, prepared))
@@ -205,19 +205,19 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         }
     }
 
-    public ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByPublicationPageAsync(
-        RecurringTriggerSchedulePublicationPageQuery query,
+    public ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByActivationPageAsync(
+        RecurringTriggerScheduleActivationPageQuery query,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
-        ValidatePublicationId(query.PublicationId);
+        ValidateActivationId(query.ActivationId);
         cancellationToken.ThrowIfCancellationRequested();
         var table = new TableId(scheduleUnit.Name);
-        var publication = Column(table, ElsaRuntimeV2StorageManifest.RecurringTriggerSchedulePublicationIdField);
+        var activation = Column(table, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleActivationIdField);
         var scheduleId = Column(table, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIdField);
         var result = QueryWithBoundCursor(new QueryRequest(
             table,
-            Equal(publication, query.PublicationId),
+            Equal(activation, query.ActivationId),
             [new OrderTerm(scheduleId, OrderDirection.Ascending, NullOrder.Last)],
             Projection.All,
             PagingFor(query.Limit, query.ContinuationToken)), query.ContinuationToken);
@@ -242,26 +242,26 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         return ValueTask.FromResult(Page(query, result));
     }
 
-    public ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByPublicationAsync(
-        string publicationId,
+    public ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByActivationAsync(
+        string activationId,
         CancellationToken cancellationToken = default)
     {
-        ValidatePublicationId(publicationId);
+        ValidateActivationId(activationId);
         cancellationToken.ThrowIfCancellationRequested();
         return ValueTask.FromResult<IReadOnlyCollection<RecurringTriggerSchedule>>(
-            ListAllByPublication(OpenScheduleSession(), publicationId, cancellationToken)
+            ListAllByActivation(OpenScheduleSession(), activationId, cancellationToken)
                 .Select(row => row.Schedule)
                 .ToArray());
     }
 
-    public async ValueTask ActivatePublicationAsync(
-        string publicationId,
-        string? replacedPublicationId,
+    public async ValueTask ActivateAsync(
+        string activationId,
+        string? replacedActivationId,
         CancellationToken cancellationToken = default)
     {
-        ValidatePublicationId(publicationId);
-        if (replacedPublicationId is not null)
-            ValidatePublicationId(replacedPublicationId);
+        ValidateActivationId(activationId);
+        if (replacedActivationId is not null)
+            ValidateActivationId(replacedActivationId);
         cancellationToken.ThrowIfCancellationRequested();
         _ = Access;
         RequireAtomicCommit();
@@ -269,15 +269,15 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         using var unitOfWork = BeginUnitOfWork();
         var scheduleSession = unitOfWork.OpenSession(scheduleUnit);
         var stateSession = unitOfWork.OpenSession(projectionStateUnit);
-        var candidate = ReadProjectionState(stateSession, publicationId)
+        var candidate = ReadProjectionState(stateSession, activationId)
             ?? throw new InvalidOperationException(
-                $"Publication '{publicationId}' has no prepared recurring-schedule projection.");
-        var hasDistinctReplacement = replacedPublicationId is not null &&
-            !StringComparer.Ordinal.Equals(publicationId, replacedPublicationId);
+                $"Activation '{activationId}' has no prepared recurring-schedule projection.");
+        var hasDistinctReplacement = replacedActivationId is not null &&
+            !StringComparer.Ordinal.Equals(activationId, replacedActivationId);
         var replaced = hasDistinctReplacement
-            ? ReadProjectionState(stateSession, replacedPublicationId!)
+            ? ReadProjectionState(stateSession, replacedActivationId!)
             : null;
-        var candidateRows = ListAllByPublication(scheduleSession, publicationId, cancellationToken);
+        var candidateRows = ListAllByActivation(scheduleSession, activationId, cancellationToken);
         if (candidate.State.IsActive)
             EnsureActiveProjection(candidate.State, candidateRows, scheduleSession);
         else
@@ -290,24 +290,24 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
                 if (candidateRows.Any(row => !row.Schedule.IsActive))
                 {
                     throw new InvalidDataException(
-                        $"Recurring-schedule publication '{publicationId}' is active but has non-active rows.");
+                        $"Recurring-schedule activation '{activationId}' is active but has non-active rows.");
                 }
 
                 return;
             }
 
             throw new InvalidOperationException(
-                $"Recurring-schedule publication '{publicationId}' is active while replaced publication '{replacedPublicationId}' is still active.");
+                $"Recurring-schedule activation '{activationId}' is active while replaced activation '{replacedActivationId}' is still active.");
         }
 
         if (hasDistinctReplacement && (replaced is null || !replaced.Value.State.IsActive))
         {
             throw new InvalidOperationException(
-                $"Recurring-schedule publication '{publicationId}' cannot replace a projection that is missing or no longer active.");
+                $"Recurring-schedule activation '{activationId}' cannot replace a projection that is missing or no longer active.");
         }
 
         var replacedRows = hasDistinctReplacement
-            ? ListAllByPublication(scheduleSession, replacedPublicationId!, cancellationToken)
+            ? ListAllByActivation(scheduleSession, replacedActivationId!, cancellationToken)
             : [];
         if (replaced is not null)
         {
@@ -332,7 +332,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
             StageProjectionState(
                 unitOfWork,
                 ProjectionState(
-                    replaced.Value.State.PublicationId,
+                    replaced.Value.State.ActivationId,
                     replacedRows.Select(row => row.Schedule).ToArray(),
                     isActive: false,
                     replaced.Value.State.ArtifactId),
@@ -343,11 +343,11 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         await CommitAsync(unitOfWork, cancellationToken);
     }
 
-    public async ValueTask DeleteByPublicationAsync(
-        string publicationId,
+    public async ValueTask DeleteByActivationAsync(
+        string activationId,
         CancellationToken cancellationToken = default)
     {
-        ValidatePublicationId(publicationId);
+        ValidateActivationId(activationId);
         cancellationToken.ThrowIfCancellationRequested();
         _ = Access;
         RequireAtomicCommit();
@@ -355,8 +355,8 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         using var unitOfWork = BeginUnitOfWork();
         var scheduleSession = unitOfWork.OpenSession(scheduleUnit);
         var stateSession = unitOfWork.OpenSession(projectionStateUnit);
-        var rows = ListAllByPublication(scheduleSession, publicationId, cancellationToken);
-        var state = ReadProjectionState(stateSession, publicationId);
+        var rows = ListAllByActivation(scheduleSession, activationId, cancellationToken);
+        var state = ReadProjectionState(stateSession, activationId);
         foreach (var row in rows)
             StageDelete(unitOfWork, scheduleUnit, row.Schedule.ScheduleId, row.Version);
         if (state is not null)
@@ -367,7 +367,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
                 EnsureProjectionMatches(state.Value.State, rows);
             unitOfWork.Stage(RowWrite.Delete(
                 projectionStateUnit,
-                GroundworkRuntimeRowStore.Key(ProjectionStateId(publicationId)),
+                GroundworkRuntimeRowStore.Key(ProjectionStateId(activationId)),
                 WriteOptions.IfVersion(state.Value.Version)));
         }
 
@@ -483,52 +483,52 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         var rows = ListAll(scheduleSession, Equal(
             Column(new TableId(scheduleUnit.Name), ElsaRuntimeV2StorageManifest.ArtifactIdField),
             artifactId), cancellationToken);
-        var publicationRows = rows
-            .Where(row => row.Schedule.PublicationId is not null)
-            .GroupBy(row => row.Schedule.PublicationId!, StringComparer.Ordinal)
+        var activationRows = rows
+            .Where(row => row.Schedule.ActivationId is not null)
+            .GroupBy(row => row.Schedule.ActivationId!, StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
-                group => ListAllByPublication(scheduleSession, group.Key, cancellationToken),
+                group => ListAllByActivation(scheduleSession, group.Key, cancellationToken),
                 StringComparer.Ordinal);
         var statesToDelete = ListProjectionStatesByArtifact(stateSession, artifactId, cancellationToken)
-            .ToDictionary(item => item.State.PublicationId, StringComparer.Ordinal);
-        foreach (var publicationId in publicationRows.Keys.Concat(statesToDelete.Keys).Distinct(StringComparer.Ordinal))
+            .ToDictionary(item => item.State.ActivationId, StringComparer.Ordinal);
+        foreach (var activationId in activationRows.Keys.Concat(statesToDelete.Keys).Distinct(StringComparer.Ordinal))
         {
-            var allRows = publicationRows.TryGetValue(publicationId, out var discoveredRows)
+            var allRows = activationRows.TryGetValue(activationId, out var discoveredRows)
                 ? discoveredRows
-                : ListAllByPublication(scheduleSession, publicationId, cancellationToken);
+                : ListAllByActivation(scheduleSession, activationId, cancellationToken);
             if (allRows.Any(row => !StringComparer.Ordinal.Equals(row.Schedule.ArtifactId, artifactId)))
             {
                 throw new InvalidDataException(
-                    $"Recurring-schedule publication '{publicationId}' does not match artifact ownership '{artifactId}'.");
+                    $"Recurring-schedule activation '{activationId}' does not match artifact ownership '{artifactId}'.");
             }
 
-            var state = statesToDelete.TryGetValue(publicationId, out var discoveredState)
+            var state = statesToDelete.TryGetValue(activationId, out var discoveredState)
                 ? discoveredState
-                : ReadProjectionState(stateSession, publicationId);
+                : ReadProjectionState(stateSession, activationId);
             if (state is not null)
             {
                 if (!StringComparer.Ordinal.Equals(state.Value.State.ArtifactId, artifactId))
                 {
                     throw new InvalidDataException(
-                        $"Recurring-schedule publication '{publicationId}' has invalid artifact ownership.");
+                        $"Recurring-schedule activation '{activationId}' has invalid artifact ownership.");
                 }
 
                 if (state.Value.State.IsActive)
                     EnsureActiveProjection(state.Value.State, allRows, scheduleSession);
                 else
                     EnsureProjectionMatches(state.Value.State, allRows);
-                statesToDelete[publicationId] = state.Value;
+                statesToDelete[activationId] = state.Value;
             }
         }
 
         foreach (var row in rows)
             StageDelete(unitOfWork, scheduleUnit, row.Schedule.ScheduleId, row.Version);
-        foreach (var (publicationId, state) in statesToDelete)
+        foreach (var (activationId, state) in statesToDelete)
         {
             unitOfWork.Stage(RowWrite.Delete(
                 projectionStateUnit,
-                GroundworkRuntimeRowStore.Key(ProjectionStateId(publicationId)),
+                GroundworkRuntimeRowStore.Key(ProjectionStateId(activationId)),
                 WriteOptions.IfVersion(state.Version)));
         }
 
@@ -550,13 +550,13 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
 
         var schedule = GroundworkV2RecurringTriggerScheduleStorageConventions.Deserialize(entry.Values.Values);
         EnsureIdentity(schedule, scheduleId);
-        if (schedule.PublicationId is not null)
+        if (schedule.ActivationId is not null)
         {
-            var state = ReadProjectionState(OpenProjectionStateSession(), schedule.PublicationId);
+            var state = ReadProjectionState(OpenProjectionStateSession(), schedule.ActivationId);
             if (state is { State.IsActive: false })
             {
                 throw new InvalidOperationException(
-                    $"Cannot delete recurring-trigger schedule '{scheduleId}' from inactive prepared publication '{schedule.PublicationId}'.");
+                    $"Cannot delete recurring-trigger schedule '{scheduleId}' from inactive prepared activation '{schedule.ActivationId}'.");
             }
 
             if (state is { State.IsActive: true })
@@ -612,15 +612,15 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         }
     }
 
-    private List<StoredSchedule> ListAllByPublication(
+    private List<StoredSchedule> ListAllByActivation(
         IStorageSession session,
-        string publicationId,
+        string activationId,
         CancellationToken cancellationToken) =>
         ListAll(
             session,
             Equal(
-                Column(new TableId(scheduleUnit.Name), ElsaRuntimeV2StorageManifest.RecurringTriggerSchedulePublicationIdField),
-                publicationId),
+                Column(new TableId(scheduleUnit.Name), ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleActivationIdField),
+                activationId),
             cancellationToken);
 
     private List<StoredSchedule> ListAll(
@@ -720,11 +720,11 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
                         "Groundwork recurring-trigger projection-state query returned a row outside its artifact predicate.");
                 }
 
-                var entry = session.Read(GroundworkRuntimeRowStore.Key(ProjectionStateId(queried.PublicationId)));
+                var entry = session.Read(GroundworkRuntimeRowStore.Key(ProjectionStateId(queried.ActivationId)));
                 if (entry is null)
                     continue;
                 var current = DeserializeProjectionState(entry.Values.Values);
-                if (!StringComparer.Ordinal.Equals(current.PublicationId, queried.PublicationId) ||
+                if (!StringComparer.Ordinal.Equals(current.ActivationId, queried.ActivationId) ||
                     !StringComparer.Ordinal.Equals(current.ArtifactId, artifactId))
                 {
                     throw new InvalidDataException(
@@ -734,7 +734,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
                 states.Add((
                     current,
                     entry.Version ?? throw new InvalidDataException(
-                        $"Groundwork recurring-trigger projection state '{current.PublicationId}' did not expose an optimistic revision.")));
+                        $"Groundwork recurring-trigger projection state '{current.ActivationId}' did not expose an optimistic revision.")));
             }
 
             continuationToken = result.NextContinuationToken;
@@ -789,7 +789,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         var rowsById = rows.ToDictionary(row => row.Schedule.ScheduleId, StringComparer.Ordinal);
         return rows.All(row =>
                    !row.Schedule.IsActive &&
-                   StringComparer.Ordinal.Equals(row.Schedule.PublicationId, state.PublicationId) &&
+                   StringComparer.Ordinal.Equals(row.Schedule.ActivationId, state.ActivationId) &&
                    StringComparer.Ordinal.Equals(row.Schedule.ArtifactId, state.ArtifactId)) &&
                state.ScheduleIds.All(rowsById.ContainsKey) &&
                state.ScheduleFingerprints.All(pair =>
@@ -804,7 +804,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         if (!ProjectionMatches(state, rows))
         {
             throw new InvalidDataException(
-                $"Groundwork recurring-schedule publication projection '{state.PublicationId}' does not match its projection state.");
+                $"Groundwork recurring-schedule activation projection '{state.ActivationId}' does not match its projection state.");
         }
     }
 
@@ -816,7 +816,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         if (!state.IsActive ||
             state.ProjectionKind != ProjectionKind ||
             (state.ScheduleCount > 0 && string.IsNullOrWhiteSpace(state.ArtifactId)) ||
-            !StringComparer.Ordinal.Equals(state.PublicationId, rows.FirstOrDefault()?.Schedule.PublicationId ?? state.PublicationId) ||
+            !StringComparer.Ordinal.Equals(state.ActivationId, rows.FirstOrDefault()?.Schedule.ActivationId ?? state.ActivationId) ||
             state.ScheduleIds is null ||
             state.ScheduleFingerprints is null ||
             state.ScheduleCount != state.ScheduleIds.Count ||
@@ -825,25 +825,25 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
             state.ScheduleIds.Any(id => !state.ScheduleFingerprints.ContainsKey(id)))
         {
             throw new InvalidDataException(
-                $"Groundwork recurring-schedule active projection '{state.PublicationId}' has invalid identity state.");
+                $"Groundwork recurring-schedule active projection '{state.ActivationId}' has invalid identity state.");
         }
 
         var currentIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var row in rows)
         {
             if (!currentIds.Add(row.Schedule.ScheduleId) ||
-                !StringComparer.Ordinal.Equals(row.Schedule.PublicationId, state.PublicationId) ||
+                !StringComparer.Ordinal.Equals(row.Schedule.ActivationId, state.ActivationId) ||
                 !StringComparer.Ordinal.Equals(row.Schedule.ArtifactId, state.ArtifactId))
             {
                 throw new InvalidDataException(
-                    $"Groundwork recurring-schedule active projection '{state.PublicationId}' contains an unexpected row.");
+                    $"Groundwork recurring-schedule active projection '{state.ActivationId}' contains an unexpected row.");
             }
 
             EnsureActiveSchedule(state, row.Schedule);
         }
 
         // A missing row is an allowed operational outcome (the pump may have exhausted and deleted it),
-        // but a row still present under an expected key must retain its immutable publication identity.
+        // but a row still present under an expected key must retain its immutable activation identity.
         foreach (var scheduleId in state.ScheduleIds)
         {
             var entry = session.Read(GroundworkRuntimeRowStore.Key(
@@ -862,18 +862,18 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         RecurringTriggerSchedule schedule)
     {
         if (!schedule.IsActive ||
-            !StringComparer.Ordinal.Equals(schedule.PublicationId, state.PublicationId) ||
+            !StringComparer.Ordinal.Equals(schedule.ActivationId, state.ActivationId) ||
             !StringComparer.Ordinal.Equals(schedule.ArtifactId, state.ArtifactId) ||
             !state.ScheduleFingerprints.TryGetValue(schedule.ScheduleId, out var expectedFingerprint) ||
             !StringComparer.Ordinal.Equals(expectedFingerprint, ImmutableFingerprint(schedule)))
         {
             throw new InvalidDataException(
-                $"Groundwork recurring-schedule active projection '{state.PublicationId}' contains a row with invalid immutable state.");
+                $"Groundwork recurring-schedule active projection '{state.ActivationId}' contains a row with invalid immutable state.");
         }
     }
 
     private static GroundworkV2RecurringTriggerScheduleProjectionState ProjectionState(
-        string publicationId,
+        string activationId,
         IReadOnlyCollection<RecurringTriggerSchedule> schedules,
         bool isActive,
         string? retainedArtifactId = null)
@@ -888,7 +888,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         if (artifacts.Length > 1)
         {
             throw new InvalidDataException(
-                $"Recurring-schedule publication projection '{publicationId}' contains multiple artifacts.");
+                $"Recurring-schedule activation projection '{activationId}' contains multiple artifacts.");
         }
 
         var artifactId = artifacts.SingleOrDefault() ?? retainedArtifactId;
@@ -896,12 +896,12 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
             !StringComparer.Ordinal.Equals(artifacts[0], retainedArtifactId))
         {
             throw new InvalidDataException(
-                $"Recurring-schedule publication projection '{publicationId}' changed artifact ownership.");
+                $"Recurring-schedule activation projection '{activationId}' changed artifact ownership.");
         }
 
         return new(
             ProjectionKind,
-            publicationId,
+            activationId,
             artifactId,
             isActive,
             ordered.Length,
@@ -974,11 +974,11 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         var options = createOnly
             ? WriteOptions.CreateOnly
             : WriteOptions.IfVersion(expectedVersion ?? throw new InvalidOperationException(
-                $"Recurring-schedule projection state '{state.PublicationId}' did not expose an optimistic revision."));
+                $"Recurring-schedule projection state '{state.ActivationId}' did not expose an optimistic revision."));
         unitOfWork.Stage(RowWrite.Upsert(
             projectionStateUnit,
             GroundworkRuntimeRowStore.Values(
-                ProjectionStateId(state.PublicationId),
+                ProjectionStateId(state.ActivationId),
                 ElsaRuntimeV2StorageManifest.SchemaVersion,
                 GroundworkV2RuntimeJson.Serialize(state),
                 new Dictionary<string, object?>(StringComparer.Ordinal)
@@ -991,20 +991,20 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
 
     private (GroundworkV2RecurringTriggerScheduleProjectionState State, long Version)? ReadProjectionState(
         IStorageSession session,
-        string publicationId)
+        string activationId)
     {
-        var entry = session.Read(GroundworkRuntimeRowStore.Key(ProjectionStateId(publicationId)));
+        var entry = session.Read(GroundworkRuntimeRowStore.Key(ProjectionStateId(activationId)));
         if (entry is null)
             return null;
         var state = DeserializeProjectionState(entry.Values.Values);
-        if (!StringComparer.Ordinal.Equals(state.PublicationId, publicationId))
+        if (!StringComparer.Ordinal.Equals(state.ActivationId, activationId))
         {
             throw new InvalidDataException(
                 "Groundwork recurring-schedule projection state identity does not match its key.");
         }
 
         return (state, entry.Version ?? throw new InvalidDataException(
-            $"Groundwork recurring-schedule projection state '{publicationId}' did not expose an optimistic revision."));
+            $"Groundwork recurring-schedule projection state '{activationId}' did not expose an optimistic revision."));
     }
 
     private static GroundworkV2RecurringTriggerScheduleProjectionState DeserializeProjectionState(
@@ -1047,7 +1047,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         }
 
         if (!StringComparer.Ordinal.Equals(state.ProjectionKind, ProjectionKind) ||
-            string.IsNullOrWhiteSpace(state.PublicationId) ||
+            string.IsNullOrWhiteSpace(state.ActivationId) ||
             (state.ArtifactId is not null &&
              (string.IsNullOrWhiteSpace(state.ArtifactId) ||
               state.ArtifactId.Length > ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength)) ||
@@ -1068,7 +1068,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         EnsureProjection(
             values,
             ElsaRuntimeV2StorageManifest.IdField,
-            ProjectionStateId(state.PublicationId));
+            ProjectionStateId(state.ActivationId));
         EnsureProjection(
             values,
             ElsaRuntimeV2StorageManifest.PublicationProjectionKindField,
@@ -1124,7 +1124,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
                 capability.Id.Equals(WellKnownCapabilities.AtomicCommit)))
         {
             throw new NotSupportedException(
-                "Groundwork recurring-schedule publication changes require the provider's evidenced atomic-commit capability.");
+                "Groundwork recurring-schedule activation changes require the provider's evidenced atomic-commit capability.");
         }
     }
 
@@ -1164,21 +1164,21 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         }
     }
 
-    private static void ValidatePublication(
-        string publicationId,
+    private static void ValidateActivation(
+        string activationId,
         IReadOnlyCollection<RecurringTriggerSchedule> schedules)
     {
-        ValidatePublicationId(publicationId);
+        ValidateActivationId(activationId);
         ArgumentNullException.ThrowIfNull(schedules);
         var ids = new HashSet<string>(StringComparer.Ordinal);
         string? artifactId = null;
         foreach (var schedule in schedules)
         {
             GroundworkV2RecurringTriggerScheduleStorageConventions.Validate(schedule);
-            if (!StringComparer.Ordinal.Equals(schedule.PublicationId, publicationId))
+            if (!StringComparer.Ordinal.Equals(schedule.ActivationId, activationId))
             {
                 throw new ArgumentException(
-                    $"Schedule '{schedule.ScheduleId}' does not belong to publication '{publicationId}'.",
+                    $"Schedule '{schedule.ScheduleId}' does not belong to activation '{activationId}'.",
                     nameof(schedules));
             }
 
@@ -1187,28 +1187,28 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
             if (!StringComparer.Ordinal.Equals(artifactId, schedule.ArtifactId))
             {
                 throw new ArgumentException(
-                    $"Publication '{publicationId}' cannot contain recurring-trigger schedules from multiple artifacts.",
+                    $"Activation '{activationId}' cannot contain recurring-trigger schedules from multiple artifacts.",
                     nameof(schedules));
             }
 
             if (!ids.Add(schedule.ScheduleId))
             {
                 throw new ArgumentException(
-                    $"Publication '{publicationId}' contains duplicate recurring-trigger schedule '{schedule.ScheduleId}'.",
+                    $"Activation '{activationId}' contains duplicate recurring-trigger schedule '{schedule.ScheduleId}'.",
                     nameof(schedules));
             }
         }
     }
 
-    private static void ValidatePublicationId(string publicationId)
+    private static void ValidateActivationId(string activationId)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
-        if (publicationId.Length > ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength)
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
+        if (activationId.Length > ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength)
         {
             throw new ArgumentOutOfRangeException(
-                nameof(publicationId),
-                publicationId,
-                $"Groundwork recurring-schedule publication identity cannot exceed {ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength} characters.");
+                nameof(activationId),
+                activationId,
+                $"Groundwork recurring-schedule activation identity cannot exceed {ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength} characters.");
         }
     }
 
@@ -1291,8 +1291,8 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
             ? Paging.Keyset(limit)
             : Paging.Continuation(continuationToken, limit);
 
-    private static string ProjectionStateId(string publicationId) =>
-        $"{ProjectionKind}:{publicationId.Length}:{publicationId}";
+    private static string ProjectionStateId(string activationId) =>
+        $"{ProjectionKind}:{activationId.Length}:{activationId}";
 
     private static bool IsSaved(WriteOutcomeStatus status) =>
         status is WriteOutcomeStatus.Inserted or
@@ -1333,7 +1333,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
             }
 
             throw new InvalidOperationException(
-                $"Groundwork rejected recurring-schedule publication change with {report.Failed} failed row outcomes.");
+                $"Groundwork rejected recurring-schedule activation change with {report.Failed} failed row outcomes.");
         }
     }
 

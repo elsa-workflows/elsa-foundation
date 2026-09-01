@@ -28,7 +28,7 @@ internal static class RouteConstants
     internal static string WorkflowSnapshotPreflight => GetRoute("workflows/preflight");
     internal static string WorkflowPreflight => GetRoute($"workflows/{{versionId:{VersionIdConstraint}}}/preflight");
     internal static string WorkflowPublish => GetRoute($"workflows/{{versionId:{VersionIdConstraint}}}/publish");
-    internal static string WorkflowSlots => GetRoute("workflows/{definitionId}/slots");
+    internal static string WorkflowExecutableExport => GetRoute($"workflows/{{versionId:{VersionIdConstraint}}}/executable-export");
     internal static string WorkflowSlot => GetRoute("workflows/{definitionId}/slots/{slotName}");
     internal static string WorkflowSlotRestore => GetRoute("workflows/{definitionId}/slots/{slotName}/restore");
     internal static string WorkflowPolicy => GetRoute("workflows/{definitionId}/policy");

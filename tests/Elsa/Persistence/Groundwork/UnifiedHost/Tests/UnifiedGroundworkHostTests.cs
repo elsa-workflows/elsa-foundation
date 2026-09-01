@@ -97,8 +97,9 @@ public class UnifiedGroundworkHostTests
         // Runtime resolves off it.
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
 
-        // Publishing authority uses the same durable store; the API's in-memory fallbacks must not win.
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IPublicationSlotStore>());
+        // Runtime activation authority and the publishing journal use the same durable store; the API's
+        // in-memory fallbacks must not win.
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowActivationAuthority>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IPublicationRecordStore>());
 
         // Design lane ports resolve (scoped).
@@ -255,19 +256,25 @@ public class UnifiedGroundworkHostTests
         {
             await using var firstScope = firstHost.CreateAsyncScope();
             await firstScope.ServiceProvider.GetRequiredService<IPublicationRecordStore>().SaveAsync(record);
-            var activation = await firstScope.ServiceProvider.GetRequiredService<IPublicationSlotStore>()
-                .TryActivateAsync("definition-1", "default", record.PublicationId, 0, now);
+            var activation = await firstScope.ServiceProvider.GetRequiredService<IWorkflowActivationAuthority>()
+                .TryActivateAsync(new WorkflowActivationSlotRequest(
+                    "definition-1",
+                    "default",
+                    record.PublicationId,
+                    WorkflowActivationSource.Publishing,
+                    0,
+                    now));
             Assert.True(activation.Succeeded);
         }
 
         await using var restartedHost = await BuildHostAsync(database.ConnectionString);
         await using var restartedScope = restartedHost.CreateAsyncScope();
-        var restoredSlot = await restartedScope.ServiceProvider.GetRequiredService<IPublicationSlotStore>()
+        var restoredSlot = await restartedScope.ServiceProvider.GetRequiredService<IWorkflowActivationAuthority>()
             .FindAsync("definition-1", "default");
         var restoredRecord = await restartedScope.ServiceProvider.GetRequiredService<IPublicationRecordStore>()
             .FindAsync(record.PublicationId);
 
-        Assert.Equal(record.PublicationId, restoredSlot?.ActivePublicationId);
+        Assert.Equal(record.PublicationId, restoredSlot?.ActiveActivationId);
         Assert.Equal(PublicationStatus.Active, restoredRecord?.Status);
     }
 

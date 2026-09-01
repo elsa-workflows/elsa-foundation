@@ -34,6 +34,16 @@ public sealed class InvalidatingWorkflowExecutableStore : WorkflowExecutableStor
         Invalidate(executable.Identity.ArtifactId, WorkflowExecutableCacheTelemetry.SaveReason);
     }
 
+    public override async ValueTask SaveBatchAsync(
+        IReadOnlyList<WorkflowExecutable> executables,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(executables);
+        await Inner.SaveBatchAsync(executables, cancellationToken);
+        foreach (var executable in executables)
+            Invalidate(executable.Identity.ArtifactId, WorkflowExecutableCacheTelemetry.SaveReason);
+    }
+
     public override async ValueTask<bool> DeleteAsync(
         string artifactId,
         CancellationToken cancellationToken = default)

@@ -345,7 +345,7 @@ public sealed class WorkflowStartLineageTests
             PublishedAt: Now,
             Scope: WorkflowExecutableReferenceScope.Published,
             ExpiresAt: null,
-            PublicationId: "publication-1",
+            ActivationId: "publication-1",
             SlotId: "slot-1");
 
     private sealed class RecordingActorProvider : IWorkflowExecutionActorProvider

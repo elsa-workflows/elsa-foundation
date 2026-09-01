@@ -53,6 +53,16 @@ public sealed class CachingWorkflowExecutableStore : WorkflowExecutableStoreDeco
         _cache.Invalidate(_partition, executable.Identity.ArtifactId, WorkflowExecutableCacheTelemetry.SaveReason);
     }
 
+    public override async ValueTask SaveBatchAsync(
+        IReadOnlyList<WorkflowExecutable> executables,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(executables);
+        await Inner.SaveBatchAsync(executables, cancellationToken);
+        foreach (var executable in executables)
+            _cache.Invalidate(_partition, executable.Identity.ArtifactId, WorkflowExecutableCacheTelemetry.SaveReason);
+    }
+
     public override async ValueTask<bool> DeleteAsync(string artifactId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);

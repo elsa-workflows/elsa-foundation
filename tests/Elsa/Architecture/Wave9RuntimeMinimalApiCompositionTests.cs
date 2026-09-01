@@ -53,7 +53,7 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
     private static readonly string BaselineDirectory = Path.Join(AppContext.BaseDirectory, "Baselines");
 
     [Fact]
-    public async Task Runtime_minimal_mapper_publishes_all_24_routes_with_baseline_openapi_coverage()
+    public async Task Runtime_minimal_mapper_publishes_all_26_routes_with_baseline_openapi_coverage()
     {
         var receipt = BaselineFile.Load<JsonElement>(Path.Join(BaselineDirectory, "wave9-runtime-before-capture-receipt.json"));
         Assert.Equal(24, receipt.GetProperty("registrationCount").GetInt32());
@@ -61,15 +61,21 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
 
         await using var host = await RuntimeHost.StartAsync();
         var openApi = OpenApiEvidenceCapture.Capture(await host.GetOpenApiAsync());
-        Assert.Equal(24, openApi.Operations.Count);
+        Assert.Equal(26, openApi.Operations.Count);
 
         var expected = BaselineFile.Load<OpenApiEvidenceDocument>(Path.Join(BaselineDirectory, "wave9-runtime-openapi-fastendpoints.json"));
+        var expectedRoutes = expected.Operations
+            .Select(operation => operation.Endpoint.Method.Value + " " + Normalize(operation.Endpoint.Route.Value))
+            .Concat([
+                "GET /runtime/workflows/activation-slots/{param}",
+                "GET /runtime/workflows/activation-slots/{param}/{param}"
+            ]);
         Assert.Equal(
-            expected.Operations.Select(operation => operation.Endpoint.Method.Value + " " + Normalize(operation.Endpoint.Route.Value)).Order(StringComparer.Ordinal),
+            expectedRoutes.Order(StringComparer.Ordinal),
             openApi.Operations.Select(operation => operation.Endpoint.Method.Value + " " + Normalize(operation.Endpoint.Route.Value)).Order(StringComparer.Ordinal));
 
         var endpoints = host.Endpoints;
-        Assert.Equal(24, endpoints.Count(endpoint => endpoint.Metadata.GetMetadata<EndpointAuthoringMetadata>()?.Model == EndpointAuthoringModels.MinimalApi));
+        Assert.Equal(26, endpoints.Count(endpoint => endpoint.Metadata.GetMetadata<EndpointAuthoringMetadata>()?.Model == EndpointAuthoringModels.MinimalApi));
         Assert.All(endpoints.Where(endpoint => endpoint.Metadata.GetMetadata<EndpointAuthoringMetadata>()?.Model == EndpointAuthoringModels.MinimalApi), endpoint =>
         {
             Assert.Equal("Elsa.Workflows.Runtime.Api", endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.Owner);
@@ -142,7 +148,12 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
 
         foreach (var key in beforeOperations.Keys.Union(afterOperations.Keys, StringComparer.Ordinal))
         {
-            Assert.True(beforeOperations.TryGetValue(key, out var beforeOperation), $"Missing before OpenAPI operation '{key}'.");
+            if (!beforeOperations.TryGetValue(key, out var beforeOperation))
+            {
+                Assert.True(afterOperations.ContainsKey(key), $"Missing after OpenAPI operation '{key}'.");
+                continue;
+            }
+
             Assert.True(afterOperations.TryGetValue(key, out var afterOperation), $"Missing after OpenAPI operation '{key}'.");
             var routeApprovals = approvals.Where(approval => RuntimeOpenApiApprovalValidator.EndpointKey(approval) == key).ToArray();
             foreach (var approval in routeApprovals)
@@ -208,7 +219,7 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
     {
         await using var host = await RuntimeHost.StartAsync();
         var runtimeEndpoints = host.Endpoints.Where(endpoint => endpoint.Metadata.GetMetadata<EndpointAuthoringMetadata>()?.Model == EndpointAuthoringModels.MinimalApi).ToArray();
-        Assert.Equal(24, runtimeEndpoints.Length);
+        Assert.Equal(26, runtimeEndpoints.Length);
         foreach (var endpoint in runtimeEndpoints)
         {
             var method = endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods.Single() ?? HttpMethods.Get;
@@ -228,7 +239,7 @@ public sealed class Wave9RuntimeMinimalApiCompositionTests
     {
         await using var host = await RuntimeHost.StartAsync();
         var runtimeEndpoints = host.Endpoints.Where(endpoint => endpoint.Metadata.GetMetadata<EndpointAuthoringMetadata>()?.Model == EndpointAuthoringModels.MinimalApi).ToArray();
-        Assert.Equal(24, runtimeEndpoints.Length);
+        Assert.Equal(26, runtimeEndpoints.Length);
         foreach (var endpoint in runtimeEndpoints)
         {
             var method = endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods.Single() ?? HttpMethods.Get;

@@ -152,11 +152,11 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
 
         for (var publication = 0; publication < PublicationCount; publication++)
         {
-            var publicationId = PublicationId(logicalScope, publication);
-            var bindings = CreateBindings(logicalScope, publication, publicationId).ToArray();
-            await scope.TriggerBindings.PreparePublicationAsync(publicationId, bindings, cancellationToken);
+            var activationId = ActivationId(logicalScope, publication);
+            var bindings = CreateBindings(logicalScope, publication, activationId).ToArray();
+            await scope.TriggerBindings.PrepareActivationAsync(activationId, bindings, cancellationToken);
             bindingsByPublication.Add(
-                publicationId,
+                activationId,
                 bindings
                     .Select(binding => binding with { IsActive = publication != PublicationCount - 1 })
                     .OrderBy(binding => binding.TriggerBindingId, StringComparer.Ordinal)
@@ -165,12 +165,12 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
         }
 
         // Exercise replacement without changing any of the 31 primary exact matches.
-        var replacedPublicationId = PublicationId(logicalScope, PublicationCount - 1);
-        await scope.TriggerBindings.ActivatePublicationAsync(replacedPublicationId, replacedPublicationId: null, cancellationToken);
+        var replacedActivationId = ActivationId(logicalScope, PublicationCount - 1);
+        await scope.TriggerBindings.ActivateAsync(replacedActivationId, replacedActivationId: null, cancellationToken);
         for (var publication = 0; publication < PublicationCount - 1; publication++)
         {
-            var replaced = publication == PublicationCount - 2 ? replacedPublicationId : null;
-            await scope.TriggerBindings.ActivatePublicationAsync(PublicationId(logicalScope, publication), replaced, cancellationToken);
+            var replaced = publication == PublicationCount - 2 ? replacedActivationId : null;
+            await scope.TriggerBindings.ActivateAsync(ActivationId(logicalScope, publication), replaced, cancellationToken);
         }
 
         for (var publication = 0; publication < PublicationCount; publication++)
@@ -194,7 +194,7 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
         return new SeededScope(tenantId, bindingsByPublication, activeExact, activeType, references.OrderBy(reference => reference.SourceReferenceId, StringComparer.Ordinal).ToArray());
     }
 
-    private static IEnumerable<WorkflowTriggerBinding> CreateBindings(string logicalScope, int publication, string publicationId)
+    private static IEnumerable<WorkflowTriggerBinding> CreateBindings(string logicalScope, int publication, string activationId)
     {
         for (var binding = 0; binding < BindingsPerPublication; binding++)
         {
@@ -239,7 +239,7 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
                 null,
                 new Dictionary<string, string>(StringComparer.Ordinal) { ["seed"] = Seed, ["scope"] = logicalScope },
                 FixedNowUtc.AddMinutes(-global - 1),
-                publicationId,
+                activationId,
                 $"slot-{binding:D4}",
                 TriggerCardinality.FanOut,
                 IsActive: false);
@@ -259,7 +259,7 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
             FixedNowUtc.AddDays(-1),
             FixedNowUtc.AddHours(-1),
             WorkflowExecutableReferenceScope.Published,
-            PublicationId: PublicationId(logicalScope, publication),
+            ActivationId: ActivationId(logicalScope, publication),
             SlotId: $"slot-{publication:D4}",
             TenantId: tenantId);
 
@@ -268,7 +268,7 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
         {
             SourceReferenceId = $"source-reference-expired-{logicalScope}",
             ExpiresAt = FixedNowUtc,
-            PublicationId = $"publication-expired-{logicalScope}"
+            ActivationId = $"publication-expired-{logicalScope}"
         };
 
     private static WorkflowExecutableSourceReference CreateRetiredReference(string logicalScope, string tenantId) =>
@@ -277,7 +277,7 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
             SourceReferenceId = $"source-reference-retired-{logicalScope}",
             DeletedAt = FixedNowUtc.AddTicks(-1),
             DeletedReason = "retired",
-            PublicationId = $"publication-retired-{logicalScope}"
+            ActivationId = $"publication-retired-{logicalScope}"
         };
 
     private static WorkflowExecutableSourceReference CreateTestRunReference(string logicalScope, string tenantId) =>
@@ -286,7 +286,7 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
             SourceReferenceId = $"source-reference-test-run-{logicalScope}",
             Scope = WorkflowExecutableReferenceScope.TestRun,
             ExpiresAt = FixedNowUtc.AddHours(1),
-            PublicationId = null,
+            ActivationId = null,
             SlotId = null
         };
 
@@ -344,21 +344,21 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
         IReadOnlyDictionary<string, IReadOnlyList<WorkflowTriggerBinding>> expectedByPublication,
         CancellationToken cancellationToken)
     {
-        foreach (var (publicationId, expected) in expectedByPublication.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        foreach (var (activationId, expected) in expectedByPublication.OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
             var results = new List<WorkflowTriggerBinding>();
             var seenTokens = new HashSet<string>(StringComparer.Ordinal);
             string? token = null;
             do
             {
-                var query = new WorkflowTriggerBindingPublicationPageQuery(publicationId, PageSize, token);
-                var page = await store.ListByPublicationAsync(query, cancellationToken);
-                RequireBindingPage(page, query, expected, results.Count, $"publication projection '{publicationId}'", seenTokens);
+                var query = new WorkflowTriggerBindingActivationPageQuery(activationId, PageSize, token);
+                var page = await store.ListByActivationAsync(query, cancellationToken);
+                RequireBindingPage(page, query, expected, results.Count, $"publication projection '{activationId}'", seenTokens);
                 results.AddRange(page.Items);
                 token = page.NextContinuationToken;
             } while (token is not null);
 
-            RequireBindingSequence(results, expected, $"publication projection '{publicationId}'");
+            RequireBindingSequence(results, expected, $"publication projection '{activationId}'");
         }
     }
 
@@ -405,10 +405,10 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
     {
         var referencesByPublication = references
             .Where(reference => reference.Scope == WorkflowExecutableReferenceScope.Published && reference.IsLive(FixedNowUtc) && reference.TenantId == tenantId)
-            .ToDictionary(reference => reference.PublicationId!, StringComparer.Ordinal);
+            .ToDictionary(reference => reference.ActivationId!, StringComparer.Ordinal);
         return bindings.Count(binding =>
-            binding.PublicationId is not null &&
-            referencesByPublication.TryGetValue(binding.PublicationId, out var reference) &&
+            binding.ActivationId is not null &&
+            referencesByPublication.TryGetValue(binding.ActivationId, out var reference) &&
             reference.ArtifactId == binding.ArtifactId);
     }
 
@@ -441,7 +441,7 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
 
     private static void RequireSourceScopeFacts(IReadOnlyList<WorkflowExecutableSourceReference> references, string tenantId, string logicalScope)
     {
-        if (references.Any(reference => reference.TenantId != tenantId || reference.PublicationId is null || !reference.ArtifactId.Contains(logicalScope, StringComparison.Ordinal)))
+        if (references.Any(reference => reference.TenantId != tenantId || reference.ActivationId is null || !reference.ArtifactId.Contains(logicalScope, StringComparison.Ordinal)))
             throw new InvalidOperationException($"The {logicalScope} logical scope exposed source references from another scope.");
     }
 
@@ -461,7 +461,7 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
     private static int Int(string name) => (int)Scenario.Parameters[name];
     private static string StimulusType(string logicalScope) => logicalScope == "primary" ? PrimaryStimulusType : SecondaryStimulusType;
     private static string StimulusHash(string logicalScope) => logicalScope == "primary" ? PrimaryStimulusHash : SecondaryStimulusHash;
-    private static string PublicationId(string logicalScope, int publication) => $"publication-{logicalScope}-{publication:D4}";
+    private static string ActivationId(string logicalScope, int publication) => $"publication-{logicalScope}-{publication:D4}";
     private static string ArtifactId(string logicalScope, int publication) => $"artifact-{logicalScope}-{publication:D4}";
     private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
 
@@ -486,7 +486,7 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
             left.ArtifactHash == right.ArtifactHash && left.ExecutableNodeId == right.ExecutableNodeId &&
             left.StimulusType == right.StimulusType && left.StimulusHash == right.StimulusHash &&
             left.CorrelationScope == right.CorrelationScope && left.CreatedAt == right.CreatedAt &&
-            left.PublicationId == right.PublicationId && left.SlotId == right.SlotId &&
+            left.ActivationId == right.ActivationId && left.SlotId == right.SlotId &&
             left.Cardinality == right.Cardinality && left.IsActive == right.IsActive &&
             left.Metadata.OrderBy(pair => pair.Key, StringComparer.Ordinal).SequenceEqual(right.Metadata.OrderBy(pair => pair.Key, StringComparer.Ordinal));
 
@@ -505,7 +505,7 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
             left.DefinitionId == right.DefinitionId && left.DefinitionVersionId == right.DefinitionVersionId &&
             left.ArtifactVersion == right.ArtifactVersion && left.CreatedAt == right.CreatedAt && left.PublishedAt == right.PublishedAt &&
             left.Scope == right.Scope && left.ExpiresAt == right.ExpiresAt && left.DeletedAt == right.DeletedAt &&
-            left.DeletedReason == right.DeletedReason && left.PublicationId == right.PublicationId && left.SlotId == right.SlotId &&
+            left.DeletedReason == right.DeletedReason && left.ActivationId == right.ActivationId && left.SlotId == right.SlotId &&
             left.TenantId == right.TenantId;
 
         public int GetHashCode(WorkflowExecutableSourceReference reference) => StringComparer.Ordinal.GetHashCode(reference.SourceReferenceId);

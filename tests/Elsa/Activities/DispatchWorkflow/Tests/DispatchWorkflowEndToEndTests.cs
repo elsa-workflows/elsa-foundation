@@ -896,7 +896,7 @@ public sealed class DispatchWorkflowEndToEndTests
                 CreatedAt: DispatchWorkflowRuntimeTestFixture.Now,
                 PublishedAt: DispatchWorkflowRuntimeTestFixture.Now,
                 Scope: WorkflowExecutableReferenceScope.Published,
-                PublicationId: "publication-child-distractor",
+                ActivationId: "publication-child-distractor",
                 SlotId: "slot-child-distractor"));
 
     private sealed class HandlerIntentDispatcher(ChildStartExecutor handler) : IRuntimePostCommitIntentDispatcher

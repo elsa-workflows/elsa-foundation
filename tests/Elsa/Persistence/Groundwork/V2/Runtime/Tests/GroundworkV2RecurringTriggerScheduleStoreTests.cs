@@ -85,28 +85,28 @@ public sealed class GroundworkV2RecurringTriggerScheduleStoreTests
         var oldSecond = Schedule("artifact-old", "old-2", 2, "pub-old", "slot-a");
         var replacement = Schedule("artifact-new", "new", 1, "pub-new", "slot-b");
 
-        await store.PreparePublicationAsync("pub-old", [old, oldSecond]);
-        await store.PreparePublicationAsync("pub-new", [replacement]);
-        var firstPage = await store.ListByPublicationPageAsync(
-            new RecurringTriggerSchedulePublicationPageQuery("pub-old", 1));
+        await store.PrepareActivationAsync("pub-old", [old, oldSecond]);
+        await store.PrepareActivationAsync("pub-new", [replacement]);
+        var firstPage = await store.ListByActivationPageAsync(
+            new RecurringTriggerScheduleActivationPageQuery("pub-old", 1));
         Assert.Single(firstPage.Items);
         Assert.NotNull(firstPage.NextContinuationToken);
-        var secondPage = await store.ListByPublicationPageAsync(
-            new RecurringTriggerSchedulePublicationPageQuery("pub-old", 1, firstPage.NextContinuationToken));
+        var secondPage = await store.ListByActivationPageAsync(
+            new RecurringTriggerScheduleActivationPageQuery("pub-old", 1, firstPage.NextContinuationToken));
         Assert.Single(secondPage.Items);
         Assert.Null(secondPage.NextContinuationToken);
-        Assert.All((await store.ListByPublicationAsync("pub-old")), schedule => Assert.False(schedule.IsActive));
+        Assert.All((await store.ListByActivationAsync("pub-old")), schedule => Assert.False(schedule.IsActive));
 
-        await store.ActivatePublicationAsync("pub-old", null);
+        await store.ActivateAsync("pub-old", null);
         Assert.Equal(2, (await store.ListDueAsync(Now.AddHours(1), 10)).Count);
-        await store.ActivatePublicationAsync("pub-new", "pub-old");
-        Assert.True(Assert.Single(await store.ListByPublicationAsync("pub-new")).IsActive);
-        Assert.All(await store.ListByPublicationAsync("pub-old"), schedule => Assert.False(schedule.IsActive));
+        await store.ActivateAsync("pub-new", "pub-old");
+        Assert.True(Assert.Single(await store.ListByActivationAsync("pub-new")).IsActive);
+        Assert.All(await store.ListByActivationAsync("pub-old"), schedule => Assert.False(schedule.IsActive));
 
-        await store.DeleteByPublicationAsync("pub-new");
-        Assert.Empty(await store.ListByPublicationAsync("pub-new"));
+        await store.DeleteByActivationAsync("pub-new");
+        Assert.Empty(await store.ListByActivationAsync("pub-new"));
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            store.ActivatePublicationAsync("pub-new", null).AsTask());
+            store.ActivateAsync("pub-new", null).AsTask());
     }
 
     [Fact]
@@ -117,16 +117,16 @@ public sealed class GroundworkV2RecurringTriggerScheduleStoreTests
         var old = Schedule("artifact-old", "node-old", -1, "pub-old", "slot-a");
         var replacement = Schedule("artifact-new", "node-new", 1, "pub-new", "slot-b");
 
-        await store.PreparePublicationAsync("pub-old", [old]);
-        await store.ActivatePublicationAsync("pub-old", null);
+        await store.PrepareActivationAsync("pub-old", [old]);
+        await store.ActivateAsync("pub-old", null);
         var advanced = old.NextOccurrence.AddMinutes(5);
         Assert.True(await store.TryAdvanceAsync(old.ScheduleId, old.NextOccurrence, advanced));
 
-        await store.PreparePublicationAsync("pub-new", [replacement]);
-        await store.ActivatePublicationAsync("pub-new", "pub-old");
+        await store.PrepareActivationAsync("pub-new", [replacement]);
+        await store.ActivateAsync("pub-new", "pub-old");
 
-        Assert.True(Assert.Single(await store.ListByPublicationAsync("pub-new")).IsActive);
-        var deactivated = Assert.Single(await store.ListByPublicationAsync("pub-old"));
+        Assert.True(Assert.Single(await store.ListByActivationAsync("pub-new")).IsActive);
+        var deactivated = Assert.Single(await store.ListByActivationAsync("pub-old"));
         Assert.False(deactivated.IsActive);
         Assert.Equal(advanced, deactivated.NextOccurrence);
     }
@@ -139,15 +139,15 @@ public sealed class GroundworkV2RecurringTriggerScheduleStoreTests
         var old = Schedule("artifact-old", "node-old", -1, "pub-old", "slot-a");
         var replacement = Schedule("artifact-new", "node-new", 1, "pub-new", "slot-b");
 
-        await store.PreparePublicationAsync("pub-old", [old]);
+        await store.PrepareActivationAsync("pub-old", [old]);
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.DeleteAsync(old.ScheduleId).AsTask());
-        await store.ActivatePublicationAsync("pub-old", null);
+        await store.ActivateAsync("pub-old", null);
         await store.DeleteAsync(old.ScheduleId);
 
-        await store.PreparePublicationAsync("pub-new", [replacement]);
-        await store.ActivatePublicationAsync("pub-new", "pub-old");
-        Assert.True(Assert.Single(await store.ListByPublicationAsync("pub-new")).IsActive);
-        Assert.Empty(await store.ListByPublicationAsync("pub-old"));
+        await store.PrepareActivationAsync("pub-new", [replacement]);
+        await store.ActivateAsync("pub-new", "pub-old");
+        Assert.True(Assert.Single(await store.ListByActivationAsync("pub-new")).IsActive);
+        Assert.Empty(await store.ListByActivationAsync("pub-old"));
     }
 
     [Fact]
@@ -157,14 +157,14 @@ public sealed class GroundworkV2RecurringTriggerScheduleStoreTests
         var store = runtime.Store("tenant-a");
         var schedule = Schedule("artifact", "node", -1, "publication", "slot");
 
-        await store.PreparePublicationAsync("publication", [schedule]);
+        await store.PrepareActivationAsync("publication", [schedule]);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.SaveAsync(schedule).AsTask());
         Assert.Empty(await store.ListDueAsync(Now, 10));
-        Assert.False(Assert.Single(await store.ListByPublicationAsync("publication")).IsActive);
+        Assert.False(Assert.Single(await store.ListByActivationAsync("publication")).IsActive);
 
-        await store.ActivatePublicationAsync("publication", null);
-        Assert.True(Assert.Single(await store.ListByPublicationAsync("publication")).IsActive);
+        await store.ActivateAsync("publication", null);
+        Assert.True(Assert.Single(await store.ListByActivationAsync("publication")).IsActive);
     }
 
     [Fact]
@@ -174,11 +174,11 @@ public sealed class GroundworkV2RecurringTriggerScheduleStoreTests
         var store = runtime.Store("tenant-a");
         var schedule = Schedule("artifact", "node", -1, "publication", "slot");
 
-        await store.PreparePublicationAsync("publication", [schedule]);
-        await store.ActivatePublicationAsync("publication", null);
+        await store.PrepareActivationAsync("publication", [schedule]);
+        await store.ActivateAsync("publication", null);
         await store.DeleteAsync(schedule.ScheduleId);
 
-        var forged = schedule with { PublicationId = null, SlotId = null };
+        var forged = schedule with { ActivationId = null, SlotId = null };
         await Assert.ThrowsAsync<ArgumentException>(() => store.SaveAsync(forged).AsTask());
         Assert.Null(await store.FindAsync(schedule.ScheduleId));
     }
@@ -202,11 +202,11 @@ public sealed class GroundworkV2RecurringTriggerScheduleStoreTests
         };
 
         await store.SaveAsync(direct);
-        await store.PreparePublicationAsync("publication", [published]);
+        await store.PrepareActivationAsync("publication", [published]);
 
         Assert.Equal(direct, await store.FindAsync(direct.ScheduleId));
         Assert.Equal(published with { IsActive = false }, Assert.Single(
-            await store.ListByPublicationAsync("publication")));
+            await store.ListByActivationAsync("publication")));
     }
 
     [Fact]
@@ -215,7 +215,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStoreTests
         await using var runtime = NativeProviderRuntime.Create("sqlite", null);
         var store = runtime.Store("tenant-a");
         var schedule = Schedule("artifact", "node", -1, "publication", "slot");
-        await store.PreparePublicationAsync("publication", [schedule]);
+        await store.PrepareActivationAsync("publication", [schedule]);
 
         var stateSession = runtime.Open(
             ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind,
@@ -238,9 +238,9 @@ public sealed class GroundworkV2RecurringTriggerScheduleStoreTests
             stateSession.Upsert(new StorageValues(values), WriteOptions.Unconditional).Status);
 
         await Assert.ThrowsAsync<InvalidDataException>(() =>
-            store.ActivatePublicationAsync("publication", null).AsTask());
+            store.ActivateAsync("publication", null).AsTask());
         Assert.Empty(await store.ListDueAsync(Now, 10));
-        Assert.False(Assert.Single(await store.ListByPublicationAsync("publication")).IsActive);
+        Assert.False(Assert.Single(await store.ListByActivationAsync("publication")).IsActive);
     }
 
     [Fact]
@@ -250,14 +250,14 @@ public sealed class GroundworkV2RecurringTriggerScheduleStoreTests
         var store = runtime.Store("tenant-a");
         var exhausted = Schedule("artifact", "old", -1, "publication", "slot-old");
 
-        await store.PreparePublicationAsync("publication", [exhausted]);
-        await store.ActivatePublicationAsync("publication", null);
+        await store.PrepareActivationAsync("publication", [exhausted]);
+        await store.ActivateAsync("publication", null);
         await store.DeleteAsync(exhausted.ScheduleId);
         await store.DeleteByArtifactAsync("artifact");
 
         var replacement = Schedule("artifact", "new", 1, "publication", "slot-new");
-        await store.PreparePublicationAsync("publication", [replacement]);
-        var prepared = Assert.Single(await store.ListByPublicationAsync("publication"));
+        await store.PrepareActivationAsync("publication", [replacement]);
+        var prepared = Assert.Single(await store.ListByActivationAsync("publication"));
         Assert.Equal(replacement.ScheduleId, prepared.ScheduleId);
         Assert.False(prepared.IsActive);
     }
@@ -271,11 +271,11 @@ public sealed class GroundworkV2RecurringTriggerScheduleStoreTests
         var second = Schedule("artifact-b", "second", 1, "publication", "slot-b");
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            store.PreparePublicationAsync("publication", [first, second]).AsTask());
+            store.PrepareActivationAsync("publication", [first, second]).AsTask());
 
-        Assert.Empty(await store.ListByPublicationAsync("publication"));
+        Assert.Empty(await store.ListByActivationAsync("publication"));
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            store.ActivatePublicationAsync("publication", null).AsTask());
+            store.ActivateAsync("publication", null).AsTask());
     }
 
     [Fact]
@@ -284,12 +284,12 @@ public sealed class GroundworkV2RecurringTriggerScheduleStoreTests
         await using var runtime = NativeProviderRuntime.Create("sqlite", null);
         var store = runtime.Store("tenant-a");
 
-        await store.PreparePublicationAsync("empty-publication", []);
-        await store.ActivatePublicationAsync("empty-publication", null);
-        Assert.Empty(await store.ListByPublicationAsync("empty-publication"));
+        await store.PrepareActivationAsync("empty-publication", []);
+        await store.ActivateAsync("empty-publication", null);
+        Assert.Empty(await store.ListByActivationAsync("empty-publication"));
 
-        await store.DeleteByPublicationAsync("empty-publication");
-        await store.PreparePublicationAsync("empty-publication", []);
+        await store.DeleteByActivationAsync("empty-publication");
+        await store.PrepareActivationAsync("empty-publication", []);
     }
 
     [Fact]
@@ -387,7 +387,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStoreTests
             new FakeSource(cycling, cycling.Unit),
             new FixedAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
         var cycleException = await Assert.ThrowsAsync<InvalidDataException>(() =>
-            cycleStore.ListByPublicationAsync("publication").AsTask());
+            cycleStore.ListByActivationAsync("publication").AsTask());
         Assert.Contains("continuation", cycleException.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(2, cycling.QueryCount);
     }
@@ -434,8 +434,8 @@ public sealed class GroundworkV2RecurringTriggerScheduleStoreTests
             new FixedAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
 
         var publication = await Assert.ThrowsAsync<ArgumentException>(() =>
-            store.ListByPublicationPageAsync(
-                new RecurringTriggerSchedulePublicationPageQuery("publication", 10, "invalid")).AsTask());
+            store.ListByActivationPageAsync(
+                new RecurringTriggerScheduleActivationPageQuery("publication", 10, "invalid")).AsTask());
         var artifact = await Assert.ThrowsAsync<ArgumentException>(() =>
             store.ListByArtifactPageAsync(
                 new RecurringTriggerScheduleArtifactPageQuery("artifact", 10, "invalid")).AsTask());
@@ -463,38 +463,38 @@ public sealed class GroundworkV2RecurringTriggerScheduleStoreTests
 
         var current = Schedule("artifact-current", "node-current", -1, "pub-current", "slot-current");
         var replacement = Schedule("artifact-next", "node-next", 1, "pub-next", "slot-next");
-        await store.PreparePublicationAsync("pub-current", [current]);
-        await store.ActivatePublicationAsync("pub-current", null);
+        await store.PrepareActivationAsync("pub-current", [current]);
+        await store.ActivateAsync("pub-current", null);
         var advanced = current.NextOccurrence.AddMinutes(5);
         Assert.True(await store.TryAdvanceAsync(current.ScheduleId, current.NextOccurrence, advanced));
-        await store.PreparePublicationAsync("pub-next", [replacement]);
-        await store.ActivatePublicationAsync("pub-next", "pub-current");
-        Assert.True(Assert.Single(await store.ListByPublicationAsync("pub-next")).IsActive);
-        var deactivated = Assert.Single(await store.ListByPublicationAsync("pub-current"));
+        await store.PrepareActivationAsync("pub-next", [replacement]);
+        await store.ActivateAsync("pub-next", "pub-current");
+        Assert.True(Assert.Single(await store.ListByActivationAsync("pub-next")).IsActive);
+        var deactivated = Assert.Single(await store.ListByActivationAsync("pub-current"));
         Assert.False(deactivated.IsActive);
         Assert.Equal(advanced, deactivated.NextOccurrence);
 
         var exhausted = Schedule("artifact-exhausted", "node-exhausted", -1, "pub-exhausted", "slot-exhausted");
-        await store.PreparePublicationAsync("pub-exhausted", [exhausted]);
-        await store.ActivatePublicationAsync("pub-exhausted", null);
+        await store.PrepareActivationAsync("pub-exhausted", [exhausted]);
+        await store.ActivateAsync("pub-exhausted", null);
         await store.DeleteAsync(exhausted.ScheduleId);
         await store.DeleteByArtifactAsync(exhausted.ArtifactId);
         var republished = Schedule("artifact-exhausted", "node-republished", 1, "pub-exhausted", "slot-republished");
-        await store.PreparePublicationAsync("pub-exhausted", [republished]);
-        Assert.False(Assert.Single(await store.ListByPublicationAsync("pub-exhausted")).IsActive);
+        await store.PrepareActivationAsync("pub-exhausted", [republished]);
+        Assert.False(Assert.Single(await store.ListByActivationAsync("pub-exhausted")).IsActive);
     }
 
     private static RecurringTriggerSchedule Schedule(
         string artifactId,
         string nodeId,
         int nextOffsetMinutes,
-        string? publicationId = null,
+        string? activationId = null,
         string? slotId = null,
         string expression = "PT5M") =>
         new(
-            publicationId is null
+            activationId is null
                 ? RecurringTriggerSchedule.BuildId(artifactId, nodeId)
-                : RecurringTriggerSchedule.BuildId(publicationId, artifactId, nodeId),
+                : RecurringTriggerSchedule.BuildId(activationId, artifactId, nodeId),
             artifactId,
             nodeId,
             "Timer",
@@ -503,7 +503,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStoreTests
             expression,
             Now.AddMinutes(nextOffsetMinutes),
             Now,
-            publicationId,
+            activationId,
             slotId,
             true);
 
