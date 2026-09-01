@@ -95,7 +95,7 @@ public sealed class GroundworkV2StructuredLogStoreTests
     }
 
     [Fact]
-    public async Task Scope_isolation_and_zero_retention_preserve_lifetime_high_water()
+    public async Task Scope_isolation_and_zero_retention_preserve_lifetime_high_water_without_reserved_data_rows()
     {
         await using var fixture = await Fixture.CreateAsync();
         await using var first = fixture.CreateStore(new("tenant-a", "scope-a", "structured-logs"));
@@ -106,9 +106,13 @@ public sealed class GroundworkV2StructuredLogStoreTests
 
         Assert.Single(await first.GetRecentAsync(StructuredLogFilter.None));
         Assert.Single(await second.GetRecentAsync(StructuredLogFilter.None));
+        Assert.Single(fixture.OpenSession(new("tenant-a", "scope-a", "structured-logs"))
+            .Query(AllRows(StructuredLogsGroundworkStorageSchema.CreateUnit())).Rows);
 
         await first.TrimAsync(0);
         Assert.Empty(await first.GetRecentAsync(StructuredLogFilter.None));
+        Assert.Empty(fixture.OpenSession(new("tenant-a", "scope-a", "structured-logs"))
+            .Query(AllRows(StructuredLogsGroundworkStorageSchema.CreateUnit())).Rows);
         Assert.Equal(committed.Sequence, await first.GetHighWaterMarkAsync());
         Assert.Single(await second.GetRecentAsync(StructuredLogFilter.None));
     }
@@ -471,6 +475,13 @@ public sealed class GroundworkV2StructuredLogStoreTests
         Message = message,
         SourceId = "writer"
     };
+
+    private static QueryRequest AllRows(StorageUnit unit) => new(
+        new TableId(unit.Name),
+        new Predicate.AlwaysTrue(),
+        [],
+        Projection.All,
+        Paging.None);
 
     private static StorageValues Values(string message, string token) => new(new Dictionary<string, object?>
     {

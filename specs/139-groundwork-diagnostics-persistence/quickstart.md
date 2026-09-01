@@ -510,7 +510,32 @@ only. It does not import a #646 performance verdict, delete either diagnostics
 EF oracle, complete T047/T050-T055/T057, promote a final evidence generation,
 or authorize #642 closure.
 
-## Exact Groundwork 0.4.0-preview.1 closeout checkpoint
+## Exact Groundwork 0.4.0-preview.3 recertification checkpoint
+
+The current Elsa source head for this focused recertification is `8b92d34b7832271daa1ef24986311401c5d56e20`.
+The Groundwork package family resolves exactly to `0.4.0-preview.3`, from tag `v0.4.0-preview.3`
+and release SHA `9de7aa0e6271c311536d2a78a1e6c1f0260e1fda`. The current receipt is
+[preview0403-recertification-results.json](evidence/preview0403-recertification-results.json).
+
+The shared diagnostics persistence correctness and architecture suite passed 97/97. The current
+v2 Structured Logs matrix passed 29/32 with SQLite executed and three external-provider skips;
+the current v2 OpenTelemetry matrix passed 8/11 with SQLite executed and three external-provider
+skips. Groundwork aggregate feature composition passed 3/3. The Structured Logs v2 test project
+was corrected to declare `IsTestProject`, so the 29/32 result is an executed test result rather
+than a build-only result. Build output continues to report the existing NU1903 SSH.NET warning.
+
+The three EF-mechanism-only ledger facts are explicitly retired at the Groundwork boundary: both
+`DbContextFactory` lifetime facts have no Groundwork equivalent, while the reserved high-water
+sentinel is replaced by the provider-neutral lifetime high-water invariant with no reserved visible
+data row. The EF oracle source remains intact; #647 still owns deletion and the final zero-EF guard.
+
+This is focused current-v2 correctness and package evidence only. PostgreSQL, SQL Server, and
+MongoDB were unavailable locally, so this checkpoint is not four-provider proof. It does not
+import a #646 performance verdict, assert numeric budgets, promote grouped/native-plan evidence,
+complete T050/T051/T052/T053/T054/T055/T057, or authorize #642 closure. The earlier preview.1
+closeout receipt below remains historical and immutable.
+
+## Historical exact Groundwork 0.4.0-preview.1 closeout checkpoint (immutable)
 
 The adopted Elsa `main` source is `3e694377ff6a73dc6b80e34991222b1f8cd47509`, and every
 Groundwork package pin is exactly `0.4.0-preview.1` from release SHA

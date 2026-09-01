@@ -2,8 +2,8 @@
 
 **Work unit:** `139-groundwork-diagnostics-persistence`
 **Scope:** pending T053/T054 only; no EF project or test deletion is authorized by this intake.
-**Captured:** 2026-08-31 on `codex/642-diagnostics-closeout`, against Elsa `main` `3e694377f`.
-**Groundwork baseline:** exact `0.4.0-preview.1` (release SHA `701229e0a736670f406140ed7c61f00e10156ffd`).
+**Captured:** 2026-09-01 on `codex/642-diagnostics-03-recertification`, against Elsa `main` `8b92d34b7`.
+**Groundwork baseline:** exact `0.4.0-preview.3` (tag `v0.4.0-preview.3`, release SHA `9de7aa0e6271c311536d2a78a1e6c1f0260e1fda`).
 
 This follows Spec 093's source-method ledger and its shared-host addendum. It inventories every
 `[Fact]` in the two EF test projects, including the SQLite feature/host tests that a token-only
@@ -11,11 +11,12 @@ EF scan can miss. A row is not deletion approval: framework §2.21.1 requires ex
 architect approval before the original test can be removed. `Covered` means a named Groundwork or
 provider-neutral test has been inspected and exercises the objective. `EF-mechanism-only` means the
 behavior is an implementation detail of the EF oracle with no provider-neutral contract to preserve.
-Neither label is deletion approval: the three mechanism-only rows still require explicit architect
-disposition before T053/T054.
+The current certification explicitly records those rows as retired at the Groundwork boundary; this
+is a disposition of the EF test objective, not authorization to delete the EF oracle. T053/T054
+remain separately gated by #646 and #647.
 
-**Disposition: 43 covered; 3 EF-mechanism-only.** Every one of the 46 original EF facts has an
-explicit row and named outcome; the ledger is mechanically checked by
+**Disposition: 43 covered; 3 EF-mechanism-only facts retired at the Groundwork boundary.** Every one
+of the 46 original EF facts has an explicit row and named outcome; the ledger is mechanically checked by
 `DiagnosticsPersistenceArchitectureTests`.
 
 ## Structured Logs — 30 facts
@@ -31,7 +32,7 @@ explicit row and named outcome; the ledger is mechanically checked by
 | `.ReplayPagesThroughTheWholeSnapshotBeyondThePerQueryLimit` | Paged cursor replay beyond one query. | `DiagnosticsGroundworkProviderConformanceTests.Structured_log_replay_retry_and_failure_semantics_match_across_providers` — covered on all four providers. |
 | `.ReadAfterRejectsDefaultCursorAtTheEfStoreBoundary` | Default cursor is non-disclosing unavailable. | `GroundworkStructuredLogReplayTests.Malformed_or_foreign_binding_fails_with_one_non_disclosing_outcome` — covered. |
 | `.TrimToZeroAndRestartPreserveLifetimeLogicalHighWater` | Trimmed anchor expires, high-water survives restart. | `GroundworkStructuredLogReplayTests.Trimmed_anchor_expires_while_lifetime_high_water_survives_restart` — covered. |
-| `.AppendRejectsTheExactReservedHighWaterRepresentation` | EF state-row sentinel cannot collide with data. | EF persistence mechanism only; Groundwork has no state-row sentinel. Candidate for architect-approved removal, not a behavior conversion. |
+| `.AppendRejectsTheExactReservedHighWaterRepresentation` | EF state-row sentinel cannot collide with data. | Retired at the Groundwork boundary: Groundwork has no reserved high-water data row; provider sequence/high-water metadata is separate from visible records. Current v2 coverage is `GroundworkV2StructuredLogStoreTests.Scope_isolation_and_zero_retention_preserve_lifetime_high_water_without_reserved_data_rows`, including the post-trim empty data set and preserved lifetime high-water. |
 | `.ConcurrentFirstInitializationPreservesTheMaximumWithoutExposingStateRows` | Concurrent writers retain distinct commits and maximum high-water. | `DiagnosticsDurableOperationConformanceTests.Concurrent_writers_commit_distinct_records_in_one_durable_order` plus `GroundworkStructuredLogReplayTests.Tied_entries_replay_in_committed_cursor_order` — covered. |
 | `.FailedBatchCannotAdvanceLifetimeHighWaterBeforeCommit` | Failed append has no visible durable/high-water mutation. | `DiagnosticsDurableOperationConformanceTests.Cancellation_before_or_during_provider_work_does_not_mutate` — covered at the provider-neutral operation boundary. |
 | `.DrainPersistsAppendedEntriesRoundTrippingComplexFields` | Properties, scopes, and exception survive durable round trip. | `GroundworkStructuredLogReplayTests.Complex_structured_log_fields_round_trip_through_durable_storage` — **added in this intake; covered.** |
@@ -51,7 +52,7 @@ explicit row and named outcome; the ledger is mechanically checked by
 | `.PersistentStoreResolvesWhenStructuredLogCaptureIsEnabled` | Selected durable store is reachable through host composition. | `DiagnosticsPersistenceReadinessTests.Selected_durable_stores_resolve_and_start_through_the_shared_host_lifecycle` — **added in this intake; covered.** |
 | `.RegistersTheDrainingStartupTask` | Durable drain enters host lifecycle. | `DiagnosticsPersistenceLifecycleTests.Registration_uses_one_hosted_coordinator_and_the_selected_singleton_drain_instances` — covered. |
 | `.RegistersTheDrainingShellTerminator` | Shell termination shares the coordinator. | `DiagnosticsPersistenceLifecycleTests.Cshell_lifecycle_uses_the_same_coordinator_after_provider_prepare` — covered. |
-| `.RegistersTheDbContextFactoryAsSingletonToAvoidCaptiveDependency` | EF factory lifetime avoids captive dependency. | EF-only infrastructure; replacement has no DbContext factory. Candidate for architect-approved removal. |
+| `.RegistersTheDbContextFactoryAsSingletonToAvoidCaptiveDependency` | EF factory lifetime avoids captive dependency. | Retired at the Groundwork boundary: the replacement owns provider connections/sessions directly and has no `IDbContextFactory` or captive-context lifetime to preserve. Current v2 connection/session lifecycle coverage is in `GroundworkV2StructuredLogStoreTests.Connection_constructor_applies_schema_and_publishes_actual_provider_capabilities`. |
 
 ## OpenTelemetry — 16 facts
 
@@ -72,7 +73,7 @@ explicit row and named outcome; the ledger is mechanically checked by
 | `.PreventsDefaultStoreInterfaceRegistrationWhenPersistenceFeatureRunsFirst` | Selection is registration-order independent. | `DiagnosticsPersistenceArchitectureTests.Default_and_explicit_registration_have_order_independent_selection_semantics` — covered. |
 | `.RegistersTheDrainingStartupTask` | Durable drain enters host lifecycle. | `DiagnosticsPersistenceLifecycleTests.Registration_uses_one_hosted_coordinator_and_the_selected_singleton_drain_instances` — covered. |
 | `.RegistersTheDrainingShellTerminator` | Shell termination shares the coordinator. | `DiagnosticsPersistenceLifecycleTests.Cshell_lifecycle_uses_the_same_coordinator_after_provider_prepare` — covered. |
-| `.RegistersTheDbContextFactoryAsSingletonToAvoidCaptiveDependency` | EF factory lifetime avoids captive dependency. | EF-only infrastructure; replacement has no DbContext factory. Candidate for architect-approved removal. |
+| `.RegistersTheDbContextFactoryAsSingletonToAvoidCaptiveDependency` | EF factory lifetime avoids captive dependency. | Retired at the Groundwork boundary: the replacement owns provider connections/sessions directly and has no `IDbContextFactory` or captive-context lifetime to preserve. Current v2 connection/session lifecycle coverage is in `GroundworkV2OpenTelemetryTests.SQLite_queued_capture_survives_restart_and_scope_isolation`. |
 
 ## Inventory and exit conditions
 
@@ -86,8 +87,8 @@ blocker is historical and is not a reason to delete or retain a test by itself.
 Before T053/T054 can be approved and performed:
 
 1. The 43 covered rows must remain green in the exact current-family certification and preserved
-   provider-neutral suites; the three EF-mechanism-only rows require explicit recorded architect
-   disposition before their source tests are removed.
+   provider-neutral suites; the three EF-mechanism-only rows are explicitly retired at the
+   Groundwork boundary, but their source tests remain until the separate deletion gates are met.
 2. Satisfy the existing T050-T052 performance/remediation gates and the uncompleted T047/T057 final
    architecture and zero-EF checks. #646 owns the accepted diagnostics verdict and #647 owns the
    dependency-ordered deletion. This ledger does not authorize or mark either deletion task complete.
