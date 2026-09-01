@@ -4,18 +4,29 @@ using Xunit;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Guards the temporary split: provider-neutral OpenIddict behavior is reusable by
-/// Groundwork while Workbench owns the vendor EF wiring and the legacy project remains the frozen EF oracle until
-/// #1471 removes it.
+/// Guards the durable split: Elsa's OpenIddict package is provider-neutral while Workbench owns its explicit
+/// third-party vendor persistence choice.
 /// </summary>
 public sealed class OpenIddictPersistenceArchitectureTests
 {
-    private static readonly string[] TransitionalOpenIddictEfPackages =
+    private static readonly string[] WorkbenchOpenIddictEfPackages =
     [
         "Microsoft.EntityFrameworkCore.Design",
         "Microsoft.EntityFrameworkCore.InMemory",
         "Microsoft.EntityFrameworkCore.Sqlite",
         "OpenIddict.EntityFrameworkCore"
+    ];
+
+    private static readonly string[] WorkbenchOpenIddictVendorSources =
+    [
+        "OpenIddictEntityFrameworkCoreDefaults.cs",
+        "OpenIddictIdentityDbContext.cs",
+        "OpenIddictIdentityStoreInitializer.cs",
+        "Sqlite/Migrations/20260704221407_Initial.Designer.cs",
+        "Sqlite/Migrations/20260704221407_Initial.cs",
+        "Sqlite/Migrations/OpenIddictIdentityDbContextModelSnapshot.cs",
+        "Sqlite/OpenIddictIdentityDbContextFactory.cs",
+        "WorkbenchOpenIddictEntityFrameworkCoreOptions.cs"
     ];
 
     [Fact]
@@ -51,11 +62,10 @@ public sealed class OpenIddictPersistenceArchitectureTests
 
     [Fact]
     /// <summary>
-    /// The frozen Elsa OpenIddict project still carries the vendor packages/context/migrations as the transitional
-    /// oracle. The host-owned registration is intentionally outside this project and will be the only remaining
-    /// vendor choice after #1471 removes the frozen slice.
+    /// Elsa's reusable OpenIddict package ships no concrete persistence implementation. The only retained EF
+    /// implementation is the vendor-owned model selected explicitly by Workbench.
     /// </summary>
-    public void Vendor_EF_persistence_keeps_the_pinned_packages_and_excludes_nested_sources()
+    public void Elsa_OpenIddict_package_has_no_EF_packages_or_wrapper_sources()
     {
         var projectPath = Path.Combine(
             RepoRoot,
@@ -72,10 +82,18 @@ public sealed class OpenIddictPersistenceArchitectureTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(TransitionalOpenIddictEfPackages, efPackages);
+        Assert.Empty(efPackages);
         Assert.Contains(
             project.Descendants("Compile"),
             element => string.Equals((string?)element.Attribute("Remove"), "Behavior/**/*.cs", StringComparison.Ordinal));
+        Assert.False(Directory.Exists(Path.Combine(
+            RepoRoot,
+            "src",
+            "Elsa",
+            "Foundation",
+            "Identity",
+            "OpenIddict",
+            "EntityFrameworkCore")));
     }
 
     [Fact]
@@ -117,6 +135,12 @@ public sealed class OpenIddictPersistenceArchitectureTests
         Assert.Contains(
             project.Descendants("PackageReference"),
             element => string.Equals((string?)element.Attribute("Include"), "OpenIddict.EntityFrameworkCore", StringComparison.Ordinal));
+        var vendorPackages = project.Descendants("PackageReference")
+            .Select(element => (string?)element.Attribute("Include"))
+            .Where(include => include?.Contains("EntityFrameworkCore", StringComparison.Ordinal) == true)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(WorkbenchOpenIddictEfPackages, vendorPackages);
         Assert.Contains("AddWorkbenchOpenIddictVendor", program, StringComparison.Ordinal);
 
         var hostRegistration = File.ReadAllText(Path.Combine(
@@ -129,6 +153,31 @@ public sealed class OpenIddictPersistenceArchitectureTests
         Assert.Contains("AddDbContext<OpenIddictIdentityDbContext>", hostRegistration, StringComparison.Ordinal);
         Assert.Contains("UseEntityFrameworkCore", hostRegistration, StringComparison.Ordinal);
         Assert.Contains("AddHostedService", hostRegistration, StringComparison.Ordinal);
+        var vendorRoot = Path.Combine(RepoRoot, "src", "Apps", "Elsa.Workbench", "OpenIddict");
+        Assert.True(Directory.Exists(vendorRoot));
+        var vendorSources = Directory.EnumerateFiles(vendorRoot, "*.cs", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(vendorRoot, path).Replace(Path.DirectorySeparatorChar, '/'))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(WorkbenchOpenIddictVendorSources, vendorSources);
+
+        var testProject = XDocument.Load(Path.Combine(
+            RepoRoot,
+            "tests",
+            "Elsa",
+            "Foundation",
+            "Identity",
+            "Tests",
+            "Elsa.Foundation.Identity.Tests.csproj"));
+        var testVendorPackages = testProject.Descendants("PackageReference")
+            .Select(element => (string?)element.Attribute("Include"))
+            .OfType<string>()
+            .Where(include => include.Contains("EntityFrameworkCore", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(
+            ["Microsoft.EntityFrameworkCore.InMemory", "OpenIddict.EntityFrameworkCore"],
+            testVendorPackages);
     }
 
     private static bool IsSourceOrProject(string path) =>
@@ -142,62 +191,6 @@ public sealed class OpenIddictPersistenceArchitectureTests
             .Select((line, index) => (line, number: index + 1))
             .Where(candidate => tokens.Any(token => candidate.line.Contains(token, StringComparison.OrdinalIgnoreCase)))
             .Select(candidate => $"{relativePath}:{candidate.number}: {candidate.line.Trim()}");
-    }
-
-    private static IReadOnlyList<string> FindEfDependencyPaths(string rootProjectPath)
-    {
-        var violations = new List<string>();
-        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        Visit(rootProjectPath, []);
-        return violations;
-
-        void Visit(string projectPath, IReadOnlyList<string> incomingPath)
-        {
-            var fullPath = Path.GetFullPath(projectPath);
-            var relativePath = Path.GetRelativePath(RepoRoot, fullPath)
-                .Replace(Path.DirectorySeparatorChar, '/');
-            var dependencyPath = incomingPath.Append(relativePath).ToArray();
-
-            if (!visited.Add(fullPath))
-                return;
-
-            if (!File.Exists(fullPath))
-            {
-                violations.Add($"{string.Join(" -> ", dependencyPath)} (missing project)");
-                return;
-            }
-
-            var project = XDocument.Load(fullPath);
-            var efPackages = project.Descendants("PackageReference")
-                .Select(element => (string?)element.Attribute("Include"))
-                .Where(include => include?.Contains("EntityFrameworkCore", StringComparison.OrdinalIgnoreCase) == true);
-
-            violations.AddRange(efPackages.Select(package =>
-                $"{string.Join(" -> ", dependencyPath)} -> package:{package}"));
-
-            foreach (var reference in project.Descendants("ProjectReference"))
-            {
-                var include = (string?)reference.Attribute("Include");
-                if (string.IsNullOrWhiteSpace(include))
-                {
-                    violations.Add($"{string.Join(" -> ", dependencyPath)} -> unresolved empty ProjectReference");
-                    continue;
-                }
-
-                if (include.Contains("$(", StringComparison.Ordinal))
-                {
-                    violations.Add($"{string.Join(" -> ", dependencyPath)} -> unresolved ProjectReference:{include}");
-                    continue;
-                }
-
-                var normalizedInclude = include
-                    .Replace('\\', Path.DirectorySeparatorChar)
-                    .Replace('/', Path.DirectorySeparatorChar);
-                var referencedProject = Path.GetFullPath(
-                    Path.Combine(Path.GetDirectoryName(fullPath)!, normalizedInclude));
-                Visit(referencedProject, dependencyPath);
-            }
-        }
     }
 
     private static string RepoRoot

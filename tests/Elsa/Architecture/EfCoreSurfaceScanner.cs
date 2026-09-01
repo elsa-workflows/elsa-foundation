@@ -435,6 +435,7 @@ internal sealed class EfCoreSurfaceScanner
         var directPackages = inventoryProjects
             .SelectMany(project => project.PackageReferences
                 .Where(IsEfPackage)
+                .Where(package => !IsApprovedOpenIddictVendorPackage(project.RelativePath, package))
                 .Select(package => Pair(project.RelativePath, package)))
             .Sorted();
         var directEfReferences = inventoryProjects
@@ -502,12 +503,38 @@ internal sealed class EfCoreSurfaceScanner
             transitiveEfPackages,
             resolvedEfPackages,
             projectsMissingAssets,
-            SourceFiles("*.cs").Where(IsEfMigration).Select(Relative).Sorted(),
-            SourceFiles("*.cs").Where(IsDbContextFile).Select(Relative).Sorted(),
-            SourceFiles("*.cs").SelectMany(RegistrationEntries).Sorted(),
+            SourceFiles("*.cs").Where(path => !IsApprovedOpenIddictVendorSource(Relative(path))).Where(IsEfMigration).Select(Relative).Sorted(),
+            SourceFiles("*.cs").Where(path => !IsApprovedOpenIddictVendorSource(Relative(path))).Where(IsDbContextFile).Select(Relative).Sorted(),
+            SourceFiles("*.cs").Where(path => !IsApprovedOpenIddictVendorSource(Relative(path))).SelectMany(RegistrationEntries).Sorted(),
             ConfigurationFiles().SelectMany(HostConfigurationEntries).Sorted(),
             boundaryViolations);
     }
+
+    // ADR 0042 treats OpenIddict's vendor persistence as a host choice rather than first-party Elsa
+    // persistence. OpenIddictPersistenceArchitectureTests owns the exact package/source allowlist; the
+    // general shrink-only ratchet excludes those entries so moving the vendor implementation from the
+    // reusable Elsa package into Workbench is recognized as a contraction, not a false expansion.
+    private static bool IsApprovedOpenIddictVendorPackage(string project, string package) =>
+        project switch
+        {
+            "src/Apps/Elsa.Workbench/Elsa.Workbench.csproj" => package is
+                "Microsoft.EntityFrameworkCore.Design" or
+                "Microsoft.EntityFrameworkCore.InMemory" or
+                "Microsoft.EntityFrameworkCore.Sqlite" or
+                "OpenIddict.EntityFrameworkCore",
+            "tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj" =>
+                package is "Microsoft.EntityFrameworkCore.InMemory" or "OpenIddict.EntityFrameworkCore",
+            _ => false
+        };
+
+    private static bool IsApprovedOpenIddictVendorSource(string path) =>
+        path.StartsWith("src/Apps/Elsa.Workbench/OpenIddict/", StringComparison.Ordinal) ||
+        path.Equals(
+            "src/Apps/Elsa.Workbench/WorkbenchOpenIddictVendorRegistration.cs",
+            StringComparison.Ordinal) ||
+        path.Equals(
+            "tests/Elsa/Foundation/Identity/Tests/OpenIddict/OpenIddictVendorTestRegistration.cs",
+            StringComparison.Ordinal);
 
     public IReadOnlyList<string> EfFreeBoundaryProjectNames() =>
         LoadProjects()
