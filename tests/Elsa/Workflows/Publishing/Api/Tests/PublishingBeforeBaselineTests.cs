@@ -1,5 +1,6 @@
 using Elsa.Api.Compatibility.Testing.Baselines;
 using Elsa.Api.Compatibility.Testing.Http;
+using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Api.Compatibility.Testing.OpenApi;
 using Elsa.Workflows.Publishing.Api.Tests.Support;
 using System.Diagnostics;
@@ -20,24 +21,24 @@ public sealed class PublishingBeforeBaselineTests
     private const string InitialApprovalsFileName = "publishing-approved-differences.initial.json";
 
     [Fact]
-    public void Reviewed_manifest_contains_exactly_23_one_to_one_registrations()
+    public void Reviewed_manifest_contains_exactly_21_one_to_one_registrations()
     {
         var routes = PublishingCompatibilityCases.Manifest;
 
-        Assert.Equal(23, routes.Count);
-        Assert.Equal(23, routes.Select(route => route.Id).Distinct(StringComparer.Ordinal).Count());
-        Assert.Equal(23, routes.Select(route => route.Endpoint).Distinct().Count());
-        Assert.Equal(23, routes.Select(route => route.Endpoint.ToString()).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(21, routes.Count);
+        Assert.Equal(21, routes.Select(route => route.Id).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(21, routes.Select(route => route.Endpoint).Distinct().Count());
+        Assert.Equal(21, routes.Select(route => route.Endpoint.ToString()).Distinct(StringComparer.Ordinal).Count());
         Assert.All(routes, route => Assert.False(string.IsNullOrWhiteSpace(route.Request)));
         Assert.All(routes, route => Assert.False(string.IsNullOrWhiteSpace(route.Response)));
-        Assert.Equal(12, routes.Count(route => route.Action == "read"));
+        Assert.Equal(10, routes.Count(route => route.Action == "read"));
         Assert.Equal(11, routes.Count(route => route.Action == "manage"));
-        Assert.Equal(23, PublishingCompatibilityCases.Anonymous.Count);
-        Assert.Equal(23, PublishingCompatibilityCases.Authenticated.Count);
+        Assert.Equal(21, PublishingCompatibilityCases.Anonymous.Count);
+        Assert.Equal(21, PublishingCompatibilityCases.Authenticated.Count);
         Assert.Equal(10, PublishingCompatibilityCases.Binding.Count);
-        Assert.Equal(17, PublishingCompatibilityCases.Domain.Count);
+        Assert.Equal(16, PublishingCompatibilityCases.Domain.Count);
         Assert.Single(PublishingCompatibilityCases.Cancellation);
-        Assert.Equal(74, PublishingCompatibilityCases.All.Count);
+        Assert.Equal(69, PublishingCompatibilityCases.All.Count);
     }
 
     [Fact]
@@ -48,7 +49,7 @@ public sealed class PublishingBeforeBaselineTests
 
         Assert.Equal(3, versioned.Length);
         Assert.All(versioned, route => Assert.Contains("drafts", route.Endpoint.Route.Value, StringComparison.Ordinal));
-        Assert.Equal(20, routes.Count(route => route.Endpoint.Route.Value.StartsWith("/publishing/", StringComparison.Ordinal)));
+        Assert.Equal(18, routes.Count(route => route.Endpoint.Route.Value.StartsWith("/publishing/", StringComparison.Ordinal)));
         Assert.Equal(3, routes.Count(route => route.Endpoint.Route.Value.StartsWith("/design/activities/", StringComparison.Ordinal)));
         Assert.Equal(4, routes.Count(route => route.Endpoint.Route.Value.StartsWith("/publishing/activity-", StringComparison.Ordinal)));
     }
@@ -92,7 +93,6 @@ public sealed class PublishingBeforeBaselineTests
         AssertCase(observations, "WorkflowPublish|trusted-route-over-body", 201, "Completed");
         AssertCase(observations, "WorkflowTestRuns.StartDraft|trusted-reserved-drafts-selection", 200, "Completed");
         AssertCase(observations, "ActivityTestRuns.Start|trusted-route-over-body", 202, "Completed");
-        AssertCase(observations, "PublicationSlots.Get|trusted-domain-not-found", 404, "Completed");
         AssertCase(observations, "WorkflowPolicy.Set|trusted-domain-conflict", 409, "Completed");
         AssertCase(observations, "WorkflowPublish|trusted-domain-conflict", 409, "Completed");
         AssertCase(observations, "WorkflowPreflight|trusted-domain-validation", 400, "Completed");
@@ -113,11 +113,17 @@ public sealed class PublishingBeforeBaselineTests
     }
 
     [Fact]
-    public void Historical_openapi_fixture_contains_exactly_the_reviewed_23_operations()
+    public void Historical_openapi_fixture_contains_the_reviewed_23_operations_before_slot_reads_moved()
     {
         var document = BaselineFile.Load<OpenApiEvidenceDocument>(Path.Join(BaselineDirectory, OpenApiFileName));
+        var retiredSlotReads = new[]
+        {
+            new EndpointIdentity("/publishing/workflows/{definitionId}/slots", "GET"),
+            new EndpointIdentity("/publishing/workflows/{definitionId}/slots/{slotName}", "GET")
+        };
         var expected = PublishingCompatibilityCases.Manifest
             .Select(route => OpenApiIdentity(route.Endpoint.ToString()))
+            .Concat(retiredSlotReads.Select(endpoint => OpenApiIdentity(endpoint.ToString())))
             .Order(StringComparer.Ordinal)
             .ToArray();
         var actual = document.Operations.Select(operation => operation.Endpoint.ToString()).Order(StringComparer.Ordinal).ToArray();

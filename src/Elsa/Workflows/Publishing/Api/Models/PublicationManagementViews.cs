@@ -52,8 +52,6 @@ public sealed record PublicationSlotView(
             publication is null ? null : PublicationView.From(publication));
 }
 
-public sealed record PublicationSlotListResponse(IReadOnlyCollection<PublicationSlotView> Items);
-
 public sealed record PublicationPolicyView(
     string DefinitionId,
     PublicationPolicyDefaultActionView DefaultAction,

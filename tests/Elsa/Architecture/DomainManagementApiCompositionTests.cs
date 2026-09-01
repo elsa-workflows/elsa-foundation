@@ -120,8 +120,6 @@ public sealed class DomainManagementApiCompositionTests
         new("/publishing/value-conversion/profiles", "GET"),
         new("/publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/preflight", "POST"),
         new("/publishing/workflows/preflight", "POST"),
-        new("/publishing/workflows/{definitionId}/slots", "GET"),
-        new("/publishing/workflows/{definitionId}/slots/{slotName}", "GET"),
         new("/publishing/workflows/{definitionId}/slots/{slotName}", "DELETE"),
         new("/publishing/workflows/{definitionId}/slots/{slotName}/restore", "POST"),
         new("/publishing/workflows/{definitionId}/policy", "GET"),

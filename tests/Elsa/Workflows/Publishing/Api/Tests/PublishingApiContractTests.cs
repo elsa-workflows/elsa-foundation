@@ -51,7 +51,7 @@ public sealed class PublishingApiContractTests
     private const string Owner = "Elsa.Workflows.Publishing.Api";
 
     [Fact]
-    public void Publishing_mapper_exposes_exactly_the_frozen_23_operation_manifest()
+    public void Publishing_mapper_exposes_exactly_the_current_21_operation_manifest()
     {
         using var provider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(provider);
@@ -59,7 +59,7 @@ public sealed class PublishingApiContractTests
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
 
         var manifest = EndpointManifestBuilder.Capture(routes.DataSources);
-        Assert.Equal(23, manifest.Entries.Count);
+        Assert.Equal(21, manifest.Entries.Count);
         Assert.Equal(
             PublishingCompatibilityCases.Manifest
                 .Select(route => route.Endpoint.ToString())
@@ -87,8 +87,8 @@ public sealed class PublishingApiContractTests
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
 
         var endpoints = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
-        Assert.Equal(23, endpoints.Length);
-        Assert.Equal(23, endpoints.Select(endpoint => endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName)
+        Assert.Equal(21, endpoints.Length);
+        Assert.Equal(21, endpoints.Select(endpoint => endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName)
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Distinct(StringComparer.Ordinal)
             .Count());
@@ -158,12 +158,17 @@ public sealed class PublishingApiContractTests
             .Where(operation => operation.Endpoint.Route.Value.StartsWith("/publishing/", StringComparison.Ordinal) ||
                                 operation.Endpoint.Route.Value.StartsWith("/design/activities/", StringComparison.Ordinal))
             .ToArray();
-        Assert.Equal(23, publishingOperations.Length);
+        Assert.Equal(21, publishingOperations.Length);
 
+        var beforeHttp = BaselineFile.Load<HttpCompatibilityObservation[]>(Path.Join(BaselineDirectory, "publishing-http-fastendpoints.json"));
+        var beforeOpenApi = BaselineFile.Load<OpenApiEvidenceDocument>(Path.Join(BaselineDirectory, "publishing-openapi-fastendpoints.json"));
+        // The immutable-before capture predates T117 and contains the two publishing GETs that
+        // were intentionally retired. Compare the preserved publishing contract only; their
+        // replacement runtime reads are covered by Runtime API contract and HTTP tests.
         var before = new CompatibilityEvidenceSet
         {
-            Http = BaselineFile.Load<HttpCompatibilityObservation[]>(Path.Join(BaselineDirectory, "publishing-http-fastendpoints.json")),
-            OpenApi = BaselineFile.Load<OpenApiEvidenceDocument>(Path.Join(BaselineDirectory, "publishing-openapi-fastendpoints.json"))
+            Http = beforeHttp.Where(observation => !IsRetiredSlotRead(observation.Endpoint)).ToArray(),
+            OpenApi = new OpenApiEvidenceDocument(beforeOpenApi.Operations.Where(operation => !IsRetiredSlotRead(operation.Endpoint)).ToArray())
         };
         var after = new CompatibilityEvidenceSet
         {
@@ -174,7 +179,9 @@ public sealed class PublishingApiContractTests
         var approvalsPath = Path.Join(BaselineDirectory, "publishing-approved-differences.json");
         if (!File.Exists(approvalsPath))
             approvalsPath = Path.Join(BaselineDirectory, "publishing-approved-differences.initial.json");
-        var approvals = PublishingApprovalRegistry.Load(approvalsPath);
+        var approvals = PublishingApprovalRegistry.Load(approvalsPath)
+            .Where(approval => !IsRetiredSlotRead(new EndpointIdentity(approval.Endpoint, approval.Method)))
+            .ToArray();
         var httpComparison = CompatibilityComparer.CompareBidirectional(
             before with { OpenApi = null },
             after with { OpenApi = null },
@@ -251,6 +258,10 @@ public sealed class PublishingApiContractTests
         ApprovedDifference[] approvals) =>
         string.Join(Environment.NewLine,
             CompatibilityComparer.CompareBidirectional(before, after, approvals).Failures);
+
+    private static bool IsRetiredSlotRead(EndpointIdentity endpoint) =>
+        endpoint.Method.Value == "GET" &&
+        endpoint.Route.Value is "/publishing/workflows/{param}/slots" or "/publishing/workflows/{param}/slots/{param}";
 
     private static CompatibilityEvidenceSet Evidence(string canonical)
     {

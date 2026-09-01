@@ -5,10 +5,6 @@ using Elsa.Workflows.Publishing.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Requests;
 
-public sealed record ListPublicationSlots(string DefinitionId);
-
-public sealed record GetPublicationSlot(string DefinitionId, string SlotName);
-
 public sealed record GetWorkflowPublicationPolicy(string DefinitionId);
 
 public sealed record SetWorkflowPublicationPolicy(
