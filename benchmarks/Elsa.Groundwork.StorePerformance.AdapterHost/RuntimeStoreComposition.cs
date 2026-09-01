@@ -5,6 +5,8 @@ using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Distributed.Contracts;
+using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
 using Groundwork.Kernel;
 using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
@@ -57,7 +59,8 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
         string persistenceScope,
         CancellationToken cancellationToken,
         WritePathRoundTripObserver? observer = null,
-        IStorageProviderConnection? existingConnection = null)
+        IStorageProviderConnection? existingConnection = null,
+        bool includeDistributedRuntimeStores = false)
     {
         observer ??= new WritePathRoundTripObserver(providerName);
         var ownsConnection = existingConnection is null;
@@ -89,6 +92,8 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
             services.AddSingleton<IProviderCommandObserver>(observer);
 
             services.AddGroundworkV2RuntimeStores();
+            if (includeDistributedRuntimeStores)
+                services.AddGroundworkDistributedRuntimeStores();
 
             // IRuntimeExecutionOwnershipService has no Groundwork replacement; it comes from the runtime core.
             services.AddWorkflowRuntime();
@@ -200,6 +205,14 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
             services.GetRequiredService<IRuntimePostCommitOutboxClaimStore>(),
             services.GetRequiredService<IRuntimePostCommitOutboxClaimCompletionStore>(),
             services.GetRequiredService<IPostCommitOutboxLookupStore>());
+    }
+
+    /// <summary>Mints the durable distributed execution placement contract from an isolated DI scope.</summary>
+    public IExecutionPlacementStore CreatePlacementClient()
+    {
+        var scope = provider.CreateAsyncScope();
+        scopes.Add(scope);
+        return scope.ServiceProvider.GetRequiredService<IExecutionPlacementStore>();
     }
 
     /// <summary>Mints the recurring-trigger schedule contract from an isolated DI scope.</summary>

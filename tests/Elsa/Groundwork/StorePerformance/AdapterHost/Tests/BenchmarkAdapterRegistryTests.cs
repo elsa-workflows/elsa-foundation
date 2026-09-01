@@ -122,6 +122,32 @@ public sealed class BenchmarkAdapterRegistryTests
     }
 
     [Fact]
+    public async Task Dispatches_placement_takeover_to_its_exact_groundwork_physical_form()
+    {
+        await using var adapter = BenchmarkAdapterRegistry.Create(
+            Request("placement-takeover", DistributedPlacementTakeoverAdapter.PhysicalForm),
+            "unused",
+            "unused");
+
+        Assert.IsType<DistributedPlacementTakeoverAdapter>(adapter);
+        var workload = WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()).Workloads["placement-takeover"];
+        Assert.Contains(DistributedPlacementTakeoverAdapter.PhysicalForm, workload.PhysicalFormsFor646);
+    }
+
+    [Fact]
+    public async Task Placement_takeover_operations_are_not_admitted_before_correctness_preparation()
+    {
+        await using var adapter = BenchmarkAdapterRegistry.Create(
+            Request("placement-takeover", DistributedPlacementTakeoverAdapter.PhysicalForm),
+            "unused",
+            "unused");
+
+        var exception = Assert.Throws<PerformanceContractException>(() => adapter.Operations);
+
+        Assert.Contains("before correctness preparation", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Gives_each_checkpoint_matrix_process_a_distinct_deterministic_persistence_scope()
     {
         await using var warmup = (CheckpointCommitAdapter)BenchmarkAdapterRegistry.Create(
@@ -170,6 +196,9 @@ public sealed class BenchmarkAdapterRegistryTests
     [InlineData("recurring-schedule-selection", "shared-documents-with-linked-index-tables", "groundwork-v2")]
     [InlineData("recurring-schedule-selection", "dedicated-recurring-schedule-documents", "other-adapter")]
     [InlineData("recurring-schedule-selection", "dedicated-recurring-schedule-documents", "groundwork-v2", "9.9.9")]
+    [InlineData("placement-takeover", "shared-documents-with-linked-index-tables", "groundwork-v2")]
+    [InlineData("placement-takeover", "dedicated-placement-lease-documents", "other-adapter")]
+    [InlineData("placement-takeover", "dedicated-placement-lease-documents", "groundwork-v2", "9.9.9")]
     public void Refuses_unregistered_workload_adapter_and_physical_form_without_fallback(
         string workloadId,
         string physicalForm,
