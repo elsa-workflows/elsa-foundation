@@ -12,6 +12,7 @@
       "tests/Elsa/Persistence/EFCore/Tests/Elsa.Persistence.EFCore.Tests.csproj"
     ],
     "DirectPackageReferences": [
+      "src/Apps/Elsa.Workbench/Elsa.Workbench.csproj -\u003E OpenIddict.EntityFrameworkCore",
       "src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite.csproj -\u003E Microsoft.EntityFrameworkCore.Design",
       "src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Sqlite/Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite.csproj -\u003E Microsoft.EntityFrameworkCore.Design",
       "src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj -\u003E Microsoft.AspNetCore.Identity.EntityFrameworkCore",
@@ -309,9 +310,12 @@
       "tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/AspNetCoreIdentityRegistrationTests.cs -\u003E AspNetCoreIdentityEntityFrameworkCoreFeature x 4",
       "tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/AspNetCoreIdentityRegistrationTests.cs -\u003E UseInMemoryDatabase x 1",
       "tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/EfCoreIdentityStoreTests.cs -\u003E UseInMemoryDatabase x 1",
+      "tests/Elsa/Foundation/Identity/Tests/IdentityProviderModuleTests.cs -\u003E UseInMemoryDatabase x 2",
       "tests/Elsa/Foundation/Identity/Tests/OpenIddict/OpenIddictBearerAuthenticationTests.cs -\u003E UseInMemoryDatabase x 1",
       "tests/Elsa/Foundation/Identity/Tests/OpenIddict/OpenIddictIdentityFixture.cs -\u003E UseInMemoryDatabase x 1",
-      "tests/Elsa/Foundation/Identity/Tests/OpenIddict/OpenIddictSchemeCompositionTests.cs -\u003E UseInMemoryDatabase x 3",
+      "tests/Elsa/Foundation/Identity/Tests/OpenIddict/OpenIddictSchemeCompositionTests.cs -\u003E UseInMemoryDatabase x 4",
+      "tests/Elsa/Foundation/Identity/Tests/OpenIddict/OpenIddictVendorTestRegistration.cs -\u003E AddDbContext x 1",
+      "tests/Elsa/Foundation/Identity/Tests/OpenIddict/OpenIddictVendorTestRegistration.cs -\u003E UseEntityFrameworkCore x 1",
       "tests/Elsa/Persistence/EFCore/Tests/EFCoreSaveCommandTests.cs -\u003E UseSqlite x 1",
       "tests/Elsa/Persistence/EFCore/Tests/RunMigrationsStartupTaskTests.cs -\u003E UseSqlite x 1",
       "tests/Elsa/Persistence/EFCore/Tests/UpsertCommandGeneratorPostgresTests.cs -\u003E UseNpgsql x 1",

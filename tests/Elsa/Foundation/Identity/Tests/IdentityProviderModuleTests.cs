@@ -176,29 +176,33 @@ public sealed class IdentityProviderModuleTests
         // Exercises the REAL OpenIddict pipeline (JWT issuance + local validation + EF token store):
         // development/demo mode self-provisions an in-memory store and ephemeral keys.
         var services = new ServiceCollection();
+        var databaseName = $"openiddict-{Guid.NewGuid():n}";
         services.AddLogging();
+        services.AddOpenIddictVendorForTests(
+            builder => builder.UseInMemoryDatabase(databaseName));
         services.AddFoundationIdentityOpenIddict(options =>
         {
             options.ProviderId = "local";
             options.IsDevelopmentOrDemo = true;
         });
-        services.AddOpenIddictVendorForTests(
-            builder => builder.UseInMemoryDatabase($"openiddict-{Guid.NewGuid():n}"));
         services.AddFoundationIdentityApi();
         using var provider = services.BuildServiceProvider();
+
+        using (var scope = provider.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>().Database.EnsureCreatedAsync();
 
         var tokenService = provider.GetRequiredService<ITokenService>();
         var sessionService = provider.GetRequiredService<IAuthSessionService>();
 
         var issued = await tokenService.IssueAsync(new TokenIssueRequest("user-1", "tenant-a", [DefaultIdentityPermissionKeys.IdentityUsersRead]));
         var validated = await tokenService.ValidateAsync(new TokenValidationRequest(issued.AccessToken));
-        var session = await sessionService.GetAsync(validated.Principal!);
+        Assert.True(validated.Succeeded, validated.Failure);
+        var session = await sessionService.GetAsync(Assert.IsType<ClaimsPrincipal>(validated.Principal));
         var refreshed = await tokenService.RefreshAsync(new TokenRefreshRequest(issued.RefreshToken!));
         var refreshedValidation = await tokenService.ValidateAsync(new TokenValidationRequest(refreshed.AccessToken));
         await tokenService.RevokeAsync(new TokenRevocationRequest(refreshed.AccessToken));
         var revokedValidation = await tokenService.ValidateAsync(new TokenValidationRequest(refreshed.AccessToken));
 
-        Assert.True(validated.Succeeded);
         Assert.Equal("authenticated", session.Status);
         Assert.Equal("user-1", session.Subject);
         Assert.Equal("tenant-a", session.TenantId);
