@@ -224,9 +224,222 @@ public sealed class GroundworkV2WorkflowActivationAuthorityTests
         Assert.Null(deactivated.Source);
     }
 
+    [Theory]
+    [InlineData(WriteOutcomeStatus.ConcurrencyConflict)]
+    [InlineData(WriteOutcomeStatus.UniqueViolation)]
+    public async Task Modeled_batch_conflict_is_retried_without_leaking_provider_exception(WriteOutcomeStatus status)
+    {
+        await using var persistence = GroundworkV2TestPersistence.Create(
+            "memory",
+            [ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDocumentKind)]);
+        var source = new FaultingBatchSessionSource(persistence.Sessions)
+        {
+            NextFailureStatus = status
+        };
+        IWorkflowActivationAuthority authority = CreateAuthority(source, persistence);
+
+        var result = await authority.TryActivateAsync(new(
+            "definition-retry",
+            "default",
+            "activation-retry",
+            WorkflowActivationSource.Publishing,
+            0,
+            new DateTimeOffset(2026, 8, 15, 12, 0, 0, TimeSpan.Zero)));
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(1, result.Slot.Revision);
+        Assert.Equal(2, source.BeginCount);
+    }
+
+    [Theory]
+    [InlineData(WriteOutcomeStatus.ConcurrencyConflict)]
+    [InlineData(WriteOutcomeStatus.UniqueViolation)]
+    public async Task Modeled_batch_conflict_with_winner_returns_revision_mismatch(WriteOutcomeStatus status)
+    {
+        await using var persistence = GroundworkV2TestPersistence.Create(
+            "memory",
+            [ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDocumentKind)]);
+        var source = new FaultingBatchSessionSource(persistence.Sessions)
+        {
+            NextFailureStatus = status
+        };
+        source.BeforeFailure = (writes, access) =>
+        {
+            var write = writes.Single();
+            var values = write.Values ?? throw new InvalidOperationException("The activation-slot test write has no values.");
+            var winner = persistence.Sessions.Open(write.Unit.Id.Value, access).Insert(
+                values,
+                WriteOptions.CreateOnly);
+            Assert.Equal(WriteOutcomeStatus.Inserted, winner.Status);
+        };
+        IWorkflowActivationAuthority authority = CreateAuthority(source, persistence);
+
+        var result = await authority.TryActivateAsync(new(
+            "definition-winner",
+            "default",
+            "activation-winner",
+            WorkflowActivationSource.Publishing,
+            0,
+            new DateTimeOffset(2026, 8, 15, 12, 0, 0, TimeSpan.Zero)));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(WorkflowActivationConflict.RevisionMismatch, result.Conflict);
+        Assert.Equal(1, result.Slot.Revision);
+        Assert.Equal(1, source.BeginCount);
+    }
+
+    [Fact]
+    public async Task Unexpected_batch_outcome_is_rethrown()
+    {
+        await using var persistence = GroundworkV2TestPersistence.Create(
+            "memory",
+            [ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDocumentKind)]);
+        var source = new FaultingBatchSessionSource(persistence.Sessions)
+        {
+            NextFailureStatus = WriteOutcomeStatus.NotFound
+        };
+        IWorkflowActivationAuthority authority = CreateAuthority(source, persistence);
+
+        var exception = await Assert.ThrowsAsync<BatchWriteException>(() => authority.TryActivateAsync(new(
+            "definition-unexpected",
+            "default",
+            "activation-unexpected",
+            WorkflowActivationSource.Publishing,
+            0,
+            new DateTimeOffset(2026, 8, 15, 12, 0, 0, TimeSpan.Zero))).AsTask());
+
+        Assert.Equal(WriteOutcomeStatus.NotFound, exception.Outcomes.Single().Outcome.Status);
+        Assert.Equal(1, source.BeginCount);
+    }
+
+    [Fact]
+    public async Task Caller_cancellation_during_batch_commit_is_rethrown()
+    {
+        await using var persistence = GroundworkV2TestPersistence.Create(
+            "memory",
+            [ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDocumentKind)]);
+        using var cancellation = new CancellationTokenSource();
+        var source = new FaultingBatchSessionSource(persistence.Sessions)
+        {
+            BeforeFailure = (_, _) => cancellation.Cancel(),
+            ThrowCancellation = true
+        };
+        IWorkflowActivationAuthority authority = CreateAuthority(source, persistence);
+
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => authority.TryActivateAsync(new(
+            "definition-cancel",
+            "default",
+            "activation-cancel",
+            WorkflowActivationSource.Publishing,
+            0,
+            new DateTimeOffset(2026, 8, 15, 12, 0, 0, TimeSpan.Zero)), cancellation.Token).AsTask());
+
+        Assert.Equal(cancellation.Token, exception.CancellationToken);
+        Assert.Equal(1, source.BeginCount);
+    }
+
     private static IWorkflowActivationAuthority CreateAuthority(GroundworkV2TestPersistence persistence) =>
         new GroundworkV2WorkflowActivationAuthority(
             persistence.Sessions,
             persistence.Access(),
             new GroundworkStorageTransactionFactory(persistence.Sessions, persistence.Access()));
+
+    private static IWorkflowActivationAuthority CreateAuthority(
+        FaultingBatchSessionSource source,
+        GroundworkV2TestPersistence persistence) =>
+        new GroundworkV2WorkflowActivationAuthority(
+            source,
+            persistence.Access(),
+            new GroundworkStorageTransactionFactory(source, persistence.Access()));
+
+    private sealed class FaultingBatchSessionSource(IGroundworkStorageSessionSource inner) :
+        IGroundworkStorageSessionSource,
+        IGroundworkStorageCapabilitySource
+    {
+        public WriteOutcomeStatus? NextFailureStatus { get; set; }
+
+        public Action<IReadOnlyList<RowWrite>, StorageAccess>? BeforeFailure { get; set; }
+
+        public bool ThrowCancellation { get; set; }
+
+        public int BeginCount { get; private set; }
+
+        public IReadOnlyList<CapabilityDescriptor> Capabilities(string? targetName = null) =>
+            ((IGroundworkStorageCapabilitySource)inner).Capabilities(targetName);
+
+        public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) =>
+            inner.Open(unitId, access, targetName);
+
+        public IUnitOfWork BeginUnitOfWork(
+            StorageAccess access,
+            BatchWriteOptions options,
+            IReadOnlyList<string> unitIds,
+            string? targetName = null)
+        {
+            BeginCount++;
+            var unitOfWork = inner.BeginUnitOfWork(access, options, unitIds, targetName);
+            if (NextFailureStatus is not null || BeforeFailure is not null || ThrowCancellation)
+            {
+                var status = NextFailureStatus;
+                var beforeFailure = BeforeFailure;
+                var throwCancellation = ThrowCancellation;
+                NextFailureStatus = null;
+                BeforeFailure = null;
+                ThrowCancellation = false;
+                return new FaultingBatchUnitOfWork(unitOfWork, access, status, beforeFailure, throwCancellation);
+            }
+
+            return unitOfWork;
+        }
+
+        public StorageUnit Unit(string unitId, string? targetName = null) => inner.Unit(unitId, targetName);
+    }
+
+    private sealed class FaultingBatchUnitOfWork(
+        IUnitOfWork inner,
+        StorageAccess access,
+        WriteOutcomeStatus? failureStatus,
+        Action<IReadOnlyList<RowWrite>, StorageAccess>? beforeFailure,
+        bool throwCancellation) : IUnitOfWork
+    {
+        private readonly List<RowWrite> staged = [];
+
+        public IStorageSession OpenSession(StorageUnit unit) => inner.OpenSession(unit);
+
+        public void Stage(RowWrite write)
+        {
+            staged.Add(write);
+            inner.Stage(write);
+        }
+
+        public BatchWriteSummary Commit() => throw CreateFailure(CancellationToken.None);
+
+        public BatchWriteReport CommitWithOutcomes() => throw CreateFailure(CancellationToken.None);
+
+        public ValueTask<BatchWriteSummary> CommitAsync(CancellationToken cancellationToken = default) =>
+            throw CreateFailure(cancellationToken);
+
+        public ValueTask<BatchWriteReport> CommitWithOutcomesAsync(CancellationToken cancellationToken = default) =>
+            throw CreateFailure(cancellationToken);
+
+        public void Rollback() => inner.Rollback();
+
+        public void Dispose() => inner.Dispose();
+
+        private BatchWriteException CreateFailure(CancellationToken cancellationToken)
+        {
+            if (staged.Count != 1)
+                throw new InvalidOperationException("The deterministic activation-slot failure requires one staged row.");
+            beforeFailure?.Invoke(staged, access);
+            if (throwCancellation)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                throw new OperationCanceledException(cancellationToken);
+            }
+            var status = failureStatus ?? throw new InvalidOperationException("The deterministic batch failure has no outcome.");
+            return new BatchWriteException(
+                $"Deterministic activation-slot failure: {status}.",
+                [new RowWriteOutcome(staged[0], new WriteOutcome(status))]);
+        }
+    }
 }
