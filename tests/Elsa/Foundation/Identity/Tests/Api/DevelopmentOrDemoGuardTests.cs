@@ -1,7 +1,10 @@
-using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Extensions;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
 using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Elsa.Foundation.Identity.OpenIddict.Extensions;
+using Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
+using Elsa.Persistence.Core;
+using Elsa.Persistence.Core.DependencyInjection;
+using Groundwork.Store;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -32,9 +35,8 @@ public sealed class DevelopmentOrDemoGuardTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
 
         // The message must name the setting and how to fix it (mirrors the SecurityDefaultGuard/kill-switch style).
-        Assert.Contains("IsDevelopmentOrDemo", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("GroundworkIdentitySeeder", exception.Message, StringComparison.Ordinal);
         Assert.Contains("Development", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("ASPNETCORE_ENVIRONMENT", exception.Message, StringComparison.Ordinal);
 
         await host.StopAsync();
         host.Dispose();
@@ -72,9 +74,11 @@ public sealed class DevelopmentOrDemoGuardTests
                 webHost.ConfigureServices(services =>
                 {
                     services.AddLogging();
-                    services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(
-                        isDevelopmentOrDemo: false,
-                        configureDbContext: builder => builder.UseInMemoryDatabase($"identity-{suffix}"));
+                    var persistence = new IdentityV2TestPersistence();
+                    services.AddSingleton(persistence);
+                    services.AddSingleton<IStorageProviderConnection>(p => p.GetRequiredService<IdentityV2TestPersistence>().Connection);
+                    services.AddPersistenceCore();
+                    services.AddFoundationAspNetCoreIdentityGroundwork();
                     services.AddOpenIddictVendorForTests(
                         builder => builder.UseInMemoryDatabase($"openiddict-{suffix}"));
                     services.AddFoundationIdentityOpenIddict(
@@ -104,11 +108,13 @@ public sealed class DevelopmentOrDemoGuardTests
                 webHost.ConfigureServices(services =>
                 {
                     services.AddLogging();
-                    services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(
-                        isDevelopmentOrDemo: isDevelopmentOrDemo,
-                        configureDbContext: builder => builder.UseInMemoryDatabase($"identity-{suffix}"),
-                        // Dev/demo hosts seed an explicitly configured admin; the Development boot test asserts it exists.
-                        initialAdmin: isDevelopmentOrDemo ? TestAdmin.SeedOptions() : null);
+                    var persistence = new IdentityV2TestPersistence();
+                    services.AddSingleton(persistence);
+                    services.AddSingleton<IStorageProviderConnection>(p => p.GetRequiredService<IdentityV2TestPersistence>().Connection);
+                    services.AddPersistenceCore();
+                    services.AddFoundationAspNetCoreIdentityGroundwork(
+                        isDevelopmentOrDemo ? TestAdmin.SeedOptions() : null,
+                        isDevelopmentOrDemo);
                     services.AddOpenIddictVendorForTests(
                         builder => builder.UseInMemoryDatabase($"openiddict-{suffix}"));
                     services.AddFoundationIdentityOpenIddict(
@@ -121,7 +127,6 @@ public sealed class DevelopmentOrDemoGuardTests
     private static async Task EnsureSchemaAsync(IHost host)
     {
         await using var scope = host.Services.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<ApplicationIdentityDbContext>().Database.EnsureCreatedAsync();
         await scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>().Database.EnsureCreatedAsync();
     }
 

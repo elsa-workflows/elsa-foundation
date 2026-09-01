@@ -6,7 +6,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 
 ## Summary
 
-- Source projects: 149
+- Source projects: 148
 - Test projects: 109
 - Domains: 27
 - Direct cross-domain references: 721
@@ -24,7 +24,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Diagnostics | 13 | 10 | contract<br>feature/implementation<br>provider/implementation<br>test |
 | Elsa.Events | 3 | 1 | contract<br>feature/implementation<br>helper<br>test |
 | Elsa.Expressions | 10 | 3 | contract<br>feature/implementation<br>provider/implementation<br>test |
-| Elsa.Foundation | 10 | 6 | feature/implementation<br>test |
+| Elsa.Foundation | 9 | 6 | feature/implementation<br>test |
 | Elsa.Git | 1 | 0 | feature/implementation |
 | Elsa.Groundwork | 0 | 3 | test |
 | Elsa.Http | 3 | 1 | contract<br>feature/implementation<br>test |
@@ -112,7 +112,6 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Foundation.Identity.Abstractions](../../src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj) | source | Elsa.Foundation | Identity.Abstractions | feature/implementation | Elsa.Api.AspNetCore |
 | [Elsa.Foundation.Identity.Api](../../src/Elsa/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj) | source | Elsa.Foundation | Identity.Api | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Foundation.Identity.Abstractions |
 | [Elsa.Foundation.Identity.AspNetCoreIdentity](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj) | source | Elsa.Foundation | Identity.AspNetCoreIdentity | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Persistence.Core |
-| [Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj) | source | Elsa.Foundation | Identity.AspNetCoreIdentity.EntityFrameworkCore | feature/implementation | Elsa.Foundation.Identity.AspNetCoreIdentity |
 | [Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj) | source | Elsa.Foundation | Identity.AspNetCoreIdentity.Groundwork | feature/implementation | Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Foundation.Identity.Persistence.Groundwork |
 | [Elsa.Foundation.Identity.Oidc](../../src/Elsa/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj) | source | Elsa.Foundation | Identity.Oidc | feature/implementation | Elsa.Foundation.Identity.Abstractions |
 | [Elsa.Foundation.Identity.OpenIddict.Behavior](../../src/Elsa/Foundation/Identity/OpenIddict/Behavior/Elsa.Foundation.Identity.OpenIddict.Behavior.csproj) | source | Elsa.Foundation | Identity.OpenIddict.Behavior | feature/implementation | Elsa.Foundation.Identity.Abstractions |
@@ -246,7 +245,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.V2.ProviderMatrix.Tests](../../tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/V2/ProviderMatrix/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.V2.ProviderMatrix.Tests.csproj) | test | Elsa.Foundation | Identity.AspNetCoreIdentity.Groundwork.V2.ProviderMatrix.Tests | test | Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.ProcessProbe<br>Elsa.Foundation.Identity.Persistence.Groundwork |
 | [Elsa.Foundation.Identity.Persistence.Groundwork.Tests](../../tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.Tests.csproj) | test | Elsa.Foundation | Identity.Persistence.Groundwork.Tests | test | Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing |
 | [Elsa.Foundation.Identity.Persistence.Groundwork.V2.ProviderMatrix.Tests](../../tests/Elsa/Foundation/Identity/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj) | test | Elsa.Foundation | Identity.Persistence.Groundwork.V2.ProviderMatrix.Tests | test | Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Persistence.Groundwork |
-| [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | Elsa.Foundation | Identity.Tests | test | Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork<br>Elsa.Foundation.Identity.Oidc<br>Elsa.Foundation.Identity.OpenIddict<br>Elsa.Foundation.Identity.Persistence.Groundwork<br>Elsa.Groundwork.StorePerformance.Benchmarks<br>Elsa.Persistence.Groundwork.Testing |
+| [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | Elsa.Foundation | Identity.Tests | test | Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork<br>Elsa.Foundation.Identity.Oidc<br>Elsa.Foundation.Identity.OpenIddict<br>Elsa.Foundation.Identity.Persistence.Groundwork<br>Elsa.Groundwork.StorePerformance.Benchmarks<br>Elsa.Persistence.Groundwork.Testing |
 | [Elsa.Groundwork.ProviderEvidenceImporter.Tests](../../tests/Elsa/Groundwork/ProviderEvidenceImporter/Tests/Elsa.Groundwork.ProviderEvidenceImporter.Tests.csproj) | test | Elsa.Groundwork | ProviderEvidenceImporter.Tests | test | Elsa.Groundwork.ProviderEvidenceImporter |
 | [Elsa.Groundwork.StorePerformance.AdapterHost.Tests](../../tests/Elsa/Groundwork/StorePerformance/AdapterHost/Tests/Elsa.Groundwork.StorePerformance.AdapterHost.Tests.csproj) | test | Elsa.Groundwork | StorePerformance.AdapterHost.Tests | test | Elsa.Groundwork.StorePerformance.AdapterHost |
 | [Elsa.Groundwork.StorePerformance.Benchmarks.Tests](../../tests/Elsa/Groundwork/StorePerformance/Benchmarks/Tests/Elsa.Groundwork.StorePerformance.Benchmarks.Tests.csproj) | test | Elsa.Groundwork | StorePerformance.Benchmarks.Tests | test | Elsa.Groundwork.StorePerformance.Benchmarks |

@@ -1,7 +1,5 @@
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Iam;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Extensions;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Stores;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
@@ -22,10 +20,9 @@ using Xunit;
 namespace Elsa.Foundation.Identity.Tests.AspNetCoreIdentity.Performance;
 
 /// <summary>
-/// Executes the shared, timing-free IAM scenario against each real SQLite-backed store implementation.
+/// Executes the shared, timing-free IAM scenario against the Groundwork SQLite-backed store implementation.
 /// Native-plan evidence remains a separate prerequisite for performance measurement and verdicts.
 /// </summary>
-[Collection(Differential.SqliteIdentityFileCollection.Name)]
 public sealed class IamNormalizedLookupSqliteCorrectnessTests
 {
     private const int BoundedCursorPageSize = 100;
@@ -44,28 +41,6 @@ public sealed class IamNormalizedLookupSqliteCorrectnessTests
             new GroundworkIdentityRoleStore(persistence.Rows(access), access));
 
         AssertRatified(await new IamNormalizedLookupWorkload().ExecuteAsync(adapter));
-    }
-
-    [Fact]
-    [Trait("Category", "Sqlite")]
-    public async Task Ef_identity_store_contracts_produce_the_ratified_digest()
-    {
-        var services = new ServiceCollection();
-        services.AddFoundationAspNetCoreIdentityEntityFrameworkCore();
-        using var provider = services.BuildServiceProvider();
-        using var scope = provider.CreateScope();
-        var serviceProvider = scope.ServiceProvider;
-        var db = serviceProvider.GetRequiredService<ApplicationIdentityDbContext>();
-        try
-        {
-            await db.Database.EnsureCreatedAsync();
-            var adapter = new EfIdentityWorkloadAdapter(serviceProvider.GetRequiredService<IServiceScopeFactory>());
-            AssertRatified(await new IamNormalizedLookupWorkload().ExecuteAsync(adapter));
-        }
-        finally
-        {
-            await db.Database.EnsureDeletedAsync();
-        }
     }
 
     [Fact]
@@ -457,74 +432,6 @@ public sealed class IamNormalizedLookupSqliteCorrectnessTests
 
         public Task<IdentityResult> UpdateUserAsync(AspNetCoreIdentityUser user, CancellationToken token) =>
             users.UpdateAsync(user, token);
-    }
-
-    private sealed class EfIdentityWorkloadAdapter(IServiceScopeFactory scopeFactory) : IIamIdentityWorkloadAdapter
-    {
-        public Task<IdentityResult> CreateUserAsync(AspNetCoreIdentityUser user, CancellationToken token) =>
-            UseUserStoreAsync(store => store.CreateAsync(user, token));
-
-        public Task<IdentityResult> CreateRoleAsync(IdentityRole role, CancellationToken token) =>
-            UseRoleStoreAsync(store => store.CreateAsync(role, token));
-
-        public async Task AddToRoleAsync(AspNetCoreIdentityUser user, string role, CancellationToken token)
-        {
-            using var scope = scopeFactory.CreateScope();
-            var users = scope.ServiceProvider.GetRequiredService<IUserStore<AspNetCoreIdentityUser>>();
-            var memberships = users as IUserRoleStore<AspNetCoreIdentityUser>
-                ?? throw new InvalidOperationException("The EF Identity user store must support user-role membership.");
-            await memberships.AddToRoleAsync(user, role, token);
-            IamNormalizedLookupWorkload.AssertSucceeded(await users.UpdateAsync(user, token), "persist-user-role-link");
-        }
-
-        public Task<AspNetCoreIdentityUser?> FindUserByNormalizedNameAsync(string value, CancellationToken token) =>
-            UseUserStoreAsync(store => store.FindByNameAsync(value, token));
-
-        public Task<AspNetCoreIdentityUser?> FindUserByNormalizedEmailAsync(string value, CancellationToken token) =>
-            UseEmailStoreAsync(store => store.FindByEmailAsync(value, token));
-
-        public Task<IdentityRole?> FindRoleByNormalizedNameAsync(string value, CancellationToken token) =>
-            UseRoleStoreAsync(store => store.FindByNameAsync(value, token));
-
-        public Task<IList<string>> GetRolesAsync(AspNetCoreIdentityUser user, CancellationToken token) =>
-            UseRoleMembershipStoreAsync(store => store.GetRolesAsync(user, token));
-
-        public Task<IList<AspNetCoreIdentityUser>> GetUsersInRoleAsync(string value, CancellationToken token) =>
-            UseRoleMembershipStoreAsync(store => store.GetUsersInRoleAsync(value, token));
-
-        public Task<AspNetCoreIdentityUser?> FindUserByIdAsync(string value, CancellationToken token) =>
-            UseUserStoreAsync(store => store.FindByIdAsync(value, token));
-
-        public Task<IdentityResult> UpdateUserAsync(AspNetCoreIdentityUser user, CancellationToken token) =>
-            UseUserStoreAsync(store => store.UpdateAsync(user, token));
-
-        private async Task<T> UseUserStoreAsync<T>(Func<IUserStore<AspNetCoreIdentityUser>, Task<T>> operation)
-        {
-            using var scope = scopeFactory.CreateScope();
-            return await operation(scope.ServiceProvider.GetRequiredService<IUserStore<AspNetCoreIdentityUser>>());
-        }
-
-        private async Task<T> UseRoleStoreAsync<T>(Func<IRoleStore<IdentityRole>, Task<T>> operation)
-        {
-            using var scope = scopeFactory.CreateScope();
-            return await operation(scope.ServiceProvider.GetRequiredService<IRoleStore<IdentityRole>>());
-        }
-
-        private async Task<T> UseEmailStoreAsync<T>(Func<IUserEmailStore<AspNetCoreIdentityUser>, Task<T>> operation)
-        {
-            using var scope = scopeFactory.CreateScope();
-            var store = scope.ServiceProvider.GetRequiredService<IUserStore<AspNetCoreIdentityUser>>() as IUserEmailStore<AspNetCoreIdentityUser>
-                ?? throw new InvalidOperationException("The EF Identity user store must support normalized email lookup.");
-            return await operation(store);
-        }
-
-        private async Task<T> UseRoleMembershipStoreAsync<T>(Func<IUserRoleStore<AspNetCoreIdentityUser>, Task<T>> operation)
-        {
-            using var scope = scopeFactory.CreateScope();
-            var store = scope.ServiceProvider.GetRequiredService<IUserStore<AspNetCoreIdentityUser>>() as IUserRoleStore<AspNetCoreIdentityUser>
-                ?? throw new InvalidOperationException("The EF Identity user store must support user-role membership.");
-            return await operation(store);
-        }
     }
 
     private sealed class FixedAccessContextAccessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor

@@ -15,7 +15,7 @@ For the design rationale see [`docs/plans/studio-bearer-token-issuance.md`](../p
 | `FoundationIdentityOidc` | External OpenID Connect / JWT-bearer provider (optional; for an upstream IdP). |
 | `FoundationIdentityApi` | The provider-agnostic identity endpoints: `bootstrap`, `capabilities`, `session`, `challenge`, `logout`, `refresh`, and the `GET /_elsa/identity/token` cookie→bearer exchange. Permission checks use the shared Foundation policy path. |
 | `FoundationIdentityAspNetCoreIdentity` | The provider-neutral ASP.NET Core Identity substrate (managers, principal factory, sign-in service, provider module, antiforgery). |
-| `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore` | Durable EF Core user/role store, `SignInManager` cookie sign-in, the login page/endpoints, and dev seeding. |
+| `FoundationIdentityAspNetCoreIdentityGroundwork` | Groundwork-backed durable user/role stores, `SignInManager` cookie sign-in, the login page/endpoints, and configured admin seeding. |
 | `FoundationIdentityOpenIddict` | OpenIddict-backed JWT access-token issuance + local bearer validation for the API surface. |
 
 The composite scheme selector these register becomes the default authenticate/challenge scheme, so an
@@ -29,7 +29,7 @@ intended **only** for local development and demos:
 ```jsonc
 "FoundationIdentityApi": {},
 "FoundationIdentityAspNetCoreIdentity": {},
-"FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
+"FoundationIdentityAspNetCoreIdentityGroundwork": {
   "IsDevelopmentOrDemo": true,
   "SeedAdminUserName": "admin",
   "SeedAdminPassword": "Password123!",
@@ -41,7 +41,8 @@ intended **only** for local development and demos:
 
 Under `IsDevelopmentOrDemo`:
 
-- **Stores are in-memory** (EF in-memory database) — data does not survive a restart.
+- **Identity stores use the configured Groundwork provider** — with the default Workbench SQLite provider, users,
+  roles, external identities, and tenant memberships survive a restart.
 - **Signing/encryption keys are ephemeral per process** — issued tokens do not survive a restart.
 - **An admin account is seeded** from the `SeedAdmin*` settings above — the committed dev defaults are
   username `admin`, password `Password123!` (logged prominently at startup). There are no credential
@@ -54,18 +55,19 @@ Under `IsDevelopmentOrDemo`:
 Set these on the relevant feature in `shells.json` (or via any configuration provider — environment variables,
 etc.). Secrets should come from a secret store, not source control.
 
-### `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore`
+### `FoundationIdentityAspNetCoreIdentityGroundwork`
 
 | Setting | Meaning | Production requirement |
 |---|---|---|
-| `IsDevelopmentOrDemo` | In-memory store + ephemeral keys. | **`false`.** |
-| `ConnectionString` | Sqlite connection string for the identity database. | Set to a durable path, e.g. `Data Source=/var/lib/elsa/identity.db`. Defaults to `identity.db` in the content root when unset. |
+| `IsDevelopmentOrDemo` | Enables development/demo seeding and the relaxed local cookie posture. | **`false`.** |
 | `SeedAdminUserName` | Username of an administrator to provision at startup. | Optional. Requires `SeedAdminPassword`. |
 | `SeedAdminPassword` | Password for the seeded administrator. | **Supply via a secret** (user-secrets / environment variable), never committed. |
 | `SeedAdminEmail` | Email for the seeded administrator. | Optional; defaults to `<username>@elsa.local`. |
 | `SeedAdminRoleName` | Role granted to the seeded administrator. | Optional; defaults to `administrator`. |
 
-The seed account is defined **entirely by the `SeedAdmin*` settings** on both the dev/demo and production
+The Groundwork provider owns the identity documents and their schema; select its provider feature (for example
+`GroundworkProviderSqlite` or `GroundworkProviderPostgreSql`) to configure the storage connection. The seed account
+is defined **entirely by the `SeedAdmin*` settings** on both the dev/demo and production
 paths — there are no credential constants in code. The committed `admin` / `Password123!` values apply only
 under `IsDevelopmentOrDemo`. In production, either provision users through your own onboarding, or seed a first
 administrator by setting `SeedAdminUserName` and supplying `SeedAdminPassword` from a secret store (its password
@@ -79,7 +81,7 @@ is never written to the log; the username xor password half-configured is a star
 | `Issuer` | Logical issuer URI written into (and required from) first-party access tokens. | Set to a stable absolute URI, e.g. `https://elsa.example.com/`. |
 | `SigningKey` | Base64-encoded **PKCS#8 RSA private key** used to sign access tokens (RS256). Falls back to `FoundationIdentityOptions.SigningKey`. | **Required.** See generation command below. |
 | `EncryptionKey` | Key material for OpenIddict's encryption credentials. Defaults to a key derived (domain-separated) from `SigningKey`. | Recommended: set a **distinct** value from `SigningKey`. |
-| `ConnectionString` | Sqlite connection string for the token store. Defaults to the shared identity database. | Optional; set for a dedicated token DB. |
+| `ConnectionString` | Sqlite connection string for the OpenIddict token store. | Optional; set for a dedicated token DB. |
 | `AutoMigrate` | Lets Workbench's host-owned OpenIddict EF provider migrate its schema during startup. Defaults to `true`. | Turn off for multi-instance deployments that apply migrations out-of-band. |
 
 `Elsa.Foundation.Identity.OpenIddict` contains only provider-neutral OpenIddict behavior. It no longer references
@@ -131,8 +133,8 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
 
 ## Production go-live checklist
 
-1. `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore.IsDevelopmentOrDemo = false` and set
-   `ConnectionString` to a durable database.
+1. `FoundationIdentityAspNetCoreIdentityGroundwork.IsDevelopmentOrDemo = false` and configure a durable
+   Groundwork provider (for example `GroundworkProviderSqlite` or `GroundworkProviderPostgreSql`).
 2. `FoundationIdentityOpenIddict.IsDevelopmentOrDemo = false`.
 3. `FoundationIdentityOpenIddict.SigningKey` = base64 PKCS#8 RSA private key (generated with the command above),
    sourced from a secret store.
@@ -155,8 +157,8 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
       --project src/Apps/Elsa.Workbench
     ```
 
-    (The ASP.NET Core Identity feature's own `ApplicationIdentityDbContext` likewise relies on relational
-    migrations outside dev/demo; run `dotnet ef database update` for it too if you have not already.)
+    Groundwork Identity schema initialization is owned by the selected Groundwork provider; it does not require
+    an ASP.NET Core Identity EF migration step.
 
 If a required signing/encryption key is missing outside `IsDevelopmentOrDemo`, the host throws at startup with a
 message naming the setting to configure — a missing key never silently degrades to an insecure default.

@@ -122,6 +122,18 @@ public sealed class IdentityCompatibilityComparerTests
                             obj[property] = $"<{property}>";
                     if (obj["roles"] is JsonArray roles && roles.Count > 0)
                         obj["roles"] = new JsonArray("<role>");
+                    // Permissions are a set in AuthSession; normalize storage-provider iteration order before
+                    // comparing the protocol payload with the historical EF-backed observation.
+                    if (obj["permissions"] is JsonArray permissions &&
+                        permissions.All(value => value is JsonValue jsonValue && jsonValue.TryGetValue<string>(out _)))
+                    {
+                        var orderedPermissions = new JsonArray();
+                        foreach (var permission in permissions
+                                     .Select(value => value!.GetValue<string>())
+                                     .OrderBy(value => value, StringComparer.Ordinal))
+                            orderedPermissions.Add(permission);
+                        obj["permissions"] = orderedPermissions;
+                    }
                     return CompatibilityJson.Canonicalize(obj);
                 }
             }

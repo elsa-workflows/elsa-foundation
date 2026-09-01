@@ -97,7 +97,7 @@ A Postgres-flavored curated example lives in the repo at
 [`docker/compose/elsa-workbench.shells.json`](../docker/compose/elsa-workbench.shells.json).
 
 > Keep the identity features (`FoundationIdentity*`) and `FastEndpoints` if you want to log in from
-> Studio; the seeded admin comes from `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore`.
+> Studio; the seeded admin comes from `FoundationIdentityAspNetCoreIdentityGroundwork`.
 
 ### Mount it — two modes
 

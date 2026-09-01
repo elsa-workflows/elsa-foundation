@@ -6,7 +6,7 @@ namespace Elsa.Workbench.OpenIddict.Sqlite;
 /// <summary>
 /// Design-time factory for <see cref="OpenIddictIdentityDbContext"/> so <c>dotnet ef migrations</c> can build
 /// the model without the full application host. Accepts an optional <c>--connectionString &lt;value&gt;</c>
-/// argument, defaulting to the shared identity database file. Mirrors the identity module's factory.
+/// argument, defaulting to the Workbench token database file.
 /// </summary>
 public sealed class OpenIddictIdentityDbContextFactory : IDesignTimeDbContextFactory<OpenIddictIdentityDbContext>
 {

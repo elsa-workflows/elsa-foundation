@@ -29,7 +29,6 @@ namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjec
 public static class AspNetCoreIdentityGroundworkRegistration
 {
     private const string GroundworkAuthority = "FoundationIdentityAspNetCoreIdentityGroundwork";
-    private const string FrozenEntityFrameworkAuthority = "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore";
     private const string UnmarkedFrameworkStoreAuthority = "UnmarkedAspNetCoreIdentityUserOrRoleStore";
 
     public static IServiceCollection AddFoundationAspNetCoreIdentityGroundwork(this IServiceCollection services) =>
@@ -47,9 +46,6 @@ public static class AspNetCoreIdentityGroundworkRegistration
     {
         services.SelectIdentityPersistenceAuthority(
             GroundworkAuthority,
-            new IdentityAuthorityCompatibility(
-                FrozenEntityFrameworkAuthority,
-                IsFrozenEntityFrameworkIdentityDescriptor),
             new IdentityAuthorityCompatibility(
                 UnmarkedFrameworkStoreAuthority,
                 IsUnmarkedFrameworkStoreDescriptor));
@@ -122,11 +118,6 @@ public static class AspNetCoreIdentityGroundworkRegistration
         services.AddScoped<TService, TImplementation>();
     }
 
-    private static bool IsFrozenEntityFrameworkIdentityDescriptor(ServiceDescriptor descriptor) =>
-        IsFrozenEntityFrameworkIdentityType(descriptor.ServiceType) ||
-        IsFrozenEntityFrameworkIdentityType(descriptor.ImplementationType) ||
-        IsFrozenEntityFrameworkIdentityType(descriptor.ImplementationInstance?.GetType());
-
     private static bool IsUnmarkedFrameworkStoreDescriptor(ServiceDescriptor descriptor)
     {
         var isFrameworkStore = descriptor.ServiceType == typeof(IUserStore<AspNetCoreIdentityUser>) ||
@@ -135,15 +126,8 @@ public static class AspNetCoreIdentityGroundworkRegistration
             return false;
 
         return !IsGroundworkIdentityStoreType(descriptor.ImplementationType) &&
-               !IsGroundworkIdentityStoreType(descriptor.ImplementationInstance?.GetType()) &&
-               !IsFrozenEntityFrameworkIdentityType(descriptor.ImplementationType) &&
-               !IsFrozenEntityFrameworkIdentityType(descriptor.ImplementationInstance?.GetType());
+               !IsGroundworkIdentityStoreType(descriptor.ImplementationInstance?.GetType());
     }
-
-    private static bool IsFrozenEntityFrameworkIdentityType(Type? type) =>
-        type?.FullName?.StartsWith(
-            "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.",
-            StringComparison.Ordinal) == true;
 
     private static bool IsGroundworkIdentityStoreType(Type? type) =>
         type == typeof(GroundworkIdentityUserStore) || type == typeof(GroundworkIdentityRoleStore);
