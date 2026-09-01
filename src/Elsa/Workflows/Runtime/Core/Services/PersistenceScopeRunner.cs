@@ -1,6 +1,8 @@
 using System.Runtime.ExceptionServices;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Persistence.Core.DependencyInjection;
+namespace Elsa.Workflows.Runtime.Core.Services;
 
 internal sealed class PersistenceScopeRunner(
     IPersistenceScopeSource scopeSource,

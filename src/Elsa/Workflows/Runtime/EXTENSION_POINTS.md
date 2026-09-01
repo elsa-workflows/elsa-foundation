@@ -34,6 +34,35 @@ types (`*Service`, `*Handler`, `*Dispatcher`, `*Drainer`, `*Orchestrator`, `*Mat
 `*Committer`, `*Scheduler`, `*Router`, `*Pipeline`, `*Session`, `*Scanner`, `*Processor`, and
 `InMemory*`) from moving back into the `.Core` assembly.
 
+## Persistence access and scope contracts
+
+Provider-neutral persistence access and scope selection are runtime-domain contracts because they
+are consumed by the runtime `I*Store` surface as well as design, publishing, identity, and
+provider adapters. They live in `Elsa.Workflows.Runtime.Core.Contracts` and
+`Elsa.Workflows.Runtime.Core.Models`; no contract in this layer depends on Groundwork or another
+storage provider.
+
+### `IPersistenceAccessContextAccessor` / `IPersistenceAccessContextBinder`
+
+The scoped accessor exposes the immutable `PersistenceAccessContext` selected for the current
+request or operation. A transported/background operation binds one context exactly once through
+the paired binder. Hosts replacing the accessor must replace both contracts with the same scoped
+state holder and must preserve fail-closed scope and privilege validation.
+
+### `IPersistenceOperationScopeFactory` / `IPersistenceScopeSource` / `IPersistenceScopeRunner`
+
+These host-lifetime bridges create fresh async DI scopes, supply a finite duplicate-free
+`PersistenceScope` snapshot, and run one ordinary operation per partition. The default
+`AddPersistenceCore` registration is implemented by Runtime.Core and remains provider-neutral;
+providers only replace the contracts when they own an equivalent boundary.
+
+### `AddPersistenceCore`
+
+`AddPersistenceCore(IServiceCollection, string defaultScope = PersistenceScope.DefaultValue)`
+registers the scoped default access context and singleton scope bridges with `TryAdd*`. It does
+not select a database provider or grant privileged, global, or cross-scope access. Provider
+adapters validate and translate the selected context at their own persistence boundary.
+
 ---
 
 ## Overridable replacement contracts

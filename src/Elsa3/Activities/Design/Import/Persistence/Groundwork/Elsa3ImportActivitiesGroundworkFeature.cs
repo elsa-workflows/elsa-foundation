@@ -1,7 +1,8 @@
 using CShells.Features;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa3.Activities.Design.Import.Contracts;

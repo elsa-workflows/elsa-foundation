@@ -1,4 +1,4 @@
-namespace Elsa.Persistence.Core.Design;
+namespace Elsa.Workflows.Design.Persistence.Core.Exceptions;
 
 /// <summary>Identifies the design domain whose public persistence contract failed.</summary>
 public enum DesignPersistenceDomain

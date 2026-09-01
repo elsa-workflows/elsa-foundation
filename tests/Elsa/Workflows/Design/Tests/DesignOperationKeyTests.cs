@@ -1,7 +1,7 @@
-using Elsa.Persistence.Core.Design;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Xunit;
 
-namespace Elsa.Persistence.Core.Tests;
+namespace Elsa.Workflows.Design.Tests;
 
 public class DesignOperationKeyTests
 {

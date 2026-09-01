@@ -1,7 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 
-namespace Elsa.Persistence.Core.DependencyInjection;
+namespace Elsa.Workflows.Runtime.Core.Extensions;
 
 public static class PersistenceCoreServiceCollectionExtensions
 {

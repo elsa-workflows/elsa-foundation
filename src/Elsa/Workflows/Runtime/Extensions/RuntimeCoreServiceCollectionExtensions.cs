@@ -1,4 +1,4 @@
-using Elsa.Persistence.Core.DependencyInjection;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Builders;
 using Elsa.Workflows.Runtime.Core.Constants;

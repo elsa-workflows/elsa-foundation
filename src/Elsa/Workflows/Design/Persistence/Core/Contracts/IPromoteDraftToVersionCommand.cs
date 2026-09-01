@@ -1,5 +1,5 @@
-using Elsa.Persistence.Core.Design;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 

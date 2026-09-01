@@ -426,7 +426,7 @@ public sealed class ActivityDesignFeatureCompositionTests
     private sealed class StubAddActivityDefinitionCommand : IAddActivityDefinitionCommand
     {
         public Task<ActivityDefinitionCreated> Execute(
-            Elsa.Persistence.Core.Design.DesignOperationKey operationKey,
+            Elsa.Workflows.Design.Persistence.Core.Models.DesignOperationKey operationKey,
             ActivityDefinition definition,
             ActivityDefinitionVersion version,
             CancellationToken cancellation) =>
@@ -436,7 +436,7 @@ public sealed class ActivityDesignFeatureCompositionTests
     private sealed class StubAddActivityDefinitionVersionCommand : IAddActivityDefinitionVersionCommand
     {
         public Task<ActivityDefinitionVersionAdded> Execute(
-            Elsa.Persistence.Core.Design.DesignOperationKey operationKey,
+            Elsa.Workflows.Design.Persistence.Core.Models.DesignOperationKey operationKey,
             ActivityDefinitionVersion version,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(new ActivityDefinitionVersionAdded(version.DefinitionId, version.Id, version.Version, version.Hash));

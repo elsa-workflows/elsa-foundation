@@ -9,7 +9,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="Core\Elsa.Workflows.Runtime.Core.csproj" />
-    <ProjectReference Include="..\..\Persistence\Core\Elsa.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
     <ProjectReference Include="..\..\Tasks\Schedules\Elsa.Tasks.Schedules.csproj" />
   </ItemGroup>

@@ -5,7 +5,8 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Stores;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
-using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Foundation.Identity.Tests.AspNetCoreIdentity.Differential;

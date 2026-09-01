@@ -6,8 +6,10 @@ using Elsa.Activities.Design.Persistence.Core.Constants;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Locking.Core;
-using Elsa.Persistence.Core;
-using Elsa.Persistence.Core.Design;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 

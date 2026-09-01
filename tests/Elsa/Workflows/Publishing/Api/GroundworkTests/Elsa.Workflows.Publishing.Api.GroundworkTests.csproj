@@ -68,7 +68,6 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Publishing\Persistence\Groundwork\Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\V2\Elsa.Persistence.Groundwork.V2.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Primitives\Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Mediator\Core\Elsa.Mediator.Core.csproj" />

@@ -1,4 +1,4 @@
-namespace Elsa.Persistence.Core;
+namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
 /// Identifies one application persistence partition. The value is opaque to domain code and never

@@ -1,7 +1,7 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Events.Core.Contracts;
 using Elsa.Expressions.Core.Models;
-using Elsa.Persistence.Core.Design;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Core.Models;

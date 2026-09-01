@@ -1,6 +1,7 @@
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
-using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Store;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;

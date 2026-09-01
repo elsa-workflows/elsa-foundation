@@ -1,7 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Elsa.Persistence.Core.Design;
+using Elsa.Workflows.Design.Persistence.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork;
 

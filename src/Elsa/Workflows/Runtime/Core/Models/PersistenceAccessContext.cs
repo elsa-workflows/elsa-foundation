@@ -1,4 +1,4 @@
-namespace Elsa.Persistence.Core;
+namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
 /// Immutable scope and authorization selected before a persistence operation reaches a provider.

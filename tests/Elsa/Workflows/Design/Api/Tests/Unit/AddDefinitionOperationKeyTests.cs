@@ -1,5 +1,5 @@
 using Elsa.Primitives.Contracts;
-using Elsa.Persistence.Core.Design;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
