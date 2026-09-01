@@ -202,6 +202,14 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
             services.GetRequiredService<IPostCommitOutboxLookupStore>());
     }
 
+    /// <summary>Mints the recurring-trigger schedule contract from an isolated DI scope.</summary>
+    public IRecurringTriggerScheduleStore CreateRecurringScheduleClient()
+    {
+        var scope = provider.CreateAsyncScope();
+        scopes.Add(scope);
+        return scope.ServiceProvider.GetRequiredService<IRecurringTriggerScheduleStore>();
+    }
+
     /// <summary>Mints the trigger-binding and executable-source-reference contracts from one isolated DI scope.</summary>
     public RuntimeTriggerBindingStimulusLookupScope CreateTriggerBindingClient()
     {

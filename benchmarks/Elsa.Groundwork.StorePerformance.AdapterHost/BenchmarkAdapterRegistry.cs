@@ -32,6 +32,8 @@ internal static class BenchmarkAdapterRegistry
                 new OutboxDrainAdapter(request, connectionString, outputDirectory),
             { WorkloadId: RuntimeTriggerBindingStimulusLookupWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: GroundworkV2Adapter, PhysicalForm: TriggerBindingStimulusLookupAdapter.PhysicalForm } =>
                 new TriggerBindingStimulusLookupAdapter(request, connectionString, outputDirectory),
+            { WorkloadId: RuntimeRecurringScheduleSelectionWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: GroundworkV2Adapter, PhysicalForm: RecurringScheduleSelectionAdapter.PhysicalForm } =>
+                new RecurringScheduleSelectionAdapter(request, connectionString, outputDirectory),
             _ => throw new PerformanceContractException(
                 $"No Groundwork adapter is registered for exact workload/adapter/physical form '{request.WorkloadId}/{request.Adapter}/{request.PhysicalForm}'.")
         };

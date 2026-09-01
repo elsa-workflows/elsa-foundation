@@ -61,6 +61,19 @@ public sealed class BenchmarkAdapterRegistryTests
     }
 
     [Fact]
+    public async Task Dispatches_recurring_schedule_selection_to_its_exact_groundwork_physical_form()
+    {
+        await using var adapter = BenchmarkAdapterRegistry.Create(
+            Request("recurring-schedule-selection", RecurringScheduleSelectionAdapter.PhysicalForm),
+            "unused",
+            "unused");
+
+        Assert.IsType<RecurringScheduleSelectionAdapter>(adapter);
+        var workload = WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()).Workloads["recurring-schedule-selection"];
+        Assert.Contains(RecurringScheduleSelectionAdapter.PhysicalForm, workload.PhysicalFormsFor646);
+    }
+
+    [Fact]
     public async Task Queue_drain_operations_are_not_admitted_before_correctness_preparation()
     {
         await using var adapter = BenchmarkAdapterRegistry.Create(
@@ -87,6 +100,19 @@ public sealed class BenchmarkAdapterRegistryTests
     {
         await using var adapter = BenchmarkAdapterRegistry.Create(
             Request("trigger-binding-stimulus-lookup", TriggerBindingStimulusLookupAdapter.PhysicalForm),
+            "unused",
+            "unused");
+
+        var exception = Assert.Throws<PerformanceContractException>(() => adapter.Operations);
+
+        Assert.Contains("before correctness preparation", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Recurring_schedule_selection_operations_are_not_admitted_before_correctness_preparation()
+    {
+        await using var adapter = BenchmarkAdapterRegistry.Create(
+            Request("recurring-schedule-selection", RecurringScheduleSelectionAdapter.PhysicalForm),
             "unused",
             "unused");
 
@@ -141,6 +167,9 @@ public sealed class BenchmarkAdapterRegistryTests
     [InlineData("trigger-binding-stimulus-lookup", "shared-documents-with-linked-index-tables", "groundwork-v2")]
     [InlineData("trigger-binding-stimulus-lookup", "linked-executable-source-reference-index", "other-adapter")]
     [InlineData("trigger-binding-stimulus-lookup", "linked-executable-source-reference-index", "groundwork-v2", "9.9.9")]
+    [InlineData("recurring-schedule-selection", "shared-documents-with-linked-index-tables", "groundwork-v2")]
+    [InlineData("recurring-schedule-selection", "dedicated-recurring-schedule-documents", "other-adapter")]
+    [InlineData("recurring-schedule-selection", "dedicated-recurring-schedule-documents", "groundwork-v2", "9.9.9")]
     public void Refuses_unregistered_workload_adapter_and_physical_form_without_fallback(
         string workloadId,
         string physicalForm,
