@@ -38,51 +38,91 @@ public sealed class GroundworkV2WorkflowExecutableStore : IWorkflowExecutableSto
 
     public async ValueTask SaveAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default)
     {
-        GroundworkV2WorkflowExecutableStorageConventions.Validate(executable);
+        await SaveBatchAsync([executable], cancellationToken);
+    }
+
+    public async ValueTask SaveBatchAsync(
+        IReadOnlyList<WorkflowExecutable> executables,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(executables);
         cancellationToken.ThrowIfCancellationRequested();
-        var key = GroundworkRuntimeRowStore.Key(executable.Identity.ArtifactId);
-        var current = OpenExecutable().Read(key);
-        if (current is not null)
-        {
-            _ = GroundworkV2WorkflowExecutableStorageConventions.Deserialize(current.Values.Values);
-            var coordination = OpenCoordination().Read(key);
-            if (coordination is null)
-                throw new InvalidDataException($"Workflow executable '{executable.Identity.ArtifactId}' has no current coordination row.");
-            _ = GroundworkV2WorkflowExecutableStorageConventions.DeserializeCoordination(
-                coordination.Values.Values,
-                executable.Identity.ArtifactId);
-            return;
-        }
+        foreach (var executable in executables)
+            GroundworkV2WorkflowExecutableStorageConventions.Validate(executable);
 
-        RequireAtomicCommit();
-        using var unitOfWork = BeginAtomicUnitOfWork();
-        unitOfWork.Stage(RowWrite.Insert(
-            executableUnit,
-            GroundworkV2WorkflowExecutableStorageConventions.Values(executable),
-            WriteOptions.CreateOnly));
-        unitOfWork.Stage(RowWrite.Insert(
-            coordinationUnit,
-            GroundworkV2WorkflowExecutableStorageConventions.EmptyCoordinationValues(executable.Identity.ArtifactId),
-            WriteOptions.CreateOnly));
-        BatchWriteReport report;
-        try
+        if (executables.Select(executable => executable.Identity.ArtifactId).Distinct(StringComparer.Ordinal).Count() != executables.Count)
+            throw new ArgumentException("A workflow executable batch must contain distinct artifact ids.", nameof(executables));
+        if (executables.Count == 0)
+            return;
+
+        for (var attempt = 0; attempt < 32; attempt++)
         {
-            report = await CommitAsync(unitOfWork, cancellationToken);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            if (HasCompleteWinningArtifact(executable.Identity.ArtifactId))
+            cancellationToken.ThrowIfCancellationRequested();
+            var executableSession = OpenExecutable();
+            var coordinationSession = OpenCoordination();
+            var missing = new List<WorkflowExecutable>();
+            foreach (var executable in executables)
+            {
+                var artifactId = executable.Identity.ArtifactId;
+                var key = GroundworkRuntimeRowStore.Key(artifactId);
+                var current = executableSession.Read(key);
+                var coordination = coordinationSession.Read(key);
+                if (current is null && coordination is null)
+                {
+                    missing.Add(executable);
+                    continue;
+                }
+
+                if (current is null || coordination is null)
+                    throw new InvalidDataException($"Workflow executable '{artifactId}' has incomplete current storage state.");
+                _ = GroundworkV2WorkflowExecutableStorageConventions.Deserialize(current.Values.Values);
+                _ = GroundworkV2WorkflowExecutableStorageConventions.DeserializeCoordination(
+                    coordination.Values.Values,
+                    artifactId);
+            }
+
+            if (missing.Count == 0)
                 return;
-            throw;
-        }
-        if (report.IsSuccessful)
-            return;
 
-        if (HasCompleteWinningArtifact(executable.Identity.ArtifactId))
-            return;
+            RequireAtomicCommit();
+            using var unitOfWork = BeginAtomicUnitOfWork();
+            foreach (var executable in missing)
+            {
+                unitOfWork.Stage(RowWrite.Insert(
+                    executableUnit,
+                    GroundworkV2WorkflowExecutableStorageConventions.Values(executable),
+                    WriteOptions.CreateOnly));
+                unitOfWork.Stage(RowWrite.Insert(
+                    coordinationUnit,
+                    GroundworkV2WorkflowExecutableStorageConventions.EmptyCoordinationValues(executable.Identity.ArtifactId),
+                    WriteOptions.CreateOnly));
+            }
+
+            BatchWriteReport report;
+            try
+            {
+                report = await CommitAsync(unitOfWork, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                if (executables.All(executable => HasCompleteWinningArtifact(executable.Identity.ArtifactId)))
+                    return;
+                throw;
+            }
+
+            if (report.IsSuccessful)
+                return;
+
+            var winningArtifactCount = executables.Count(executable =>
+                HasCompleteWinningArtifact(executable.Identity.ArtifactId));
+            if (winningArtifactCount == executables.Count)
+                return;
+            if (winningArtifactCount == 0)
+                throw RejectedBatch(executables);
+        }
 
         throw new InvalidOperationException(
-            $"Groundwork rejected workflow executable '{executable.Identity.ArtifactId}' without a complete winning artifact.");
+            "Groundwork could not atomically save the workflow executable batch after repeated concurrent changes.");
     }
 
     public ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default)
@@ -563,4 +603,9 @@ public sealed class GroundworkV2WorkflowExecutableStore : IWorkflowExecutableSto
 
     private static InvalidOperationException ConcurrentChange(string artifactId) =>
         new($"Workflow executable coordination for '{artifactId}' changed too frequently; retry the operation.");
+
+    private static InvalidOperationException RejectedBatch(IReadOnlyList<WorkflowExecutable> executables) =>
+        new(
+            $"Groundwork rejected workflow executable batch '{string.Join(", ", executables.Select(executable => executable.Identity.ArtifactId))}' " +
+            "without a complete winning artifact.");
 }

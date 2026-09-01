@@ -23,6 +23,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services;
 using Elsa.Workflows.Runtime.Scheduling;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -45,7 +46,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
     private readonly InMemoryWorkflowExecutableSourceReferenceStore _referenceStore = new();
     private readonly InMemoryWorkflowTriggerBindingStore _bindingStore = new();
     private readonly InMemoryRecurringTriggerScheduleStore _scheduleStore = new();
-    private readonly InMemoryPublicationSlotStore _slotStore = new();
+    private readonly InMemoryWorkflowActivationAuthority _activationAuthority = new();
     private readonly InMemoryPublicationRecordStore _publicationStore = new();
     private readonly InMemoryPublicationPolicyStore _policyStore = new();
     private readonly InMemoryPublicationProjectionIntentStore _intentStore = new();
@@ -107,8 +108,8 @@ public sealed class PublishWorkflowTriggerIndexingTests
             Assert.False(string.IsNullOrWhiteSpace(binding.StimulusHash));
         });
 
-        var publicationId = Assert.Single(bindings.Select(binding => binding.PublicationId).Distinct())!;
-        var schedule = (await _scheduleStore.ListByPublicationAsync(publicationId)).SingleOrDefault();
+        var publicationId = Assert.Single(bindings.Select(binding => binding.ActivationId).Distinct())!;
+        var schedule = (await _scheduleStore.ListByActivationAsync(publicationId)).SingleOrDefault();
         if (scenario.IsRecurring)
         {
             Assert.NotNull(schedule);
@@ -127,8 +128,8 @@ public sealed class PublishWorkflowTriggerIndexingTests
         var seededView = await FirstPartyHandler(scenario, scenario.ValidInputs)
             .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
         var seededBindings = await _bindingStore.ListAllByArtifactAsync(seededView.ArtifactId);
-        var seededPublicationId = Assert.Single(seededBindings.Select(binding => binding.PublicationId).Distinct())!;
-        var seededSchedule = (await _scheduleStore.ListByPublicationAsync(seededPublicationId)).SingleOrDefault();
+        var seededPublicationId = Assert.Single(seededBindings.Select(binding => binding.ActivationId).Distinct())!;
+        var seededSchedule = (await _scheduleStore.ListByActivationAsync(seededPublicationId)).SingleOrDefault();
 
         await AssertInvalidPublicationAsync(scenario, () =>
             FirstPartyHandler(scenario, scenario.InvalidInputs)
@@ -139,7 +140,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
             (await _bindingStore.ListAllByArtifactAsync(seededView.ArtifactId)).OrderBy(x => x.TriggerBindingId));
         Assert.Equal(
             seededSchedule,
-            (await _scheduleStore.ListByPublicationAsync(seededPublicationId)).SingleOrDefault());
+            (await _scheduleStore.ListByActivationAsync(seededPublicationId)).SingleOrDefault());
     }
 
     [Theory]
@@ -333,14 +334,29 @@ public sealed class PublishWorkflowTriggerIndexingTests
         IWorkflowTriggerIndexer indexer,
         Type? clrType = null)
     {
-        var reconciler = new PublicationProjectionReconciler(
-            _intentStore,
-            _executableStore,
+        // The activation coordinator commits trigger bindings and recurring schedules as one serving
+        // projection. Even scenarios without recurring providers must prepare the intentionally empty
+        // schedule side so the coordinator can distinguish it from a partial projection write.
+        if (indexer is not RecurringTriggerScheduleIndexer)
+        {
+            indexer = new RecurringTriggerScheduleIndexer(
+                indexer,
+                [],
+                _scheduleStore,
+                new RecurringScheduleCalculator(),
+                TimeProvider.System,
+                NullLogger<RecurringTriggerScheduleIndexer>.Instance);
+        }
+
+        var coordinator = new WorkflowActivationCoordinator(
+            _activationAuthority,
+            _referenceStore,
+            TestRootWriteLeases.Create(_executableStore),
+            TimeProvider.System,
             indexer,
             _bindingStore,
-            TimeProvider.System,
             _scheduleStore);
-        var activator = new PublicationActivator(_slotStore, _publicationStore, reconciler, TimeProvider.System);
+        var activator = new PublicationActivator(coordinator, _publicationStore, TimeProvider.System);
         return new PublishWorkflowRequestHandler(
             Compiler(workflowVersion, triggerActivity, clrType),
             _executableStore,
@@ -348,10 +364,9 @@ public sealed class PublishWorkflowTriggerIndexingTests
             extractor,
             _bindingStore,
             new NullLayoutStore(),
-            TestRootWriteLeases.Create(_executableStore),
+            _activationAuthority,
             _policyStore,
             new PublicationPolicyResolver(),
-            _slotStore,
             _publicationStore,
             new PublicationPreflightService(),
             activator,

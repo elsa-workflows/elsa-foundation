@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
@@ -48,6 +49,11 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStoreTests
         };
         var retired = Reference("ref-retired", "artifact-b", WorkflowExecutableReferenceScope.Published)
             .Retire(now.AddMinutes(-2), "replaced");
+        var neighbouringVersion = Reference(
+            "ref-neighbour",
+            "artifact-d",
+            WorkflowExecutableReferenceScope.Published,
+            definitionVersionId: "definition-version-2");
 
         await store.SaveAsync(live);
         await store.SaveAsync(expired);
@@ -81,6 +87,25 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStoreTests
             (await store.ListPageAsync(new WorkflowExecutableSourceReferencePageQuery(
                 liveOnly: true,
                 now: now))).Items.Select(reference => reference.SourceReferenceId));
+        await store.SaveAsync(neighbouringVersion);
+        var versionFirst = await store.ListByDefinitionVersionPageAsync(
+            new WorkflowExecutableSourceReferenceDefinitionVersionPageQuery("definition-version-1", limit: 1));
+        Assert.Equal(["ref-expired"], versionFirst.Items.Select(reference => reference.SourceReferenceId));
+        Assert.NotNull(versionFirst.NextContinuationToken);
+        var versionSecond = await store.ListByDefinitionVersionPageAsync(
+            new WorkflowExecutableSourceReferenceDefinitionVersionPageQuery(
+                "definition-version-1", limit: 1, versionFirst.NextContinuationToken));
+        Assert.Equal(["ref-live"], versionSecond.Items.Select(reference => reference.SourceReferenceId));
+        Assert.NotNull(versionSecond.NextContinuationToken);
+        var versionThird = await store.ListByDefinitionVersionPageAsync(
+            new WorkflowExecutableSourceReferenceDefinitionVersionPageQuery(
+                "definition-version-1", limit: 1, versionSecond.NextContinuationToken));
+        Assert.Equal(["ref-retired"], versionThird.Items.Select(reference => reference.SourceReferenceId));
+        Assert.Null(versionThird.NextContinuationToken);
+        Assert.DoesNotContain(
+            "ref-neighbour",
+            (await store.ListAllByDefinitionVersionAsync("definition-version-1"))
+                .Select(reference => reference.SourceReferenceId));
         Assert.Equal(
             ["artifact-b", "artifact-c"],
             await store.ListUnreferencedArtifactIdsAsync(
@@ -171,6 +196,98 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStoreTests
         Assert.Equal("done", stillRetired.DeletedReason);
     }
 
+    [Fact]
+    public async Task Try_retire_requires_the_exact_live_snapshot()
+    {
+        await using var runtime = NativeProviderRuntime.Create();
+        using var connection = runtime.OpenConnection();
+        var unit = ElsaRuntimeV2StorageManifest.Require(
+            ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDocumentKind);
+        connection.Schema.Apply(unit);
+        var store = new GroundworkV2WorkflowExecutableSourceReferenceStore(
+            new DirectSessionSource(connection, unit),
+            new TestAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+        var original = Reference("ref-try-retire", "artifact-before", WorkflowExecutableReferenceScope.Published);
+        await store.SaveAsync(original);
+
+        var retiredAt = new DateTimeOffset(2026, 8, 17, 14, 0, 0, TimeSpan.Zero);
+        var stale = original with { SourceVersion = "stale" };
+        Assert.False(await store.TryRetireAsync(stale, stale.Retire(retiredAt, "activation-failed")));
+        Assert.Null((await store.FindAsync(original.SourceReferenceId))!.DeletedAt);
+
+        var retired = original.Retire(retiredAt, "activation-failed");
+        Assert.True(await store.TryRetireAsync(original, retired));
+        Assert.False(await store.TryRetireAsync(original, retired));
+        var stored = await store.FindAsync(original.SourceReferenceId);
+        Assert.Equal(retiredAt, stored!.DeletedAt);
+        Assert.Equal("activation-failed", stored.DeletedReason);
+    }
+
+    [Fact]
+    public async Task Try_restore_requires_the_expected_retired_snapshot_and_restores_live_reference()
+    {
+        await using var runtime = NativeProviderRuntime.Create();
+        using var connection = runtime.OpenConnection();
+        var unit = ElsaRuntimeV2StorageManifest.Require(
+            ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDocumentKind);
+        connection.Schema.Apply(unit);
+        var source = new DirectSessionSource(connection, unit);
+        var store = new GroundworkV2WorkflowExecutableSourceReferenceStore(
+            source,
+            new TestAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+        var original = Reference("ref-restore", "artifact-before", WorkflowExecutableReferenceScope.TestRun);
+        await store.SaveAsync(original);
+
+        var retiredAt = new DateTimeOffset(2026, 8, 17, 14, 0, 0, TimeSpan.Zero);
+        Assert.True(await store.RetireAsync(original.SourceReferenceId, retiredAt, "activation-replaced"));
+        var retired = await store.FindAsync(original.SourceReferenceId);
+        Assert.NotNull(retired);
+        Assert.True(await store.TryRestoreAsync(retired!, original));
+        var restored = await store.FindAsync(original.SourceReferenceId);
+        Assert.Equal(original.ArtifactId, restored!.ArtifactId);
+        Assert.Null(restored.DeletedAt);
+
+        Assert.True(await store.RetireAsync(original.SourceReferenceId, retiredAt.AddMinutes(1), "activation-replaced"));
+        var expected = await store.FindAsync(original.SourceReferenceId);
+        var raw = source.Open(unit.Id.Value, StorageAccess.Scoped(new StorageScope("tenant-a")));
+        var changed = expected! with
+        {
+            Layout = [new WorkflowExecutableLayoutRecord("node-1", 42, 43, 120, 80, JsonSerializer.SerializeToElement(new { changed = true }))],
+            LayoutSidecar = new ExecutableLayoutSidecar([
+                new ExecutableLayoutBoundarySegment(
+                    "boundary-1",
+                    new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.TemplateBoundary, "boundary-1")]),
+                    "template-v2",
+                    [new ExecutableActivityLayoutRecord(
+                        "template-node",
+                        "authored-node-1",
+                        "node-1",
+                        42,
+                        43,
+                        ActivityType: "test/activity",
+                        ActivityTypeVersion: "2.0.0",
+                        HasPinnedGeometry: false)],
+                    [new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.NestedPlacement, "nested-1")])])
+            ]),
+            AuthoredInputs = [new WorkflowExecutableAuthoredInputRecord(
+                "node-1",
+                "input",
+                "json",
+                JsonSerializer.SerializeToElement(new { value = 1 }))],
+            ActivityPresentation = [new WorkflowExecutableActivityPresentationRecord("node-1", "Changed display", "Changed description")]
+        };
+        Assert.True(raw.Update(
+                GroundworkV2WorkflowExecutableSourceReferenceStorageConventions.Values(changed),
+                WriteOptions.Unconditional)
+            .Succeeded);
+
+        Assert.False(await store.TryRestoreAsync(expected!, original));
+        var stillRetired = await store.FindAsync(original.SourceReferenceId);
+        Assert.Equal(expected.DeletedReason, stillRetired!.DeletedReason);
+        Assert.True(WorkflowExecutableSourceReferenceComparer.SameIdentity(changed, stillRetired));
+        Assert.NotNull(stillRetired.DeletedAt);
+    }
+
     [SkippableTheory]
     [MemberData(nameof(Providers))]
     public async Task Native_provider_matrix_round_trips_source_reference(string providerName)
@@ -249,7 +366,8 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStoreTests
     private static WorkflowExecutableSourceReference Reference(
         string id,
         string artifactId,
-        WorkflowExecutableReferenceScope scope) =>
+        WorkflowExecutableReferenceScope scope,
+        string definitionVersionId = "definition-version-1") =>
         new(
             id,
             artifactId,
@@ -257,7 +375,7 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStoreTests
             $"source-{id}",
             "1",
             "definition-1",
-            "definition-version-1",
+            definitionVersionId,
             "artifact-version-1",
             new DateTimeOffset(2026, 8, 17, 10, 0, 0, TimeSpan.Zero),
             scope == WorkflowExecutableReferenceScope.Published

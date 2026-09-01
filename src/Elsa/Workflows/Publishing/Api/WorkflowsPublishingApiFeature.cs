@@ -73,6 +73,10 @@ public class WorkflowsPublishingApiFeature : IWebShellFeature
         services.TryAddScoped<Handlers.IPublicationSlotUnpublisher, Handlers.UnpublishPublicationSlotRequestHandler>();
         services.TryAddScoped<Handlers.IPublicationSlotRestorer, Handlers.RestorePublicationSlotRequestHandler>();
         services.TryAddScoped<IRuntimeRequirementPreflight>(provider => provider.GetRequiredService<RuntimeRequirementPreflight>());
+        // Export targets are fan-in: a future folder or blob target contributes alongside the safe built-in
+        // download target rather than replacing it.
+        services.TryAddEnumerable(
+            ServiceDescriptor.Scoped<IWorkflowArtifactExportTarget, DownloadWorkflowArtifactExportTarget>());
         // Endpoint failure rendering and translation, keyed by the owner so hosts composing several
         // modules keep each module's own problem shapes.
         services.TryAddKeyedSingleton<IEndpointProblemWriter, Endpoints.WorkflowPublishingProblemWriter>(WorkflowsPublishingApi.OwnerId);

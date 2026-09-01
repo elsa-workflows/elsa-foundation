@@ -287,14 +287,14 @@ public sealed class EndpointSecurityTests
     }
 
     [Fact]
-    public void Publishing_minimal_api_declares_23_owned_secure_routes_with_one_catalog_action_each()
+    public void Publishing_minimal_api_declares_22_owned_secure_routes_with_one_catalog_action_each()
     {
         using var serviceProvider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(serviceProvider);
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
         var endpoints = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
 
-        Assert.Equal(23, endpoints.Length);
+        Assert.Equal(22, endpoints.Length);
         foreach (var endpoint in endpoints)
         {
             var authorization = Assert.Single(endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>());

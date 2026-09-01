@@ -27,6 +27,7 @@ CShells__Shells__default__Features__WorkflowsRuntimeApi__WorkflowAlterationPaylo
 |---|---|
 | Executables | `GET /runtime/workflows/executables`, `GET /runtime/workflows/executables/{artifactId}`, `GET /runtime/workflows/executables/{artifactId}/provenance` |
 | Execution | `POST /runtime/workflows/executables/{artifactId}/execute`, `POST /runtime/workflows/stimuli` |
+| Activation slots | `GET /runtime/workflows/activation-slots/{definitionId}`, `GET /runtime/workflows/activation-slots/{definitionId}/{slotName}` |
 | Instances | `GET /runtime/workflows/instances`, `GET /runtime/workflows/instances/{workflowExecutionId}`, `GET .../incidents`, `GET .../activity-executions/{activityExecutionId}` |
 | Detached dispatches | `GET /runtime/workflows/dispatches?parentWorkflowExecutionId=...|childWorkflowExecutionId=...|status=...`, `GET /runtime/workflows/dispatches/{dispatchId}` |
 | Diagnostics | `GET/PUT /runtime/workflows/diagnostics/settings` |
@@ -39,6 +40,10 @@ Executable, provenance, instance, and diagnostics reads use `workflow-runtime.re
 Dispatch inspection is allowlist-only: it exposes lifecycle/linkage, child artifact/source type, input name/type capture descriptors, timestamps, and classified diagnostic code/category. It never serializes raw input/output values, tenant/partition/authority context, arbitrary metadata, exception messages, or stack traces.
 
 Provenance is deliberately read-only here. Publishing owns creation and retirement of publication/test-run references, while Runtime owns artifact retention and garbage collection.
+
+Activation slots are the runtime-owned ledger for the live activation of a `(definitionId, slotName)` pair.
+The read-only views expose the slot identity, active activation, source ownership, revision, and update time;
+they do not join to publishing records. Runtime deliberately exposes no deactivation endpoint.
 
 ## Alteration plan API
 

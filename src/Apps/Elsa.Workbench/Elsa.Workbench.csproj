@@ -148,6 +148,12 @@
 			artifacts. Scheduling is host policy — the runtime resolves the GC service regardless.
 		-->
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\ReferenceGarbageCollection\Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj" />
+		<!--
+			Portable executable import (#1304). Hosts opt in by enabling JsonWorkflowArtifactReconciliation with
+			a folder or ordered file list; keeping the assembly in Workbench's feature catalog makes that runtime-only
+			deployment shape testable without composing Design or Publishing into the target shell.
+		-->
+		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Reconciliation\Elsa.Workflows.Runtime.Reconciliation.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
 		<!--
 			Engine self-instrumentation (MS-9): swaps the no-op IWorkflowEngineTracer for the ActivitySource-backed

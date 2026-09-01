@@ -67,7 +67,7 @@ public sealed class PublicationSnapshotReviewService(TimeProvider timeProvider, 
                 requestedSlotName,
                 requestedExpectedPublicationId,
                 plan.Slot?.Revision ?? 0,
-                plan.Slot?.ActivePublicationId,
+                plan.Slot?.ActiveActivationId,
                 tenantId,
                 now.Add(Lifetime));
             if (await store.TryAddAsync(review, cancellationToken))
@@ -123,7 +123,7 @@ public sealed class PublicationSnapshotReviewService(TimeProvider timeProvider, 
                         review.PolicySource == resolved.PolicySource &&
                         review.PolicyRevision == resolved.PolicyRevision &&
                         review.SlotRevision == (currentPlan.Slot?.Revision ?? 0) &&
-                        StringComparer.Ordinal.Equals(review.ActivePublicationId, currentPlan.Slot?.ActivePublicationId);
+                        StringComparer.Ordinal.Equals(review.ActivePublicationId, currentPlan.Slot?.ActiveActivationId);
         if (!isCurrent || !await store.TryConsumeAsync(preflightToken, cancellationToken))
             throw PublicationSnapshotReviewException.Stale();
     }

@@ -84,6 +84,7 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature
             });
         }
         services.TryAddScoped<WorkflowExecutableInspector>();
+        services.TryAddScoped<WorkflowActivationSlotInspectionService>();
 
         // The operation seams the endpoint classes dispatch to. Registered against the concrete
         // services so a replacement of either registration keeps the other coherent.

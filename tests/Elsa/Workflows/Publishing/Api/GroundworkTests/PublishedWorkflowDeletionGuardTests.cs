@@ -9,6 +9,7 @@ using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.GroundworkTests;
@@ -23,7 +24,7 @@ public sealed class PublishedWorkflowDeletionGuardTests
     private const string DefinitionId = "definition-1";
     private static readonly DateTimeOffset Now = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
-    private readonly InMemoryPublicationSlotStore _slots = new();
+    private readonly InMemoryWorkflowActivationAuthority _slots = new();
     private readonly InMemoryWorkflowExecutableSourceReferenceStore _references = new();
     private readonly PublishedWorkflowDeletionGuard _guard;
 
@@ -31,7 +32,13 @@ public sealed class PublishedWorkflowDeletionGuardTests
         _guard = new(_slots, _references, TimeProvider.System);
 
     private Task ActivateSlot() =>
-        _slots.TryActivateAsync(DefinitionId, "default", "publication-1", 0, Now).AsTask();
+        _slots.TryActivateAsync(new WorkflowActivationSlotRequest(
+            DefinitionId,
+            "default",
+            "publication-1",
+            WorkflowActivationSource.Publishing,
+            0,
+            Now)).AsTask();
 
     private Task SaveReference(string sourceReferenceId = "reference-1", DateTimeOffset? deletedAt = null) =>
         _references.SaveAsync(new WorkflowExecutableSourceReference(
@@ -76,7 +83,12 @@ public sealed class PublishedWorkflowDeletionGuardTests
         await ActivateSlot();
         await SaveReference();
 
-        await _slots.TryUnpublishAsync(DefinitionId, "default", 1, Now);
+        await _slots.TryDeactivateAsync(
+            DefinitionId,
+            "default",
+            WorkflowActivationSource.Publishing,
+            1,
+            Now);
         await _references.RetireAsync("reference-1", Now, "publication-unpublished");
 
         await _guard.EnsureCanDeleteAsync(DefinitionId);
@@ -137,7 +149,12 @@ public sealed class PublishedWorkflowDeletionGuardTests
             delete.Execute(new DesignOperationKey("published-delete-blocked"), DefinitionId));
         Assert.NotNull(await definitions.FindByIdAsync(DefinitionId));
 
-        await _slots.TryUnpublishAsync(DefinitionId, "default", 1, Now);
+        await _slots.TryDeactivateAsync(
+            DefinitionId,
+            "default",
+            WorkflowActivationSource.Publishing,
+            1,
+            Now);
         await _references.RetireAsync("reference-1", Now, "publication-unpublished");
 
         await delete.Execute(new DesignOperationKey("published-delete-complete"), DefinitionId);

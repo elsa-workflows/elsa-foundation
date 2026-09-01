@@ -34,8 +34,8 @@ public sealed class PublicationProjectionReconcilerTests
         var intents = await fixture.IntentStore.ListByPublicationAsync(fixture.Publication.PublicationId);
         Assert.Equal(6, intents.Count);
         Assert.All(intents, intent => Assert.Equal(PublicationProjectionIntentStatus.Delivered, intent.Status));
-        Assert.Empty(await fixture.BindingStore.ListAllByPublicationAsync(fixture.Publication.PublicationId));
-        Assert.Empty(await fixture.ScheduleStore.ListByPublicationAsync(fixture.Publication.PublicationId));
+        Assert.Empty(await fixture.BindingStore.ListAllByActivationAsync(fixture.Publication.PublicationId));
+        Assert.Empty(await fixture.ScheduleStore.ListByActivationAsync(fixture.Publication.PublicationId));
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public sealed class PublicationProjectionReconcilerTests
     {
         var fixture = await Fixture.CreateAsync(_now);
         await fixture.Reconciler.PrepareAsync(fixture.Publication);
-        var candidateBinding = Assert.Single(await fixture.BindingStore.ListAllByPublicationAsync(fixture.Publication.PublicationId));
+        var candidateBinding = Assert.Single(await fixture.BindingStore.ListAllByActivationAsync(fixture.Publication.PublicationId));
         var restoredBinding = candidateBinding with
         {
             TriggerBindingId = WorkflowTriggerBinding.BuildId(
@@ -80,23 +80,23 @@ public sealed class PublicationProjectionReconcilerTests
                 candidateBinding.ArtifactId,
                 candidateBinding.ExecutableNodeId,
                 candidateBinding.StimulusHash),
-            PublicationId = "publication-old",
+            ActivationId = "publication-old",
             IsActive = false
         };
-        await fixture.BindingStore.PreparePublicationAsync("publication-old", [restoredBinding]);
-        var candidateSchedule = Assert.Single(await fixture.ScheduleStore.ListByPublicationAsync(fixture.Publication.PublicationId));
+        await fixture.BindingStore.PrepareActivationAsync("publication-old", [restoredBinding]);
+        var candidateSchedule = Assert.Single(await fixture.ScheduleStore.ListByActivationAsync(fixture.Publication.PublicationId));
         var restoredSchedule = candidateSchedule with
         {
             ScheduleId = RecurringTriggerSchedule.BuildId(
                 "publication-old",
                 candidateSchedule.ArtifactId,
                 "node-root"),
-            PublicationId = "publication-old",
+            ActivationId = "publication-old",
             IsActive = false
         };
-        await fixture.ScheduleStore.PreparePublicationAsync("publication-old", [restoredSchedule]);
-        await fixture.BindingStore.ActivatePublicationAsync("publication-old", replacedPublicationId: null);
-        await fixture.ScheduleStore.ActivatePublicationAsync("publication-old", replacedPublicationId: null);
+        await fixture.ScheduleStore.PrepareActivationAsync("publication-old", [restoredSchedule]);
+        await fixture.BindingStore.ActivateAsync("publication-old", replacedActivationId: null);
+        await fixture.ScheduleStore.ActivateAsync("publication-old", replacedActivationId: null);
         await fixture.Reconciler.ActivateAsync(fixture.Publication, "publication-old");
         fixture.Observer.Clear();
 
@@ -104,7 +104,7 @@ public sealed class PublicationProjectionReconcilerTests
 
         var visible = Assert.Single(fixture.Observer.VisiblePublicationsByNotification);
         Assert.Equal(new[] { "publication-old" }, visible);
-        Assert.Empty(await fixture.BindingStore.ListAllByPublicationAsync(fixture.Publication.PublicationId));
+        Assert.Empty(await fixture.BindingStore.ListAllByActivationAsync(fixture.Publication.PublicationId));
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public sealed class PublicationProjectionReconcilerTests
         await fixture.Reconciler.PrepareAsync(fixture.Publication);
         await fixture.Reconciler.ActivateAsync(fixture.Publication, replacedPublicationId: null);
         await fixture.Reconciler.RemoveAsync(fixture.Publication);
-        Assert.Empty(await fixture.BindingStore.ListAllByPublicationAsync(fixture.Publication.PublicationId));
+        Assert.Empty(await fixture.BindingStore.ListAllByActivationAsync(fixture.Publication.PublicationId));
 
         await fixture.Reconciler.RestoreAsync(fixture.Publication);
 
@@ -202,7 +202,7 @@ public sealed class PublicationProjectionReconcilerTests
         {
             var visible = await bindingStore.ListAllByStimulusTypeAsync("Event", cancellationToken);
             VisiblePublicationsByNotification.Add(visible
-                .Select(x => x.PublicationId!)
+                .Select(x => x.ActivationId!)
                 .OrderBy(x => x, StringComparer.Ordinal)
                 .ToArray());
         }
@@ -224,9 +224,9 @@ public sealed class PublicationProjectionReconcilerTests
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PreparePublicationAsync(
+        public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(
             WorkflowExecutable executable,
-            string publicationId,
+            string activationId,
             string slotId,
             CancellationToken cancellationToken = default)
         {
@@ -238,7 +238,7 @@ public sealed class PublicationProjectionReconcilerTests
             }
 
             var binding = new WorkflowTriggerBinding(
-                WorkflowTriggerBinding.BuildId(publicationId, executable.Identity.ArtifactId, "node-root", "orders"),
+                WorkflowTriggerBinding.BuildId(activationId, executable.Identity.ArtifactId, "node-root", "orders"),
                 executable.Identity.ArtifactId,
                 executable.Identity.DefinitionId,
                 executable.Identity.ArtifactVersion,
@@ -249,11 +249,11 @@ public sealed class PublicationProjectionReconcilerTests
                 CorrelationScope: null,
                 Metadata: new Dictionary<string, string>(),
                 CreatedAt: now,
-                PublicationId: publicationId,
+                ActivationId: activationId,
                 SlotId: slotId,
                 IsActive: false);
             var schedule = new RecurringTriggerSchedule(
-                RecurringTriggerSchedule.BuildId(publicationId, executable.Identity.ArtifactId, "node-root"),
+                RecurringTriggerSchedule.BuildId(activationId, executable.Identity.ArtifactId, "node-root"),
                 executable.Identity.ArtifactId,
                 "node-root",
                 "Event",
@@ -262,11 +262,11 @@ public sealed class PublicationProjectionReconcilerTests
                 "PT1H",
                 now.AddHours(1),
                 now,
-                PublicationId: publicationId,
+                ActivationId: activationId,
                 SlotId: slotId,
                 IsActive: false);
-            await bindingStore.PreparePublicationAsync(publicationId, [binding], cancellationToken);
-            await scheduleStore.PreparePublicationAsync(publicationId, [schedule], cancellationToken);
+            await bindingStore.PrepareActivationAsync(activationId, [binding], cancellationToken);
+            await scheduleStore.PrepareActivationAsync(activationId, [schedule], cancellationToken);
             return [binding];
         }
     }

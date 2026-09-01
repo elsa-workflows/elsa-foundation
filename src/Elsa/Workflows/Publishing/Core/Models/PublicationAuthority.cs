@@ -1,3 +1,5 @@
+using Elsa.Workflows.Runtime.Core.Models;
+
 namespace Elsa.Workflows.Publishing.Core.Models;
 
 /// <summary>The sole start authority for one named publication lane of a workflow definition.</summary>
@@ -42,11 +44,20 @@ public sealed record PublicationRecord(
     PublicationFailure? Failure,
     string SlotName = "default");
 
-public sealed record PublicationActivationRequest(PublicationRecord Candidate);
+/// <summary>One publishing request for the shared activation lifecycle.</summary>
+/// <remarks>
+/// The candidate is publishing's journal row; the executable and provenance-bearing source reference are what
+/// <see cref="IWorkflowActivationCoordinator"/> actually needs. Publishing supplies all three and owns none of
+/// the activation sequence.
+/// </remarks>
+public sealed record PublicationActivationRequest(
+    PublicationRecord Candidate,
+    WorkflowExecutable Executable,
+    WorkflowExecutableSourceReference Reference);
 
 public sealed record PublicationActivationResult(
     bool Succeeded,
     PublicationRecord Publication,
-    PublicationSlot Slot,
+    WorkflowActivationSlot Slot,
     PublicationFailure? Failure = null,
     string? ReplacedPublicationId = null);

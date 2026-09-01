@@ -21,8 +21,6 @@ public static class PublishingCompatibilityCases
         Route("ValueConversionProfiles.List", "GET", "publishing/value-conversion/profiles", "read", 200, "none"),
         Route("WorkflowPreflight", "POST", "publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/preflight", "read", 200, "PreflightWorkflowPublication"),
         Route("WorkflowSnapshotPreflight", "POST", "publishing/workflows/preflight", "read", 200, "PreflightWorkflowPublicationSnapshot"),
-        Route("PublicationSlots.List", "GET", "publishing/workflows/{definitionId}/slots", "read", 200, "ListPublicationSlots"),
-        Route("PublicationSlots.Get", "GET", "publishing/workflows/{definitionId}/slots/{slotName}", "read", 200, "GetPublicationSlot"),
         Route("PublicationSlots.Unpublish", "DELETE", "publishing/workflows/{definitionId}/slots/{slotName}", "manage", 200, "UnpublishPublicationSlotRequest"),
         Route("PublicationSlots.Restore", "POST", "publishing/workflows/{definitionId}/slots/{slotName}/restore", "manage", 200, "RestorePublicationSlotRequest"),
         Route("WorkflowPolicy.Get", "GET", "publishing/workflows/{definitionId}/policy", "read", 200, "GetWorkflowPublicationPolicy"),
@@ -62,7 +60,6 @@ public static class PublishingCompatibilityCases
 
     public static IReadOnlyList<HttpCompatibilityCase> Domain { get; } =
     [
-        Create(Find("PublicationSlots.Get"), "PublicationSlots.Get|trusted-domain-not-found", "trusted-domain-not-found", requestPath: "/publishing/workflows/missing-definition/slots/default"),
         Create(Find("WorkflowPolicy.Set"), "WorkflowPolicy.Set|trusted-domain-conflict", "trusted-domain-conflict", "{}"),
         Create(Find("WorkflowPublish"), "WorkflowPublish|trusted-domain-conflict", "trusted-domain-conflict", BodyFor(Find("WorkflowPublish"))),
         Create(Find("WorkflowPreflight"), "WorkflowPreflight|trusted-domain-validation", "trusted-domain-validation", "{\"action\":999}"),
@@ -179,8 +176,7 @@ public sealed record PublishingRoute(
         "ValueConversionProfiles.List" => "ValueConversionProfilesResponse",
         "WorkflowPreflight" => "PublicationPreflightView",
         "WorkflowSnapshotPreflight" => "PublicationSnapshotPreflightView",
-        "PublicationSlots.List" => "PublicationSlotListResponse",
-        "PublicationSlots.Get" or "PublicationSlots.Unpublish" or "PublicationSlots.Restore" => "PublicationSlotView",
+        "PublicationSlots.Unpublish" or "PublicationSlots.Restore" => "PublicationSlotView",
         "WorkflowPolicy.Get" or "WorkflowPolicy.Set" => "PublicationPolicyView",
         "WorkflowPublish" => "PublishedWorkflowView",
         "WorkflowTestRuns.Start" or "WorkflowTestRuns.StartDraft" => "WorkflowTestRunView",

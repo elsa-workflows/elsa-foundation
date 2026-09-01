@@ -1,6 +1,7 @@
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints;
 
@@ -27,6 +28,12 @@ internal static class PublicationSlotViews
         CancellationToken cancellationToken) =>
         PublicationSlotView.From(slot, await ResolveVisiblePublicationAsync(slot, publicationStore, cancellationToken));
 
+    public static async ValueTask<PublicationSlotView> ComposeAsync(
+        WorkflowActivationSlot slot,
+        IPublicationRecordStore publicationStore,
+        CancellationToken cancellationToken) =>
+        PublicationSlotView.From(slot, await ResolveVisiblePublicationAsync(slot, publicationStore, cancellationToken));
+
     private static async ValueTask<PublicationRecord?> ResolveVisiblePublicationAsync(
         PublicationSlot slot,
         IPublicationRecordStore publicationStore,
@@ -34,6 +41,19 @@ internal static class PublicationSlotViews
     {
         if (slot.ActivePublicationId is { } activePublicationId)
             return await publicationStore.FindAsync(activePublicationId, cancellationToken);
+        return (await publicationStore.ListBySlotAsync(slot.SlotId, cancellationToken))
+            .OrderByDescending(publication => publication.CreatedAt)
+            .ThenByDescending(publication => publication.PublicationId, StringComparer.Ordinal)
+            .FirstOrDefault();
+    }
+
+    private static async ValueTask<PublicationRecord?> ResolveVisiblePublicationAsync(
+        WorkflowActivationSlot slot,
+        IPublicationRecordStore publicationStore,
+        CancellationToken cancellationToken)
+    {
+        if (slot.ActiveActivationId is { } activeActivationId)
+            return await publicationStore.FindAsync(activeActivationId, cancellationToken);
         return (await publicationStore.ListBySlotAsync(slot.SlotId, cancellationToken))
             .OrderByDescending(publication => publication.CreatedAt)
             .ThenByDescending(publication => publication.PublicationId, StringComparer.Ordinal)

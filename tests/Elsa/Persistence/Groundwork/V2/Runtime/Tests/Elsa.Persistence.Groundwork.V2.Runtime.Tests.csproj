@@ -25,5 +25,6 @@
     <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Runtime/Attention/Elsa.Workflows.Runtime.Attention.csproj" />
     <ProjectReference Include="..\..\..\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
+    <ProjectReference Include="..\..\Testing\Elsa.Persistence.Groundwork.V2.Testing.csproj" />
   </ItemGroup>
 </Project>
