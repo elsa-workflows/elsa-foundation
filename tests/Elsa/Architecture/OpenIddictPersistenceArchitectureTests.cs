@@ -118,7 +118,6 @@ public sealed class OpenIddictPersistenceArchitectureTests
             project.Descendants("PackageReference"),
             element => string.Equals((string?)element.Attribute("Include"), "OpenIddict.EntityFrameworkCore", StringComparison.Ordinal));
         Assert.Contains("AddWorkbenchOpenIddictVendor", program, StringComparison.Ordinal);
-        Assert.Contains("CShells:Shells:default:Features:FoundationIdentityOpenIddict", program, StringComparison.Ordinal);
 
         var hostRegistration = File.ReadAllText(Path.Combine(
             RepoRoot,
@@ -126,6 +125,7 @@ public sealed class OpenIddictPersistenceArchitectureTests
             "Apps",
             "Elsa.Workbench",
             "WorkbenchOpenIddictVendorRegistration.cs"));
+        Assert.Contains("CShells:Shells:default:Features:FoundationIdentityOpenIddict", hostRegistration, StringComparison.Ordinal);
         Assert.Contains("AddDbContext<OpenIddictIdentityDbContext>", hostRegistration, StringComparison.Ordinal);
         Assert.Contains("UseEntityFrameworkCore", hostRegistration, StringComparison.Ordinal);
         Assert.Contains("AddHostedService", hostRegistration, StringComparison.Ordinal);
