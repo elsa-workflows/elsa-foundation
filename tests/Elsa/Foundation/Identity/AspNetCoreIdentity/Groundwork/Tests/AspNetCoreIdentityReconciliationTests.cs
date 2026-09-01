@@ -330,10 +330,12 @@ public sealed class AspNetCoreIdentityReconciliationTests
         source.State.ReceiptCleanupFailure = new IOException("The cleanup query failed.");
         var write = UserWrite("cleanup-failure");
 
-        var exception = await Assert.ThrowsAsync<IOException>(() =>
+        var exception = await Assert.ThrowsAsync<GroundworkIdentityStoreException>(() =>
             AtomicWrite(source).SaveAsync(write, CancellationToken.None).AsTask());
 
-        Assert.Equal("The cleanup query failed.", exception.Message);
+        Assert.Contains("identity_mutation_receipt_by_expiry", exception.Message, StringComparison.Ordinal);
+        var providerFailure = Assert.IsType<IOException>(exception.InnerException);
+        Assert.Equal("The cleanup query failed.", providerFailure.Message);
         Assert.Equal(0, source.State.BeginCount);
         Assert.Null(source.Read(write.UnitId, write.Id));
     }
