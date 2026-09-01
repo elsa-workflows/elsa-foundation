@@ -35,7 +35,7 @@ Two measurements taken over the repository's full history (2026-05-08 onward, 10
 **Line A, the host baseline.** The cross-cutting contract packages a host pins share one version that
 moves only when the contract surface changes, under framework §4.2 SemVer. Membership begins with
 `Elsa.Primitives`, `Elsa.Events.Core`, `Elsa.Tasks.Core`, `Elsa.Serialization.Core`,
-`Elsa.Mediator.Core`, `Elsa.Persistence.Core`, `Elsa.Attention.Core` and `Elsa.Expressions.Core`,
+`Elsa.Mediator.Core`, `Elsa.Attention.Core` and `Elsa.Expressions.Core`,
 selected on cross-domain reach and low churn.
 
 **Line B, everything else.** All features and all domain `.Core` packages share `major.minor` across

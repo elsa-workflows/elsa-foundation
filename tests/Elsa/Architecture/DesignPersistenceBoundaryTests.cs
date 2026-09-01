@@ -147,7 +147,6 @@ public sealed class DesignPersistenceBoundaryTests
     [InlineData("src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj", true)]
     [InlineData("src/Elsa/Workflows/Design/Persistence/Groundwork/Elsa.Workflows.Design.Persistence.Groundwork.csproj", true)]
     [InlineData("src/Elsa/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj", false)]
-    [InlineData("src/Elsa/Persistence/Core/Elsa.Persistence.Core.csproj", false)]
     public void Groundwork_project_classification_is_correct(string relativePath, bool expected) =>
         Assert.Equal(expected, IsGroundworkProjectPath(relativePath));
 
@@ -155,7 +154,7 @@ public sealed class DesignPersistenceBoundaryTests
     [InlineData("Groundwork.Documents", true)]
     [InlineData("Groundwork", true)]
     [InlineData("Microsoft.Extensions.DependencyInjection", false)]
-    [InlineData("Elsa.Persistence.Core", false)]
+    [InlineData("Elsa.Persistence.EFCore", false)]
     public void Groundwork_package_classification_is_correct(string package, bool expected) =>
         Assert.Equal(expected, IsGroundworkPackage(package));
 

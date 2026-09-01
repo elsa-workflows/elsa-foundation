@@ -14,7 +14,6 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Models;
-using Elsa.Persistence.Core.Queries;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Enums;
 using Elsa.Primitives.Persistence;
@@ -130,7 +129,7 @@ internal static class InMemoryReconcilerHarness
             Task.FromResult(items.Single(x => x.Id == id));
 
         public Task<ActivityDefinition?> FindAsync(ActivityDefinitionFilter filter, CancellationToken cancellationToken = default) =>
-            Task.FromResult(InMemoryQuery.Apply(items, filter.ToQuery()).FirstOrDefault());
+            Task.FromResult(Apply(items, filter).FirstOrDefault());
 
         public Task<ActivityDefinition?> FindByIdOrActivityTypeKeyAsync(string id, string activityTypeKey, CancellationToken cancellationToken = default) =>
             Task.FromResult<ActivityDefinition?>(items.FirstOrDefault(x => x.Id == id || x.ActivityTypeKey == activityTypeKey));
@@ -139,7 +138,51 @@ internal static class InMemoryReconcilerHarness
             Task.FromResult(items.Any(x => x.ActivityTypeKey == activityTypeKey));
 
         public Task<IReadOnlyList<ActivityDefinition>> ListAsync(ActivityDefinitionFilter filter, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<ActivityDefinition>>(InMemoryQuery.Apply(items, filter.ToQuery()).ToList());
+            Task.FromResult<IReadOnlyList<ActivityDefinition>>(Apply(items, filter).ToList());
+
+        private static IEnumerable<ActivityDefinition> Apply(IEnumerable<ActivityDefinition> items, ActivityDefinitionFilter filter)
+        {
+            IEnumerable<ActivityDefinition> query = items;
+
+            if (filter.Id is not null)
+                query = query.Where(x => string.Equals(x.Id, filter.Id, StringComparison.Ordinal));
+
+            if (filter.Ids is not null)
+            {
+                var ids = filter.Ids.ToHashSet(StringComparer.Ordinal);
+                query = query.Where(x => ids.Contains(x.Id));
+            }
+
+            if (filter.ActivityTypeKey is not null)
+                query = query.Where(x => string.Equals(x.ActivityTypeKey, filter.ActivityTypeKey, StringComparison.Ordinal));
+
+            if (filter.ActivityTypeKeys is not null)
+            {
+                var keys = filter.ActivityTypeKeys.ToHashSet(StringComparer.Ordinal);
+                query = query.Where(x => keys.Contains(x.ActivityTypeKey));
+            }
+
+            if (filter.Category is not null)
+                query = query.Where(x => string.Equals(x.Category, filter.Category, StringComparison.Ordinal));
+
+            if (filter.DisplayName is not null)
+                query = query.Where(x => string.Equals(x.DisplayName, filter.DisplayName, StringComparison.Ordinal));
+
+            if (filter.Description is not null)
+                query = query.Where(x => x.Description?.Contains(filter.Description, StringComparison.OrdinalIgnoreCase) == true);
+
+            if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
+            {
+                query = query.Where(x =>
+                    x.Id.Contains(filter.SearchTerm, StringComparison.OrdinalIgnoreCase)
+                    || x.ActivityTypeKey.Contains(filter.SearchTerm, StringComparison.OrdinalIgnoreCase)
+                    || x.Category?.Contains(filter.SearchTerm, StringComparison.OrdinalIgnoreCase) == true
+                    || x.DisplayName?.Contains(filter.SearchTerm, StringComparison.OrdinalIgnoreCase) == true
+                    || x.Description?.Contains(filter.SearchTerm, StringComparison.OrdinalIgnoreCase) == true);
+            }
+
+            return query;
+        }
     }
 
     private sealed class InMemoryActivityDefinitionVersionStore(List<ActivityDefinitionVersion> items) : IActivityDefinitionVersionStore
@@ -166,44 +209,4 @@ internal static class InMemoryReconcilerHarness
             Task.FromResult<IReadOnlyList<ActivityDefinitionVersion>>(items.ToList());
     }
 
-    /// <summary>
-    /// Evaluates the closed <see cref="Query{TEntity}"/> shape (AND of OR-groups over Equal / In /
-    /// Contains, plus one optional order) directly over in-memory items, mirroring the provider
-    /// translators' semantics: Equal is exact, In is set membership, Contains is a case-insensitive
-    /// substring over non-null strings.
-    /// </summary>
-    private static class InMemoryQuery
-    {
-        public static IEnumerable<TEntity> Apply<TEntity>(IEnumerable<TEntity> items, Query<TEntity> query)
-            where TEntity : Elsa.Primitives.Entities.Entity
-        {
-            foreach (var clause in query.Clauses)
-            {
-                if (clause.Count == 0)
-                    continue;
-                var comparisons = clause.Select(c => (Field: c.FieldSelector.Compile(), c.Operator, c.Value)).ToArray();
-                items = items.Where(item => comparisons.Any(c => Matches(c.Field.DynamicInvoke(item), c.Operator, c.Value)));
-            }
-
-            if (query.Order is { } order)
-            {
-                var key = order.FieldSelector.Compile();
-                items = order.Direction == Elsa.Primitives.Persistence.OrderDirection.Descending
-                    ? items.OrderByDescending(item => key.DynamicInvoke(item))
-                    : items.OrderBy(item => key.DynamicInvoke(item));
-            }
-
-            return items;
-        }
-
-        private static bool Matches(object? fieldValue, QueryOp op, object? comparand) => op switch
-        {
-            QueryOp.Equal => Equals(fieldValue, comparand),
-            QueryOp.In => comparand is System.Collections.IEnumerable set &&
-                          set.Cast<object?>().Any(candidate => Equals(fieldValue, candidate)),
-            QueryOp.Contains => fieldValue is string text && comparand is string needle &&
-                                text.Contains(needle, StringComparison.OrdinalIgnoreCase),
-            _ => throw new NotSupportedException($"Unsupported query operator '{op}'.")
-        };
-    }
 }

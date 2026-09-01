@@ -53,22 +53,10 @@ public abstract class EFCorePersistenceShellFeatureBase<TDbContext> : IShellFeat
     public string? ConnectionString { get; set; }
 
     /// <summary>
-    /// Controls whether command-side persistence services are registered.
-    /// </summary>
-    [ManifestSetting(DisplayName = "Use commands", Description = "Registers command-side EF Core persistence services and entity saving handlers.", Category = "Persistence", DefaultValue = "true", Advanced = true)]
-    public bool UseCommands { get; set; } = true;
-
-    /// <summary>
-    /// Controls whether query-side persistence services are registered.
-    /// </summary>
-    [ManifestSetting(DisplayName = "Use queries", Description = "Registers query-side EF Core persistence services and entity loading handlers.", Category = "Persistence", DefaultValue = "true", Advanced = true)]
-    public bool UseQueries { get; set; } = true;
-
-    /// <summary>
     /// Assemblies scanned for the typed <see cref="Contracts.IEntitySavingHandler{TDbContext,TEntity}"/>
     /// / <see cref="Contracts.IEntityLoadingHandler{TDbContext,TEntity}"/> contributors. Both handler
-    /// kinds are registered from the SAME list (saving under <see cref="UseCommands"/>, loading under
-    /// <see cref="UseQueries"/>), so a feature can never register one direction without the other.
+    /// kinds are registered from the same list, so a feature can never register one direction without
+    /// the other.
     /// Defaults to the concrete feature's own assembly; a domain base overrides this to add the
     /// assembly that actually holds its handlers (typically the intermediate <c>.EFCore</c> assembly).
     /// </summary>
@@ -120,22 +108,14 @@ public abstract class EFCorePersistenceShellFeatureBase<TDbContext> : IShellFeat
             })
             .AddScoped<IStartupTask, RunMigrationsStartupTask<TDbContext>>();
 
-        // COMMANDS & QUERIES. The typed entity handlers are registered here from the SAME
-        // assembly list for both directions — saving with the command side, loading with the
-        // query side — so a feature can never wire one direction without the other (the
-        // ApplyEntity{Saving,Loading}Handlers aggregators above dispatch whatever is registered).
+        // Register the typed entity handlers from the same assembly list for both directions, so a
+        // feature can never wire one direction without the other.
         var handlerAssemblies = EntityHandlerAssemblies.Distinct().ToArray();
 
-        if (UseCommands)
+        foreach (var assembly in handlerAssemblies)
         {
-            services.ConfigureCommands<TDbContext>();
-            foreach (var assembly in handlerAssemblies)
-                services.AddEntitySavingHandlersFrom(assembly);
-        }
-        if (UseQueries)
-        {
-            foreach (var assembly in handlerAssemblies)
-                services.AddEntityLoadingHandlersFrom(assembly);
+            services.AddEntitySavingHandlersFrom(assembly);
+            services.AddEntityLoadingHandlersFrom(assembly);
         }
 
         OnAfterConfigured(services);

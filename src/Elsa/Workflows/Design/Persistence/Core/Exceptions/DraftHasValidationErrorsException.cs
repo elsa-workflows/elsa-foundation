@@ -8,8 +8,7 @@ namespace Elsa.Workflows.Design.Persistence.Core.Exceptions;
 /// error set. Per Unit C FR-024: validation errors are compile errors for a workflow definition;
 /// promotion is a compile-success precondition. Errors are derived state (not persisted) — the
 /// promotion gate re-runs the validators at promotion time. The gate enforces this at execution
-/// time; bypassing it (e.g. inserting a Version row directly through
-/// <c>IAddCommand&lt;WorkflowDefinitionVersion&gt;</c>) is forbidden by domain contract.
+/// time; bypassing it (e.g. inserting a Version row directly) is forbidden by domain contract.
 /// </summary>
 /// <remarks>
 /// The exception carries the full derived <see cref="Errors"/> list (not just the count) so the API
