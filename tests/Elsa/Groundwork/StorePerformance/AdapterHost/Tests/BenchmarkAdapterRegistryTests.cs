@@ -48,6 +48,19 @@ public sealed class BenchmarkAdapterRegistryTests
     }
 
     [Fact]
+    public async Task Dispatches_trigger_binding_lookup_to_its_exact_groundwork_physical_form()
+    {
+        await using var adapter = BenchmarkAdapterRegistry.Create(
+            Request("trigger-binding-stimulus-lookup", TriggerBindingStimulusLookupAdapter.PhysicalForm),
+            "unused",
+            "unused");
+
+        Assert.IsType<TriggerBindingStimulusLookupAdapter>(adapter);
+        var workload = WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()).Workloads["trigger-binding-stimulus-lookup"];
+        Assert.Contains(TriggerBindingStimulusLookupAdapter.PhysicalForm, workload.PhysicalFormsFor646);
+    }
+
+    [Fact]
     public async Task Queue_drain_operations_are_not_admitted_before_correctness_preparation()
     {
         await using var adapter = BenchmarkAdapterRegistry.Create(
@@ -63,6 +76,19 @@ public sealed class BenchmarkAdapterRegistryTests
     {
         await using var adapter = BenchmarkAdapterRegistry.Create(
             Request("outbox-drain", OutboxDrainAdapter.PhysicalForm), "unused", "unused");
+
+        var exception = Assert.Throws<PerformanceContractException>(() => adapter.Operations);
+
+        Assert.Contains("before correctness preparation", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Trigger_binding_lookup_operations_are_not_admitted_before_correctness_preparation()
+    {
+        await using var adapter = BenchmarkAdapterRegistry.Create(
+            Request("trigger-binding-stimulus-lookup", TriggerBindingStimulusLookupAdapter.PhysicalForm),
+            "unused",
+            "unused");
 
         var exception = Assert.Throws<PerformanceContractException>(() => adapter.Operations);
 
@@ -112,6 +138,9 @@ public sealed class BenchmarkAdapterRegistryTests
     [InlineData("outbox-drain", "shared-documents-with-linked-index-tables", "groundwork-v2")]
     [InlineData("outbox-drain", "dedicated-post-commit-outbox-documents", "other-adapter")]
     [InlineData("outbox-drain", "dedicated-post-commit-outbox-documents", "groundwork-v2", "9.9.9")]
+    [InlineData("trigger-binding-stimulus-lookup", "shared-documents-with-linked-index-tables", "groundwork-v2")]
+    [InlineData("trigger-binding-stimulus-lookup", "linked-executable-source-reference-index", "other-adapter")]
+    [InlineData("trigger-binding-stimulus-lookup", "linked-executable-source-reference-index", "groundwork-v2", "9.9.9")]
     public void Refuses_unregistered_workload_adapter_and_physical_form_without_fallback(
         string workloadId,
         string physicalForm,

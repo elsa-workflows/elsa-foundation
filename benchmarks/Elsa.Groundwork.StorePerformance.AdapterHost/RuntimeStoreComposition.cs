@@ -35,14 +35,17 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
     private readonly ServiceProvider provider;
     private readonly List<AsyncServiceScope> scopes = [];
     private readonly IStorageProviderConnection connection;
+    private readonly bool ownsConnection;
 
     private RuntimeStoreComposition(
         ServiceProvider provider,
         IStorageProviderConnection connection,
-        WritePathRoundTripObserver observer)
+        WritePathRoundTripObserver observer,
+        bool ownsConnection)
     {
         this.provider = provider;
         this.connection = connection;
+        this.ownsConnection = ownsConnection;
         Observer = observer;
     }
 
@@ -53,10 +56,12 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
         string connectionString,
         string persistenceScope,
         CancellationToken cancellationToken,
-        WritePathRoundTripObserver? observer = null)
+        WritePathRoundTripObserver? observer = null,
+        IStorageProviderConnection? existingConnection = null)
     {
         observer ??= new WritePathRoundTripObserver(providerName);
-        var connection = ProviderConnections.Open(providerName, connectionString);
+        var ownsConnection = existingConnection is null;
+        var connection = existingConnection ?? ProviderConnections.Open(providerName, connectionString);
         // Held so the catch can dispose it, and cleared once ownership transfers to the composition —
         // after that point DisposeAsync owns both it and the connection.
         ServiceProvider? built = null;
@@ -65,7 +70,10 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
             var services = new ServiceCollection();
 
             // Registered before the runtime family so the units this connection must admit resolve against it.
-            services.AddGroundworkStorageProviderConnection(connection);
+            // A shared connection belongs to the adapter, not this composition's service provider. The
+            // non-disposing facade prevents disposal of one logical scope from invalidating its sibling.
+            services.AddGroundworkStorageProviderConnection(
+                ownsConnection ? connection : new NonDisposingConnection(connection));
 
             // Registered before AddGroundworkV2RuntimeStores, which calls AddPersistenceCore with the
             // DEFAULT scope — and AddPersistenceCore registers with TryAddScoped, so whoever registers
@@ -95,7 +103,7 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
             // point, not a formality. If it throws, the provider it was resolved from must be disposed
             // here: nothing else holds a reference to it yet, and it owns singletons of its own.
             await built.GetRequiredService<GroundworkStorageSessionSource>().InitializeAsync(cancellationToken);
-            var composition = new RuntimeStoreComposition(built, connection, observer);
+            var composition = new RuntimeStoreComposition(built, connection, observer, ownsConnection);
             built = null;
             return composition;
         }
@@ -107,7 +115,8 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
             // diagnostic cleanup error. Each is therefore released independently, and the original
             // exception is the one that propagates.
             await SafelyDisposeAsync(built);
-            SafelyDispose(connection);
+            if (ownsConnection)
+                SafelyDispose(connection);
             throw;
         }
     }
@@ -193,12 +202,55 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
             services.GetRequiredService<IPostCommitOutboxLookupStore>());
     }
 
+    /// <summary>Mints the trigger-binding and executable-source-reference contracts from one isolated DI scope.</summary>
+    public RuntimeTriggerBindingStimulusLookupScope CreateTriggerBindingClient()
+    {
+        var scope = provider.CreateAsyncScope();
+        scopes.Add(scope);
+        var services = scope.ServiceProvider;
+        return new RuntimeTriggerBindingStimulusLookupScope(
+            services.GetRequiredService<IWorkflowTriggerBindingStore>(),
+            services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>());
+    }
+
     public async ValueTask DisposeAsync()
     {
         foreach (var scope in scopes)
             await scope.DisposeAsync();
         scopes.Clear();
         await provider.DisposeAsync();
-        connection.Dispose();
+        if (ownsConnection)
+            connection.Dispose();
+    }
+
+    private sealed class NonDisposingConnection(IStorageProviderConnection inner) : IStorageProviderConnection
+    {
+        public IProviderCatalog Catalog => inner.Catalog;
+        public ISchemaCoordinator Schema => inner.Schema;
+        public IReadOnlyList<CapabilityDescriptor> Capabilities => inner.Capabilities;
+
+        public IStorageSession OpenSession(StorageUnit unit, StorageAccess access, IProviderCommandObserver? observer = null) =>
+            inner.OpenSession(unit, access, observer);
+
+        public IOwnedStorageSession OpenOwnedSession(StorageUnit unit, StorageAccess access, IProviderCommandObserver? observer = null) =>
+            inner.OpenOwnedSession(unit, access, observer);
+
+        public IUnitOfWork BeginUnitOfWork(StorageAccess access, params StorageUnit[] units) =>
+            inner.BeginUnitOfWork(access, units);
+
+        public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, params StorageUnit[] units) =>
+            inner.BeginUnitOfWork(access, options, units);
+
+        public IUnitOfWork BeginUnitOfWork(
+            StorageAccess access,
+            BatchWriteOptions options,
+            IProviderCommandObserver? observer,
+            params StorageUnit[] units) =>
+            inner.BeginUnitOfWork(access, options, observer, units);
+
+        public void Dispose()
+        {
+            // The adapter owns and disposes the shared connection after all sibling compositions close.
+        }
     }
 }
