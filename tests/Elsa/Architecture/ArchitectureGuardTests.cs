@@ -65,6 +65,47 @@ public sealed class ArchitectureGuardTests
     }
 
     [Fact]
+    public void Active_project_and_solution_references_resolve_to_existing_projects()
+    {
+        var missing = new List<string>();
+
+        // ProjectFiles intentionally covers the source/test domain tree used by the architecture
+        // conventions. This guard also covers benchmark project files because they are active build
+        // inputs even though they sit outside that convention's scope.
+        var activeProjects = ProjectFiles().Concat(
+            Directory.EnumerateFiles(Path.Combine(RepoRoot, "benchmarks"), "*.csproj", SearchOption.AllDirectories)
+                .Select(file => ProjectInfo.From(RepoRoot, file)));
+
+        foreach (var project in activeProjects)
+        {
+            var document = XDocument.Load(project.FullPath);
+            foreach (var include in document.Descendants("ProjectReference")
+                         .Select(reference => reference.Attribute("Include")?.Value)
+                         .OfType<string>())
+            {
+                var path = Path.GetFullPath(Path.Combine(
+                    Path.GetDirectoryName(project.FullPath)!,
+                    include.Replace('\\', Path.DirectorySeparatorChar)));
+                if (!File.Exists(path))
+                    missing.Add($"{project.RelativePath} -> {Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/')}");
+            }
+        }
+
+        foreach (var solutionProject in SolutionProjects())
+        {
+            var path = Path.Combine(RepoRoot, solutionProject.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path))
+                missing.Add($"Elsa.Server.slnx -> {solutionProject.Path}");
+        }
+
+        Assert.True(
+            missing.Count == 0,
+            "Every active ProjectReference and solution project must resolve to a checked-in project. " +
+            "Missing entries would otherwise be downgraded to MSB9008 warnings:" +
+            Environment.NewLine + string.Join(Environment.NewLine, missing));
+    }
+
+    [Fact]
     public void Solution_folders_collapse_leaf_project_segments()
     {
         var projectDirectories = ProjectFiles()
@@ -311,33 +352,25 @@ public sealed class ArchitectureGuardTests
     public void Groundwork_provider_projects_carry_no_persistence_lane_vocabulary()
     {
         string[] laneWords = ["Design", "Runtime", "Publishing", "Secrets", "Dashboard"];
-        var providerRoots = new[] { "Sqlite", "PostgreSql", "SqlServer", "MongoDb" }
-            .Select(provider => Path.Combine(
-                RepoRoot, "src", "Elsa", "Persistence", "Groundwork", provider))
-            .Where(Directory.Exists)
-            .ToArray();
-        Assert.NotEmpty(providerRoots);
+        var providerRegistration = Path.Combine(
+            RepoRoot,
+            "src",
+            "Apps",
+            "Elsa.Workbench",
+            "Groundwork",
+            "GroundworkProviderRegistration.cs");
+        Assert.True(File.Exists(providerRegistration));
 
         var violations = new List<string>();
-        foreach (var root in providerRoots)
+        foreach (var file in new[] { providerRegistration })
         {
-            // Provider leaf files only. Presets — the Unified subfolder and the runtime-only shell features —
-            // exist precisely to bind lanes to a target, so naming lanes is their job, not a leak.
-            var files = Directory
-                .EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
-                .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-                .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-                .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}Unified{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-                .Where(file => !Path.GetFileName(file).EndsWith("PersistenceShellFeature.cs", StringComparison.Ordinal));
-
-            foreach (var file in files)
-            {
-                var text = File.ReadAllText(file);
-                violations.AddRange(laneWords
-                    .Where(word => text.Contains($"Groundwork{word}Stores", StringComparison.Ordinal)
-                                   || text.Contains($"AddGroundwork{word}", StringComparison.Ordinal))
-                    .Select(word => $"{Path.GetFileName(file)} references the {word} lane"));
-            }
+            // The host-owned provider registration selects only a connection. Lane composition belongs to
+            // the individual host features, not to provider-specific construction.
+            var text = File.ReadAllText(file);
+            violations.AddRange(laneWords
+                .Where(word => text.Contains($"Groundwork{word}Stores", StringComparison.Ordinal)
+                               || text.Contains($"AddGroundwork{word}", StringComparison.Ordinal))
+                .Select(word => $"{Path.GetFileName(file)} references the {word} lane"));
         }
 
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations.Distinct()));

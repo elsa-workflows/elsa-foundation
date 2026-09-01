@@ -193,20 +193,7 @@
   </Folder>
   <Folder Name="/src/Elsa/Persistence/EFCore/Sqlite/" />
   <Folder Name="/src/Elsa/Persistence/Groundwork/">
-    <Project Path="src/Elsa/Persistence/Groundwork/ReferenceComposition/Elsa.Persistence.Groundwork.ReferenceComposition.csproj" />
     <Project Path="src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj" />
-  </Folder>
-  <Folder Name="/src/Elsa/Persistence/Groundwork/MongoDb/">
-    <Project Path="src/Elsa/Persistence/Groundwork/MongoDb/Unified/Elsa.Persistence.Groundwork.MongoDb.Unified.csproj" />
-  </Folder>
-  <Folder Name="/src/Elsa/Persistence/Groundwork/PostgreSql/">
-    <Project Path="src/Elsa/Persistence/Groundwork/PostgreSql/Unified/Elsa.Persistence.Groundwork.PostgreSql.Unified.csproj" />
-  </Folder>
-  <Folder Name="/src/Elsa/Persistence/Groundwork/Sqlite/">
-    <Project Path="src/Elsa/Persistence/Groundwork/Sqlite/Unified/Elsa.Persistence.Groundwork.Sqlite.Unified.csproj" />
-  </Folder>
-  <Folder Name="/src/Elsa/Persistence/Groundwork/SqlServer/">
-    <Project Path="src/Elsa/Persistence/Groundwork/SqlServer/Unified/Elsa.Persistence.Groundwork.SqlServer.Unified.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Pipelines/">
     <Project Path="src/Elsa/Pipelines/Core/Elsa.Pipelines.Core.csproj" />

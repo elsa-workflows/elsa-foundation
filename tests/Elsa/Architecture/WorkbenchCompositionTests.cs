@@ -2,7 +2,7 @@ using Xunit;
 
 namespace Elsa.Architecture.Tests;
 
-public sealed class WorkbenchReferenceCompositionTests
+public sealed class WorkbenchCompositionTests
 {
     private static readonly string LegacyRoute = string.Join('/', "", "_elsa", "workflow-management");
     private static readonly string FacadeTypeName = string.Concat("ElsaWorkflow", "ManagementApi");

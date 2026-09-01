@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <PackageReference Include="Groundwork.Testing" VersionOverride="0.4.0-preview.3" />
+    <PackageReference Include="Groundwork.Sqlite" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="xunit" />
@@ -42,8 +43,7 @@
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Validations\Elsa.Workflows.Design.Validations.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\JavaScript\Elsa.Workflows.Design.JavaScript.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Sqlite\Unified\Elsa.Persistence.Groundwork.Sqlite.Unified.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\ReferenceComposition\Elsa.Persistence.Groundwork.ReferenceComposition.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\V2\Elsa.Persistence.Groundwork.V2.csproj" />
     <ProjectReference Include="..\..\..\Persistence\Groundwork\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
   </ItemGroup>
 
