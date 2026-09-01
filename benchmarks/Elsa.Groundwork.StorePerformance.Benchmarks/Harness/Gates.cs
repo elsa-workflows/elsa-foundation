@@ -41,7 +41,14 @@ public sealed record GatePolicy(GateClass GateClass, double MaxP95Ratio, double 
     /// trigger-binding-stimulus-lookup. This remains a live catastrophic-regression backstop until a reviewed
     /// per-workload replacement supersedes it.
     /// </summary>
-    public const double RatifiedBoundedReadPathP95Milliseconds = 40d;
+    public const double AdoptedBoundedReadPathP95Milliseconds = 40d;
+
+    /// <summary>
+    /// Compatibility alias for callers compiled against the earlier name. The 40 ms value is adopted under
+    /// #1176 pending explicit acceptance, so new callers should use <see cref="AdoptedBoundedReadPathP95Milliseconds"/>.
+    /// </summary>
+    [Obsolete("Use AdoptedBoundedReadPathP95Milliseconds; #1176 acceptance is pending.")]
+    public const double RatifiedBoundedReadPathP95Milliseconds = AdoptedBoundedReadPathP95Milliseconds;
 
     /// <summary>
     /// The runtime hot path carries an absolute ceiling as well as its ratios. The workload identity is
@@ -66,7 +73,7 @@ public sealed record GatePolicy(GateClass GateClass, double MaxP95Ratio, double 
         if (gateClass == GateClass.RuntimeHotPath)
         {
             var ceiling = BoundedReadWorkloads.Contains(workloadId)
-                ? RatifiedBoundedReadPathP95Milliseconds
+                ? AdoptedBoundedReadPathP95Milliseconds
                 : RatifiedDurableWritePathP95Milliseconds;
             return new(gateClass, 1.10, .90, 2.0, null, ceiling);
         }

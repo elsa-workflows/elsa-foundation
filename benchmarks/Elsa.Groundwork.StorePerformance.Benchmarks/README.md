@@ -53,7 +53,8 @@ never flatten samples across processes.
 
 Default gates derive their class from the exact workload id. Runtime hot paths use the Spec 094
 performance-handoff ratios (p95 <= 1.10x, throughput >= 90%, p99 <= 2.0x) plus a 150 ms p95 ceiling for
-durable writes or 40 ms for bounded reads. Ordinary workloads use p95 <= 1.25x, throughput >= 80%, and
+durable writes or the #1176-adopted 40 ms backstop for bounded reads (pending explicit acceptance).
+Ordinary workloads use p95 <= 1.25x, throughput >= 80%, and
 p99 <= 2.0x without a default absolute ceiling. A replacement must use the workload-derived class and
 carry non-empty, distinct proposer/reviewer identities, a review reference, and the exact workload
 id/version; it cannot be self-authored.

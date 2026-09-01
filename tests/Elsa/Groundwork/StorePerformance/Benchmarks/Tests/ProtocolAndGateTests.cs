@@ -209,12 +209,12 @@ public sealed class ProtocolAndGateTests
     }
 
     /// <summary>
-    /// The ratified absolute ceiling must actually bind. It was reachable on GatePolicy but unset by every
-    /// construction path, so a workload inside its ratio comparison could exceed the latency budget and
-    /// still pass — the budget existed on paper only.
+    /// The ratified durable-write absolute ceiling must actually bind. It was reachable on GatePolicy but
+    /// unset by every construction path, so a workload inside its ratio comparison could exceed the latency
+    /// budget and still pass — the budget existed on paper only.
     /// </summary>
     [Fact]
-    public void Runtime_hot_path_default_carries_the_ratified_absolute_ceiling()
+    public void Runtime_hot_path_default_carries_the_ratified_durable_write_ceiling()
     {
         Assert.Equal(
             GatePolicy.RatifiedDurableWritePathP95Milliseconds,
@@ -253,10 +253,10 @@ public sealed class ProtocolAndGateTests
     [InlineData("due-timer-selection")]
     [InlineData("recurring-schedule-selection")]
     [InlineData("trigger-binding-stimulus-lookup")]
-    public void Ratified_bounded_read_ceiling_is_enforced_for_each_declared_workload(string workloadId)
+    public void Adopted_bounded_read_ceiling_is_enforced_for_each_declared_workload(string workloadId)
     {
         Assert.Equal(
-            GatePolicy.RatifiedBoundedReadPathP95Milliseconds,
+            GatePolicy.AdoptedBoundedReadPathP95Milliseconds,
             GatePolicy.DefaultFor(GateClass.RuntimeHotPath, workloadId).MaxP95Milliseconds);
     }
 
@@ -270,8 +270,8 @@ public sealed class ProtocolAndGateTests
         var inheritedDurableWrite = GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, durableWriteReview);
         var explicitCeiling = GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, boundedReadReview, 25d);
 
-        // Omitting the ceiling inherits it; dropping a ratified budget must be deliberate, not an omission.
-        Assert.Equal(GatePolicy.RatifiedBoundedReadPathP95Milliseconds, inheritedBoundedRead.MaxP95Milliseconds);
+        // Omitting the ceiling inherits the class default; dropping a default budget must be deliberate, not an omission.
+        Assert.Equal(GatePolicy.AdoptedBoundedReadPathP95Milliseconds, inheritedBoundedRead.MaxP95Milliseconds);
         Assert.Equal(GatePolicy.RatifiedDurableWritePathP95Milliseconds, inheritedDurableWrite.MaxP95Milliseconds);
         Assert.Equal(25d, explicitCeiling.MaxP95Milliseconds);
         Assert.Throws<PerformanceContractException>(() =>
@@ -637,7 +637,7 @@ public sealed class ProtocolAndGateTests
     public async Task Gate_cli_reports_incomplete_artifacts_as_blocked_instead_of_throwing_for_empty_workload_identity()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
         fixture.Bind();
 
         var exitCode = await BenchmarkCli.RunAsync(
@@ -689,8 +689,8 @@ public sealed class ProtocolAndGateTests
         }
 
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"], transform: At140Milliseconds);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"], transform: At140Milliseconds);
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations, transform: At140Milliseconds);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations, transform: At140Milliseconds);
         fixture.Bind();
 
         var exitCode = await BenchmarkCli.RunAsync(
@@ -706,15 +706,16 @@ public sealed class ProtocolAndGateTests
             File.ReadAllBytes(Path.Combine(fixture.Directory, "gate.v1.json")),
             ArtifactStore.JsonOptions)!;
         Assert.Equal(PerformanceVerdict.Redesign, report.Payload.Verdict.Verdict);
-        Assert.Equal(GatePolicy.RatifiedBoundedReadPathP95Milliseconds, Assert.Single(report.Payload.Verdict.Rows).MaxP95Milliseconds);
+        Assert.Equal(ArtifactFixture.BookmarkOperations.Length, report.Payload.Verdict.Rows.Count);
+        Assert.All(report.Payload.Verdict.Rows, row => Assert.Equal(GatePolicy.AdoptedBoundedReadPathP95Milliseconds, row.MaxP95Milliseconds));
     }
 
     [Fact]
     public async Task Gate_cli_rejects_an_unreviewed_gate_class_override()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"]);
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations);
         fixture.Bind();
 
         var exitCode = await BenchmarkCli.RunAsync(
@@ -799,22 +800,19 @@ public sealed class ProtocolAndGateTests
         var raw = Enumerable.Repeat(1d, 100).ToArray();
         IReadOnlyList<OperationSample> operations = request.ProcessKind == ProcessKind.Warmup
             ? []
-            :
-            [
-                new OperationSample(
-                    "read",
-                    raw.Length,
-                    30,
-                    raw.Length / 30d,
-                    Statistics.Percentile(raw, 50),
-                    Statistics.Percentile(raw, 95),
-                    Statistics.Percentile(raw, 99),
-                    raw)
-                {
-                    RoundTrips = raw.Length,
-                    RawRoundTrips = Enumerable.Repeat(1L, raw.Length).ToArray()
-                }
-            ];
+            : BookmarkScenario.OperationSequence.Select(operation => new OperationSample(
+                operation,
+                raw.Length,
+                30,
+                raw.Length / 30d,
+                Statistics.Percentile(raw, 50),
+                Statistics.Percentile(raw, 95),
+                Statistics.Percentile(raw, 99),
+                raw)
+            {
+                RoundTrips = raw.Length,
+                RawRoundTrips = Enumerable.Repeat(1L, raw.Length).ToArray()
+            }).ToArray();
         return new ProcessArtifact(
             2,
             request,

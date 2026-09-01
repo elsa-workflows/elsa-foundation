@@ -708,9 +708,10 @@ public static class Comparison
         var warmup = artifacts.Single(item => item.Request.ProcessKind == ProcessKind.Warmup);
         if (warmup.Operations.Count != 0) return TargetValidation.Invalid(anchor, "Warmup artifacts must not contain timed operation samples.");
         var measured = artifacts.Where(item => item.Request.ProcessKind == ProcessKind.Measured).OrderBy(item => item.Request.ProcessIndex).ToArray();
-        var names = measured[0].Operations.Select(operation => operation.Operation).Order(StringComparer.Ordinal).ToArray();
-        if (names.Length == 0 || names.Any(name => !OperationIdentity.IsValid(name)) || names.Distinct(StringComparer.Ordinal).Count() != names.Length || measured.Any(item => !names.SequenceEqual(item.Operations.Select(operation => operation.Operation).Order(StringComparer.Ordinal), StringComparer.Ordinal) || item.Operations.Any(operation => operation.Count < 100 || operation.SteadyStateSeconds < 30 || !Statistics.HasAuthoritativeRawMetrics(operation)))) return TargetValidation.Invalid(anchor, "Measured runs must contain identical non-empty operation sets with finite positive raw latency and provider round-trip samples, with summaries reproduced from them.");
-        return TargetValidation.Validated(anchor, correctness, machine, names);
+        var expectedNames = workload.OperationSequence.ToArray();
+        var observedNames = measured[0].Operations.Select(operation => operation.Operation).ToArray();
+        if (expectedNames.Length == 0 || expectedNames.Any(name => !OperationIdentity.IsValid(name)) || expectedNames.Distinct(StringComparer.Ordinal).Count() != expectedNames.Length || !expectedNames.SequenceEqual(observedNames, StringComparer.Ordinal) || measured.Any(item => !expectedNames.SequenceEqual(item.Operations.Select(operation => operation.Operation), StringComparer.Ordinal) || item.Operations.Any(operation => operation.Count < 100 || operation.SteadyStateSeconds < 30 || !Statistics.HasAuthoritativeRawMetrics(operation)))) return TargetValidation.Invalid(anchor, "Measured runs must contain exactly the frozen workload operation sequence in deterministic order, with finite positive raw latency and provider round-trip samples, with summaries reproduced from them.");
+        return TargetValidation.Validated(anchor, correctness, machine, expectedNames);
     }
 
     private static bool SameEvidence(CorrectnessEvidence first, CorrectnessEvidence second) =>

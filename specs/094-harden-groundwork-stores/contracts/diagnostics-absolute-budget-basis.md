@@ -227,7 +227,7 @@ oracle *harvesting* — so it does not sit on the irreversible path that governs
 - **Do not transplant 093's numeric budgets.** Different operations, different access shapes, and a
   harness absent from this repository. Method transfers; values do not.
 - **Do not use the runtime class ceilings as diagnostics provider budgets.** #1176 now wires
-  `RatifiedBoundedReadPathP95Milliseconds` for the five bounded-read runtime workloads and retains the
+  `AdoptedBoundedReadPathP95Milliseconds` for the five bounded-read runtime workloads and retains the
   150 ms durable-write ceiling for the other three runtime hot paths. Diagnostics remains an
   `OrdinaryStore` workload with no default absolute ceiling; Route 2 still requires independently
   reviewed per-provider policy files.
