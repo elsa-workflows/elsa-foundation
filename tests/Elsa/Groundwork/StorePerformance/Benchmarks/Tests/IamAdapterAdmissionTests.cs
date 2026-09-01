@@ -169,7 +169,7 @@ public sealed class IamAdapterAdmissionTests
             [],
             null);
 
-        var gate = GateEvaluator.Evaluate(GatePolicy.DefaultFor(GateClass.OrdinaryStore), comparison);
+        var gate = GateEvaluator.Evaluate(GatePolicy.DefaultFor(GateClass.OrdinaryStore, comparison.WorkloadId), comparison);
 
         Assert.Equal(PerformanceVerdict.Blocked, gate.Verdict);
         Assert.Contains("iam.adapter-form.ratification-required", gate.Reason, StringComparison.Ordinal);

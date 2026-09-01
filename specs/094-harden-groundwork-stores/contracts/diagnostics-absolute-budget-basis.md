@@ -157,12 +157,12 @@ costs, different index structures, and in MongoDB's case a transaction-capable r
 path is not comparable to a single-node relational commit. `requiredProviderEvidence` already declares
 three *different* evidence kinds for them, which is the contract conceding the same point.
 
-This is also why the budgets cannot be expressed as class constants. `GatePolicy.DefaultFor` keys on
-`GateClass` and takes no workload or provider argument, and
-`RatifiedBoundedReadPathP95Milliseconds` is the standing proof of what happens when a per-workload number
-is declared as a constant anyway: ratified at 40 ms, **enforced by nothing**, with five bounded-read
-workloads silently carrying the 150 ms durable-write ceiling instead. Per-provider diagnostics budgets
-must arrive as reviewed policy **files**, keyed by workload *and* provider.
+This is also why provider-specific diagnostics budgets cannot be expressed as the runtime class constants.
+`GatePolicy.DefaultFor(workloadId)` now derives the workload's class; diagnostics remains `OrdinaryStore`
+and intentionally has no default absolute ceiling, while the eight runtime workloads receive their
+40 ms bounded-read or 150 ms durable-write backstop (the 40 ms adoption is recorded under #1176 pending
+explicit acceptance). Per-provider diagnostics budgets must still
+arrive as reviewed policy **files**, keyed by workload *and* provider.
 
 ## What must change in code
 
@@ -226,11 +226,11 @@ oracle *harvesting* — so it does not sit on the irreversible path that governs
   comparison at one commit would compare a thing to itself.
 - **Do not transplant 093's numeric budgets.** Different operations, different access shapes, and a
   harness absent from this repository. Method transfers; values do not.
-- **Do not wire `RatifiedBoundedReadPathP95Milliseconds`** as part of this work.
-  `ProtocolAndGateTests.Ratified_bounded_read_ceiling_is_declared_but_enforced_by_no_construction_path`
-  fails if any construction path starts applying it, and #1176 owns the wire-or-supersede choice. Once
-  per-provider policy files exist, superseding is the cleaner resolution — but that is #1176's call to
-  record, not a side effect of this change.
+- **Do not use the runtime class ceilings as diagnostics provider budgets.** #1176 now wires
+  `AdoptedBoundedReadPathP95Milliseconds` for the five bounded-read runtime workloads and retains the
+  150 ms durable-write ceiling for the other three runtime hot paths. Diagnostics remains an
+  `OrdinaryStore` workload with no default absolute ceiling; Route 2 still requires independently
+  reviewed per-provider policy files.
 - **Do not let a missing budget read as a pass.** Item 4 above exists because the most likely silent
   failure is a policy file that omits an operation class and a gate that therefore never bounds it.
 

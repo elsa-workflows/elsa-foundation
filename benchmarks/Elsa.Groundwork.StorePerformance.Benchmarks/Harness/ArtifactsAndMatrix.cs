@@ -487,7 +487,145 @@ public static class ProcessMatrixRunner
         first.ProcessIndex == second.ProcessIndex;
 }
 
-public sealed record ComparisonResult(int SchemaVersion, string ArtifactManifestSha256, string WorkloadId, string WorkloadVersion, string Provider, string Scale, string OracleTarget, string Target, bool Complete, bool CorrectnessEqual, IReadOnlyList<ProcessAggregate> OracleOperations, IReadOnlyList<ProcessAggregate> TargetOperations, string? BlockReason);
+public sealed record ComparisonResult(int SchemaVersion, string ArtifactManifestSha256, string WorkloadId, string WorkloadVersion, string Provider, string Scale, string OracleTarget, string Target, bool Complete, bool CorrectnessEqual, IReadOnlyList<ProcessAggregate> OracleOperations, IReadOnlyList<ProcessAggregate> TargetOperations, string? BlockReason)
+{
+    // A public record constructor is retained for report/serialization compatibility, but only a result
+    // created by Comparison.Compare receives this internal, content-bound admission marker. GateEvaluator
+    // requires it before producing any pass/redesign verdict.
+    [JsonIgnore]
+    internal ComparisonAdmission? Admission { get; init; }
+}
+
+internal sealed class ComparisonAdmission
+{
+    private readonly int schemaVersion;
+    private readonly string? artifactManifestSha256;
+    private readonly string? workloadId;
+    private readonly string? workloadVersion;
+    private readonly string? provider;
+    private readonly string? scale;
+    private readonly string? oracleTarget;
+    private readonly string? target;
+    private readonly bool complete;
+    private readonly bool correctnessEqual;
+    private readonly string? blockReason;
+    private readonly AggregateSnapshot[] oracleOperations;
+    private readonly AggregateSnapshot[] targetOperations;
+
+    private ComparisonAdmission(ComparisonResult comparison)
+    {
+        schemaVersion = comparison.SchemaVersion;
+        artifactManifestSha256 = comparison.ArtifactManifestSha256;
+        workloadId = comparison.WorkloadId;
+        workloadVersion = comparison.WorkloadVersion;
+        provider = comparison.Provider;
+        scale = comparison.Scale;
+        oracleTarget = comparison.OracleTarget;
+        target = comparison.Target;
+        complete = comparison.Complete;
+        correctnessEqual = comparison.CorrectnessEqual;
+        blockReason = comparison.BlockReason;
+        oracleOperations = Snapshot(comparison.OracleOperations);
+        targetOperations = Snapshot(comparison.TargetOperations);
+    }
+
+    internal static ComparisonAdmission Create(ComparisonResult comparison) => new(comparison);
+
+    internal static bool TryValidate(ComparisonResult comparison, out string reason)
+    {
+        if (comparison.Admission is null)
+        {
+            reason = "The comparison result was not produced by the admitted artifact comparison path; operation evidence is not admitted.";
+            return false;
+        }
+
+        if (!comparison.Admission.Matches(comparison))
+        {
+            reason = "The comparison result's manifest, identities, or raw operation evidence was changed after artifact admission.";
+            return false;
+        }
+
+        if (comparison.SchemaVersion != 1 || !IsSha256(comparison.ArtifactManifestSha256))
+        {
+            reason = "The admitted comparison has an invalid schema or artifact manifest SHA-256 identity.";
+            return false;
+        }
+
+        if (!HasIdentity(comparison.WorkloadId) || !HasIdentity(comparison.WorkloadVersion) || !HasIdentity(comparison.Provider) || !HasIdentity(comparison.Scale) || !HasIdentity(comparison.OracleTarget) || !HasIdentity(comparison.Target))
+        {
+            reason = "The admitted comparison has an empty or whitespace-padded workload, provider, scale, or target identity.";
+            return false;
+        }
+
+        reason = "";
+        return true;
+    }
+
+    private bool Matches(ComparisonResult comparison) =>
+        schemaVersion == comparison.SchemaVersion &&
+        string.Equals(artifactManifestSha256, comparison.ArtifactManifestSha256, StringComparison.Ordinal) &&
+        string.Equals(workloadId, comparison.WorkloadId, StringComparison.Ordinal) &&
+        string.Equals(workloadVersion, comparison.WorkloadVersion, StringComparison.Ordinal) &&
+        string.Equals(provider, comparison.Provider, StringComparison.Ordinal) &&
+        string.Equals(scale, comparison.Scale, StringComparison.Ordinal) &&
+        string.Equals(oracleTarget, comparison.OracleTarget, StringComparison.Ordinal) &&
+        string.Equals(target, comparison.Target, StringComparison.Ordinal) &&
+        complete == comparison.Complete &&
+        correctnessEqual == comparison.CorrectnessEqual &&
+        string.Equals(blockReason, comparison.BlockReason, StringComparison.Ordinal) &&
+        Matches(oracleOperations, comparison.OracleOperations) &&
+        Matches(targetOperations, comparison.TargetOperations);
+
+    private static AggregateSnapshot[] Snapshot(IReadOnlyList<ProcessAggregate>? operations) =>
+        operations?.Select(AggregateSnapshot.Create).ToArray() ?? [];
+
+    private static bool Matches(AggregateSnapshot[] expected, IReadOnlyList<ProcessAggregate>? actual) =>
+        actual is not null &&
+        expected.Length == actual.Count &&
+        expected.Zip(actual).All(pair => pair.First.Matches(pair.Second));
+
+    private static bool HasIdentity(string? value) =>
+        !string.IsNullOrWhiteSpace(value) && string.Equals(value, value.Trim(), StringComparison.Ordinal);
+
+    private static bool IsSha256(string? value) =>
+        value is { Length: 64 } && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
+
+    private sealed class AggregateSnapshot
+    {
+        private readonly string? operation;
+        private readonly double[] p50Milliseconds;
+        private readonly double[] p95Milliseconds;
+        private readonly double[] p99Milliseconds;
+        private readonly double[] throughputPerSecond;
+        private readonly Dictionary<int, double[]> rawLatenciesByProcess;
+
+        private AggregateSnapshot(ProcessAggregate aggregate)
+        {
+            operation = aggregate.Operation;
+            p50Milliseconds = aggregate.P50Milliseconds?.ToArray() ?? [];
+            p95Milliseconds = aggregate.P95Milliseconds?.ToArray() ?? [];
+            p99Milliseconds = aggregate.P99Milliseconds?.ToArray() ?? [];
+            throughputPerSecond = aggregate.ThroughputPerSecond?.ToArray() ?? [];
+            rawLatenciesByProcess = aggregate.RawLatenciesByProcess?.ToDictionary(pair => pair.Key, pair => pair.Value?.ToArray() ?? []) ?? [];
+        }
+
+        internal static AggregateSnapshot Create(ProcessAggregate aggregate) => new(aggregate);
+
+        internal bool Matches(ProcessAggregate aggregate) =>
+            string.Equals(operation, aggregate.Operation, StringComparison.Ordinal) &&
+            SequenceEqual(p50Milliseconds, aggregate.P50Milliseconds) &&
+            SequenceEqual(p95Milliseconds, aggregate.P95Milliseconds) &&
+            SequenceEqual(p99Milliseconds, aggregate.P99Milliseconds) &&
+            SequenceEqual(throughputPerSecond, aggregate.ThroughputPerSecond) &&
+            aggregate.RawLatenciesByProcess is not null &&
+            rawLatenciesByProcess.Count == aggregate.RawLatenciesByProcess.Count &&
+            rawLatenciesByProcess.All(pair => aggregate.RawLatenciesByProcess.TryGetValue(pair.Key, out var values) && SequenceEqual(pair.Value, values));
+
+        private static bool SequenceEqual(IReadOnlyList<double> expected, IReadOnlyList<double>? actual) =>
+            actual is not null && expected.SequenceEqual(actual);
+    }
+}
+
 public static class Comparison
 {
     public static ComparisonResult Compare(string outputDirectory, string oracleTarget, string target, WorkloadCatalog catalog)
@@ -517,12 +655,15 @@ public static class Comparison
             return Blocked(artifactSet.ManifestSha256, oracleTarget, target, source, "Oracle and target operation sets differ.");
         if (oracleValidation.Correctness!.ObservedResultDigestSha256 != targetValidation.Correctness!.ObservedResultDigestSha256)
             return Blocked(artifactSet.ManifestSha256, oracleTarget, target, source, "Oracle and target correctness digests differ.");
-        return new ComparisonResult(1, artifactSet.ManifestSha256, source.WorkloadId, source.WorkloadVersion, source.Provider, source.Scale, oracleTarget, target, true, true, Aggregate(oracle), Aggregate(targetArtifacts), null);
+        return Admitted(new ComparisonResult(1, artifactSet.ManifestSha256, source.WorkloadId, source.WorkloadVersion, source.Provider, source.Scale, oracleTarget, target, true, true, Aggregate(oracle), Aggregate(targetArtifacts), null));
     }
 
     public static string Target(ProcessArtifact artifact) => $"{artifact.Request.Provider}/{artifact.Request.Adapter}/{artifact.Request.PhysicalForm}";
 
-    private static ComparisonResult Blocked(string manifestHash, string oracleTarget, string target, RunRequest? request, string reason) => new(1, manifestHash, request?.WorkloadId ?? "", request?.WorkloadVersion ?? "", request?.Provider ?? "", request?.Scale ?? "", oracleTarget, target, false, false, [], [], reason);
+    private static ComparisonResult Admitted(ComparisonResult comparison) => comparison with { Admission = ComparisonAdmission.Create(comparison) };
+
+    private static ComparisonResult Blocked(string manifestHash, string oracleTarget, string target, RunRequest? request, string reason) =>
+        Admitted(new ComparisonResult(1, manifestHash, request?.WorkloadId ?? "", request?.WorkloadVersion ?? "", request?.Provider ?? "", request?.Scale ?? "", oracleTarget, target, false, false, [], [], reason));
 
     private static TargetValidation ValidateSet(IReadOnlyList<ProcessArtifact> artifacts, WorkloadCatalog catalog, string outputDirectory)
     {
@@ -567,9 +708,10 @@ public static class Comparison
         var warmup = artifacts.Single(item => item.Request.ProcessKind == ProcessKind.Warmup);
         if (warmup.Operations.Count != 0) return TargetValidation.Invalid(anchor, "Warmup artifacts must not contain timed operation samples.");
         var measured = artifacts.Where(item => item.Request.ProcessKind == ProcessKind.Measured).OrderBy(item => item.Request.ProcessIndex).ToArray();
-        var names = measured[0].Operations.Select(operation => operation.Operation).Order(StringComparer.Ordinal).ToArray();
-        if (names.Length == 0 || names.Distinct(StringComparer.Ordinal).Count() != names.Length || measured.Any(item => !names.SequenceEqual(item.Operations.Select(operation => operation.Operation).Order(StringComparer.Ordinal), StringComparer.Ordinal) || item.Operations.Any(operation => operation.Count < 100 || operation.SteadyStateSeconds < 30 || !Statistics.HasAuthoritativeRawMetrics(operation)))) return TargetValidation.Invalid(anchor, "Measured runs must contain identical non-empty operation sets with finite positive raw latency and provider round-trip samples, with summaries reproduced from them.");
-        return TargetValidation.Validated(anchor, correctness, machine, names);
+        var expectedNames = workload.OperationSequence.ToArray();
+        var observedNames = measured[0].Operations.Select(operation => operation.Operation).ToArray();
+        if (expectedNames.Length == 0 || expectedNames.Any(name => !OperationIdentity.IsValid(name)) || expectedNames.Distinct(StringComparer.Ordinal).Count() != expectedNames.Length || !expectedNames.SequenceEqual(observedNames, StringComparer.Ordinal) || measured.Any(item => !expectedNames.SequenceEqual(item.Operations.Select(operation => operation.Operation), StringComparer.Ordinal) || item.Operations.Any(operation => operation.Count < 100 || operation.SteadyStateSeconds < 30 || !Statistics.HasAuthoritativeRawMetrics(operation)))) return TargetValidation.Invalid(anchor, "Measured runs must contain exactly the frozen workload operation sequence in deterministic order, with finite positive raw latency and provider round-trip samples, with summaries reproduced from them.");
+        return TargetValidation.Validated(anchor, correctness, machine, expectedNames);
     }
 
     private static bool SameEvidence(CorrectnessEvidence first, CorrectnessEvidence second) =>
