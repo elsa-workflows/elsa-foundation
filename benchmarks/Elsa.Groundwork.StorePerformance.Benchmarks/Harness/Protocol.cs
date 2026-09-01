@@ -71,7 +71,8 @@ public sealed record NativePlanEvidenceDocument(
     string Seed,
     string InputFingerprintSha256,
     string Identity,
-    IReadOnlyList<NativeRouteEvidence> Routes);
+    IReadOnlyList<NativeRouteEvidence> Routes,
+    string RouteContract = "provider-native-routes");
 public sealed record NativePlanEvidence(string Identity, string Reference, string ContentSha256, IReadOnlyList<NativeRouteEvidence> Routes);
 public sealed record CorrectnessEvidence(
     string ObservedResultDigestSha256,
@@ -431,6 +432,9 @@ public static class ArtifactAdmission
             document.Seed != request.Seed ||
             document.InputFingerprintSha256 != request.InputFingerprintSha256 ||
             document.Identity != nativePlan.Identity ||
+            document.RouteContract != (workload.RequiredNativeRoutes.Count == 0
+                ? "no-native-routes-declared"
+                : "provider-native-routes") ||
             document.Routes is null ||
             !document.Routes.SequenceEqual(routes))
             throw new PerformanceContractException("Native-plan evidence file does not match the admitted target, provenance, or structured route evidence.");

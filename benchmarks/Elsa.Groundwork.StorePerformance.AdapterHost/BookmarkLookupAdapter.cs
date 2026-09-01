@@ -53,6 +53,7 @@ internal sealed class BookmarkLookupAdapter(
     {
         RequirePrepared();
         var document = NativePlanEvidenceStaging.PublishInto(outputDirectory, request);
+        var observed = await ProviderProbe.ReadAsync(request.Provider, connectionString, cancellationToken);
         var workload = new RuntimeBookmarkLookupWorkload();
         var result = await workload.ExecuteAsync(this, cancellationToken);
         operations = (await workload.PrepareMeasuredOperationsAsync(this, cancellationToken))
@@ -61,9 +62,9 @@ internal sealed class BookmarkLookupAdapter(
 
         return new CorrectnessEvidence(
             result.ResultDigest,
-            request.ProviderVersion,
-            request.ProviderTopology,
-            request.ProviderConfiguration,
+            observed.Version,
+            observed.Topology,
+            observed.Configuration,
             new NativePlanEvidence(
                 request.NativePlanIdentity,
                 request.NativePlanEvidenceReference,

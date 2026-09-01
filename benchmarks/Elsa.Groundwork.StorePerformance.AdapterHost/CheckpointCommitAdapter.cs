@@ -52,12 +52,9 @@ internal sealed class CheckpointCommitAdapter(
     /// read back, and <c>ValidateCorrectness</c> compares it against the frozen
     /// <c>workload.Correctness.ResultDigestSha256</c>. A wrong commit path cannot produce it.
     ///
-    /// The provider identity fields are echoed from the request, and that is a real gap rather than a
-    /// design choice: <c>probe-provider</c> does not yet read sanitized provider configuration back off a
-    /// live connection, so the host has nothing independent to report. <c>ValidateCorrectness</c> requires
-    /// observed identity to equal requested identity exactly, so echoing is the only thing that can pass
-    /// today — which means those three fields currently prove the operator was self-consistent, not that
-    /// the provider was what they said. Do not read them as observation until probe-provider is finished.
+    /// Provider identity and sanitized driver configuration are read from a live native handshake. The
+    /// request is compared to that observation by <c>ArtifactAdmission.ValidateCorrectness</c>; a stale or
+    /// hand-edited request therefore blocks rather than becoming provenance.
     /// </summary>
     public async Task<CorrectnessEvidence> VerifyCorrectnessAsync(CancellationToken cancellationToken)
     {
@@ -67,6 +64,7 @@ internal sealed class CheckpointCommitAdapter(
         // not hash to the requested commitment. checkpoint-commit declares no required native routes, so
         // the document's route list is expected to be empty; ValidateCorrectness enforces that count.
         var document = NativePlanEvidenceStaging.PublishInto(outputDirectory, request);
+        var observed = await ProviderProbe.ReadAsync(request.Provider, connectionString, cancellationToken);
 
         var result = await new RuntimeCheckpointCommitWorkload().ExecuteAsync(this, cancellationToken);
         operations = (await new RuntimeCheckpointCommitWorkload().PrepareMeasuredOperationsAsync(this, cancellationToken))
@@ -75,9 +73,9 @@ internal sealed class CheckpointCommitAdapter(
 
         return new CorrectnessEvidence(
             result.ResultDigest,
-            request.ProviderVersion,
-            request.ProviderTopology,
-            request.ProviderConfiguration,
+            observed.Version,
+            observed.Topology,
+            observed.Configuration,
             new NativePlanEvidence(
                 request.NativePlanIdentity,
                 request.NativePlanEvidenceReference,

@@ -10,11 +10,12 @@ try
     var command = args.Length > 0 ? args[0] : "";
     return command switch
     {
-        "probe-provider" => ProbeProvider(args),
+        "probe-provider" => await ProbeProvider(args),
+        "capture-plan" => await CapturePlan(args),
         "verify-correctness" => await VerifyCorrectness(args),
         "run" => await Run(args),
         _ => throw new PerformanceContractException(
-            $"Unknown adapter-host command '{command}'. Supported: probe-provider, verify-correctness, run.")
+            $"Unknown adapter-host command '{command}'. Supported: probe-provider, capture-plan, verify-correctness, run.")
     };
 }
 catch (PerformanceContractException exception)
@@ -26,13 +27,34 @@ catch (PerformanceContractException exception)
 // Reads the provider's own identity off a live connection. ValidateCorrectness binds the observed
 // provider configuration to the requested one entry for entry, so these values must be read rather than
 // guessed — this is the command whose output the operator pastes into capture-plan and matrix.
-static int ProbeProvider(string[] args)
+static async Task<int> ProbeProvider(string[] args)
 {
     var provider = HostArguments.Require(args, "probe-provider", "--provider");
     var connectionString = ProviderConnections.RequireConnectionString(provider);
-    using var connection = ProviderConnections.Open(provider, connectionString);
-    Console.WriteLine($"provider={provider}");
-    Console.WriteLine($"connection-opened={connection.GetType().Name}");
+    var probe = await ProviderProbe.ReadAsync(provider, connectionString);
+    Console.WriteLine($"provider={probe.Provider}");
+    Console.WriteLine($"connection-type={probe.ConnectionType}");
+    Console.WriteLine($"provider-version={probe.Version}");
+    Console.WriteLine($"provider-topology={probe.Topology}");
+    foreach (var (key, value) in probe.Configuration.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        Console.WriteLine($"provider-setting={key}={value}");
+    return 0;
+}
+
+static async Task<int> CapturePlan(string[] args)
+{
+    var request = RunRequestWire.Parse(HostArguments.Require(args, "capture-plan", "--request"));
+    var outputDirectory = HostArguments.Require(args, "capture-plan", "--out");
+    var connectionString = ProviderConnections.RequireConnectionString(request.Provider);
+    var observed = await ProviderProbe.ReadAsync(request.Provider, connectionString);
+    var reference = NativePlanEvidenceStaging.ReferenceFor(request.WorkloadId, request.Provider);
+    if (!string.Equals(reference, request.NativePlanEvidenceReference, StringComparison.Ordinal))
+        throw new PerformanceContractException(
+            $"Checkpoint evidence must use '{reference}' as --native-plan-evidence; received '{request.NativePlanEvidenceReference}'.");
+    var digest = NativePlanEvidenceStaging.WriteCheckpoint(outputDirectory, request, observed);
+    Console.WriteLine($"native-plan-evidence={reference}");
+    Console.WriteLine($"native-plan-sha256={digest}");
+    Console.WriteLine("native-plan-routes=0 (required by the frozen checkpoint-commit contract)");
     return 0;
 }
 

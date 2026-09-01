@@ -12,8 +12,8 @@ substrate.
 | project, references, CLI scaffolding (`HostArguments`, `RunRequestWire`, `NativePlanEvidenceStaging`) | **done**, compiles |
 | `WritePathRoundTripObserver` — the exact provider-native round-trip counter | **done**, compiles |
 | `ProviderConnections` — opens a real v2 connection for all four providers | **done**, compiles |
-| `probe-provider` | **partial** — opens the connection; does not yet read back sanitized provider configuration |
-| `capture-plan` | **not started** |
+| `probe-provider` | **done** — reads native server identity, topology, and sanitized driver settings |
+| `capture-plan` | **done for checkpoint-commit** — emits its explicitly routeless provenance document; native-route capture remains a separate provider-specific task |
 | optional-observer `src/` seam on `GroundworkV2RuntimeCheckpointWriter` | **done**, compiles |
 | `RuntimeStoreComposition` — DI composition, unit admission, distinct clients | **done**, compiles |
 | `CheckpointCommitAdapter` — correctness half, over the production commit path | **done**, compiles |
@@ -33,37 +33,13 @@ if (observer is null || !observer.IsExact)
     throw new PerformanceContractException(... "adapter command counts or synthetic estimates are not admissible.");
 ```
 
-Groundwork v2 exposes exactly two observer seams, and only one of them counts provider commands:
+Groundwork v2 exposes `IProviderCommandObserver`, which counts every provider command issued by a session,
+including reads, writes, probes, and retention. `RuntimeStoreComposition` registers one exact observer and
+forwards it through both sessions and units of work. `IStorageAccessObserver` remains an audit hook for
+privileged access, not a round-trip counter.
 
-- `IWritePathObserver` (`Groundwork.Kernel`) — "one provider command observed while executing a write path".
-  This is a true provider-native round-trip counter. It is threaded through `WriteOptions.Observer`, and the
-  batched unit-of-work path honours it too, taking the observer from the first staged write of each chunk
-  (`PostgreSqlStorageSession.ApplyUpsertBatch` raises one event per multi-row statement). `WritePathObserver`
-  in `Groundwork.Store` already exposes a `RoundTrips` count in exactly this shape.
-- `IStorageAccessObserver` (`Groundwork.Store`) — "one auditable use of **privileged** storage access". It is
-  an audit hook, not a command counter, and it does not fire per provider command.
-
-**There is no read-path observer.** `IStorageSession.Query(QueryRequest, QueryRenderOptions?)` takes no
-observer, and no read-side observer interface exists (`grep "interface I.*Observer"` over `src/` in
-groundwork-v2 returns exactly the two above).
-
-Two consequences, and they set the order of the remaining work:
-
-1. **Write-dominated workloads are measurable on v2 today.** `checkpoint-commit` is the right first leaf, for
-   the same reason it was the right first leaf on v1.
-2. **Read-dominated workloads are blocked upstream**, not merely unwritten. `runtime-bookmark-lookup`,
-   `runtime-trigger-binding-stimulus-lookup`, `runtime-queue-drain`, `runtime-outbox-drain`,
-   `runtime-recurring-schedule-selection` and `iam-normalized-lookup-update` cannot produce an admissible
-   measured artifact until groundwork-v2 grows a read-path round-trip seam. That is a groundwork-v2 change,
-   not an Elsa one, and it is filed as **valence-works/groundwork-v2#63**. #1425 is therefore two pieces of
-   work: this write-dominated half, which is buildable now, and a read half that no amount of work in this
-   repo unblocks.
-
-   If that seam lands, note where to instrument it: each relational provider funnels essentially every
-   command through one private factory — `PostgreSqlStorageSession.Command(string sql)` takes 32 of that
-   session's 33 command creations. Instrumenting the chokepoint makes completeness a property of the design;
-   instrumenting per call site means auditing ~44-51 sites per provider, where a miss silently undercounts and
-   the harness cannot detect it.
+The write and read adapters in this host therefore use the same provider-native observer. Remaining
+read-dominated workloads are unimplemented adapter leaves, rather than being blocked by an absent read seam.
 
 A third point, and its resolution.
 
@@ -101,20 +77,20 @@ callback, while the timed calls remain public runtime-store operations.
 the adapter prepares the same five phases for either process kind. The separate `verify-correctness`
 command remains useful for provider admission without running the timed protocol.
 
-**Correctness has now run against all four providers — two pass, two are blocked upstream of this project.**
+**Historical correctness evidence (not current-version acceptance).** The following results were produced
+before this host's current probe/evidence path and must not be read as evidence for the current package family:
 
-| provider | result (Groundwork `0.3.0-preview.1`, session-scoped observer) |
+| provider | historical result (Groundwork `0.3.0-preview.1`, session-scoped observer) |
 |---|---|
 | sqlite | **passes** — result digest exactly matches the frozen `ebb92b59…`, **37 857** provider round trips |
 | mongodb | **passes** — same digest, **38 751** round trips |
 | postgresql | **fails in the concurrent stale-fence phase** — see elsa-workflows/elsa-foundation#1449 |
 | sqlserver | fails identically to postgresql, same mechanism |
 
-Counts made on `0.2.0-preview.2`'s write-path observer (4 096 sqlite / 10 240 mongodb on this same
-workload) are **not comparable**: the write-only seam was blind to reads, so the ~9× increase is added
-visibility, not added cost. Append-heavy workloads additionally undercount by the relational
-idempotency-ledger overhead (~5 commands per append) until the follow-up declared on
-valence-works/groundwork-v2#63 lands.
+Counts made on `0.2.0-preview.2`'s retired write-path observer (4 096 sqlite / 10 240 mongodb on this same
+workload) are **not comparable**: that write-only seam was blind to reads, so the ~9× increase is added
+visibility, not added cost. They are historical diagnostics only; current evidence uses the provider-command
+observer described above.
 
 One diagnosis trap recorded from the migration run: `RuntimeExecutionOwnershipOptions.LeaseDuration`
 defaults to one minute, and the workload heartbeats each lease before first commit — on a heavily loaded
@@ -142,24 +118,21 @@ Two operational facts the runs established, both previously unverified:
   which cost a misdiagnosis before it was spotted.
 
 The adapter now compiles and is wired end to end, but no provider has executed the timed path yet. A
-correctness or measurement process still requires a staged native-plan document.
+correctness or measurement process still requires a current-version staged native-plan document.
 
 `VerifyCorrectnessAsync` calls `NativePlanEvidenceStaging.PublishInto`, which copies a native-plan evidence
 document out of `ELSA_BENCH_NATIVE_PLAN_STAGING` and fails unless it hashes to the requested
-`--native-plan-sha256`. Nothing produces that document because `capture-plan` is not started. Thus provider
-execution remains blocked on a staged document and the timed cohort remains unrun.
+`--native-plan-sha256`. For checkpoint-commit, `capture-plan` now produces this document after a live probe;
+provider execution remains blocked until the operator runs that command against the current provider.
 
 The good news for this particular workload: `checkpoint-commit` declares **no** required native routes, so
-the document it needs carries an empty `Routes` list and no real plan has to be captured to produce one.
-`NativePlanEvidenceStaging.Write` will emit a well-formed document from a `NativePlanEvidenceDocument`
-whose provider identity matches the request. Either finish `capture-plan` or stage a zero-route document
-that way; both are small, and either unblocks running correctness on all four providers.
+the document it needs carries an empty `Routes` list because the frozen contract declares no required native
+routes. `capture-plan` records that fact as `RouteContract=no-native-routes-declared`, binds the live probe,
+and writes the content digest the matrix request must carry. It does not claim a provider execution plan.
 
-**`probe-provider` still cannot observe provider identity.** `CheckpointCommitAdapter` therefore echoes
-`ProviderVersion`, `ProviderTopology` and `ProviderConfiguration` from the request. `ValidateCorrectness`
-requires observed to equal requested exactly, so echoing is the only thing that can pass today — meaning
-those three fields currently prove the operator was self-consistent, not that the provider was what they
-said. The result digest is the substantive claim and is unaffected by this.
+`probe-provider` now reads native server identity and sanitized driver settings. Both adapters consume that
+observation during correctness, and `ValidateCorrectness` requires it to equal the request exactly; stale,
+hand-edited, or cross-provider metadata therefore blocks the run.
 
 ### The composition, for reference
 
@@ -218,6 +191,14 @@ Verified by reading the harness, not inherited from the v1 host:
 Every operating constraint in the v1 host's README still applies and none of it is provider-specific: artifact
 and staging directories outside the worktree, identical build configuration for harness and host, build once
 then stage then run, run detached, and prefer a checkout you are not editing. They are not repeated here.
+
+Before a checkpoint run, invoke `probe-provider` with the provider connection in its environment. It prints
+the native server version, the admitted topology, and the sanitized `--provider-setting` values to use when
+constructing the matrix request. Then invoke `capture-plan --request <request-json> --out <staging-directory>`
+for each provider. This command performs the live probe again and emits
+`checkpoint-commit.<provider>.native-plan.json`; its digest is the value for `--native-plan-sha256`. The
+document's `RouteContract=no-native-routes-declared` is a provenance statement derived from the frozen
+checkpoint workload, not a provider-plan capture or a performance result.
 
 Two additions for v2:
 

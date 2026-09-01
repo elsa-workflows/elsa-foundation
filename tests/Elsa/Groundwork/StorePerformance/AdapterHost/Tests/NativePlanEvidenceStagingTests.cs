@@ -73,6 +73,37 @@ public sealed class NativePlanEvidenceStagingTests : IDisposable
         Assert.True(File.Exists(Path.Combine(output, reference)));
     }
 
+    [Fact]
+    public void Checkpoint_document_records_that_zero_routes_are_the_frozen_contract()
+    {
+        var reference = Stage(Document());
+        var request = Request(reference) with
+        {
+            ProviderVersion = "3.46.0",
+            ProviderTopology = "file-backed-distinct-connections",
+            ProviderConfiguration = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["mode"] = "ReadWriteCreate",
+                ["cache"] = "Shared",
+                ["pooling"] = "True",
+                ["journal_mode"] = "wal",
+                ["synchronous"] = "1"
+            }
+        };
+        var observed = new ProviderProbe.Result(
+            "sqlite",
+            "SqliteProviderConnection",
+            request.ProviderVersion,
+            request.ProviderTopology,
+            request.ProviderConfiguration);
+
+        var document = NativePlanEvidenceStaging.CreateCheckpointDocument(request, observed);
+
+        Assert.Equal(2, document.SchemaVersion);
+        Assert.Equal(NativePlanEvidenceStaging.NoNativeRoutesContract, document.RouteContract);
+        Assert.Empty(document.Routes);
+    }
+
     private string Stage(NativePlanEvidenceDocument document)
     {
         NativePlanEvidenceStaging.Write(staging, document);
