@@ -178,7 +178,7 @@ Any feature setting can therefore be overridden without touching the file, using
 section separator:
 
 ```bash
--e CShells__Shells__default__Features__GroundworkUnifiedPersistencePostgreSql__ConnectionString="Host=postgres;..."
+-e CShells__Shells__default__Features__GroundworkProviderPostgreSql__ConnectionString="Host=postgres;..."
 ```
 
 > **Warning:** because env vars sit *above* the file, a `CShells__...` variable silently masks both

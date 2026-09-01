@@ -1,4 +1,5 @@
 using Elsa.Foundation.Identity.OpenIddict.Extensions;
+using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using OpenIddict.Server;
@@ -48,9 +49,10 @@ public sealed class OpenIddictSigningKeyResolutionTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddOpenIddictVendorForTests(
+            builder => OpenIddictIdentityFixture.ConfigureInMemoryStore(builder, $"openiddict-{Guid.NewGuid():n}"));
         services.AddFoundationIdentityOpenIddict(
-            options => options.IsDevelopmentOrDemo = isDevelopmentOrDemo,
-            configureDbContext: builder => OpenIddictIdentityFixture.ConfigureInMemoryStore(builder, $"openiddict-{Guid.NewGuid():n}"));
+            options => options.IsDevelopmentOrDemo = isDevelopmentOrDemo);
         return services.BuildServiceProvider();
     }
 }

@@ -200,6 +200,33 @@ public sealed class ArchitectureGuardTests
     }
 
     [Fact]
+    public void Docker_reference_shell_inlines_the_Groundwork_lanes()
+    {
+        var path = Path.Combine(RepoRoot, "docker", "compose", "elsa-workbench.shells.json");
+        var features = ReadDefaultShellFeatures(path);
+
+        foreach (var feature in new[]
+                 {
+                     "GroundworkProviderPostgreSql",
+                     "GroundworkWorkflowRuntime",
+                     "ActivitiesDesignGroundworkPersistence",
+                     "WorkflowsDesignGroundworkPersistence",
+                     "WorkflowsRuntimeDistributedGroundworkPersistence",
+                     "WorkflowsPublishingGroundwork",
+                     "DiagnosticsGroundworkPersistence",
+                     "GroundworkWorkflowDashboard"
+                 })
+        {
+            Assert.True(features.ContainsKey(feature), $"Docker shell must explicitly enable {feature}.");
+        }
+
+        Assert.False(features.ContainsKey("GroundworkUnifiedPersistencePostgreSql"));
+        Assert.Equal(
+            "Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa",
+            Assert.IsType<JsonObject>(features["GroundworkProviderPostgreSql"])["ConnectionString"]?.GetValue<string>());
+    }
+
+    [Fact]
     public void Server_Dockerfile_restores_ReadyToRun_packages_before_no_restore_publish()
     {
         var dockerfile = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Workbench", "Dockerfile"));
@@ -241,22 +268,33 @@ public sealed class ArchitectureGuardTests
     }
 
     /// <summary>
-    /// The reference shell keeps every lane in one database, which the unified preset expresses. Composing a
-    /// second Groundwork target is supported since #1156 and no longer a violation, so this asserts the
-    /// reference shape rather than a host-wide invariant: the preset is selected, and nothing overrides a
-    /// lane it already covers.
+    /// The reference shell owns its composition explicitly: one provider connection is selected and each
+    /// Groundwork lane is enabled by its own feature. The provider and lane features all default to the
+    /// same target, preserving the old single-database reference shape without consuming an Elsa Unified preset.
     /// </summary>
     [Theory]
     [InlineData("shells.json")]
     [InlineData("shells.baseline.json")]
-    public void Server_default_shell_keeps_every_lane_on_the_unified_Groundwork_preset(string fileName)
+    public void Server_default_shell_inlines_the_Groundwork_lanes(string fileName)
     {
         var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
 
-        Assert.True(features.ContainsKey("GroundworkUnifiedPersistenceSqlite"),
-            $"{fileName} must select the unified Groundwork SQLite preset for the reference composition.");
-        Assert.False(features.ContainsKey("GroundworkRuntimePersistenceSqlite"),
-            $"{fileName} must not also compose the runtime-only preset over the unified one.");
+        foreach (var feature in new[]
+                 {
+                     "GroundworkProviderSqlite",
+                     "GroundworkWorkflowRuntime",
+                     "ActivitiesDesignGroundworkPersistence",
+                     "WorkflowsDesignGroundworkPersistence",
+                     "WorkflowsRuntimeDistributedGroundworkPersistence",
+                     "WorkflowsPublishingGroundwork",
+                     "GroundworkWorkflowDashboard"
+                 })
+        {
+            Assert.True(features.ContainsKey(feature), $"{fileName} must explicitly enable {feature}.");
+        }
+
+        Assert.False(features.ContainsKey("GroundworkUnifiedPersistenceSqlite"),
+            $"{fileName} must not consume the Elsa Unified Groundwork preset.");
         Assert.False(features.ContainsKey("GroundworkTargets"),
             $"{fileName} is the single-database reference shape and must not declare targets explicitly.");
         Assert.False(features.ContainsKey("WorkflowsDesignPersistenceEFCoreSqlite"),
@@ -311,7 +349,7 @@ public sealed class ArchitectureGuardTests
     public void Server_default_shell_enables_the_bounded_executable_cache(string fileName)
     {
         var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
-        var settings = Assert.IsType<JsonObject>(features["GroundworkUnifiedPersistenceSqlite"]);
+        var settings = Assert.IsType<JsonObject>(features["GroundworkWorkflowRuntime"]);
 
         Assert.True(settings["CacheWorkflowExecutables"]?.GetValue<bool>());
         Assert.Equal(256, settings["WorkflowExecutableCacheCapacity"]?.GetValue<int>());

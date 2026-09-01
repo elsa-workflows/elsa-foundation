@@ -42,9 +42,9 @@ Prove persistence actually hits Postgres:
 
 ```bash
 docker compose exec postgres psql -U elsa -d elsa -c '\dt'
-# -> groundwork_documents, groundwork_document_indexes, groundwork_schema_history
+# -> per-unit v2 tables such as elsa_workflow_definitions_v2, plus __groundwork_schema_history
 docker compose exec postgres psql -U elsa -d elsa \
-  -c "SELECT document_kind, count(*) FROM groundwork_documents GROUP BY document_kind;"
+  -c 'SELECT count(*) AS applied_units FROM "__groundwork_schema_history";'
 ```
 
 Tear down (including volumes):
@@ -100,7 +100,7 @@ environment variables. Standard .NET double-underscore (`__`) env keys override 
 | `Elsa__ModuleManagement__ApiKey` | The Elsa host management key the server accepts on its `/_elsa/module-management` API (header `X-Elsa-Module-Management-Key`). Server-side only — the browser never sees or sends it. **Must match** Studio's `Studio__BackendModuleManagementApiKey`. | `elsa-docker-demo-key` |
 | `Cors__AllowedOrigins__0`, `__1`, … | Browser origins allowed by the `ElsaStudio` CORS policy. The Studio container's **published host origin** must be listed. | `http://localhost:14000` |
 | `CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentity__AllowedReturnUrlOrigins__0`, `__1`, … | Origins the development login provider may redirect back to after sign-in. Add the Studio origin when Studio is hosted separately from the backend. | `http://localhost:14000` |
-| `CShells__Shells__default__Features__GroundworkUnifiedPersistencePostgreSql__ConnectionString` | Optional: override the Postgres connection string without editing the mounted `shells.json`. | *(commented out)* |
+| `CShells__Shells__default__Features__GroundworkProviderPostgreSql__ConnectionString` | Optional: override the Postgres connection string without editing the mounted `shells.json`. | *(commented out)* |
 
 `Cors:AllowedOrigins` defaults (in `appsettings.json`) are localhost dev values for running the
 server outside Docker; the compose file adds the Studio container origin.
@@ -117,31 +117,26 @@ server outside Docker; the compose file adds the Studio container origin.
 
 ## Demo persistence composition
 
-`docker/compose/elsa-workbench.shells.json` swaps the repo default (SQLite) for a single Groundwork
-PostgreSQL document store:
+`docker/compose/elsa-workbench.shells.json` swaps the repo default (SQLite) for an explicit Groundwork
+PostgreSQL provider and persistence-lane composition:
 
-- **`GroundworkUnifiedPersistencePostgreSql`** is the one-database preset: it declares a single Groundwork
-  target and binds the **runtime**, **workflows-design** and **activities-design** lanes to it. A host that
-  wants those lanes in separate databases enables `GroundworkTargets` and the per-lane persistence features
-  instead — see the Groundwork extension-points catalog. Its connection string binds from a **top-level
-  `ConnectionString` property** on the feature section (not an `Options` wrapper):
+- **`GroundworkProviderPostgreSql`** supplies the one host-selected Groundwork connection. Its connection string
+  binds from a **top-level `ConnectionString` property** on the feature section (not an `Options` wrapper):
 
   ```json
-  "GroundworkUnifiedPersistencePostgreSql": {
+  "GroundworkProviderPostgreSql": {
     "ConnectionString": "Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa"
   }
   ```
 
-- The SQLite EFCore design lanes (`WorkflowsDesignPersistenceEFCoreSqlite`,
-  `ActivitiesDesignPersistenceEFCoreSqlite`) and the SQLite runtime lane
-  (`GroundworkRuntimePersistenceSqlite`) are **removed** — the unified feature covers those lanes.
+- The explicit `GroundworkWorkflowRuntime`, `WorkflowsDesignGroundworkPersistence`,
+  `ActivitiesDesignGroundworkPersistence`, `WorkflowsPublishingGroundwork`, and
+  `WorkflowsRuntimeDistributedGroundworkPersistence` features bind the runtime, workflows-design,
+  activities-design, publishing, and distributed lanes to the provider's default target.
 
-- The **diagnostics** EFCore persistence lanes ship only SQLite providers, so they are **omitted**
-  to keep this a pure-Postgres persistence demo. The diagnostics *features*
-  (`DiagnosticsConsoleLogStreaming`, `DiagnosticsOpenTelemetry`, `DiagnosticsStructuredLogs`) stay
-  enabled but do not persist. If you want persisted diagnostics, add
-  `DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` / `DiagnosticsStructuredLogsPersistenceEFCoreSqlite`
-  back and give `/app` a writable volume for the SQLite files.
+- `DiagnosticsGroundworkPersistence` persists OpenTelemetry and structured logs through the same provider,
+  while `SecretsGroundworkPersistence` keeps the secrets lane on Groundwork. The dashboard projection feature
+  is enabled explicitly so run-health and portfolio queries do not fall back to unavailable/in-memory sources.
 
 - Engine self-instrumentation is enabled: `WorkflowsRuntimeTracing` emits engine spans and
   `DiagnosticsOpenTelemetryEngineBridge` forwards them into the OpenTelemetry ingestion store, so
@@ -151,9 +146,10 @@ PostgreSQL document store:
 - The `SampleNuplaneActivities` and `WeatherForecastSample` sample features are dropped because they
   require Nuplane feed packages that are not present in the image.
 
-`GroundworkUnifiedPersistencePostgreSql` declares `DependsOn "WorkflowsRuntimeResumption"`; CShells
-auto-enables that dependency, so it does not need a `shells.json` entry (its assembly is referenced
-by the host — see the note in `Elsa.Workbench.csproj`).
+`GroundworkWorkflowRuntime` declares `DependsOn "WorkflowsRuntimeResumption"`, and the distributed Groundwork
+feature declares `DependsOn "WorkflowsRuntimeDistributed"`; CShells auto-enables those dependencies. Their
+assemblies are referenced by the host so the features are discoverable in a clean deployment (see the note in
+`Elsa.Workbench.csproj`).
 
 ---
 

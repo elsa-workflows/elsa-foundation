@@ -75,13 +75,14 @@ public sealed class DevelopmentOrDemoGuardTests
                     services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(
                         isDevelopmentOrDemo: false,
                         configureDbContext: builder => builder.UseInMemoryDatabase($"identity-{suffix}"));
+                    services.AddOpenIddictVendorForTests(
+                        builder => builder.UseInMemoryDatabase($"openiddict-{suffix}"));
                     services.AddFoundationIdentityOpenIddict(
                         options =>
                         {
                             options.IsDevelopmentOrDemo = false;
                             options.SigningKey = TestSigningKey;
-                        },
-                        configureDbContext: builder => builder.UseInMemoryDatabase($"openiddict-{suffix}"));
+                        });
                 });
                 webHost.Configure(_ => { });
             })
@@ -108,9 +109,10 @@ public sealed class DevelopmentOrDemoGuardTests
                         configureDbContext: builder => builder.UseInMemoryDatabase($"identity-{suffix}"),
                         // Dev/demo hosts seed an explicitly configured admin; the Development boot test asserts it exists.
                         initialAdmin: isDevelopmentOrDemo ? TestAdmin.SeedOptions() : null);
+                    services.AddOpenIddictVendorForTests(
+                        builder => builder.UseInMemoryDatabase($"openiddict-{suffix}"));
                     services.AddFoundationIdentityOpenIddict(
-                        options => options.IsDevelopmentOrDemo = isDevelopmentOrDemo,
-                        configureDbContext: builder => builder.UseInMemoryDatabase($"openiddict-{suffix}"));
+                        options => options.IsDevelopmentOrDemo = isDevelopmentOrDemo);
                 });
                 webHost.Configure(_ => { });
             })

@@ -102,32 +102,52 @@ public sealed class GroundworkExecutionCommandTransport(
             throw new ArgumentOutOfRangeException(nameof(leaseDuration), "Lease duration must be positive.");
         DistributedRuntimeQueryLimits.ValidateTake(maxItems, nameof(maxItems));
 
-        var result = Session(DistributedGroundworkStorageManifest.CommandTransportUnitId).Query(new QueryRequest(
-            new TableId(DistributedGroundworkStorageManifest.CommandTransportUnitName),
-            new Predicate.And([
-                Equal(Columns.WorkflowExecutionId, workflowExecutionId),
-                new Predicate.Range(Columns.VisibleAt, null, Bound.Inclusive(QueryConstant.Of(Columns.VisibleAt, now)))
-            ]),
-            [new OrderTerm(Columns.Sequence, OrderDirection.Ascending, NullOrder.Last)],
-            Projection.All,
-            Paging.Keyset(maxItems)));
-        var leased = new List<ExecutionCommandTransportItem>(Math.Min(maxItems, result.Rows.Count));
         var session = Session(DistributedGroundworkStorageManifest.CommandTransportUnitId);
-        foreach (var row in result.Rows)
+        var leased = new List<ExecutionCommandTransportItem>(maxItems);
+        var seenContinuations = new HashSet<string>(StringComparer.Ordinal);
+        var seenItemIds = new HashSet<string>(StringComparer.Ordinal);
+        string? continuation = null;
+        do
         {
-            var itemId = StringValue(row, DistributedGroundworkStorageManifest.TransportItemIdField);
-            var entry = session.Read(Key(DistributedGroundworkStorageManifest.TransportItemIdField, itemId));
-            if (entry is null)
-                continue;
-            var item = Deserialize<ExecutionCommandTransportItem>(entry.Values.Values);
-            if (!item.IsVisible(now))
-                continue;
-            var next = item.Lease(ownerId, now + leaseDuration);
-            var options = WriteOptions.IfVersion(entry.Version ?? throw new InvalidOperationException("The command row has no optimistic revision."));
-            var outcome = ConditionalUpsert(session, Values(next), options);
-            if (outcome.Succeeded)
-                leased.Add(next);
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = session.Query(new QueryRequest(
+                new TableId(DistributedGroundworkStorageManifest.CommandTransportUnitName),
+                new Predicate.And([
+                    Equal(Columns.WorkflowExecutionId, workflowExecutionId),
+                    new Predicate.Range(Columns.VisibleAt, null, Bound.Inclusive(QueryConstant.Of(Columns.VisibleAt, now)))
+                ]),
+                [new OrderTerm(Columns.Sequence, OrderDirection.Ascending, NullOrder.Last)],
+                Projection.All,
+                continuation is null ? Paging.Keyset(maxItems) : Paging.Continuation(continuation, maxItems)));
+            foreach (var row in result.Rows)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var itemId = StringValue(row, DistributedGroundworkStorageManifest.TransportItemIdField);
+                if (!seenItemIds.Add(itemId))
+                    continue;
+                var entry = session.Read(Key(DistributedGroundworkStorageManifest.TransportItemIdField, itemId));
+                if (entry is null)
+                    continue;
+                var item = Deserialize<ExecutionCommandTransportItem>(entry.Values.Values);
+                if (!item.IsVisible(now))
+                    continue;
+                var next = item.Lease(ownerId, now + leaseDuration);
+                var options = WriteOptions.IfVersion(entry.Version ?? throw new InvalidOperationException("The command row has no optimistic revision."));
+                var outcome = ConditionalUpsert(session, Values(next), options);
+                if (outcome.Succeeded)
+                    leased.Add(next);
+                if (leased.Count == maxItems)
+                    break;
+            }
+
+            if (leased.Count == maxItems)
+                break;
+            continuation = result.NextContinuationToken;
+            if (continuation is not null && !seenContinuations.Add(continuation))
+                throw new InvalidOperationException("The command transport provider returned a non-advancing lease continuation.");
         }
+        while (continuation is not null);
+
         return ValueTask.FromResult<IReadOnlyList<ExecutionCommandTransportItem>>(leased);
     }
 

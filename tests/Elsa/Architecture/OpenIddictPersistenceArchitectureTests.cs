@@ -5,7 +5,8 @@ namespace Elsa.Architecture.Tests;
 
 /// <summary>
 /// Guards the temporary split: provider-neutral OpenIddict behavior is reusable by
-/// Groundwork while the legacy project remains the frozen EF oracle for #646.
+/// Groundwork while Workbench owns the vendor EF wiring and the legacy project remains the frozen EF oracle until
+/// #1471 removes it.
 /// </summary>
 public sealed class OpenIddictPersistenceArchitectureTests
 {
@@ -50,10 +51,9 @@ public sealed class OpenIddictPersistenceArchitectureTests
 
     [Fact]
     /// <summary>
-    /// OpenIddict persistence is supplied by OpenIddict's own vendor packages, so this EF reference is
-    /// permanent rather than a transitional oracle. Renamed from
-    /// <c>Transitional_EF_oracle_keeps_the_frozen_packages_and_excludes_nested_sources</c> when the
-    /// Groundwork OpenIddict adapter was removed; the assertion is unchanged, only the claim it makes.
+    /// The frozen Elsa OpenIddict project still carries the vendor packages/context/migrations as the transitional
+    /// oracle. The host-owned registration is intentionally outside this project and will be the only remaining
+    /// vendor choice after #1471 removes the frozen slice.
     /// </summary>
     public void Vendor_EF_persistence_keeps_the_pinned_packages_and_excludes_nested_sources()
     {
@@ -76,6 +76,59 @@ public sealed class OpenIddictPersistenceArchitectureTests
         Assert.Contains(
             project.Descendants("Compile"),
             element => string.Equals((string?)element.Attribute("Remove"), "Behavior/**/*.cs", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void OpenIddict_behavior_composite_does_not_select_vendor_persistence()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            RepoRoot,
+            "src",
+            "Elsa",
+            "Foundation",
+            "Identity",
+            "OpenIddict",
+            "Extensions",
+            "OpenIddictIdentityServiceCollectionExtensions.cs"));
+
+        Assert.DoesNotContain("services.AddDbContext", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("UseEntityFrameworkCore", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("UseInMemoryDatabase", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("UseSqlite", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("OpenIddictIdentityStoreInitializer", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Workbench_owns_the_vendor_package_and_explicit_registration()
+    {
+        var project = XDocument.Load(Path.Combine(
+            RepoRoot,
+            "src",
+            "Apps",
+            "Elsa.Workbench",
+            "Elsa.Workbench.csproj"));
+        var program = File.ReadAllText(Path.Combine(
+            RepoRoot,
+            "src",
+            "Apps",
+            "Elsa.Workbench",
+            "Program.cs"));
+
+        Assert.Contains(
+            project.Descendants("PackageReference"),
+            element => string.Equals((string?)element.Attribute("Include"), "OpenIddict.EntityFrameworkCore", StringComparison.Ordinal));
+        Assert.Contains("AddWorkbenchOpenIddictVendor", program, StringComparison.Ordinal);
+
+        var hostRegistration = File.ReadAllText(Path.Combine(
+            RepoRoot,
+            "src",
+            "Apps",
+            "Elsa.Workbench",
+            "WorkbenchOpenIddictVendorRegistration.cs"));
+        Assert.Contains("CShells:Shells:default:Features:FoundationIdentityOpenIddict", hostRegistration, StringComparison.Ordinal);
+        Assert.Contains("AddDbContext<OpenIddictIdentityDbContext>", hostRegistration, StringComparison.Ordinal);
+        Assert.Contains("UseEntityFrameworkCore", hostRegistration, StringComparison.Ordinal);
+        Assert.Contains("AddHostedService", hostRegistration, StringComparison.Ordinal);
     }
 
     private static bool IsSourceOrProject(string path) =>

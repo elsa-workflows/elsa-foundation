@@ -84,11 +84,11 @@ internal sealed class AspNetCoreIdentityGroundworkHttpFixture : IAsyncDisposable
                     services.AddAuthorization();
                     services.AddSingleton<IStorageProviderConnection>(persistence.Connection);
                     services.AddPersistenceCore(AspNetCoreIdentityGroundworkHttpFixture.PrimaryTenant);
-                    services.AddFoundationIdentityOpenIddict(
-                        options => options.IsDevelopmentOrDemo = true,
-                        configureDbContext: builder => OpenIddictIdentityFixture.ConfigureInMemoryStore(
+                    services.AddOpenIddictVendorForTests(
+                        builder => OpenIddictIdentityFixture.ConfigureInMemoryStore(
                             builder,
                             $"openiddict-{databaseSuffix}"));
+                    services.AddFoundationIdentityOpenIddict(options => options.IsDevelopmentOrDemo = true);
                     services.AddFoundationAspNetCoreIdentityGroundwork();
                     services.Configure<IdentityOptions>(options => options.User.RequireUniqueEmail = true);
                     services.Configure<AspNetCoreIdentityOptions>(options =>

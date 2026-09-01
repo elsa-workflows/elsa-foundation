@@ -33,8 +33,10 @@ on:
     paths:
       - .github/workflows/http-workflow-performance.yml
       - Directory.Packages.props
+      - src/Apps/Elsa.Workbench/**
       - src/Elsa/Persistence/Groundwork/**
       - src/Elsa/Workflows/Runtime/**
+      - docker/compose/**
       - tools/performance/**
   push:
     branches:

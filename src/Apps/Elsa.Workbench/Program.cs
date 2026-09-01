@@ -7,6 +7,7 @@ using CShells.Lifecycle;
 using CShells.Management.Api;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Core.Options;
+using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Clr;
 using Elsa.Activities.Flowchart;
@@ -47,8 +48,8 @@ using Elsa.Modularity.ExtensionBuilder;
 using Elsa.Modularity.ExtensionBuilder.Extensions;
 using Elsa.Modularity.Nuplane.Extensions;
 using Elsa.Modularity.Nuplane.Services;
-using Elsa.Persistence.Groundwork.PostgreSql.Unified;
-using Elsa.Persistence.Groundwork.Sqlite.Unified;
+using Elsa.Persistence.Groundwork.Providers;
+using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Primitives.Hosting;
 using Elsa.Secrets.Attention;
 using Elsa.Serialization.Newtonsoft;
@@ -62,6 +63,7 @@ using Elsa.Workbench.Boot;
 using Elsa.Workbench.Readiness;
 using Elsa.Workflows.Dashboard;
 using Elsa.Workflows.Design.Api;
+using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Design.Reconciliation;
 using Elsa.Workflows.Design.Reconciliation.Json;
 using Elsa.Workflows.ExecutionEvidence;
@@ -70,6 +72,8 @@ using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Distributed;
+using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Resumption;
@@ -103,6 +107,12 @@ builder.Configuration
     .AddEnvironmentVariables()
     .AddCommandLine(args);
 var configuration = builder.Configuration;
+
+// OpenIddict's protocol behavior is composed by the shell feature, but its vendor EF store is host-owned. Bind the
+// default shell's persistence settings at the root so the host-level initializer and every copied shell service
+// provider select the same demo in-memory store or durable SQLite store. The behavior composite deliberately does not
+// register a DbContext, an EF store, or an initializer; this is the Workbench's explicit vendor choice.
+builder.Services.AddWorkbenchOpenIddictVendor(configuration);
 
 // Opt-in cold-start phase instrument (spec 129). Null unless Elsa:Boot:PhaseTiming:Enabled is set, so the host
 // registers no boot services and pays nothing when the switch is off. When on, the timeline is a root singleton
@@ -223,8 +233,13 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(Elsa.Workflows.Design.JavaScript.JavaScriptWorkflowsDesignFeature).Assembly,
             typeof(Elsa.Workflows.Runtime.JavaScript.JavaScriptActivitiesFeature).Assembly,
 
-            typeof(SqliteGroundworkUnifiedPersistenceShellFeature).Assembly,
-            typeof(PostgreSqlGroundworkUnifiedPersistenceShellFeature).Assembly,
+            typeof(GroundworkSqliteProviderFeature).Assembly,
+            typeof(GroundworkWorkflowRuntimeFeature).Assembly,
+            typeof(ActivitiesDesignGroundworkPersistenceFeature).Assembly,
+            typeof(WorkflowsDesignGroundworkPersistenceFeature).Assembly,
+            typeof(WorkflowsRuntimeDistributedFeature).Assembly,
+            typeof(WorkflowsRuntimeDistributedGroundworkPersistenceFeature).Assembly,
+            typeof(WorkbenchGroundworkDashboardFeature).Assembly,
             typeof(WorkflowsDesignApiFeature).Assembly,
             typeof(ActivitiesDesignApiFeature).Assembly,
 
