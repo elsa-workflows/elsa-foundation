@@ -29,9 +29,13 @@ public sealed class IdentityGroundworkV2BoundaryTests
 
         var users = IdentityV2StorageManifest.Require(IdentityStorageManifest.IdentityUserDocumentKind);
         Assert.Contains(users.Indexes, index =>
-            index.Columns.SequenceEqual([new IndexColumn(IdentityStorageManifest.NormalizedUserNameKeyField)]));
+            index.Columns.SequenceEqual([
+                new IndexColumn(IdentityStorageManifest.NormalizedUserNameKeyField),
+                new IndexColumn(IdentityV2StorageManifest.IdField)]));
         Assert.Contains(users.Indexes, index =>
-            index.Columns.SequenceEqual([new IndexColumn(IdentityStorageManifest.NormalizedEmailKeyField)]));
+            index.Columns.SequenceEqual([
+                new IndexColumn(IdentityStorageManifest.NormalizedEmailKeyField),
+                new IndexColumn(IdentityV2StorageManifest.IdField)]));
         Assert.True(users.Columns.Single(column => column.Name == IdentityStorageManifest.NormalizedUserNameKeyField).IsNullable);
         Assert.True(users.Columns.Single(column => column.Name == IdentityStorageManifest.NormalizedEmailKeyField).IsNullable);
 
@@ -40,7 +44,9 @@ public sealed class IdentityGroundworkV2BoundaryTests
             PortableType.DateTimeOffset,
             receipts.Columns.Single(column => column.Name == IdentityStorageManifest.MutationReceiptExpiresAtField).Type);
         Assert.Contains(receipts.Indexes, index =>
-            index.Columns.SequenceEqual([new IndexColumn(IdentityStorageManifest.MutationReceiptExpiresAtField)]));
+            index.Columns.SequenceEqual([
+                new IndexColumn(IdentityStorageManifest.MutationReceiptExpiresAtField),
+                new IndexColumn(IdentityV2StorageManifest.IdField)]));
     }
 
     [Fact]

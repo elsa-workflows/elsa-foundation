@@ -1,5 +1,6 @@
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
+using Elsa.Foundation.Identity.Persistence.Groundwork.Exceptions;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Composition;
 using Groundwork.Kernel;
@@ -130,10 +131,12 @@ public sealed class IdentityGroundworkStoreTests
             });
         }
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var exception = await Assert.ThrowsAsync<GroundworkIdentityStoreException>(async () =>
             await store.ListAsync("tenant-1"));
 
-        Assert.Contains(nameof(IPagedRoleStore), exception.Message, StringComparison.Ordinal);
+        Assert.Contains("identity_role_by_tenant", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("bounded materialization limit", exception.Message, StringComparison.Ordinal);
+        Assert.Null(exception.InnerException);
     }
 
     [Fact]
@@ -151,10 +154,12 @@ public sealed class IdentityGroundworkStoreTests
             });
         }
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var exception = await Assert.ThrowsAsync<GroundworkIdentityStoreException>(async () =>
             await store.ListForProviderAsync("tenant-1", "google"));
 
-        Assert.Contains(nameof(IPagedClaimMappingStore), exception.Message, StringComparison.Ordinal);
+        Assert.Contains("identity_claim_mapping_by_provider", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("bounded materialization limit", exception.Message, StringComparison.Ordinal);
+        Assert.Null(exception.InnerException);
     }
 
     [Fact]
@@ -199,10 +204,12 @@ public sealed class IdentityGroundworkStoreTests
                 GroundworkIdentityRowWriteCondition.CreateOnly));
         Assert.True(seeded.Succeeded, seeded.Message);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var exception = await Assert.ThrowsAsync<GroundworkIdentityStoreException>(async () =>
             await store.ListForUserAsync("tenant-1", "user-1"));
 
-        Assert.Contains(nameof(IPagedExternalIdentityStore), exception.Message, StringComparison.Ordinal);
+        Assert.Contains("identity_login_by_user", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("bounded materialization limit", exception.Message, StringComparison.Ordinal);
+        Assert.Null(exception.InnerException);
     }
 
     [Fact]

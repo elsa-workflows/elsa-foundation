@@ -34,9 +34,10 @@ using Elsa.Expressions.Api;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork;
 using Elsa.Foundation.Identity.Oidc;
 using Elsa.Foundation.Identity.OpenIddict;
+using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Locking.FileSystem;
 using Elsa.Mediator;
 using Elsa.Modularity.Api;
@@ -278,7 +279,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             // (provider-agnostic auth/IAM contracts) plus the OIDC authentication provider module, which
             // registers the external JWT bearer scheme, and — now that Workstream D is landed — the
             // first-party token stack: the identity API endpoints (login/session/token exchange), the
-            // ASP.NET Core Identity substrate (cookie sign-in, EF stores, dev seeding), and the OpenIddict
+            // ASP.NET Core Identity substrate (cookie sign-in, Groundwork stores, dev seeding), and the OpenIddict
             // token service (JWT issuance + local bearer validation). Together their composite scheme
             // selector becomes the default authenticate/challenge scheme, so an unauthenticated call is
             // rejected with 401. All of these are enabled in the default shell (see shells.json) with
@@ -292,9 +293,10 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(OidcAuthenticationFeature).Assembly,
             typeof(AspNetCoreIdentityFeature).Assembly,
 
-            // The EF Core-backed ASP.NET Core Identity substrate (durable stores, SignInManager cookie
+            // The Groundwork-backed ASP.NET Core Identity substrate (durable stores, SignInManager cookie
             // sign-in, login endpoints/page, dev seeding), enabled in the default shell via shells.json.
-            typeof(AspNetCoreIdentityEntityFrameworkCoreFeature).Assembly,
+            typeof(IdentityGroundworkPersistenceFeature).Assembly,
+            typeof(AspNetCoreIdentityGroundworkFeature).Assembly,
 
             typeof(OpenIddictIdentityFeature).Assembly,
             typeof(AttentionApiFeature).Assembly,

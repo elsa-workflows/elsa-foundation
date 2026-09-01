@@ -23,7 +23,8 @@ public sealed class MongoDbReplicaSetFixture : IAsyncLifetime
 
     public string ConnectionString => new MongoUrlBuilder(_container.GetConnectionString())
     {
-        ReplicaSetName = ReplicaSetName
+        ReplicaSetName = ReplicaSetName,
+        AuthenticationSource = "admin"
     }.ToString();
 
     /// <summary>Returns a database name used by one test's explicit schema application and host admission.</summary>

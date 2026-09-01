@@ -12,7 +12,6 @@
 		<PackageReference Include="Nuplane.Admin" />
 		<PackageReference Include="Nuplane.Loading" />
 		<PackageReference Include="Nuplane.Sources.Directory" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -78,7 +77,7 @@
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\AspNetCoreIdentity\Groundwork\Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj" />
-		<ProjectReference Include="..\..\Elsa\Foundation\Identity\AspNetCoreIdentity\EntityFrameworkCore\Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Persistence\Groundwork\Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
 		<ProjectReference Include="..\..\Elsa\Secrets\Persistence\Groundwork\Elsa.Secrets.Persistence.Groundwork.csproj" />

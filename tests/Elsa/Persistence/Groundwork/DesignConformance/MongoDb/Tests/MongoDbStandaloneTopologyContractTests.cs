@@ -1,9 +1,14 @@
 using CShells.Lifecycle;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.DesignConformance.Tests;
 using Elsa.Persistence.Groundwork.MongoDb.Unified.DependencyInjection;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
+using Elsa.Workflows.Design.Persistence.Groundwork;
+using Groundwork.Kernel;
+using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
+using MongoDB.Bson;
 using MongoDB.Driver;
 using Xunit;
 
@@ -11,15 +16,14 @@ namespace Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests;
 
 /// <summary>
 /// T054 negative proof: the unified MongoDB substrate composed against an unsupported topology (a
-/// standalone server that cannot serve multi-document transactions) must fail readiness during runtime
-/// admission <em>before</em> any design document — or even any collection — is written, and the schema
-/// tool must surface the same incompatibility rather than reporting a ready target.
+/// standalone server that cannot serve multi-document transactions) may apply its idempotent schema,
+/// but must refuse an atomic design write before a unit of work is acquired or any design row is staged.
 /// </summary>
 [Collection(MongoDbStandaloneTopologyCollection.Name)]
 public sealed class MongoDbStandaloneTopologyContractTests(MongoDbStandaloneTopologyFixture container)
 {
     [SkippableFact]
-    public async Task Standalone_topology_fails_runtime_readiness_before_any_design_write()
+    public async Task Standalone_topology_refuses_atomic_design_write_before_any_design_row()
     {
         Skip.IfNot(container.IsAvailable, container.SkipReason ?? "Docker unavailable.");
 
@@ -30,25 +34,39 @@ public sealed class MongoDbStandaloneTopologyContractTests(MongoDbStandaloneTopo
         var initializers = services.GetServices<IShellInitializer>().ToArray();
         Assert.NotEmpty(initializers);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-        {
-            foreach (var initializer in initializers)
-                await initializer.InitializeAsync(CancellationToken.None);
-        });
+        foreach (var initializer in initializers)
+            await initializer.InitializeAsync(CancellationToken.None);
 
-        // The established runtime-admission failure: MongoDbGroundworkRuntimeAdmission requires the
-        // configured and observed deployment to be the same writable replica set with working
-        // transactions; a standalone server is rejected and no store is opened.
-        Assert.Contains("writable replica set", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("no store was opened", exception.Message, StringComparison.Ordinal);
+        // Groundwork v2 admits and applies schema independently from write capability. The atomic
+        // boundary is BeginUnitOfWork: it checks the observed deployment before it opens a provider
+        // transaction or accepts a staged design row.
+        var sessions = services.GetRequiredService<IGroundworkStorageSessionSource>();
+        var exception = Assert.Throws<InvalidOperationException>(() => sessions.BeginUnitOfWork(
+            StorageAccess.Scoped(new StorageScope("tenant-a")),
+            BatchWriteOptions.Exact,
+            [WorkflowsDesignStorageManifest.DesignOperationDocumentKind]));
 
-        // Admission rejected the topology before composing or opening a physical store, so the target
-        // database holds no design collections (indeed no collections at all).
+        Assert.Contains("transaction-capable MongoDB replica set", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("standalone MongoDB", exception.Message, StringComparison.Ordinal);
+
+        // Schema collections are expected after v2 admission; the transaction refusal must still
+        // precede domain data. In particular, every physical operation-ledger collection remains
+        // empty, including the scope-specific collection admission created before the topology gate.
         using var client = new MongoClient(connectionString);
         var database = client.GetDatabase(databaseName);
-        var collections = await (await database.ListCollectionNamesAsync(cancellationToken: CancellationToken.None))
-            .ToListAsync(CancellationToken.None);
-        Assert.Empty(collections);
+        var operationCollections = (await (await database.ListCollectionNamesAsync(
+                cancellationToken: CancellationToken.None))
+            .ToListAsync(CancellationToken.None))
+            .Where(name => name.StartsWith("elsa_design_operations", StringComparison.Ordinal))
+            .ToArray();
+        Assert.NotEmpty(operationCollections);
+        foreach (var collectionName in operationCollections)
+        {
+            var operations = database.GetCollection<BsonDocument>(collectionName);
+            Assert.Equal(0, await operations.CountDocumentsAsync(
+                FilterDefinition<BsonDocument>.Empty,
+                cancellationToken: CancellationToken.None));
+        }
     }
 
     private static ServiceProvider BuildServices(string connectionString, string databaseName)
