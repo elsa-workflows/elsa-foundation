@@ -161,7 +161,6 @@
   </Folder>
   <Folder Name="/src/Elsa/Foundation/Identity/AspNetCoreIdentity/">
     <Project Path="src/Elsa/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
-    <Project Path="src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
     <Project Path="src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Foundation/Identity/OpenIddict/">

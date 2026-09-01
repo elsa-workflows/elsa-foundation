@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 110
+- Discovered feature classes: 109
 
 ## Features
 
@@ -58,7 +58,6 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | FoundationIdentityAbstractionsFeature | direct IShellFeature | Elsa.Foundation.Identity.Abstractions | IShellFeature | [FoundationIdentityAbstractionsFeature.cs](../../src/Elsa/Foundation/Identity/Abstractions/FoundationIdentityAbstractionsFeature.cs) |
 | FoundationIdentityApiFeature | direct IWebShellFeature | Elsa.Foundation.Identity.Api | IWebShellFeature | [FoundationIdentityApiFeature.cs](../../src/Elsa/Foundation/Identity/Api/FoundationIdentityApiFeature.cs) |
 | AspNetCoreIdentityFeature | direct IWebShellFeature | Elsa.Foundation.Identity.AspNetCoreIdentity | IWebShellFeature | [AspNetCoreIdentityFeature.cs](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/AspNetCoreIdentityFeature.cs) |
-| AspNetCoreIdentityEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore | IShellFeature | [AspNetCoreIdentityEntityFrameworkCoreFeature.cs](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/AspNetCoreIdentityEntityFrameworkCoreFeature.cs) |
 | AspNetCoreIdentityGroundworkFeature | direct IShellFeature | Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork | IShellFeature | [AspNetCoreIdentityGroundworkFeature.cs](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/AspNetCoreIdentityGroundworkFeature.cs) |
 | OidcAuthenticationFeature | direct IShellFeature | Elsa.Foundation.Identity.Oidc | IShellFeature | [OidcAuthenticationFeature.cs](../../src/Elsa/Foundation/Identity/Oidc/OidcAuthenticationFeature.cs) |
 | OpenIddictIdentityFeature | direct IShellFeature | Elsa.Foundation.Identity.OpenIddict | IShellFeature | [OpenIddictIdentityFeature.cs](../../src/Elsa/Foundation/Identity/OpenIddict/OpenIddictIdentityFeature.cs) |

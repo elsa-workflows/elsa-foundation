@@ -4,10 +4,12 @@ using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.Api.Extensions;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Extensions;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
+using Elsa.Foundation.Identity.OpenIddict;
 using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Elsa.Foundation.Identity.OpenIddict.Extensions;
+using Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using FastEndpoints;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -22,6 +24,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Groundwork.Store;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 
@@ -29,7 +32,7 @@ namespace Elsa.Foundation.Identity.Tests.Api;
 
 /// <summary>
 /// Shared HTTP host for the <c>GET /_elsa/identity/token</c> tests (plan C2). Composes the three landed
-/// workstreams end to end over private in-memory databases: the ASP.NET Core Identity substrate + cookie
+/// workstreams end to end over a private Groundwork SQLite store and an in-memory OpenIddict vendor database: the ASP.NET Core Identity substrate + cookie
 /// sign-in + <c>POST /_elsa/identity/login</c> (A), the OpenIddict issuance + bearer validation scheme (B),
 /// and the explicit Foundation Identity Minimal API mapping (C). A single self-contained <c>/protected</c>
 /// endpoint (default scheme = the OpenIddict selector) proves an issued bearer authenticates onward.
@@ -68,15 +71,23 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
 
                     // Workstream A: identity substrate + cookie sign-in + login endpoint (in dev/demo mode with
                     // an explicitly configured admin so we can log in through the real POST /login flow).
-                    services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(
-                        isDevelopmentOrDemo: true,
-                        configureDbContext: builder => builder.UseInMemoryDatabase($"identity-{databaseSuffix}"),
-                        initialAdmin: TestAdmin.SeedOptions());
+                    var persistence = new IdentityV2TestPersistence();
+                    services.AddSingleton(persistence);
+                    services.AddSingleton<IStorageProviderConnection>(p => p.GetRequiredService<IdentityV2TestPersistence>().Connection);
+                    services.AddPersistenceCore();
+                    services.AddFoundationAspNetCoreIdentityGroundwork(TestAdmin.SeedOptions(), isDevelopmentOrDemo: true);
 
-                    // Workstream B: OpenIddict issuance + bearer validation + selector default scheme.
+                    // Workstream B: OpenIddict issuance + bearer validation + selector default scheme. Explicitly
+                    // select the bearer/cookie router because the Groundwork-only default is registered first.
                     services.AddOpenIddictVendorForTests(
                         builder => builder.UseInMemoryDatabase($"openiddict-{databaseSuffix}"));
                     services.AddFoundationIdentityOpenIddict(options => options.IsDevelopmentOrDemo = true);
+                    services.AddAuthentication(options =>
+                    {
+                        options.DefaultScheme = OpenIddictIdentityDefaults.SelectorScheme;
+                        options.DefaultAuthenticateScheme = OpenIddictIdentityDefaults.SelectorScheme;
+                        options.DefaultChallengeScheme = OpenIddictIdentityDefaults.SelectorScheme;
+                    });
 
                     // Model an external JWT handler that authenticates a raw provider principal. The token
                     // exchange must reject this identity until a provider-owned projection normalizes it.
@@ -120,10 +131,9 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
             })
             .Build();
 
-        // Materialize both in-memory schemas before startup so the seeder hosted service can write.
+        // Materialize the vendor schema before startup so its hosted service can write.
         await using (var scope = host.Services.CreateAsyncScope())
         {
-            await scope.ServiceProvider.GetRequiredService<ApplicationIdentityDbContext>().Database.EnsureCreatedAsync();
             await scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>().Database.EnsureCreatedAsync();
         }
 

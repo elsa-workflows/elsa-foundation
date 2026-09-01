@@ -17,17 +17,15 @@ namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Extensions;
 public static class AspNetCoreIdentityServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the provider-neutral half of the ASP.NET Core Identity substrate: the Elsa IAM stores
-    /// (in-memory by default — see remarks), the user/role managers, the Elsa principal factory, the
-    /// first-party sign-in service, and the local authentication provider module.
+    /// Registers the provider-neutral ASP.NET Core Identity substrate: the Elsa IAM contracts, the
+    /// user/role managers, the Elsa principal factory, the first-party sign-in service, and the local
+    /// authentication provider module.
     /// </summary>
     /// <remarks>
-    /// The durable EF stores, ASP.NET Core Identity core (<c>SignInManager</c>, token providers), the cookie
-    /// scheme, and admin seeding are supplied by the separate
-    /// <c>FoundationIdentityAspNetCoreIdentityEntityFrameworkCore</c> feature
-    /// (<c>AddFoundationAspNetCoreIdentityEntityFrameworkCore</c>), which replaces the in-memory Elsa IAM
-    /// stores with EF-backed ones over a shared <c>ApplicationIdentityDbContext</c>. The in-memory store is
-    /// retained here as the default only for <c>IsDevelopmentOrDemo</c> / tests.
+    /// A concrete persistence integration supplies the ASP.NET Core Identity core services, cookie scheme,
+    /// durable Elsa IAM stores, and optional administrator seeding. The Groundwork integration is the
+    /// first-party durable implementation and is registered with
+    /// <c>AddFoundationAspNetCoreIdentityGroundwork</c>.
     /// </remarks>
     public static IServiceCollection AddFoundationAspNetCoreIdentity(this IServiceCollection services, Action<AspNetCoreIdentityOptions>? configure = null)
     {
@@ -66,7 +64,7 @@ public static class AspNetCoreIdentityServiceCollectionExtensions
     /// Adds ASP.NET Core Identity core (user/role managers, sign-in manager, default token providers), the
     /// Elsa claims-principal factory as ASP.NET Core's <see cref="IUserClaimsPrincipalFactory{TUser}"/>, and
     /// the first-party cookie scheme. Store registration is left to the caller via the returned
-    /// <see cref="IdentityBuilder"/> (e.g. <c>.AddEntityFrameworkStores&lt;T&gt;()</c>).
+    /// <see cref="IdentityBuilder"/>.
     /// </summary>
     /// <param name="isDevelopmentOrDemo">
     /// When <c>false</c> (production), the sign-in cookie is marked <see cref="CookieSecurePolicy.Always"/> so

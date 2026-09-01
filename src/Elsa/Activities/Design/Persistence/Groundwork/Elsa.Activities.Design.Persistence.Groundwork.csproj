@@ -18,6 +18,7 @@
     <ProjectReference Include="..\..\..\..\Locking\Core\Elsa.Locking.Core.csproj" />
     <ProjectReference Include="..\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Persistence\Groundwork\V2\Elsa.Persistence.Groundwork.V2.csproj" />
     <ProjectReference Include="..\..\..\..\Serialization\Core\Elsa.Serialization.Core.csproj" />
   </ItemGroup>
