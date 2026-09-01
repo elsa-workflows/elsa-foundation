@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
+namespace Elsa.Workbench.OpenIddict;
 
 /// <summary>
 /// Companion EF Core context holding OpenIddict's entity sets (applications, authorizations, scopes,

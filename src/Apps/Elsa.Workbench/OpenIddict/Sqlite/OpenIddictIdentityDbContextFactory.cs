@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
-namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Sqlite;
+namespace Elsa.Workbench.OpenIddict.Sqlite;
 
 /// <summary>
 /// Design-time factory for <see cref="OpenIddictIdentityDbContext"/> so <c>dotnet ef migrations</c> can build
