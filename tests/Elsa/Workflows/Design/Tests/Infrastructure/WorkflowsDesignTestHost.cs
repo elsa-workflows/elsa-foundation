@@ -3,7 +3,7 @@ using Elsa.Activities.Design.Reconciliation;
 using Elsa.Events;
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
-using Elsa.Persistence.Core.Design;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
 using Elsa.Primitives.Contracts;

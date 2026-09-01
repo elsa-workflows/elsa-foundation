@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
+using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Persistence.Core;
+namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
 /// Creates a dependency-injection scope whose ordinary persistence context is bound to one explicit partition.

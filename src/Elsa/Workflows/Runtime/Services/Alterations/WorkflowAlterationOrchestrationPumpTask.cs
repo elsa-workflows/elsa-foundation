@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
-using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Tasks.Schedules;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;

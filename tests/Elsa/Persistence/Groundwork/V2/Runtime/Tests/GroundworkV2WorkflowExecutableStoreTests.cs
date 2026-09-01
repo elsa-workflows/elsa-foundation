@@ -1,6 +1,5 @@
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Models;
-using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Primitives.Models;

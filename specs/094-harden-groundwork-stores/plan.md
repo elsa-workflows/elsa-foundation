@@ -78,7 +78,7 @@ specs/094-harden-groundwork-stores/
 
 ```text
 src/Elsa/
-├── Persistence/Core/                         # Provider-neutral persistence scope/access contract
+├── Workflows/Runtime/Core/                    # Provider-neutral persistence scope/access contract
 ├── Persistence/Groundwork/
 │   ├── Composition/                  # Acyclic implementation-level manifest contribution contracts
 │   ├── Stores/                       # Runtime adapters and operational transitions

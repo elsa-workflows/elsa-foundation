@@ -29,6 +29,9 @@ There is no shared `Elsa.Workflows.Core` parent package. Design and Runtime are 
 Top-level domain Cores in play:
 
 - `Elsa.Persistence.Core` - generic persistence contracts such as `IAddCommand<T>` and `IQuery<T>`.
+- Runtime persistence access and scope contracts now live in `Elsa.Workflows.Runtime.Core`; design
+  operation identity and failure contracts live in `Elsa.Workflows.Design.Persistence.Core`. The
+  old `Elsa.Persistence.Core` namespaces are not compatibility aliases.
 - `Elsa.Serialization.Core` - serialization contracts.
 
 Workflows sub-domain Cores:
@@ -248,4 +251,3 @@ Key reasoning:
 Activity-specific validators co-locate with their activity's design-time module. The validator is an `IDraftValidator` registered by the `Elsa.Http.Activities.Design` feature; it is not its own event handler.
 
 This is not a license to over-elaborate every cross-domain contribution. The three-segment composition activates only when the consumer domain also has an internal phase axis that must appear at the package boundary.
-

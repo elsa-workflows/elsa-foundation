@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
-using Elsa.Persistence.Core.Design;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Exceptions;
 using Elsa.Serialization.Core;
@@ -36,7 +36,7 @@ public class GroundworkWorkflowDefinitionCommandTests
     private readonly HookEventPublisher _events = new();
     private readonly SequentialIdentityGenerator _identities = new();
     private readonly FakeSystemClock _clock = new();
-    private readonly Elsa.Persistence.Core.IPersistenceAccessContextAccessor _accessContext =
+    private readonly Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextAccessor _accessContext =
         GroundworkTestAccess.DefaultAccessContextAccessor;
     private int _operationSequence;
 

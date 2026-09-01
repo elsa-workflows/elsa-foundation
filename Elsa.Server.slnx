@@ -491,7 +491,6 @@
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/" />
   <Folder Name="/tests/Elsa/Persistence/Core/">
-    <Project Path="tests/Elsa/Persistence/Core/Tests/Elsa.Persistence.Core.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/EFCore/">
     <Project Path="tests/Elsa/Persistence/EFCore/Tests/Elsa.Persistence.EFCore.Tests.csproj" />

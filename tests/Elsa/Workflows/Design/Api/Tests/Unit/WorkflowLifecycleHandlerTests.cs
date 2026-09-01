@@ -1,6 +1,5 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Persistence.Core.Design;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Core.Models;

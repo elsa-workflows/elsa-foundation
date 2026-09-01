@@ -11,7 +11,6 @@ using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Http.Core;
 using Elsa.Persistence.Groundwork;
-using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Primitives.Models;

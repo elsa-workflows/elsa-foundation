@@ -1,4 +1,6 @@
-namespace Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Models;
+
+namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
 /// Supplies the finite snapshot of persistence partitions that background infrastructure must visit

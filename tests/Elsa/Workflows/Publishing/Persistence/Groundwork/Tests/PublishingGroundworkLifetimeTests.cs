@@ -1,4 +1,3 @@
-using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Core.Contracts;

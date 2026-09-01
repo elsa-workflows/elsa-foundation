@@ -1,4 +1,4 @@
-namespace Elsa.Persistence.Core;
+namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>Authorization level required by a persistence operation, independent of its storage scope.</summary>
 public enum PersistenceAccessPolicy
