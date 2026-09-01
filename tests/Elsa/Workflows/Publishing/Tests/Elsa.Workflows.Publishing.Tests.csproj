@@ -10,6 +10,8 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <!-- WorkflowExecutionHarness uses the API feature's shell abstractions at runtime. -->
+    <PackageReference Include="CShells.AspNetCore.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>
@@ -22,7 +24,15 @@
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Publishing\Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Publishing\Core\Elsa.Workflows.Publishing.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <!-- The SC-B-003 acceptance proof crosses the real export target/codec into a fresh runtime-only importer. -->
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Reconciliation\Elsa.Workflows.Runtime.Reconciliation.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Reconciliation\Core\Elsa.Workflows.Runtime.Reconciliation.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\DispatchWorkflow\Runtime\Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Mediator\Core\Elsa.Mediator.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\tests\Elsa\Activities\Testing\Elsa.Activities.Testing.csproj" />
   </ItemGroup>
 
 </Project>
