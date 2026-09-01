@@ -39,19 +39,6 @@ public sealed class OpenIddictSchemeCompositionTests : IAsyncDisposable
     }
 
     [Fact]
-    public void Legacy_db_context_callback_fails_closed_with_host_registration_guidance()
-    {
-        var services = new ServiceCollection();
-
-        var exception = Assert.Throws<NotSupportedException>(() =>
-            services.AddFoundationIdentityOpenIddict(
-                options => options.IsDevelopmentOrDemo = true,
-                configureDbContext: _ => { }));
-
-        Assert.Contains("host boundary", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public async Task Registers_The_Validation_Handler_And_Selector_Schemes()
     {
         var schemes = await _fixture.Services.GetRequiredService<IAuthenticationSchemeProvider>().GetAllSchemesAsync();

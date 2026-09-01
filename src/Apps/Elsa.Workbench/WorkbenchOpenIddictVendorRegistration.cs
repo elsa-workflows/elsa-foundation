@@ -1,11 +1,10 @@
 using Elsa.Foundation.Identity.OpenIddict;
-using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
+using Elsa.Workbench.OpenIddict;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using OpenIddict.EntityFrameworkCore;
-using ElsaOpenIddictEntityFrameworkCoreOptions = Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictEntityFrameworkCoreOptions;
 
 namespace Elsa.Workbench;
 
@@ -22,7 +21,7 @@ internal static class WorkbenchOpenIddictVendorRegistration
     {
         services.Configure<OpenIddictIdentityOptions>(
             configuration.GetSection("CShells:Shells:default:Features:FoundationIdentityOpenIddict"));
-        services.AddOptions<ElsaOpenIddictEntityFrameworkCoreOptions>()
+        services.AddOptions<WorkbenchOpenIddictEntityFrameworkCoreOptions>()
             .Configure<IOptions<OpenIddictIdentityOptions>>((options, identityOptions) =>
             {
                 options.ConnectionString = identityOptions.Value.ConnectionString;
@@ -38,7 +37,7 @@ internal static class WorkbenchOpenIddictVendorRegistration
                 return;
             }
 
-            var options = serviceProvider.GetRequiredService<IOptions<ElsaOpenIddictEntityFrameworkCoreOptions>>().Value;
+            var options = serviceProvider.GetRequiredService<IOptions<WorkbenchOpenIddictEntityFrameworkCoreOptions>>().Value;
             builder.UseSqlite(
                 options.ConnectionString ?? OpenIddictEntityFrameworkCoreDefaults.DefaultConnectionString,
                 sqlite => sqlite
@@ -53,7 +52,7 @@ internal static class WorkbenchOpenIddictVendorRegistration
 
         // Root hosted services run once for the Workbench process. CShells copies these root descriptors into shell
         // providers, so registering this initializer again as an IShellInitializer would race durable migrations
-        // during shell activation. The frozen context/migrations/initializer remain until #1471 removes them.
+        // during shell activation. The context, migrations, and lifecycle remain host-owned vendor infrastructure.
         services.AddSingleton<OpenIddictIdentityStoreInitializer>();
         services.AddHostedService(serviceProvider =>
             serviceProvider.GetRequiredService<OpenIddictIdentityStoreInitializer>());

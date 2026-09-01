@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.Sqlite.Migrations
+namespace Elsa.Workbench.OpenIddict.Sqlite.Migrations
 {
     /// <inheritdoc />
     public partial class Initial : Migration

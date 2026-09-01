@@ -1,6 +1,6 @@
-namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
+namespace Elsa.Workbench.OpenIddict;
 
-/// <summary>EF-oracle-only defaults for the transitional OpenIddict persistence implementation.</summary>
+/// <summary>Workbench defaults for the host-selected OpenIddict vendor persistence implementation.</summary>
 public static class OpenIddictEntityFrameworkCoreDefaults
 {
     public const string DefaultConnectionString = "Data Source=identity.db";
