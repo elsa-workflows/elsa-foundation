@@ -46,15 +46,15 @@ public sealed class GroundworkV2WorkflowTriggerBindingStoreTests
         var second = Binding("pub-a", "artifact-a", "node-b", "orders", "h2");
         var replacement = Binding("pub-b", "artifact-b", "node-a", "orders", "h1");
 
-        await store.PreparePublicationAsync("pub-a", [first, second]);
-        var prepared = await store.ListByPublicationAsync(
-            new WorkflowTriggerBindingPublicationPageQuery("pub-a"));
+        await store.PrepareActivationAsync("pub-a", [first, second]);
+        var prepared = await store.ListByActivationAsync(
+            new WorkflowTriggerBindingActivationPageQuery("pub-a"));
         Assert.Equal(new[] { first.TriggerBindingId, second.TriggerBindingId }.Order(StringComparer.Ordinal),
             prepared.Items.Select(binding => binding.TriggerBindingId));
         Assert.All(prepared.Items, binding => Assert.False(binding.IsActive));
         Assert.Empty((await store.ListByStimulusAsync(new WorkflowTriggerBindingPageQuery("Event", "h1"))).Items);
 
-        await store.ActivatePublicationAsync("pub-a", null);
+        await store.ActivateAsync("pub-a", null);
         Assert.Single((await store.ListByStimulusAsync(new WorkflowTriggerBindingPageQuery("Event", "h1"))).Items);
         var typePage = await store.ListByStimulusTypeAsync(
             new WorkflowTriggerBindingTypePageQuery("Event", limit: 1));
@@ -65,16 +65,16 @@ public sealed class GroundworkV2WorkflowTriggerBindingStoreTests
         Assert.Equal(2, typeSecond.TotalCount);
         Assert.Single(typeSecond.Items);
 
-        await store.PreparePublicationAsync("pub-b", [replacement]);
-        await store.ActivatePublicationAsync("pub-b", "pub-a");
+        await store.PrepareActivationAsync("pub-b", [replacement]);
+        await store.ActivateAsync("pub-b", "pub-a");
         Assert.Empty((await store.ListByStimulusAsync(new WorkflowTriggerBindingPageQuery("Event", "h2"))).Items);
         Assert.Single((await store.ListByStimulusAsync(new WorkflowTriggerBindingPageQuery("Event", "h1"))).Items);
-        Assert.False((await store.ListByPublicationAsync(
-            new WorkflowTriggerBindingPublicationPageQuery("pub-a"))).Items.Single(binding => binding.StimulusHash == "h1").IsActive);
+        Assert.False((await store.ListByActivationAsync(
+            new WorkflowTriggerBindingActivationPageQuery("pub-a"))).Items.Single(binding => binding.StimulusHash == "h1").IsActive);
 
-        await store.DeleteByPublicationAsync("pub-b");
-        Assert.Empty((await store.ListByPublicationAsync(
-            new WorkflowTriggerBindingPublicationPageQuery("pub-b"))).Items);
+        await store.DeleteByActivationAsync("pub-b");
+        Assert.Empty((await store.ListByActivationAsync(
+            new WorkflowTriggerBindingActivationPageQuery("pub-b"))).Items);
     }
 
     [Fact]
@@ -95,9 +95,9 @@ public sealed class GroundworkV2WorkflowTriggerBindingStoreTests
         var pending = Binding("pub-pending", "artifact-old", "node-c", "orders", "pending");
         var retained = Binding("pub-retained", "artifact-retained", "node-a", "orders", "keep");
 
-        await store.PreparePublicationAsync("pub-old", [oldOne, oldTwo]);
-        await store.ActivatePublicationAsync("pub-old", null);
-        await store.PreparePublicationAsync("pub-pending", [pending]);
+        await store.PrepareActivationAsync("pub-old", [oldOne, oldTwo]);
+        await store.ActivateAsync("pub-old", null);
+        await store.PrepareActivationAsync("pub-pending", [pending]);
         await store.SaveAsync(retained);
 
         Assert.Equal(3, await store.DeleteByArtifactAsync("artifact-old"));
@@ -106,20 +106,20 @@ public sealed class GroundworkV2WorkflowTriggerBindingStoreTests
         Assert.Single((await store.ListByArtifactAsync(
             new WorkflowTriggerBindingArtifactPageQuery("artifact-retained"))).Items);
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            store.ActivatePublicationAsync("pub-old", null).AsTask());
+            store.ActivateAsync("pub-old", null).AsTask());
 
-        await store.PreparePublicationAsync("pub-old", [oldOne]);
-        await store.ActivatePublicationAsync("pub-old", null);
+        await store.PrepareActivationAsync("pub-old", [oldOne]);
+        await store.ActivateAsync("pub-old", null);
         Assert.Single((await store.ListByStimulusAsync(
             new WorkflowTriggerBindingPageQuery("Event", "old-1"))).Items);
 
         var splitFirst = Binding("pub-split", "artifact-split", "node-a", "orders", "split-a");
         var splitSecond = Binding("pub-split", "artifact-other", "node-b", "orders", "split-b");
-        await store.PreparePublicationAsync("pub-split", [splitFirst, splitSecond]);
+        await store.PrepareActivationAsync("pub-split", [splitFirst, splitSecond]);
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             store.DeleteByArtifactAsync("artifact-split").AsTask());
-        Assert.Equal(2, (await store.ListByPublicationAsync(
-            new WorkflowTriggerBindingPublicationPageQuery("pub-split"))).Items.Count);
+        Assert.Equal(2, (await store.ListByActivationAsync(
+            new WorkflowTriggerBindingActivationPageQuery("pub-split"))).Items.Count);
     }
 
     [Fact]
@@ -179,21 +179,21 @@ public sealed class GroundworkV2WorkflowTriggerBindingStoreTests
         var replacement = Binding("pub-replace", "artifact-replace", "node-b", "orders", "replacement");
 
         await store.SaveAsync(existing);
-        await store.PreparePublicationAsync("pub-replace", [replacement]);
-        var replacedItems = (await store.ListByPublicationAsync(
-            new WorkflowTriggerBindingPublicationPageQuery("pub-replace"))).Items;
+        await store.PrepareActivationAsync("pub-replace", [replacement]);
+        var replacedItems = (await store.ListByActivationAsync(
+            new WorkflowTriggerBindingActivationPageQuery("pub-replace"))).Items;
         Assert.Equal([replacement.TriggerBindingId], replacedItems.Select(binding => binding.TriggerBindingId));
 
         var first = Binding("pub-race", "artifact-race", "node-a", "orders", "first");
         var conflicting = Binding("pub-race", "artifact-race", "node-b", "orders", "second");
-        await store.PreparePublicationAsync("pub-race", [first]);
-        await store.PreparePublicationAsync("pub-race", [first]);
+        await store.PrepareActivationAsync("pub-race", [first]);
+        await store.PrepareActivationAsync("pub-race", [first]);
         var conflictError = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            store.PreparePublicationAsync("pub-race", [conflicting]).AsTask());
+            store.PrepareActivationAsync("pub-race", [conflicting]).AsTask());
         Assert.Contains("already prepared", conflictError.Message, StringComparison.Ordinal);
         Assert.Equal(first.TriggerBindingId,
-            Assert.Single((await store.ListByPublicationAsync(
-                new WorkflowTriggerBindingPublicationPageQuery("pub-race"))).Items).TriggerBindingId);
+            Assert.Single((await store.ListByActivationAsync(
+                new WorkflowTriggerBindingActivationPageQuery("pub-race"))).Items).TriggerBindingId);
     }
 
     [Fact]
@@ -231,7 +231,7 @@ public sealed class GroundworkV2WorkflowTriggerBindingStoreTests
             new TestAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
         var binding = Binding("pub-missing-row", "artifact-missing-row", "node-a", "orders", "missing-row");
 
-        await store.PreparePublicationAsync("pub-missing-row", [binding]);
+        await store.PrepareActivationAsync("pub-missing-row", [binding]);
         var rawSession = source.Open(
             bindingUnit.Id.Value,
             StorageAccess.Scoped(new StorageScope("tenant-a")));
@@ -240,7 +240,7 @@ public sealed class GroundworkV2WorkflowTriggerBindingStoreTests
             rawSession.Delete(GroundworkRuntimeRowStore.Key(binding.TriggerBindingId)).Status);
 
         await Assert.ThrowsAsync<InvalidDataException>(() =>
-            store.ActivatePublicationAsync("pub-missing-row", null).AsTask());
+            store.ActivateAsync("pub-missing-row", null).AsTask());
     }
 
     [Fact]
@@ -266,8 +266,8 @@ public sealed class GroundworkV2WorkflowTriggerBindingStoreTests
         var inspectionStore = new GroundworkV2WorkflowTriggerBindingStore(
             inspectionSource,
             new TestAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
-        var equalItems = (await inspectionStore.ListByPublicationAsync(
-            new WorkflowTriggerBindingPublicationPageQuery("pub-concurrent-equal"))).Items;
+        var equalItems = (await inspectionStore.ListByActivationAsync(
+            new WorkflowTriggerBindingActivationPageQuery("pub-concurrent-equal"))).Items;
         var equalItem = Assert.Single(equalItems);
         Assert.Equal(equalA.TriggerBindingId, equalItem.TriggerBindingId);
         Assert.False(equalItem.IsActive);
@@ -283,8 +283,8 @@ public sealed class GroundworkV2WorkflowTriggerBindingStoreTests
 
         Assert.Equal(1, conflictingOutcomes.Count(outcome => outcome is null));
         Assert.Equal(1, conflictingOutcomes.Count(outcome => outcome is not null));
-        var conflictingItems = (await inspectionStore.ListByPublicationAsync(
-            new WorkflowTriggerBindingPublicationPageQuery("pub-concurrent-conflict"))).Items;
+        var conflictingItems = (await inspectionStore.ListByActivationAsync(
+            new WorkflowTriggerBindingActivationPageQuery("pub-concurrent-conflict"))).Items;
         var conflictingItem = Assert.Single(conflictingItems);
         Assert.Contains(
             conflictingItem.TriggerBindingId,
@@ -292,37 +292,37 @@ public sealed class GroundworkV2WorkflowTriggerBindingStoreTests
         Assert.False(conflictingItem.IsActive);
 
         var activationBinding = Binding("pub-concurrent-activate", "artifact-concurrent-activate", "node-a", "orders", "activate");
-        await inspectionStore.PreparePublicationAsync("pub-concurrent-activate", [activationBinding]);
+        await inspectionStore.PrepareActivationAsync("pub-concurrent-activate", [activationBinding]);
         var activationOutcomes = await RunConcurrentOperationsAsync(
             connectionA,
             connectionB,
-            store => store.ActivatePublicationAsync("pub-concurrent-activate", null),
-            store => store.ActivatePublicationAsync("pub-concurrent-activate", null));
+            store => store.ActivateAsync("pub-concurrent-activate", null),
+            store => store.ActivateAsync("pub-concurrent-activate", null));
         Assert.InRange(activationOutcomes.Count(outcome => outcome is null), 1, 2);
-        var activatedItem = Assert.Single((await inspectionStore.ListByPublicationAsync(
-            new WorkflowTriggerBindingPublicationPageQuery("pub-concurrent-activate"))).Items);
+        var activatedItem = Assert.Single((await inspectionStore.ListByActivationAsync(
+            new WorkflowTriggerBindingActivationPageQuery("pub-concurrent-activate"))).Items);
         Assert.True(activatedItem.IsActive);
 
         var deleteRaceBinding = Binding("pub-concurrent-delete", "artifact-concurrent-delete", "node-a", "orders", "delete");
-        await inspectionStore.PreparePublicationAsync("pub-concurrent-delete", [deleteRaceBinding]);
+        await inspectionStore.PrepareActivationAsync("pub-concurrent-delete", [deleteRaceBinding]);
         var deleteRaceOutcomes = await RunConcurrentOperationsAsync(
             connectionA,
             connectionB,
-            store => store.ActivatePublicationAsync("pub-concurrent-delete", null),
-            store => store.DeleteByPublicationAsync("pub-concurrent-delete"));
+            store => store.ActivateAsync("pub-concurrent-delete", null),
+            store => store.DeleteByActivationAsync("pub-concurrent-delete"));
         Assert.InRange(deleteRaceOutcomes.Count(outcome => outcome is null), 1, 2);
-        var deleteRaceItems = (await inspectionStore.ListByPublicationAsync(
-            new WorkflowTriggerBindingPublicationPageQuery("pub-concurrent-delete"))).Items;
+        var deleteRaceItems = (await inspectionStore.ListByActivationAsync(
+            new WorkflowTriggerBindingActivationPageQuery("pub-concurrent-delete"))).Items;
         if (deleteRaceItems.Count == 0)
         {
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                inspectionStore.ActivatePublicationAsync("pub-concurrent-delete", null).AsTask());
+                inspectionStore.ActivateAsync("pub-concurrent-delete", null).AsTask());
         }
         else
         {
             Assert.Single(deleteRaceItems);
             Assert.True(deleteRaceItems[0].IsActive);
-            await inspectionStore.ActivatePublicationAsync("pub-concurrent-delete", null);
+            await inspectionStore.ActivateAsync("pub-concurrent-delete", null);
         }
     }
 
@@ -365,10 +365,10 @@ public sealed class GroundworkV2WorkflowTriggerBindingStoreTests
             var replacementFirst = Binding("pub-replacement", "artifact-replacement", "node-a", "orders", "replacement-hash-a");
             var replacementSecond = Binding("pub-replacement", "artifact-replacement", "node-b", "orders", "replacement-hash-b");
 
-            await store.PreparePublicationAsync("pub-matrix", [first, second]);
-            await store.ActivatePublicationAsync("pub-matrix", null);
-            await store.PreparePublicationAsync("pub-replacement", [replacementFirst, replacementSecond]);
-            await store.ActivatePublicationAsync("pub-replacement", "pub-matrix");
+            await store.PrepareActivationAsync("pub-matrix", [first, second]);
+            await store.ActivateAsync("pub-matrix", null);
+            await store.PrepareActivationAsync("pub-replacement", [replacementFirst, replacementSecond]);
+            await store.ActivateAsync("pub-replacement", "pub-matrix");
 
             Assert.Empty((await store.ListByStimulusAsync(
                 new WorkflowTriggerBindingPageQuery("Event", "matrix-hash-a"))).Items);
@@ -388,9 +388,9 @@ public sealed class GroundworkV2WorkflowTriggerBindingStoreTests
             Assert.Single(secondPage.Items);
             Assert.NotEqual(firstPage.Items[0].TriggerBindingId, secondPage.Items[0].TriggerBindingId);
 
-            await store.DeleteByPublicationAsync("pub-replacement");
-            Assert.Empty((await store.ListByPublicationAsync(
-                new WorkflowTriggerBindingPublicationPageQuery("pub-replacement"))).Items);
+            await store.DeleteByActivationAsync("pub-replacement");
+            Assert.Empty((await store.ListByActivationAsync(
+                new WorkflowTriggerBindingActivationPageQuery("pub-replacement"))).Items);
         }
         finally
         {
@@ -404,13 +404,13 @@ public sealed class GroundworkV2WorkflowTriggerBindingStoreTests
     }
 
     private static WorkflowTriggerBinding Binding(
-        string? publicationId,
+        string? activationId,
         string artifactId,
         string nodeId,
         string definitionId,
         string stimulusHash) =>
         new(
-            WorkflowTriggerBinding.BuildId(publicationId ?? "unpublished", artifactId, nodeId, stimulusHash),
+            WorkflowTriggerBinding.BuildId(activationId ?? "unpublished", artifactId, nodeId, stimulusHash),
             artifactId,
             definitionId,
             "1.0.0",
@@ -421,8 +421,8 @@ public sealed class GroundworkV2WorkflowTriggerBindingStoreTests
             null,
             new Dictionary<string, string> { ["source"] = "v2-test" },
             new DateTimeOffset(2026, 8, 16, 12, 0, 0, TimeSpan.Zero),
-            publicationId,
-            publicationId is null ? null : "slot-a",
+            activationId,
+            activationId is null ? null : "slot-a",
             TriggerCardinality.FanOut,
             true);
 
@@ -434,14 +434,14 @@ public sealed class GroundworkV2WorkflowTriggerBindingStoreTests
     private static async Task<Exception?[]> RunConcurrentPreparesAsync(
         IStorageProviderConnection connectionA,
         IStorageProviderConnection connectionB,
-        string publicationId,
+        string activationId,
         WorkflowTriggerBinding bindingA,
         WorkflowTriggerBinding bindingB)
         => await RunConcurrentOperationsAsync(
             connectionA,
             connectionB,
-            store => store.PreparePublicationAsync(publicationId, [bindingA]),
-            store => store.PreparePublicationAsync(publicationId, [bindingB]));
+            store => store.PrepareActivationAsync(activationId, [bindingA]),
+            store => store.PrepareActivationAsync(activationId, [bindingB]));
 
     private static async Task<Exception?[]> RunConcurrentOperationsAsync(
         IStorageProviderConnection connectionA,

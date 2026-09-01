@@ -115,7 +115,7 @@ public sealed class RecurringTriggerPumpOwnerScopingTests
         await _pump.ExecuteAsync(CancellationToken.None);
 
         var started = Assert.Single(_startDispatcher.Requests);
-        Assert.Equal("publication-1", started.SourceSelection!.PublicationId);
+        Assert.Equal("publication-1", started.SourceSelection!.ActivationId);
         Assert.Equal("slot-blue", started.SourceSelection.SlotId);
     }
 
@@ -123,11 +123,11 @@ public sealed class RecurringTriggerPumpOwnerScopingTests
         string artifactId,
         string nodeId,
         DateTimeOffset next,
-        string? publicationId = null,
+        string? activationId = null,
         string? slotId = null) => new(
-        ScheduleId: publicationId is null
+        ScheduleId: activationId is null
             ? RecurringTriggerSchedule.BuildId(artifactId, nodeId)
-            : RecurringTriggerSchedule.BuildId(publicationId, artifactId, nodeId),
+            : RecurringTriggerSchedule.BuildId(activationId, artifactId, nodeId),
         ArtifactId: artifactId,
         ExecutableNodeId: nodeId,
         StimulusType: "Timer",
@@ -136,17 +136,17 @@ public sealed class RecurringTriggerPumpOwnerScopingTests
         Expression: "PT1M",
         NextOccurrence: next,
         CreatedAt: Now,
-        PublicationId: publicationId,
+        ActivationId: activationId,
         SlotId: slotId);
 
     private static WorkflowTriggerBinding Binding(
         string artifactId,
         string nodeId,
-        string? publicationId = null,
+        string? activationId = null,
         string? slotId = null) => new(
-        TriggerBindingId: publicationId is null
+        TriggerBindingId: activationId is null
             ? WorkflowTriggerBinding.BuildId(artifactId, nodeId, SharedHash)
-            : WorkflowTriggerBinding.BuildId(publicationId, artifactId, nodeId, SharedHash),
+            : WorkflowTriggerBinding.BuildId(activationId, artifactId, nodeId, SharedHash),
         ArtifactId: artifactId,
         DefinitionId: "definition-1",
         ArtifactVersion: "1.0.0",
@@ -157,7 +157,7 @@ public sealed class RecurringTriggerPumpOwnerScopingTests
         CorrelationScope: null,
         Metadata: new Dictionary<string, string>(),
         CreatedAt: Now,
-        PublicationId: publicationId,
+        ActivationId: activationId,
         SlotId: slotId);
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

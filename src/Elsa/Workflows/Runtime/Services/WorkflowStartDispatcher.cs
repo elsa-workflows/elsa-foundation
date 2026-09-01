@@ -258,7 +258,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 
     // Resolves the artifact's Source References and returns content identity plus independently pinned source
     // attribution. This is deliberately fail-closed: the content artifact's identity can reflect whichever source
-    // first produced deduplicated content, so it is never authoritative publication provenance on its own.
+    // first produced deduplicated content, so it is never authoritative activation provenance on its own.
     private async ValueTask<ResolvedPinnedExecutable> ResolvePinnedExecutableAsync(
         WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutable executable,
@@ -326,7 +326,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             return references.Where(reference => StringComparer.Ordinal.Equals(reference.SourceReferenceId, sourceReferenceId)).ToArray();
 
         return references
-            .Where(reference => selection.PublicationId is null || StringComparer.Ordinal.Equals(reference.PublicationId, selection.PublicationId))
+            .Where(reference => selection.ActivationId is null || StringComparer.Ordinal.Equals(reference.ActivationId, selection.ActivationId))
             .Where(reference => selection.SlotId is null || StringComparer.Ordinal.Equals(reference.SlotId, selection.SlotId))
             .ToArray();
     }

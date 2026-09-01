@@ -156,7 +156,7 @@ public sealed class RestorePublicationSlotRequestHandler(
                 PublishedAt = now,
                 DeletedAt = null,
                 DeletedReason = null,
-                PublicationId = publicationId,
+                ActivationId = publicationId,
                 SlotId = slot.SlotId
             };
 

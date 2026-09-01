@@ -103,7 +103,7 @@ public sealed class RuntimeRecurringScheduleSelectionWorkload
             ["advancedScheduleId"] = persistedAdvance.ScheduleId,
             ["dueScheduleIdentityDigest"] = Hash(JsonSerializer.Serialize(allDue.Select(schedule => schedule.ScheduleId), CanonicalJsonOptions)),
             ["firstPageCount"] = dueFirstPage.Count,
-            ["inactivePublicationResultCount"] = allDue.Count(schedule => IsInactivePublication(schedule.PublicationId)),
+            ["inactivePublicationResultCount"] = allDue.Count(schedule => IsInactivePublication(schedule.ActivationId)),
             ["loadedProjectionCount"] = firstProjectionPage.Items.Count,
             ["reopenedProjectionMatched"] = reopenedTarget!.NextOccurrence == advancedTo &&
                                            reopenedDue.Count == DueSchedules - 1 &&
@@ -150,24 +150,24 @@ public sealed class RuntimeRecurringScheduleSelectionWorkload
     {
         for (var publicationIndex = 0; publicationIndex < PublicationCount; publicationIndex++)
         {
-            var publicationId = PublicationId(publicationIndex);
+            var activationId = ActivationId(publicationIndex);
             var schedules = SchedulesForPublication(publicationIndex, dueAt).ToArray();
-            await store.PreparePublicationAsync(publicationId, schedules, cancellationToken);
+            await store.PrepareActivationAsync(activationId, schedules, cancellationToken);
         }
 
         for (var publicationIndex = 0; publicationIndex < ReplacementCandidatePublicationIndex; publicationIndex++)
-            await store.ActivatePublicationAsync(PublicationId(publicationIndex), replacedPublicationId: null, cancellationToken);
+            await store.ActivateAsync(ActivationId(publicationIndex), replacedActivationId: null, cancellationToken);
 
-        await store.ActivatePublicationAsync(
-            PublicationId(ReplacementCandidatePublicationIndex),
-            PublicationId(ReplacedPublicationIndex),
+        await store.ActivateAsync(
+            ActivationId(ReplacementCandidatePublicationIndex),
+            ActivationId(ReplacedPublicationIndex),
             cancellationToken);
     }
 
     private static IEnumerable<RecurringTriggerSchedule> SchedulesForPublication(int publicationIndex, DateTimeOffset dueAt)
     {
         var count = publicationIndex == 0 ? 64 : publicationIndex < 248 ? 8 : 1;
-        var publicationId = PublicationId(publicationIndex);
+        var activationId = ActivationId(publicationIndex);
         var globalOffset = publicationIndex == 0 ? 0 : (publicationIndex - 1) * 8;
         if (publicationIndex >= 248)
             globalOffset = 1976 + publicationIndex - 248;
@@ -177,7 +177,7 @@ public sealed class RuntimeRecurringScheduleSelectionWorkload
             var globalIndex = globalOffset + index;
             var isProjection = publicationIndex == 0;
             var isDue = !isProjection && globalIndex < DueSchedules;
-            var isInactive = IsInactivePublication(publicationId);
+        var isInactive = IsInactivePublication(activationId);
             yield return new RecurringTriggerSchedule(
                 ScheduleId: isProjection ? $"schedule-projection-{globalIndex:D4}" : isDue ? $"schedule-due-{globalIndex:D4}" : isInactive ? $"schedule-inactive-{globalIndex:D4}" : $"schedule-future-{globalIndex:D4}",
                 ArtifactId: $"artifact-{publicationIndex:D4}",
@@ -188,7 +188,7 @@ public sealed class RuntimeRecurringScheduleSelectionWorkload
                 Expression: "PT5M",
                 NextOccurrence: isDue ? dueAt : isInactive ? FixedNowUtc.AddMinutes(-1) : FixedNowUtc.AddDays(1),
                 CreatedAt: FixedNowUtc.AddDays(-1),
-                PublicationId: publicationId,
+                ActivationId: activationId,
                 SlotId: $"slot-{globalIndex:D4}");
         }
     }
@@ -241,7 +241,7 @@ public sealed class RuntimeRecurringScheduleSelectionWorkload
         var expected = expectedSchedules.ToArray();
         if (schedules is null || schedules.Count != expected.Length ||
             !schedules.SequenceEqual(expected, RecurringScheduleComparer.Instance) ||
-            schedules.Any(schedule => !schedule.IsActive || schedule.NextOccurrence > FixedNowUtc || IsInactivePublication(schedule.PublicationId)))
+            schedules.Any(schedule => !schedule.IsActive || schedule.NextOccurrence > FixedNowUtc || IsInactivePublication(schedule.ActivationId)))
             throw new InvalidOperationException($"The {operation} does not match the exact active, due, ordered recurring-schedule contract.");
     }
 
@@ -253,22 +253,22 @@ public sealed class RuntimeRecurringScheduleSelectionWorkload
         RuntimeStorePage<RecurringTriggerSchedule>? firstProjectionPage = null;
         for (var publicationIndex = 0; publicationIndex < PublicationCount; publicationIndex++)
         {
-            var publicationId = PublicationId(publicationIndex);
+            var activationId = ActivationId(publicationIndex);
             var expected = ExpectedSchedulesForPublication(publicationIndex, advancedOccurrence).ToArray();
             var observed = 0;
             string? continuation = null;
             var seenContinuations = new HashSet<string>(StringComparer.Ordinal);
             do
             {
-                var page = await store.ListByPublicationPageAsync(
-                    new RecurringTriggerSchedulePublicationPageQuery(publicationId, PageSize, continuation),
+                var page = await store.ListByActivationPageAsync(
+                    new RecurringTriggerScheduleActivationPageQuery(activationId, PageSize, continuation),
                     cancellationToken);
                 var expectedItems = expected.Skip(observed).Take(PageSize).ToArray();
                 var expectsContinuation = observed + expectedItems.Length < expected.Length;
                 RequireProjectionPage(
                     page,
                     expectedItems,
-                    publicationId,
+                    activationId,
                     expectsContinuation,
                     $"publication projection page at offset {observed}");
                 if (publicationIndex == ProjectionPublicationIndex && observed == 0)
@@ -277,11 +277,11 @@ public sealed class RuntimeRecurringScheduleSelectionWorkload
                 observed += page.Items.Count;
                 continuation = page.NextContinuationToken;
                 if (continuation is not null && !seenContinuations.Add(continuation))
-                    throw new InvalidOperationException($"Publication '{publicationId}' repeated a continuation token.");
+                    throw new InvalidOperationException($"Publication '{activationId}' repeated a continuation token.");
             } while (continuation is not null);
 
             if (observed != expected.Length)
-                throw new InvalidOperationException($"Publication '{publicationId}' did not expose its complete prepared projection.");
+                throw new InvalidOperationException($"Publication '{activationId}' did not expose its complete prepared projection.");
         }
 
         return firstProjectionPage
@@ -291,18 +291,18 @@ public sealed class RuntimeRecurringScheduleSelectionWorkload
     private static void RequireProjectionPage(
         RuntimeStorePage<RecurringTriggerSchedule>? page,
         IReadOnlyList<RecurringTriggerSchedule> expected,
-        string publicationId,
+        string activationId,
         bool expectsContinuation,
         string operation)
     {
         if (page is null ||
             page.Items.Count != expected.Count ||
-            page.Items.Any(schedule => schedule.PublicationId != publicationId) ||
+            page.Items.Any(schedule => schedule.ActivationId != activationId) ||
             !page.Items.SequenceEqual(expected, RecurringScheduleComparer.Instance) ||
             expectsContinuation == string.IsNullOrWhiteSpace(page.NextContinuationToken))
         {
             throw new InvalidOperationException(
-                $"The {operation} does not match publication '{publicationId}' or its continuation boundary.");
+                $"The {operation} does not match publication '{activationId}' or its continuation boundary.");
         }
     }
 
@@ -327,7 +327,7 @@ public sealed class RuntimeRecurringScheduleSelectionWorkload
         {
             yield return schedule with
             {
-                IsActive = !IsInactivePublication(schedule.PublicationId),
+                IsActive = !IsInactivePublication(schedule.ActivationId),
                 NextOccurrence = schedule.ScheduleId == AdvancedScheduleId && advancedOccurrence is not null
                     ? advancedOccurrence.Value
                     : schedule.NextOccurrence
@@ -343,18 +343,18 @@ public sealed class RuntimeRecurringScheduleSelectionWorkload
 
     private static int ReplacementCandidatePublicationIndex => PublicationCount - InactivePublications;
     private static int ReplacedPublicationIndex => ReplacementCandidatePublicationIndex - 1;
-    private static string PublicationId(int index) => $"publication-{index:D4}";
-    private static bool IsInactivePublication(string? publicationId) =>
-        TryParsePublicationIndex(publicationId, out var index) &&
+    private static string ActivationId(int index) => $"publication-{index:D4}";
+    private static bool IsInactivePublication(string? activationId) =>
+        TryParsePublicationIndex(activationId, out var index) &&
         (index == ReplacedPublicationIndex || index > ReplacementCandidatePublicationIndex);
 
-    private static bool TryParsePublicationIndex(string? publicationId, out int index)
+    private static bool TryParsePublicationIndex(string? activationId, out int index)
     {
         index = default;
-        return publicationId is not null &&
-               publicationId.StartsWith("publication-", StringComparison.Ordinal) &&
+        return activationId is not null &&
+               activationId.StartsWith("publication-", StringComparison.Ordinal) &&
                int.TryParse(
-                   publicationId.AsSpan("publication-".Length),
+                   activationId.AsSpan("publication-".Length),
                    System.Globalization.NumberStyles.None,
                    System.Globalization.CultureInfo.InvariantCulture,
                    out index);

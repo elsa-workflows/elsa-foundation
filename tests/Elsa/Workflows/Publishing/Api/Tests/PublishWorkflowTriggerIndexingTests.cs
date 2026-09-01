@@ -107,8 +107,8 @@ public sealed class PublishWorkflowTriggerIndexingTests
             Assert.False(string.IsNullOrWhiteSpace(binding.StimulusHash));
         });
 
-        var publicationId = Assert.Single(bindings.Select(binding => binding.PublicationId).Distinct())!;
-        var schedule = (await _scheduleStore.ListByPublicationAsync(publicationId)).SingleOrDefault();
+        var publicationId = Assert.Single(bindings.Select(binding => binding.ActivationId).Distinct())!;
+        var schedule = (await _scheduleStore.ListByActivationAsync(publicationId)).SingleOrDefault();
         if (scenario.IsRecurring)
         {
             Assert.NotNull(schedule);
@@ -127,8 +127,8 @@ public sealed class PublishWorkflowTriggerIndexingTests
         var seededView = await FirstPartyHandler(scenario, scenario.ValidInputs)
             .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
         var seededBindings = await _bindingStore.ListAllByArtifactAsync(seededView.ArtifactId);
-        var seededPublicationId = Assert.Single(seededBindings.Select(binding => binding.PublicationId).Distinct())!;
-        var seededSchedule = (await _scheduleStore.ListByPublicationAsync(seededPublicationId)).SingleOrDefault();
+        var seededPublicationId = Assert.Single(seededBindings.Select(binding => binding.ActivationId).Distinct())!;
+        var seededSchedule = (await _scheduleStore.ListByActivationAsync(seededPublicationId)).SingleOrDefault();
 
         await AssertInvalidPublicationAsync(scenario, () =>
             FirstPartyHandler(scenario, scenario.InvalidInputs)
@@ -139,7 +139,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
             (await _bindingStore.ListAllByArtifactAsync(seededView.ArtifactId)).OrderBy(x => x.TriggerBindingId));
         Assert.Equal(
             seededSchedule,
-            (await _scheduleStore.ListByPublicationAsync(seededPublicationId)).SingleOrDefault());
+            (await _scheduleStore.ListByActivationAsync(seededPublicationId)).SingleOrDefault());
     }
 
     [Theory]

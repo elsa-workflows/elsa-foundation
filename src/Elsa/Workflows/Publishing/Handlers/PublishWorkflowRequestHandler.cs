@@ -229,7 +229,7 @@ public sealed class PublishWorkflowRequestHandler(
             PublishedAt: now,
             Scope: WorkflowExecutableReferenceScope.Published,
             Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout),
-            PublicationId: publicationId,
+            ActivationId: publicationId,
             SlotId: PublicationSlotIdentity.Create(identity.DefinitionId, slotName),
             LayoutSidecar: placementSidecars?.Get(identity.DefinitionVersionId),
             AuthoredInputs: authoredInputs,

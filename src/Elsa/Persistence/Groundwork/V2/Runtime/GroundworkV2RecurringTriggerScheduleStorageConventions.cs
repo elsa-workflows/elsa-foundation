@@ -32,7 +32,7 @@ internal static class GroundworkV2RecurringTriggerScheduleStorageConventions
             [ElsaRuntimeV2StorageManifest.CollectionField] =
                 ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleDocumentKind,
             [ElsaRuntimeV2StorageManifest.ArtifactIdField] = schedule.ArtifactId,
-            [ElsaRuntimeV2StorageManifest.RecurringTriggerSchedulePublicationIdField] = schedule.PublicationId,
+            [ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleActivationIdField] = schedule.ActivationId,
             [ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIdField] = schedule.ScheduleId,
             [ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIsActiveField] = schedule.IsActive,
             [ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleNextOccurrenceField] = schedule.NextOccurrence
@@ -113,33 +113,33 @@ internal static class GroundworkV2RecurringTriggerScheduleStorageConventions
             schedule.ArtifactId,
             ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength,
             nameof(schedule.ArtifactId));
-        if (schedule.PublicationId is not null)
+        if (schedule.ActivationId is not null)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(schedule.PublicationId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(schedule.ActivationId);
             ValidateProjectionLength(
-                schedule.PublicationId,
+                schedule.ActivationId,
                 ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength,
-                nameof(schedule.PublicationId));
+                nameof(schedule.ActivationId));
         }
 
-        if (schedule.PublicationId is null && schedule.SlotId is not null)
-            throw new ArgumentException("A recurring-trigger schedule slot requires a publication.", nameof(schedule));
+        if (schedule.ActivationId is null && schedule.SlotId is not null)
+            throw new ArgumentException("A recurring-trigger schedule slot requires an activation.", nameof(schedule));
         if (schedule.SlotId is not null)
             ArgumentException.ThrowIfNullOrWhiteSpace(schedule.SlotId);
 
-        var expectedId = schedule.PublicationId is null
+        var expectedId = schedule.ActivationId is null
             ? RecurringTriggerSchedule.BuildId(schedule.ArtifactId, schedule.ExecutableNodeId)
             : RecurringTriggerSchedule.BuildId(
-                schedule.PublicationId,
+                schedule.ActivationId,
                 schedule.ArtifactId,
                 schedule.ExecutableNodeId);
-        var expectedFanOutId = schedule.PublicationId is null
+        var expectedFanOutId = schedule.ActivationId is null
             ? RecurringTriggerSchedule.BuildFanOutId(
                 schedule.ArtifactId,
                 schedule.ExecutableNodeId,
                 schedule.StimulusHash)
             : RecurringTriggerSchedule.BuildFanOutId(
-                schedule.PublicationId,
+                schedule.ActivationId,
                 schedule.ArtifactId,
                 schedule.ExecutableNodeId,
                 schedule.StimulusHash);
@@ -244,7 +244,7 @@ internal static class GroundworkV2RecurringTriggerScheduleStorageConventions
 
 internal sealed record GroundworkV2RecurringTriggerScheduleProjectionState(
     string ProjectionKind,
-    string PublicationId,
+    string ActivationId,
     string? ArtifactId,
     bool IsActive,
     int ScheduleCount,

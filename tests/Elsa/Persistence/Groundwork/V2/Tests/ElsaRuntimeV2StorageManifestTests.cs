@@ -60,7 +60,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             ["operationalState"] = ["by_collection", "by_collection_workflow_execution_and_operational_state_id", "by_recovery_detected", "by_recovery_detected_heartbeat_owner", "by_recovery_detected_lease_owner", "by_recovery_detected_ownerless", "by_recovery_heartbeat", "by_recovery_heartbeat_owner", "by_recovery_lease_acquisition", "by_recovery_lease_acquisition_owner", "by_recovery_lease_expiry", "by_recovery_lease_expiry_owner", "by_workflow_execution", "by_workflow_execution_and_operational_state_id"],
             ["postCommitOutbox"] = ["by_claimable_by_intent_kind_time_recorded_id", "by_claimable_by_workflow_and_intent_kind_time_recorded_id", "by_claimable_by_workflow_time_recorded_id", "by_claimable_time_recorded_id", "by_collection", "by_deliverable_by_intent_kind_time_recorded_id", "by_deliverable_by_workflow_and_intent_kind_time_recorded_id", "by_deliverable_by_workflow_time_recorded_id", "by_deliverable_time_recorded_id", "by_outbox_claimable_at", "by_outbox_deliverable_at", "by_outbox_intent_kind", "by_outbox_item_id", "by_outbox_recorded_at", "by_outbox_status", "by_workflow_execution"],
             ["publicationProjectionState"] = ["by_projection_kind_and_artifact_id"],
-            ["recurringTriggerSchedule"] = ["by_active_next_occurrence_and_schedule_id", "by_artifact", "by_artifact_and_schedule_id", "by_collection", "by_next_occurrence", "by_publication", "by_publication_and_schedule_id", "by_recurring_schedule_active", "by_recurring_schedule_id"],
+            ["recurringTriggerSchedule"] = ["by_activation", "by_activation_and_schedule_id", "by_active_next_occurrence_and_schedule_id", "by_artifact", "by_artifact_and_schedule_id", "by_collection", "by_next_occurrence", "by_recurring_schedule_active", "by_recurring_schedule_id"],
             ["schedulerPoison"] = ["by_workflow_execution", "by_workflow_execution_and_failure_window"],
             ["schedulerState"] = ["by_collection"],
             ["schedulerWorkItem"] = ["by_scheduler_work_order", "by_workflow_execution", "by_workflow_execution_and_scheduler_recorded_at_and_order", "by_workflow_execution_and_scheduler_work_order"],
@@ -73,7 +73,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             ["workflowExecutionState"] = ["by_alteration_capture_tenant_and_execution", "by_attention_fault_history", "by_collection_and_pinned_artifact", "by_collection_and_pinned_artifact_v2", "by_history_order"],
             ["workflowRunHealthState"] = ["by_definition_and_started_at", "by_run_kind_and_started_at", "by_run_kind_status_definition_started_at", "by_run_kind_status_started_at", "by_started_at", "by_status_and_started_at"],
             ["workflowTestScope"] = ["by_collection", "by_expires_at", "by_scope_id", "by_state_and_expires_at", "by_state_and_scope_id", "by_status"],
-            ["workflowTriggerBinding"] = ["by_active", "by_artifact", "by_artifact_and_trigger_binding_id", "by_publication", "by_publication_and_trigger_binding_id", "by_stimulus", "by_stimulus_and_type", "by_stimulus_type", "by_stimulus_type_and_active", "by_trigger_binding_id"],
+            ["workflowTriggerBinding"] = ["by_activation", "by_activation_and_trigger_binding_id", "by_active", "by_artifact", "by_artifact_and_trigger_binding_id", "by_stimulus", "by_stimulus_and_type", "by_stimulus_type", "by_stimulus_type_and_active", "by_trigger_binding_id"],
             ["workflowActivationSlot"] = ["by_active_activation", "by_active_activation_and_slot_id", "by_definition", "by_definition_and_slot_id"]
         };
         var actualIndexes = units.ToDictionary(
@@ -310,7 +310,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             [ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleDocumentKind] =
             [
                 ElsaRuntimeV2StorageManifest.ArtifactIdField,
-                ElsaRuntimeV2StorageManifest.RecurringTriggerSchedulePublicationIdField,
+                ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleActivationIdField,
                 ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleNextOccurrenceField,
                 ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIdField,
                 ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIsActiveField
@@ -409,7 +409,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
                 ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingIsActiveField,
                 ElsaRuntimeV2StorageManifest.TriggerBindingIdField,
                 ElsaRuntimeV2StorageManifest.ArtifactIdField,
-                ElsaRuntimeV2StorageManifest.PublicationIdField
+                ElsaRuntimeV2StorageManifest.ActivationIdField
             ]
         };
 

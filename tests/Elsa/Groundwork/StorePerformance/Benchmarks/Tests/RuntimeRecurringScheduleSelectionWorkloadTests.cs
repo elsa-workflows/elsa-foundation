@@ -25,17 +25,17 @@ public sealed class RuntimeRecurringScheduleSelectionWorkloadTests
         Assert.Equal(3, adapter.OpenedClients.Count);
         Assert.Equal(3, adapter.OpenedClients.Distinct(ReferenceEqualityComparer.Instance).Count());
         Assert.Equal(RuntimeRecurringScheduleSelectionWorkload.ScheduleCount, adapter.Shared.Schedules.Count);
-        Assert.Equal(RuntimeRecurringScheduleSelectionWorkload.PublicationCount, adapter.Shared.PreparedPublications.Count);
+        Assert.Equal(RuntimeRecurringScheduleSelectionWorkload.PublicationCount, adapter.Shared.PreparedActivations.Count);
         Assert.Equal(
             RuntimeRecurringScheduleSelectionWorkload.InactivePublications,
             adapter.Shared.Schedules.Values
                 .Where(schedule => !schedule.IsActive)
-                .Select(schedule => schedule.PublicationId)
+                .Select(schedule => schedule.ActivationId)
                 .Distinct(StringComparer.Ordinal)
                 .Count());
         Assert.All(
             adapter.Shared.Schedules.Values,
-            schedule => Assert.Equal(!IsExpectedInactivePublication(schedule.PublicationId), schedule.IsActive));
+            schedule => Assert.Equal(!IsExpectedInactivePublication(schedule.ActivationId), schedule.IsActive));
         Assert.Equal(
             RuntimeRecurringScheduleSelectionWorkload.DueSchedules - 1,
             adapter.Shared.Schedules.Values.Count(schedule =>
@@ -43,13 +43,13 @@ public sealed class RuntimeRecurringScheduleSelectionWorkloadTests
                 schedule.NextOccurrence <= RuntimeRecurringScheduleSelectionWorkload.FixedNowUtc));
         Assert.Equal(
             (RuntimeRecurringScheduleSelectionWorkload.PublicationCount + 1) * 2,
-            adapter.Shared.PublicationPageRequests.Count);
-        Assert.All(adapter.Shared.PublicationPageRequests, request =>
+            adapter.Shared.ActivationPageRequests.Count);
+        Assert.All(adapter.Shared.ActivationPageRequests, request =>
         {
             Assert.Equal(RuntimeRecurringScheduleSelectionWorkload.PageSize, request.Limit);
         });
-        var requestsByPublication = adapter.Shared.PublicationPageRequests
-            .GroupBy(request => request.PublicationId, StringComparer.Ordinal)
+        var requestsByPublication = adapter.Shared.ActivationPageRequests
+            .GroupBy(request => request.ActivationId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         Assert.Equal(RuntimeRecurringScheduleSelectionWorkload.PublicationCount, requestsByPublication.Count);
         Assert.Equal(4, requestsByPublication["publication-0000"].Length);
@@ -136,11 +136,11 @@ public sealed class RuntimeRecurringScheduleSelectionWorkloadTests
             value.Contains("Physical", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static bool IsExpectedInactivePublication(string? publicationId)
+    private static bool IsExpectedInactivePublication(string? activationId)
     {
-        Assert.NotNull(publicationId);
+        Assert.NotNull(activationId);
         var index = int.Parse(
-            publicationId.AsSpan("publication-".Length),
+            activationId.AsSpan("publication-".Length),
             System.Globalization.NumberStyles.None,
             System.Globalization.CultureInfo.InvariantCulture);
         var replacementCandidate = RuntimeRecurringScheduleSelectionWorkload.PublicationCount -
@@ -184,8 +184,8 @@ public sealed class RuntimeRecurringScheduleSelectionWorkloadTests
     {
         public object Sync { get; } = new();
         public Dictionary<string, RecurringTriggerSchedule> Schedules { get; } = new(StringComparer.Ordinal);
-        public HashSet<string> PreparedPublications { get; } = new(StringComparer.Ordinal);
-        public List<RecurringTriggerSchedulePublicationPageQuery> PublicationPageRequests { get; } = [];
+        public HashSet<string> PreparedActivations { get; } = new(StringComparer.Ordinal);
+        public List<RecurringTriggerScheduleActivationPageQuery> ActivationPageRequests { get; } = [];
         public int NonAtomicReadyCount { get; set; }
         public TaskCompletionSource NonAtomicRelease { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int ResponseOnlyGranted { get; set; }
@@ -204,33 +204,33 @@ public sealed class RuntimeRecurringScheduleSelectionWorkloadTests
             }
         }
 
-        public ValueTask PreparePublicationAsync(string publicationId, IReadOnlyCollection<RecurringTriggerSchedule> schedules, CancellationToken cancellationToken = default)
+        public ValueTask PrepareActivationAsync(string activationId, IReadOnlyCollection<RecurringTriggerSchedule> schedules, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             lock (backing.Sync)
             {
-                foreach (var existing in backing.Schedules.Values.Where(schedule => schedule.PublicationId == publicationId).Select(schedule => schedule.ScheduleId).ToArray())
+                foreach (var existing in backing.Schedules.Values.Where(schedule => schedule.ActivationId == activationId).Select(schedule => schedule.ScheduleId).ToArray())
                     backing.Schedules.Remove(existing);
                 foreach (var schedule in schedules)
                     backing.Schedules.Add(schedule.ScheduleId, schedule with { IsActive = false });
-                backing.PreparedPublications.Add(publicationId);
+                backing.PreparedActivations.Add(activationId);
                 return ValueTask.CompletedTask;
             }
         }
 
-        public ValueTask ActivatePublicationAsync(string publicationId, string? replacedPublicationId, CancellationToken cancellationToken = default)
+        public ValueTask ActivateAsync(string activationId, string? replacedActivationId, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             lock (backing.Sync)
             {
-                if (!backing.PreparedPublications.Contains(publicationId))
+                if (!backing.PreparedActivations.Contains(activationId))
                     throw new InvalidOperationException("Publication was not prepared.");
                 if (fault == RecurringScheduleAdapterFault.IgnoreActivation)
                     return ValueTask.CompletedTask;
-                SetActive(publicationId, true);
-                if (replacedPublicationId is not null && fault != RecurringScheduleAdapterFault.IgnoreReplacement)
-                    SetActive(replacedPublicationId, false);
-                if (replacedPublicationId is not null && fault == RecurringScheduleAdapterFault.DeactivateUnrelatedPublication)
+                SetActive(activationId, true);
+                if (replacedActivationId is not null && fault != RecurringScheduleAdapterFault.IgnoreReplacement)
+                    SetActive(replacedActivationId, false);
+                if (replacedActivationId is not null && fault == RecurringScheduleAdapterFault.DeactivateUnrelatedPublication)
                     SetActive("publication-0001", false);
                 return ValueTask.CompletedTask;
             }
@@ -259,14 +259,14 @@ public sealed class RuntimeRecurringScheduleSelectionWorkloadTests
             }
         }
 
-        public ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByPublicationPageAsync(RecurringTriggerSchedulePublicationPageQuery query, CancellationToken cancellationToken = default)
+        public ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByActivationPageAsync(RecurringTriggerScheduleActivationPageQuery query, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             lock (backing.Sync)
             {
-                backing.PublicationPageRequests.Add(query);
+                backing.ActivationPageRequests.Add(query);
                 var allSchedules = backing.Schedules.Values
-                    .Where(schedule => fault == RecurringScheduleAdapterFault.IgnorePublicationFilter || schedule.PublicationId == query.PublicationId)
+                    .Where(schedule => fault == RecurringScheduleAdapterFault.IgnorePublicationFilter || schedule.ActivationId == query.ActivationId)
                     .OrderBy(schedule => schedule.ScheduleId, StringComparer.Ordinal)
                     .ToArray();
                 var offset = query.ContinuationToken is null || fault == RecurringScheduleAdapterFault.IgnorePublicationContinuation
@@ -320,7 +320,7 @@ public sealed class RuntimeRecurringScheduleSelectionWorkloadTests
         public ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByArtifactPageAsync(RecurringTriggerScheduleArtifactPageQuery query, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("The recurring schedule workload does not use artifact pages.");
 
-        public ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
         public ValueTask DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
         public ValueTask DeleteAsync(string scheduleId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 
@@ -342,9 +342,9 @@ public sealed class RuntimeRecurringScheduleSelectionWorkloadTests
             }
         }
 
-        private void SetActive(string publicationId, bool active)
+        private void SetActive(string activationId, bool active)
         {
-            foreach (var schedule in backing.Schedules.Values.Where(schedule => schedule.PublicationId == publicationId).ToArray())
+            foreach (var schedule in backing.Schedules.Values.Where(schedule => schedule.ActivationId == activationId).ToArray())
                 backing.Schedules[schedule.ScheduleId] = schedule with { IsActive = active };
         }
 

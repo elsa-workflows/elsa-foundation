@@ -54,7 +54,7 @@ public sealed class WorkflowPublicationPreflightReader(
                 continue;
             var active = await publicationStore.FindAsync(activePublicationId, cancellationToken)
                 ?? throw new InvalidOperationException($"Active publication '{activePublicationId}' does not exist.");
-            var activeBindings = await triggerBindingStore.ListAllByPublicationAsync(activePublicationId, cancellationToken);
+            var activeBindings = await triggerBindingStore.ListAllByActivationAsync(activePublicationId, cancellationToken);
             authoritativeSets.Add(new PublicationAuthoritativeClaimSet(
                 activePublicationId,
                 active.SlotName,

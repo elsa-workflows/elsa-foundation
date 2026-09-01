@@ -296,10 +296,10 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                 DateTimeOffset.UtcNow,
                 DateTimeOffset.UtcNow,
                 WorkflowExecutableReferenceScope.Published,
-                PublicationId: publicationId,
+                ActivationId: publicationId,
                 SlotId: slotId));
         await Services.GetRequiredService<IWorkflowTriggerIndexer>()
-            .PreparePublicationAsync(executable, publicationId, slotId);
+            .PrepareActivationAsync(executable, publicationId, slotId);
     }
 
     /// <summary>
@@ -312,14 +312,14 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         string artifactId)
     {
         var store = Services.GetRequiredService<IWorkflowTriggerBindingStore>();
-        await store.ActivatePublicationAsync(publicationId, replacedPublicationId);
-        var bindings = await store.ListAllByPublicationAsync(publicationId);
+        await store.ActivateAsync(publicationId, replacedPublicationId);
+        var bindings = await store.ListAllByActivationAsync(publicationId);
         await NotifyPublicationAuthorityChangedAsync(artifactId, bindings);
     }
 
     /// <summary>Removes a prepared projection so a subsequent activation exercises the real missing-candidate failure.</summary>
     public async Task RemovePreparedPublishedHttpTriggerAsync(string publicationId) =>
-        await Services.GetRequiredService<IWorkflowTriggerBindingStore>().DeleteByPublicationAsync(publicationId);
+        await Services.GetRequiredService<IWorkflowTriggerBindingStore>().DeleteByActivationAsync(publicationId);
 
     /// <summary>
     /// Retires an artifact-scoped start projection while retaining its executable and any waiting bookmarks. Used

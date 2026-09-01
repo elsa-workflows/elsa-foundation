@@ -142,7 +142,7 @@ public sealed record ExecutableSourceReferenceView(
             reference.DefinitionId,
             reference.DefinitionVersionId,
             reference.ArtifactVersion,
-            reference.PublicationId,
+            reference.ActivationId,
             reference.SlotId,
             reference.CreatedAt,
             reference.PublishedAt,

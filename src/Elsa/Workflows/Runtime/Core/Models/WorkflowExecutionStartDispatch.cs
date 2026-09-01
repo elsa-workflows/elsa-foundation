@@ -420,34 +420,34 @@ public sealed class WorkflowExecutableRetainedDependencyAuthority
 
 /// <summary>
 /// Selects an authoritative source reference without allowing callers to assert definition or version facts.
-/// Direct execution uses <see cref="SourceReferenceId"/>; stimulus routing uses the publication/slot identity
+/// Direct execution uses <see cref="SourceReferenceId"/>; stimulus routing uses the activation/slot identity
 /// already stamped on the server-owned trigger binding.
 /// </summary>
 public sealed record WorkflowExecutableSourceSelection
 {
     public WorkflowExecutableSourceSelection(
         string? sourceReferenceId = null,
-        string? publicationId = null,
+        string? activationId = null,
         string? slotId = null)
     {
         if (sourceReferenceId is not null && string.IsNullOrWhiteSpace(sourceReferenceId))
             throw new ArgumentException("Source reference ID cannot be blank when provided.", nameof(sourceReferenceId));
-        if (publicationId is not null && string.IsNullOrWhiteSpace(publicationId))
-            throw new ArgumentException("Publication ID cannot be blank when provided.", nameof(publicationId));
+        if (activationId is not null && string.IsNullOrWhiteSpace(activationId))
+            throw new ArgumentException("Activation ID cannot be blank when provided.", nameof(activationId));
         if (slotId is not null && string.IsNullOrWhiteSpace(slotId))
             throw new ArgumentException("Slot ID cannot be blank when provided.", nameof(slotId));
-        if (sourceReferenceId is null && publicationId is null && slotId is null)
-            throw new ArgumentException("A source reference, publication or slot ID is required.");
-        if (sourceReferenceId is not null && (publicationId is not null || slotId is not null))
-            throw new ArgumentException("Select by source reference ID or publication identity, not both.");
+        if (sourceReferenceId is null && activationId is null && slotId is null)
+            throw new ArgumentException("A source reference, activation or slot ID is required.");
+        if (sourceReferenceId is not null && (activationId is not null || slotId is not null))
+            throw new ArgumentException("Select by source reference ID or activation identity, not both.");
 
         SourceReferenceId = sourceReferenceId;
-        PublicationId = publicationId;
+        ActivationId = activationId;
         SlotId = slotId;
     }
 
     public string? SourceReferenceId { get; }
-    public string? PublicationId { get; }
+    public string? ActivationId { get; }
     public string? SlotId { get; }
 }
 
