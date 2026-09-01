@@ -58,10 +58,10 @@ public sealed class ActivityCallGenerator : IIncrementalGenerator
         System.Threading.CancellationToken cancellationToken)
     {
         var activities = ImmutableArray.CreateBuilder<ActivityMetadata>();
-        var activityContract = compilation.GetTypeByMetadataName(ActivityContractName);
-        if (activityContract is null)
-            return activities.ToImmutable();
-
+        // Do not resolve the contract through Compilation.GetTypeByMetadataName. A consumer can
+        // reference more than one assembly that carries the same contract metadata (for example,
+        // an authoring stub package alongside the runtime contract assembly), in which case Roslyn
+        // returns null for the ambiguous metadata name even though the activity symbols are valid.
         CollectActivities(compilation.Assembly.GlobalNamespace, activities, cancellationToken);
         foreach (var assembly in compilation.SourceModule.ReferencedAssemblySymbols)
         {
