@@ -149,7 +149,7 @@ internal sealed class RecurringScheduleSelectionAdapter(
     /// <summary>
     /// Adapts the catalog's stable workload ids to the deterministic ids required by the public runtime
     /// schedule contract. The workload ids are part of the frozen result vector, while Groundwork validates
-    /// persisted ids from (publication, artifact, executable node); this map keeps that translation entirely
+    /// persisted ids from (activation, artifact, executable node); this map keeps that translation entirely
     /// at the public-store boundary and leaves provider calls in the production store implementation.
     /// </summary>
     private sealed class WorkloadScheduleStore(
@@ -165,20 +165,20 @@ internal sealed class RecurringScheduleSelectionAdapter(
             return identities.ToWorkload(saved);
         }
 
-        public async ValueTask PreparePublicationAsync(
-            string publicationId,
+        public async ValueTask PrepareActivationAsync(
+            string activationId,
             IReadOnlyCollection<RecurringTriggerSchedule> schedules,
             CancellationToken cancellationToken = default)
         {
             var stored = schedules.Select(identities.ToStorage).ToArray();
-            await inner.PreparePublicationAsync(publicationId, stored, cancellationToken);
+            await inner.PrepareActivationAsync(activationId, stored, cancellationToken);
         }
 
-        public async ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByPublicationPageAsync(
-            RecurringTriggerSchedulePublicationPageQuery query,
+        public async ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByActivationPageAsync(
+            RecurringTriggerScheduleActivationPageQuery query,
             CancellationToken cancellationToken = default)
         {
-            var page = await inner.ListByPublicationPageAsync(query, cancellationToken);
+            var page = await inner.ListByActivationPageAsync(query, cancellationToken);
             return identities.ToWorkload(page);
         }
 
@@ -190,16 +190,16 @@ internal sealed class RecurringScheduleSelectionAdapter(
             return identities.ToWorkload(page);
         }
 
-        public ValueTask ActivatePublicationAsync(
-            string publicationId,
-            string? replacedPublicationId,
+        public ValueTask ActivateAsync(
+            string activationId,
+            string? replacedActivationId,
             CancellationToken cancellationToken = default) =>
-            inner.ActivatePublicationAsync(publicationId, replacedPublicationId, cancellationToken);
+            inner.ActivateAsync(activationId, replacedActivationId, cancellationToken);
 
-        public ValueTask DeleteByPublicationAsync(
-            string publicationId,
+        public ValueTask DeleteByActivationAsync(
+            string activationId,
             CancellationToken cancellationToken = default) =>
-            inner.DeleteByPublicationAsync(publicationId, cancellationToken);
+            inner.DeleteByActivationAsync(activationId, cancellationToken);
 
         public async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(
             DateTimeOffset asOf,
@@ -245,10 +245,10 @@ internal sealed class RecurringScheduleSelectionAdapter(
 
         public RecurringTriggerSchedule ToStorage(RecurringTriggerSchedule schedule)
         {
-            var storageId = schedule.PublicationId is null
+            var storageId = schedule.ActivationId is null
                 ? RecurringTriggerSchedule.BuildId(schedule.ArtifactId, schedule.ExecutableNodeId)
                 : RecurringTriggerSchedule.BuildId(
-                    schedule.PublicationId,
+                    schedule.ActivationId,
                     schedule.ArtifactId,
                     schedule.ExecutableNodeId);
             lock (this)
