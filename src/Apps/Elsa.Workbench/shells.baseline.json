@@ -57,6 +57,7 @@
           },
           "ActivitiesDesignGroundworkPersistence": {},
           "WorkflowsDesignGroundworkPersistence": {},
+          "WorkflowsRuntimeDistributed": {},
           "WorkflowsRuntimeDistributedGroundworkPersistence": {},
           "GroundworkWorkflowDashboard": {},
           "FoundationAgentAbstractions": {},

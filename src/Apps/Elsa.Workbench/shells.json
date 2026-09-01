@@ -71,6 +71,7 @@
           },
           "ActivitiesDesignGroundworkPersistence": {},
           "WorkflowsDesignGroundworkPersistence": {},
+          "WorkflowsRuntimeDistributed": {},
           "WorkflowsRuntimeDistributedGroundworkPersistence": {},
           "GroundworkWorkflowDashboard": {},
           "Http": {},

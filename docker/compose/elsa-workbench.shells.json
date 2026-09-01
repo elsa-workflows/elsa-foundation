@@ -50,6 +50,7 @@
           "ActivitiesDesignGroundworkPersistence": {},
           "WorkflowsDesignGroundworkPersistence": {},
           "WorkflowsPublishingGroundwork": {},
+          "WorkflowsRuntimeDistributed": {},
           "WorkflowsRuntimeDistributedGroundworkPersistence": {},
           "GroundworkWorkflowDashboard": {},
           "HttpJavaScript": {},

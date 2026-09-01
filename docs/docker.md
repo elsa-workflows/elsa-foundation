@@ -42,9 +42,9 @@ Prove persistence actually hits Postgres:
 
 ```bash
 docker compose exec postgres psql -U elsa -d elsa -c '\dt'
-# -> groundwork_documents, groundwork_document_indexes, groundwork_schema_history
+# -> per-unit v2 tables such as elsa_workflow_definitions_v2, plus __groundwork_schema_history
 docker compose exec postgres psql -U elsa -d elsa \
-  -c "SELECT document_kind, count(*) FROM groundwork_documents GROUP BY document_kind;"
+  -c 'SELECT count(*) AS applied_units FROM "__groundwork_schema_history";'
 ```
 
 Tear down (including volumes):
