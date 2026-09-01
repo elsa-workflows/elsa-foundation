@@ -468,7 +468,7 @@ public sealed class GroundworkOpenTelemetryStore :
         checked((int)Math.Min(int.MaxValue, session.Query(new QueryRequest(
             new TableId(session.Unit.Name),
             Predicate.AlwaysTrue.Instance,
-            [new OrderTerm(orderColumn)],
+            [new OrderTerm(orderColumn, OrderDirection.Ascending, NullOrder.Last)],
             Projection.All,
             Paging.Keyset(1),
             result: ResultShape.TotalCount.Instance)).TotalCount ?? 0));

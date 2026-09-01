@@ -6,12 +6,14 @@
   "evidenceClassification": "current-v2-four-provider-correctness-recertification",
   "recordedAtUtc": "2026-09-01T10:21:24Z",
   "elsaSourceCommit": "8b92d34b7832271daa1ef24986311401c5d56e20",
-  "testedSourceState": "The focused local recertification ran from the Elsa source commit above plus the explicitly listed guard, ledger, current-v2 test, and test-project metadata changes. Hosted workflow run 33498592159 then executed the integrated exact head ebce7a70e157ea788f191c48ac68b062b5d6478d, including the retained receipt and the native-provider CI lane. No diagnostics EF implementation or test source was deleted.",
+  "testedSourceState": "The focused local recertification ran from the Elsa source commit above plus the explicitly listed guard, ledger, current-v2 tests, portable diagnostics-count ordering correction, and test-project metadata changes. Hosted workflow run 33498592159 executed exact code-and-workflow head ebce7a70e157ea788f191c48ac68b062b5d6478d and proved the native-provider CI lane before the later correction commit added the current executable ledger evidence. The pull request's exact-head checks remain the integrated authority for that final commit. No diagnostics EF implementation or test source was deleted.",
   "workingTreeSha256": {
-    "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsPersistenceArchitectureTests.cs": "b17ce601edf3e296a5dc493cfee876fba9030a3fe528478942702c860638be5a",
+    "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsPersistenceArchitectureTests.cs": "0355188152e7c37e28b8e5eafbfd01636910bac34ce23164aebe4ea8b0979034",
     "tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests.csproj": "4689e6ca4c11d548329fdba2899875d2f70d3da671e94b33e0ca513a9f5227d6",
     "tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/V2/Tests/GroundworkV2StructuredLogStoreTests.cs": "fa1cb9a51817601bf53896edb6cc465809c65d22b1dc65ff41b8cd1ca1471bd6",
-    "specs/139-groundwork-diagnostics-persistence/ef-test-removal-ledger.md": "2b42b3e62e885990de85c67feebb3e258f3d95bad96594c97e73ffc3816af249"
+    "specs/139-groundwork-diagnostics-persistence/ef-test-removal-ledger.md": "98270aa769db5731fdab7dba90278869168567cb0c2c95d84a2c019c4cedd409",
+    "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryV2Store.cs": "211991f38dbd4fccd8d41c44b611490a27c71fbd7fbeb66348688dd2e0a7034c",
+    "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2/Tests/GroundworkV2OpenTelemetryTests.cs": "8de3fdc7991ea6d85b50a3cd57b19defffdd496f83ee1cbc4d8c251f47c68d3d"
   },
   "groundworkTag": "v0.4.0-preview.3",
   "groundworkReleaseSha": "9de7aa0e6271c311536d2a78a1e6c1f0260e1fda",
@@ -43,10 +45,10 @@
     {
       "purpose": "OpenTelemetry current v2 SQLite provider matrix",
       "command": "GROUNDWORK_V2_SQLITE_CONNECTION_STRING='Data Source=<temporary-dir>/diagnostics.db' dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests.csproj --no-restore --logger 'console;verbosity=minimal'",
-      "passed": 8,
+      "passed": 13,
       "failed": 0,
       "skipped": 3,
-      "total": 11,
+      "total": 16,
       "providerResult": "SQLite passed; PostgreSQL, SQL Server, and MongoDB were skipped because their connection-string environment variables were not configured."
     },
     {
