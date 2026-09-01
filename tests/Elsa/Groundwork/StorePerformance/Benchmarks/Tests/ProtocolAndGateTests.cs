@@ -198,7 +198,7 @@ public sealed class ProtocolAndGateTests
             [],
             null);
         var gate = GateEvaluator.Evaluate(
-            GatePolicy.DefaultFor(GateClass.OrdinaryStore),
+            GatePolicy.DefaultFor(GateClass.OrdinaryStore, workload.Id),
             forgedCompleteComparison);
 
         Assert.Equal(PerformanceVerdict.Blocked, gate.Verdict);
@@ -206,87 +206,85 @@ public sealed class ProtocolAndGateTests
     }
 
     /// <summary>
-    /// The ratified absolute ceiling must actually bind. It was reachable on GatePolicy but unset by every
-    /// construction path, so a workload inside its ratio comparison could exceed the latency budget and
-    /// still pass — the budget existed on paper only.
+    /// The ratified durable-write absolute ceiling must actually bind. It was reachable on GatePolicy but
+    /// unset by every construction path, so a workload inside its ratio comparison could exceed the latency
+    /// budget and still pass — the budget existed on paper only.
     /// </summary>
     [Fact]
-    public void Runtime_hot_path_default_carries_the_ratified_absolute_ceiling()
+    public void Runtime_hot_path_default_carries_the_ratified_durable_write_ceiling()
     {
         Assert.Equal(
             GatePolicy.RatifiedDurableWritePathP95Milliseconds,
-            GatePolicy.DefaultFor(GateClass.RuntimeHotPath).MaxP95Milliseconds);
+            GatePolicy.DefaultFor(GateClass.RuntimeHotPath, "checkpoint-commit").MaxP95Milliseconds);
     }
 
     [Theory]
-    [InlineData("bookmark-lookup", WorkloadBudgetClass.BoundedRead, 40d)]
-    [InlineData("recovery-scan", WorkloadBudgetClass.BoundedRead, 40d)]
-    [InlineData("due-timer-selection", WorkloadBudgetClass.BoundedRead, 40d)]
-    [InlineData("recurring-schedule-selection", WorkloadBudgetClass.BoundedRead, 40d)]
-    [InlineData("trigger-binding-stimulus-lookup", WorkloadBudgetClass.BoundedRead, 40d)]
-    [InlineData("checkpoint-commit", WorkloadBudgetClass.DurableWrite, 150d)]
-    [InlineData("command-send-lease-ack", WorkloadBudgetClass.DurableWrite, 150d)]
-    [InlineData("diagnostics-durable-history", WorkloadBudgetClass.DurableWrite, 150d)]
-    [InlineData("iam-normalized-lookup-update", WorkloadBudgetClass.DurableWrite, 150d)]
-    [InlineData("outbox-drain", WorkloadBudgetClass.DurableWrite, 150d)]
-    [InlineData("placement-takeover", WorkloadBudgetClass.DurableWrite, 150d)]
-    [InlineData("queue-drain", WorkloadBudgetClass.DurableWrite, 150d)]
-    [InlineData("secret-create-read-list", WorkloadBudgetClass.DurableWrite, 150d)]
-    public void Every_catalog_workload_has_an_explicit_ratified_budget(
-        string workloadId,
-        WorkloadBudgetClass expectedClass,
-        double expectedCeiling)
+    [InlineData("checkpoint-commit", 150d)]
+    [InlineData("queue-drain", 150d)]
+    [InlineData("outbox-drain", 150d)]
+    [InlineData("bookmark-lookup", 40d)]
+    [InlineData("recovery-scan", 40d)]
+    [InlineData("due-timer-selection", 40d)]
+    [InlineData("recurring-schedule-selection", 40d)]
+    [InlineData("trigger-binding-stimulus-lookup", 40d)]
+    public void Every_runtime_workload_gets_its_workload_derived_gate_class_and_ceiling(string workloadId, double ceiling)
     {
-        var policy = GatePolicy.ForWorkload(workloadId, GateClass.RuntimeHotPath);
+        var policy = GatePolicy.DefaultFor(workloadId);
 
-        Assert.Equal(workloadId, policy.WorkloadId);
-        Assert.Equal(expectedClass, policy.BudgetClass);
-        Assert.Equal(expectedCeiling, policy.MaxP95Milliseconds);
+        Assert.Equal(GateClass.RuntimeHotPath, policy.GateClass);
+        Assert.Equal(ceiling, policy.MaxP95Milliseconds);
     }
 
     [Fact]
-    public void Unknown_workload_budget_fails_closed_as_a_blocked_gate()
+    public void Workload_default_does_not_trust_an_ordinary_workload_as_a_runtime_path()
     {
-        var comparison = new ComparisonResult(
-            1,
-            new string('a', 64),
-            "unknown-workload",
-            "1.0.0",
-            "sqlite",
-            "100k",
-            "sqlite/ef/store",
-            "sqlite/groundwork/store",
-            true,
-            true,
-            [],
-            [],
-            null);
+        var ordinary = GatePolicy.DefaultFor("secret-create-read-list");
 
-        var gate = GateEvaluator.Evaluate(GatePolicy.DefaultFor(GateClass.RuntimeHotPath), comparison);
+        Assert.Equal(GateClass.OrdinaryStore, ordinary.GateClass);
+        Assert.Null(ordinary.MaxP95Milliseconds);
+    }
 
-        Assert.Equal(PerformanceVerdict.Blocked, gate.Verdict);
-        Assert.Contains("no ratified absolute latency budget", gate.Reason, StringComparison.OrdinalIgnoreCase);
+    [Theory]
+    [InlineData("bookmark-lookup")]
+    [InlineData("recovery-scan")]
+    [InlineData("due-timer-selection")]
+    [InlineData("recurring-schedule-selection")]
+    [InlineData("trigger-binding-stimulus-lookup")]
+    public void Adopted_bounded_read_ceiling_is_enforced_for_each_declared_workload(string workloadId)
+    {
+        Assert.Equal(
+            GatePolicy.AdoptedBoundedReadPathP95Milliseconds,
+            GatePolicy.DefaultFor(GateClass.RuntimeHotPath, workloadId).MaxP95Milliseconds);
     }
 
     [Fact]
     public void Reviewed_replacement_inherits_the_ceiling_when_the_policy_file_omits_it()
     {
-        var review = new GateReview("w", "1.0.0", "proposer", "reviewer", "ref", "2026-08-04T00:00:00Z");
+        var boundedReadReview = new GateReview("bookmark-lookup", "1.0.0", "proposer", "reviewer", "ref", "2026-08-04T00:00:00Z");
+        var durableWriteReview = new GateReview("checkpoint-commit", "1.0.0", "proposer", "reviewer", "ref", "2026-08-04T00:00:00Z");
 
-        var inherited = GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, review);
-        var explicitCeiling = GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, review, 40d);
+        var inheritedBoundedRead = GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, boundedReadReview);
+        var inheritedDurableWrite = GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, durableWriteReview);
+        var explicitCeiling = GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, boundedReadReview, 25d);
 
-        // Omitting the ceiling inherits it; dropping a ratified budget must be deliberate, not an omission.
-        Assert.Equal(GatePolicy.RatifiedDurableWritePathP95Milliseconds, inherited.MaxP95Milliseconds);
-        Assert.Equal(40d, explicitCeiling.MaxP95Milliseconds);
+        // Omitting the ceiling inherits the class default; dropping a default budget must be deliberate, not an omission.
+        Assert.Equal(GatePolicy.AdoptedBoundedReadPathP95Milliseconds, inheritedBoundedRead.MaxP95Milliseconds);
+        Assert.Equal(GatePolicy.RatifiedDurableWritePathP95Milliseconds, inheritedDurableWrite.MaxP95Milliseconds);
+        Assert.Equal(25d, explicitCeiling.MaxP95Milliseconds);
         Assert.Throws<PerformanceContractException>(() =>
-            GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, review, 0d));
+            GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, boundedReadReview, 0d));
+    }
 
-        var boundedReview = review with { WorkloadId = "bookmark-lookup", ReviewReference = "bounded-read-review" };
-        var boundedDefault = GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, boundedReview).ForWorkload("bookmark-lookup");
-        var boundedOverride = GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, boundedReview, 25d).ForWorkload("bookmark-lookup");
-        Assert.Equal(40d, boundedDefault.MaxP95Milliseconds);
-        Assert.Equal(25d, boundedOverride.MaxP95Milliseconds);
+    [Fact]
+    public void Replacement_gate_rejects_non_finite_thresholds()
+    {
+        var review = new GateReview("bookmark-lookup", "1.0.0", "proposer", "reviewer", "ref", "2026-08-04T00:00:00Z");
+
+        Assert.Throws<PerformanceContractException>(() => GatePolicy.Replacement(GateClass.RuntimeHotPath, double.NaN, .90, 2.0, review));
+        Assert.Throws<PerformanceContractException>(() => GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, double.PositiveInfinity, 2.0, review));
+        Assert.Throws<PerformanceContractException>(() => GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, double.NegativeInfinity, review));
+        Assert.Throws<PerformanceContractException>(() => GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, review, double.NaN));
+        Assert.Throws<PerformanceContractException>(() => GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, review, double.PositiveInfinity));
     }
 
     [Fact]
@@ -549,7 +547,7 @@ public sealed class ProtocolAndGateTests
     [Fact]
     public void Gate_defaults_to_the_performance_handoff_ratios()
     {
-        var gate = GatePolicy.DefaultFor(GateClass.RuntimeHotPath);
+        var gate = GatePolicy.DefaultFor(GateClass.RuntimeHotPath, "checkpoint-commit");
 
         Assert.Equal(1.10, gate.MaxP95Ratio);
         Assert.Equal(0.90, gate.MinThroughputRatio);
@@ -570,14 +568,183 @@ public sealed class ProtocolAndGateTests
         Assert.Contains("independent", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("", "reviewer")]
+    [InlineData("proposer", "")]
+    public void Replacement_gate_requires_nonempty_reviewer_identities(string proposedBy, string reviewedBy)
+    {
+        var error = Assert.Throws<PerformanceContractException>(() => GatePolicy.Replacement(
+            GateClass.RuntimeHotPath,
+            1.10,
+            .90,
+            2.0,
+            new GateReview("bookmark-lookup", "1.0.0", proposedBy, reviewedBy, "review-42", "2026-07-24T00:00:00Z")));
+
+        Assert.Contains("independent", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Reviewed_replacement_cannot_change_the_workload_derived_gate_class()
+    {
+        var error = Assert.Throws<PerformanceContractException>(() => GatePolicy.Replacement(
+            GateClass.OrdinaryStore,
+            1.10,
+            .90,
+            2.0,
+            new GateReview("bookmark-lookup", "1.0.0", "proposer", "reviewer", "review-42", "2026-07-24T00:00:00Z")));
+
+        Assert.Contains("gate class", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void Incomplete_or_nonmatching_evidence_fails_closed()
     {
         var comparison = new ComparisonResult(1, new string('c', 64), "bookmark-lookup", "1.0.0", "sqlite", "100k", "sqlite/ef/store", "sqlite/groundwork/store", false, false, [], [], "incomplete");
 
-        var verdict = GateEvaluator.Evaluate(GatePolicy.DefaultFor(GateClass.OrdinaryStore), comparison);
+        var verdict = GateEvaluator.Evaluate(GatePolicy.DefaultFor(GateClass.OrdinaryStore, comparison.WorkloadId), comparison);
 
         Assert.Equal(PerformanceVerdict.Blocked, verdict.Verdict);
+    }
+
+    [Fact]
+    public void Gate_evaluator_rejects_a_complete_comparison_with_no_operations()
+    {
+        var comparison = new ComparisonResult(
+            1,
+            new string('c', 64),
+            "bookmark-lookup",
+            "1.1.0",
+            "sqlite",
+            "100k",
+            "sqlite/ef/document-type-specific-tables",
+            "sqlite/groundwork/document-type-specific-tables",
+            true,
+            true,
+            [],
+            [],
+            null);
+
+        var verdict = GateEvaluator.Evaluate(GatePolicy.DefaultFor("bookmark-lookup"), comparison);
+
+        Assert.Equal(PerformanceVerdict.Blocked, verdict.Verdict);
+        Assert.Contains("operation", verdict.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Gate_cli_reports_incomplete_artifacts_as_blocked_instead_of_throwing_for_empty_workload_identity()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.Bind();
+
+        var exitCode = await BenchmarkCli.RunAsync(
+        [
+            "gate",
+            "--out", fixture.Directory,
+            "--oracle", "sqlite/ef/document-type-specific-tables",
+            "--target", "sqlite/groundwork/document-type-specific-tables"
+        ]);
+
+        Assert.Equal(2, exitCode);
+        var reportPath = Path.Combine(fixture.Directory, "gate.v1.json");
+        Assert.True(File.Exists(reportPath));
+        using var report = JsonDocument.Parse(File.ReadAllBytes(reportPath));
+        Assert.Equal((int)PerformanceVerdict.Blocked, report.RootElement.GetProperty("Payload").GetProperty("Verdict").GetProperty("Verdict").GetInt32());
+    }
+
+    [Fact]
+    public async Task Gate_cli_writes_a_blocked_report_when_the_manifest_is_missing()
+    {
+        using var fixture = ArtifactFixture.Create();
+        Directory.CreateDirectory(fixture.Directory);
+
+        var exitCode = await BenchmarkCli.RunAsync(
+        [
+            "gate",
+            "--out", fixture.Directory,
+            "--oracle", "sqlite/ef/document-type-specific-tables",
+            "--target", "sqlite/groundwork/document-type-specific-tables"
+        ]);
+
+        Assert.Equal(2, exitCode);
+        Assert.Equal((int)PerformanceVerdict.Blocked, ReadGateVerdict(fixture.Directory));
+    }
+
+    [Fact]
+    public async Task Gate_cli_uses_the_bounded_read_ceiling_through_the_workload_default()
+    {
+        static OperationSample At140Milliseconds(OperationSample operation)
+        {
+            var latencies = Enumerable.Repeat(140d, operation.RawLatenciesMilliseconds.Count).ToArray();
+            return operation with
+            {
+                P50Milliseconds = 140d,
+                P95Milliseconds = 140d,
+                P99Milliseconds = 140d,
+                RawLatenciesMilliseconds = latencies
+            };
+        }
+
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations, transform: At140Milliseconds);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations, transform: At140Milliseconds);
+        fixture.Bind();
+
+        var exitCode = await BenchmarkCli.RunAsync(
+        [
+            "gate",
+            "--out", fixture.Directory,
+            "--oracle", "sqlite/ef/document-type-specific-tables",
+            "--target", "sqlite/groundwork/document-type-specific-tables"
+        ]);
+
+        Assert.Equal(2, exitCode);
+        var report = JsonSerializer.Deserialize<ResultEnvelope<GateReport>>(
+            File.ReadAllBytes(Path.Combine(fixture.Directory, "gate.v1.json")),
+            ArtifactStore.JsonOptions)!;
+        Assert.Equal(PerformanceVerdict.Redesign, report.Payload.Verdict.Verdict);
+        Assert.Equal(ArtifactFixture.BookmarkOperations.Length, report.Payload.Verdict.Rows.Count);
+        Assert.All(report.Payload.Verdict.Rows, row => Assert.Equal(GatePolicy.AdoptedBoundedReadPathP95Milliseconds, row.MaxP95Milliseconds));
+    }
+
+    [Fact]
+    public async Task Gate_cli_rejects_an_unreviewed_gate_class_override()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.Bind();
+
+        var exitCode = await BenchmarkCli.RunAsync(
+        [
+            "gate",
+            "--out", fixture.Directory,
+            "--oracle", "sqlite/ef/document-type-specific-tables",
+            "--target", "sqlite/groundwork/document-type-specific-tables",
+            "--class", "ordinary"
+        ]);
+
+        Assert.Equal(2, exitCode);
+        Assert.Equal((int)PerformanceVerdict.Blocked, ReadGateVerdict(fixture.Directory));
+    }
+
+    [Fact]
+    public async Task Gate_cli_writes_a_blocked_report_for_malformed_json()
+    {
+        using var fixture = ArtifactFixture.Create();
+        Directory.CreateDirectory(fixture.Directory);
+        File.WriteAllText(Path.Combine(fixture.Directory, "artifact-manifest.v2.json"), "{");
+
+        var exitCode = await BenchmarkCli.RunAsync(
+        [
+            "gate",
+            "--out", fixture.Directory,
+            "--oracle", "sqlite/ef/document-type-specific-tables",
+            "--target", "sqlite/groundwork/document-type-specific-tables"
+        ]);
+
+        Assert.Equal(2, exitCode);
+        Assert.Equal((int)PerformanceVerdict.Blocked, ReadGateVerdict(fixture.Directory));
     }
 
     [Fact]
@@ -597,7 +764,7 @@ public sealed class ProtocolAndGateTests
         try
         {
             File.WriteAllText(path, """
-                { "SchemaVersion": 1, "WorkloadId": "bookmark-lookup", "WorkloadVersion": "1.0.0", "GateClass": 1, "MaxP95Ratio": 1.3, "MinThroughputRatio": 0.8, "MaxP99Ratio": 2.0, "Review": { "WorkloadId": "bookmark-lookup", "WorkloadVersion": "1.0.0", "ProposedBy": "#645", "ReviewedBy": "#646", "ReviewReference": "review-42", "ReviewedAtUtc": "2026-07-24T00:00:00Z" } }
+                { "SchemaVersion": 1, "WorkloadId": "bookmark-lookup", "WorkloadVersion": "1.0.0", "GateClass": 0, "MaxP95Ratio": 1.3, "MinThroughputRatio": 0.8, "MaxP99Ratio": 2.0, "Review": { "WorkloadId": "bookmark-lookup", "WorkloadVersion": "1.0.0", "ProposedBy": "#645", "ReviewedBy": "#646", "ReviewReference": "review-42", "ReviewedAtUtc": "2026-07-24T00:00:00Z" } }
                 """);
 
             var policy = GatePolicyFile.Load(path, "bookmark-lookup", "1.0.0");
@@ -619,27 +786,30 @@ public sealed class ProtocolAndGateTests
     private static PerformanceWorkload Workload() =>
         WorkloadCatalog.Load(Repository.Root()).Workloads["bookmark-lookup"];
 
+    private static int ReadGateVerdict(string outputDirectory)
+    {
+        using var report = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(outputDirectory, "gate.v1.json")));
+        return report.RootElement.GetProperty("Payload").GetProperty("Verdict").GetProperty("Verdict").GetInt32();
+    }
+
     private static ProcessArtifact ArtifactFor(RunRequest request)
     {
         var raw = Enumerable.Repeat(1d, 100).ToArray();
         IReadOnlyList<OperationSample> operations = request.ProcessKind == ProcessKind.Warmup
             ? []
-            :
-            [
-                new OperationSample(
-                    "read",
-                    raw.Length,
-                    30,
-                    raw.Length / 30d,
-                    Statistics.Percentile(raw, 50),
-                    Statistics.Percentile(raw, 95),
-                    Statistics.Percentile(raw, 99),
-                    raw)
-                {
-                    RoundTrips = raw.Length,
-                    RawRoundTrips = Enumerable.Repeat(1L, raw.Length).ToArray()
-                }
-            ];
+            : BookmarkScenario.OperationSequence.Select(operation => new OperationSample(
+                operation,
+                raw.Length,
+                30,
+                raw.Length / 30d,
+                Statistics.Percentile(raw, 50),
+                Statistics.Percentile(raw, 95),
+                Statistics.Percentile(raw, 99),
+                raw)
+            {
+                RoundTrips = raw.Length,
+                RawRoundTrips = Enumerable.Repeat(1L, raw.Length).ToArray()
+            }).ToArray();
         return new ProcessArtifact(
             2,
             request,
@@ -737,5 +907,20 @@ public sealed class ProtocolAndGateTests
             events.Add($"invoke:{invocation}");
             return Task.CompletedTask;
         }
+    }
+
+    [Fact]
+    public void Reviewed_replacement_gate_rejects_a_missing_reviewer_identity()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"elsa646-gate-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, """
+                { "SchemaVersion": 1, "WorkloadId": "bookmark-lookup", "WorkloadVersion": "1.0.0", "GateClass": 0, "MaxP95Ratio": 1.3, "MinThroughputRatio": 0.8, "MaxP99Ratio": 2.0, "Review": { "WorkloadId": "bookmark-lookup", "WorkloadVersion": "1.0.0", "ProposedBy": "#645", "ReviewReference": "review-42", "ReviewedAtUtc": "2026-07-24T00:00:00Z" } }
+                """);
+
+            Assert.Throws<PerformanceContractException>(() => GatePolicyFile.Load(path, "bookmark-lookup", "1.0.0"));
+        }
+        finally { File.Delete(path); }
     }
 }
