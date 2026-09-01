@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Elsa.Activities.DispatchWorkflow.Runtime;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
@@ -53,7 +54,7 @@ public sealed class WorkflowArtifactExportImportExecutionTests
         // The test harness's NewExecutable is only a convenient way to get the real pinned Probe contract. Rebuild
         // its identity through the same production hasher before it enters the export store.
         child = Reidentify(child);
-        var childReference = await exportEngine.PublishAsync(child);
+        var childReference = await exportEngine.PublishThroughProductionAsync(child);
 
         var parentNode = NewDispatchNode(child.Identity, childReference);
         var parent = WorkflowArtifactExportFixture.Executable(
@@ -62,8 +63,7 @@ public sealed class WorkflowArtifactExportImportExecutionTests
             artifactVersion: "1.0.0",
             dependencies: WorkflowArtifactExportFixture.DependencyOn(child, ParentNodeId));
         parent = WithCompletionResumeTarget(parent, parentNode);
-        await exportEngine.SaveArtifactAsync(parent);
-        var parentReference = await exportEngine.AddReferenceAsync(parent, WorkflowExecutableReferenceScope.Published);
+        var parentReference = await exportEngine.PublishThroughProductionAsync(parent);
 
         var closure = await exportEngine.CreateFactory().CreateAsync(parentReference.DefinitionVersionId);
         Assert.Equal(parent.Identity.ArtifactId, closure.RootArtifactId);
@@ -89,38 +89,16 @@ public sealed class WorkflowArtifactExportImportExecutionTests
         {
             await File.WriteAllBytesAsync(Path.Combine(mount, "parent-closure.json"), delivery.Payload!.Value.ToArray());
 
-            await using var runtime = BuildRuntimeOnlyEngine(mount);
-            runtime.InitializeActivityTypes();
-            await using var scope = runtime.Services.CreateAsyncScope();
-            var reconciliation = await scope.ServiceProvider
-                .GetRequiredService<IWorkflowArtifactReconciler>()
-                .ReconcileAsync();
-
-            Assert.Equal(2, reconciliation.Entries.Count);
-            Assert.All(reconciliation.Entries, entry =>
-                Assert.Equal(WorkflowArtifactImportOutcome.Imported, entry.Outcome));
-
-            var importedParent = Assert.Single(reconciliation.Entries, entry =>
-                StringComparer.Ordinal.Equals(entry.ArtifactId, parent.Identity.ArtifactId));
-            var importedParentReference = await runtime.Services
-                .GetRequiredService<IWorkflowExecutableSourceReferenceStore>()
-                .FindAsync(WorkflowActivationReferenceIdentity.Create(importedParent.ActivationId!));
-            Assert.NotNull(importedParentReference);
-
-            await runtime.StartPublishedAsync(importedParentReference!, ParentExecutionId);
-            await runtime.SweepUntilQuietAsync();
-
-            var parentRun = await runtime.ReadRunAsync(ParentExecutionId);
-            Assert.Equal(WorkflowExecutionStatus.Completed, parentRun.WorkflowState?.Status);
-            var dispatchState = parentRun.AssertOutcomes(ParentNodeId, DispatchWorkflowOutcomes.Completed);
-
-            var childExecutionId = new WorkflowDispatchIdentity(
-                    ParentExecutionId,
-                    dispatchState.Execution.ActivityExecutionId)
-                .ChildWorkflowExecutionId;
-            var childRun = await runtime.ReadRunAsync(childExecutionId);
-            Assert.Equal(WorkflowExecutionStatus.Completed, childRun.WorkflowState?.Status);
-            childRun.AssertCompleted(ChildNodeId);
+            using var result = await RunRuntimeProbeAsync(
+                mount,
+                parent.Identity.ArtifactId,
+                ParentNodeId,
+                ChildNodeId,
+                ParentExecutionId);
+            Assert.Equal(2, result.RootElement.GetProperty("Imported").GetInt32());
+            Assert.Equal("Completed", result.RootElement.GetProperty("ParentStatus").GetString());
+            Assert.Equal("Completed", result.RootElement.GetProperty("ChildStatus").GetString());
+            Assert.Empty(result.RootElement.GetProperty("ForbiddenAssemblies").EnumerateArray());
         }
         finally
         {
@@ -129,28 +107,70 @@ public sealed class WorkflowArtifactExportImportExecutionTests
         }
     }
 
-    private static WorkflowExecutionHarness BuildRuntimeOnlyEngine(string mount) =>
-        WorkflowExecutionHarness.Create()
-            .WithFeature(services => new WorkflowsRuntimeTriggersFeature().ConfigureServices(services))
-            .WithFeature(services => new WorkflowsRuntimeResumptionFeature().ConfigureServices(services))
-            .WithFeature(services => new DispatchWorkflowRuntimeFeature().ConfigureServices(services))
-            .WithFeature(services => new JsonWorkflowArtifactReconciliationFeature
-            {
-                Options =
-                {
-                    SourceId = "fresh-runtime-mount",
-                    FolderPath = mount
-                }
-            }.ConfigureServices(services))
-            .ConfigureServices(services =>
-            {
-                services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
-            })
-            .Build(
-                "parent-dispatch-execution",
-                "child-probe-execution",
-                "child-start-execution",
-                "parent-resume-execution");
+    private static async Task<JsonDocument> RunRuntimeProbeAsync(
+        string mount,
+        string parentArtifactId,
+        string parentNodeId,
+        string childNodeId,
+        string parentExecutionId)
+    {
+        var testOutput = new DirectoryInfo(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar));
+        var targetFramework = testOutput.Name;
+        var configuration = testOutput.Parent?.Name
+            ?? throw new InvalidOperationException("The test output configuration directory could not be resolved.");
+        var repository = FindRepositoryRoot(testOutput);
+        var probe = Path.Combine(
+            repository.FullName,
+            "tests",
+            "Elsa",
+            "Workflows",
+            "Runtime",
+            "Reconciliation",
+            "ExecutionProbe",
+            "bin",
+            configuration,
+            targetFramework,
+            "Elsa.Workflows.Runtime.Reconciliation.ExecutionProbe.dll");
+        Assert.True(File.Exists(probe), $"The runtime-only execution probe was not built at '{probe}'.");
+
+        var start = new ProcessStartInfo("dotnet")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        foreach (var argument in new[] { probe, mount, parentArtifactId, parentNodeId, childNodeId, parentExecutionId })
+            start.ArgumentList.Add(argument);
+
+        using var process = Process.Start(start)
+            ?? throw new InvalidOperationException("The runtime-only execution probe could not be started.");
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        await process.WaitForExitAsync(timeout.Token);
+        var standardOutput = await stdout;
+        var standardError = await stderr;
+        Assert.True(
+            process.ExitCode == 0,
+            $"The runtime-only process exited with {process.ExitCode}.{Environment.NewLine}{standardError}{Environment.NewLine}{standardOutput}");
+        var payload = standardOutput
+            .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .LastOrDefault()
+            ?? throw new InvalidOperationException("The runtime-only process returned no result payload.");
+        return JsonDocument.Parse(payload);
+    }
+
+    private static DirectoryInfo FindRepositoryRoot(DirectoryInfo start)
+    {
+        for (var current = start; current is not null; current = current.Parent)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "Elsa.Server.slnx")))
+                return current;
+        }
+
+        throw new InvalidOperationException("Could not locate the Elsa repository root from the test output directory.");
+    }
 
     private static ExecutableNode NewDispatchNode(
         WorkflowExecutableIdentity childIdentity,

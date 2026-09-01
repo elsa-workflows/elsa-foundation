@@ -33,6 +33,9 @@
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Mediator\Core\Elsa.Mediator.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\tests\Elsa\Activities\Testing\Elsa.Activities.Testing.csproj" />
+    <!-- Build-only dependency: SC-B-003 launches this design-free runtime in a separate process. -->
+    <ProjectReference Include="..\..\Runtime\Reconciliation\ExecutionProbe\Elsa.Workflows.Runtime.Reconciliation.ExecutionProbe.csproj"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>

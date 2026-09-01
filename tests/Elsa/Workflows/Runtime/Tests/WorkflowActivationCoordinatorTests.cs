@@ -147,6 +147,113 @@ public sealed class WorkflowActivationCoordinatorTests
     }
 
     [Fact]
+    public async Task Failed_activation_can_resume_its_exact_retired_reference_on_a_later_attempt()
+    {
+        var harness = new Harness();
+        harness.Observer.ThrowOnce = true;
+
+        var failed = await harness.ActivateAsync("candidate", "artifact-1");
+        Assert.False(failed.Succeeded);
+        Assert.Equal(
+            WorkflowActivationCoordinator.FailedRetireReason,
+            (await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("candidate")))!.DeletedReason);
+
+        harness.ResetCalls();
+        var slot = await harness.Authority.FindAsync("definition-1", "default");
+        var retry = harness.Command("candidate", "artifact-1", expectedRevision: slot?.Revision ?? 0);
+        retry = retry with
+        {
+            Reference = retry.Reference with
+            {
+                CreatedAt = Now.AddMinutes(5),
+                PublishedAt = Now.AddMinutes(5)
+            }
+        };
+        var recovered = await harness.Coordinator.ActivateAsync(retry);
+
+        Assert.True(recovered.Succeeded);
+        Assert.Equal(WorkflowActivationOutcome.Activated, recovered.Outcome);
+        Assert.DoesNotContain("reference:save", harness.Calls);
+        var restored = await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("candidate"));
+        Assert.NotNull(restored);
+        Assert.Null(restored.DeletedAt);
+        Assert.Null(restored.DeletedReason);
+        Assert.Equal(Now, restored.CreatedAt);
+        Assert.Equal(Now, restored.PublishedAt);
+    }
+
+    [Fact]
+    public async Task Failed_activation_reference_is_not_reused_or_mutated_for_a_different_payload()
+    {
+        var harness = new Harness();
+        harness.Observer.ThrowOnce = true;
+        _ = await harness.ActivateAsync("candidate", "artifact-1");
+
+        var conflict = await harness.ActivateAsync("candidate", "artifact-2");
+
+        Assert.False(conflict.Succeeded);
+        Assert.Equal(WorkflowActivationStep.SourceReferenceMint, conflict.FailedStep);
+        Assert.Contains("different activation payload", conflict.Diagnostic!, StringComparison.Ordinal);
+        var original = await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("candidate"));
+        Assert.Equal("artifact-1", original!.ArtifactId);
+        Assert.NotNull(original.DeletedAt);
+        Assert.Equal(WorkflowActivationCoordinator.FailedRetireReason, original.DeletedReason);
+    }
+
+    [Fact]
+    public async Task Duplicate_create_race_does_not_retire_a_different_winning_reference()
+    {
+        var harness = new Harness();
+        var winner = harness.ActivationReference("candidate", "artifact-2");
+        harness.References.ConcurrentCreateWinner = winner;
+
+        var conflict = await harness.ActivateAsync("candidate", "artifact-1");
+
+        Assert.False(conflict.Succeeded);
+        Assert.Equal(WorkflowActivationStep.SourceReferenceMint, conflict.FailedStep);
+        Assert.Contains("different activation payload", conflict.Diagnostic!, StringComparison.Ordinal);
+        var current = await harness.References.FindAsync(winner.SourceReferenceId);
+        Assert.NotNull(current);
+        Assert.Equal("artifact-2", current.ArtifactId);
+        Assert.Null(current.DeletedAt);
+        Assert.DoesNotContain("reference:retire", harness.Calls);
+    }
+
+    [Fact]
+    public async Task Duplicate_create_race_reuses_the_same_winning_reference()
+    {
+        var harness = new Harness();
+        var winner = harness.ActivationReference("candidate", "artifact-1");
+        harness.References.ConcurrentCreateWinner = winner;
+
+        var activated = await harness.ActivateAsync("candidate", "artifact-1");
+
+        Assert.True(activated.Succeeded);
+        Assert.Equal(WorkflowActivationOutcome.Activated, activated.Outcome);
+        var current = await harness.References.FindAsync(winner.SourceReferenceId);
+        Assert.NotNull(current);
+        Assert.True(WorkflowExecutableSourceReferenceComparer.SameSnapshot(winner, current));
+    }
+
+    [Fact]
+    public async Task Compensation_does_not_retire_a_reference_replaced_after_ownership_check()
+    {
+        var harness = new Harness();
+        harness.Observer.ThrowOnce = true;
+        var winner = harness.ActivationReference("candidate", "artifact-2");
+        harness.References.ReplaceBeforeTryRetire = winner;
+
+        var failed = await harness.ActivateAsync("candidate", "artifact-1");
+
+        Assert.False(failed.Succeeded);
+        Assert.Contains("changed while failed-activation compensation", failed.CompensationDiagnostic!, StringComparison.Ordinal);
+        var current = await harness.References.FindAsync(winner.SourceReferenceId);
+        Assert.NotNull(current);
+        Assert.Equal("artifact-2", current.ArtifactId);
+        Assert.Null(current.DeletedAt);
+    }
+
+    [Fact]
     public async Task Compensation_failure_is_reported_without_masking_the_original_failure()
     {
         var harness = new Harness();
@@ -528,6 +635,14 @@ public sealed class WorkflowActivationCoordinatorTests
 
         public void ResetCalls() => Calls.Clear();
 
+        public WorkflowExecutableSourceReference ActivationReference(string activationId, string artifactId) =>
+            Reference(artifactId) with
+            {
+                SourceReferenceId = WorkflowActivationReferenceIdentity.Create(activationId),
+                ActivationId = activationId,
+                SlotId = WorkflowActivationSlotIdentity.Create("definition-1", "default")
+            };
+
         public WorkflowActivationCommand Command(
             string activationId,
             string artifactId,
@@ -742,10 +857,18 @@ public sealed class WorkflowActivationCoordinatorTests
         public CancellationTokenSource? CancelAfterRetire { get; set; }
         public WorkflowExecutableSourceReference? ReplaceAfterRetire { get; set; }
         public WorkflowExecutableSourceReference? ReplaceBeforeRestore { get; set; }
+        public WorkflowExecutableSourceReference? ConcurrentCreateWinner { get; set; }
+        public WorkflowExecutableSourceReference? ReplaceBeforeTryRetire { get; set; }
 
         public async ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default)
         {
             calls.Add("reference:save");
+            if (ConcurrentCreateWinner is { } winner)
+            {
+                ConcurrentCreateWinner = null;
+                await inner.SaveAsync(winner, cancellationToken);
+                throw new InvalidOperationException("A concurrent source-reference create won.");
+            }
             await inner.SaveAsync(reference, cancellationToken);
             if (CancelAfterSave is { } source)
             {
@@ -802,6 +925,20 @@ public sealed class WorkflowActivationCoordinatorTests
             }
 
             return await inner.TryRestoreAsync(expectedRetiredReference, restoredReference, cancellationToken);
+        }
+
+        public async ValueTask<bool> TryRetireAsync(
+            WorkflowExecutableSourceReference expectedLiveReference,
+            WorkflowExecutableSourceReference retiredReference,
+            CancellationToken cancellationToken = default)
+        {
+            if (ReplaceBeforeTryRetire is { } replacement)
+            {
+                ReplaceBeforeTryRetire = null;
+                await inner.SaveAsync(replacement, cancellationToken);
+            }
+
+            return await inner.TryRetireAsync(expectedLiveReference, retiredReference, cancellationToken);
         }
 
         public ValueTask<bool> DeleteAsync(string sourceReferenceId, CancellationToken cancellationToken = default) => inner.DeleteAsync(sourceReferenceId, cancellationToken);

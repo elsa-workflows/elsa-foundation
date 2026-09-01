@@ -616,6 +616,7 @@
     <Project Path="tests/Elsa/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Runtime/Reconciliation/">
+    <Project Path="tests/Elsa/Workflows/Runtime/Reconciliation/ExecutionProbe/Elsa.Workflows.Runtime.Reconciliation.ExecutionProbe.csproj" />
     <Project Path="tests/Elsa/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Runtime/Distributed/">

@@ -83,6 +83,30 @@ public sealed class InMemoryWorkflowExecutableSourceReferenceStore : IWorkflowEx
         }
     }
 
+    public ValueTask<bool> TryRetireAsync(
+        WorkflowExecutableSourceReference expectedLiveReference,
+        WorkflowExecutableSourceReference retiredReference,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(expectedLiveReference);
+        ArgumentNullException.ThrowIfNull(retiredReference);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (expectedLiveReference.DeletedAt is not null ||
+            retiredReference.DeletedAt is null ||
+            !WorkflowExecutableSourceReferenceComparer.SameIdentity(expectedLiveReference, retiredReference))
+            return ValueTask.FromResult(false);
+
+        lock (_gate)
+        {
+            if (!_references.TryGetValue(expectedLiveReference.SourceReferenceId, out var current) ||
+                !WorkflowExecutableSourceReferenceComparer.SameSnapshot(current, expectedLiveReference))
+                return ValueTask.FromResult(false);
+
+            _references[expectedLiveReference.SourceReferenceId] = retiredReference;
+            return ValueTask.FromResult(true);
+        }
+    }
+
     public ValueTask<bool> TryRestoreAsync(
         WorkflowExecutableSourceReference expectedRetiredReference,
         WorkflowExecutableSourceReference restoredReference,

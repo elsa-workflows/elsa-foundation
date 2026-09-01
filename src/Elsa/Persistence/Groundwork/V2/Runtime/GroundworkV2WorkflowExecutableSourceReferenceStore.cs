@@ -227,28 +227,54 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
             !WorkflowExecutableSourceReferenceComparer.SameIdentity(expectedRetiredReference, restoredReference))
             return ValueTask.FromResult(false);
 
+        return TryReplaceSnapshot(expectedRetiredReference, restoredReference, "restoration");
+    }
+
+    public ValueTask<bool> TryRetireAsync(
+        WorkflowExecutableSourceReference expectedLiveReference,
+        WorkflowExecutableSourceReference retiredReference,
+        CancellationToken cancellationToken = default)
+    {
+        GroundworkV2WorkflowExecutableSourceReferenceStorageConventions.Validate(expectedLiveReference);
+        GroundworkV2WorkflowExecutableSourceReferenceStorageConventions.Validate(retiredReference);
+        EnsureTenant(expectedLiveReference);
+        EnsureTenant(retiredReference);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (expectedLiveReference.DeletedAt is not null ||
+            retiredReference.DeletedAt is null ||
+            !WorkflowExecutableSourceReferenceComparer.SameIdentity(expectedLiveReference, retiredReference))
+            return ValueTask.FromResult(false);
+
+        return TryReplaceSnapshot(expectedLiveReference, retiredReference, "retirement");
+    }
+
+    private ValueTask<bool> TryReplaceSnapshot(
+        WorkflowExecutableSourceReference expectedReference,
+        WorkflowExecutableSourceReference replacement,
+        string operation)
+    {
         var session = Open();
-        var key = GroundworkRuntimeRowStore.Key(expectedRetiredReference.SourceReferenceId);
+        var key = GroundworkRuntimeRowStore.Key(expectedReference.SourceReferenceId);
         var existing = session.Read(key);
         if (existing is null)
             return ValueTask.FromResult(false);
 
         var current = Deserialize(existing.Values.Values);
-        if (!WorkflowExecutableSourceReferenceComparer.SameSnapshot(current, expectedRetiredReference))
+        if (!WorkflowExecutableSourceReferenceComparer.SameSnapshot(current, expectedReference))
             return ValueTask.FromResult(false);
 
         var revision = existing.Version ?? throw new InvalidDataException(
-            $"Groundwork source-reference row '{expectedRetiredReference.SourceReferenceId}' did not expose an optimistic revision.");
+            $"Groundwork source-reference row '{expectedReference.SourceReferenceId}' did not expose an optimistic revision.");
         var result = ConditionalUpsert(
             session,
-            GroundworkV2WorkflowExecutableSourceReferenceStorageConventions.Values(restoredReference),
+            GroundworkV2WorkflowExecutableSourceReferenceStorageConventions.Values(replacement),
             revision);
         if (result.Status is WriteOutcomeStatus.ConcurrencyConflict or WriteOutcomeStatus.NotFound)
             return ValueTask.FromResult(false);
         if (!IsSaved(result.Status))
         {
             throw new InvalidOperationException(
-                $"Groundwork source-reference restoration for '{expectedRetiredReference.SourceReferenceId}' failed with status '{result.Status}'.");
+                $"Groundwork source-reference {operation} for '{expectedReference.SourceReferenceId}' failed with status '{result.Status}'.");
         }
 
         return ValueTask.FromResult(true);

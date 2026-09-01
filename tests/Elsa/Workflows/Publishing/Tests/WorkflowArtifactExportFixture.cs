@@ -1,13 +1,21 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Core.Requests;
+using Elsa.Workflows.Publishing.Core.Services;
+using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Services;
-
 
 namespace Elsa.Workflows.Publishing.Tests;
 
@@ -16,12 +24,14 @@ namespace Elsa.Workflows.Publishing.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Nothing here is a stub. The stores are the production in-memory defaults the publishing feature registers, and
-/// artifact identities come from the production <see cref="WorkflowExecutableHasher"/> — so a child's id and hash
-/// are genuinely derived from its content and a parent's dependency edge genuinely pins that derived identity. A
-/// fixture that hand-wrote ids would let the walk pass on identities no compiler could ever produce, and the
-/// diamond test in particular would prove nothing: it is only interesting because two parents independently
-/// arrive at the <em>same</em> content-addressed child.
+/// The stores, publish handler, activation coordinator, and closure factory are the production implementations.
+/// Artifact identities come from the production <see cref="WorkflowExecutableHasher"/> — so a child's id and hash
+/// are genuinely derived from its content and a parent's dependency edge genuinely pins that derived identity.
+/// The publish-boundary helper uses a narrow compiler adapter only to present that already content-verified output
+/// to the production handler; the test does not write the executable or its Published reference directly. A fixture
+/// that hand-wrote ids would let the walk pass on identities no compiler could ever produce, and the diamond test
+/// in particular would prove nothing: it is only interesting because two parents independently arrive at the
+/// <em>same</em> content-addressed child.
 /// </para>
 /// <para>
 /// The one place identity is supplied by hand is <see cref="SaveCorruptedAsync"/>, which exists to model store
@@ -39,6 +49,9 @@ internal sealed class WorkflowArtifactExportFixture
     public InMemoryWorkflowExecutableStore Executables { get; } = new();
     public InMemoryWorkflowExecutableSourceReferenceStore SourceReferences { get; } = new();
     public InMemoryWorkflowTriggerBindingStore TriggerBindings { get; } = new();
+    private InMemoryWorkflowActivationAuthority ActivationAuthority { get; } = new();
+    private InMemoryPublicationRecordStore PublicationRecords { get; } = new();
+    private InMemoryPublicationPolicyStore PublicationPolicies { get; } = new();
 
     public IWorkflowArtifactClosureFactory CreateFactory() =>
         new WorkflowArtifactClosureFactory(Executables, SourceReferences, TriggerBindings);
@@ -102,6 +115,51 @@ internal sealed class WorkflowArtifactExportFixture
     {
         await Executables.SaveAsync(executable);
         return await AddReferenceAsync(executable, WorkflowExecutableReferenceScope.Published, deletedAt);
+    }
+
+    /// <summary>
+    /// Runs an already compiled, content-verified executable through the production publish handler and activation
+    /// coordinator. This is the author-engine boundary used by the cross-process export/import proof: no test writes
+    /// the executable or its Published reference directly.
+    /// </summary>
+    public async Task<WorkflowExecutableSourceReference> PublishThroughProductionAsync(WorkflowExecutable executable)
+    {
+        var version = new WorkflowDefinitionVersion(executable.Identity.DefinitionId, executable.Identity.ArtifactVersion)
+        {
+            Id = executable.Identity.DefinitionVersionId,
+            Definition = new() { Id = executable.Identity.DefinitionId, Name = executable.Identity.DefinitionId },
+            State = WorkflowDefinitionState.Empty
+        };
+        var versionStore = new SingleWorkflowVersionStore(version);
+        var extractor = new WorkflowTriggerBindingExtractor([]);
+        var indexer = new WorkflowTriggerIndexer(extractor, TriggerBindings);
+        var coordinator = new WorkflowActivationCoordinator(
+            ActivationAuthority,
+            SourceReferences,
+            new InProcessRootWriteLeaseManager(),
+            TimeProvider.System,
+            indexer,
+            TriggerBindings);
+        var handler = new PublishWorkflowRequestHandler(
+            new VerifiedExecutableCompiler(executable),
+            Executables,
+            SourceReferences,
+            extractor,
+            TriggerBindings,
+            EmptyWorkflowLayoutStore.Instance,
+            ActivationAuthority,
+            PublicationPolicies,
+            new PublicationPolicyResolver(),
+            PublicationRecords,
+            new PublicationPreflightService(),
+            new PublicationActivator(coordinator, PublicationRecords, TimeProvider.System),
+            TimeProvider.System,
+            workflowVersionStore: versionStore,
+            expressionValidator: ValidExpressionValidator.Instance);
+
+        var published = await handler.Handle(new PublishWorkflow(version.Id), CancellationToken.None);
+        return await SourceReferences.FindAsync(published.SourceReferenceId!)
+            ?? throw new InvalidOperationException("The production publish handler did not persist its source reference.");
     }
 
     /// <summary>Saves the artifact with no source reference at all — a dependency nobody published on its own.</summary>
@@ -198,4 +256,78 @@ internal sealed class WorkflowArtifactExportFixture
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference,
             checkpointCadence: null,
             workflowVariables: []);
+
+    private sealed class VerifiedExecutableCompiler(WorkflowExecutable executable) : IWorkflowExecutableCompiler
+    {
+        public ValueTask<WorkflowExecutable> CompileAsync(
+            WorkflowExecutableCompileRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!StringComparer.Ordinal.Equals(request.VersionId, executable.Identity.DefinitionVersionId))
+                throw new InvalidOperationException("The requested workflow version does not match the supplied executable.");
+
+            var inputContract = executable.InputContract
+                ?? new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion, []);
+            var computedHash = Hasher.ComputeHash(
+                executable.RootActivity,
+                inputContract,
+                executable.Dependencies,
+                executable.CheckpointCadence,
+                executable.WorkflowVariables,
+                executable.IncidentStrategy);
+            if (!StringComparer.Ordinal.Equals(computedHash, executable.Identity.ArtifactHash) ||
+                !StringComparer.Ordinal.Equals(
+                    Hasher.CreateArtifactId(request.ArtifactIdPrefix, computedHash),
+                    executable.Identity.ArtifactId))
+            {
+                throw new InvalidOperationException("The supplied executable does not match its content-addressed identity.");
+            }
+
+            return ValueTask.FromResult(executable);
+        }
+    }
+
+    private sealed class SingleWorkflowVersionStore(WorkflowDefinitionVersion version) : IWorkflowDefinitionVersionStore
+    {
+        public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) =>
+            StringComparer.Ordinal.Equals(version.Id, versionId)
+                ? Task.FromResult(version)
+                : throw new ArgumentException($"Workflow definition version '{versionId}' does not exist.");
+
+        public Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class EmptyWorkflowLayoutStore : IWorkflowDefinitionVersionLayoutStore
+    {
+        public static EmptyWorkflowLayoutStore Instance { get; } = new();
+
+        public Task<WorkflowDefinitionVersionLayout?> FindByVersionIdAsync(
+            string workflowDefinitionVersionId,
+            CancellationToken cancellationToken = default) => Task.FromResult<WorkflowDefinitionVersionLayout?>(null);
+    }
+
+    private sealed class ValidExpressionValidator : IExpressionDraftSemanticValidator
+    {
+        public static ValidExpressionValidator Instance { get; } = new();
+
+        public ValueTask<ExpressionDraftValidationResult> ValidateAsync(
+            WorkflowDefinitionState state,
+            string documentScope,
+            CancellationToken cancellationToken) =>
+            ValueTask.FromResult(new ExpressionDraftValidationResult(ExpressionDraftValidationState.Valid, []));
+    }
+
+    private sealed class InProcessRootWriteLeaseManager : IWorkflowExecutableRootWriteLeaseManager
+    {
+        public ValueTask ExecuteAsync(
+            string artifactId,
+            string leaseId,
+            Func<CancellationToken, ValueTask> write,
+            CancellationToken cancellationToken = default) => write(cancellationToken);
+    }
 }

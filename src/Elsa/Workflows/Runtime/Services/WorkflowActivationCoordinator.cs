@@ -234,8 +234,17 @@ public sealed class WorkflowActivationCoordinator(
     {
         try
         {
-            await sourceReferenceStore.SaveAsync(reference, cancellationToken);
+            reference = await MintOrResumeSourceReferenceAsync(reference, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
+        }
+        catch (SourceReferenceResumeConflictException exception)
+        {
+            return new(
+                false,
+                WorkflowActivationOutcome.Failed,
+                await CurrentSlotAsync(command.Executable.Identity.DefinitionId, command.SlotName),
+                Diagnostic: Truncate(SafeMessage(exception)),
+                FailedStep: WorkflowActivationStep.SourceReferenceMint);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -400,6 +409,66 @@ public sealed class WorkflowActivationCoordinator(
         return new(true, WorkflowActivationOutcome.Activated, transition.Slot, reference, transition.ReplacedActivationId);
     }
 
+    private async ValueTask<WorkflowExecutableSourceReference> MintOrResumeSourceReferenceAsync(
+        WorkflowExecutableSourceReference candidate,
+        CancellationToken cancellationToken)
+    {
+        var existing = await sourceReferenceStore.FindAsync(candidate.SourceReferenceId, cancellationToken);
+        if (existing is null)
+        {
+            try
+            {
+                await sourceReferenceStore.SaveAsync(candidate, cancellationToken);
+                return candidate;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception saveFailure)
+            {
+                // Create-only stores may report a duplicate after another activation with the same deterministic
+                // id wins between the read and insert. Re-read before deciding whether this is an idempotent retry
+                // or a conflicting payload. When no winner is visible, preserve the original store failure.
+                existing = await sourceReferenceStore.FindAsync(candidate.SourceReferenceId, cancellationToken);
+                if (existing is null)
+                    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(saveFailure).Throw();
+            }
+        }
+
+        // A retry may rebuild the command later, so its wall-clock provenance can differ. Preserve the first
+        // attempt's timestamps and require every other persisted identity/source field to be identical before an
+        // existing row is reused. The activation root lease serializes this recovery with competing attempts.
+        var candidateAtOriginalTime = candidate with
+        {
+            CreatedAt = existing.CreatedAt,
+            PublishedAt = existing.PublishedAt
+        };
+        if (!WorkflowExecutableSourceReferenceComparer.SameIdentity(existing, candidateAtOriginalTime))
+        {
+            throw new SourceReferenceResumeConflictException(
+                $"Source reference '{candidate.SourceReferenceId}' already belongs to a different activation payload.");
+        }
+
+        if (existing.DeletedAt is null)
+            return existing;
+
+        if (!StringComparer.Ordinal.Equals(existing.DeletedReason, FailedRetireReason))
+        {
+            throw new SourceReferenceResumeConflictException(
+                $"Source reference '{candidate.SourceReferenceId}' was retired for '{existing.DeletedReason ?? "an unspecified reason"}' and cannot be resumed.");
+        }
+
+        var restored = existing with { DeletedAt = null, DeletedReason = null };
+        if (!await sourceReferenceStore.TryRestoreAsync(existing, restored, cancellationToken))
+        {
+            throw new SourceReferenceResumeConflictException(
+                $"Source reference '{candidate.SourceReferenceId}' changed while its failed activation was being resumed.");
+        }
+
+        return restored;
+    }
+
     private async ValueTask PrepareProjectionsAsync(
         WorkflowExecutable executable,
         string activationId,
@@ -556,7 +625,7 @@ public sealed class WorkflowActivationCoordinator(
         }
 
         await CaptureAsync(failures, "Candidate projection compensation", () => RemoveProjectionsAsync(command.ActivationId, CancellationToken.None));
-        await CaptureAsync(failures, "Reference compensation", () => RetireFailedReferenceAsync(command, reference));
+        await CaptureAsync(failures, "Reference compensation", () => RetireFailedReferenceAsync(reference));
         if (predecessorReferenceRetirementAttempted)
             await CaptureAsync(
                 failures,
@@ -700,12 +769,20 @@ public sealed class WorkflowActivationCoordinator(
             await recurringScheduleStore.DeleteByActivationAsync(activationId, cancellationToken);
     }
 
-    private async ValueTask RetireFailedReferenceAsync(WorkflowActivationCommand command, WorkflowExecutableSourceReference reference) =>
-        await sourceReferenceStore.RetireAsync(
-            reference.SourceReferenceId,
-            timeProvider.GetUtcNow(),
-            FailedRetireReason,
-            CancellationToken.None);
+    private async ValueTask RetireFailedReferenceAsync(WorkflowExecutableSourceReference reference)
+    {
+        var current = await sourceReferenceStore.FindAsync(reference.SourceReferenceId, CancellationToken.None);
+        if (current is not { DeletedAt: null } ||
+            !WorkflowExecutableSourceReferenceComparer.SameIdentity(current, reference))
+            return;
+
+        var retired = current.Retire(timeProvider.GetUtcNow(), FailedRetireReason);
+        if (!await sourceReferenceStore.TryRetireAsync(current, retired, CancellationToken.None))
+        {
+            throw new InvalidOperationException(
+                $"Source reference '{reference.SourceReferenceId}' changed while failed-activation compensation was retiring it.");
+        }
+    }
 
     private async ValueTask<WorkflowActivationSlot> CurrentSlotAsync(string definitionId, string slotName)
     {
@@ -751,4 +828,6 @@ public sealed class WorkflowActivationCoordinator(
 
     private static string SafeMessage(Exception exception) =>
         Truncate(string.IsNullOrWhiteSpace(exception.Message) ? exception.GetType().Name : exception.Message);
+
+    private sealed class SourceReferenceResumeConflictException(string message) : InvalidOperationException(message);
 }

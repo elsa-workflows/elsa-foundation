@@ -197,6 +197,33 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStoreTests
     }
 
     [Fact]
+    public async Task Try_retire_requires_the_exact_live_snapshot()
+    {
+        await using var runtime = NativeProviderRuntime.Create();
+        using var connection = runtime.OpenConnection();
+        var unit = ElsaRuntimeV2StorageManifest.Require(
+            ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDocumentKind);
+        connection.Schema.Apply(unit);
+        var store = new GroundworkV2WorkflowExecutableSourceReferenceStore(
+            new DirectSessionSource(connection, unit),
+            new TestAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+        var original = Reference("ref-try-retire", "artifact-before", WorkflowExecutableReferenceScope.Published);
+        await store.SaveAsync(original);
+
+        var retiredAt = new DateTimeOffset(2026, 8, 17, 14, 0, 0, TimeSpan.Zero);
+        var stale = original with { SourceVersion = "stale" };
+        Assert.False(await store.TryRetireAsync(stale, stale.Retire(retiredAt, "activation-failed")));
+        Assert.Null((await store.FindAsync(original.SourceReferenceId))!.DeletedAt);
+
+        var retired = original.Retire(retiredAt, "activation-failed");
+        Assert.True(await store.TryRetireAsync(original, retired));
+        Assert.False(await store.TryRetireAsync(original, retired));
+        var stored = await store.FindAsync(original.SourceReferenceId);
+        Assert.Equal(retiredAt, stored!.DeletedAt);
+        Assert.Equal("activation-failed", stored.DeletedReason);
+    }
+
+    [Fact]
     public async Task Try_restore_requires_the_expected_retired_snapshot_and_restores_live_reference()
     {
         await using var runtime = NativeProviderRuntime.Create();
