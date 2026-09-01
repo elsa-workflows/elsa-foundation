@@ -1,10 +1,12 @@
 using CShells.Features;
+using Elsa.Modularity.Core.Models;
+using Elsa.Modularity.Nuplane.Services;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Workbench;
 using Groundwork.Kernel;
 using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Elsa.Workbench;
 using Xunit;
 using Xunit.Sdk;
 
@@ -74,6 +76,52 @@ public sealed class GroundworkProviderRegistrationTests
         finally
         {
             DeleteDatabase(path);
+        }
+    }
+
+    [Fact]
+    public async Task Workbench_provider_manifest_hints_are_projected_into_the_runtime_catalog()
+    {
+        var features = new (Type Type, string Name)[]
+        {
+            (typeof(GroundworkSqliteProviderFeature), "GroundworkProviderSqlite"),
+            (typeof(GroundworkPostgreSqlProviderFeature), "GroundworkProviderPostgreSql"),
+            (typeof(GroundworkSqlServerProviderFeature), "GroundworkProviderSqlServer"),
+            (typeof(GroundworkMongoDbProviderFeature), "GroundworkProviderMongoDb")
+        };
+
+        foreach (var (featureType, featureName) in features)
+        {
+            var runtimeKind = Assert.Single(
+                featureType.GetCustomAttributesData(),
+                attribute => attribute.AttributeType.FullName ==
+                             "Elsa.Platform.PackageManifest.Generator.Hints.ManifestRuntimeKindAttribute");
+            var descriptor = new ShellFeatureDescriptor(featureName)
+            {
+                StartupType = featureType,
+                Metadata = new Dictionary<string, object>
+                {
+                    ["DisplayName"] = featureName
+                }
+            };
+            var contributor = new RuntimeFeatureCatalogContributor(new FakeRuntimeFeatureCatalog(descriptor));
+            var context = FeatureCatalogTestContext.Create();
+
+            await contributor.ContributeAsync(context);
+
+            var item = context.Items[featureName].ToItem();
+            var connectionString = Assert.Single(item.Settings, setting => setting.Name == "ConnectionString");
+            var target = Assert.Single(item.Settings, setting => setting.Name == "Target");
+
+            Assert.Equal("elsa.server", runtimeKind.ConstructorArguments.Single().Value);
+            Assert.Equal(["Persistence"], item.Categories);
+            Assert.Equal("Connection string", connectionString.DisplayName);
+            Assert.Equal("Provider connection string used by Groundwork persistence features.", connectionString.Description);
+            Assert.Equal("Persistence", connectionString.Category);
+            Assert.True(connectionString.Secret);
+            Assert.Null(connectionString.DefaultValue);
+            Assert.Equal("Optional Groundwork target supplied by this provider. Defaults to 'default'.", target.Description);
+            Assert.Null(target.DefaultValue);
         }
     }
 
@@ -346,4 +394,23 @@ public sealed class GroundworkProviderRegistrationTests
             "mongodb" => services.AddGroundworkMongoDbProvider(connectionString),
             _ => throw new ArgumentOutOfRangeException(nameof(providerName), providerName, null)
         };
+
+    private sealed class FakeRuntimeFeatureCatalog(params ShellFeatureDescriptor[] descriptors) : IRuntimeFeatureCatalog
+    {
+        public Task<RuntimeFeatureCatalogSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(Build());
+
+        public Task<RuntimeFeatureCatalogSnapshot> RefreshAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(Build());
+
+        private RuntimeFeatureCatalogSnapshot Build()
+        {
+            var map = new Dictionary<string, ShellFeatureDescriptor>(StringComparer.OrdinalIgnoreCase);
+            foreach (var descriptor in descriptors)
+                if (!string.IsNullOrWhiteSpace(descriptor.Id))
+                    map[descriptor.Id] = descriptor;
+
+            return new RuntimeFeatureCatalogSnapshot(1, [], descriptors, map, DateTimeOffset.UnixEpoch);
+        }
+    }
 }

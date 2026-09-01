@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workbench;
@@ -6,6 +7,8 @@ namespace Elsa.Workbench;
 /// <summary>
 /// Selects the public Groundwork SQL Server provider connection for an Elsa shell.
 /// </summary>
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Persistence")]
 [ShellFeature(
     name: "GroundworkProviderSqlServer",
     DisplayName = "Groundwork SQL Server Provider",
