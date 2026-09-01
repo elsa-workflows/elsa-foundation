@@ -11,16 +11,17 @@ public sealed class ElsaRuntimeV2StorageManifestTests
     {
         var units = ElsaRuntimeV2StorageManifest.CreateUnits();
 
-        Assert.Equal(28, units.Count);
+        Assert.Equal(29, units.Count);
         Assert.Equal(
             [
                 "activityExecutionHierarchy", "activityExecutionInspection", "activityExecutionState",
                 "bookmarkState", "checkpointCommit", "controlPlaneState", "durableTimer", "durableValueState",
                 "executableActivityTemplate", "executableActivityTemplateHashClaim", "incidentState", "operationalState",
                 "postCommitOutbox", "publicationProjectionState", "recurringTriggerSchedule", "schedulerPoison",
-                "schedulerState", "schedulerWorkItem", "workflowAlterationJob", "workflowAlterationPlan", "workflowDispatch",
+                "schedulerState", "schedulerWorkItem", "workflowActivationSlot", "workflowAlterationJob", "workflowAlterationPlan", "workflowDispatch",
                 "workflowExecutable", "workflowExecutableCoordination", "workflowExecutableSourceReference",
-                "workflowExecutionState", "workflowRunHealthState", "workflowTestScope", "workflowTriggerBinding"
+                "workflowExecutionState", "workflowRunHealthState", "workflowTestScope",
+                "workflowTriggerBinding"
             ],
             units.Select(unit => unit.Id.Value).OrderBy(id => id, StringComparer.Ordinal));
 
@@ -72,7 +73,8 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             ["workflowExecutionState"] = ["by_alteration_capture_tenant_and_execution", "by_attention_fault_history", "by_collection_and_pinned_artifact", "by_collection_and_pinned_artifact_v2", "by_history_order"],
             ["workflowRunHealthState"] = ["by_definition_and_started_at", "by_run_kind_and_started_at", "by_run_kind_status_definition_started_at", "by_run_kind_status_started_at", "by_started_at", "by_status_and_started_at"],
             ["workflowTestScope"] = ["by_collection", "by_expires_at", "by_scope_id", "by_state_and_expires_at", "by_state_and_scope_id", "by_status"],
-            ["workflowTriggerBinding"] = ["by_active", "by_artifact", "by_artifact_and_trigger_binding_id", "by_publication", "by_publication_and_trigger_binding_id", "by_stimulus", "by_stimulus_and_type", "by_stimulus_type", "by_stimulus_type_and_active", "by_trigger_binding_id"]
+            ["workflowTriggerBinding"] = ["by_active", "by_artifact", "by_artifact_and_trigger_binding_id", "by_publication", "by_publication_and_trigger_binding_id", "by_stimulus", "by_stimulus_and_type", "by_stimulus_type", "by_stimulus_type_and_active", "by_trigger_binding_id"],
+            ["workflowActivationSlot"] = ["by_active_activation", "by_active_activation_and_slot_id", "by_definition", "by_definition_and_slot_id"]
         };
         var actualIndexes = units.ToDictionary(
             unit => unit.Id.Value,
@@ -106,6 +108,16 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             ],
             included: true);
         Assert.True(triggerBindings.Indexes.Single(index => index.Name == "by_trigger_binding_id").IsUnique);
+
+        var activationSlots = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDocumentKind);
+        AssertColumn(activationSlots, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDefinitionIdField, PortableType.String, 128, nullable: true);
+        AssertColumn(activationSlots, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotNameField, PortableType.String, 128, nullable: true);
+        AssertColumn(activationSlots, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotActiveActivationIdField, PortableType.String, 128, nullable: true);
+        AssertIndex(activationSlots, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotByDefinition, [ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDefinitionIdField]);
+        AssertIndex(activationSlots, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotByDefinitionAndSlotId, [ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDefinitionIdField, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotNameField, ElsaRuntimeV2StorageManifest.IdField], included: true);
+        AssertIndex(activationSlots, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotByActiveActivation, [ElsaRuntimeV2StorageManifest.WorkflowActivationSlotActiveActivationIdField], unique: true);
+        AssertIndex(activationSlots, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotByActiveActivationAndSlotId, [ElsaRuntimeV2StorageManifest.WorkflowActivationSlotActiveActivationIdField, ElsaRuntimeV2StorageManifest.IdField]);
+        Assert.All(activationSlots.Indexes.Where(index => index.Name.Contains("active_activation", StringComparison.Ordinal)), index => Assert.Equal(MissingValueBehavior.Excluded, index.MissingValues));
 
         var executionState = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind);
         AssertIndex(executionState, "by_collection_and_pinned_artifact", ["collection", "historyArtifactId", "historyArtifactTimestamp", "historyWorkflowExecutionId"]);

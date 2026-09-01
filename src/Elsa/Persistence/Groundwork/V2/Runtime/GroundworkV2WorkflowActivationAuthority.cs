@@ -129,7 +129,7 @@ public sealed class GroundworkV2WorkflowActivationAuthority : IWorkflowActivatio
         if (existing is null)
             transaction.StageInsert(unit.Id.Value, GroundworkV2WorkflowActivationSlotStorageConventions.Values(slot), WriteOptions.CreateOnly);
         else
-            transaction.Stage(unit.Id.Value, GroundworkV2WorkflowActivationSlotStorageConventions.Values(slot), WriteOptions.IfVersion(existing.Version ?? throw new InvalidDataException("Activation-slot row did not expose an optimistic revision.")));
+            transaction.Stage(unit.Id.Value, GroundworkV2WorkflowActivationSlotStorageConventions.Values(slot, clearInactiveProjection: true), WriteOptions.IfVersion(existing.Version ?? throw new InvalidDataException("Activation-slot row did not expose an optimistic revision.")));
         BatchWriteReport report;
         try
         {

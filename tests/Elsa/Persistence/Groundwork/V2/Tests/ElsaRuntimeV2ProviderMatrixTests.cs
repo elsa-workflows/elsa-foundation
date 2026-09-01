@@ -34,7 +34,7 @@ public sealed class ElsaRuntimeV2ProviderMatrixTests
             var units = providerName == "sqlite"
                 ? ElsaRuntimeV2StorageManifest.CreateUnits()
                 : FreshPhysicalUnits();
-            Assert.Equal(28, units.Count);
+            Assert.Equal(29, units.Count);
             Assert.Equal(units.Count, units.Select(unit => unit.Name).Distinct(StringComparer.Ordinal).Count());
 
             foreach (var unit in units)
@@ -69,10 +69,13 @@ public sealed class ElsaRuntimeV2ProviderMatrixTests
     {
         var units = FreshPhysicalUnits();
 
-        Assert.Equal(28, units.Count);
+        Assert.Equal(29, units.Count);
         Assert.Equal(units.Count, units.Select(unit => unit.Id.Value).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(units.Count, units.Select(unit => unit.Name).Distinct(StringComparer.Ordinal).Count());
         Assert.All(units, unit => Assert.Equal(unit.Id.Value, unit.Name));
+        var activationSlots = units.Single(unit => unit.Indexes.Any(index => index.Name == ElsaRuntimeV2StorageManifest.WorkflowActivationSlotByActiveActivation));
+        Assert.Contains(activationSlots.Indexes, index => index.Name == ElsaRuntimeV2StorageManifest.WorkflowActivationSlotByDefinitionAndSlotId);
+        Assert.Contains(activationSlots.Indexes, index => index.Name == ElsaRuntimeV2StorageManifest.WorkflowActivationSlotByActiveActivationAndSlotId);
     }
 
     private static IReadOnlyList<StorageUnit> FreshPhysicalUnits()

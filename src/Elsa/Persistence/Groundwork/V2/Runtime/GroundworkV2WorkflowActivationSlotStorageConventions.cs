@@ -6,22 +6,36 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 
 internal static class GroundworkV2WorkflowActivationSlotStorageConventions
 {
-    public static StorageValues Values(WorkflowActivationSlot slot)
+    public static StorageValues Values(WorkflowActivationSlot slot, bool clearInactiveProjection = false)
     {
         Validate(slot);
+        var projections = Projections(slot);
+        // Groundwork row updates are sparse: omitting a column preserves its prior value. A
+        // deactivation therefore needs one explicit null assignment to clear an existing owner;
+        // new inactive rows and the public projection contract remain omission-based.
+        if (clearInactiveProjection && slot.ActiveActivationId is null)
+            projections = new Dictionary<string, object?>(projections, StringComparer.Ordinal)
+            {
+                [ElsaRuntimeV2StorageManifest.WorkflowActivationSlotActiveActivationIdField] = null
+            };
         return GroundworkRuntimeRowStore.Values(
             slot.SlotId,
             ElsaRuntimeV2StorageManifest.SchemaVersion,
             GroundworkV2RuntimeJson.Serialize(slot),
-            Projections(slot));
+            projections);
     }
 
-    public static IReadOnlyDictionary<string, object?> Projections(WorkflowActivationSlot slot) => new Dictionary<string, object?>(StringComparer.Ordinal)
+    public static IReadOnlyDictionary<string, object?> Projections(WorkflowActivationSlot slot)
     {
-        [ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDefinitionIdField] = slot.WorkflowDefinitionId,
-        [ElsaRuntimeV2StorageManifest.WorkflowActivationSlotNameField] = slot.SlotName,
-        [ElsaRuntimeV2StorageManifest.WorkflowActivationSlotActiveActivationIdField] = slot.ActiveActivationId
-    };
+        var projections = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDefinitionIdField] = slot.WorkflowDefinitionId,
+            [ElsaRuntimeV2StorageManifest.WorkflowActivationSlotNameField] = slot.SlotName
+        };
+        if (slot.ActiveActivationId is not null)
+            projections[ElsaRuntimeV2StorageManifest.WorkflowActivationSlotActiveActivationIdField] = slot.ActiveActivationId;
+        return projections;
+    }
 
     public static WorkflowActivationSlot Deserialize(IReadOnlyDictionary<string, object?> values)
     {
@@ -82,7 +96,7 @@ internal static class GroundworkV2WorkflowActivationSlotStorageConventions
             if (expected is null) return;
             throw new InvalidDataException($"Groundwork activation-slot projection '{field}' does not match its content.");
         }
-        var actual = value switch { string text => text, JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(), JsonElement { ValueKind: JsonValueKind.Null } => null, null => null, _ => null };
+        var actual = value switch { string text => text, JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(), JsonElement { ValueKind: JsonValueKind.Null } => null, null or DBNull => null, _ => null };
         if (!StringComparer.Ordinal.Equals(actual, expected)) throw new InvalidDataException($"Groundwork activation-slot projection '{field}' does not match its content.");
     }
 }
