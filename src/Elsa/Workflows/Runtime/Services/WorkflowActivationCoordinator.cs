@@ -124,6 +124,14 @@ public sealed class WorkflowActivationCoordinator(
                 command.ExpectedRevision,
                 timeProvider.GetUtcNow(),
                 cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            var ambiguousTransition = await InferDeactivationTransitionAfterCancellationAsync(command, slot, activationId);
+            if (ambiguousTransition is not null)
+                await CompensateDeactivationAsync(command, activationId, ambiguousTransition);
+            throw;
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
@@ -148,6 +156,12 @@ public sealed class WorkflowActivationCoordinator(
         try
         {
             await RemoveProjectionsAsync(activationId, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            await CompensateDeactivationAsync(command, activationId, transition);
+            throw;
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
@@ -157,6 +171,12 @@ public sealed class WorkflowActivationCoordinator(
         try
         {
             await NotifyTriggerObserversAsync(activationId, command.Executable.Identity.ArtifactId, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            await CompensateDeactivationAsync(command, activationId, transition);
+            throw;
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
@@ -215,6 +235,12 @@ public sealed class WorkflowActivationCoordinator(
         try
         {
             await sourceReferenceStore.SaveAsync(reference, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            await CompensateAsync(command, reference, null);
+            throw;
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
@@ -224,12 +250,30 @@ public sealed class WorkflowActivationCoordinator(
         try
         {
             await PrepareProjectionsAsync(command.Executable, command.ActivationId, slotId, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            await CompensateAsync(command, reference, null);
+            throw;
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
             return await FailAsync(command, reference, null, WorkflowActivationStep.ProjectionPreparation, exception);
         }
 
+        WorkflowActivationSlot? slotBeforeTransition;
+        try
+        {
+            slotBeforeTransition = await authority.FindAsync(
+                command.Executable.Identity.DefinitionId,
+                command.SlotName,
+                CancellationToken.None);
+        }
+        catch (Exception exception) when (NotRequestedCancellation(exception, CancellationToken.None))
+        {
+            return await FailAsync(command, reference, null, WorkflowActivationStep.SlotTransition, exception);
+        }
         WorkflowActivationTransition transition;
         try
         {
@@ -243,6 +287,18 @@ public sealed class WorkflowActivationCoordinator(
                     timeProvider.GetUtcNow(),
                     command.OwnershipIntent),
                 cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (StringComparer.Ordinal.Equals(transition.ReplacedActivationId, command.ActivationId))
+                transition = transition with { ReplacedActivationId = null, ReplacedSource = null };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // A provider may apply a CAS and then observe cancellation while returning. Read back with an
+            // uncancelled token and compensate only when the candidate is still authoritative; never invent a
+            // restore transition for a CAS that demonstrably did not win (or has already been superseded).
+            var ambiguousTransition = await InferActivationTransitionAfterCancellationAsync(command, slotBeforeTransition);
+            await CompensateAsync(command, reference, ambiguousTransition);
+            throw;
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
@@ -264,6 +320,12 @@ public sealed class WorkflowActivationCoordinator(
         try
         {
             await ActivateProjectionsAsync(command.ActivationId, transition.ReplacedActivationId, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            await CompensateAsync(command, reference, transition);
+            throw;
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
@@ -273,6 +335,12 @@ public sealed class WorkflowActivationCoordinator(
         try
         {
             await NotifyTriggerObserversAsync(command.ActivationId, command.Executable.Identity.ArtifactId, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            await CompensateAsync(command, reference, transition);
+            throw;
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
@@ -281,7 +349,13 @@ public sealed class WorkflowActivationCoordinator(
 
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             await RetirePredecessorReferenceAsync(command, transition.ReplacedActivationId, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            await CompensateAsync(command, reference, transition);
+            throw;
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
@@ -328,6 +402,7 @@ public sealed class WorkflowActivationCoordinator(
         string fallbackArtifactId,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (_triggerObservers.Count == 0)
             return;
 
@@ -335,7 +410,10 @@ public sealed class WorkflowActivationCoordinator(
         var artifactId = bindings.FirstOrDefault()?.ArtifactId ?? fallbackArtifactId;
         var snapshot = new WorkflowTriggerIndexSnapshot(artifactId, bindings) { RequiresProjectionRefresh = true };
         foreach (var observer in _triggerObservers)
+        {
             await observer.OnTriggersIndexedAsync(snapshot, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
     }
 
     private async ValueTask<WorkflowActivationResult> FailAsync(
@@ -441,6 +519,71 @@ public sealed class WorkflowActivationCoordinator(
                 "Observer compensation",
                 () => NotifyTriggerObserversAsync(activatedSlot!.ReplacedActivationId ?? command.ActivationId, command.Executable.Identity.ArtifactId, CancellationToken.None));
         return failures.Count == 0 ? null : string.Join(" ", failures);
+    }
+
+    private async ValueTask<WorkflowActivationTransition?> InferActivationTransitionAfterCancellationAsync(
+        WorkflowActivationCommand command,
+        WorkflowActivationSlot? slotBeforeTransition)
+    {
+        WorkflowActivationSlot? current;
+        try
+        {
+            current = await authority.FindAsync(
+                command.Executable.Identity.DefinitionId,
+                command.SlotName,
+                CancellationToken.None);
+        }
+        catch
+        {
+            // Without read-back evidence, leave authority untouched. Candidate projection/reference cleanup still
+            // runs, and a later reconcile attempt can safely resolve the unknown authority state.
+            return null;
+        }
+
+        if (current?.ActiveActivationId is not { } activeActivationId ||
+            !StringComparer.Ordinal.Equals(activeActivationId, command.ActivationId))
+            return null;
+
+        var replacedActivationId = slotBeforeTransition?.ActiveActivationId;
+        if (StringComparer.Ordinal.Equals(replacedActivationId, command.ActivationId))
+            replacedActivationId = null;
+        return new WorkflowActivationTransition(
+            true,
+            current,
+            replacedActivationId,
+            ReplacedSource: slotBeforeTransition?.Source);
+    }
+
+    private async ValueTask<WorkflowActivationTransition?> InferDeactivationTransitionAfterCancellationAsync(
+        WorkflowDeactivationCommand command,
+        WorkflowActivationSlot slotBeforeTransition,
+        string activationId)
+    {
+        WorkflowActivationSlot? current;
+        try
+        {
+            current = await authority.FindAsync(
+                command.Executable.Identity.DefinitionId,
+                command.SlotName,
+                CancellationToken.None);
+        }
+        catch
+        {
+            return null;
+        }
+
+        // A successful deactivation increments the slot revision and clears the activation. If another writer
+        // has already moved the slot, do not overwrite that writer during cancellation compensation.
+        if (current is null ||
+            current.ActiveActivationId is not null ||
+            current.Revision <= slotBeforeTransition.Revision)
+            return null;
+
+        return new WorkflowActivationTransition(
+            true,
+            current,
+            activationId,
+            ReplacedSource: slotBeforeTransition.Source);
     }
 
     private async ValueTask CompensateAuthorityAsync(WorkflowActivationCommand command, WorkflowActivationTransition activatedSlot)

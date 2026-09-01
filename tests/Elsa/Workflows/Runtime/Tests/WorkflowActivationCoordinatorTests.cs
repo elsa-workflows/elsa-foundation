@@ -223,6 +223,146 @@ public sealed class WorkflowActivationCoordinatorTests
         Assert.DoesNotContain("authority:activate", harness.Calls);
     }
 
+    [Fact]
+    public async Task Cancellation_after_source_reference_save_retires_the_candidate_reference()
+    {
+        var harness = new Harness();
+        using var cancellation = new CancellationTokenSource();
+        harness.References.CancelAfterSave = cancellation;
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await harness.Coordinator.ActivateAsync(harness.Command("activation-1", "artifact-1"), cancellation.Token));
+
+        Assert.Null((await harness.Authority.FindAsync("definition-1", "default"))?.ActiveActivationId);
+        var reference = await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("activation-1"));
+        Assert.Equal(WorkflowActivationCoordinator.FailedRetireReason, reference!.DeletedReason);
+    }
+
+    [Fact]
+    public async Task Cancellation_after_projection_preparation_removes_candidate_projection()
+    {
+        var harness = new Harness();
+        using var cancellation = new CancellationTokenSource();
+        harness.Indexer.CancelAfterPrepare = cancellation;
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await harness.Coordinator.ActivateAsync(harness.Command("activation-1", "artifact-1"), cancellation.Token));
+
+        Assert.Empty(await harness.BindingsForAsync("activation-1"));
+        Assert.Null((await harness.Authority.FindAsync("definition-1", "default"))?.ActiveActivationId);
+        Assert.Equal(
+            WorkflowActivationCoordinator.FailedRetireReason,
+            (await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("activation-1")))!.DeletedReason);
+    }
+
+    [Fact]
+    public async Task Cancellation_after_activation_slot_flip_restores_the_predecessor()
+    {
+        var harness = new Harness();
+        var incumbent = await harness.ActivateAsync("incumbent", "artifact-1");
+        using var cancellation = new CancellationTokenSource();
+        harness.Authority.CancelAfterActivate = cancellation;
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await harness.Coordinator.ActivateAsync(
+                harness.Command("candidate", "artifact-2", expectedRevision: incumbent.Slot.Revision), cancellation.Token));
+
+        Assert.Equal("incumbent", (await harness.Authority.FindAsync("definition-1", "default"))!.ActiveActivationId);
+        Assert.Single(await harness.BindingsForAsync("incumbent"));
+        Assert.Empty(await harness.BindingsForAsync("candidate"));
+        Assert.Equal(
+            WorkflowActivationCoordinator.FailedRetireReason,
+            (await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("candidate")))!.DeletedReason);
+    }
+
+    [Fact]
+    public async Task Cancellation_during_projection_activation_restores_the_predecessor()
+    {
+        var harness = new Harness();
+        var incumbent = await harness.ActivateAsync("incumbent", "artifact-1");
+        using var cancellation = new CancellationTokenSource();
+        harness.Bindings.CancelAfterActivate = cancellation;
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await harness.Coordinator.ActivateAsync(
+                harness.Command("candidate", "artifact-2", expectedRevision: incumbent.Slot.Revision), cancellation.Token));
+
+        Assert.Equal("incumbent", (await harness.Authority.FindAsync("definition-1", "default"))!.ActiveActivationId);
+        Assert.Single(await harness.BindingsForAsync("incumbent"));
+        Assert.Empty(await harness.BindingsForAsync("candidate"));
+        Assert.Equal(
+            WorkflowActivationCoordinator.FailedRetireReason,
+            (await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("candidate")))!.DeletedReason);
+    }
+
+    [Fact]
+    public async Task Cancellation_during_observer_notification_restores_the_predecessor()
+    {
+        var harness = new Harness();
+        var incumbent = await harness.ActivateAsync("incumbent", "artifact-1");
+        using var cancellation = new CancellationTokenSource();
+        harness.Observer.CancelAfterCall = cancellation;
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await harness.Coordinator.ActivateAsync(
+                harness.Command("candidate", "artifact-2", expectedRevision: incumbent.Slot.Revision), cancellation.Token));
+
+        Assert.Equal("incumbent", (await harness.Authority.FindAsync("definition-1", "default"))!.ActiveActivationId);
+        Assert.Single(await harness.BindingsForAsync("incumbent"));
+        Assert.Empty(await harness.BindingsForAsync("candidate"));
+        Assert.Equal(
+            WorkflowActivationCoordinator.FailedRetireReason,
+            (await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("candidate")))!.DeletedReason);
+    }
+
+    [Fact]
+    public async Task Cancellation_after_deactivation_slot_flip_restores_authority_and_projection()
+    {
+        var harness = new Harness();
+        var activated = await harness.ActivateAsync("activation-1", "artifact-1");
+        using var cancellation = new CancellationTokenSource();
+        harness.Authority.CancelAfterDeactivate = cancellation;
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await harness.DeactivateAsync(activated.Slot.Revision, cancellation.Token));
+
+        Assert.Equal("activation-1", (await harness.Authority.FindAsync("definition-1", "default"))!.ActiveActivationId);
+        Assert.Single(await harness.BindingsForAsync("activation-1"));
+        Assert.Null((await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("activation-1")))!.DeletedAt);
+    }
+
+    [Fact]
+    public async Task Cancellation_during_deactivation_projection_removal_restores_authority_and_projection()
+    {
+        var harness = new Harness();
+        var activated = await harness.ActivateAsync("activation-1", "artifact-1");
+        using var cancellation = new CancellationTokenSource();
+        harness.Bindings.CancelAfterDelete = cancellation;
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await harness.DeactivateAsync(activated.Slot.Revision, cancellation.Token));
+
+        Assert.Equal("activation-1", (await harness.Authority.FindAsync("definition-1", "default"))!.ActiveActivationId);
+        Assert.Single(await harness.BindingsForAsync("activation-1"));
+        Assert.Null((await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("activation-1")))!.DeletedAt);
+    }
+
+    [Fact]
+    public async Task Cancellation_during_deactivation_observer_notification_restores_authority_and_projection()
+    {
+        var harness = new Harness();
+        var activated = await harness.ActivateAsync("activation-1", "artifact-1");
+        using var cancellation = new CancellationTokenSource();
+        harness.Observer.CancelAfterCall = cancellation;
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await harness.DeactivateAsync(activated.Slot.Revision, cancellation.Token));
+
+        Assert.Equal("activation-1", (await harness.Authority.FindAsync("definition-1", "default"))!.ActiveActivationId);
+        Assert.Single(await harness.BindingsForAsync("activation-1"));
+        Assert.Null((await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("activation-1")))!.DeletedAt);
+    }
+
     private sealed class Harness
     {
         public Harness()
@@ -270,8 +410,8 @@ public sealed class WorkflowActivationCoordinatorTests
             WorkflowActivationOwnershipIntent intent = WorkflowActivationOwnershipIntent.RespectExistingOwner) =>
             Coordinator.ActivateAsync(Command(activationId, artifactId, source, expectedRevision, intent));
 
-        public ValueTask<WorkflowActivationResult> DeactivateAsync(long expectedRevision, WorkflowActivationSource? source = null) =>
-            Coordinator.DeactivateAsync(new(Executable("artifact-1"), "default", source ?? WorkflowActivationSource.Publishing, expectedRevision));
+        public ValueTask<WorkflowActivationResult> DeactivateAsync(long expectedRevision, CancellationToken cancellationToken = default, WorkflowActivationSource? source = null) =>
+            Coordinator.DeactivateAsync(new(Executable("artifact-1"), "default", source ?? WorkflowActivationSource.Publishing, expectedRevision), cancellationToken);
 
         public async Task<IReadOnlyCollection<WorkflowTriggerBinding>> ServingBindingsAsync() =>
             (await Bindings.ListByStimulusAsync(new WorkflowTriggerBindingPageQuery("test", "hash-1"))).Items;
@@ -332,6 +472,8 @@ public sealed class WorkflowActivationCoordinatorTests
         public Exception? ThrowOnActivate { get; set; }
         public bool RefuseDeactivation { get; set; }
         public HashSet<string> RefuseActivationIds { get; } = new(StringComparer.Ordinal);
+        public CancellationTokenSource? CancelAfterActivate { get; set; }
+        public CancellationTokenSource? CancelAfterDeactivate { get; set; }
 
         public ValueTask<WorkflowActivationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default) =>
             inner.FindAsync(workflowDefinitionId, slotName, cancellationToken);
@@ -350,7 +492,14 @@ public sealed class WorkflowActivationCoordinatorTests
                     new(WorkflowActivationSlotIdentity.Create(request.WorkflowDefinitionId, request.SlotName), request.WorkflowDefinitionId, request.SlotName, null, null, 0, request.UpdatedAt);
                 return new(false, slot, Conflict: WorkflowActivationConflict.ForeignSource, Diagnostic: "authority compensation refused");
             }
-            return await inner.TryActivateAsync(request, cancellationToken);
+            var result = await inner.TryActivateAsync(request, cancellationToken);
+            if (CancelAfterActivate is { } source)
+            {
+                CancelAfterActivate = null;
+                source.Cancel();
+                throw new OperationCanceledException(cancellationToken);
+            }
+            return result;
         }
 
         public async ValueTask<WorkflowActivationTransition> TryDeactivateAsync(string workflowDefinitionId, string slotName, WorkflowActivationSource source, long expectedRevision, DateTimeOffset updatedAt, CancellationToken cancellationToken = default)
@@ -362,7 +511,14 @@ public sealed class WorkflowActivationCoordinatorTests
                     new(WorkflowActivationSlotIdentity.Create(workflowDefinitionId, slotName), workflowDefinitionId, slotName, null, null, 0, updatedAt);
                 return new(false, slot, Conflict: WorkflowActivationConflict.RevisionMismatch, Diagnostic: "authority compensation refused");
             }
-            return await inner.TryDeactivateAsync(workflowDefinitionId, slotName, source, expectedRevision, updatedAt, cancellationToken);
+            var result = await inner.TryDeactivateAsync(workflowDefinitionId, slotName, source, expectedRevision, updatedAt, cancellationToken);
+            if (CancelAfterDeactivate is { } cancelSource)
+            {
+                CancelAfterDeactivate = null;
+                cancelSource.Cancel();
+                throw new OperationCanceledException(cancellationToken);
+            }
+            return result;
         }
     }
 
@@ -370,6 +526,7 @@ public sealed class WorkflowActivationCoordinatorTests
     {
         public Exception? Failure { get; set; }
         public CancellationTokenSource? CancelBeforeThrow { get; set; }
+        public CancellationTokenSource? CancelAfterPrepare { get; set; }
 
         public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> IndexAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<WorkflowTriggerBinding>>([]);
@@ -377,9 +534,9 @@ public sealed class WorkflowActivationCoordinatorTests
         public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PrepareActivationAsync(WorkflowExecutable executable, string activationId, string slotId, CancellationToken cancellationToken = default)
         {
             calls.Add("projection:prepare");
-            if (CancelBeforeThrow is { } source)
+            if (CancelBeforeThrow is { } beforeSource)
             {
-                source.Cancel();
+                beforeSource.Cancel();
                 throw new OperationCanceledException(cancellationToken);
             }
             if (Failure is { } failure)
@@ -400,6 +557,12 @@ public sealed class WorkflowActivationCoordinatorTests
                 activationId,
                 slotId);
             await bindingStore.PrepareActivationAsync(activationId, [binding], cancellationToken);
+            if (CancelAfterPrepare is { } afterSource)
+            {
+                CancelAfterPrepare = null;
+                afterSource.Cancel();
+                throw new OperationCanceledException(cancellationToken);
+            }
             return [binding];
         }
     }
@@ -408,11 +571,18 @@ public sealed class WorkflowActivationCoordinatorTests
     {
         public bool ThrowOnce { get; set; }
         public int Calls { get; private set; }
+        public CancellationTokenSource? CancelAfterCall { get; set; }
 
         public ValueTask OnTriggersIndexedAsync(WorkflowTriggerIndexSnapshot snapshot, CancellationToken cancellationToken = default)
         {
             Calls++;
             calls.Add("observer");
+            if (CancelAfterCall is { } source)
+            {
+                CancelAfterCall = null;
+                source.Cancel();
+                throw new OperationCanceledException(cancellationToken);
+            }
             if (ThrowOnce)
             {
                 ThrowOnce = false;
@@ -425,11 +595,18 @@ public sealed class WorkflowActivationCoordinatorTests
     private sealed class RecordingReferenceStore(IWorkflowExecutableSourceReferenceStore inner, List<string> calls) : IWorkflowExecutableSourceReferenceStore
     {
         public bool ThrowOnRetire { get; set; }
+        public CancellationTokenSource? CancelAfterSave { get; set; }
 
-        public ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default)
+        public async ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default)
         {
             calls.Add("reference:save");
-            return inner.SaveAsync(reference, cancellationToken);
+            await inner.SaveAsync(reference, cancellationToken);
+            if (CancelAfterSave is { } source)
+            {
+                CancelAfterSave = null;
+                source.Cancel();
+                throw new OperationCanceledException(cancellationToken);
+            }
         }
 
         public ValueTask<WorkflowExecutableSourceReference?> FindAsync(string sourceReferenceId, CancellationToken cancellationToken = default) => inner.FindAsync(sourceReferenceId, cancellationToken);
@@ -453,26 +630,40 @@ public sealed class WorkflowActivationCoordinatorTests
     {
         public Exception? ThrowOnActivate { get; set; }
         public Exception? ThrowOnDelete { get; set; }
+        public CancellationTokenSource? CancelAfterActivate { get; set; }
+        public CancellationTokenSource? CancelAfterDelete { get; set; }
 
         public ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default) => inner.SaveAsync(binding, cancellationToken);
 
         public ValueTask PrepareActivationAsync(string activationId, IReadOnlyCollection<WorkflowTriggerBinding> bindings, CancellationToken cancellationToken = default) => inner.PrepareActivationAsync(activationId, bindings, cancellationToken);
         public ValueTask<WorkflowTriggerBindingPage> ListByActivationAsync(WorkflowTriggerBindingActivationPageQuery query, CancellationToken cancellationToken = default) => inner.ListByActivationAsync(query, cancellationToken);
 
-        public ValueTask ActivateAsync(string activationId, string? replacedActivationId, CancellationToken cancellationToken = default)
+        public async ValueTask ActivateAsync(string activationId, string? replacedActivationId, CancellationToken cancellationToken = default)
         {
             calls.Add("projection:activate");
             if (ThrowOnActivate is { } failure)
                 throw failure;
-            return inner.ActivateAsync(activationId, replacedActivationId, cancellationToken);
+            await inner.ActivateAsync(activationId, replacedActivationId, cancellationToken);
+            if (CancelAfterActivate is { } source)
+            {
+                CancelAfterActivate = null;
+                source.Cancel();
+                throw new OperationCanceledException(cancellationToken);
+            }
         }
 
-        public ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default)
+        public async ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default)
         {
             calls.Add("projection:delete");
             if (ThrowOnDelete is { } failure)
                 throw failure;
-            return inner.DeleteByActivationAsync(activationId, cancellationToken);
+            await inner.DeleteByActivationAsync(activationId, cancellationToken);
+            if (CancelAfterDelete is { } source)
+            {
+                CancelAfterDelete = null;
+                source.Cancel();
+                throw new OperationCanceledException(cancellationToken);
+            }
         }
 
         public ValueTask<int> DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => inner.DeleteByArtifactAsync(artifactId, cancellationToken);
