@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using OpenIddict.EntityFrameworkCore;
+using ElsaOpenIddictEntityFrameworkCoreOptions = Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore.OpenIddictEntityFrameworkCoreOptions;
 
 namespace Elsa.Workbench;
 
@@ -21,7 +22,7 @@ internal static class WorkbenchOpenIddictVendorRegistration
     {
         services.Configure<OpenIddictIdentityOptions>(
             configuration.GetSection("CShells:Shells:default:Features:FoundationIdentityOpenIddict"));
-        services.AddOptions<OpenIddictEntityFrameworkCoreOptions>()
+        services.AddOptions<ElsaOpenIddictEntityFrameworkCoreOptions>()
             .Configure<IOptions<OpenIddictIdentityOptions>>((options, identityOptions) =>
             {
                 options.ConnectionString = identityOptions.Value.ConnectionString;
@@ -37,7 +38,7 @@ internal static class WorkbenchOpenIddictVendorRegistration
                 return;
             }
 
-            var options = serviceProvider.GetRequiredService<IOptions<OpenIddictEntityFrameworkCoreOptions>>().Value;
+            var options = serviceProvider.GetRequiredService<IOptions<ElsaOpenIddictEntityFrameworkCoreOptions>>().Value;
             builder.UseSqlite(
                 options.ConnectionString ?? OpenIddictEntityFrameworkCoreDefaults.DefaultConnectionString,
                 sqlite => sqlite
