@@ -16,8 +16,8 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 /// Draft in-lock yields a non-empty error set. Validation errors are derived state (not
 /// persisted): the gate re-runs the validators at promotion time rather than reading a persisted
 /// row. Validation errors are compile errors for a workflow definition; promotion is a
-/// compile-success precondition. Bypassing the gate (e.g. inserting a Version row directly via
-/// <c>IAddCommand&lt;WorkflowDefinitionVersion&gt;</c>) is forbidden by domain contract.
+/// compile-success precondition. Bypassing the gate (e.g. inserting a Version row directly) is
+/// forbidden by domain contract.
 /// </para>
 /// <para>
 /// <b>Lock contract (Unit C FR-027b).</b> Promotion MUST acquire the same

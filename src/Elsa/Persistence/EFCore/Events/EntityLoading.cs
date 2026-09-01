@@ -12,11 +12,8 @@ namespace Elsa.Persistence.EFCore.Events;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Publication sites: <see cref="Services.EFCoreReadStore{TDbContext,TEntity}"/>
-/// (<c>QueryAsync</c> / <c>FirstOrDefaultAsync</c>) publishes it for every entity returned by the
-/// read-only (<c>AsNoTracking</c>) query path; mutate-then-save commands that load through their
-/// own tracked context publish it themselves so the already-tracked instance is hydrated by the
-/// same context that will save it.
+/// Publication is owned by provider-specific persistence adapters that opt into this lifecycle
+/// event; the base EF Core shell no longer ships a generic query/read-store adapter.
 /// </para>
 /// <para>
 /// Published on the default (Sequential) strategy so hydration completes before the entity is

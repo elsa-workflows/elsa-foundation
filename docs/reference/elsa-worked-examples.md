@@ -28,10 +28,9 @@ There is no shared `Elsa.Workflows.Core` parent package. Design and Runtime are 
 
 Top-level domain Cores in play:
 
-- `Elsa.Persistence.Core` - generic persistence contracts such as `IAddCommand<T>` and `IQuery<T>`.
 - Runtime persistence access and scope contracts now live in `Elsa.Workflows.Runtime.Core`; design
-  operation identity and failure contracts live in `Elsa.Workflows.Design.Persistence.Core`. The
-  old `Elsa.Persistence.Core` namespaces are not compatibility aliases.
+  operation identity, failure contracts, and named store ports live in
+  `Elsa.Workflows.Design.Persistence.Core`.
 - `Elsa.Serialization.Core` - serialization contracts.
 
 Workflows sub-domain Cores:
@@ -41,7 +40,8 @@ Workflows sub-domain Cores:
 
 The observable cross-`.Core` reference today is in Design's sub-sub-domain Cores:
 
-- `Elsa.Workflows.Design.Persistence.Core` - references `Elsa.Workflows.Design.Core` and may reference `Elsa.Persistence.Core` as an explicit design choice when useful.
+- `Elsa.Workflows.Design.Persistence.Core` - references `Elsa.Workflows.Design.Core` and owns the
+  provider-neutral design persistence ports.
 
 Implementations:
 

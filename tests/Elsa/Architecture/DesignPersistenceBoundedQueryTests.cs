@@ -73,8 +73,11 @@ public sealed class DesignPersistenceBoundedQueryTests
     }
 
     [Fact]
-    public void The_transitional_reader_and_in_memory_evaluator_stay_deleted()
+    public void The_obsolete_generic_persistence_kernel_and_transitional_reader_stay_deleted()
     {
+        Assert.False(
+            File.Exists(FullPath("src/Elsa/Persistence/Core/Elsa.Persistence.Core.csproj")),
+            "The obsolete Elsa.Persistence.Core command/query kernel must stay deleted.");
         Assert.False(
             File.Exists(FullPath("src/Elsa/Persistence/Groundwork/Querying/GroundworkReadStore.cs")),
             "The transitional GroundworkReadStore must stay deleted.");

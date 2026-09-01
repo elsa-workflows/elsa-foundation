@@ -186,7 +186,6 @@
     <Project Path="src/Elsa/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Persistence/">
-    <Project Path="src/Elsa/Persistence/Core/Elsa.Persistence.Core.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Persistence/EFCore/">
     <Project Path="src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj" />
@@ -489,8 +488,6 @@
     <Project Path="tests/Elsa/Primitives/Hosting/Tests/Elsa.Primitives.Hosting.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/" />
-  <Folder Name="/tests/Elsa/Persistence/Core/">
-  </Folder>
   <Folder Name="/tests/Elsa/Persistence/EFCore/">
     <Project Path="tests/Elsa/Persistence/EFCore/Tests/Elsa.Persistence.EFCore.Tests.csproj" />
   </Folder>
