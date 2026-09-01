@@ -115,6 +115,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<RuntimeBurstCacheOptions>();
         services.TryAddSingleton<IWorkflowBurstScopeAccessor, AsyncLocalWorkflowBurstScopeAccessor>();
         services.TryAddScoped<IWorkflowExecutableReader, BurstCachedWorkflowExecutableReader>();
+        // One provider-neutral checker is shared by Publishing preflight and future Runtime artifact
+        // import admission. Hosts compose the serialization/type-registry feature alongside Runtime.
+        services.TryAddScoped<IRuntimeRequirementChecker, RuntimeRequirementChecker>();
         services.TryAddSingleton<IExecutableActivityTemplateStore, InMemoryExecutableActivityTemplateStore>();
         services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
         services.AddOptions<ActivityExecutionHierarchyCursorOptions>();
