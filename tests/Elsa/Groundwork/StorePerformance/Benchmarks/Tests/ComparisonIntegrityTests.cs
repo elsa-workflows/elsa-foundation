@@ -176,7 +176,7 @@ public sealed class ComparisonIntegrityTests
     }
 
     [Fact]
-    public void Comparison_rejects_forged_complete_iam_artifacts_without_a_ratified_adapter_form_mapping()
+    public void Comparison_rejects_post_hoc_forged_iam_artifacts_before_adapter_form_admission()
     {
         using var fixture = ArtifactFixture.Create();
         fixture.WriteTarget("ef", "store", operations: ["read"]);
@@ -194,7 +194,7 @@ public sealed class ComparisonIntegrityTests
             "sqlite/groundwork-aspnetcore-identity/entity-type-specific-physical-tables-current-identity-shape");
 
         Assert.False(result.Complete);
-        Assert.Contains("iam.adapter-form.ratification-required", result.BlockReason, StringComparison.Ordinal);
+        Assert.Contains("frozen", result.BlockReason, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
