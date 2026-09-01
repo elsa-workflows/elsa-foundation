@@ -22,6 +22,8 @@ public static class ReproducibleWorkloadScenarioCatalog
     public const string BlockedResultDigest = "615f7bbd8e160dd34d38180d5def0e99d0b4225822e6ebee5ea31ed21bbabcdb";
     public const string BlockedReasonCode = "comparator.secret.real-ef-required";
     public const string BlockedReason = "A real EF Secret repository comparator is required; synthetic or waived comparison is not admissible.";
+    public const string HistoricalRecoveryInputFingerprint = "36277c9b9c525d4cbb611c1a7e83c96a02eb3434fb85b6657ce2ede9b8a7a5e3";
+    public const string HistoricalRecoveryResultDigest = "3c7cae42737a2a995968852a862f769070a016b4e4a0289c7a9a5e7205e9eabf";
 
     private static readonly JsonSerializerOptions CanonicalJson = new()
     {
@@ -47,7 +49,7 @@ public static class ReproducibleWorkloadScenarioCatalog
             ["outbox-drain"] = new("bc5c6ca1113e78fe948a61de35c66a644129c79028a198d9143dc316cea7bede", "7228f024095bc2fadc0649e0841d56259f3408b55368911ea402b7d96c8b2e71"),
             ["placement-takeover"] = new("17f22a7e7896b3842ebd771e604b13e859d1b480bc5b6093ce576f14a673e985", "3ad65cc7ff9287f9c20a68ec6cd267bc78fa083fb775dda36062c185706fb4b4"),
             ["queue-drain"] = new("15f2d5f9dc8d5814a1613156b7c686e59a150a35bd7e51787a145b6d7230d5e2", "7db639fdbfddc02973a7275d7c0e8835872b62449ca160e97e8086c0ca46eba4"),
-            ["recovery-scan"] = new("36277c9b9c525d4cbb611c1a7e83c96a02eb3434fb85b6657ce2ede9b8a7a5e3", "3c7cae42737a2a995968852a862f769070a016b4e4a0289c7a9a5e7205e9eabf"),
+            ["recovery-scan"] = new("eb4df814e208fedf12c3f8a995430b1084fac5cf7b7e67bd0464be07d0043eef", "af331fc39ac89be97b601ba9e472fd7872b45ec5e50ccc9bba6b55de53e3aba0"),
             ["recurring-schedule-selection"] = new("384bcbf0fd72f306b63d78b71a8130c4e2e02de146cbd45d066ef581f4d78d17", "9728bad4f576c7e50c3f6210994524ffb1d77761c5258a71f27fe1cf1793cec4"),
             ["secret-create-read-list"] = new("7f64dd6942e976e2cea5ad84db1704f4b6239380136a93d99a6480f5909021ce", "394ff58bd146744fe30f4abd3a8529ab1287129787d40e188ffc0c58038e8783"),
             ["trigger-binding-stimulus-lookup"] = new("4f2515dfa9549935712019f178283f79e6ac1cc9428e810524e733cfdea4cabc", "00b6651345cdb8b6724a205b094c712d383c7a19ef87dcce6fdf026bc7dd7c8a")
@@ -165,14 +167,15 @@ public static class ReproducibleWorkloadScenarioCatalog
         yield return Scenario(
             "recovery-scan",
             "runtime-recovery-scan",
-            "spec094-recovery-scan-v1.1",
+            "spec094-recovery-scan-v1.2",
             [
                 ("executionCount", 2048),
                 ("fixedNowUtc", "2026-07-20T10:00:00Z"),
-                ("liveExecutions", 1875),
-                ("pageSize", 64),
+                ("liveExecutions", 1867),
+                ("pageSize", 4),
                 ("recoverableCandidates", 173),
                 ("tenantCount", 2),
+                ("terminalExecutions", 8),
                 ("timedSetup", "excluded")
             ],
             ["seed-live-and-recoverable-state", "scan-recovery-candidates", "reopen-and-rescan", "verify-bounded-order-and-non-candidates"],
@@ -181,7 +184,8 @@ public static class ReproducibleWorkloadScenarioCatalog
                 ("firstPageCount", Int(parameters, "pageSize")),
                 ("liveExecutionResultCount", 0),
                 ("reopenedCandidateIdentityDigest", SequenceDigest("recovery-candidate", Int(parameters, "recoverableCandidates"))),
-                ("scanNowUtc", String(parameters, "fixedNowUtc"))));
+                ("scanNowUtc", String(parameters, "fixedNowUtc"))),
+            version: "1.2.0");
 
         yield return Scenario(
             "queue-drain",
@@ -413,8 +417,9 @@ public static class ReproducibleWorkloadScenarioCatalog
         string seed,
         IEnumerable<(string Name, object Value)> parameters,
         IReadOnlyList<string> operations,
-        Func<IReadOnlyDictionary<string, object>, IReadOnlyDictionary<string, object>> observe) =>
-        new(workloadId, "1.1.0", scenarioId, seed, Parameters(parameters), operations, observe);
+        Func<IReadOnlyDictionary<string, object>, IReadOnlyDictionary<string, object>> observe,
+        string version = "1.1.0") =>
+        new(workloadId, version, scenarioId, seed, Parameters(parameters), operations, observe);
 
     private static IReadOnlyDictionary<string, object> Parameters(IEnumerable<(string Name, object Value)> values) =>
         new SortedDictionary<string, object>(values.ToDictionary(pair => pair.Name, pair => pair.Value, StringComparer.Ordinal), StringComparer.Ordinal);

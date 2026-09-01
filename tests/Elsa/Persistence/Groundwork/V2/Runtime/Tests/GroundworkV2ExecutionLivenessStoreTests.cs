@@ -207,6 +207,133 @@ public sealed class GroundworkV2ExecutionLivenessStoreTests
     }
 
     [Fact]
+    public async Task Sqlite_recovery_v12_production_scanner_traverses_all_candidates_and_excludes_live_and_terminal_rows()
+    {
+        await using var runtime = NativeProviderRuntime.Create("sqlite", null);
+        var units = UniqueRuntimeUnits();
+        IReadOnlyList<string> first;
+
+        using (var connection = runtime.OpenConnection())
+        {
+            foreach (var unit in units.Values)
+                connection.Schema.Apply(unit);
+
+            var source = new DirectSessionSource(connection, units);
+            var scope = new TestAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+            IExecutionLivenessStateStore liveness = new GroundworkV2ExecutionLivenessStateStore(source, scope);
+            IWorkflowExecutionStateStore executions = new GroundworkV2WorkflowExecutionStateStore(source, scope);
+
+            for (var index = 0; index < 173; index++)
+            {
+                var workflowId = $"recovery-v12-candidate-{index:D4}";
+                await liveness.SaveAsync(ProductionRecoveryState(workflowId, index));
+                await executions.SaveAsync(WorkflowState(workflowId));
+            }
+
+            for (var index = 0; index < 8; index++)
+            {
+                var workflowId = $"recovery-v12-terminal-{index:D4}";
+                await liveness.SaveAsync(ProductionRecoveryState(workflowId, 173 + index));
+                await executions.SaveAsync(WorkflowState(workflowId, WorkflowExecutionStatus.Completed));
+            }
+
+            for (var index = 0; index < 1_867; index++)
+            {
+                var workflowId = $"recovery-v12-live-{index:D4}";
+                await liveness.SaveAsync(State(workflowId, "op-1", "worker-a", leaseExpiresAt: Now.AddHours(1)));
+                await executions.SaveAsync(WorkflowState(workflowId));
+            }
+
+            first = await ScanAllProductionPagesAsync(source, scope);
+        }
+
+        IReadOnlyList<string> reopened;
+        using (var connection = runtime.OpenConnection())
+        {
+            var source = new DirectSessionSource(connection, units);
+            var scope = new TestAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+            reopened = await ScanAllProductionPagesAsync(source, scope);
+        }
+
+        var expected = Enumerable.Range(0, 173).Select(index => $"recovery-v12-candidate-{index:D4}").ToArray();
+        Assert.Equal(expected, first);
+        Assert.Equal(first, reopened);
+    }
+
+    private static async Task<IReadOnlyList<string>> ScanAllProductionPagesAsync(
+        DirectSessionSource source,
+        TestAccessContextAccessor scope)
+    {
+        var scanner = new GroundworkV2RuntimeRecoveryScanner(source, scope, continuationCodec: TestCodec());
+        var ids = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        string? continuation = null;
+        for (var pageNumber = 0; pageNumber < 512; pageNumber++)
+        {
+            var page = await scanner.ScanPageAsync(new RuntimeRecoveryScanRequest(
+                Now, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(1), 4, continuationToken: continuation));
+            Assert.InRange(page.Items.Count, 0, 4);
+            Assert.DoesNotContain(page.Items, candidate =>
+                candidate.WorkflowExecutionId.StartsWith("recovery-v12-live-", StringComparison.Ordinal) ||
+                candidate.WorkflowExecutionId.StartsWith("recovery-v12-terminal-", StringComparison.Ordinal));
+            foreach (var candidate in page.Items)
+                Assert.True(seen.Add(candidate.WorkflowExecutionId), $"Duplicate production candidate {candidate.WorkflowExecutionId}.");
+            ids.AddRange(page.Items.Select(candidate => candidate.WorkflowExecutionId));
+            if (page.NextContinuationToken is null)
+                return ids;
+            Assert.NotEqual(continuation, page.NextContinuationToken);
+            continuation = page.NextContinuationToken;
+        }
+
+        throw new Xunit.Sdk.XunitException("The production recovery scanner exceeded the v1.2 bounded page budget.");
+    }
+
+    private static ExecutionLivenessState ProductionRecoveryState(string workflowId, int routeIndex) =>
+        (routeIndex % 4) switch
+        {
+            0 => new ExecutionLivenessState(
+                "op-1",
+                workflowId,
+                null,
+                null,
+                null,
+                new InterruptedExecutionState(
+                    $"interruption-{workflowId}",
+                    workflowId,
+                    null,
+                    $"checkpoint-{workflowId}",
+                    RuntimeInterruptionReason.HostStopped,
+                    RuntimeInterruptionStatus.Detected,
+                    Now.AddMinutes(-1))),
+            1 => State(workflowId, "op-1", "worker-a", leaseExpiresAt: Now.AddMinutes(-1)),
+            2 => new ExecutionLivenessState(
+                "op-1",
+                workflowId,
+                new RuntimeExecutionLease(
+                    $"lease-{workflowId}",
+                    workflowId,
+                    "worker-a",
+                    Now.AddMinutes(-6),
+                    Now.AddMinutes(10),
+                    fencingToken: 1),
+                null,
+                null,
+                null),
+            _ => new ExecutionLivenessState(
+                "op-1",
+                workflowId,
+                null,
+                new RuntimeHeartbeat(
+                    $"heartbeat-{workflowId}",
+                    workflowId,
+                    "worker-a",
+                    null,
+                    Now.AddMinutes(-2)),
+                null,
+                null)
+        };
+
+    [Fact]
     public async Task Sqlite_recovery_scan_carries_candidates_from_distinct_routes_across_pages()
     {
         await using var runtime = NativeProviderRuntime.Create("sqlite", null);

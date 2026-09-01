@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
@@ -9,6 +10,7 @@ using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
 using Groundwork.Kernel;
@@ -103,6 +105,17 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
             // process, and both clients must contribute to the same total.
             services.AddSingleton<IProviderCommandObserver>(observer);
 
+            // Recovery continuations must be authenticated even though the key is only a local composition
+            // fixture and never crosses the artifact boundary. A fresh cryptographic key per composition is
+            // enough because every scanner/reopen client resolves the same singleton codec; no continuation is
+            // persisted or handed to another benchmark process.
+            var recoverySigningKey = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+            services.Configure<RuntimeRecoveryContinuationOptions>(options =>
+            {
+                options.SigningKey = recoverySigningKey;
+                options.AllowEphemeralDevelopmentKey = false;
+            });
+
             services.AddGroundworkV2RuntimeStores();
             if (includeDistributedRuntimeStores)
                 services.AddGroundworkDistributedRuntimeStores();
@@ -192,6 +205,21 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
         return new RuntimeBookmarkLookupClient(
             services.GetRequiredService<IBookmarkStateStore>(),
             services.GetRequiredService<IBookmarkStimulusIndex>());
+    }
+
+    /// <summary>Mints the public recovery scanner and all state stores it correlates from an isolated scope.</summary>
+    public RuntimeRecoveryScanClient CreateRecoveryScanClient()
+    {
+        var scope = provider.CreateAsyncScope();
+        scopes.Add(scope);
+        var services = scope.ServiceProvider;
+        return new RuntimeRecoveryScanClient(
+            services.GetRequiredService<IRuntimeRecoveryScanner>(),
+            services.GetRequiredService<IExecutionLivenessStateStore>(),
+            services.GetRequiredService<IWorkflowExecutionStateStore>(),
+            services.GetRequiredService<IIncidentStateStore>(),
+            services.GetRequiredService<ISchedulerStateStore>(),
+            services.GetRequiredService<IWorkflowHoldStateStore>());
     }
 
     /// <summary>Mints the scheduler queue and poison-store contracts from one isolated DI scope.</summary>

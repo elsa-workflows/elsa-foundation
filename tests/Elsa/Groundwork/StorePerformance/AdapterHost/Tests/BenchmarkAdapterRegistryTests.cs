@@ -18,6 +18,17 @@ public sealed class BenchmarkAdapterRegistryTests
     }
 
     [Fact]
+    public async Task Dispatches_recovery_scan_to_the_exact_groundwork_physical_form()
+    {
+        await using var adapter = BenchmarkAdapterRegistry.Create(
+            Request("recovery-scan", RecoveryScanAdapter.PhysicalForm, RuntimeRecoveryScanWorkload.Version), "unused", "unused");
+
+        Assert.IsType<RecoveryScanAdapter>(adapter);
+        var workload = WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()).Workloads["recovery-scan"];
+        Assert.Contains(RecoveryScanAdapter.PhysicalForm, workload.PhysicalFormsFor646);
+    }
+
+    [Fact]
     public async Task Preserves_checkpoint_dispatch_for_its_exact_contract_key()
     {
         await using var adapter = BenchmarkAdapterRegistry.Create(
@@ -412,6 +423,16 @@ public sealed class BenchmarkAdapterRegistryTests
     {
         var exception = Assert.Throws<PerformanceContractException>(() =>
             BenchmarkAdapterRegistry.Create(Request("bookmark-lookup", "document-type-specific-tables", "9.9.9"), "unused", "unused"));
+
+        Assert.Contains("exact workload/adapter/physical form", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Refuses_the_historical_recovery_scan_version_after_the_v12_successor_is_admitted()
+    {
+        var exception = Assert.Throws<PerformanceContractException>(() =>
+            BenchmarkAdapterRegistry.Create(
+                Request("recovery-scan", RecoveryScanAdapter.PhysicalForm, "1.1.0"), "unused", "unused"));
 
         Assert.Contains("exact workload/adapter/physical form", exception.Message, StringComparison.Ordinal);
     }

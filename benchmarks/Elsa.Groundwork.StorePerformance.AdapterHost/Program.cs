@@ -81,6 +81,20 @@ static async Task<int> CapturePlan(string[] args)
         return 0;
     }
 
+    if (string.Equals(request.WorkloadId, RuntimeRecoveryScanWorkload.WorkloadId, StringComparison.Ordinal))
+    {
+        var recoveryDigest = await RecoveryNativePlanCapture.CaptureAsync(
+            request,
+            connectionString,
+            outputDirectory,
+            observed,
+            CancellationToken.None);
+        Console.WriteLine($"native-plan-evidence={request.NativePlanEvidenceReference}");
+        Console.WriteLine($"native-plan-sha256={recoveryDigest}");
+        Console.WriteLine("native-plan-routes=4");
+        return 0;
+    }
+
     var reference = NativePlanEvidenceStaging.ReferenceFor(request.WorkloadId, request.Provider, request.MeasurementSetId);
     if (!string.Equals(reference, request.NativePlanEvidenceReference, StringComparison.Ordinal))
         throw new PerformanceContractException(

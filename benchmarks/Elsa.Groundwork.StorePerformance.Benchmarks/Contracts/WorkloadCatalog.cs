@@ -6,7 +6,7 @@ using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 
 /// <summary>
-/// The closed #646 input boundary. Historical hashes remain frozen while reviewed v1.1 successors
+/// The closed #646 input boundary. Historical hashes remain frozen while reviewed successors
 /// must reproduce their benchmark-owned contract vectors; neither may be silently reinterpreted.
 /// </summary>
 public sealed class WorkloadCatalog
@@ -14,7 +14,7 @@ public sealed class WorkloadCatalog
     private static readonly string[] RequiredFiles =
         ["runtime.json", "iam-secrets.json", "distributed-runtime.json", "diagnostics.json"];
     private static readonly string[] SuccessorFiles =
-        ["secret-create-read-list-v1.1.json"];
+        ["recovery-scan-v1.2.json", "secret-create-read-list-v1.1.json"];
     private static readonly string[] Providers = ["sqlite", "sqlserver", "postgresql", "mongodb"];
     private static readonly Regex Slug = new("^[a-z0-9]+(?:-[a-z0-9]+)*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex Sha256 = new("^[0-9a-f]{64}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -39,7 +39,7 @@ public sealed class WorkloadCatalog
         var expectedFiles = RequiredFiles.Concat(SuccessorFiles).Order(StringComparer.Ordinal).ToArray();
         if (!discovered.SequenceEqual(expectedFiles, StringComparer.Ordinal))
             throw new WorkloadContractException(
-                "The workload directory must contain exactly the four historical workload files and the reviewed Secret v1.1 successor file.");
+                "The workload directory must contain exactly the four historical workload files and the reviewed Secret v1.1 and recovery-scan v1.2 successor files.");
 
         var workloads = new Dictionary<string, PerformanceWorkload>(StringComparer.Ordinal);
         foreach (var file in RequiredFiles)
@@ -52,15 +52,24 @@ public sealed class WorkloadCatalog
         if (!workloads.TryGetValue(ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId, out var historicalSecret))
             throw new WorkloadContractException("The immutable iam-secrets.json source does not contain the historical Secret workload.");
         ValidateHistoricalSecretContract(historicalSecret);
+        if (!workloads.TryGetValue(RuntimeRecoveryScanWorkload.WorkloadId, out var historicalRecovery))
+            throw new WorkloadContractException("The immutable runtime.json source does not contain the historical recovery-scan workload.");
+        ValidateHistoricalRecoveryContract(historicalRecovery);
 
-        var successors = ReadFile(workloadDirectory, SuccessorFiles.Single(), expectedSourceDigests);
-        if (successors.Count != 1)
-            throw new WorkloadContractException("The Secret v1.1 successor file must contain exactly one workload.");
+        var successors = SuccessorFiles.SelectMany(file => ReadFile(workloadDirectory, file, expectedSourceDigests)).ToArray();
+        if (successors.Count(workload => workload.Id == ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId) != 1 ||
+            successors.Count(workload => workload.Id == RuntimeRecoveryScanWorkload.WorkloadId) != 1 ||
+            successors.Length != 2)
+            throw new WorkloadContractException("The Secret v1.1 and recovery-scan v1.2 successor files must each contain exactly one workload.");
         foreach (var workload in successors)
         {
             if (!string.Equals(workload.Id, ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId, StringComparison.Ordinal) ||
                 workloads.ContainsKey(workload.Id) is false)
-                throw new WorkloadContractException("The Secret v1.1 successor file must replace the historical Secret workload by its exact identifier.");
+            {
+                if (!string.Equals(workload.Id, RuntimeRecoveryScanWorkload.WorkloadId, StringComparison.Ordinal) ||
+                    workloads.ContainsKey(workload.Id) is false)
+                    throw new WorkloadContractException("Each successor file must replace its historical workload by its exact identifier.");
+            }
             workloads[workload.Id] = workload;
         }
 
@@ -158,11 +167,39 @@ public sealed class WorkloadCatalog
             throw new WorkloadContractException("The historical Secret v1.0 contract has been modified.");
     }
 
+    private static void ValidateHistoricalRecoveryContract(PerformanceWorkload actual)
+    {
+        var expected = Expected[RuntimeRecoveryScanWorkload.WorkloadId];
+        var parameters = new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            ["executionCount"] = 2048,
+            ["fixedNowUtc"] = "2026-07-20T10:00:00Z",
+            ["liveExecutions"] = 1875,
+            ["pageSize"] = 64,
+            ["recoverableCandidates"] = 173,
+            ["tenantCount"] = 2,
+            ["timedSetup"] = "excluded"
+        };
+        if (actual.Id != RuntimeRecoveryScanWorkload.WorkloadId ||
+            actual.Version != "1.1.0" ||
+            actual.ScenarioId != "runtime-recovery-scan" ||
+            actual.Input.Seed != "spec094-recovery-scan-v1.1" ||
+            actual.Input.FingerprintSha256 != ReproducibleWorkloadScenarioCatalog.HistoricalRecoveryInputFingerprint ||
+            actual.Correctness.ResultDigestSha256 != ReproducibleWorkloadScenarioCatalog.HistoricalRecoveryResultDigest ||
+            !SemanticInputMatches(actual.Input.Values, parameters) ||
+            !actual.CoverageRows.SequenceEqual(expected.CoverageRows, StringComparer.Ordinal) ||
+            !actual.OperationSequence.SequenceEqual(["seed-live-and-recoverable-state", "scan-recovery-candidates", "reopen-and-rescan", "verify-bounded-order-and-non-candidates"], StringComparer.Ordinal) ||
+            actual.Lineage is not null)
+            throw new WorkloadContractException("The historical recovery-scan v1.1 contract has been modified.");
+    }
+
     private static PerformanceWorkload ParseWorkload(JsonElement value, string source)
     {
         RequireObject(value, source);
-        RequireClosedProperties(value,
-        ["id", "version", "scenarioId", "owner", "handoffTarget", "publicOperation", "coverageRows", "input", "operationSequence", "requiredProviders", "requiredNativeRoutes", "requiredProviderEvidence", "correctness", "efContractBaseline", "benchmarkAdmission", "physicalFormsFor646", "artifactRetention"], source);
+        var properties = new[] { "id", "version", "scenarioId", "owner", "handoffTarget", "publicOperation", "coverageRows", "input", "operationSequence", "requiredProviders", "requiredNativeRoutes", "requiredProviderEvidence", "correctness", "efContractBaseline", "benchmarkAdmission", "physicalFormsFor646", "artifactRetention" };
+        if (source == "recovery-scan-v1.2.json")
+            properties = [.. properties, "lineage"];
+        RequireClosedProperties(value, properties, source);
 
         var id = RequireString(value, "id", source);
         var version = RequireString(value, "version", source);
@@ -186,8 +223,23 @@ public sealed class WorkloadCatalog
         var admission = ParseBenchmarkAdmission(RequireProperty(value, "benchmarkAdmission", source), source);
         var physicalForms = RequireStrings(RequireArray(value, "physicalFormsFor646", source), source, "physicalFormsFor646", allowEmpty: false);
         var retention = RequireStrings(RequireArray(value, "artifactRetention", source), source, "artifactRetention", allowEmpty: false);
+        var lineage = source == "recovery-scan-v1.2.json"
+            ? ParseLineage(RequireProperty(value, "lineage", source), source)
+            : null;
 
-        return new PerformanceWorkload(id, version, RequireString(value, "scenarioId", source), RequireString(value, "owner", source), RequireString(value, "publicOperation", source), coverageRows, input, operationSequence, requiredProviders, routes, providerEvidence, correctness, baseline, admission, physicalForms, retention);
+        return new PerformanceWorkload(id, version, RequireString(value, "scenarioId", source), RequireString(value, "owner", source), RequireString(value, "publicOperation", source), coverageRows, input, operationSequence, requiredProviders, routes, providerEvidence, correctness, baseline, admission, physicalForms, retention, lineage);
+    }
+
+    private static WorkloadLineage ParseLineage(JsonElement value, string source)
+    {
+        RequireObject(value, source);
+        RequireClosedProperties(value, ["predecessorId", "predecessorVersion", "reason"], source);
+        var predecessorId = RequireString(value, "predecessorId", source);
+        var predecessorVersion = RequireString(value, "predecessorVersion", source);
+        var reason = RequireString(value, "reason", source);
+        if (!Slug.IsMatch(predecessorId) || !SemVer.IsMatch(predecessorVersion) || string.IsNullOrWhiteSpace(reason))
+            throw new WorkloadContractException($"{source} contains invalid successor lineage.");
+        return new WorkloadLineage(predecessorId, predecessorVersion, reason);
     }
 
     /// <summary>
@@ -279,8 +331,10 @@ public sealed class WorkloadCatalog
                 successor.ComputeInputFingerprint() != golden.InputFingerprint ||
                 successor.ComputeResultDigest() != golden.ResultDigest ||
                 !SemanticInputMatches(actual.Input.Values, successor.Parameters) ||
-                !actual.OperationSequence.SequenceEqual(successor.OperationSequence, StringComparer.Ordinal))
-                throw new WorkloadContractException($"The workload '{actual.Id}' does not match its reproducible v1.1 contract vector, including every semantic input field.");
+                !actual.OperationSequence.SequenceEqual(successor.OperationSequence, StringComparer.Ordinal) ||
+                (actual.Id == RuntimeRecoveryScanWorkload.WorkloadId &&
+                    actual.Lineage != new WorkloadLineage(RuntimeRecoveryScanWorkload.WorkloadId, "1.1.0", "production scanner paging is bounded to four native route candidates per page and the fixture preserves explicit terminal/live execution partitions")))
+                throw new WorkloadContractException($"The workload '{actual.Id}' does not match its reproducible successor contract vector, including every semantic input field and lineage.");
             if (ReproducibleWorkloadScenarioCatalog.TryGetBlockedReason(actual.Id, out var blockedReason))
                 RequireAdmission(actual, "blocked", blockedReason);
             else
@@ -413,6 +467,7 @@ public sealed class WorkloadCatalog
         ["runtime.json"] = "1b81a63d8a2acfe5ceea9e9a7e458de21c0fae8069506be5e94258198eff7d41",
         ["iam-secrets.json"] = "b5681de1cb1cf5fa9e671770df0cc78f026103293889d86d0c9ea63fcc4ee364",
         ["secret-create-read-list-v1.1.json"] = "d9359af187da4f8a1568896a7ecae8e97215eb58f68d0e185d677a94833cc240",
+        ["recovery-scan-v1.2.json"] = "7f6e808855a36fffcc2ebfca3a05c3f0ddcd4e301e03fb935216c61999271419",
         ["distributed-runtime.json"] = "e03a5db9ddbdbfe4c854632fadc00b2674546d0925e65b0af198ada75910d837",
         ["diagnostics.json"] = "fb2c8de14b3ae6c5620c21b9720aa9e544ed477cc88e62f70137db58d500286a"
     };
@@ -436,7 +491,8 @@ public sealed class WorkloadCatalog
     };
 }
 
-public sealed record PerformanceWorkload(string Id, string Version, string ScenarioId, string Owner, string PublicOperation, IReadOnlyList<string> CoverageRows, WorkloadInput Input, IReadOnlyList<string> OperationSequence, IReadOnlyList<string> RequiredProviders, IReadOnlyList<string> RequiredNativeRoutes, IReadOnlyDictionary<string, string> RequiredProviderEvidence, CorrectnessContract Correctness, EfContractBaseline EfContractBaseline, BenchmarkAdmission BenchmarkAdmission, IReadOnlyList<string> PhysicalFormsFor646, IReadOnlyList<string> ArtifactRetention);
+public sealed record PerformanceWorkload(string Id, string Version, string ScenarioId, string Owner, string PublicOperation, IReadOnlyList<string> CoverageRows, WorkloadInput Input, IReadOnlyList<string> OperationSequence, IReadOnlyList<string> RequiredProviders, IReadOnlyList<string> RequiredNativeRoutes, IReadOnlyDictionary<string, string> RequiredProviderEvidence, CorrectnessContract Correctness, EfContractBaseline EfContractBaseline, BenchmarkAdmission BenchmarkAdmission, IReadOnlyList<string> PhysicalFormsFor646, IReadOnlyList<string> ArtifactRetention, WorkloadLineage? Lineage = null);
+public sealed record WorkloadLineage(string PredecessorId, string PredecessorVersion, string Reason);
 public sealed record WorkloadInput(string Seed, string FingerprintSha256, JsonElement Values);
 public sealed record CorrectnessContract(string ResultDigestSha256, IReadOnlyList<string> Invariants, string TimingGate);
 public sealed record EfContractBaseline(string BaselineIdentity, string ExecutionStatus, string ExecutionOwner, string Purpose);

@@ -393,6 +393,7 @@ public static class ArtifactAdmission
             throw new PerformanceContractException("Native-plan evidence must admit every required route with a retained raw-plan digest, bounded cardinality, predicates, finite limit, and materialized-count facts.");
         ValidateIamNativeRoutes(workload, routes);
         ValidateSecretNativeRoutes(workload, routes);
+        ValidateRecoveryNativeRoutes(workload, routes);
         ValidateSecretConcurrency(workload, request, nativePlan.ProviderConcurrency);
         if (routes.Count != workload.RequiredNativeRoutes.Count ||
             !routes.Select(route => route.RouteIdentity).Order(StringComparer.Ordinal).SequenceEqual(workload.RequiredNativeRoutes.Order(StringComparer.Ordinal), StringComparer.Ordinal) ||
@@ -421,6 +422,11 @@ public static class ArtifactAdmission
                 SecretRetainedNativePlan.Validate(
                     request.Provider,
                     request.Adapter,
+                    route,
+                    File.ReadAllText(rawPlanPath));
+            if (string.Equals(workload.Id, RuntimeRecoveryScanWorkload.WorkloadId, StringComparison.Ordinal))
+                RecoveryRetainedNativePlan.Validate(
+                    request.Provider,
                     route,
                     File.ReadAllText(rawPlanPath));
         }
@@ -507,6 +513,30 @@ public static class ArtifactAdmission
             route.MaterializedCandidateCount != SecretCreateReadListWorkload.PageSize)
             throw new PerformanceContractException(
                 "Secret native-plan evidence must contain the frozen list-filtered route with physical cardinality 68 and a 16-row bounded page.");
+    }
+
+    private static void ValidateRecoveryNativeRoutes(
+        PerformanceWorkload workload,
+        IReadOnlyList<NativeRouteEvidence> routes)
+    {
+        if (!string.Equals(workload.Id, RuntimeRecoveryScanWorkload.WorkloadId, StringComparison.Ordinal))
+            return;
+
+        var expectedRoutes = RuntimeRecoveryScanWorkload.NativeRouteIdentities;
+        var routeNamesMatch = workload.RequiredNativeRoutes.Count == expectedRoutes.Count &&
+                              workload.RequiredNativeRoutes.Order(StringComparer.Ordinal)
+                                  .SequenceEqual(expectedRoutes.Order(StringComparer.Ordinal), StringComparer.Ordinal) &&
+                              routes.Count == expectedRoutes.Count &&
+                              routes.Select(route => route.RouteIdentity).Distinct(StringComparer.Ordinal).Count() == expectedRoutes.Count &&
+                              routes.All(route => expectedRoutes.Contains(route.RouteIdentity, StringComparer.Ordinal));
+        var routeFactsMatch = routes.All(route =>
+            route.PhysicalCardinality == RuntimeRecoveryScanWorkload.ExecutionCount &&
+            route.MaterializedCandidateCount == 1 &&
+            route.FiniteLimit == 1);
+
+        if (!routeNamesMatch || !routeFactsMatch)
+            throw new PerformanceContractException(
+                "Recovery native-plan evidence must contain exactly the four frozen route names and bind physical cardinality 2048, one materialized candidate, and a finite limit of one.");
     }
 
     private static void ValidateSecretConcurrency(

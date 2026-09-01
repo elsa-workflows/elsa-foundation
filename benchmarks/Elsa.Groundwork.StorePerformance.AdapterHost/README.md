@@ -17,6 +17,7 @@ substrate.
 | optional-observer `src/` seam on `GroundworkV2RuntimeCheckpointWriter` | **done**, compiles |
 | `RuntimeStoreComposition` — DI composition, unit admission, distinct clients | **done**, compiles |
 | `CheckpointCommitAdapter` — correctness half, over the production commit path | **done**, compiles |
+| `RecoveryScanAdapter` — bounded public recovery paging and four native routes | **implemented**, focused workload tests pass; live provider capture remains operator-driven |
 | `verify-correctness` command | **done**, compiles, **not yet run against a provider** |
 | the five measured operations | **implemented** in the workload-owned phase adapter; no timed cohort claimed |
 | a measured cohort | **not run**, and not runnable on a loaded machine by construction |
@@ -38,8 +39,8 @@ including reads, writes, probes, and retention. `RuntimeStoreComposition` regist
 forwards it through both sessions and units of work. `IStorageAccessObserver` remains an audit hook for
 privileged access, not a round-trip counter.
 
-The write and read adapters in this host therefore use the same provider-native observer. Remaining
-read-dominated workloads are unimplemented adapter leaves, rather than being blocked by an absent read seam.
+The write and read adapters in this host therefore use the same provider-native observer. Other
+read-dominated workloads remain adapter leaves, rather than being blocked by an absent read seam.
 
 A third point, and its resolution.
 

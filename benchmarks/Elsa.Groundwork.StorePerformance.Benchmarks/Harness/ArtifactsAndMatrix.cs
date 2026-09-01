@@ -190,6 +190,7 @@ public static class ArtifactStore
         if (ArtifactSafety.ContainsSensitiveContent(content))
             throw new PerformanceContractException("Raw provider-plan evidence may not retain connection values or credentials.");
         var structuredContent = SecretRetainedNativePlan.ProviderPlanForStructuredSafetyValidation(content);
+        structuredContent = RecoveryRetainedNativePlan.ProviderPlanForStructuredSafetyValidation(structuredContent);
         if (path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
         {
             try

@@ -28,7 +28,7 @@ public sealed class WorkloadCatalogTests
     }
 
     [Fact]
-    public void Keeps_the_historical_secret_source_separate_from_its_executable_successor()
+    public void Keeps_historical_sources_separate_from_their_executable_successors()
     {
         var directory = Path.Combine(Repository.Root(), "specs", "094-harden-groundwork-stores", "workloads");
 
@@ -38,6 +38,13 @@ public sealed class WorkloadCatalogTests
         Assert.Equal(
             "d9359af187da4f8a1568896a7ecae8e97215eb58f68d0e185d677a94833cc240",
             Hash(Path.Combine(directory, "secret-create-read-list-v1.1.json")));
+        Assert.Equal(
+            "1b81a63d8a2acfe5ceea9e9a7e458de21c0fae8069506be5e94258198eff7d41",
+            Hash(Path.Combine(directory, "runtime.json")));
+        Assert.Equal("36277c9b9c525d4cbb611c1a7e83c96a02eb3434fb85b6657ce2ede9b8a7a5e3",
+            ReproducibleWorkloadScenarioCatalog.HistoricalRecoveryInputFingerprint);
+        Assert.Equal("3c7cae42737a2a995968852a862f769070a016b4e4a0289c7a9a5e7205e9eabf",
+            ReproducibleWorkloadScenarioCatalog.HistoricalRecoveryResultDigest);
     }
 
     [Fact]
@@ -73,7 +80,7 @@ public sealed class WorkloadCatalogTests
         {
             var workload = catalog.Workloads[id];
             var golden = ExpectedGoldenVectors[id];
-            Assert.Equal("1.1.0", workload.Version);
+            Assert.Equal(id == "recovery-scan" ? "1.2.0" : "1.1.0", workload.Version);
             Assert.Equal(scenario.Seed, workload.Input.Seed);
             Assert.Equal(scenario.OperationSequence, workload.OperationSequence);
             Assert.Equal(golden.InputFingerprint, scenario.ComputeInputFingerprint());
@@ -98,6 +105,15 @@ public sealed class WorkloadCatalogTests
         Assert.Equal(
             new BenchmarkAdmission("blocked", ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode),
             diagnostics.BenchmarkAdmission);
+
+        var recovery = catalog.Workloads[RuntimeRecoveryScanWorkload.WorkloadId];
+        Assert.Equal("1.2.0", recovery.Version);
+        Assert.Equal(
+            new WorkloadLineage(
+                RuntimeRecoveryScanWorkload.WorkloadId,
+                "1.1.0",
+                "production scanner paging is bounded to four native route candidates per page and the fixture preserves explicit terminal/live execution partitions"),
+            recovery.Lineage);
     }
 
     [Fact]
@@ -134,6 +150,21 @@ public sealed class WorkloadCatalogTests
         Assert.Contains("semantic input", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Rejects_recovery_successor_lineage_drift_even_when_its_source_digest_is_reviewed_again()
+    {
+        using var fixture = WorkloadFixture.CopyFromRepository();
+        fixture.Replace(
+            "production scanner paging is bounded to four native route candidates per page and the fixture preserves explicit terminal/live execution partitions",
+            "recovery successor has no predecessor",
+            "recovery-scan-v1.2.json");
+
+        var error = Assert.Throws<WorkloadContractException>(() =>
+            WorkloadCatalog.Load(fixture.Root, SourceDigests(fixture.Root)));
+
+        Assert.Contains("lineage", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Theory]
     [InlineData("\"noiseUserCount\": 16", "\"noiseUserCount\": 17")]
     [InlineData("\"scenarioId\": \"identity-authority-baseline\"", "\"scenarioId\": \"identity-authority-drift\"")]
@@ -165,7 +196,7 @@ public sealed class WorkloadCatalogTests
         var error = Assert.Throws<WorkloadContractException>(() =>
             WorkloadCatalog.Load(fixture.Root, SourceDigests(fixture.Root)));
 
-        Assert.Contains("reproducible v1.1 contract vector", error.Message, StringComparison.Ordinal);
+        Assert.Contains("reproducible successor contract vector", error.Message, StringComparison.Ordinal);
     }
 
     private static IReadOnlyDictionary<string, string> SourceDigests(string repositoryRoot)
@@ -215,7 +246,7 @@ public sealed class WorkloadCatalogTests
             ["outbox-drain"] = new("bc5c6ca1113e78fe948a61de35c66a644129c79028a198d9143dc316cea7bede", "7228f024095bc2fadc0649e0841d56259f3408b55368911ea402b7d96c8b2e71"),
             ["placement-takeover"] = new("17f22a7e7896b3842ebd771e604b13e859d1b480bc5b6093ce576f14a673e985", "3ad65cc7ff9287f9c20a68ec6cd267bc78fa083fb775dda36062c185706fb4b4"),
             ["queue-drain"] = new("15f2d5f9dc8d5814a1613156b7c686e59a150a35bd7e51787a145b6d7230d5e2", "7db639fdbfddc02973a7275d7c0e8835872b62449ca160e97e8086c0ca46eba4"),
-            ["recovery-scan"] = new("36277c9b9c525d4cbb611c1a7e83c96a02eb3434fb85b6657ce2ede9b8a7a5e3", "3c7cae42737a2a995968852a862f769070a016b4e4a0289c7a9a5e7205e9eabf"),
+            ["recovery-scan"] = new("eb4df814e208fedf12c3f8a995430b1084fac5cf7b7e67bd0464be07d0043eef", "af331fc39ac89be97b601ba9e472fd7872b45ec5e50ccc9bba6b55de53e3aba0"),
             ["recurring-schedule-selection"] = new("384bcbf0fd72f306b63d78b71a8130c4e2e02de146cbd45d066ef581f4d78d17", "9728bad4f576c7e50c3f6210994524ffb1d77761c5258a71f27fe1cf1793cec4"),
             ["secret-create-read-list"] = new("7f64dd6942e976e2cea5ad84db1704f4b6239380136a93d99a6480f5909021ce", "394ff58bd146744fe30f4abd3a8529ab1287129787d40e188ffc0c58038e8783"),
             ["trigger-binding-stimulus-lookup"] = new("4f2515dfa9549935712019f178283f79e6ac1cc9428e810524e733cfdea4cabc", "00b6651345cdb8b6724a205b094c712d383c7a19ef87dcce6fdf026bc7dd7c8a")

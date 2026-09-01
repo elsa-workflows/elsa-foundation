@@ -21,9 +21,10 @@ internal static class CapturePlanAdmission
         ArtifactAdmission.ValidateRequest(workload, request);
         if (!string.Equals(request.WorkloadId, RuntimeCheckpointCommitWorkload.WorkloadId, StringComparison.Ordinal) &&
             !string.Equals(request.WorkloadId, IamNormalizedLookupWorkload.WorkloadId, StringComparison.Ordinal) &&
-            !string.Equals(request.WorkloadId, SecretCreateReadListWorkload.WorkloadId, StringComparison.Ordinal))
+            !string.Equals(request.WorkloadId, SecretCreateReadListWorkload.WorkloadId, StringComparison.Ordinal) &&
+            !string.Equals(request.WorkloadId, RuntimeRecoveryScanWorkload.WorkloadId, StringComparison.Ordinal))
             throw new PerformanceContractException(
-                "The capture-plan command supports only checkpoint-commit, iam-normalized-lookup-update, and secret-create-read-list.");
+                "The capture-plan command supports only checkpoint-commit, iam-normalized-lookup-update, secret-create-read-list, and recovery-scan.");
 
         var expectedReference = NativePlanEvidenceStaging.ReferenceFor(
             request.WorkloadId,

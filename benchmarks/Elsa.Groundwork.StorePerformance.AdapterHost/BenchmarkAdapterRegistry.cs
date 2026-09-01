@@ -14,6 +14,7 @@ internal static class BenchmarkAdapterRegistry
     internal const string EfSecretRepositoryAdapterId = "ef-secret-repository";
     internal const string GroundworkSecretRepositoryAdapterId = "groundwork-secret-repository";
     internal const string WorkloadVersion = "1.1.0";
+    internal const string RecoveryWorkloadVersion = "1.2.0";
     internal const string CheckpointPhysicalForm = "checkpoint-unit-of-work-with-linked-outbox";
 
     public static IBenchmarkAdapter Create(
@@ -29,6 +30,8 @@ internal static class BenchmarkAdapterRegistry
                 new CheckpointCommitAdapter(request, connectionString, outputDirectory),
             { WorkloadId: RuntimeBookmarkLookupWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: GroundworkV2Adapter, PhysicalForm: BookmarkLookupAdapter.PhysicalForm } =>
                 new BookmarkLookupAdapter(request, connectionString, outputDirectory),
+            { WorkloadId: RuntimeRecoveryScanWorkload.WorkloadId, WorkloadVersion: RecoveryWorkloadVersion, Adapter: GroundworkV2Adapter, PhysicalForm: RecoveryScanAdapter.PhysicalForm } =>
+                new RecoveryScanAdapter(request, connectionString, outputDirectory),
             { WorkloadId: RuntimeQueueDrainWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: GroundworkV2Adapter, PhysicalForm: QueueDrainAdapter.PhysicalForm } =>
                 new QueueDrainAdapter(request, connectionString, outputDirectory),
             { WorkloadId: RuntimeOutboxDrainWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: GroundworkV2Adapter, PhysicalForm: OutboxDrainAdapter.PhysicalForm } =>
