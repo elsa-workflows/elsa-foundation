@@ -5,6 +5,8 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
+using Elsa.Secrets.Core.Contracts;
+using Elsa.Secrets.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
@@ -64,7 +66,8 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
         WritePathRoundTripObserver? observer = null,
         IStorageProviderConnection? existingConnection = null,
         bool includeDistributedRuntimeStores = false,
-        bool includeGroundworkIdentityStores = false)
+        bool includeGroundworkIdentityStores = false,
+        bool includeGroundworkSecretStores = false)
     {
         observer ??= new WritePathRoundTripObserver(providerName);
         var ownsConnection = existingConnection is null;
@@ -92,6 +95,8 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
 
             if (includeGroundworkIdentityStores)
                 services.AddFoundationAspNetCoreIdentityGroundwork();
+            if (includeGroundworkSecretStores)
+                services.AddGroundworkSecretsStore();
 
             // The observer GroundworkStorageSessionSource resolves and forwards to every session and unit
             // of work it opens. Singleton because the harness snapshots one cumulative count for the
@@ -274,6 +279,14 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
         var scope = provider.CreateAsyncScope();
         scopes.Add(scope);
         return scope.ServiceProvider.GetRequiredService<Elsa.Foundation.Identity.Persistence.Groundwork.Stores.GroundworkIdentityRowStore>();
+    }
+
+    /// <summary>Mints the public Secret repository over the Groundwork storage unit from an isolated scope.</summary>
+    public ISecretRepository CreateSecretClient()
+    {
+        var scope = provider.CreateAsyncScope();
+        scopes.Add(scope);
+        return scope.ServiceProvider.GetRequiredService<ISecretRepository>();
     }
 
     public async ValueTask DisposeAsync()

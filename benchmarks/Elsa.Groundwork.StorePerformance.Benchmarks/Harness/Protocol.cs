@@ -52,6 +52,14 @@ public sealed record NativeRouteEvidence(
     bool HasRoutePredicate,
     int FiniteLimit,
     int MaterializedCandidateCount);
+public sealed record SecretProviderConcurrencyEvidence(
+    int IndependentClientCount,
+    int CompletedContenders,
+    int ProviderCommandStartCount,
+    bool ProviderCommandOverlapObserved,
+    bool ProviderCommandsSerializedByDesign,
+    bool EveryContenderIssuedProviderCommands,
+    int DistinctPhysicalConnectionCount);
 public sealed record NativePlanEvidenceDocument(
     int SchemaVersion,
     string ComparisonCohortId,
@@ -73,8 +81,14 @@ public sealed record NativePlanEvidenceDocument(
     string InputFingerprintSha256,
     string Identity,
     IReadOnlyList<NativeRouteEvidence> Routes,
-    string RouteContract = "provider-native-routes");
-public sealed record NativePlanEvidence(string Identity, string Reference, string ContentSha256, IReadOnlyList<NativeRouteEvidence> Routes);
+    string RouteContract = "provider-native-routes")
+{
+    public SecretProviderConcurrencyEvidence? ProviderConcurrency { get; init; }
+}
+public sealed record NativePlanEvidence(string Identity, string Reference, string ContentSha256, IReadOnlyList<NativeRouteEvidence> Routes)
+{
+    public SecretProviderConcurrencyEvidence? ProviderConcurrency { get; init; }
+}
 public sealed record CorrectnessEvidence(
     string ObservedResultDigestSha256,
     string ObservedProviderVersion,
@@ -342,7 +356,7 @@ public static class ArtifactAdmission
     public static void ValidateRequest(PerformanceWorkload workload, RunRequest request)
     {
         BenchmarkAdmissionGuard.RequireReady(workload);
-        BenchmarkAdapterAdmission.RequireAdmitted(workload, request.Adapter, request.PhysicalForm);
+        BenchmarkAdapterAdmission.RequireAdmitted(workload, request.Provider, request.Adapter, request.PhysicalForm);
         ArtifactSafety.ValidateRequest(request);
         if (workload.Id != request.WorkloadId ||
             workload.Version != request.WorkloadVersion ||
@@ -378,6 +392,8 @@ public static class ArtifactAdmission
         if (routes is null)
             throw new PerformanceContractException("Native-plan evidence must admit every required route with a retained raw-plan digest, bounded cardinality, predicates, finite limit, and materialized-count facts.");
         ValidateIamNativeRoutes(workload, routes);
+        ValidateSecretNativeRoutes(workload, routes);
+        ValidateSecretConcurrency(workload, request, nativePlan.ProviderConcurrency);
         if (routes.Count != workload.RequiredNativeRoutes.Count ||
             !routes.Select(route => route.RouteIdentity).Order(StringComparer.Ordinal).SequenceEqual(workload.RequiredNativeRoutes.Order(StringComparer.Ordinal), StringComparer.Ordinal) ||
             routes.Select(route => route.RouteIdentity).Distinct(StringComparer.Ordinal).Count() != routes.Count ||
@@ -401,6 +417,12 @@ public static class ArtifactAdmission
             if (!File.Exists(rawPlanPath) || ArtifactStore.HashFile(rawPlanPath) != route.RawPlanSha256)
                 throw new PerformanceContractException($"Raw provider-plan evidence is missing or does not match its digest for route {route.RouteIdentity}.");
             ArtifactStore.ValidateRawPlanFile(rawPlanPath);
+            if (string.Equals(workload.Id, SecretCreateReadListWorkload.WorkloadId, StringComparison.Ordinal))
+                SecretRetainedNativePlan.Validate(
+                    request.Provider,
+                    request.Adapter,
+                    route,
+                    File.ReadAllText(rawPlanPath));
         }
         NativePlanEvidenceDocument document;
         try
@@ -438,6 +460,7 @@ public static class ArtifactAdmission
             document.RouteContract != (workload.RequiredNativeRoutes.Count == 0
                 ? "no-native-routes-declared"
                 : "provider-native-routes") ||
+            document.ProviderConcurrency != nativePlan.ProviderConcurrency ||
             document.Routes is null ||
             !document.Routes.SequenceEqual(routes))
             throw new PerformanceContractException("Native-plan evidence file does not match the admitted target, provenance, or structured route evidence.");
@@ -467,6 +490,50 @@ public static class ArtifactAdmission
         if (!routeNamesMatch || !routeFactsMatch)
             throw new PerformanceContractException(
                 "IAM native-plan evidence must contain exactly the five frozen route names and bind physical cardinality 100000, one materialized candidate, and the exact route-specific finite limits.");
+    }
+
+    private static void ValidateSecretNativeRoutes(
+        PerformanceWorkload workload,
+        IReadOnlyList<NativeRouteEvidence> routes)
+    {
+        if (!string.Equals(workload.Id, SecretCreateReadListWorkload.WorkloadId, StringComparison.Ordinal))
+            return;
+
+        var route = routes.Count == 1 && routes[0].RouteIdentity == "list-filtered" ? routes[0] : null;
+        if (route is null ||
+            route.PhysicalCardinality != SecretCreateReadListWorkload.CanonicalSecretCount +
+            SecretCreateReadListWorkload.NoiseSecretCount + 1 ||
+            route.FiniteLimit != SecretCreateReadListWorkload.PageSize ||
+            route.MaterializedCandidateCount != SecretCreateReadListWorkload.PageSize)
+            throw new PerformanceContractException(
+                "Secret native-plan evidence must contain the frozen list-filtered route with physical cardinality 68 and a 16-row bounded page.");
+    }
+
+    private static void ValidateSecretConcurrency(
+        PerformanceWorkload workload,
+        RunRequest request,
+        SecretProviderConcurrencyEvidence? evidence)
+    {
+        if (!string.Equals(workload.Id, SecretCreateReadListWorkload.WorkloadId, StringComparison.Ordinal))
+        {
+            if (evidence is not null)
+                throw new PerformanceContractException("Only the Secret workload may publish Secret provider-concurrency evidence.");
+            return;
+        }
+
+        var expectedSerialized = string.Equals(request.Provider, "sqlite", StringComparison.Ordinal) &&
+                                 string.Equals(request.Adapter, "groundwork-secret-repository", StringComparison.Ordinal);
+        var expectedConnections = expectedSerialized ? 1 : 2;
+        if (evidence is null ||
+            evidence.IndependentClientCount != SecretCreateReadListWorkload.ConcurrentContenders ||
+            evidence.CompletedContenders != SecretCreateReadListWorkload.ConcurrentContenders ||
+            evidence.ProviderCommandStartCount != SecretCreateReadListWorkload.ConcurrentContenders ||
+            evidence.ProviderCommandOverlapObserved == expectedSerialized ||
+            evidence.ProviderCommandsSerializedByDesign != expectedSerialized ||
+            !evidence.EveryContenderIssuedProviderCommands ||
+            evidence.DistinctPhysicalConnectionCount != expectedConnections)
+            throw new PerformanceContractException(
+                "Secret correctness evidence must retain the exact provider-command overlap/serialization, contender-command, and physical-connection proof.");
     }
 
     public static bool SameMachineEnvironment(MachineMetadata first, MachineMetadata second) =>

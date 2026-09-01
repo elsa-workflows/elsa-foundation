@@ -22,7 +22,10 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 /// Schema work never reaches a session observer — <c>ISchemaCoordinator</c> hangs off the connection —
 /// so admission-time DDL is structurally excluded from these counts.
 /// </summary>
-internal sealed class WritePathRoundTripObserver(string provider, bool captureCommands = false) : IProviderCommandObserver, IProviderRoundTripObserver
+internal sealed class WritePathRoundTripObserver(
+    string provider,
+    bool captureCommands = false,
+    Action<ProviderCommandEvent>? commandStarting = null) : IProviderCommandObserver, IProviderRoundTripObserver
 {
     private long count;
     private readonly List<ProviderCommandEvent> commands = [];
@@ -36,6 +39,7 @@ internal sealed class WritePathRoundTripObserver(string provider, bool captureCo
 
     public void Observe(ProviderCommandEvent command)
     {
+        commandStarting?.Invoke(command);
         Interlocked.Increment(ref count);
         if (captureCommands)
             lock (commands)

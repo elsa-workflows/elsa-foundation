@@ -13,14 +13,14 @@ public sealed class IamAdapterAdmissionTests
         string adapter,
         string physicalForm)
     {
-        BenchmarkAdapterAdmission.RequireAdmitted(IamWorkload(), adapter, physicalForm);
+        BenchmarkAdapterAdmission.RequireAdmitted(IamWorkload(), "sqlite", adapter, physicalForm);
     }
 
     [Fact]
     public void Unratified_iam_adapter_form_pair_is_rejected()
     {
         var error = Assert.Throws<PerformanceContractException>(() =>
-            BenchmarkAdapterAdmission.RequireAdmitted(IamWorkload(), "unratified-adapter", "unratified-form"));
+            BenchmarkAdapterAdmission.RequireAdmitted(IamWorkload(), "sqlite", "unratified-adapter", "unratified-form"));
 
         Assert.Contains("iam.adapter-form.ratification-required", error.Message, StringComparison.Ordinal);
     }

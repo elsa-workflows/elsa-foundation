@@ -67,6 +67,20 @@ static async Task<int> CapturePlan(string[] args)
         return 0;
     }
 
+    if (string.Equals(request.WorkloadId, SecretCreateReadListWorkload.WorkloadId, StringComparison.Ordinal))
+    {
+        var secretDigest = await SecretNativePlanCapture.CaptureAsync(
+            request,
+            connectionString,
+            outputDirectory,
+            observed,
+            CancellationToken.None);
+        Console.WriteLine($"native-plan-evidence={request.NativePlanEvidenceReference}");
+        Console.WriteLine($"native-plan-sha256={secretDigest}");
+        Console.WriteLine("native-plan-routes=1");
+        return 0;
+    }
+
     var reference = NativePlanEvidenceStaging.ReferenceFor(request.WorkloadId, request.Provider, request.MeasurementSetId);
     if (!string.Equals(reference, request.NativePlanEvidenceReference, StringComparison.Ordinal))
         throw new PerformanceContractException(
@@ -85,8 +99,11 @@ static async Task<int> CapturePlan(string[] args)
 // ProcessMeasurement then warms and times those same phases without rebuilding their private fixtures.
 static async Task<int> Run(string[] args)
 {
-    var (request, outputDirectory, connectionString) = ParseRun(args, "run");
-    var workload = RequireWorkload(request.WorkloadId);
+    var admitted = SecretRunAdmission.ParseAndResolve(
+        args,
+        "run",
+        ProviderConnections.RequireConnectionString);
+    var (request, outputDirectory, connectionString, workload) = admitted;
     await using var adapter = BenchmarkAdapterRegistry.Create(request, connectionString, outputDirectory);
     var artifact = await ProcessMeasurement.ExecuteAsync(
         workload, request, BenchmarkProtocol.Acceptance, adapter, outputDirectory, CancellationToken.None);
@@ -99,9 +116,11 @@ static async Task<int> Run(string[] args)
 // the workload-owned timed phases after this same baseline has passed.
 static async Task<int> VerifyCorrectness(string[] args)
 {
-    var (request, outputDirectory, connectionString) = ParseRun(args, "verify-correctness");
-    var workload = RequireWorkload(request.WorkloadId);
-    ArtifactAdmission.ValidateRequest(workload, request);
+    var admitted = SecretRunAdmission.ParseAndResolve(
+        args,
+        "verify-correctness",
+        ProviderConnections.RequireConnectionString);
+    var (request, outputDirectory, connectionString, workload) = admitted;
 
     await using var adapter = BenchmarkAdapterRegistry.Create(request, connectionString, outputDirectory);
     await adapter.PrepareAsync(CancellationToken.None);
@@ -113,22 +132,4 @@ static async Task<int> VerifyCorrectness(string[] args)
     Console.WriteLine($"round-trips={adapter.RoundTripObserver?.Snapshot()}");
     Console.WriteLine($"instrumentation={adapter.RoundTripObserver?.Instrumentation}");
     return 0;
-}
-
-// The catalog is loaded from the frozen spec directory and keyed by id; there is no single-workload
-// accessor, and a missing id must fail here rather than surfacing as a KeyNotFoundException three frames
-// deeper inside admission.
-static PerformanceWorkload RequireWorkload(string workloadId)
-{
-    var catalog = WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot());
-    return catalog.Workloads.TryGetValue(workloadId, out var workload)
-        ? workload
-        : throw new PerformanceContractException($"Workload '{workloadId}' is not in the frozen catalog.");
-}
-
-static (RunRequest Request, string OutputDirectory, string ConnectionString) ParseRun(string[] args, string command)
-{
-    var request = RunRequestWire.Parse(HostArguments.Require(args, command, "--request"));
-    var outputDirectory = HostArguments.Require(args, command, "--out");
-    return (request, outputDirectory, ProviderConnections.RequireConnectionString(request.Provider));
 }

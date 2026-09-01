@@ -5,9 +5,9 @@ using System.Text.Json;
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 
 /// <summary>
-/// Benchmark-owned deterministic contract vectors for eleven Spec 094 workloads. These definitions
-/// describe the inputs, operation names, and expected observations that future real EF and Groundwork
-/// adapter runners must execute; they are not public-operation runners themselves.
+/// Benchmark-owned deterministic contract vectors for twelve Spec 094 workloads. These definitions
+/// describe the inputs, operation names, and expected observations consumed by the adapter runners;
+/// they are not public-operation runners themselves.
 /// </summary>
 public static class ReproducibleWorkloadScenarioCatalog
 {
@@ -49,7 +49,7 @@ public static class ReproducibleWorkloadScenarioCatalog
             ["queue-drain"] = new("15f2d5f9dc8d5814a1613156b7c686e59a150a35bd7e51787a145b6d7230d5e2", "7db639fdbfddc02973a7275d7c0e8835872b62449ca160e97e8086c0ca46eba4"),
             ["recovery-scan"] = new("36277c9b9c525d4cbb611c1a7e83c96a02eb3434fb85b6657ce2ede9b8a7a5e3", "3c7cae42737a2a995968852a862f769070a016b4e4a0289c7a9a5e7205e9eabf"),
             ["recurring-schedule-selection"] = new("384bcbf0fd72f306b63d78b71a8130c4e2e02de146cbd45d066ef581f4d78d17", "9728bad4f576c7e50c3f6210994524ffb1d77761c5258a71f27fe1cf1793cec4"),
-            ["secret-create-read-list"] = new("339a6adc9ba6c34e85ce43eafd3e0b8b7b74f7ccbb7d52bd34efe1fbe394014c", "615f7bbd8e160dd34d38180d5def0e99d0b4225822e6ebee5ea31ed21bbabcdb"),
+            ["secret-create-read-list"] = new("7f64dd6942e976e2cea5ad84db1704f4b6239380136a93d99a6480f5909021ce", "394ff58bd146744fe30f4abd3a8529ab1287129787d40e188ffc0c58038e8783"),
             ["trigger-binding-stimulus-lookup"] = new("4f2515dfa9549935712019f178283f79e6ac1cc9428e810524e733cfdea4cabc", "00b6651345cdb8b6724a205b094c712d383c7a19ef87dcce6fdf026bc7dd7c8a")
         };
 
@@ -63,7 +63,6 @@ public static class ReproducibleWorkloadScenarioCatalog
         reason = workloadId switch
         {
             DiagnosticsWorkloadId => DiagnosticsBlockedReasonCode,
-            BlockedWorkloadId => BlockedReasonCode,
             _ => ""
         };
         return reason.Length > 0;
@@ -372,6 +371,40 @@ public static class ReproducibleWorkloadScenarioCatalog
                 ("structuredLogReplayCount", Int(parameters, "queryLimit")),
                 ("structuredLogRetainedCount", Int(parameters, "retainedRecordsPerStream")),
                 ("trimmedRecordsPerStream", Int(parameters, "retentionOverflowRecords"))));
+
+        yield return Scenario(
+            "secret-create-read-list",
+            "secret-create-read-list-baseline",
+            "spec094-secret-create-read-list-v1.1",
+            [
+                ("canonicalSecretCount", 3),
+                ("concurrentContenders", 2),
+                ("noiseSecretCount", 64),
+                ("pageSize", 16),
+                ("tenantCount", 2),
+                ("timedSetup", "excluded")
+            ],
+            [
+                "create-canonical-secrets",
+                "create-noise-secrets",
+                "concurrent-create-same-secret",
+                "read-create-winner-by-identity",
+                "list-secrets-bounded-first-page",
+                "list-secrets-bounded-next-offset-page"
+            ],
+            _ => Observations(
+                ("concurrent-create-success-count", "1"),
+                ("create-winner-id", "secret-contender-winner"),
+                ("cross-tenant-result-count", "0"),
+                ("first-page-count", "16"),
+                ("first-page-identity-digest", "0963a3404a015354592a95e12ba7bd0e33fcb9f646d70cc49d9056fc1dc9a742"),
+                ("next-page-count", "16"),
+                ("next-page-identity-digest", "33105b0ab94be8628133c142f813d01bab7b0392cd4ca35f22b651f38529acce"),
+                ("read-winner-id", "secret-contender-winner"),
+                ("read-winner-value", "secret-winner-value"),
+                ("read-winner-version", "1"),
+                ("secondary-tenant-result-count", "1"),
+                ("total-count", "68")));
     }
 
     private static ReproducibleWorkloadScenario Scenario(

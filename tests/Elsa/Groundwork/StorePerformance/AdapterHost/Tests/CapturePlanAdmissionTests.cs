@@ -1,5 +1,6 @@
 using Elsa.Groundwork.StorePerformance.AdapterHost;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using Xunit;
 
 namespace Elsa.Groundwork.StorePerformance.AdapterHost.Tests;
@@ -57,6 +58,69 @@ public sealed class CapturePlanAdmissionTests
         Assert.Contains("checkpoint-commit.sqlite.set.native-plan.json", exception.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("sqlserver", "real-sqlserver-container")]
+    [InlineData("postgresql", "real-postgresql-container")]
+    [InlineData("mongodb", "transaction-capable-replica-set")]
+    public void Capture_plan_rejects_non_sqlite_ef_secret_before_provider_or_artifact_access(
+        string provider,
+        string topology)
+    {
+        var output = Path.Combine(Path.GetTempPath(), $"capture-plan-secret-rejected-{Guid.NewGuid():N}");
+
+        try
+        {
+            var exception = Assert.Throws<PerformanceContractException>(() =>
+                CapturePlanAdmission.Ensure(SecretRequest(provider, topology)));
+
+            Assert.Contains(BenchmarkAdapterAdmission.SecretEfProviderRequiredReason, exception.Message, StringComparison.Ordinal);
+            Assert.False(Directory.Exists(output));
+        }
+        finally
+        {
+            if (Directory.Exists(output))
+                Directory.Delete(output, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("run", "sqlserver", "real-sqlserver-container")]
+    [InlineData("run", "postgresql", "real-postgresql-container")]
+    [InlineData("run", "mongodb", "transaction-capable-replica-set")]
+    [InlineData("verify-correctness", "sqlserver", "real-sqlserver-container")]
+    [InlineData("verify-correctness", "postgresql", "real-postgresql-container")]
+    [InlineData("verify-correctness", "mongodb", "transaction-capable-replica-set")]
+    public void Direct_commands_reject_non_sqlite_ef_secret_before_connection_environment_resolution(
+        string command,
+        string provider,
+        string topology)
+    {
+        var request = SecretRequest(provider, topology);
+        var connectionEnvironmentRead = false;
+        var args = new[]
+        {
+            command,
+            "--request",
+            RunRequestWire.Serialize(request),
+            "--out",
+            Path.Combine(Path.GetTempPath(), $"secret-direct-rejected-{Guid.NewGuid():N}")
+        };
+
+        var exception = Assert.Throws<PerformanceContractException>(() =>
+            SecretRunAdmission.ParseAndResolve(
+                args,
+                command,
+                _ =>
+                {
+                    connectionEnvironmentRead = true;
+                    throw new InvalidOperationException("The connection environment must not be read.");
+                }));
+
+        Assert.Contains(BenchmarkAdapterAdmission.SecretEfProviderRequiredReason, exception.Message, StringComparison.Ordinal);
+        Assert.False(connectionEnvironmentRead);
+        Assert.False(Directory.Exists(args[^1]));
+    }
+
     private static RunRequest Request() => new(
         ComparisonCohortId: "cohort",
         MeasurementSetId: "set",
@@ -87,4 +151,38 @@ public sealed class CapturePlanAdmissionTests
         NativePlanContentSha256: new string('e', 64),
         ProcessKind: ProcessKind.Measured,
         ProcessIndex: 0);
+
+    private static RunRequest SecretRequest(string provider, string topology) => new(
+        ComparisonCohortId: "secret-cohort",
+        MeasurementSetId: "secret-set",
+        WorkloadId: SecretCreateReadListWorkload.WorkloadId,
+        WorkloadVersion: SecretCreateReadListWorkload.Version,
+        Provider: provider,
+        ProviderVersion: "1.0.0",
+        ProviderTopology: topology,
+        ProviderConfiguration: new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["mode"] = "candidate"
+        },
+        Adapter: BenchmarkAdapterRegistry.EfSecretRepositoryAdapterId,
+        PhysicalForm: EfSecretRepositoryAdapter.PhysicalForm,
+        Scale: "small",
+        CommitSha: new string('a', 40),
+        HarnessAssemblySha256: new string('b', 64),
+        CompositionFingerprint: new string('c', 64),
+        HostFingerprintSha256: new string('d', 64),
+        PackageVersions: new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Groundwork.Store"] = "0.4.0-preview.3"
+        },
+        Seed: SecretCreateReadListWorkload.Seed,
+        InputFingerprintSha256: SecretCreateReadListWorkload.ExpectedInputFingerprint,
+        NativePlanIdentity: "secret-ef-plan",
+        NativePlanEvidenceReference: NativePlanEvidenceStaging.ReferenceFor(
+            SecretCreateReadListWorkload.WorkloadId,
+            provider,
+            "secret-set"),
+        NativePlanContentSha256: new string('e', 64),
+        ProcessKind: ProcessKind.Measured,
+        ProcessIndex: 1);
 }

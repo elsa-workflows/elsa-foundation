@@ -13,6 +13,8 @@ public sealed class WorkloadCatalog
 {
     private static readonly string[] RequiredFiles =
         ["runtime.json", "iam-secrets.json", "distributed-runtime.json", "diagnostics.json"];
+    private static readonly string[] SuccessorFiles =
+        ["secret-create-read-list-v1.1.json"];
     private static readonly string[] Providers = ["sqlite", "sqlserver", "postgresql", "mongodb"];
     private static readonly Regex Slug = new("^[a-z0-9]+(?:-[a-z0-9]+)*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex Sha256 = new("^[0-9a-f]{64}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -34,33 +36,32 @@ public sealed class WorkloadCatalog
             throw new WorkloadContractException($"The required Spec 094 workload directory was not found: {workloadDirectory}");
 
         var discovered = Directory.EnumerateFiles(workloadDirectory, "*.json").Select(Path.GetFileName).Order(StringComparer.Ordinal).ToArray();
-        if (!discovered.SequenceEqual(RequiredFiles.Order(StringComparer.Ordinal), StringComparer.Ordinal))
+        var expectedFiles = RequiredFiles.Concat(SuccessorFiles).Order(StringComparer.Ordinal).ToArray();
+        if (!discovered.SequenceEqual(expectedFiles, StringComparer.Ordinal))
             throw new WorkloadContractException(
-                "The workload directory must contain exactly runtime.json, iam-secrets.json, distributed-runtime.json, and diagnostics.json.");
+                "The workload directory must contain exactly the four historical workload files and the reviewed Secret v1.1 successor file.");
 
         var workloads = new Dictionary<string, PerformanceWorkload>(StringComparer.Ordinal);
         foreach (var file in RequiredFiles)
         {
-            var path = Path.Combine(workloadDirectory, file);
-            var source = File.ReadAllBytes(path);
-            using var document = JsonDocument.Parse(source);
-            var root = document.RootElement;
-            RequireObject(root, file);
-            RequireClosedProperties(root, ["schemaVersion", "workloads"], file);
-            if (RequireInt(root, "schemaVersion", file) != 1)
-                throw new WorkloadContractException($"{file} must have schemaVersion 1.");
-            var entries = RequireArray(root, "workloads", file);
-            if (entries.GetArrayLength() == 0)
-                throw new WorkloadContractException($"{file} must contain at least one workload.");
-            foreach (var value in entries.EnumerateArray())
-            {
-                var workload = ParseWorkload(value, file);
+            foreach (var workload in ReadFile(workloadDirectory, file, expectedSourceDigests))
                 if (!workloads.TryAdd(workload.Id, workload))
                     throw new WorkloadContractException($"Duplicate workload id '{workload.Id}'.");
-            }
-            if (!expectedSourceDigests.TryGetValue(file, out var expectedSourceDigest) ||
-                !string.Equals(Convert.ToHexString(SHA256.HashData(source)).ToLowerInvariant(), expectedSourceDigest, StringComparison.Ordinal))
-                throw new WorkloadContractException($"{file} does not match the frozen Spec 094 #646 source contract.");
+        }
+
+        if (!workloads.TryGetValue(ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId, out var historicalSecret))
+            throw new WorkloadContractException("The immutable iam-secrets.json source does not contain the historical Secret workload.");
+        ValidateHistoricalSecretContract(historicalSecret);
+
+        var successors = ReadFile(workloadDirectory, SuccessorFiles.Single(), expectedSourceDigests);
+        if (successors.Count != 1)
+            throw new WorkloadContractException("The Secret v1.1 successor file must contain exactly one workload.");
+        foreach (var workload in successors)
+        {
+            if (!string.Equals(workload.Id, ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId, StringComparison.Ordinal) ||
+                workloads.ContainsKey(workload.Id) is false)
+                throw new WorkloadContractException("The Secret v1.1 successor file must replace the historical Secret workload by its exact identifier.");
+            workloads[workload.Id] = workload;
         }
 
         if (workloads.Count != Expected.Count || !workloads.Keys.Order(StringComparer.Ordinal).SequenceEqual(Expected.Keys.Order(StringComparer.Ordinal), StringComparer.Ordinal))
@@ -68,6 +69,93 @@ public sealed class WorkloadCatalog
         foreach (var (id, expected) in Expected)
             ValidateFrozenContract(workloads[id], expected);
         return new WorkloadCatalog(workloads);
+    }
+
+    private static IReadOnlyList<PerformanceWorkload> ReadFile(
+        string workloadDirectory,
+        string file,
+        IReadOnlyDictionary<string, string> expectedSourceDigests)
+    {
+        var path = Path.Combine(workloadDirectory, file);
+        var source = File.ReadAllBytes(path);
+        using var document = JsonDocument.Parse(source);
+        var root = document.RootElement;
+        RequireObject(root, file);
+        RequireClosedProperties(root, ["schemaVersion", "workloads"], file);
+        if (RequireInt(root, "schemaVersion", file) != 1)
+            throw new WorkloadContractException($"{file} must have schemaVersion 1.");
+        var entries = RequireArray(root, "workloads", file);
+        if (entries.GetArrayLength() == 0)
+            throw new WorkloadContractException($"{file} must contain at least one workload.");
+        var workloads = entries.EnumerateArray().Select(value => ParseWorkload(value, file)).ToArray();
+        if (!expectedSourceDigests.TryGetValue(file, out var expectedSourceDigest) ||
+            !string.Equals(Convert.ToHexString(SHA256.HashData(source)).ToLowerInvariant(), expectedSourceDigest, StringComparison.Ordinal))
+            throw new WorkloadContractException($"{file} does not match the frozen Spec 094 #646 source contract.");
+        return workloads;
+    }
+
+    private static void ValidateHistoricalSecretContract(PerformanceWorkload actual)
+    {
+        var expected = Expected[ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId];
+        var historicalParameters = new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            ["canonicalSecretCount"] = 3,
+            ["concurrentContenders"] = 2,
+            ["noiseSecretCount"] = 64,
+            ["pageSize"] = 16,
+            ["tenantCount"] = 2
+        };
+        var historicalProviderEvidence = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["sqlite"] = "file-backed-distinct-connections",
+            ["sqlserver"] = "real-sqlserver-container",
+            ["postgresql"] = "real-postgresql-container",
+            ["mongodb"] = "transaction-capable-replica-set"
+        };
+        var historicalInvariants = new[]
+        {
+            "exactly one concurrent create succeeds for the tenant-local identity",
+            "the point read returns the create winner's exact value and version",
+            "the bounded list returns deterministic offset pages and a total count without cross-tenant disclosure",
+            "the bounded list operation captures the declared provider-native route evidence"
+        };
+        var historicalArtifactRetention = new[]
+        {
+            "workload id/version",
+            "commit SHA",
+            "provider package versions",
+            "composition fingerprint",
+            "input fingerprint",
+            "result digest",
+            "native route evidence",
+            "sanitized topology"
+        };
+        if (actual.Id != ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId ||
+            actual.Version != ReproducibleWorkloadScenarioCatalog.BlockedVersion ||
+            actual.ScenarioId != SecretCreateReadListWorkload.ScenarioId ||
+            actual.Owner != "#645" ||
+            actual.PublicOperation != "Create one tenant-scoped secret concurrently, read the accepted value and version by its public identity, and list a deterministic bounded page through the public secrets repository." ||
+            actual.Input.Seed != SecretCreateReadListWorkload.HistoricalSeed ||
+            actual.Input.FingerprintSha256 != ReproducibleWorkloadScenarioCatalog.BlockedInputFingerprint ||
+            actual.Correctness.ResultDigestSha256 != ReproducibleWorkloadScenarioCatalog.BlockedResultDigest ||
+            !SemanticInputMatches(actual.Input.Values, historicalParameters) ||
+            !actual.CoverageRows.SequenceEqual(expected.CoverageRows, StringComparer.Ordinal) ||
+            !actual.OperationSequence.SequenceEqual(SecretCreateReadListWorkload.OperationSequence, StringComparer.Ordinal) ||
+            !actual.RequiredProviders.SequenceEqual(Providers, StringComparer.Ordinal) ||
+            !actual.RequiredNativeRoutes.SequenceEqual(["list-filtered"], StringComparer.Ordinal) ||
+            !actual.RequiredProviderEvidence.OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                .SequenceEqual(historicalProviderEvidence.OrderBy(pair => pair.Key, StringComparer.Ordinal)) ||
+            !actual.Correctness.Invariants.SequenceEqual(historicalInvariants, StringComparer.Ordinal) ||
+            actual.Correctness.TimingGate != "This handoff produces no timing. Issue #646 must first execute the matching correctness baseline and same-provider comparison before timing is valid." ||
+            actual.EfContractBaseline != new EfContractBaseline(
+                "external-ef-comparison-required",
+                "not-executed",
+                "#646",
+                "External comparison requirement only; it is not live EF execution, equality evidence, or a repository runtime dependency.") ||
+            !actual.PhysicalFormsFor646.SequenceEqual(expected.PhysicalForms, StringComparer.Ordinal) ||
+            !actual.ArtifactRetention.SequenceEqual(historicalArtifactRetention, StringComparer.Ordinal) ||
+            actual.BenchmarkAdmission != new BenchmarkAdmission("blocked", ReproducibleWorkloadScenarioCatalog.BlockedReasonCode))
+            throw new WorkloadContractException("The historical Secret v1.0 contract has been modified.");
     }
 
     private static PerformanceWorkload ParseWorkload(JsonElement value, string source)
@@ -324,6 +412,7 @@ public sealed class WorkloadCatalog
     {
         ["runtime.json"] = "1b81a63d8a2acfe5ceea9e9a7e458de21c0fae8069506be5e94258198eff7d41",
         ["iam-secrets.json"] = "b5681de1cb1cf5fa9e671770df0cc78f026103293889d86d0c9ea63fcc4ee364",
+        ["secret-create-read-list-v1.1.json"] = "d9359af187da4f8a1568896a7ecae8e97215eb58f68d0e185d677a94833cc240",
         ["distributed-runtime.json"] = "e03a5db9ddbdbfe4c854632fadc00b2674546d0925e65b0af198ada75910d837",
         ["diagnostics.json"] = "fb2c8de14b3ae6c5620c21b9720aa9e544ed477cc88e62f70137db58d500286a"
     };

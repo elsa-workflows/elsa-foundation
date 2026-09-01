@@ -57,7 +57,14 @@ public sealed class GroundworkSecretRepository(
         if (request.Search is not null)
             EnsureSubstringSearchCatalogBound(session);
 
-        var result = session.Query(ListQuery(tenantId, request));
+        // The status-filtered route is the one bounded native-plan route admitted by the Secrets
+        // contract.  Bind its declared physical index here so provider explain assertions observe
+        // the exact public repository query (the ordinary unfiltered route remains provider-neutral).
+        var query = ListQuery(tenantId, request);
+        var options = request.Status is not null || request.ActiveOnly
+            ? session.Unit.CreateQueryRenderOptions(SecretsGroundworkStorageSchema.FilteredListIndex)
+            : null;
+        var result = session.Query(query, options);
         var items = result.Rows.Select(row => Map(row, tenantId)).ToArray();
         return ValueTask.FromResult(new SecretRepositoryPage(
             items,

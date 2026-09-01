@@ -159,20 +159,21 @@ public sealed class ComparisonIntegrityTests
     }
 
     [Fact]
-    public void Comparison_rejects_forged_secret_artifacts_even_when_the_measurement_sets_are_complete()
+    public void Comparison_rejects_blocked_diagnostics_artifacts_even_when_the_measurement_sets_are_complete()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"], workloadId: ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"], workloadId: ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId);
+        const string physicalForm = "specialized-diagnostic-record-streams-with-shared-document-catalogs";
+        fixture.WriteTarget("ef", physicalForm, operations: ["read"], workloadId: ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId);
+        fixture.WriteTarget("groundwork", physicalForm, operations: ["read"], workloadId: ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId);
         fixture.Bind();
 
-        var comparison = fixture.Compare();
+        var comparison = fixture.Compare($"sqlite/ef/{physicalForm}", $"sqlite/groundwork/{physicalForm}");
         var gate = GateEvaluator.Evaluate(GatePolicy.DefaultFor(GateClass.OrdinaryStore), comparison);
 
         Assert.False(comparison.Complete);
-        Assert.Contains(ReproducibleWorkloadScenarioCatalog.BlockedReasonCode, comparison.BlockReason);
+        Assert.Contains(ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode, comparison.BlockReason);
         Assert.Equal(PerformanceVerdict.Blocked, gate.Verdict);
-        Assert.Contains(ReproducibleWorkloadScenarioCatalog.BlockedReasonCode, gate.Reason);
+        Assert.Contains(ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode, gate.Reason);
     }
 
     [Fact]

@@ -136,6 +136,8 @@ public sealed class GroundworkPerformanceHandoffTests
         var workloads = documents
             .SelectMany(document => document["workloads"]!.AsArray())
             .Select(workload => workload!.AsObject())
+            .GroupBy(workload => workload["id"]!.GetValue<string>(), StringComparer.Ordinal)
+            .Select(group => group.OrderByDescending(workload => workload["version"]!.GetValue<string>(), StringComparer.Ordinal).First())
             .ToDictionary(workload => workload["id"]!.GetValue<string>(), StringComparer.Ordinal);
 
         Assert.Equal(ExpectedNativeRoutes.Keys.Order(StringComparer.Ordinal), workloads.Keys.Order(StringComparer.Ordinal));
@@ -159,7 +161,6 @@ public sealed class GroundworkPerformanceHandoffTests
             var expectedBlockedReason = id switch
             {
                 "diagnostics-durable-history" => "gate.diagnostics.absolute-budget-required",
-                "secret-create-read-list" => "comparator.secret.real-ef-required",
                 _ => null
             };
             Assert.Equal(
@@ -278,7 +279,8 @@ public sealed class GroundworkPerformanceHandoffTests
         Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "runtime.json"),
         Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "distributed-runtime.json"),
         Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "diagnostics.json"),
-        IdentityWorkloadPath
+        IdentityWorkloadPath,
+        Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "secret-create-read-list-v1.1.json")
     ];
 
     private static string RepoRoot

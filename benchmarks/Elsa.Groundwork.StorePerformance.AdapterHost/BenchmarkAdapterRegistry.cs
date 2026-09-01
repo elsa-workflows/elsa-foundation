@@ -11,6 +11,8 @@ internal static class BenchmarkAdapterRegistry
 {
     internal const string GroundworkV2Adapter = "groundwork-v2";
     internal const string GroundworkAspNetCoreIdentityAdapter = "groundwork-aspnetcore-identity";
+    internal const string EfSecretRepositoryAdapterId = "ef-secret-repository";
+    internal const string GroundworkSecretRepositoryAdapterId = "groundwork-secret-repository";
     internal const string WorkloadVersion = "1.1.0";
     internal const string CheckpointPhysicalForm = "checkpoint-unit-of-work-with-linked-outbox";
 
@@ -43,6 +45,10 @@ internal static class BenchmarkAdapterRegistry
                 new DistributedCommandSendLeaseAckAdapter(request, connectionString, outputDirectory),
             { WorkloadId: RuntimeDueTimerSelectionWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: GroundworkV2Adapter, PhysicalForm: DueTimerSelectionAdapter.PhysicalForm } =>
                 new DueTimerSelectionAdapter(request, connectionString, outputDirectory),
+            { WorkloadId: SecretCreateReadListWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: EfSecretRepositoryAdapterId, PhysicalForm: EfSecretRepositoryAdapter.PhysicalForm } =>
+                new EfSecretRepositoryAdapter(request, connectionString, outputDirectory),
+            { WorkloadId: SecretCreateReadListWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: GroundworkSecretRepositoryAdapterId, PhysicalForm: GroundworkSecretRepositoryAdapter.PhysicalForm } =>
+                new GroundworkSecretRepositoryAdapter(request, connectionString, outputDirectory),
             _ => throw new PerformanceContractException(
                 $"No Groundwork adapter is registered for exact workload/adapter/physical form '{request.WorkloadId}/{request.Adapter}/{request.PhysicalForm}'.")
         };

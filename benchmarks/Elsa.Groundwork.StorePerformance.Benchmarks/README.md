@@ -1,12 +1,17 @@
 # Groundwork store performance harness (#646)
 
 This is the adapter-independent foundation for the thirteen reviewed Spec 094 store workloads. It has no
-provider, EF, Groundwork, connection, or secret dependency. Adapter leaves must implement
+provider, EF, Groundwork, or connection dependency; Secret workload code uses only the public Secret
+contracts. Adapter leaves must implement
 `IBenchmarkAdapter` in their own projects and use `ProcessMeasurement` to write `ProcessArtifact` files.
 `workload-vectors` prints deterministic contract definitions for future adapters; it does not execute the
 named public operations. Every workload carries an explicit ready/blocked benchmark-admission status. The
-Secret workload remains blocked until a real EF comparator exists; diagnostics remains blocked until
-numeric absolute budgets and an executable absolute-budget gate are independently reviewed.
+executable Secret v1.1 successor is driven by the sibling adapter host: SQLite has a real EF oracle and a
+Groundwork public-repository comparator, while the historical v1.0 hashes remain retained as immutable
+blocked history. Its executable source is the separate
+specs/094-harden-groundwork-stores/workloads/secret-create-read-list-v1.1.json successor file;
+iam-secrets.json remains byte-for-byte historical input. Diagnostics remains blocked until numeric
+absolute budgets and an executable absolute-budget gate are independently reviewed.
 
 The thirteenth workload, `diagnostics-durable-history`, is the program-owner-ratified 2026-07-25
 extension. It keeps Structured Logs and OpenTelemetry as separate suboperations under one reproducible

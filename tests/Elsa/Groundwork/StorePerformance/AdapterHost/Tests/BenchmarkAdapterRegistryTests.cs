@@ -91,6 +91,28 @@ public sealed class BenchmarkAdapterRegistryTests
     }
 
     [Fact]
+    public async Task Dispatches_secret_workload_to_both_exact_comparator_adapters()
+    {
+        await using var ef = BenchmarkAdapterRegistry.Create(
+            Request(
+                SecretCreateReadListWorkload.WorkloadId,
+                EfSecretRepositoryAdapter.PhysicalForm,
+                adapter: BenchmarkAdapterRegistry.EfSecretRepositoryAdapterId),
+            "unused",
+            "unused");
+        await using var groundwork = BenchmarkAdapterRegistry.Create(
+            Request(
+                SecretCreateReadListWorkload.WorkloadId,
+                GroundworkSecretRepositoryAdapter.PhysicalForm,
+                adapter: BenchmarkAdapterRegistry.GroundworkSecretRepositoryAdapterId),
+            "unused",
+            "unused");
+
+        Assert.IsType<EfSecretRepositoryAdapter>(ef);
+        Assert.IsType<GroundworkSecretRepositoryAdapter>(groundwork);
+    }
+
+    [Fact]
     public async Task Matrix_admission_dispatches_iam_to_the_ratified_identity_adapter()
     {
         var workload = WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()).Workloads["iam-normalized-lookup-update"];
@@ -361,6 +383,9 @@ public sealed class BenchmarkAdapterRegistryTests
     [InlineData("iam-normalized-lookup-update", "shared-documents-with-linked-index-tables", "groundwork-v2")]
     [InlineData("iam-normalized-lookup-update", "entity-type-specific-physical-tables-current-identity-shape", "other-adapter")]
     [InlineData("iam-normalized-lookup-update", "entity-type-specific-physical-tables-current-identity-shape", "groundwork-v2", "9.9.9")]
+    [InlineData("secret-create-read-list", "entity-type-specific-physical-tables", "groundwork-v2")]
+    [InlineData("secret-create-read-list", "entity-type-specific-physical-tables", "other-adapter")]
+    [InlineData("secret-create-read-list", "entity-type-specific-physical-tables", "ef-secret-repository", "9.9.9")]
     [InlineData("placement-takeover", "shared-documents-with-linked-index-tables", "groundwork-v2")]
     [InlineData("placement-takeover", "dedicated-placement-lease-documents", "other-adapter")]
     [InlineData("placement-takeover", "dedicated-placement-lease-documents", "groundwork-v2", "9.9.9")]

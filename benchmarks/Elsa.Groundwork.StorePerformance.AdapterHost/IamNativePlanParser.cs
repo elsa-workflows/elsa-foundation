@@ -19,6 +19,10 @@ internal static class IamNativePlanParser
         @"\bSEARCH\b[^\r\n]*\bUSING\s+(?:COVERING\s+)?INDEX\s+[\x22'`\[]?(?<index>[^\s\x22'`\]()]+)[\x22'`\]]?",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
+    private static readonly Regex SqliteScan = new(
+        @"\bSCAN\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     private static readonly Regex UnsafeXmlName = new(
         "(?i)(password|pwd|credential|connection|string|secret|account[_-]?key|access[_-]?key|token|server|host|endpoint|data[_-]?source|database|initial[_-]?catalog|port|user[_-]?id|uid)",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
@@ -39,6 +43,56 @@ internal static class IamNativePlanParser
             _ => throw new PerformanceContractException($"IAM native-plan parsing does not support provider '{provider}'.")
         };
     }
+
+    /// <summary>
+    /// Parses the Secret list route. A total-count page is deliberately one public repository query,
+    /// but its provider plan can contain several branches (for example, one bounded page branch and
+    /// one count branch) plus an include lookup for versions. The route table must expose one physical
+    /// index across its branches; requiring one textual SEARCH would incorrectly reject that real shape.
+    /// Every physical SCAN is rejected even when SQLite reports only an alias. Iteration over the two
+    /// named, materialized Groundwork result CTEs is not a physical-table scan and is the sole exception.
+    /// </summary>
+    public static ParsedPlan ParseSecret(string provider, string rawPlan)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(provider);
+        ArgumentNullException.ThrowIfNull(rawPlan);
+        if (!string.Equals(provider, "sqlite", StringComparison.Ordinal))
+            return Parse(provider, rawPlan);
+
+        var scanLines = rawPlan
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(line => SqliteScan.IsMatch(line) && !IsGroundworkMaterializedResultScan(line))
+            .Take(3)
+            .ToArray();
+        if (scanLines.Length != 0)
+            throw new PerformanceContractException(
+                $"Secret SQLite native plan contains a SCAN operation; aliases and include branches are not exempt: {string.Join(" | ", scanLines)}");
+
+        var matches = SqliteIndexSearch.Matches(rawPlan)
+            // The public Secret route materializes versions through EF's split include. That
+            // child lookup has its own primary-key index; it is not the list route's access path.
+            // Retain only the route index while still parsing the exact observed SQL plan.
+            .Where(match => !match.Groups["index"].Value.Contains("SecretVersion", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (matches.Length == 0)
+            throw new PerformanceContractException(
+                "Secret SQLite native plan must contain an index SEARCH operation; scans are rejected.");
+        var indexes = matches
+            .Select(match => match.Groups["index"].Value.Trim('"', '`', '[', ']'))
+            .Where(index => !string.IsNullOrWhiteSpace(index))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (indexes.Length != 1)
+            throw new PerformanceContractException(
+                "Secret SQLite native plan must use exactly one physical index across its bounded page and total-count branches.");
+        return new ParsedPlan("sqlite-explain-query-plan", indexes[0], "index-search", rawPlan);
+    }
+
+    private static bool IsGroundworkMaterializedResultScan(string line) =>
+        Regex.IsMatch(
+            line,
+            @"\bSCAN\s+__(?:groundwork_total|groundwork_page)\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     /// <summary>
     /// Removes only connection-bearing metadata that a provider may include in its native artifact.
