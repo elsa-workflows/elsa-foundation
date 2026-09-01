@@ -66,6 +66,26 @@ internal sealed class DesignGroundworkTestPersistence : IGroundworkStorageSessio
                 WorkflowsDesignStorageManifest.WorkflowDefinitionCollection));
     }
 
+    public void SeedDefinitions(IReadOnlyCollection<WorkflowDefinition> definitions)
+    {
+        var unitId = WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind;
+        var scope = new StorageScope(DesignGroundworkTestAccess.DefaultScopeValue);
+        var values = definitions.Select(definition =>
+        {
+            EnsureTimestamps(definition);
+            return GroundworkDesignStorage.Values(
+                unitId,
+                definition,
+                GroundworkDesignDocumentSerialization.Create(new FakePayloadSerializer()),
+                WorkflowsDesignStorageManifest.WorkflowDefinitionCollection);
+        }).ToArray();
+
+        using var unitOfWork = BeginUnitOfWork(StorageAccess.Scoped(scope), BatchWriteOptions.Exact, [unitId]);
+        foreach (var value in values)
+            unitOfWork.Stage(RowWrite.Insert(Unit(unitId), value, WriteOptions.Unconditional));
+        unitOfWork.Commit();
+    }
+
     public void SeedVersion(WorkflowDefinitionVersion version)
     {
         EnsureTimestamps(version);

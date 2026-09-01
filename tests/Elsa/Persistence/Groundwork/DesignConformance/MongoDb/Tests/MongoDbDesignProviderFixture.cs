@@ -33,9 +33,12 @@ public sealed class MongoDbDesignProviderFixture : IAsyncLifetime
     public string? SkipReason { get; private set; }
 
     /// <summary>The replica-set connection string every design fixture shares; databases isolate them.</summary>
-    public string ConnectionString => new MongoUrlBuilder(_container.GetConnectionString())
+    public string ConnectionString => BuildConnectionString(_container.GetConnectionString());
+
+    internal static string BuildConnectionString(string connectionString) => new MongoUrlBuilder(connectionString)
     {
-        ReplicaSetName = ReplicaSetName
+        ReplicaSetName = ReplicaSetName,
+        AuthenticationSource = "admin"
     }.ToString();
 
     /// <summary>
@@ -124,7 +127,10 @@ public sealed class MongoDbStandaloneTopologyFixture : IAsyncLifetime
     public string? SkipReason { get; private set; }
 
     /// <summary>A standalone connection string with no replica-set name configured on its URI.</summary>
-    public string ConnectionString => _container.GetConnectionString();
+    public string ConnectionString => new MongoUrlBuilder(_container.GetConnectionString())
+    {
+        AuthenticationSource = "admin"
+    }.ToString();
 
     /// <summary>Mints a fresh, uniquely-named database that admission must leave absent or empty.</summary>
     public string CreateDesignDatabaseName() => $"elsa_design_{Guid.NewGuid():N}";
