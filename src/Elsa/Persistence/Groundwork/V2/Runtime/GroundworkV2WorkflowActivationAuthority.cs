@@ -135,6 +135,14 @@ public sealed class GroundworkV2WorkflowActivationAuthority : IWorkflowActivatio
         {
             report = await transaction.Inner.CommitWithOutcomesAsync(cancellationToken);
         }
+        catch (BatchWriteException exception) when (IsRetryableConflict(exception))
+        {
+            // Exact Groundwork batches throw for modeled row failures instead of returning a failed
+            // report. Convert only CAS/unique races into the retry path; all other failures retain
+            // their original exception and cancellation semantics.
+            try { transaction.Rollback(); } catch { }
+            return TransitionWriteOutcome.Conflict;
+        }
         catch
         {
             try { transaction.Rollback(); } catch { }
@@ -146,6 +154,10 @@ public sealed class GroundworkV2WorkflowActivationAuthority : IWorkflowActivatio
             return TransitionWriteOutcome.Conflict;
         return TransitionWriteOutcome.Failed;
     }
+
+    private static bool IsRetryableConflict(BatchWriteException exception) =>
+        exception.Outcomes.Count > 0 && exception.Outcomes.All(outcome =>
+            outcome.Outcome.Status is WriteOutcomeStatus.ConcurrencyConflict or WriteOutcomeStatus.UniqueViolation);
 
     private async ValueTask<bool> IsLiveInAnotherSlotAsync(string activationId, string slotId, CancellationToken cancellationToken)
     {

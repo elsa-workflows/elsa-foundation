@@ -2,6 +2,7 @@ using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Persistence.Groundwork.V2.Testing;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Kernel;
 using Groundwork.Store;
@@ -94,4 +95,138 @@ public sealed class GroundworkV2WorkflowActivationAuthorityTests
         Assert.Single(results, result => result.Succeeded);
         Assert.Single(results, result => !result.Succeeded && result.Conflict == WorkflowActivationConflict.RevisionMismatch);
     }
+
+    [Fact]
+    public async Task Sqlite_concurrent_first_claims_return_one_winner_and_one_revision_conflict()
+    {
+        await using var persistence = GroundworkV2TestPersistence.Create(
+            "sqlite",
+            [ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDocumentKind)]);
+        IWorkflowActivationAuthority first = CreateAuthority(persistence);
+        IWorkflowActivationAuthority second = CreateAuthority(persistence);
+        var now = new DateTimeOffset(2026, 8, 15, 12, 0, 0, TimeSpan.Zero);
+        for (var attempt = 0; attempt < 8; attempt++)
+        {
+            var slotName = $"concurrent-{attempt}";
+            using var barrier = new Barrier(2);
+            var results = await Task.WhenAll(
+                Task.Run(async () =>
+                {
+                    barrier.SignalAndWait();
+                    return await first.TryActivateAsync(new(
+                        "definition-concurrent",
+                        slotName,
+                        $"activation-a-{attempt}",
+                        WorkflowActivationSource.Publishing,
+                        0,
+                        now));
+                }),
+                Task.Run(async () =>
+                {
+                    barrier.SignalAndWait();
+                    return await second.TryActivateAsync(new(
+                        "definition-concurrent",
+                        slotName,
+                        $"activation-b-{attempt}",
+                        WorkflowActivationSource.Publishing,
+                        0,
+                        now));
+                }));
+
+            Assert.Single(results, result => result.Succeeded);
+            Assert.Single(results, result => !result.Succeeded && result.Conflict == WorkflowActivationConflict.RevisionMismatch);
+        }
+    }
+
+    [Fact]
+    public async Task Sqlite_concurrent_update_and_deactivation_cas_races_return_revision_conflicts()
+    {
+        await using var persistence = GroundworkV2TestPersistence.Create(
+            "sqlite",
+            [ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDocumentKind)]);
+        IWorkflowActivationAuthority first = CreateAuthority(persistence);
+        IWorkflowActivationAuthority second = CreateAuthority(persistence);
+        var now = new DateTimeOffset(2026, 8, 15, 12, 0, 0, TimeSpan.Zero);
+        var initial = await first.TryActivateAsync(new(
+            "definition-cas",
+            "default",
+            "activation-initial",
+            WorkflowActivationSource.Publishing,
+            0,
+            now));
+        Assert.True(initial.Succeeded);
+
+        using (var barrier = new Barrier(2))
+        {
+            var updates = await Task.WhenAll(
+                Task.Run(async () =>
+                {
+                    barrier.SignalAndWait();
+                    return await first.TryActivateAsync(new(
+                        "definition-cas",
+                        "default",
+                        "activation-a",
+                        WorkflowActivationSource.Publishing,
+                        initial.Slot.Revision,
+                        now));
+                }),
+                Task.Run(async () =>
+                {
+                    barrier.SignalAndWait();
+                    return await second.TryActivateAsync(new(
+                        "definition-cas",
+                        "default",
+                        "activation-b",
+                        WorkflowActivationSource.Publishing,
+                        initial.Slot.Revision,
+                        now));
+                }));
+
+            Assert.Single(updates, result => result.Succeeded);
+            Assert.Single(updates, result => !result.Succeeded && result.Conflict == WorkflowActivationConflict.RevisionMismatch);
+        }
+
+        var updated = (await first.FindAsync("definition-cas", "default"))!;
+        Assert.Equal(2, updated.Revision);
+        Assert.Contains(updated.ActiveActivationId, new[] { "activation-a", "activation-b" });
+
+        using (var barrier = new Barrier(2))
+        {
+            var deactivations = await Task.WhenAll(
+                Task.Run(async () =>
+                {
+                    barrier.SignalAndWait();
+                    return await first.TryDeactivateAsync(
+                        "definition-cas",
+                        "default",
+                        WorkflowActivationSource.Publishing,
+                        updated.Revision,
+                        now);
+                }),
+                Task.Run(async () =>
+                {
+                    barrier.SignalAndWait();
+                    return await second.TryDeactivateAsync(
+                        "definition-cas",
+                        "default",
+                        WorkflowActivationSource.Publishing,
+                        updated.Revision,
+                        now);
+                }));
+
+            Assert.Single(deactivations, result => result.Succeeded);
+            Assert.Single(deactivations, result => !result.Succeeded && result.Conflict == WorkflowActivationConflict.RevisionMismatch);
+        }
+
+        var deactivated = (await first.FindAsync("definition-cas", "default"))!;
+        Assert.Equal(3, deactivated.Revision);
+        Assert.Null(deactivated.ActiveActivationId);
+        Assert.Null(deactivated.Source);
+    }
+
+    private static IWorkflowActivationAuthority CreateAuthority(GroundworkV2TestPersistence persistence) =>
+        new GroundworkV2WorkflowActivationAuthority(
+            persistence.Sessions,
+            persistence.Access(),
+            new GroundworkStorageTransactionFactory(persistence.Sessions, persistence.Access()));
 }
