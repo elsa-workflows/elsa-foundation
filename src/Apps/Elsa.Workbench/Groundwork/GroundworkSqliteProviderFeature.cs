@@ -2,10 +2,10 @@ using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Persistence.Groundwork.Providers;
+namespace Elsa.Workbench;
 
 /// <summary>
-/// Shared operator settings for a public Groundwork provider connection.
+/// Shared operator settings for a Workbench-selected Groundwork provider connection.
 /// </summary>
 public abstract class GroundworkProviderFeatureBase : IShellFeature
 {

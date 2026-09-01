@@ -48,7 +48,6 @@ using Elsa.Modularity.ExtensionBuilder;
 using Elsa.Modularity.ExtensionBuilder.Extensions;
 using Elsa.Modularity.Nuplane.Extensions;
 using Elsa.Modularity.Nuplane.Services;
-using Elsa.Persistence.Groundwork.Providers;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Primitives.Hosting;
 using Elsa.Secrets.Attention;

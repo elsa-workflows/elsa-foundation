@@ -2,7 +2,7 @@ using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Persistence.Groundwork.Providers;
+namespace Elsa.Workbench;
 
 /// <summary>
 /// Selects the public Groundwork PostgreSQL provider connection for an Elsa shell.

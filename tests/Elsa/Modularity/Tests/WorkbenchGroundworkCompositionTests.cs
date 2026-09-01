@@ -2,7 +2,6 @@ using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Persistence.Groundwork.Providers;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;

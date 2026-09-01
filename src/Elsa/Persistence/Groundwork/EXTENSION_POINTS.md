@@ -84,6 +84,10 @@ that opens it, and the schema composed from the lanes bound to it. A host declar
 to a target by name. Since [#1156](https://github.com/elsa-workflows/elsa-foundation/issues/1156) a host may
 declare several, so design data and runtime state can live in different databases:
 
+Provider-specific feature classes and factory selection are host-owned. For example, Workbench defines the
+`GroundworkProviderSqlite` (and equivalent provider) shell features; this persistence assembly only supplies
+the provider-neutral ports and target/lane contracts that those host features compose.
+
 ```jsonc
 "GroundworkProviderSqlite": {},
 "GroundworkTargets": { "Targets": {
