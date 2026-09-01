@@ -37,8 +37,13 @@ public static class AspNetCoreIdentityGroundworkRegistration
 
     public static IServiceCollection AddFoundationAspNetCoreIdentityGroundwork(
         this IServiceCollection services,
+        IdentitySeedOptions? initialAdmin) =>
+        services.AddFoundationAspNetCoreIdentityGroundwork(initialAdmin, isDevelopmentOrDemo: false);
+
+    public static IServiceCollection AddFoundationAspNetCoreIdentityGroundwork(
+        this IServiceCollection services,
         IdentitySeedOptions? initialAdmin,
-        bool isDevelopmentOrDemo = false)
+        bool isDevelopmentOrDemo)
     {
         services.SelectIdentityPersistenceAuthority(
             GroundworkAuthority,

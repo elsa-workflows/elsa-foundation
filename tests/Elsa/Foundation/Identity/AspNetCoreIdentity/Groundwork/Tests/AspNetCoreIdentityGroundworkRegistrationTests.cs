@@ -37,6 +37,16 @@ public sealed class AspNetCoreIdentityGroundworkRegistrationTests
     }
 
     [Fact]
+    public void Registration_preserves_the_existing_seed_options_overload()
+    {
+        var method = RequiredType(RegistrationTypeName).GetMethod(
+            RegistrationMethodName,
+            [typeof(IServiceCollection), typeof(IdentitySeedOptions)]);
+
+        Assert.NotNull(method);
+    }
+
+    [Fact]
     public void Feature_passes_configured_seed_options_to_groundwork_registration()
     {
         var services = ConfigureFeature(
