@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "workUnit": "139-groundwork-diagnostics-persistence",
   "scope": "exact-groundwork-0.4.0-preview.3-diagnostics-recertification",
-  "outcome": "partial-pass",
-  "evidenceClassification": "current-v2-focused-recertification",
+  "outcome": "four-provider-correctness-pass",
+  "evidenceClassification": "current-v2-four-provider-correctness-recertification",
   "recordedAtUtc": "2026-09-01T10:21:24Z",
   "elsaSourceCommit": "8b92d34b7832271daa1ef24986311401c5d56e20",
-  "testedSourceState": "The focused recertification ran from the Elsa source commit above plus the explicitly listed uncommitted guard, ledger, current-v2 test, and test-project metadata changes. No diagnostics EF implementation or test source was deleted.",
+  "testedSourceState": "The focused local recertification ran from the Elsa source commit above plus the explicitly listed guard, ledger, current-v2 test, and test-project metadata changes. Hosted workflow run 33498592159 then executed the integrated exact head ebce7a70e157ea788f191c48ac68b062b5d6478d, including the retained receipt and the native-provider CI lane. No diagnostics EF implementation or test source was deleted.",
   "workingTreeSha256": {
     "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsPersistenceArchitectureTests.cs": "b17ce601edf3e296a5dc493cfee876fba9030a3fe528478942702c860638be5a",
     "tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests.csproj": "4689e6ca4c11d548329fdba2899875d2f70d3da671e94b33e0ca513a9f5227d6",
@@ -59,6 +59,23 @@
       "providerResult": "Configured local aggregate checks passed."
     }
   ],
+  "hostedFourProviderVerification": {
+    "sourceCommit": "ebce7a70e157ea788f191c48ac68b062b5d6478d",
+    "workflowRunId": 33498592159,
+    "workflowUrl": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/33498592159",
+    "jobId": 99826406221,
+    "jobUrl": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/33498592159/job/99826406221",
+    "job": "Groundwork v2 native provider matrix",
+    "step": "Prove diagnostics v2 stores on every native provider",
+    "conclusion": "success",
+    "providers": [
+      "sqlite",
+      "postgresql",
+      "sqlserver",
+      "mongodb"
+    ],
+    "proof": "The Structured Logs and OpenTelemetry v2 provider-matrix test projects executed in the existing transactional native-database job. The step cannot degrade to local unavailable-provider skips because the server-provider connection strings are supplied by the job and the exact step completed successfully."
+  },
   "testHarnessCorrection": "The Structured Logs v2 test project was missing IsTestProject=true; it was restored before the current 29/32 run so those results represent executed tests rather than a build-only invocation.",
   "warnings": [
     "Build output continues to report the existing NU1903 SSH.NET 2025.1.0 vulnerability warning; it is not a recertification failure."
@@ -88,16 +105,15 @@
     "reason": "No current four-provider native-plan promotion receipt was executed in this slice."
   },
   "providerTopology": {
-    "sqlite": "Executed against a temporary local SQLite database.",
-    "postgresql": "Not configured locally; skipped.",
-    "sqlServer": "Not configured locally; skipped.",
-    "mongoDb": "Not configured locally; skipped."
+    "sqlite": "Executed locally and in hosted run 33498592159.",
+    "postgresql": "Executed against PostgreSQL 17.6 in hosted run 33498592159.",
+    "sqlServer": "Executed against SQL Server 2022 CU21 in hosted run 33498592159.",
+    "mongoDb": "Executed against a transaction-capable MongoDB 7.0.24 replica set in hosted run 33498592159."
   },
   "remainingDependencies": [
     "#646 owns the accepted diagnostics-durable-history timing/physical-form verdict and current grouped/native evidence.",
-    "A dedicated provider environment must execute the current four-provider diagnostics matrix before four-provider certification.",
     "T050, T051, T052, T053, T054, T055, and T057 remain open.",
     "#647 owns final EF oracle deletion and the zero-EF architecture guard."
   ],
-  "evidenceBoundary": "This receipt certifies current Groundwork package currency, focused provider-neutral and SQLite v2 behavior, aggregate composition, and the 46-fact EF-mechanism ledger disposition. It does not claim four-provider execution, numeric performance budgets, a #646 verdict, grouped/native-plan promotion, EF deletion, or #642 closure. The preview.1 receipt remains historical and immutable."
+  "evidenceBoundary": "This receipt certifies current Groundwork package currency, provider-neutral behavior, the exact-head four-provider Structured Logs and OpenTelemetry v2 correctness matrix, aggregate composition, and the 46-fact EF-mechanism ledger disposition. It does not claim numeric performance budgets, a #646 verdict, grouped/native-plan promotion, EF deletion, or #642 closure. The preview.1 receipt remains historical and immutable."
 }

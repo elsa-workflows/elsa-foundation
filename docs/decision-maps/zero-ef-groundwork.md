@@ -221,8 +221,10 @@ Diagnostics #642 now has a focused current-v2 recertification for exact Groundwo
 the shared diagnostics suite passed 97/97, Structured Logs v2 passed 29/32 with SQLite
 executed and three unavailable-provider skips, OpenTelemetry v2 passed 8/11 with SQLite
 executed and three unavailable-provider skips, and Groundwork aggregate composition passed
-3/3. This updates package/correctness evidence only; it is not four-provider proof, a #646
-performance verdict, or grouped/native-plan promotion.
+3/3. Hosted CI run 33498592159 then passed both v2 matrices across SQLite, PostgreSQL,
+SQL Server, and transaction-capable MongoDB at exact head `ebce7a70e`. This updates
+package/four-provider correctness evidence only; it is not a #646 performance verdict or
+grouped/native-plan promotion.
 
 ## performance-harness: How Are EF And Groundwork Compared Fairly?
 

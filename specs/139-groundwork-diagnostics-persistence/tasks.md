@@ -212,9 +212,11 @@
   records current package currency, 97/97 shared diagnostics correctness and architecture tests,
   29/32 Structured Logs v2 tests with SQLite executed and three unavailable-provider skips, 8/11
   OpenTelemetry v2 tests with SQLite executed and three unavailable-provider skips, and 3/3
-  Groundwork aggregate composition tests. It explicitly retires the three EF-mechanism-only facts
+  Groundwork aggregate composition tests. Hosted CI run 33498592159 additionally passes both v2
+  provider matrices on SQLite, PostgreSQL, SQL Server, and transaction-capable MongoDB at exact head
+  `ebce7a70e`. It explicitly retires the three EF-mechanism-only facts
   at the Groundwork boundary while retaining the EF oracle source. This is focused correctness
-  evidence only: it is not four-provider proof, a #646 performance verdict, grouped/native-plan
+  evidence only: it is not a #646 performance verdict, grouped/native-plan
   promotion, EF deletion, or completion of T050/T051/T052/T053/T054/T055/T057.
 
 - [ ] T050 [P] [US4] Consume the #646-owned diagnostics workload and retained-artifact contract; do not create a lane-local benchmark harness
