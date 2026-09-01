@@ -37,7 +37,8 @@ public static class AspNetCoreIdentityGroundworkRegistration
 
     public static IServiceCollection AddFoundationAspNetCoreIdentityGroundwork(
         this IServiceCollection services,
-        IdentitySeedOptions? initialAdmin)
+        IdentitySeedOptions? initialAdmin,
+        bool isDevelopmentOrDemo = false)
     {
         services.SelectIdentityPersistenceAuthority(
             GroundworkAuthority,
@@ -49,7 +50,7 @@ public static class AspNetCoreIdentityGroundworkRegistration
                 IsUnmarkedFrameworkStoreDescriptor));
 
         services.AddFoundationAspNetCoreIdentity();
-        services.AddIdentityCoreServices();
+        services.AddIdentityCoreServices(isDevelopmentOrDemo);
         services.AddFoundationIdentityAbstractions();
         services.AddGroundworkIdentityStores();
         services.RemoveAll<IIdentityEmailUniquenessPolicy>();

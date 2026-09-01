@@ -9,6 +9,7 @@ using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -53,6 +54,27 @@ public sealed class AspNetCoreIdentityGroundworkRegistrationTests
         Assert.Equal("admin@elsa.local", seed.Email);
         Assert.Equal(IdentitySeedOptions.DefaultRoleName, seed.RoleName);
         Assert.True(seed.IsDevelopmentSeed);
+    }
+
+    [Theory]
+    [InlineData(true, CookieSecurePolicy.SameAsRequest)]
+    [InlineData(false, CookieSecurePolicy.Always)]
+    public void Feature_propagates_development_or_demo_mode_to_cookie_security(
+        bool isDevelopmentOrDemo,
+        CookieSecurePolicy expected)
+    {
+        var services = ConfigureFeature(
+            isDevelopmentOrDemo,
+            userName: null,
+            password: null,
+            email: null,
+            roleName: null);
+        using var provider = services.BuildServiceProvider();
+
+        var options = provider.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
+            .Get(AspNetCoreIdentityDefaults.CookieScheme);
+
+        Assert.Equal(expected, options.Cookie.SecurePolicy);
     }
 
     [Fact]

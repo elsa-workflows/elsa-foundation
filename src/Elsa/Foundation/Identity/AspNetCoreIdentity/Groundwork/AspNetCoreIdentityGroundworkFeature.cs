@@ -31,7 +31,7 @@ public class AspNetCoreIdentityGroundworkFeature : IShellFeature
     public string? SeedAdminRoleName { get; set; }
 
     public virtual void ConfigureServices(IServiceCollection services) =>
-        services.AddFoundationAspNetCoreIdentityGroundwork(BuildInitialAdmin());
+        services.AddFoundationAspNetCoreIdentityGroundwork(BuildInitialAdmin(), IsDevelopmentOrDemo);
 
     // A half-configured admin is a deployment error. The dev/demo path supplies its well-known values
     // through committed config, while production credentials can be supplied through a secret overlay.
