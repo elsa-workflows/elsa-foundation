@@ -7,6 +7,10 @@ public static class ActivitiesDesignStorageManifest
 {
     public const string SchemaVersion = "1.0.0";
     public const int StorageSchemaVersion = 1;
+    // The version projection changed incompatibly when definitionId/semVerSortKey became required
+    // and their two legacy indexes collapsed into one unique domain tuple. Provision a clean
+    // pre-GA table instead of attempting an in-place backfill or retaining stale indexes.
+    public const int ActivityDefinitionVersionStorageSchemaVersion = 2;
     public const int MaximumIdLength = 450;
     public const int MaximumProjectionLength = 256;
 
@@ -179,7 +183,12 @@ public static class ActivitiesDesignStorageManifest
             else
                 declaration.Index(index.Name, Configure);
         }
-        return declaration.Scoped().Build() with { SchemaVersion = StorageSchemaVersion };
+        return declaration.Scoped().Build() with
+        {
+            SchemaVersion = id == ActivityDefinitionVersionDocumentKind
+                ? ActivityDefinitionVersionStorageSchemaVersion
+                : StorageSchemaVersion
+        };
     }
 
     private static IEnumerable<IndexSpec> IndexesFor(string id) => id switch
@@ -240,7 +249,7 @@ public static class ActivitiesDesignStorageManifest
     private static readonly (string Id, string Name)[] UnitNames =
     [
         (ActivityDefinitionDocumentKind, "elsa_activity_definitions"),
-        (ActivityDefinitionVersionDocumentKind, "elsa_activity_definition_versions"),
+        (ActivityDefinitionVersionDocumentKind, "elsa_activity_definition_versions_v2"),
         (ActivityAvailabilitySettingsDocumentKind, "elsa_activity_availability_settings"),
         (ActivityDefinitionAuthoringStateDocumentKind, "elsa_activity_definition_authoring"),
         (ActivityDefinitionDraftDocumentKind, "elsa_activity_definition_drafts"),

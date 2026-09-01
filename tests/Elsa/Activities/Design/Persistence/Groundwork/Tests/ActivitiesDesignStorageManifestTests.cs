@@ -16,7 +16,11 @@ public sealed class ActivitiesDesignStorageManifestTests
         {
             Assert.Equal(ScopePolicy.Scoped, unit.Scope);
             Assert.True(unit.Concurrency.IsOptimistic);
-            Assert.Equal(ActivitiesDesignStorageManifest.StorageSchemaVersion, unit.SchemaVersion);
+            Assert.Equal(
+                unit.Id.Value == ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind
+                    ? ActivitiesDesignStorageManifest.ActivityDefinitionVersionStorageSchemaVersion
+                    : ActivitiesDesignStorageManifest.StorageSchemaVersion,
+                unit.SchemaVersion);
             Assert.Equal([ActivitiesDesignStorageManifest.IdField], unit.Key.Columns);
             Assert.Equal(
                 PortableType.String,
@@ -39,7 +43,7 @@ public sealed class ActivitiesDesignStorageManifestTests
         var units = ActivitiesDesignStorageManifest.CreateUnits().ToDictionary(unit => unit.Id.Value);
 
         Assert.Equal("elsa_activity_definitions", units[ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind].Name);
-        Assert.Equal("elsa_activity_definition_versions", units[ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind].Name);
+        Assert.Equal("elsa_activity_definition_versions_v2", units[ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind].Name);
         Assert.Equal("elsa_activity_management_definitions", units[ActivitiesDesignStorageManifest.ActivityDefinitionManagementProjectionDocumentKind].Name);
         Assert.Equal("elsa_activity_design_operations", units[ActivitiesDesignStorageManifest.DesignOperationDocumentKind].Name);
     }

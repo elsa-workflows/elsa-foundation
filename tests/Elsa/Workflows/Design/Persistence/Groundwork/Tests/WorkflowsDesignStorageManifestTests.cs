@@ -199,9 +199,11 @@ public sealed class WorkflowsDesignStorageManifestTests
             WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
         var index = definitions.Indexes.Single(candidate =>
             candidate.Name == WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex);
-        var width = index.Columns.Sum(column =>
-            definitions.Columns.Single(item => item.Name == column.Column).MaxLength!.Value * 2);
-        Assert.Equal(WorkflowsDesignStorageManifest.DefinitionIdLookupHashMaximumLength * 2, width);
+        var width = ScopedIndexWidth(definitions, index);
+        Assert.Equal(
+            (WorkflowsDesignStorageManifest.DefinitionIdLookupHashMaximumLength + GroundworkScopeMaximumLength) *
+            PortableUnicodeBytesPerCodeUnit,
+            width);
         Assert.True(width <= PortabilityValidator.StrictIndexKeyByteBudget);
     }
 
@@ -217,11 +219,11 @@ public sealed class WorkflowsDesignStorageManifestTests
                  })
         {
             var index = definitions.Indexes.Single(candidate => candidate.Name == indexName);
-            var width = index.Columns.Sum(column =>
-                definitions.Columns.Single(item => item.Name == column.Column).MaxLength!.Value * 2);
+            var width = ScopedIndexWidth(definitions, index);
             Assert.Equal(
                 (WorkflowsDesignStorageManifest.DefinitionTextLookupHashMaximumLength +
-                 WorkflowsDesignStorageManifest.IdentityMaximumLength) * 2,
+                 WorkflowsDesignStorageManifest.IdentityMaximumLength +
+                 GroundworkScopeMaximumLength) * PortableUnicodeBytesPerCodeUnit,
                 width);
             Assert.True(width <= PortabilityValidator.StrictIndexKeyByteBudget);
         }
@@ -240,4 +242,12 @@ public sealed class WorkflowsDesignStorageManifestTests
         Assert.Equal(unique, index.IsUnique);
         Assert.Equal(columns, index.Columns.Select(column => column.Column));
     }
+
+    private static int ScopedIndexWidth(StorageUnit unit, IndexDefinition index) =>
+        index.Columns.Sum(column =>
+            unit.Columns.Single(item => item.Name == column.Column).MaxLength!.Value * PortableUnicodeBytesPerCodeUnit) +
+        GroundworkScopeMaximumLength * PortableUnicodeBytesPerCodeUnit;
+
+    private const int GroundworkScopeMaximumLength = 128;
+    private const int PortableUnicodeBytesPerCodeUnit = 2;
 }

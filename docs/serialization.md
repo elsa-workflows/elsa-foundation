@@ -152,6 +152,19 @@ version, or draft rows alongside the new definition table: they can otherwise fo
 The reset is intentional for the unreleased pre-GA line and must be replaced by an explicit data migration before
 the design schema is treated as production-compatible.
 
+### Activity-design Groundwork clean-schema boundary
+
+The activity-definition-version projection is also a pre-GA clean baseline. `definitionId` and
+`semVerSortKey` became required, and two non-unique legacy indexes were replaced by the unique domain tuple
+`(definitionId, semVerSortKey)`. The unit therefore uses the versioned physical table
+`elsa_activity_definition_versions_v2` and storage schema version `2`; the activity-design envelope
+`SchemaVersion` remains `"1.0.0"`.
+
+This change has no in-place migration. Before enabling the build, discard and reprovision the complete
+activity-design Groundwork persistence set from the current manifest, then recreate or import the activity
+designs. Do not retain old version rows beside the new table because authoring, publication, layout, and
+dependency records can otherwise reference a generation the active store no longer reads.
+
 ## Cross-execution stimulus routing (W7, E3-1 / E3-5)
 
 The trigger + stimulus-routing feature (`WorkflowsRuntimeTriggersFeature`) adds one new persisted document
