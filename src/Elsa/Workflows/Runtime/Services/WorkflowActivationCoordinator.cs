@@ -583,13 +583,9 @@ public sealed class WorkflowActivationCoordinator(
             !IsSameReference(current, predecessorReference))
             return;
 
-        // Source-reference creation is deliberately create-only in the v2 adapter. DeleteAsync rechecks the row
-        // with its provider CAS before removing the retirement, so a superseding writer wins instead of being
-        // overwritten by this compensation. SaveAsync then recreates the captured live reference with no caller
-        // cancellation token; if a writer fills the key between those operations, create-only save refuses it.
-        if (!await sourceReferenceStore.DeleteAsync(predecessorReference.SourceReferenceId, CancellationToken.None))
-            return;
-        await sourceReferenceStore.SaveAsync(predecessorReference, CancellationToken.None);
+        // The writer owns the compare-and-restore operation. It must condition the write on this exact retired
+        // snapshot, so a superseding writer that wins between the read above and compensation is left untouched.
+        await sourceReferenceStore.TryRestoreAsync(current, predecessorReference, CancellationToken.None);
     }
 
     private static bool IsSameReference(

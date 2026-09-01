@@ -59,6 +59,15 @@ public interface IWorkflowExecutableSourceReferenceWriter
 {
     ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default);
     ValueTask<bool> RetireAsync(string sourceReferenceId, DateTimeOffset deletedAt, string? reason = null, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Atomically restores a retired reference when <paramref name="expectedRetiredReference"/> is still the stored
+    /// snapshot. Implementations that cannot provide this compare-and-restore guarantee must fail closed.
+    /// </summary>
+    ValueTask<bool> TryRestoreAsync(
+        WorkflowExecutableSourceReference expectedRetiredReference,
+        WorkflowExecutableSourceReference restoredReference,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(false);
     ValueTask<bool> DeleteAsync(string sourceReferenceId, CancellationToken cancellationToken = default) =>
         ValueTask.FromResult(false);
     ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(

@@ -363,6 +363,32 @@ public sealed class WorkflowActivationCoordinatorTests
     }
 
     [Fact]
+    public async Task Cancellation_after_predecessor_reference_snapshot_conflict_leaves_the_superseding_reference()
+    {
+        var harness = new Harness();
+        var incumbent = await harness.ActivateAsync("incumbent", "artifact-1");
+        var predecessor = await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("incumbent"));
+        using var cancellation = new CancellationTokenSource();
+        harness.References.ReplaceBeforeRestore = predecessor! with
+        {
+            ArtifactId = "artifact-raced",
+            ActivationId = "raced",
+            DeletedAt = null,
+            DeletedReason = null
+        };
+        harness.References.CancelAfterRetire = cancellation;
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await harness.Coordinator.ActivateAsync(
+                harness.Command("candidate", "artifact-2", expectedRevision: incumbent.Slot.Revision), cancellation.Token));
+
+        var current = await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("incumbent"));
+        Assert.Equal("artifact-raced", current!.ArtifactId);
+        Assert.Equal("raced", current.ActivationId);
+        Assert.Null(current.DeletedAt);
+    }
+
+    [Fact]
     public async Task Cancellation_after_deactivation_slot_flip_restores_authority_and_projection()
     {
         var harness = new Harness();
@@ -645,6 +671,7 @@ public sealed class WorkflowActivationCoordinatorTests
         public CancellationTokenSource? CancelAfterSave { get; set; }
         public CancellationTokenSource? CancelAfterRetire { get; set; }
         public WorkflowExecutableSourceReference? ReplaceAfterRetire { get; set; }
+        public WorkflowExecutableSourceReference? ReplaceBeforeRestore { get; set; }
 
         public async ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default)
         {
@@ -681,6 +708,20 @@ public sealed class WorkflowActivationCoordinatorTests
                 throw new OperationCanceledException(cancellationToken);
             }
             return retired;
+        }
+
+        public async ValueTask<bool> TryRestoreAsync(
+            WorkflowExecutableSourceReference expectedRetiredReference,
+            WorkflowExecutableSourceReference restoredReference,
+            CancellationToken cancellationToken = default)
+        {
+            if (ReplaceBeforeRestore is { } replacement)
+            {
+                ReplaceBeforeRestore = null;
+                await inner.SaveAsync(replacement, cancellationToken);
+            }
+
+            return await inner.TryRestoreAsync(expectedRetiredReference, restoredReference, cancellationToken);
         }
 
         public ValueTask<bool> DeleteAsync(string sourceReferenceId, CancellationToken cancellationToken = default) => inner.DeleteAsync(sourceReferenceId, cancellationToken);

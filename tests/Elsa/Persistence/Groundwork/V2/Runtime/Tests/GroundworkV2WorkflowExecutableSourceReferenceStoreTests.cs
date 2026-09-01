@@ -171,6 +171,45 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStoreTests
         Assert.Equal("done", stillRetired.DeletedReason);
     }
 
+    [Fact]
+    public async Task Try_restore_requires_the_expected_retired_snapshot_and_restores_live_reference()
+    {
+        await using var runtime = NativeProviderRuntime.Create();
+        using var connection = runtime.OpenConnection();
+        var unit = ElsaRuntimeV2StorageManifest.Require(
+            ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDocumentKind);
+        connection.Schema.Apply(unit);
+        var source = new DirectSessionSource(connection, unit);
+        var store = new GroundworkV2WorkflowExecutableSourceReferenceStore(
+            source,
+            new TestAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+        var original = Reference("ref-restore", "artifact-before", WorkflowExecutableReferenceScope.TestRun);
+        await store.SaveAsync(original);
+
+        var retiredAt = new DateTimeOffset(2026, 8, 17, 14, 0, 0, TimeSpan.Zero);
+        Assert.True(await store.RetireAsync(original.SourceReferenceId, retiredAt, "activation-replaced"));
+        var retired = await store.FindAsync(original.SourceReferenceId);
+        Assert.NotNull(retired);
+        Assert.True(await store.TryRestoreAsync(retired!, original));
+        var restored = await store.FindAsync(original.SourceReferenceId);
+        Assert.Equal(original.ArtifactId, restored!.ArtifactId);
+        Assert.Null(restored.DeletedAt);
+
+        Assert.True(await store.RetireAsync(original.SourceReferenceId, retiredAt.AddMinutes(1), "activation-replaced"));
+        var expected = await store.FindAsync(original.SourceReferenceId);
+        var raw = source.Open(unit.Id.Value, StorageAccess.Scoped(new StorageScope("tenant-a")));
+        var changed = expected! with { DeletedReason = "superseding-writer" };
+        Assert.True(raw.Update(
+                GroundworkV2WorkflowExecutableSourceReferenceStorageConventions.Values(changed),
+                WriteOptions.Unconditional)
+            .Succeeded);
+
+        Assert.False(await store.TryRestoreAsync(expected!, original));
+        var stillRetired = await store.FindAsync(original.SourceReferenceId);
+        Assert.Equal("superseding-writer", stillRetired!.DeletedReason);
+        Assert.NotNull(stillRetired.DeletedAt);
+    }
+
     [SkippableTheory]
     [MemberData(nameof(Providers))]
     public async Task Native_provider_matrix_round_trips_source_reference(string providerName)

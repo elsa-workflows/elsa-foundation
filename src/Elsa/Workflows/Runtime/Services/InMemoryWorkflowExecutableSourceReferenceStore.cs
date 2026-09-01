@@ -69,6 +69,30 @@ public sealed class InMemoryWorkflowExecutableSourceReferenceStore : IWorkflowEx
         }
     }
 
+    public ValueTask<bool> TryRestoreAsync(
+        WorkflowExecutableSourceReference expectedRetiredReference,
+        WorkflowExecutableSourceReference restoredReference,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(expectedRetiredReference);
+        ArgumentNullException.ThrowIfNull(restoredReference);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (expectedRetiredReference.DeletedAt is null ||
+            restoredReference.DeletedAt is not null ||
+            !SameReferenceIdentity(expectedRetiredReference, restoredReference))
+            return ValueTask.FromResult(false);
+
+        lock (_gate)
+        {
+            if (!_references.TryGetValue(expectedRetiredReference.SourceReferenceId, out var current) ||
+                !SameReferenceSnapshot(current, expectedRetiredReference))
+                return ValueTask.FromResult(false);
+
+            _references[expectedRetiredReference.SourceReferenceId] = restoredReference;
+            return ValueTask.FromResult(true);
+        }
+    }
+
     public ValueTask<bool> DeleteAsync(string sourceReferenceId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceReferenceId);
@@ -76,6 +100,32 @@ public sealed class InMemoryWorkflowExecutableSourceReferenceStore : IWorkflowEx
         lock (_gate)
             return ValueTask.FromResult(_references.Remove(sourceReferenceId));
     }
+
+    private static bool SameReferenceSnapshot(
+        WorkflowExecutableSourceReference current,
+        WorkflowExecutableSourceReference expected) =>
+        SameReferenceIdentity(current, expected) &&
+        current.DeletedAt == expected.DeletedAt &&
+        StringComparer.Ordinal.Equals(current.DeletedReason, expected.DeletedReason);
+
+    private static bool SameReferenceIdentity(
+        WorkflowExecutableSourceReference current,
+        WorkflowExecutableSourceReference expected) =>
+        StringComparer.Ordinal.Equals(current.SourceReferenceId, expected.SourceReferenceId) &&
+        StringComparer.Ordinal.Equals(current.ArtifactId, expected.ArtifactId) &&
+        StringComparer.Ordinal.Equals(current.SourceKind, expected.SourceKind) &&
+        StringComparer.Ordinal.Equals(current.SourceId, expected.SourceId) &&
+        StringComparer.Ordinal.Equals(current.SourceVersion, expected.SourceVersion) &&
+        StringComparer.Ordinal.Equals(current.DefinitionId, expected.DefinitionId) &&
+        StringComparer.Ordinal.Equals(current.DefinitionVersionId, expected.DefinitionVersionId) &&
+        StringComparer.Ordinal.Equals(current.ArtifactVersion, expected.ArtifactVersion) &&
+        current.CreatedAt == expected.CreatedAt &&
+        current.PublishedAt == expected.PublishedAt &&
+        current.Scope == expected.Scope &&
+        current.ExpiresAt == expected.ExpiresAt &&
+        StringComparer.Ordinal.Equals(current.ActivationId, expected.ActivationId) &&
+        StringComparer.Ordinal.Equals(current.SlotId, expected.SlotId) &&
+        StringComparer.Ordinal.Equals(current.TenantId, expected.TenantId);
 
     public ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(
         WorkflowExecutableSourceReferenceCleanupBatch batch,
