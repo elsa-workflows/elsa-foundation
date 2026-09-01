@@ -28,6 +28,8 @@ internal static class BenchmarkAdapterRegistry
                 new BookmarkLookupAdapter(request, connectionString, outputDirectory),
             { WorkloadId: RuntimeQueueDrainWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: GroundworkV2Adapter, PhysicalForm: QueueDrainAdapter.PhysicalForm } =>
                 new QueueDrainAdapter(request, connectionString, outputDirectory),
+            { WorkloadId: RuntimeOutboxDrainWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: GroundworkV2Adapter, PhysicalForm: OutboxDrainAdapter.PhysicalForm } =>
+                new OutboxDrainAdapter(request, connectionString, outputDirectory),
             _ => throw new PerformanceContractException(
                 $"No Groundwork adapter is registered for exact workload/adapter/physical form '{request.WorkloadId}/{request.Adapter}/{request.PhysicalForm}'.")
         };

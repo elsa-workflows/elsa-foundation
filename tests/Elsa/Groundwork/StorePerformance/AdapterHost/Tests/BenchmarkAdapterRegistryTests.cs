@@ -37,10 +37,32 @@ public sealed class BenchmarkAdapterRegistryTests
     }
 
     [Fact]
+    public async Task Dispatches_outbox_drain_to_its_exact_groundwork_physical_form()
+    {
+        await using var adapter = BenchmarkAdapterRegistry.Create(
+            Request("outbox-drain", OutboxDrainAdapter.PhysicalForm), "unused", "unused");
+
+        Assert.IsType<OutboxDrainAdapter>(adapter);
+        var workload = WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()).Workloads["outbox-drain"];
+        Assert.Contains(OutboxDrainAdapter.PhysicalForm, workload.PhysicalFormsFor646);
+    }
+
+    [Fact]
     public async Task Queue_drain_operations_are_not_admitted_before_correctness_preparation()
     {
         await using var adapter = BenchmarkAdapterRegistry.Create(
             Request("queue-drain", QueueDrainAdapter.PhysicalForm), "unused", "unused");
+
+        var exception = Assert.Throws<PerformanceContractException>(() => adapter.Operations);
+
+        Assert.Contains("before correctness preparation", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Outbox_drain_operations_are_not_admitted_before_correctness_preparation()
+    {
+        await using var adapter = BenchmarkAdapterRegistry.Create(
+            Request("outbox-drain", OutboxDrainAdapter.PhysicalForm), "unused", "unused");
 
         var exception = Assert.Throws<PerformanceContractException>(() => adapter.Operations);
 
@@ -87,6 +109,9 @@ public sealed class BenchmarkAdapterRegistryTests
     [InlineData("queue-drain", "dedicated-scheduler-poison-documents", "groundwork-v2")]
     [InlineData("queue-drain", "dedicated-scheduler-work-documents", "other-adapter")]
     [InlineData("queue-drain", "dedicated-scheduler-work-documents", "groundwork-v2", "9.9.9")]
+    [InlineData("outbox-drain", "shared-documents-with-linked-index-tables", "groundwork-v2")]
+    [InlineData("outbox-drain", "dedicated-post-commit-outbox-documents", "other-adapter")]
+    [InlineData("outbox-drain", "dedicated-post-commit-outbox-documents", "groundwork-v2", "9.9.9")]
     public void Refuses_unregistered_workload_adapter_and_physical_form_without_fallback(
         string workloadId,
         string physicalForm,

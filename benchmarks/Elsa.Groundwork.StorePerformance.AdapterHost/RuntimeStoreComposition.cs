@@ -180,6 +180,19 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
             services.GetRequiredService<IWorkflowSchedulerWorkClaimInspection>());
     }
 
+    /// <summary>Mints the checkpoint and fenced post-commit outbox contracts from one isolated DI scope.</summary>
+    public RuntimeOutboxDrainClient CreateOutboxClient()
+    {
+        var scope = provider.CreateAsyncScope();
+        scopes.Add(scope);
+        var services = scope.ServiceProvider;
+        return new RuntimeOutboxDrainClient(
+            services.GetRequiredService<IRuntimeCheckpointCommitStore>(),
+            services.GetRequiredService<IRuntimePostCommitOutboxClaimStore>(),
+            services.GetRequiredService<IRuntimePostCommitOutboxClaimCompletionStore>(),
+            services.GetRequiredService<IPostCommitOutboxLookupStore>());
+    }
+
     public async ValueTask DisposeAsync()
     {
         foreach (var scope in scopes)
