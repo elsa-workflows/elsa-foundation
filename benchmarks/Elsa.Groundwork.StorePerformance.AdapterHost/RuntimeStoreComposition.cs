@@ -222,6 +222,22 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
         return scope.ServiceProvider.GetRequiredService<IExecutionPlacementStore>();
     }
 
+    /// <summary>Mints the durable distributed execution command transport from an isolated DI scope.</summary>
+    public IExecutionCommandTransport CreateCommandTransportClient()
+    {
+        var scope = provider.CreateAsyncScope();
+        scopes.Add(scope);
+        return scope.ServiceProvider.GetRequiredService<IExecutionCommandTransport>();
+    }
+
+    /// <summary>Mints the durable runtime timer contract from an isolated DI scope.</summary>
+    public IDurableTimerStore CreateDurableTimerClient()
+    {
+        var scope = provider.CreateAsyncScope();
+        scopes.Add(scope);
+        return scope.ServiceProvider.GetRequiredService<IDurableTimerStore>();
+    }
+
     /// <summary>Mints the recurring-trigger schedule contract from an isolated DI scope.</summary>
     public IRecurringTriggerScheduleStore CreateRecurringScheduleClient()
     {
@@ -250,6 +266,14 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
         return new RuntimeIdentityClient(
             services.GetRequiredService<UserManager<AspNetCoreIdentityUser>>(),
             services.GetRequiredService<RoleManager<IdentityRole>>());
+    }
+
+    /// <summary>Mints the low-level Identity row seam used only to build the native-plan fixture.</summary>
+    public Elsa.Foundation.Identity.Persistence.Groundwork.Stores.GroundworkIdentityRowStore CreateIdentityRowStore()
+    {
+        var scope = provider.CreateAsyncScope();
+        scopes.Add(scope);
+        return scope.ServiceProvider.GetRequiredService<Elsa.Foundation.Identity.Persistence.Groundwork.Stores.GroundworkIdentityRowStore>();
     }
 
     public async ValueTask DisposeAsync()

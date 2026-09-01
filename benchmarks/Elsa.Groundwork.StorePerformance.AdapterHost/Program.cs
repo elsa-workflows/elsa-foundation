@@ -1,6 +1,7 @@
 using Elsa.Groundwork.StorePerformance.AdapterHost;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 
 // The matrix runner spawns this host once per process in a cohort. Every failure path exits non-zero with
 // the contract message on stderr: the runner treats a child that cannot honour its request as a blocked
@@ -51,6 +52,21 @@ static async Task<int> CapturePlan(string[] args)
     CapturePlanAdmission.Ensure(request);
     var connectionString = ProviderConnections.RequireConnectionString(request.Provider);
     var observed = await ProviderProbe.ReadAsync(request.Provider, connectionString);
+
+    if (string.Equals(request.WorkloadId, IamNormalizedLookupWorkload.WorkloadId, StringComparison.Ordinal))
+    {
+        var iamDigest = await IamNativePlanCapture.CaptureAsync(
+            request,
+            connectionString,
+            outputDirectory,
+            observed,
+            CancellationToken.None);
+        Console.WriteLine($"native-plan-evidence={request.NativePlanEvidenceReference}");
+        Console.WriteLine($"native-plan-sha256={iamDigest}");
+        Console.WriteLine($"native-plan-routes={IamNormalizedLookupWorkload.NativeRouteLimits.Count}");
+        return 0;
+    }
+
     var reference = NativePlanEvidenceStaging.ReferenceFor(request.WorkloadId, request.Provider, request.MeasurementSetId);
     if (!string.Equals(reference, request.NativePlanEvidenceReference, StringComparison.Ordinal))
         throw new PerformanceContractException(

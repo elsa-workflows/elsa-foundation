@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 
@@ -374,8 +375,10 @@ public static class ArtifactAdmission
             throw new PerformanceContractException("Native-plan evidence file is missing or does not match the requested content digest.");
 
         var routes = nativePlan.Routes;
-        if (routes is null ||
-            routes.Count != workload.RequiredNativeRoutes.Count ||
+        if (routes is null)
+            throw new PerformanceContractException("Native-plan evidence must admit every required route with a retained raw-plan digest, bounded cardinality, predicates, finite limit, and materialized-count facts.");
+        ValidateIamNativeRoutes(workload, routes);
+        if (routes.Count != workload.RequiredNativeRoutes.Count ||
             !routes.Select(route => route.RouteIdentity).Order(StringComparer.Ordinal).SequenceEqual(workload.RequiredNativeRoutes.Order(StringComparer.Ordinal), StringComparer.Ordinal) ||
             routes.Select(route => route.RouteIdentity).Distinct(StringComparer.Ordinal).Count() != routes.Count ||
             routes.Any(route =>
@@ -439,6 +442,31 @@ public static class ArtifactAdmission
             !document.Routes.SequenceEqual(routes))
             throw new PerformanceContractException("Native-plan evidence file does not match the admitted target, provenance, or structured route evidence.");
         ArtifactSafety.Validate(evidence);
+    }
+
+    private static void ValidateIamNativeRoutes(
+        PerformanceWorkload workload,
+        IReadOnlyList<NativeRouteEvidence> routes)
+    {
+        if (!string.Equals(workload.Id, IamNormalizedLookupWorkload.WorkloadId, StringComparison.Ordinal))
+            return;
+
+        var expectedLimits = IamNormalizedLookupWorkload.NativeRouteLimits;
+        var routeNamesMatch = workload.RequiredNativeRoutes.Count == expectedLimits.Count &&
+                              workload.RequiredNativeRoutes.Order(StringComparer.Ordinal)
+                                  .SequenceEqual(expectedLimits.Keys.Order(StringComparer.Ordinal), StringComparer.Ordinal) &&
+                              routes.Count == expectedLimits.Count &&
+                              routes.Select(route => route.RouteIdentity).Distinct(StringComparer.Ordinal).Count() == expectedLimits.Count &&
+                              routes.All(route => expectedLimits.ContainsKey(route.RouteIdentity));
+        var routeFactsMatch = routes.All(route =>
+            route.PhysicalCardinality == 100_000 &&
+            route.MaterializedCandidateCount == 1 &&
+            expectedLimits.TryGetValue(route.RouteIdentity, out var finiteLimit) &&
+            route.FiniteLimit == finiteLimit);
+
+        if (!routeNamesMatch || !routeFactsMatch)
+            throw new PerformanceContractException(
+                "IAM native-plan evidence must contain exactly the five frozen route names and bind physical cardinality 100000, one materialized candidate, and the exact route-specific finite limits.");
     }
 
     public static bool SameMachineEnvironment(MachineMetadata first, MachineMetadata second) =>

@@ -5,14 +5,14 @@ using Xunit;
 
 namespace Elsa.Groundwork.StorePerformance.AdapterHost.Tests;
 
-public sealed class IamNormalizedLookupAdapterTests
+public sealed class DueTimerSelectionAdapterTests
 {
     [Fact]
-    public async Task Runs_frozen_correctness_and_prepares_operations_over_real_sqlite_identity_stores()
+    public async Task Runs_frozen_correctness_and_prepares_operations_over_real_sqlite_runtime_stores()
     {
-        var root = Path.Combine(Path.GetTempPath(), $"groundwork-iam-adapter-{Guid.NewGuid():N}");
+        var root = Path.Combine(Path.GetTempPath(), $"groundwork-due-timer-adapter-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
-        var database = Path.Combine(root, "iam.db");
+        var database = Path.Combine(root, "due-timer.db");
         var connectionString = $"Data Source={database}";
 
         try
@@ -54,13 +54,13 @@ public sealed class IamNormalizedLookupAdapterTests
             var evidenceDigest = NativePlanEvidenceStaging.Write(root, evidence);
             request = request with { NativePlanContentSha256 = evidenceDigest };
 
-            await using var adapter = new IamNormalizedLookupAdapter(request, connectionString, root);
+            await using var adapter = new DueTimerSelectionAdapter(request, connectionString, root);
             await adapter.PrepareAsync(CancellationToken.None);
             Assert.Throws<PerformanceContractException>(() => adapter.Operations);
 
             var correctness = await adapter.VerifyCorrectnessAsync(CancellationToken.None);
 
-            Assert.Equal(IamNormalizedLookupWorkload.ExpectedResultDigest, correctness.ObservedResultDigestSha256);
+            Assert.Equal(RuntimeDueTimerSelectionWorkload.ExpectedResultDigest, correctness.ObservedResultDigestSha256);
             Assert.Equal(observed.Version, correctness.ObservedProviderVersion);
             Assert.Equal(observed.Topology, correctness.ObservedProviderTopology);
             Assert.Equal(observed.Configuration, correctness.ObservedProviderConfiguration);
@@ -70,13 +70,10 @@ public sealed class IamNormalizedLookupAdapterTests
             Assert.True(adapter.RoundTripObserver.Snapshot() > 0);
             Assert.Equal(
                 [
-                    "find-user-by-normalized-name",
-                    "find-user-by-normalized-email",
-                    "find-role-by-normalized-name",
-                    "list-user-roles",
-                    "list-role-users",
-                    "accept-current-revision-update",
-                    "reject-stale-revision-update"
+                    "list-bounded-due-timers",
+                    "advance-due-timer",
+                    "attempt-stale-advance",
+                    "reopen-and-read-due-state"
                 ],
                 adapter.Operations.Select(operation => operation.Id));
             foreach (var operation in adapter.Operations)
@@ -97,14 +94,14 @@ public sealed class IamNormalizedLookupAdapterTests
     private static RunRequest Request() => new(
         ComparisonCohortId: "cohort",
         MeasurementSetId: "set",
-        WorkloadId: IamNormalizedLookupWorkload.WorkloadId,
+        WorkloadId: RuntimeDueTimerSelectionWorkload.WorkloadId,
         WorkloadVersion: "1.1.0",
         Provider: "sqlite",
         ProviderVersion: "3.0.0",
         ProviderTopology: "file-backed-distinct-connections",
         ProviderConfiguration: new Dictionary<string, string>(StringComparer.Ordinal),
-        Adapter: BenchmarkAdapterRegistry.GroundworkAspNetCoreIdentityAdapter,
-        PhysicalForm: IamNormalizedLookupAdapter.PhysicalForm,
+        Adapter: BenchmarkAdapterRegistry.GroundworkV2Adapter,
+        PhysicalForm: DueTimerSelectionAdapter.PhysicalForm,
         Scale: "small",
         CommitSha: new string('a', 40),
         HarnessAssemblySha256: new string('b', 64),
@@ -114,10 +111,10 @@ public sealed class IamNormalizedLookupAdapterTests
         },
         CompositionFingerprint: new string('c', 64),
         HostFingerprintSha256: new string('d', 64),
-        Seed: IamNormalizedLookupWorkload.Seed,
-        InputFingerprintSha256: IamNormalizedLookupWorkload.ExpectedInputFingerprint,
-        NativePlanIdentity: "iam-normalized-lookup-test-provenance",
-        NativePlanEvidenceReference: "iam-normalized-lookup.sqlite.set.native-plan.json",
+        Seed: RuntimeDueTimerSelectionWorkload.Seed,
+        InputFingerprintSha256: RuntimeDueTimerSelectionWorkload.ExpectedInputFingerprint,
+        NativePlanIdentity: "due-timer-test-provenance",
+        NativePlanEvidenceReference: "due-timer.sqlite.set.native-plan.json",
         NativePlanContentSha256: new string('e', 64),
         ProcessKind: ProcessKind.Measured,
         ProcessIndex: 1);

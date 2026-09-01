@@ -10,6 +10,7 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 internal static class BenchmarkAdapterRegistry
 {
     internal const string GroundworkV2Adapter = "groundwork-v2";
+    internal const string GroundworkAspNetCoreIdentityAdapter = "groundwork-aspnetcore-identity";
     internal const string WorkloadVersion = "1.1.0";
     internal const string CheckpointPhysicalForm = "checkpoint-unit-of-work-with-linked-outbox";
 
@@ -34,10 +35,14 @@ internal static class BenchmarkAdapterRegistry
                 new TriggerBindingStimulusLookupAdapter(request, connectionString, outputDirectory),
             { WorkloadId: RuntimeRecurringScheduleSelectionWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: GroundworkV2Adapter, PhysicalForm: RecurringScheduleSelectionAdapter.PhysicalForm } =>
                 new RecurringScheduleSelectionAdapter(request, connectionString, outputDirectory),
-            { WorkloadId: IamNormalizedLookupWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: GroundworkV2Adapter, PhysicalForm: IamNormalizedLookupAdapter.PhysicalForm } =>
+            { WorkloadId: IamNormalizedLookupWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: GroundworkAspNetCoreIdentityAdapter, PhysicalForm: IamNormalizedLookupAdapter.PhysicalForm } =>
                 new IamNormalizedLookupAdapter(request, connectionString, outputDirectory),
             { WorkloadId: DistributedPlacementTakeoverWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: GroundworkV2Adapter, PhysicalForm: DistributedPlacementTakeoverAdapter.PhysicalForm } =>
                 new DistributedPlacementTakeoverAdapter(request, connectionString, outputDirectory),
+            { WorkloadId: DistributedCommandSendLeaseAckWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: GroundworkV2Adapter, PhysicalForm: DistributedCommandSendLeaseAckAdapter.PhysicalForm } =>
+                new DistributedCommandSendLeaseAckAdapter(request, connectionString, outputDirectory),
+            { WorkloadId: RuntimeDueTimerSelectionWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: GroundworkV2Adapter, PhysicalForm: DueTimerSelectionAdapter.PhysicalForm } =>
+                new DueTimerSelectionAdapter(request, connectionString, outputDirectory),
             _ => throw new PerformanceContractException(
                 $"No Groundwork adapter is registered for exact workload/adapter/physical form '{request.WorkloadId}/{request.Adapter}/{request.PhysicalForm}'.")
         };

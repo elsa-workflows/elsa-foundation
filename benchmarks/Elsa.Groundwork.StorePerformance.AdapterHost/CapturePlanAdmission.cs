@@ -19,9 +19,10 @@ internal static class CapturePlanAdmission
             ? candidate
             : throw new PerformanceContractException($"Workload '{request.WorkloadId}' is not in the frozen catalog.");
         ArtifactAdmission.ValidateRequest(workload, request);
-        if (!string.Equals(request.WorkloadId, RuntimeCheckpointCommitWorkload.WorkloadId, StringComparison.Ordinal))
+        if (!string.Equals(request.WorkloadId, RuntimeCheckpointCommitWorkload.WorkloadId, StringComparison.Ordinal) &&
+            !string.Equals(request.WorkloadId, IamNormalizedLookupWorkload.WorkloadId, StringComparison.Ordinal))
             throw new PerformanceContractException(
-                "The capture-plan command currently supports only the checkpoint-commit workload.");
+                "The capture-plan command supports only checkpoint-commit and iam-normalized-lookup-update.");
 
         var expectedReference = NativePlanEvidenceStaging.ReferenceFor(
             request.WorkloadId,
@@ -29,6 +30,6 @@ internal static class CapturePlanAdmission
             request.MeasurementSetId);
         if (!string.Equals(request.NativePlanEvidenceReference, expectedReference, StringComparison.Ordinal))
             throw new PerformanceContractException(
-                $"Checkpoint evidence must use '{expectedReference}' as --native-plan-evidence; received '{request.NativePlanEvidenceReference}'.");
+                $"Native-plan evidence must use '{expectedReference}' as --native-plan-evidence; received '{request.NativePlanEvidenceReference}'.");
     }
 }

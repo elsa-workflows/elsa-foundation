@@ -1,6 +1,7 @@
 using Elsa.Groundwork.StorePerformance.AdapterHost;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using Xunit;
 
 namespace Elsa.Groundwork.StorePerformance.AdapterHost.Tests;
@@ -77,13 +78,50 @@ public sealed class BenchmarkAdapterRegistryTests
     public async Task Dispatches_iam_normalized_lookup_update_to_its_exact_groundwork_physical_form()
     {
         await using var adapter = BenchmarkAdapterRegistry.Create(
-            Request("iam-normalized-lookup-update", IamNormalizedLookupAdapter.PhysicalForm),
+            Request(
+                "iam-normalized-lookup-update",
+                IamNormalizedLookupAdapter.PhysicalForm,
+                adapter: BenchmarkAdapterRegistry.GroundworkAspNetCoreIdentityAdapter),
             "unused",
             "unused");
 
         Assert.IsType<IamNormalizedLookupAdapter>(adapter);
         var workload = WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()).Workloads["iam-normalized-lookup-update"];
         Assert.Contains(IamNormalizedLookupAdapter.PhysicalForm, workload.PhysicalFormsFor646);
+    }
+
+    [Fact]
+    public async Task Matrix_admission_dispatches_iam_to_the_ratified_identity_adapter()
+    {
+        var workload = WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()).Workloads["iam-normalized-lookup-update"];
+        var request = new MatrixRequest(
+            "iam-admission-cohort",
+            "iam-admission-set",
+            workload.Id,
+            workload.Version,
+            "sqlite",
+            BenchmarkAdapterRegistry.GroundworkAspNetCoreIdentityAdapter,
+            IamNormalizedLookupAdapter.PhysicalForm,
+            "100k",
+            new string('a', 40),
+            new string('b', 64),
+            new Dictionary<string, string> { ["Groundwork.Identity"] = "0.0.1-preview.60" },
+            new string('c', 64),
+            new string('d', 64),
+            "3.46.0",
+            "file-backed-distinct-connections",
+            new Dictionary<string, string> { ["journal_mode"] = "wal" },
+            workload.Input.Seed,
+            workload.Input.FingerprintSha256,
+            "iam-admission-native-plan",
+            "iam-admission.native-plan.json",
+            new string('e', 64));
+
+        var plan = MatrixPlan.Create(workload, request);
+
+        await using var adapter = BenchmarkAdapterRegistry.Create(plan.Runs[0], "unused", "unused");
+
+        Assert.IsType<IamNormalizedLookupAdapter>(adapter);
     }
 
     [Fact]
@@ -138,7 +176,10 @@ public sealed class BenchmarkAdapterRegistryTests
     public async Task Iam_normalized_lookup_update_operations_are_not_admitted_before_correctness_preparation()
     {
         await using var adapter = BenchmarkAdapterRegistry.Create(
-            Request("iam-normalized-lookup-update", IamNormalizedLookupAdapter.PhysicalForm),
+            Request(
+                "iam-normalized-lookup-update",
+                IamNormalizedLookupAdapter.PhysicalForm,
+                adapter: BenchmarkAdapterRegistry.GroundworkAspNetCoreIdentityAdapter),
             "unused",
             "unused");
 
@@ -151,7 +192,10 @@ public sealed class BenchmarkAdapterRegistryTests
     public async Task Gives_each_iam_matrix_process_a_distinct_deterministic_persistence_scope()
     {
         await using var warmup = (IamNormalizedLookupAdapter)BenchmarkAdapterRegistry.Create(
-            Request("iam-normalized-lookup-update", IamNormalizedLookupAdapter.PhysicalForm) with
+            Request(
+                "iam-normalized-lookup-update",
+                IamNormalizedLookupAdapter.PhysicalForm,
+                adapter: BenchmarkAdapterRegistry.GroundworkAspNetCoreIdentityAdapter) with
             {
                 ProcessKind = ProcessKind.Warmup,
                 ProcessIndex = 0
@@ -159,7 +203,10 @@ public sealed class BenchmarkAdapterRegistryTests
             "unused",
             "unused");
         await using var measured = (IamNormalizedLookupAdapter)BenchmarkAdapterRegistry.Create(
-            Request("iam-normalized-lookup-update", IamNormalizedLookupAdapter.PhysicalForm) with
+            Request(
+                "iam-normalized-lookup-update",
+                IamNormalizedLookupAdapter.PhysicalForm,
+                adapter: BenchmarkAdapterRegistry.GroundworkAspNetCoreIdentityAdapter) with
             {
                 ProcessKind = ProcessKind.Measured,
                 ProcessIndex = 1
@@ -167,7 +214,10 @@ public sealed class BenchmarkAdapterRegistryTests
             "unused",
             "unused");
         await using var measuredRetry = (IamNormalizedLookupAdapter)BenchmarkAdapterRegistry.Create(
-            Request("iam-normalized-lookup-update", IamNormalizedLookupAdapter.PhysicalForm) with
+            Request(
+                "iam-normalized-lookup-update",
+                IamNormalizedLookupAdapter.PhysicalForm,
+                adapter: BenchmarkAdapterRegistry.GroundworkAspNetCoreIdentityAdapter) with
             {
                 ProcessKind = ProcessKind.Measured,
                 ProcessIndex = 1
@@ -197,6 +247,60 @@ public sealed class BenchmarkAdapterRegistryTests
     {
         await using var adapter = BenchmarkAdapterRegistry.Create(
             Request("placement-takeover", DistributedPlacementTakeoverAdapter.PhysicalForm),
+            "unused",
+            "unused");
+
+        var exception = Assert.Throws<PerformanceContractException>(() => adapter.Operations);
+
+        Assert.Contains("before correctness preparation", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Dispatches_command_send_lease_ack_to_its_exact_groundwork_physical_form()
+    {
+        await using var adapter = BenchmarkAdapterRegistry.Create(
+            Request(DistributedCommandSendLeaseAckWorkload.WorkloadId, DistributedCommandSendLeaseAckAdapter.PhysicalForm),
+            "unused",
+            "unused");
+
+        Assert.IsType<DistributedCommandSendLeaseAckAdapter>(adapter);
+        var workload = WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot())
+            .Workloads[DistributedCommandSendLeaseAckWorkload.WorkloadId];
+        Assert.Contains(DistributedCommandSendLeaseAckAdapter.PhysicalForm, workload.PhysicalFormsFor646);
+    }
+
+    [Fact]
+    public async Task Command_send_lease_ack_operations_are_not_admitted_before_correctness_preparation()
+    {
+        await using var adapter = BenchmarkAdapterRegistry.Create(
+            Request(DistributedCommandSendLeaseAckWorkload.WorkloadId, DistributedCommandSendLeaseAckAdapter.PhysicalForm),
+            "unused",
+            "unused");
+
+        var exception = Assert.Throws<PerformanceContractException>(() => adapter.Operations);
+
+        Assert.Contains("before correctness preparation", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Dispatches_due_timer_selection_to_its_exact_groundwork_physical_form()
+    {
+        await using var adapter = BenchmarkAdapterRegistry.Create(
+            Request(RuntimeDueTimerSelectionWorkload.WorkloadId, DueTimerSelectionAdapter.PhysicalForm),
+            "unused",
+            "unused");
+
+        Assert.IsType<DueTimerSelectionAdapter>(adapter);
+        var workload = WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot())
+            .Workloads[RuntimeDueTimerSelectionWorkload.WorkloadId];
+        Assert.Contains(DueTimerSelectionAdapter.PhysicalForm, workload.PhysicalFormsFor646);
+    }
+
+    [Fact]
+    public async Task Due_timer_selection_operations_are_not_admitted_before_correctness_preparation()
+    {
+        await using var adapter = BenchmarkAdapterRegistry.Create(
+            Request(RuntimeDueTimerSelectionWorkload.WorkloadId, DueTimerSelectionAdapter.PhysicalForm),
             "unused",
             "unused");
 
@@ -260,6 +364,12 @@ public sealed class BenchmarkAdapterRegistryTests
     [InlineData("placement-takeover", "shared-documents-with-linked-index-tables", "groundwork-v2")]
     [InlineData("placement-takeover", "dedicated-placement-lease-documents", "other-adapter")]
     [InlineData("placement-takeover", "dedicated-placement-lease-documents", "groundwork-v2", "9.9.9")]
+    [InlineData("command-send-lease-ack", "shared-documents-with-linked-index-tables", "groundwork-v2")]
+    [InlineData("command-send-lease-ack", "dedicated-command-transport-documents", "other-adapter")]
+    [InlineData("command-send-lease-ack", "dedicated-command-transport-documents", "groundwork-v2", "9.9.9")]
+    [InlineData("due-timer-selection", "shared-documents-with-linked-index-tables", "groundwork-v2")]
+    [InlineData("due-timer-selection", "dedicated-durable-timer-documents", "other-adapter")]
+    [InlineData("due-timer-selection", "dedicated-durable-timer-documents", "groundwork-v2", "9.9.9")]
     public void Refuses_unregistered_workload_adapter_and_physical_form_without_fallback(
         string workloadId,
         string physicalForm,
