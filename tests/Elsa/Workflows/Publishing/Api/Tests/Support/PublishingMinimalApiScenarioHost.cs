@@ -7,6 +7,7 @@ using Elsa.Workflows.Publishing.Api.Tests.Support;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -73,13 +74,14 @@ internal sealed class PublishingMinimalApiScenarioHost(WebApplication app) : IAs
         app.MapOpenApi();
         await app.StartAsync();
 
-        var slotStore = app.Services.GetRequiredService<IPublicationSlotStore>();
-        await slotStore.TryActivateAsync(
+        var activationAuthority = app.Services.GetRequiredService<IWorkflowActivationAuthority>();
+        await activationAuthority.TryActivateAsync(new WorkflowActivationSlotRequest(
             "definition-route",
             "default",
             "publication-capture",
-            expectedRevision: 0,
-            new DateTimeOffset(2026, 8, 17, 12, 0, 0, TimeSpan.Zero));
+            WorkflowActivationSource.Publishing,
+            ExpectedRevision: 0,
+            new DateTimeOffset(2026, 8, 17, 12, 0, 0, TimeSpan.Zero)));
         return new PublishingMinimalApiScenarioHost(app);
     }
 

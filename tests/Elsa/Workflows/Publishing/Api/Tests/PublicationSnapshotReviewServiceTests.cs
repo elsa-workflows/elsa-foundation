@@ -4,6 +4,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Services;
+using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
@@ -93,7 +94,10 @@ public sealed class PublicationSnapshotReviewServiceTests
             new ResolvedPublicationAction(
                 "definition-1", "snapshot", PublicationAction.Replace, "default",
                 PublicationPolicySource.Workflow, PolicyRevision: 7),
-            new PublicationSlot("slot-1", "definition-1", "default", activePublicationId, slotRevision, DateTimeOffset.UnixEpoch),
+            new WorkflowActivationSlot(
+                WorkflowActivationSlotIdentity.Create("definition-1", "default"),
+                "definition-1", "default", activePublicationId, WorkflowActivationSource.Publishing,
+                slotRevision, DateTimeOffset.UnixEpoch),
             new PublicationPreflightResult(true, [], []),
             []);
 

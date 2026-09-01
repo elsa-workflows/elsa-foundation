@@ -15,6 +15,7 @@ using Elsa.Workflows.Publishing.Core.Events;
 using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -54,16 +55,19 @@ public class WorkflowsPublishingFeature : IShellFeature
             serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>());
         services.TryAddScoped<IExecutableActivityTemplateReader>(serviceProvider =>
             serviceProvider.GetRequiredService<IExecutableActivityTemplateStore>());
-        services.TryAddSingleton<IPublicationSlotStore, InMemoryPublicationSlotStore>();
         services.TryAddSingleton<IPublicationRecordStore, InMemoryPublicationRecordStore>();
         services.TryAddSingleton<IPublicationPolicyStore, InMemoryPublicationPolicyStore>();
         services.TryAddSingleton<IPublicationProjectionIntentStore, InMemoryPublicationProjectionIntentStore>();
         // Deterministic policies hold no request or persistence state and remain safe singletons.
         services.TryAddSingleton<IPublicationPolicyResolver, PublicationPolicyResolver>();
         services.TryAddSingleton<IPublicationPreflightService, PublicationPreflightService>();
+        // Runtime owns activation authority, lifecycle coordination, and serving projections. The runtime core
+        // feature normally supplies these services; keep provider-neutral fallbacks here for engine-only
+        // compositions that do not mount the complete runtime feature.
+        services.TryAddSingleton<IWorkflowActivationAuthority, InMemoryWorkflowActivationAuthority>();
+        services.TryAddScoped<IWorkflowActivationCoordinator, WorkflowActivationCoordinator>();
         // Publishing operations consume provider-overridable stores. Durable providers register those stores as
         // scoped services, so their aggregators must share the request scope instead of capturing it globally.
-        services.TryAddScoped<IPublicationProjectionPreparer, PublicationProjectionReconciler>();
         services.TryAddScoped<IPublicationActivator, PublicationActivator>();
         services.TryAddScoped<WorkflowPublicationPreflightReader>();
         services.TryAddScoped<PublicationSnapshotReviewService>();

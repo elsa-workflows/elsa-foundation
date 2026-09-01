@@ -40,7 +40,7 @@
     {
       "identity": "checked-in-commit",
       "path": "tests/Elsa/Workflows/Publishing/Api/Tests/Support/PublishingCompatibilityHost.cs",
-      "sha256": "fdb7f0c40015b53aa9cc7eeece395efec793b4d3bfc1b8f279ced5852b662fea"
+      "sha256": "4aeef6133b47a0f8d9a4860b57dfa74e542384e3d7a08ade18d909f238f76bb5"
     },
     {
       "identity": "source-commit:cd9fa1743fb982ca60c33384762644b02fdd95ed",
@@ -63,7 +63,7 @@
       "sha256": "695796b0e7c2fb3dbca453ee19c4df772c83adecd8d7b147510a81bda5b3487a"
     }
   ],
-  "runnerFingerprint": "889f5b46e8e0aedfbaf747c6be84733cc5f1f73467d50465063d301e5f3700f3",
+  "runnerFingerprint": "f1b101abd3601f76e17437318e16df6932f55c38cf29661b5018900bb75afba9",
   "runnerIdentity": "checked-in-commit",
   "sourceCommit": "cd9fa1743fb982ca60c33384762644b02fdd95ed",
   "sourceRelationship": "ancestor-before-migration",

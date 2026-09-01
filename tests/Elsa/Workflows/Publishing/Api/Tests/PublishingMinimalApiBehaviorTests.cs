@@ -159,9 +159,7 @@ public sealed class PublishingMinimalApiBehaviorTests
         await using var host = await PublishingMinimalApiScenarioHost.StartAsync(
             configureServices: services =>
             {
-                services.RemoveAll<IPublicationSlotStore>();
                 services.RemoveAll<IPublicationPolicyStore>();
-                services.AddSingleton<IPublicationSlotStore, ThrowingPublicationSlotStore>();
                 services.AddSingleton<IPublicationPolicyStore, ThrowingPublicationPolicyStore>();
             });
 
@@ -251,44 +249,6 @@ public sealed class PublishingMinimalApiBehaviorTests
     }
 
     private static StringContent Json(string body) => new(body, Encoding.UTF8, "application/json");
-}
-
-internal sealed class ThrowingPublicationSlotStore(IHttpContextAccessor contextAccessor) : IPublicationSlotStore
-{
-    private readonly InMemoryPublicationSlotStore inner = new();
-
-    public ValueTask<PublicationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default) =>
-        ShouldThrow() ? Fail<PublicationSlot?>() : inner.FindAsync(workflowDefinitionId, slotName, cancellationToken);
-
-    public ValueTask<IReadOnlyCollection<PublicationSlot>> ListByDefinitionAsync(
-        string workflowDefinitionId,
-        CancellationToken cancellationToken = default) =>
-        ShouldThrow() ? Fail<IReadOnlyCollection<PublicationSlot>>() : inner.ListByDefinitionAsync(workflowDefinitionId, cancellationToken);
-
-    public ValueTask<PublicationSlotTransitionResult> TryActivateAsync(
-        string workflowDefinitionId,
-        string slotName,
-        string publicationId,
-        long expectedRevision,
-        DateTimeOffset updatedAt,
-        CancellationToken cancellationToken = default) =>
-        inner.TryActivateAsync(workflowDefinitionId, slotName, publicationId, expectedRevision, updatedAt, cancellationToken);
-
-    public ValueTask<PublicationSlotTransitionResult> TryUnpublishAsync(
-        string workflowDefinitionId,
-        string slotName,
-        long expectedRevision,
-        DateTimeOffset updatedAt,
-        CancellationToken cancellationToken = default) =>
-        inner.TryUnpublishAsync(workflowDefinitionId, slotName, expectedRevision, updatedAt, cancellationToken);
-
-    private bool ShouldThrow() => string.Equals(
-        contextAccessor.HttpContext?.Request.Headers[PublishingCompatibilityCases.IdentityHeader].ToString(),
-        "trusted-store-500",
-        StringComparison.Ordinal);
-
-    private static ValueTask<T> Fail<T>() =>
-        ValueTask.FromException<T>(new InvalidOperationException("private store payload"));
 }
 
 internal sealed class ThrowingPublicationPolicyStore(IHttpContextAccessor contextAccessor) : IPublicationPolicyStore

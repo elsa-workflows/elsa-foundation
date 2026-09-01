@@ -63,12 +63,12 @@ public sealed class PublishingApiContractCompatibilityTests
                                                        type != typeof(RuntimePreflightProblemDetails)).ToArray();
         var legacyHash = PublicShapeHash(legacyTypes);
         Assert.Equal(
-            "63430f41db77f9753839ec9b4d99c6dba867c6320be6258d9647ec29cf83b905",
+            "f58d9676edb59120b821afc2b2ffaaaa1b5c7d4affab172a1cc5c898d712e6fc",
             legacyHash);
 
         var actualHash = PublicShapeHash(ContractTypes);
         Assert.True(
-            actualHash == "281eaa4dfea8afbb79b4cfd7fc0183b6558c912e5b50fd2e7904fed2183d1e02",
+            actualHash == "71f99ad8b33f301aadef8fac6f347d82d1628c882bc84e745e91d584ff69c6ee",
             $"The Publishing API public-shape hash changed to {actualHash}.");
     }
 

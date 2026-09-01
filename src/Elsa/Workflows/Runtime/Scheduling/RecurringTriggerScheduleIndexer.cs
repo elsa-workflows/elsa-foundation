@@ -90,7 +90,13 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
         ArgumentException.ThrowIfNullOrWhiteSpace(slotId);
 
         if (_providers.Count == 0)
+        {
+            // The activation coordinator treats a composed schedule store as part of the prepared serving
+            // projection. Mark the activation prepared even when no recurring providers contributed rows so a
+            // later coordinator-owned activation cannot confuse an intentionally empty projection with a leak.
+            await _store.PrepareActivationAsync(activationId, [], cancellationToken);
             return await _inner.PrepareActivationAsync(executable, activationId, slotId, cancellationToken);
+        }
 
         var schedules = MaterializeSchedules(executable, _timeProvider.GetUtcNow(), activationId, slotId);
         var bindings = await _inner.PrepareActivationAsync(executable, activationId, slotId, cancellationToken);
