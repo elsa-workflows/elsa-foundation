@@ -24,6 +24,38 @@ public sealed class BenchmarkAdapterRegistryTests
         Assert.IsType<CheckpointCommitAdapter>(adapter);
     }
 
+    [Fact]
+    public async Task Gives_each_checkpoint_matrix_process_a_distinct_deterministic_persistence_scope()
+    {
+        await using var warmup = (CheckpointCommitAdapter)BenchmarkAdapterRegistry.Create(
+            Request("checkpoint-commit", "checkpoint-unit-of-work-with-linked-outbox") with
+            {
+                ProcessKind = ProcessKind.Warmup,
+                ProcessIndex = 0
+            },
+            "unused",
+            "unused");
+        await using var measured = (CheckpointCommitAdapter)BenchmarkAdapterRegistry.Create(
+            Request("checkpoint-commit", "checkpoint-unit-of-work-with-linked-outbox") with
+            {
+                ProcessKind = ProcessKind.Measured,
+                ProcessIndex = 1
+            },
+            "unused",
+            "unused");
+        await using var measuredRetry = (CheckpointCommitAdapter)BenchmarkAdapterRegistry.Create(
+            Request("checkpoint-commit", "checkpoint-unit-of-work-with-linked-outbox") with
+            {
+                ProcessKind = ProcessKind.Measured,
+                ProcessIndex = 1
+            },
+            "unused",
+            "unused");
+
+        Assert.NotEqual(warmup.PersistenceScope, measured.PersistenceScope);
+        Assert.Equal(measured.PersistenceScope, measuredRetry.PersistenceScope);
+    }
+
     [Theory]
     [InlineData("bookmark-lookup", "document-type-specific-tables", "other-adapter")]
     [InlineData("bookmark-lookup", "checkpoint-unit-of-work-with-linked-outbox", "groundwork-v2")]

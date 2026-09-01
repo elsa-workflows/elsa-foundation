@@ -51,7 +51,7 @@ static async Task<int> CapturePlan(string[] args)
     CapturePlanAdmission.Ensure(request);
     var connectionString = ProviderConnections.RequireConnectionString(request.Provider);
     var observed = await ProviderProbe.ReadAsync(request.Provider, connectionString);
-    var reference = NativePlanEvidenceStaging.ReferenceFor(request.WorkloadId, request.Provider);
+    var reference = NativePlanEvidenceStaging.ReferenceFor(request.WorkloadId, request.Provider, request.MeasurementSetId);
     if (!string.Equals(reference, request.NativePlanEvidenceReference, StringComparison.Ordinal))
         throw new PerformanceContractException(
             $"Checkpoint evidence must use '{reference}' as --native-plan-evidence; received '{request.NativePlanEvidenceReference}'.");

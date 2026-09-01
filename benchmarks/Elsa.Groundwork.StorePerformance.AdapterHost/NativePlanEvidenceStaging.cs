@@ -35,21 +35,20 @@ internal static class NativePlanEvidenceStaging
     /// <summary>
     /// The <c>.native-plan.json</c> suffix is load-bearing: <c>SafeRawPlanReference</c> rejects it, so an
     /// evidence document can never be mistaken for — or cross-registered as — a raw provider plan.
+    /// The composed name is admitted rather than trusting its parts. <c>workloadId</c>, <c>provider</c>, and
+    /// <c>measurementSetId</c> reach here from a document, so a value like <c>../evil</c> would compose into
+    /// a reference that escapes the directory it is about to be written into. <c>EvidenceName</c> rejects
+    /// anything that is not a safe top-level name, which is what makes every <c>Path.Combine</c> on the result
+    /// sound.
     /// </summary>
-    /// <summary>
-    /// Admits the composed name rather than trusting its parts. <c>workloadId</c> and <c>provider</c> reach
-    /// here from a document, so a value like <c>../evil</c> would compose into a reference that escapes the
-    /// directory it is about to be written into. <c>EvidenceName</c> rejects anything that is not a safe
-    /// top-level name, which is what makes every <c>Path.Combine</c> on the result sound.
-    /// </summary>
-    public static string ReferenceFor(string workloadId, string provider) =>
-        ArtifactStore.EvidenceName($"{workloadId}.{provider}.native-plan.json");
+    public static string ReferenceFor(string workloadId, string provider, string measurementSetId) =>
+        ArtifactStore.EvidenceName($"{workloadId}.{provider}.{measurementSetId}.native-plan.json");
 
     public static string Write(string directory, NativePlanEvidenceDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
         Directory.CreateDirectory(directory);
-        var path = Path.Combine(directory, ReferenceFor(document.WorkloadId, document.Provider));
+        var path = Path.Combine(directory, ReferenceFor(document.WorkloadId, document.Provider, document.MeasurementSetId));
         File.WriteAllText(path, JsonSerializer.Serialize(document, ArtifactStore.JsonOptions));
         return Sha256(path);
     }
@@ -69,6 +68,10 @@ internal static class NativePlanEvidenceStaging
         if (!string.Equals(request.WorkloadId, "checkpoint-commit", StringComparison.Ordinal))
             throw new PerformanceContractException(
                 "The zero-route native-plan document is only valid for checkpoint-commit.");
+        var expectedReference = ReferenceFor(request.WorkloadId, request.Provider, request.MeasurementSetId);
+        if (!string.Equals(request.NativePlanEvidenceReference, expectedReference, StringComparison.Ordinal))
+            throw new PerformanceContractException(
+                $"Checkpoint evidence must use '{expectedReference}' as --native-plan-evidence; received '{request.NativePlanEvidenceReference}'.");
         if (!CheckpointTopologies.TryGetValue(request.Provider, out var expectedTopology) ||
             !string.Equals(observed.Topology, expectedTopology, StringComparison.Ordinal))
             throw new PerformanceContractException(

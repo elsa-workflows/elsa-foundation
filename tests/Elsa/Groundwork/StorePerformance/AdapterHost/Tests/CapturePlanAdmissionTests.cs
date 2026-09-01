@@ -44,6 +44,19 @@ public sealed class CapturePlanAdmissionTests
         Assert.Contains("actual frozen input", exception.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Capture_plan_binds_evidence_reference_to_the_measurement_set_before_provider_access()
+    {
+        var request = Request() with
+        {
+            NativePlanEvidenceReference = "checkpoint-commit.sqlite.other-set.native-plan.json"
+        };
+
+        var exception = Assert.Throws<PerformanceContractException>(() => CapturePlanAdmission.Ensure(request));
+
+        Assert.Contains("checkpoint-commit.sqlite.set.native-plan.json", exception.Message, StringComparison.Ordinal);
+    }
+
     private static RunRequest Request() => new(
         ComparisonCohortId: "cohort",
         MeasurementSetId: "set",
@@ -70,7 +83,7 @@ public sealed class CapturePlanAdmissionTests
         Seed: "spec094-checkpoint-commit-v1.1",
         InputFingerprintSha256: "ee4cef346ca64739bbe7cfc84ee3f74e6acefec582f537c685991ca73c62ce13",
         NativePlanIdentity: "checkpoint-commit-zero-routes",
-        NativePlanEvidenceReference: "checkpoint-commit.sqlite.native-plan.json",
+        NativePlanEvidenceReference: "checkpoint-commit.sqlite.set.native-plan.json",
         NativePlanContentSha256: new string('e', 64),
         ProcessKind: ProcessKind.Measured,
         ProcessIndex: 0);

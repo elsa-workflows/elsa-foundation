@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 
@@ -20,8 +22,16 @@ internal sealed class CheckpointCommitAdapter(
     : IBenchmarkAdapter, IRuntimeCheckpointCommitWorkloadAdapter
 {
     private RuntimeStoreComposition? composition;
+    private readonly string persistenceScope = PersistenceScopeFor(request);
 
     public IProviderRoundTripObserver? RoundTripObserver => composition?.Observer;
+
+    /// <summary>
+    /// Keeps the four sequential matrix children isolated when they share one configured provider. The
+    /// scope is deterministic for one immutable run identity, so a retry in the same child scope is also
+    /// an equivalent replay rather than a new conflicting fixture.
+    /// </summary>
+    public string PersistenceScope => persistenceScope;
 
     private IReadOnlyList<IBenchmarkOperation>? operations;
 
@@ -34,16 +44,13 @@ internal sealed class CheckpointCommitAdapter(
             "The checkpoint-commit operations were requested before correctness preparation completed.");
 
     /// <summary>
-    /// The frozen scenario stamps every committed state with this tenant, and the checkpoint writer's
-    /// EnsureTenantScope refuses a commit whose ambient scope differs — so this is the only scope the
-    /// correctness baseline can run in. v1 imposed the same requirement; the handover README marked it
-    /// unverified on v2, and the first live correctness run answered it.
+    /// The workload stamps every committed state with this adapter-selected scope, and the checkpoint
+    /// writer's EnsureTenantScope refuses a commit whose ambient scope differs. The scope is therefore
+    /// passed into both the composition and the provider-neutral fixture.
     /// </summary>
-    private const string ScenarioPersistenceScope = "tenant-checkpoint";
-
     public async Task PrepareAsync(CancellationToken cancellationToken) =>
         composition ??= await RuntimeStoreComposition.CreateAsync(
-            request.Provider, connectionString, ScenarioPersistenceScope, cancellationToken);
+            request.Provider, connectionString, persistenceScope, cancellationToken);
 
     /// <summary>
     /// Runs the catalog-owned correctness baseline and reports the digest it actually produced.
@@ -106,6 +113,36 @@ internal sealed class CheckpointCommitAdapter(
     private RuntimeStoreComposition Require() =>
         composition ?? throw new PerformanceContractException(
             "The adapter has no composed backing; PrepareAsync must run first.");
+
+    private static string PersistenceScopeFor(RunRequest request)
+    {
+        var identity = string.Join(
+            '|',
+            request.ComparisonCohortId,
+            request.MeasurementSetId,
+            request.WorkloadId,
+            request.WorkloadVersion,
+            request.Provider,
+            request.ProviderVersion,
+            request.ProviderTopology,
+            string.Join(';', request.ProviderConfiguration.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}={pair.Value}")),
+            request.Adapter,
+            request.PhysicalForm,
+            request.Scale,
+            request.CommitSha,
+            request.HarnessAssemblySha256,
+            request.CompositionFingerprint,
+            request.HostFingerprintSha256,
+            request.Seed,
+            request.InputFingerprintSha256,
+            request.NativePlanIdentity,
+            request.NativePlanEvidenceReference,
+            request.NativePlanContentSha256,
+            request.ProcessKind,
+            request.ProcessIndex);
+        var digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity))).ToLowerInvariant();
+        return $"benchmark-checkpoint-{digest}";
+    }
 
     private sealed class BenchmarkOperation(IRuntimeCheckpointCommitWorkloadOperation operation) : IBenchmarkOperation
     {

@@ -108,11 +108,15 @@ those two pass.
 
 Two operational facts the runs established, both previously unverified:
 
-- **The correctness baseline must run in the `tenant-checkpoint` persistence scope.** The scenario stamps
-  every state with that tenant and the checkpoint writer's `EnsureTenantScope` refuses any other ambient
-  scope. `RuntimeStoreComposition` now takes the scope and registers it *before* `AddGroundworkV2RuntimeStores`,
-  whose own `AddPersistenceCore()` call registers the default scope via `TryAddScoped` — first registration
-  wins, so ordering is load-bearing.
+- **Each checkpoint matrix child gets its own deterministic persistence scope.** The scenario stamps every
+  state with the adapter-selected scope and the checkpoint writer's `EnsureTenantScope` refuses any other
+  ambient scope. `CheckpointCommitAdapter` derives that scope from the immutable cohort, measurement-set,
+  process kind, and process index, so the warmup and three measured children can share one configured
+  provider without colliding on their fixed checkpoint identities. Reusing the same process identity also
+  recreates the same logical timestamps, making an interrupted child an equivalent replay instead of a
+  fingerprint conflict. `RuntimeStoreComposition` registers the selected scope *before*
+  `AddGroundworkV2RuntimeStores`, whose own `AddPersistenceCore()` call registers the default scope via
+  `TryAddScoped` — first registration wins, so ordering is load-bearing.
 - **Use a fresh database per attempt.** The executable's ArtifactId is fixed by the frozen scenario, and a
   failed run leaves rows (including the separate coordination row) that make the next run fail differently —
   which cost a misdiagnosis before it was spotted.
@@ -206,7 +210,7 @@ Before a checkpoint run, invoke `probe-provider` with the provider connection in
 the native server version, the admitted topology, and the sanitized `--provider-setting` values to use when
 constructing the matrix request. Then invoke `capture-plan --request <request-json> --out <staging-directory>`
 for each provider. This command performs the live probe again and emits
-`checkpoint-commit.<provider>.native-plan.json`; its digest is the value for `--native-plan-sha256`. The
+`checkpoint-commit.<provider>.<measurement-set>.native-plan.json`; its digest is the value for `--native-plan-sha256`. The
 document's `RouteContract=no-native-routes-declared` is a provenance statement derived from the frozen
 checkpoint workload, not a provider-plan capture or a performance result.
 

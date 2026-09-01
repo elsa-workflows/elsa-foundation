@@ -32,6 +32,19 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
         Assert.Equal(RuntimeCheckpointCommitWorkload.CheckpointCount, adapter.Shared.RootWriteLeaseCount);
     }
 
+    [Fact]
+    public async Task Replaying_the_same_fixture_is_an_equivalent_commit_not_a_fingerprint_conflict()
+    {
+        var adapter = new CheckpointAdapter();
+        var workload = new RuntimeCheckpointCommitWorkload();
+
+        var first = await workload.ExecuteAsync(adapter);
+        var replay = await workload.ExecuteAsync(adapter);
+
+        Assert.Equal(first.ResultDigest, replay.ResultDigest);
+        Assert.Equal(RuntimeCheckpointCommitWorkload.CheckpointCount, adapter.Shared.Markers.Count);
+    }
+
     [Theory]
     [InlineData(CheckpointFault.AliasInitialClients)]
     [InlineData(CheckpointFault.AliasedComponentInstances)]

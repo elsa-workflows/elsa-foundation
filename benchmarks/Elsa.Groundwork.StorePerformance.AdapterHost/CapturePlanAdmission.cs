@@ -1,5 +1,6 @@
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 
 namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 
@@ -18,5 +19,16 @@ internal static class CapturePlanAdmission
             ? candidate
             : throw new PerformanceContractException($"Workload '{request.WorkloadId}' is not in the frozen catalog.");
         ArtifactAdmission.ValidateRequest(workload, request);
+        if (!string.Equals(request.WorkloadId, RuntimeCheckpointCommitWorkload.WorkloadId, StringComparison.Ordinal))
+            throw new PerformanceContractException(
+                "The capture-plan command currently supports only the checkpoint-commit workload.");
+
+        var expectedReference = NativePlanEvidenceStaging.ReferenceFor(
+            request.WorkloadId,
+            request.Provider,
+            request.MeasurementSetId);
+        if (!string.Equals(request.NativePlanEvidenceReference, expectedReference, StringComparison.Ordinal))
+            throw new PerformanceContractException(
+                $"Checkpoint evidence must use '{expectedReference}' as --native-plan-evidence; received '{request.NativePlanEvidenceReference}'.");
     }
 }
