@@ -202,15 +202,15 @@ leaves the two containers — the browser neither sees nor sends it.
 
 ## 5. Verify Postgres persistence
 
-The stack composes Elsa.Workbench with unified Postgres persistence (via the mounted
-`elsa-workbench.shells.json`), so workflow/activity data lives in the `postgres` service. Confirm it:
+The stack composes Elsa.Workbench with an explicit Groundwork Postgres provider and persistence lanes (via the
+mounted `elsa-workbench.shells.json`), so workflow/activity data lives in the `postgres` service. Confirm it:
 
 ```bash
 docker compose exec postgres psql -U elsa -d elsa -c '\dt'
 ```
 
 Groundwork gives every storage unit its own table, named after the unit, so `\dt` lists one per
-unit across the composed lanes: the design lanes contribute `elsa_workflow_definitions`,
+unit across the composed lanes: the design lanes contribute `elsa_workflow_definitions_v2`,
 `elsa_workflow_definition_drafts`, `elsa_workflow_definition_versions` and their siblings, and the
 runtime lane contributes the `runtime_*` family (`runtime_workflow_execution_state`,
 `runtime_checkpoint_commit`, and so on). Groundwork keeps its own bookkeeping in
@@ -220,7 +220,7 @@ To confirm a workflow you designed actually landed:
 
 ```bash
 docker compose exec postgres psql -U elsa -d elsa \
-  -c "SELECT count(*) FROM elsa_workflow_definitions;"
+  -c "SELECT count(*) FROM elsa_workflow_definitions_v2;"
 ```
 
 For the full explanation of the demo composition (which persistence lanes are included/omitted and
@@ -253,7 +253,7 @@ docker compose logs -f elsa-workbench        # or: postgres, elsa-studio
 var on the `elsa-workbench` service (there is a commented-out example in `docker-compose.yml`):
 
 ```
-CShells__Shells__default__Features__GroundworkUnifiedPersistencePostgreSql__ConnectionString=Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa
+CShells__Shells__default__Features__GroundworkProviderPostgreSql__ConnectionString=Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa
 ```
 
 **Override the Elsa host management key** — change it on **both** services so they still match:

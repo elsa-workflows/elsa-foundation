@@ -7,6 +7,10 @@ public static class ActivitiesDesignStorageManifest
 {
     public const string SchemaVersion = "1.0.0";
     public const int StorageSchemaVersion = 1;
+    // The version projection changed incompatibly when definitionId/semVerSortKey became required
+    // and their two legacy indexes collapsed into one unique domain tuple. Provision a clean
+    // pre-GA table instead of attempting an in-place backfill or retaining stale indexes.
+    public const int ActivityDefinitionVersionStorageSchemaVersion = 2;
     public const int MaximumIdLength = 450;
     public const int MaximumProjectionLength = 256;
 
@@ -54,7 +58,8 @@ public static class ActivitiesDesignStorageManifest
     public const string ActivityDefinitionVersionDefinitionIdField = DefinitionIdField;
     public const string ActivityDefinitionVersionSemVerSortKeyField = "semVerSortKey";
     public const string ActivityDefinitionVersionByDefinitionIndex = "activity_definition_versions_by_definition";
-    public const string ActivityDefinitionVersionByDefinitionAndSortKeyIndex = "activity_definition_version_by_definition_and_sort_key";
+    /// <summary>Compatibility alias; exact version lookup shares the bounded definition index.</summary>
+    public const string ActivityDefinitionVersionByDefinitionAndSortKeyIndex = ActivityDefinitionVersionByDefinitionIndex;
 
     public const string FindActivityDefinitionByIdQuery = "find-activity-definition-by-id";
     public const string ListAllActivityDefinitionsQuery = "list-all-activity-definitions";
@@ -136,7 +141,7 @@ public static class ActivitiesDesignStorageManifest
     public static IReadOnlyList<ActivityDesignQueryOrder> ActivityDefinitionDescriptionOrder =>
         [new(ActivityDefinitionDescriptionField), new(EntityIdField)];
     public static IReadOnlyList<ActivityDesignQueryOrder> ActivityDefinitionVersionOrder =>
-        [new(ActivityDefinitionVersionDefinitionIdField), new(ActivityDefinitionVersionSemVerSortKeyField), new(EntityIdField)];
+        [new(ActivityDefinitionVersionDefinitionIdField), new(ActivityDefinitionVersionSemVerSortKeyField)];
 
 
     public static IReadOnlyList<StorageUnit> CreateUnits() => UnitNames.Select(pair => CreateUnit(pair.Id, pair.Name)).ToArray();
@@ -159,15 +164,31 @@ public static class ActivitiesDesignStorageManifest
         {
             if (field is IdField or SchemaVersionField or ContentField or RevisionField or UpdatedAtField or ScopeField or TenantIdField)
                 continue;
-            declaration.String(field, ProjectionLength(field));
+            if (id == ActivityDefinitionVersionDocumentKind &&
+                field is ActivityDefinitionVersionDefinitionIdField or ActivityDefinitionVersionSemVerSortKeyField)
+                declaration.String(field, ProjectionLength(field), column => column.Required());
+            else
+                declaration.String(field, ProjectionLength(field));
         }
         foreach (var index in IndexesFor(id))
-            declaration.Index(index.Name, configure =>
+        {
+            void Configure(IndexBuilder configure)
             {
                 foreach (var column in index.Columns)
                     configure.Column(column);
-            });
-        return declaration.Scoped().Build() with { SchemaVersion = StorageSchemaVersion };
+            }
+
+            if (index.Unique)
+                declaration.UniqueIndex(index.Name, Configure);
+            else
+                declaration.Index(index.Name, Configure);
+        }
+        return declaration.Scoped().Build() with
+        {
+            SchemaVersion = id == ActivityDefinitionVersionDocumentKind
+                ? ActivityDefinitionVersionStorageSchemaVersion
+                : StorageSchemaVersion
+        };
     }
 
     private static IEnumerable<IndexSpec> IndexesFor(string id) => id switch
@@ -181,13 +202,13 @@ public static class ActivitiesDesignStorageManifest
         ],
         ActivityDefinitionVersionDocumentKind =>
         [
+            // semVerSortKey is unique within a definition.  The bounded route therefore uses the
+            // unique domain tuple directly for ordering and lookup; adding the entity id would
+            // exceed SQL Server's 1,700-byte key budget once the scoped key is added.
             Index(ActivityDefinitionVersionByDefinitionIndex,
                 ActivityDefinitionVersionDefinitionIdField,
                 ActivityDefinitionVersionSemVerSortKeyField,
-                ActivityDefinitionVersionIdField),
-            Index(ActivityDefinitionVersionByDefinitionAndSortKeyIndex,
-                ActivityDefinitionVersionDefinitionIdField,
-                ActivityDefinitionVersionSemVerSortKeyField)
+                unique: true)
         ],
         ActivityDefinitionAuthoringStateDocumentKind => [Index(ByDefinitionIndex, DefinitionIdField, IdField), Index(ByHeadVersionIndex, HeadVersionIdField, IdField)],
         ActivityDefinitionDraftDocumentKind => [Index(ByDefinitionIndex, DefinitionIdField, IdField)],
@@ -228,7 +249,7 @@ public static class ActivitiesDesignStorageManifest
     private static readonly (string Id, string Name)[] UnitNames =
     [
         (ActivityDefinitionDocumentKind, "elsa_activity_definitions"),
-        (ActivityDefinitionVersionDocumentKind, "elsa_activity_definition_versions"),
+        (ActivityDefinitionVersionDocumentKind, "elsa_activity_definition_versions_v2"),
         (ActivityAvailabilitySettingsDocumentKind, "elsa_activity_availability_settings"),
         (ActivityDefinitionAuthoringStateDocumentKind, "elsa_activity_definition_authoring"),
         (ActivityDefinitionDraftDocumentKind, "elsa_activity_definition_drafts"),
@@ -250,7 +271,10 @@ public static class ActivitiesDesignStorageManifest
         (DesignOperationDocumentKind, "elsa_activity_design_operations")
     ];
 
-    private static IndexSpec Index(string name, params string[] columns) => new(name, columns);
+    private static IndexSpec Index(string name, params string[] columns) => new(name, columns, false);
+
+    private static IndexSpec Index(string name, string column, string secondColumn, bool unique) =>
+        new(name, [column, secondColumn], unique);
 
     private static int ProjectionLength(string field) => field switch
     {
@@ -261,9 +285,9 @@ public static class ActivitiesDesignStorageManifest
         ManagementSearchField => ManagementSearchMaximumLength,
         // The SemVer encoder emits an 11-code-unit core plus one code unit per
         // prerelease identifier marker.  128 is deliberately large enough for
-        // long, valid prerelease identifiers while keeping the three-column
-        // (definitionId, sortKey, id) index within SQL Server's 1,700-byte key
-        // budget (256 + 128 + 450 UTF-16 code units = 1,668 bytes).
+        // long, valid prerelease identifiers while keeping the scoped
+        // (definitionId, sortKey) index within SQL Server's 1,700-byte key
+        // budget (128 + 256 + 128 UTF-16 code units = 1,024 bytes).
         ActivityDefinitionVersionSemVerSortKeyField => 128,
         ManagementValidFromField or ManagementValidToField or ManagementVisibilityField or
             ManagementSortField or ManagementAuthorityField or ManagementDraftStatusField or
@@ -271,5 +295,5 @@ public static class ActivitiesDesignStorageManifest
         _ => MaximumProjectionLength
     };
 
-    private sealed record IndexSpec(string Name, IReadOnlyList<string> Columns);
+    private sealed record IndexSpec(string Name, IReadOnlyList<string> Columns, bool Unique);
 }

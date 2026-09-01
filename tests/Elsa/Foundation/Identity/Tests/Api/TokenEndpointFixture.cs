@@ -74,9 +74,9 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
                         initialAdmin: TestAdmin.SeedOptions());
 
                     // Workstream B: OpenIddict issuance + bearer validation + selector default scheme.
-                    services.AddFoundationIdentityOpenIddict(
-                        options => options.IsDevelopmentOrDemo = true,
-                        configureDbContext: builder => builder.UseInMemoryDatabase($"openiddict-{databaseSuffix}"));
+                    services.AddOpenIddictVendorForTests(
+                        builder => builder.UseInMemoryDatabase($"openiddict-{databaseSuffix}"));
+                    services.AddFoundationIdentityOpenIddict(options => options.IsDevelopmentOrDemo = true);
 
                     // Model an external JWT handler that authenticates a raw provider principal. The token
                     // exchange must reject this identity until a provider-owned projection normalizes it.

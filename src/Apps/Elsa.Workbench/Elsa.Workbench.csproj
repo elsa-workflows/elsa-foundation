@@ -8,11 +8,11 @@
 	<ItemGroup>
 		<PackageReference Include="CShells.Management.Api" />
 		<PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+		<PackageReference Include="OpenIddict.EntityFrameworkCore" />
 		<PackageReference Include="Nuplane" />
 		<PackageReference Include="Nuplane.Admin" />
 		<PackageReference Include="Nuplane.Loading" />
 		<PackageReference Include="Nuplane.Sources.Directory" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -78,7 +78,7 @@
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\AspNetCoreIdentity\Groundwork\Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj" />
-		<ProjectReference Include="..\..\Elsa\Foundation\Identity\AspNetCoreIdentity\EntityFrameworkCore\Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Persistence\Groundwork\Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
 		<ProjectReference Include="..\..\Elsa\Secrets\Persistence\Groundwork\Elsa.Secrets.Persistence.Groundwork.csproj" />
@@ -109,8 +109,8 @@
 		<ProjectReference Include="..\..\Elsa\Modularity\ExtensionBuilder\Elsa.Modularity.ExtensionBuilder.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Nuplane\Elsa.Modularity.Nuplane.csproj" />
 		<ProjectReference Include="..\..\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
-		<ProjectReference Include="..\..\Elsa\Persistence\Groundwork\Sqlite\Unified\Elsa.Persistence.Groundwork.Sqlite.Unified.csproj" />
-		<ProjectReference Include="..\..\Elsa\Persistence\Groundwork\PostgreSql\Unified\Elsa.Persistence.Groundwork.PostgreSql.Unified.csproj" />
+		<ProjectReference Include="..\..\Elsa\Persistence\Groundwork\V2\Elsa.Persistence.Groundwork.V2.csproj" />
+		<ProjectReference Include="..\..\Elsa\Persistence\Groundwork\V2\Providers\Elsa.Persistence.Groundwork.V2.Providers.csproj" />
 		<ProjectReference Include="..\..\Elsa\Primitives\Primitives\Elsa.Primitives.csproj" />
 		<ProjectReference Include="..\..\Elsa\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
 		<ProjectReference Include="..\..\Elsa\Serialization\Newtonsoft\Elsa.Serialization.Newtonsoft.csproj" />
@@ -126,10 +126,13 @@
 		<ProjectReference Include="..\..\Elsa\Tasks\Elsa.Tasks.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\Persistence\Groundwork\Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Dashboard\Persistence\Groundwork\V2\Elsa.Workflows.Dashboard.Persistence.Groundwork.V2.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\JavaScript\Elsa.Workflows.Runtime.JavaScript.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Http\Elsa.Workflows.Runtime.Http.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Distributed\Elsa.Workflows.Runtime.Distributed.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Distributed\Persistence\Groundwork\Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj" />
 		<!--
-			The Groundwork persistence providers (SQLite and PostgreSQL, runtime and unified) each declare
+			The Groundwork persistence providers and durable lane features each declare
 			DependsOn "WorkflowsRuntimeResumption": a durable store keeps checkpoints/outbox/scheduler backlog,
 			and this feature supplies the background pump that re-drives that work after a restart. The host must
 			therefore reference the feature's assembly so it is present in the runtime feature catalog; CShells

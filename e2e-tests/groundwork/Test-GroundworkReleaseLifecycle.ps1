@@ -2,7 +2,7 @@
 .SYNOPSIS
     Groundwork release-adoption proof: author -> save/reload -> publish -> execute/suspend -> resume.
 .DESCRIPTION
-    Drives the real Elsa.Workbench HTTP API against its GroundworkUnifiedPersistenceSqlite composition.
+    Drives the real Elsa.Workbench HTTP API against its explicit Groundwork SQLite provider and persistence lanes.
     The version GET after submit is the persistence round-trip; the Event bookmark and later completion
     prove the published executable and runtime checkpoint survive the Groundwork store boundary.
 #>
@@ -20,7 +20,7 @@ $sequence = Invoke-Step "resolve Sequence" { Get-ActivityVersionId -Ctx $ctx -Ty
 $event = Invoke-Step "resolve Event" { Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Primitives.Activities.Event' }
 $tag = Get-Random -Maximum 999999
 $eventName = "groundwork-release-$tag"
-$expectedOutput = "groundwork-0.4.0-preview.1-$tag"
+$expectedOutput = "groundwork-0.4.0-preview.3-$tag"
 
 $wait = New-EventWaitNode -NodeId "wait" -EventVersionId $event -EventName $eventName
 $complete = New-SetOutputNode -NodeId "complete" -OutputName "GroundworkRelease" -Value $expectedOutput

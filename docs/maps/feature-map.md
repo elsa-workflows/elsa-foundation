@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 109
+- Discovered feature classes: 110
 
 ## Features
 
@@ -93,6 +93,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | TasksFeature | direct IShellFeature | Elsa.Tasks | IShellFeature | [TasksFeature.cs](../../src/Elsa/Tasks/TasksFeature.cs) |
 | OpenTelemetryEngineTracingBridgeFeature | direct IShellFeature | Elsa.Workbench | IShellFeature | [OpenTelemetryEngineTracingBridge.cs](../../src/Apps/Elsa.Workbench/OpenTelemetryEngineTracingBridge.cs) |
 | RuntimeFaultStackTraceFeature | direct IShellFeature | Elsa.Workbench | IShellFeature | [RuntimeFaultStackTraceFeature.cs](../../src/Apps/Elsa.Workbench/RuntimeFaultStackTraceFeature.cs) |
+| WorkbenchGroundworkDashboardFeature | direct IShellFeature | Elsa.Workbench | IShellFeature | [WorkbenchGroundworkDashboardFeature.cs](../../src/Apps/Elsa.Workbench/WorkbenchGroundworkDashboardFeature.cs) |
 | WorkflowsDashboardFeature | direct IWebShellFeature | Elsa.Workflows.Dashboard | IWebShellFeature | [WorkflowsDashboardFeature.cs](../../src/Elsa/Workflows/Dashboard/WorkflowsDashboardFeature.cs) |
 | WorkflowsDesignApiFeature | direct IWebShellFeature | Elsa.Workflows.Design.Api | IWebShellFeature | [WorkflowsDesignApiFeature.cs](../../src/Elsa/Workflows/Design/Api/WorkflowsDesignApiFeature.cs) |
 | JavaScriptWorkflowsDesignFeature | direct IShellFeature | Elsa.Workflows.Design.JavaScript | IShellFeature | [JavaScriptWorkflowsDesignFeature.cs](../../src/Elsa/Workflows/Design/JavaScript/JavaScriptWorkflowsDesignFeature.cs) |

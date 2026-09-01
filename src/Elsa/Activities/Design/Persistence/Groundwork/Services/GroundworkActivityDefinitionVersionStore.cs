@@ -45,7 +45,7 @@ public sealed class GroundworkActivityDefinitionVersionStore(
                 ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
                     ActivitiesDesignStorageManifest.ActivityDefinitionVersionSemVerSortKeyField, semVerSortKey))
             ],
-            [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.ActivityDefinitionVersionSemVerSortKeyField)]),
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionOrder),
             cancellationToken);
         return Deserialize(result);
     }
@@ -88,12 +88,7 @@ public sealed class GroundworkActivityDefinitionVersionStore(
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
             ActivitiesDesignStorageManifest.ListActivityDefinitionVersionsByDefinitionQuery,
             clauses,
-            [
-                new ActivityDesignQueryOrder(
-                    ActivitiesDesignStorageManifest.ActivityDefinitionVersionDefinitionIdField),
-                new ActivityDesignQueryOrder(
-                    ActivitiesDesignStorageManifest.ActivityDefinitionVersionSemVerSortKeyField),
-                new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.IdField)]);
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionOrder);
         var documents = await ActivityDesignQueryPager.QueryAllAsync(
             store,
             query.DocumentKind,

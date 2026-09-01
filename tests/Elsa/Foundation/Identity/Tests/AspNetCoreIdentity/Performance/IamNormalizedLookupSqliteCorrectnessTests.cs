@@ -1,3 +1,4 @@
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Extensions;
@@ -27,6 +28,7 @@ namespace Elsa.Foundation.Identity.Tests.AspNetCoreIdentity.Performance;
 [Collection(Differential.SqliteIdentityFileCollection.Name)]
 public sealed class IamNormalizedLookupSqliteCorrectnessTests
 {
+    private const int BoundedCursorPageSize = 100;
     private const int NativePlanAcceptanceCardinality = 100_000;
     private const int SeedBatchSize = 500;
 
@@ -161,15 +163,10 @@ public sealed class IamNormalizedLookupSqliteCorrectnessTests
             var userRoles = await users.GetRolesAsync(candidate, CancellationToken.None);
             var roleUsers = await users.GetUsersInRoleAsync(role.NormalizedName!, CancellationToken.None);
             var logins = await users.GetLoginsAsync(candidate, CancellationToken.None);
-            var claimMappingRows = rows.Query(
-                IdentityStorageManifest.IdentityClaimMappingDocumentKind,
-                new GroundworkIdentityRowQuery(
-                    IdentityStorageManifest.ProviderLookupKeyField,
-                    GroundworkIdentityRowComparison.Equal,
-                    IdentityDocumentId.From(IamNormalizedLookupWorkload.TenantId, "oidc"),
-                    IdentityStorageManifest.ClaimMappingOrderField,
-                    Take: IdentityStorageManifest.MaxMaterializedListEntries,
-                    ExpectedIndex: IdentityV2StorageManifest.ClaimMappingByProviderIndex));
+            var claimMappingRows = await claimMappings.ListForProviderAsync(
+                IamNormalizedLookupWorkload.TenantId,
+                "oidc",
+                CancellationToken.None);
             var expiredReceiptRows = rows.Query(
                 IdentityStorageManifest.IdentityMutationReceiptDocumentKind,
                 new GroundworkIdentityRowQuery(
@@ -323,14 +320,14 @@ public sealed class IamNormalizedLookupSqliteCorrectnessTests
             [IdentityV2StorageManifest.UserByNormalizedNameIndex] = (1, 1, false),
             [IdentityV2StorageManifest.UserByNormalizedEmailIndex] = (1, 2, false),
             [IdentityV2StorageManifest.RoleByNormalizedNameIndex] = (2, 1, false),
-            [IdentityV2StorageManifest.RoleByTenantIndex] = (1, IdentityStorageManifest.MaxMaterializedListEntries, false),
-            [IdentityV2StorageManifest.UserClaimByUserIndex] = (1, IdentityStorageManifest.MaxAggregateRelationshipEntries, false),
-            [IdentityV2StorageManifest.UserClaimByClaimIndex] = (1, IdentityStorageManifest.MaxAggregateRelationshipEntries, false),
-            [IdentityV2StorageManifest.RoleClaimByRoleIndex] = (1, IdentityStorageManifest.MaxAggregateRelationshipEntries, false),
-            [IdentityV2StorageManifest.UserRoleByUserIndex] = (1, IdentityStorageManifest.MaxAggregateRelationshipEntries, false),
-            [IdentityV2StorageManifest.UserRoleByRoleIndex] = (1, IdentityStorageManifest.MaxAggregateRelationshipEntries, false),
-            [IdentityV2StorageManifest.LoginByUserIndex] = (1, IdentityStorageManifest.MaxAggregateRelationshipEntries, false),
-            [IdentityV2StorageManifest.ClaimMappingByProviderIndex] = (1, IdentityStorageManifest.MaxMaterializedListEntries, false),
+            [IdentityV2StorageManifest.RoleByTenantIndex] = (1, BoundedCursorPageSize, false),
+            [IdentityV2StorageManifest.UserClaimByUserIndex] = (1, BoundedCursorPageSize, false),
+            [IdentityV2StorageManifest.UserClaimByClaimIndex] = (1, BoundedCursorPageSize, false),
+            [IdentityV2StorageManifest.RoleClaimByRoleIndex] = (1, BoundedCursorPageSize, false),
+            [IdentityV2StorageManifest.UserRoleByUserIndex] = (1, BoundedCursorPageSize, false),
+            [IdentityV2StorageManifest.UserRoleByRoleIndex] = (1, BoundedCursorPageSize, false),
+            [IdentityV2StorageManifest.LoginByUserIndex] = (1, BoundedCursorPageSize, false),
+            [IdentityV2StorageManifest.ClaimMappingByProviderIndex] = (1, BoundedCursorPageSize, false),
             [IdentityV2StorageManifest.MutationReceiptByExpiryIndex] = (1, 64, true)
         };
         Assert.Equal(expected.Values.Sum(item => item.Count), observations.Count);

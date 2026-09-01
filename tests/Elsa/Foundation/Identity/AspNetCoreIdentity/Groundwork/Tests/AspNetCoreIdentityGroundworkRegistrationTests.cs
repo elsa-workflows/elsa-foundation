@@ -1,12 +1,15 @@
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Authentication;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Seeding;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -31,6 +34,108 @@ public sealed class AspNetCoreIdentityGroundworkRegistrationTests
 
         Assert.True(featureType.IsPublic);
         Assert.False(featureType.IsSealed);
+    }
+
+    [Fact]
+    public void Registration_preserves_the_existing_seed_options_overload()
+    {
+        var method = RequiredType(RegistrationTypeName).GetMethod(
+            RegistrationMethodName,
+            [typeof(IServiceCollection), typeof(IdentitySeedOptions)]);
+
+        Assert.NotNull(method);
+    }
+
+    [Fact]
+    public void Feature_passes_configured_seed_options_to_groundwork_registration()
+    {
+        var services = ConfigureFeature(
+            isDevelopmentOrDemo: true,
+            userName: "admin",
+            password: "Password123!",
+            email: null,
+            roleName: null);
+
+        using var provider = services.BuildServiceProvider();
+        var seed = provider.GetRequiredService<IOptions<IdentitySeedOptions>>().Value;
+
+        Assert.Equal("admin", seed.UserName);
+        Assert.Equal("Password123!", seed.Password);
+        Assert.Equal("admin@elsa.local", seed.Email);
+        Assert.Equal(IdentitySeedOptions.DefaultRoleName, seed.RoleName);
+        Assert.True(seed.IsDevelopmentSeed);
+    }
+
+    [Theory]
+    [InlineData(true, CookieSecurePolicy.SameAsRequest)]
+    [InlineData(false, CookieSecurePolicy.Always)]
+    public void Feature_propagates_development_or_demo_mode_to_cookie_security(
+        bool isDevelopmentOrDemo,
+        CookieSecurePolicy expected)
+    {
+        var services = ConfigureFeature(
+            isDevelopmentOrDemo,
+            userName: null,
+            password: null,
+            email: null,
+            roleName: null);
+        using var provider = services.BuildServiceProvider();
+
+        var options = provider.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
+            .Get(AspNetCoreIdentityDefaults.CookieScheme);
+
+        Assert.Equal(expected, options.Cookie.SecurePolicy);
+    }
+
+    [Fact]
+    public void Feature_registers_no_seed_when_credentials_are_absent()
+    {
+        var services = ConfigureFeature(
+            isDevelopmentOrDemo: true,
+            userName: null,
+            password: null,
+            email: null,
+            roleName: null);
+
+        Assert.DoesNotContain(services, descriptor =>
+            descriptor.ServiceType == typeof(IOptions<IdentitySeedOptions>));
+    }
+
+    [Theory]
+    [InlineData("admin", null, "SeedAdminUserName is configured but SeedAdminPassword is not")]
+    [InlineData(null, "Password123!", "SeedAdminPassword is configured but SeedAdminUserName is not")]
+    public void Feature_rejects_half_configured_seed(string? userName, string? password, string expectedMessage)
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            ConfigureFeature(
+                isDevelopmentOrDemo: false,
+                userName: userName,
+                password: password,
+                email: null,
+                roleName: null));
+
+        Assert.Contains("FoundationIdentityAspNetCoreIdentityGroundwork", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(expectedMessage, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Production_seed_is_not_marked_as_development_seed()
+    {
+        const string password = "fixture";
+        var services = ConfigureFeature(
+            isDevelopmentOrDemo: false,
+            userName: "admin",
+            password: password,
+            email: "admin@example.test",
+            roleName: "operators");
+
+        using var provider = services.BuildServiceProvider();
+        var seed = provider.GetRequiredService<IOptions<IdentitySeedOptions>>().Value;
+
+        Assert.Equal(password, seed.Password);
+        Assert.Equal("admin@example.test", seed.Email);
+        Assert.Equal("operators", seed.RoleName);
+        Assert.False(seed.IsDevelopmentSeed);
     }
 
     [Fact]
@@ -142,6 +247,26 @@ public sealed class AspNetCoreIdentityGroundworkRegistrationTests
     {
         var services = new ServiceCollection();
         return RegisterGroundworkIdentity(services);
+    }
+
+    private static IServiceCollection ConfigureFeature(
+        bool isDevelopmentOrDemo,
+        string? userName,
+        string? password,
+        string? email,
+        string? roleName)
+    {
+        var services = new ServiceCollection();
+        var feature = new AspNetCoreIdentityGroundworkFeature
+        {
+            IsDevelopmentOrDemo = isDevelopmentOrDemo,
+            SeedAdminUserName = userName,
+            SeedAdminPassword = password,
+            SeedAdminEmail = email,
+            SeedAdminRoleName = roleName
+        };
+        feature.ConfigureServices(services);
+        return services;
     }
 
     private static IServiceCollection RegisterGroundworkIdentity(IServiceCollection services)

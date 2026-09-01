@@ -14,9 +14,9 @@ namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 /// <c>OpenIddictTokens</c> table.
 /// </summary>
 /// <remarks>
-/// Implemented as both an <see cref="IHostedService"/> (plain hosts / tests) and a CShells
-/// <see cref="IShellInitializer"/> (the shell-composed Elsa.Workbench host, where shell-scoped hosted services
-/// do not run). Ensure-created / migrate are idempotent, so running under either hook is safe.
+/// The frozen EF slice keeps both lifecycle interfaces for compatibility. Workbench wires the initializer as a
+/// root <see cref="IHostedService"/> because CShells copies root descriptors into shell providers; registering the
+/// same initializer again as an <see cref="IShellInitializer"/> would run durable migrations twice on activation.
 /// </remarks>
 public sealed class OpenIddictIdentityStoreInitializer(
     IServiceProvider services,
