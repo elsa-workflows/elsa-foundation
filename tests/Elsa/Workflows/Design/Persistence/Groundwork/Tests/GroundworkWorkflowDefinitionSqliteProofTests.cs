@@ -61,6 +61,18 @@ public sealed class GroundworkWorkflowDefinitionSqliteProofTests
             // run on persisted search keys, which is what makes folding portable.
             var miss = await store.ListAsync(new WorkflowDefinitionFilter { Name = "sqlite alpha" });
             var exact = await store.ListAsync(new WorkflowDefinitionFilter { Name = "SQLite Alpha" });
+            var nameQueries = source.Queries
+                .Where(query => query.Options?.SelectedIndex == WorkflowsDesignStorageManifest.DefinitionByNameIndex)
+                .ToArray();
+            Assert.Equal(2, nameQueries.Length);
+            Assert.All(nameQueries, query =>
+            {
+                Assert.Equal(
+                    [WorkflowsDesignStorageManifest.DefinitionNameLookupHashField,
+                     WorkflowsDesignStorageManifest.DefinitionIdField],
+                    query.Request.Order.Select(term => term.Column.Name));
+                Assert.IsType<Predicate.And>(query.Request.Where);
+            });
             source.Queries.Clear();
             var search = await store.ListAsync(new WorkflowDefinitionFilter { SearchTerm = "ALP" });
             source.Queries.Clear();
@@ -91,6 +103,58 @@ public sealed class GroundworkWorkflowDefinitionSqliteProofTests
     }
 
     [Fact]
+    public async Task Combined_exact_filters_use_the_description_hash_route_and_ordinal_residual()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"elsa-workflow-design-v2-combined-{Guid.NewGuid():N}.db");
+        try
+        {
+            var definitionUnit = WorkflowsDesignStorageManifest.Require(
+                WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
+            var access = StorageAccess.Scoped(new StorageScope("sqlite-combined"));
+            using (var connection = new SqliteProviderFactory().Create($"Data Source={path};Pooling=False"))
+            {
+                foreach (var unit in WorkflowsDesignStorageManifest.CreateUnits())
+                    connection.Schema.Apply(unit);
+                var session = connection.OpenSession(definitionUnit, access);
+                foreach (var values in new[]
+                         {
+                             DefinitionValues("combined-a", "Order Processing", "Handles orders"),
+                             DefinitionValues("combined-b", "Order Processing", "Other"),
+                             DefinitionValues("combined-c", "Other", "Handles orders")
+                         })
+                    Assert.True(session.Insert(values, WriteOptions.CreateOnly).Succeeded);
+            }
+
+            using var reopened = new SqliteProviderFactory().Create($"Data Source={path};Pooling=False");
+            var source = new NativeSessionSource(reopened);
+            var store = new GroundworkWorkflowDefinitionStore(
+                source,
+                DesignGroundworkTestAccess.AccessContext("sqlite-combined"));
+
+            var result = await store.ListAsync(new WorkflowDefinitionFilter
+            {
+                Name = "Order Processing",
+                Description = "Handles orders"
+            });
+
+            Assert.Equal(["combined-a"], result.Select(definition => definition.Id));
+            var query = Assert.Single(source.Queries);
+            Assert.Equal(WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex, query.Options?.SelectedIndex);
+            Assert.Null(query.Request.AcceptedScan);
+            Assert.Equal(
+                [WorkflowsDesignStorageManifest.DefinitionDescriptionLookupHashField,
+                 WorkflowsDesignStorageManifest.DefinitionIdField],
+                query.Request.Order.Select(term => term.Column.Name));
+        }
+        finally
+        {
+            foreach (var file in new[] { path, $"{path}-shm", $"{path}-wal" })
+                if (File.Exists(file))
+                    File.Delete(file);
+        }
+    }
+
+    [Fact]
     public void Definition_projection_uses_a_new_versioned_table_for_the_clean_schema_boundary()
     {
         var path = Path.Combine(Path.GetTempPath(), $"elsa-workflow-design-v2-boundary-{Guid.NewGuid():N}.db");
@@ -104,7 +168,10 @@ public sealed class GroundworkWorkflowDefinitionSqliteProofTests
                 Name = "elsa_workflow_definitions",
                 SchemaVersion = 1,
                 Columns = current.Columns
-                    .Where(column => column.Name != WorkflowsDesignStorageManifest.DefinitionIdLookupHashField)
+                    .Where(column => column.Name is not
+                        (WorkflowsDesignStorageManifest.DefinitionIdLookupHashField or
+                         WorkflowsDesignStorageManifest.DefinitionNameLookupHashField or
+                         WorkflowsDesignStorageManifest.DefinitionDescriptionLookupHashField))
                     .ToArray(),
                 Indexes =
                 [
@@ -226,7 +293,7 @@ public sealed class GroundworkWorkflowDefinitionSqliteProofTests
         }
     }
 
-    private static StorageValues DefinitionValues(string id, string name) =>
+    private static StorageValues DefinitionValues(string id, string name, string? description = null) =>
         GroundworkDesignStorage.Values(
             WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
             new WorkflowDefinition
@@ -234,6 +301,7 @@ public sealed class GroundworkWorkflowDefinitionSqliteProofTests
                 Id = id,
                 TenantId = "sqlite-probe",
                 Name = name,
+                Description = description,
                 CreatedAt = DateTimeOffset.UtcNow,
                 LastModifiedAt = DateTimeOffset.UtcNow
             },

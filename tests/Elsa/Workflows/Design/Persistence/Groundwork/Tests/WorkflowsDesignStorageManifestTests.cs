@@ -49,6 +49,8 @@ public sealed class WorkflowsDesignStorageManifestTests
         {
             WorkflowsDesignStorageManifest.DefinitionByIdIndex,
             WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex,
+            WorkflowsDesignStorageManifest.DefinitionByNameIndex,
+            WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex,
             WorkflowsDesignStorageManifest.VersionByDefinitionIndex,
             WorkflowsDesignStorageManifest.VersionByDefinitionAndSortKeyIndex,
             WorkflowsDesignStorageManifest.LatestVersionByDefinitionIndex,
@@ -122,12 +124,9 @@ public sealed class WorkflowsDesignStorageManifestTests
     }
 
     [Fact]
-    public void Search_keeps_wide_text_keys_out_of_physical_indexes()
+    public void Search_uses_fixed_width_text_lookup_hashes_for_bounded_exact_routes()
     {
         var definitions = WorkflowsDesignStorageManifest.Require(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
-        Assert.DoesNotContain(definitions.Indexes, index => index.Name is
-            WorkflowsDesignStorageManifest.DefinitionByNameIndex or
-            WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex);
         Assert.DoesNotContain(definitions.Indexes, index => index.Name == "definition-by-search-v2");
         Assert.True(definitions.Columns.Single(column => column.Name == WorkflowsDesignStorageManifest.DefinitionIdField).IsNullable is false);
         Assert.True(definitions.Columns.Single(column => column.Name == WorkflowsDesignStorageManifest.DefinitionIdSearchKeyField).IsNullable is false);
@@ -138,6 +137,14 @@ public sealed class WorkflowsDesignStorageManifestTests
             [WorkflowsDesignStorageManifest.DefinitionIdLookupHashField],
             definitions.Indexes.Single(index => index.Name == WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex).Columns.Select(column => column.Column));
         Assert.True(definitions.Indexes.Single(index => index.Name == WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex).IsUnique);
+        AssertIndex(definitions, WorkflowsDesignStorageManifest.DefinitionByNameIndex,
+            [WorkflowsDesignStorageManifest.DefinitionNameLookupHashField, WorkflowsDesignStorageManifest.DefinitionIdField], unique: false);
+        AssertIndex(definitions, WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex,
+            [WorkflowsDesignStorageManifest.DefinitionDescriptionLookupHashField, WorkflowsDesignStorageManifest.DefinitionIdField], unique: false);
+        Assert.Equal(WorkflowsDesignStorageManifest.DefinitionTextLookupHashMaximumLength,
+            definitions.Columns.Single(column => column.Name == WorkflowsDesignStorageManifest.DefinitionNameLookupHashField).MaxLength);
+        Assert.Equal(WorkflowsDesignStorageManifest.DefinitionTextLookupHashMaximumLength,
+            definitions.Columns.Single(column => column.Name == WorkflowsDesignStorageManifest.DefinitionDescriptionLookupHashField).MaxLength);
         Assert.Equal(
             PortableCollation.UnicodeOrdinalIgnoreCase,
             definitions.Columns.Single(column => column.Name == WorkflowsDesignStorageManifest.DefinitionNameField).Collation);
@@ -196,6 +203,28 @@ public sealed class WorkflowsDesignStorageManifestTests
             definitions.Columns.Single(item => item.Name == column.Column).MaxLength!.Value * 2);
         Assert.Equal(WorkflowsDesignStorageManifest.DefinitionIdLookupHashMaximumLength * 2, width);
         Assert.True(width <= PortabilityValidator.StrictIndexKeyByteBudget);
+    }
+
+    [Fact]
+    public void Definition_text_lookup_routes_are_within_the_public_portable_index_budget()
+    {
+        var definitions = WorkflowsDesignStorageManifest.Require(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
+        foreach (var indexName in new[]
+                 {
+                     WorkflowsDesignStorageManifest.DefinitionByNameIndex,
+                     WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex
+                 })
+        {
+            var index = definitions.Indexes.Single(candidate => candidate.Name == indexName);
+            var width = index.Columns.Sum(column =>
+                definitions.Columns.Single(item => item.Name == column.Column).MaxLength!.Value * 2);
+            Assert.Equal(
+                (WorkflowsDesignStorageManifest.DefinitionTextLookupHashMaximumLength +
+                 WorkflowsDesignStorageManifest.IdentityMaximumLength) * 2,
+                width);
+            Assert.True(width <= PortabilityValidator.StrictIndexKeyByteBudget);
+        }
     }
 
     [Fact]

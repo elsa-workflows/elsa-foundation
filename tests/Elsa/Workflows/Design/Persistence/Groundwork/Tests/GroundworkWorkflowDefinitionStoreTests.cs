@@ -143,8 +143,9 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
         using (raw)
         {
             Assert.Equal(["c"], (await store.ListAsync(new WorkflowDefinitionFilter { Name = "Shipping" })).Select(x => x.Id));
-            AssertRoute(raw, WorkflowsDesignStorageManifest.DefinitionByIdIndex,
-                [WorkflowsDesignStorageManifest.DefinitionIdField]);
+            AssertRoute(raw, WorkflowsDesignStorageManifest.DefinitionByNameIndex,
+                [WorkflowsDesignStorageManifest.DefinitionNameLookupHashField,
+                 WorkflowsDesignStorageManifest.DefinitionIdField]);
         }
     }
 
@@ -155,8 +156,9 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
         using (raw)
         {
             Assert.Equal(["a", "c"], (await store.ListAsync(new WorkflowDefinitionFilter { Names = ["Order Processing", "Shipping"] })).Select(x => x.Id).OrderBy(x => x));
-            AssertRoute(raw, WorkflowsDesignStorageManifest.DefinitionByIdIndex,
-                [WorkflowsDesignStorageManifest.DefinitionIdField]);
+            AssertRoute(raw, WorkflowsDesignStorageManifest.DefinitionByNameIndex,
+                [WorkflowsDesignStorageManifest.DefinitionNameLookupHashField,
+                 WorkflowsDesignStorageManifest.DefinitionIdField]);
         }
     }
 
@@ -174,8 +176,9 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
         using (raw)
         {
             Assert.Equal(["a"], (await store.ListAsync(new WorkflowDefinitionFilter { Description = "Handles orders" })).Select(x => x.Id));
-                AssertRoute(raw, WorkflowsDesignStorageManifest.DefinitionByIdIndex,
-                [WorkflowsDesignStorageManifest.DefinitionIdField]);
+            AssertRoute(raw, WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex,
+                [WorkflowsDesignStorageManifest.DefinitionDescriptionLookupHashField,
+                 WorkflowsDesignStorageManifest.DefinitionIdField]);
         }
     }
 
@@ -197,7 +200,11 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
 
         Assert.Equal(["exact-10000"], result.Select(definition => definition.Id));
         Assert.DoesNotContain(raw.Queries, query => query.Request.AcceptedScan is not null);
-        Assert.All(raw.Queries, query => Assert.Equal(WorkflowsDesignStorageManifest.DefinitionByIdIndex, query.Options?.SelectedIndex));
+        Assert.All(raw.Queries, query => Assert.Equal(WorkflowsDesignStorageManifest.DefinitionByNameIndex, query.Options?.SelectedIndex));
+        Assert.All(raw.Queries, query => Assert.Equal(
+            [WorkflowsDesignStorageManifest.DefinitionNameLookupHashField,
+             WorkflowsDesignStorageManifest.DefinitionIdField],
+            query.Request.Order.Select(term => term.Column.Name)));
     }
 
     [Fact]
@@ -250,14 +257,37 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
 
         Assert.Equal(["a"], result.Select(x => x.Id));
         Assert.Single(raw.Queries);
-        var probe = Assert.Single(raw.Queries, query => query.Options?.SelectedIndex == WorkflowsDesignStorageManifest.DefinitionByIdIndex);
-        Assert.Equal("GW-SCAN-ELSA-WORKFLOWS-DESIGN-CATALOG-CARDINALITY", probe.Request.AcceptedScan?.Id);
-        Assert.Equal("elsa-workflows-design", probe.Request.AcceptedScan?.Owner);
-        Assert.Equal(new DateTimeOffset(2027, 8, 16, 0, 0, 0, TimeSpan.Zero), probe.Request.AcceptedScan?.ExpiresOn);
-        Assert.True(probe.Request.AcceptedScan?.Allowed);
-        Assert.Equal(GroundworkDesignStorage.SearchTermProbeLimit, probe.Request.Paging.Limit);
-        Assert.Equal(WorkflowsDesignStorageManifest.DefinitionByIdIndex, probe.IndexName);
-        Assert.Equal([WorkflowsDesignStorageManifest.DefinitionIdField], probe.Request.Order.Select(x => x.Column.Name));
+        var query = Assert.Single(raw.Queries, query => query.Options?.SelectedIndex == WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex);
+        Assert.Null(query.Request.AcceptedScan);
+        Assert.Equal(WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex, query.IndexName);
+        Assert.Equal(
+            [WorkflowsDesignStorageManifest.DefinitionDescriptionLookupHashField,
+             WorkflowsDesignStorageManifest.DefinitionIdField],
+            query.Request.Order.Select(x => x.Column.Name));
+    }
+
+    [Fact]
+    public async Task Combined_exact_filters_use_one_bounded_route_and_preserve_ordinal_residuals()
+    {
+        var (store, raw) = Seeded(
+            new WorkflowDefinition { Id = "a", Name = "Order Processing", Description = "Handles orders" },
+            new WorkflowDefinition { Id = "b", Name = "Order Processing", Description = "Other" },
+            new WorkflowDefinition { Id = "c", Name = "Other", Description = "Handles orders" });
+
+        using (raw)
+        {
+            var result = await store.ListAsync(new WorkflowDefinitionFilter
+            {
+                Name = "Order Processing",
+                Description = "Handles orders"
+            });
+
+            Assert.Equal(["a"], result.Select(definition => definition.Id));
+            AssertRoute(raw, WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex,
+                [WorkflowsDesignStorageManifest.DefinitionDescriptionLookupHashField,
+                 WorkflowsDesignStorageManifest.DefinitionIdField]);
+            Assert.DoesNotContain(raw.Queries, query => query.Request.AcceptedScan is not null);
+        }
     }
 
     [Fact]

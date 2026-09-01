@@ -62,6 +62,21 @@ public sealed class GroundworkDesignStorage(
                     QueryConstant.Of(lookupColumn, DefinitionIdLookupHash(text)));
             }
 
+            if (IsDefinitionTextField(field))
+            {
+                var lookupColumn = DefinitionTextLookupHashColumn(unitId, field);
+                var textExact = Column(unitId, field);
+                return new Predicate.And(
+                [
+                    new Predicate.Equal(
+                        lookupColumn,
+                        QueryConstant.Of(lookupColumn, DefinitionTextLookupHash(text))),
+                    // The fixed-width hash is only a candidate route. Retain the source-column
+                    // equality so a theoretical collision cannot change the ordinal contract.
+                    new Predicate.Equal(textExact, QueryConstant.Of(textExact, text))
+                ]);
+            }
+
             var searchColumn = SearchColumn(unitId, field);
             var policy = SearchPolicy(unitId, field);
             var lower = QueryConstant.Of(searchColumn, QuerySearchKeys.Encode(text, policy));
@@ -535,7 +550,13 @@ public sealed class GroundworkDesignStorage(
                 values[WorkflowsDesignStorageManifest.DefinitionIdLookupHashField] =
                     DefinitionIdLookupHash(definition.Id);
                 values[WorkflowsDesignStorageManifest.DefinitionNameField] = definition.Name;
+                if (definition.Name is { } name)
+                    values[WorkflowsDesignStorageManifest.DefinitionNameLookupHashField] =
+                        DefinitionTextLookupHash(name);
                 values[WorkflowsDesignStorageManifest.DefinitionDescriptionField] = definition.Description;
+                if (definition.Description is { } description)
+                    values[WorkflowsDesignStorageManifest.DefinitionDescriptionLookupHashField] =
+                        DefinitionTextLookupHash(description);
                 values[WorkflowsDesignStorageManifest.DefinitionDeletedAtField] = definition.DeletedAt;
                 values[WorkflowsDesignStorageManifest.DefinitionDeletedReasonField] = definition.DeletedReason;
                 values[WorkflowsDesignStorageManifest.DefinitionIsSourceOwnedField] = definition.IsSourceOwned;
@@ -838,6 +859,10 @@ public sealed class GroundworkDesignStorage(
         StringComparer.Ordinal.Equals(name, WorkflowsDesignStorageManifest.IdField) ||
         StringComparer.Ordinal.Equals(name, WorkflowsDesignStorageManifest.DefinitionIdField);
 
+    private static bool IsDefinitionTextField(string name) =>
+        StringComparer.Ordinal.Equals(name, WorkflowsDesignStorageManifest.DefinitionNameField) ||
+        StringComparer.Ordinal.Equals(name, WorkflowsDesignStorageManifest.DefinitionDescriptionField);
+
     private ColumnRef SearchColumn(string unitId, string field)
     {
         var unit = Unit(unitId);
@@ -858,11 +883,24 @@ public sealed class GroundworkDesignStorage(
     private ColumnRef DefinitionIdLookupHashColumn(string unitId) =>
         Column(unitId, WorkflowsDesignStorageManifest.DefinitionIdLookupHashField);
 
+    private ColumnRef DefinitionTextLookupHashColumn(string unitId, string field) =>
+        Column(unitId, field switch
+        {
+            WorkflowsDesignStorageManifest.DefinitionNameField =>
+                WorkflowsDesignStorageManifest.DefinitionNameLookupHashField,
+            WorkflowsDesignStorageManifest.DefinitionDescriptionField =>
+                WorkflowsDesignStorageManifest.DefinitionDescriptionLookupHashField,
+            _ => throw new ArgumentException($"Field '{field}' has no workflow-definition text lookup hash.", nameof(field))
+        });
+
     private static string DefinitionIdLookupHash(string value)
     {
         var searchKey = QuerySearchKeys.Encode(value, DefinitionIdSearchPolicy);
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(searchKey))).ToLowerInvariant();
     }
+
+    private static string DefinitionTextLookupHash(string value) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
 
     private static QuerySearchKeyPolicy SearchPolicy(string unitId, string field) =>
         IsDefinitionIdField(field)

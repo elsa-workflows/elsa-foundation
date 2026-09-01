@@ -45,30 +45,54 @@ public sealed class GroundworkWorkflowDefinitionStore(
                 return Task.FromResult<IReadOnlyList<WorkflowDefinition>>([]);
             basePredicates.Add(storage.In(unit, WorkflowsDesignStorageManifest.IdField, filter.Ids.Cast<object?>()));
         }
+        if (filter.Name is not null)
+            basePredicates.Add(storage.Equal(unit, WorkflowsDesignStorageManifest.DefinitionNameField, filter.Name));
         if (filter.Names is not null && filter.Names.Count == 0)
             return Task.FromResult<IReadOnlyList<WorkflowDefinition>>([]);
+        if (filter.Names is not null)
+            basePredicates.Add(storage.In(unit, WorkflowsDesignStorageManifest.DefinitionNameField, filter.Names.Cast<object?>()));
+        if (filter.Description is not null)
+            basePredicates.Add(storage.Equal(unit, WorkflowsDesignStorageManifest.DefinitionDescriptionField, filter.Description));
 
         var acrossScopes = filter.TenantAgnostic == true;
         var rows = new Dictionary<GroundworkDesignRowIdentity, GroundworkDesignEntry>();
-        // Exact name/description filters retain the normal paged ID route, so their public
-        // equality semantics remain complete for catalogs larger than the SearchTerm bound.
-        var requiresCandidateScan = !string.IsNullOrWhiteSpace(filter.SearchTerm);
+        var hasIdFilter = filter.Id is not null || filter.Ids is not null;
+        var hasNameFilter = filter.Name is not null || filter.Names is not null;
+        var hasDescriptionFilter = filter.Description is not null;
+        var exactRoute = hasIdFilter
+            ? WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex
+            : hasDescriptionFilter
+                ? WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex
+                : hasNameFilter
+                    ? WorkflowsDesignStorageManifest.DefinitionByNameIndex
+                    : WorkflowsDesignStorageManifest.DefinitionByIdIndex;
+        var exactRouteOrder = exactRoute switch
+        {
+            WorkflowsDesignStorageManifest.DefinitionByNameIndex =>
+            [
+                storage.Order(unit, WorkflowsDesignStorageManifest.DefinitionNameLookupHashField),
+                storage.Order(unit, WorkflowsDesignStorageManifest.DefinitionIdField)
+            ],
+            WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex =>
+            [
+                storage.Order(unit, WorkflowsDesignStorageManifest.DefinitionDescriptionLookupHashField),
+                storage.Order(unit, WorkflowsDesignStorageManifest.DefinitionIdField)
+            ],
+            _ => SearchOrder(unit, WorkflowsDesignStorageManifest.IdField)
+        };
+        // A SearchTerm without an exact route is the only public shape that needs a bounded
+        // catalog probe. Exact ID/name/description predicates first narrow the provider read
+        // through their fixed-width lookup-hash index; Matches remains the collision guard.
+        var requiresCandidateScan = !string.IsNullOrWhiteSpace(filter.SearchTerm) && !hasIdFilter &&
+                                    !hasNameFilter && !hasDescriptionFilter;
         if (requiresCandidateScan)
         {
-            var candidates = filter.Id is not null || filter.Ids is not null
-                ? storage.Query(
-                    unit,
-                    And(basePredicates),
-                    SearchOrder(unit, WorkflowsDesignStorageManifest.IdField),
-                    WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex,
-                    acrossScopes,
-                    cancellationToken)
-                : storage.Probe(
-                    unit,
-                    Predicate.AlwaysTrue.Instance,
-                    [storage.Order(unit, WorkflowsDesignStorageManifest.DefinitionIdField)],
-                    acrossScopes,
-                    cancellationToken);
+            var candidates = storage.Probe(
+                unit,
+                Predicate.AlwaysTrue.Instance,
+                [storage.Order(unit, WorkflowsDesignStorageManifest.DefinitionIdField)],
+                acrossScopes,
+                cancellationToken);
 
             foreach (var row in candidates)
             {
@@ -80,14 +104,11 @@ public sealed class GroundworkWorkflowDefinitionStore(
         }
         else
         {
-            var index = filter.Id is not null || filter.Ids is not null
-                ? WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex
-                : WorkflowsDesignStorageManifest.DefinitionByIdIndex;
             foreach (var row in storage.Query(
                          unit,
                          And(basePredicates),
-                         SearchOrder(unit, WorkflowsDesignStorageManifest.IdField),
-                         index,
+                         exactRouteOrder,
+                         exactRoute,
                          acrossScopes,
                          cancellationToken))
             {

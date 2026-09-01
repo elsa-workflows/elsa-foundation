@@ -6,7 +6,8 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork;
 /// The provider-neutral Groundwork v2 catalog for workflow-design persistence.
 /// Projection values are written as first-class row values; the JSON payload is retained only for
 /// aggregate materialization. Provider routes use only indexes whose declared key widths fit the
-/// public portable budget; text filtering uses the bounded identity candidate probe.
+/// public portable budget; exact name/description filtering uses fixed-width lookup hashes and
+/// substring filtering uses the bounded identity candidate probe.
 /// </summary>
 public static class WorkflowsDesignStorageManifest
 {
@@ -24,6 +25,7 @@ public static class WorkflowsDesignStorageManifest
     // deliberately not indexed: its maximum width is larger than the strict portable index cap.
     public const int DefinitionIdSearchKeyMaximumLength = IdentityMaximumLength * 7;
     public const int DefinitionIdLookupHashMaximumLength = 64;
+    public const int DefinitionTextLookupHashMaximumLength = 64;
 
     public const string WorkflowDefinitionDocumentKind = "workflowDefinition";
     public const string WorkflowDefinitionVersionDocumentKind = "workflowDefinitionVersion";
@@ -46,6 +48,8 @@ public static class WorkflowsDesignStorageManifest
     public const string DefinitionDescriptionField = "description";
     public const string DefinitionIdSearchKeyField = "definitionIdSearchKey";
     public const string DefinitionIdLookupHashField = "definitionIdLookupHash";
+    public const string DefinitionNameLookupHashField = "definitionNameLookupHash";
+    public const string DefinitionDescriptionLookupHashField = "definitionDescriptionLookupHash";
     public const string DefinitionDeletedAtField = "deletedAt";
     public const string DefinitionDeletedReasonField = "deletedReason";
     public const string DefinitionIsSourceOwnedField = "isSourceOwned";
@@ -89,8 +93,8 @@ public static class WorkflowsDesignStorageManifest
     // identities above retain the public route names; these names are the provider-facing indexes.
     public const string DefinitionByIdIndex = "definition_by_id_list_v2";
     public const string DefinitionByIdSearchIndex = "definition_by_id_search_v2";
-    // Historical route identities retained for schema/report compatibility. They are no longer
-    // physical indexes because Unicode text keys exceed the portable provider key budget.
+    // These route identities use fixed-width exact lookup hashes, keeping the candidate route
+    // narrow while the source column remains the authority for ordinal equality.
     public const string DefinitionByNameIndex = "definition_by_name_v2";
     public const string DefinitionByDescriptionIndex = "definition_by_description_v2";
     public const string VersionByDefinitionIndex = "versions_by_definition_v2";
@@ -121,6 +125,8 @@ public static class WorkflowsDesignStorageManifest
             .String(DefinitionIdField, IdentityMaximumLength, column => column.Required())
             .String(DefinitionIdSearchKeyField, DefinitionIdSearchKeyMaximumLength, column => column.Required())
             .String(DefinitionIdLookupHashField, DefinitionIdLookupHashMaximumLength, column => column.Required())
+            .String(DefinitionNameLookupHashField, DefinitionTextLookupHashMaximumLength)
+            .String(DefinitionDescriptionLookupHashField, DefinitionTextLookupHashMaximumLength)
             .String(DefinitionNameField, TextMaximumLength, column => column.Collation(PortableCollation.UnicodeOrdinalIgnoreCase))
             .String(DefinitionDescriptionField, TextMaximumLength, column => column.Collation(PortableCollation.UnicodeOrdinalIgnoreCase))
             .Timestamp(DefinitionDeletedAtField)
@@ -132,6 +138,8 @@ public static class WorkflowsDesignStorageManifest
             .OptimisticConcurrency(ConcurrencyTokenField)
             .UniqueIndex(DefinitionByIdIndex, DefinitionIdField)
             .UniqueIndex(DefinitionByIdSearchIndex, DefinitionIdLookupHashField)
+            .Index(DefinitionByNameIndex, index => index.Ascending(DefinitionNameLookupHashField).Ascending(DefinitionIdField))
+            .Index(DefinitionByDescriptionIndex, index => index.Ascending(DefinitionDescriptionLookupHashField).Ascending(DefinitionIdField))
             .Scoped()
             .Build() with { SchemaVersion = DefinitionStorageSchemaVersion };
 
