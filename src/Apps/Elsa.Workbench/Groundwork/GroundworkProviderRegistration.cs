@@ -6,10 +6,10 @@ using Groundwork.SqlServer;
 using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Persistence.Groundwork.Providers;
+namespace Elsa.Workbench;
 
 /// <summary>
-/// Registers one public Groundwork v2 provider connection for an Elsa host.
+/// Registers one public Groundwork v2 provider connection for the Workbench host.
 /// </summary>
 /// <remarks>
 /// These methods only compose the provider-owned connection. The provider factory owns all

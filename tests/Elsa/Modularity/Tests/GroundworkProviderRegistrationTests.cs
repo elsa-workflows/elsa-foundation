@@ -1,14 +1,14 @@
 using CShells.Features;
 using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Persistence.Groundwork.Providers;
 using Groundwork.Kernel;
 using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Elsa.Workbench;
 using Xunit;
 using Xunit.Sdk;
 
-namespace Elsa.Persistence.Groundwork.V2.Providers.Tests;
+namespace Elsa.Modularity.Tests;
 
 public sealed class GroundworkProviderRegistrationTests
 {
@@ -36,14 +36,6 @@ public sealed class GroundworkProviderRegistrationTests
         Assert.False(featureType.IsSealed);
         Assert.Null(provider.GetService<IStorageProviderConnection>());
         Assert.NotNull(provider.GetRequiredKeyedService<IStorageProviderConnection>("runtime"));
-        Assert.Contains(
-            featureType.GetProperties(),
-            property => property.Name == "ConnectionString"
-                        && property.CustomAttributes.Any(attribute => attribute.AttributeType.Name == "ManifestSettingAttribute"));
-        Assert.Contains(
-            featureType.GetProperties(),
-            property => property.Name == "Target"
-                        && property.CustomAttributes.Any(attribute => attribute.AttributeType.Name == "ManifestSettingAttribute"));
     }
 
     [Fact]

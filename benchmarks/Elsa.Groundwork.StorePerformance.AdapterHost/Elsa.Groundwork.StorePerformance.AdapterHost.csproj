@@ -9,9 +9,9 @@
     project, and because ArchitectureGuardTests.ProjectFiles() enumerates only src/ and tests/.
 
     The v1 host referenced the v1 provider-driver library under tests/; that driver went with the v1
-    substrate in #1420. The v2 replacement is Elsa.Persistence.Groundwork.V2.Providers, which is the
-    project that binds the four Groundwork provider packages to the v2 composition — so the benchmark
-    runs against the same provider drivers that produce the four-provider conformance evidence.
+    substrate in #1420. The v2 host binds the four Groundwork provider packages directly to the benchmark
+    composition, so it runs against the same provider drivers that produce the four-provider conformance
+    evidence without depending on an Elsa provider-composition package.
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -20,7 +20,11 @@
     <AssemblyName>Elsa.Groundwork.StorePerformance.AdapterHost</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Groundwork.MongoDb" />
+    <PackageReference Include="Groundwork.PostgreSql" />
+    <PackageReference Include="Groundwork.Sqlite" />
+    <PackageReference Include="Groundwork.SqlServer" />
     <ProjectReference Include="../Elsa.Groundwork.StorePerformance.Benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks.csproj" />
-    <ProjectReference Include="../../src/Elsa/Persistence/Groundwork/V2/Providers/Elsa.Persistence.Groundwork.V2.Providers.csproj" />
+    <ProjectReference Include="../../src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj" />
   </ItemGroup>
 </Project>

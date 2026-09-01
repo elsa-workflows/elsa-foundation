@@ -7,7 +7,7 @@ using Groundwork.Sqlite;
 using Groundwork.Store;
 using Xunit;
 
-namespace Elsa.Persistence.Groundwork.V2.Providers.Tests;
+namespace Elsa.Persistence.Groundwork.V2.Tests;
 
 public sealed class GroundworkStorageAccessMapperTests
 {

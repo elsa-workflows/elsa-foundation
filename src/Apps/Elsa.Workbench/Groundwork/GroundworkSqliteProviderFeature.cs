@@ -1,25 +1,15 @@
 using CShells.Features;
-using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Persistence.Groundwork.Providers;
+namespace Elsa.Workbench;
 
 /// <summary>
-/// Shared operator settings for a public Groundwork provider connection.
+/// Shared operator settings for a Workbench-selected Groundwork provider connection.
 /// </summary>
 public abstract class GroundworkProviderFeatureBase : IShellFeature
 {
-    [ManifestSetting(
-        DisplayName = "Connection string",
-        Description = "Provider connection string used by Groundwork persistence features.",
-        Category = "Persistence",
-        Secret = true)]
     public string? ConnectionString { get; set; }
 
-    [ManifestSetting(
-        DisplayName = "Target",
-        Description = "Optional Groundwork target supplied by this provider. Defaults to 'default'.",
-        Category = "Persistence")]
     public string? Target { get; set; }
 
     public void ConfigureServices(IServiceCollection services) =>
@@ -35,8 +25,6 @@ public abstract class GroundworkProviderFeatureBase : IShellFeature
 /// <summary>
 /// Selects the public Groundwork SQLite provider connection for an Elsa shell.
 /// </summary>
-[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
-[ManifestFeatureCategory("Persistence")]
 [ShellFeature(
     name: "GroundworkProviderSqlite",
     DisplayName = "Groundwork SQLite Provider",

@@ -1,14 +1,11 @@
 using CShells.Features;
-using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Persistence.Groundwork.Providers;
+namespace Elsa.Workbench;
 
 /// <summary>
 /// Selects the public Groundwork MongoDB provider connection for an Elsa shell.
 /// </summary>
-[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
-[ManifestFeatureCategory("Persistence")]
 [ShellFeature(
     name: "GroundworkProviderMongoDb",
     DisplayName = "Groundwork MongoDB Provider",
