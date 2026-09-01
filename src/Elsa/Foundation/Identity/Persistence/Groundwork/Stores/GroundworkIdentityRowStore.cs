@@ -1,4 +1,5 @@
-using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Exceptions;
 using Groundwork.Kernel;

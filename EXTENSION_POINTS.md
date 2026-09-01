@@ -103,7 +103,7 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| Provider-neutral persistence scope selection | [`src/Elsa/Persistence/Core/EXTENSION_POINTS.md`](src/Elsa/Persistence/Core/EXTENSION_POINTS.md) |
+| Provider-neutral persistence access and scope selection | [`src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md) |
 | EF Core persistence (entity saving/loading, upsert, schema) | [`src/Elsa/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Persistence/EFCore/EXTENSION_POINTS.md) |
 | Groundwork runtime persistence (document serializer + schema-version upcasters) | [`src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md) |
 | Foundation Identity Groundwork persistence (durable users/roles/external-identities/memberships; Identity schema selection) | [`src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md) |

@@ -1,4 +1,4 @@
-namespace Elsa.Persistence.Core.Design;
+namespace Elsa.Workflows.Design.Persistence.Core.Models;
 
 /// <summary>
 /// Identifies one logical design mutation across retries. Callers create the key before dispatch and

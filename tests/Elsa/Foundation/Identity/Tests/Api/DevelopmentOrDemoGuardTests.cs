@@ -2,8 +2,7 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection
 using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Elsa.Foundation.Identity.OpenIddict.Extensions;
 using Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
-using Elsa.Persistence.Core;
-using Elsa.Persistence.Core.DependencyInjection;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Groundwork.Store;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;

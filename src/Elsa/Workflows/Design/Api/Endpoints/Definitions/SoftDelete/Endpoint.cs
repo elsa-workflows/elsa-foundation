@@ -3,7 +3,7 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Mediator.Core.Models;
-using Elsa.Persistence.Core.Design;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Models;

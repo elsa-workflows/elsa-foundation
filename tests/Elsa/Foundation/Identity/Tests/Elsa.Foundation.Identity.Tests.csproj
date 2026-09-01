@@ -33,6 +33,7 @@
 		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
 		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
 		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\Persistence\Groundwork\Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
+		<ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
 		<ProjectReference Include="..\..\..\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
 		<ProjectReference Include="..\..\..\..\..\benchmarks\Elsa.Groundwork.StorePerformance.Benchmarks\Elsa.Groundwork.StorePerformance.Benchmarks.csproj" />
 	</ItemGroup>

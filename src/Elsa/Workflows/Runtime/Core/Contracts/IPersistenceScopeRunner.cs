@@ -1,4 +1,6 @@
-namespace Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Models;
+
+namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
 /// Runs background work once for every host-supplied persistence partition using a fresh ordinary operation scope.

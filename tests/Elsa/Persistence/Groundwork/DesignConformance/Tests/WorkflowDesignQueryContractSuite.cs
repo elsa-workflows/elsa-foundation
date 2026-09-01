@@ -1,4 +1,3 @@
-using Elsa.Persistence.Core.Design;
 using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;

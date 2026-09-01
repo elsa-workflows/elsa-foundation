@@ -1,5 +1,6 @@
-using Elsa.Persistence.Core;
-using Elsa.Persistence.Core.Design;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Primitives.Exceptions;
 using Elsa.Serialization.Core;

@@ -10,7 +10,6 @@ using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Sequence.Models;
-using Elsa.Persistence.Core;
 using Elsa.Primitives.Entities;
 using Elsa.Primitives.Models;
 using Elsa.Primitives.Persistence;

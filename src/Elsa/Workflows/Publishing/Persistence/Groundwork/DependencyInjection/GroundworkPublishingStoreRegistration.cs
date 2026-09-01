@@ -1,5 +1,6 @@
-using Elsa.Persistence.Core;
-using Elsa.Persistence.Core.DependencyInjection;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;

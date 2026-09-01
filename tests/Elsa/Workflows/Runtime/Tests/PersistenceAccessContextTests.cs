@@ -1,8 +1,10 @@
-using Elsa.Persistence.Core.DependencyInjection;
+using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Elsa.Persistence.Core.Tests;
+namespace Elsa.Workflows.Runtime.Tests;
 
 public class PersistenceAccessContextTests
 {

@@ -1,5 +1,4 @@
 using CShells.Features;
-using Elsa.Persistence.Core;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;

@@ -1,7 +1,7 @@
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
 using Elsa.Foundation.Identity.Abstractions;
-using Elsa.Persistence.Core.DependencyInjection;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;

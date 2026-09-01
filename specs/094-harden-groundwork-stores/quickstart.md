@@ -405,7 +405,7 @@ access are distinct immutable values; privileged access always has a named purpo
 Run the direct scope/session evidence:
 
 ```bash
-dotnet test tests/Elsa/Persistence/Core/Tests/Elsa.Persistence.Core.Tests.csproj \
+dotnet test tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj \
   --configuration Release --no-build
 
 dotnet test tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj \

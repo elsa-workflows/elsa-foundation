@@ -11,7 +11,7 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Stores;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Seeding;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
-using Elsa.Persistence.Core.DependencyInjection;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Groundwork.Store;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
