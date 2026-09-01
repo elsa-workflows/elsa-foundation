@@ -71,6 +71,7 @@ public static class ElsaRuntimeV2StorageManifest
     public const string WorkflowTriggerBindingDocumentKind = "workflowTriggerBinding";
     public const string RecurringTriggerScheduleDocumentKind = "recurringTriggerSchedule";
     public const string PublicationProjectionStateDocumentKind = "publicationProjectionState";
+    public const string WorkflowActivationSlotDocumentKind = "workflowActivationSlot";
 
     public const string WorkflowExecutionIdField = "workflowExecutionId";
     public const string CollectionField = "collection";
@@ -125,6 +126,9 @@ public static class ElsaRuntimeV2StorageManifest
     public const string RecurringTriggerScheduleNextOccurrenceField = "scheduleNextOccurrence";
     public const string RecurringTriggerScheduleIdField = "scheduleId";
     public const string RecurringTriggerScheduleIsActiveField = "scheduleIsActive";
+    public const string WorkflowActivationSlotDefinitionIdField = "workflowDefinitionId";
+    public const string WorkflowActivationSlotNameField = "slotName";
+    public const string WorkflowActivationSlotActiveActivationIdField = "activeActivationId";
     public const string PublicationProjectionKindField = "projectionKind";
     public const string PublicationProjectionArtifactIdField = "projectionArtifactId";
     public const string SchedulerWorkOrderKeyField = "orderKey";
@@ -203,6 +207,10 @@ public static class ElsaRuntimeV2StorageManifest
     public const string ByScopeIndex = "by_scope";
     public const string ByRetiredIndex = "by_retired";
     public const string WorkflowTriggerBindingByActive = "by_active";
+    public const string WorkflowActivationSlotByDefinition = "by_definition";
+    public const string WorkflowActivationSlotByDefinitionAndSlotId = "by_definition_and_slot_id";
+    public const string WorkflowActivationSlotByActiveActivation = "by_active_activation";
+    public const string WorkflowActivationSlotByActiveActivationAndSlotId = "by_active_activation_and_slot_id";
     public const string WorkflowRunHealthStatusProfile = "workflow_run_health_status";
     public const string WorkflowRunHealthHourlyProfile = "workflow_run_health_hourly";
     public const string WorkflowRunHealthDailyProfile = "workflow_run_health_daily";
@@ -262,6 +270,7 @@ public static class ElsaRuntimeV2StorageManifest
         ], AddWorkflowRunHealthAggregations),
         Unit(WorkflowTriggerBindingDocumentKind, "runtime_workflow_trigger_binding", [String(StimulusHashField, StimulusHashProjectionLength), String(StimulusTypeField, WorkflowTriggerBindingStimulusTypeProjectionLength), String(StimulusLookupKeyField, BookmarkStimulusLookupKeyProjectionLength), String(StimulusTypeLookupKeyField, BookmarkStimulusLookupKeyProjectionLength), Boolean(WorkflowTriggerBindingIsActiveField), String(TriggerBindingIdField, RuntimeExecutionIdProjectionLength), String(ArtifactIdField, RuntimeExecutionIdProjectionLength), String(PublicationIdField, RuntimeExecutionIdProjectionLength)], [Index(WorkflowTriggerBindingByActive, WorkflowTriggerBindingIsActiveField), Index(ByArtifactIndex, ArtifactIdField), IncludedIndex("by_artifact_and_trigger_binding_id", ArtifactIdField, TriggerBindingIdField), Index(ByPublicationIndex, PublicationIdField), IncludedIndex("by_publication_and_trigger_binding_id", PublicationIdField, TriggerBindingIdField), Index(ByStimulusIndex, StimulusHashField), IncludedIndex("by_stimulus_and_type", StimulusLookupKeyField, WorkflowTriggerBindingIsActiveField, TriggerBindingIdField), Index(ByStimulusTypeIndex, StimulusTypeField), IncludedIndex("by_stimulus_type_and_active", StimulusTypeLookupKeyField, WorkflowTriggerBindingIsActiveField, TriggerBindingIdField), UniqueIndex("by_trigger_binding_id", TriggerBindingIdField)]),
         Unit(RecurringTriggerScheduleDocumentKind, "runtime_recurring_trigger_schedule", [String(CollectionField, 128), String(ArtifactIdField, 128), String(RecurringTriggerSchedulePublicationIdField, 128), String(RecurringTriggerScheduleIdField, 128), Boolean(RecurringTriggerScheduleIsActiveField), DateTime(RecurringTriggerScheduleNextOccurrenceField)], [IncludedIndex("by_active_next_occurrence_and_schedule_id", RecurringTriggerScheduleIsActiveField, RecurringTriggerScheduleNextOccurrenceField, RecurringTriggerScheduleIdField), Index(ByArtifactIndex, ArtifactIdField), IncludedIndex("by_artifact_and_schedule_id", ArtifactIdField, RecurringTriggerScheduleIdField), Index(ByCollectionIndex, CollectionField), Index("by_next_occurrence", RecurringTriggerScheduleNextOccurrenceField), Index(ByPublicationIndex, RecurringTriggerSchedulePublicationIdField), IncludedIndex("by_publication_and_schedule_id", RecurringTriggerSchedulePublicationIdField, RecurringTriggerScheduleIdField), Index(ByRecurringScheduleActiveIndex, RecurringTriggerScheduleIsActiveField), Index(ByRecurringScheduleIdIndex, RecurringTriggerScheduleIdField)]),
+        Unit(WorkflowActivationSlotDocumentKind, "runtime_workflow_activation_slot", [String(WorkflowActivationSlotDefinitionIdField, RuntimeExecutionIdProjectionLength), String(WorkflowActivationSlotNameField, 128), String(WorkflowActivationSlotActiveActivationIdField, RuntimeExecutionIdProjectionLength)], [Index(WorkflowActivationSlotByDefinition, WorkflowActivationSlotDefinitionIdField), IncludedIndex(WorkflowActivationSlotByDefinitionAndSlotId, WorkflowActivationSlotDefinitionIdField, WorkflowActivationSlotNameField, IdField), UniqueIndex(WorkflowActivationSlotByActiveActivation, WorkflowActivationSlotActiveActivationIdField), IncludedIndex(WorkflowActivationSlotByActiveActivationAndSlotId, WorkflowActivationSlotActiveActivationIdField, IdField)]),
         Unit(PublicationProjectionStateDocumentKind, "runtime_publication_projection_state", [String(PublicationProjectionKindField, 128), String(PublicationProjectionArtifactIdField, RuntimeExecutionIdProjectionLength)], [IncludedIndex("by_projection_kind_and_artifact_id", PublicationProjectionKindField, PublicationProjectionArtifactIdField, IdField)])
     ];
 
