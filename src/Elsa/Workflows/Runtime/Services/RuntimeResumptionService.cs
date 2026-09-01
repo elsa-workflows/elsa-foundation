@@ -1,3 +1,7 @@
+using System.Buffers.Binary;
+using System.Security.Cryptography;
+using System.Text;
+using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -41,9 +45,59 @@ public sealed class RuntimeResumptionService(
     IRuntimeExecutionIdGenerator idGenerator,
     TimeProvider timeProvider,
     IWorkflowExecutionStateStore workflowExecutionStateStore,
-    IWorkflowExecutionPartitionAccessor? partitionAccessor = null) : IRuntimeResumptionService
+    IWorkflowExecutionPartitionAccessor? partitionAccessor = null,
+    IRuntimeRecoverySweepCursorStore? recoveryCursorStore = null,
+    IPersistenceAccessContextAccessor? persistenceAccessContextAccessor = null) : IRuntimeResumptionService
 {
+    // Keep both pre-paging constructor signatures in the binary surface. Optional parameters preserve source
+    // compatibility but do not preserve metadata constructors used by already compiled hosts.
+    public RuntimeResumptionService(
+        IRuntimePostCommitOutboxProcessor outboxProcessor,
+        IWorkflowSchedulerWorkQueue workQueue,
+        IRuntimeRecoveryScanner recoveryScanner,
+        IWorkflowExecutionActorProvider agentProvider,
+        IRuntimeExecutionIdGenerator idGenerator,
+        TimeProvider timeProvider,
+        IWorkflowExecutionStateStore workflowExecutionStateStore)
+        : this(
+            outboxProcessor,
+            workQueue,
+            recoveryScanner,
+            agentProvider,
+            idGenerator,
+            timeProvider,
+            workflowExecutionStateStore,
+            null,
+            null,
+            null)
+    {
+    }
+
+    public RuntimeResumptionService(
+        IRuntimePostCommitOutboxProcessor outboxProcessor,
+        IWorkflowSchedulerWorkQueue workQueue,
+        IRuntimeRecoveryScanner recoveryScanner,
+        IWorkflowExecutionActorProvider agentProvider,
+        IRuntimeExecutionIdGenerator idGenerator,
+        TimeProvider timeProvider,
+        IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IWorkflowExecutionPartitionAccessor? partitionAccessor)
+        : this(
+            outboxProcessor,
+            workQueue,
+            recoveryScanner,
+            agentProvider,
+            idGenerator,
+            timeProvider,
+            workflowExecutionStateStore,
+            partitionAccessor,
+            null,
+            null)
+    {
+    }
+
     private const string DispatchSource = "runtime-resumption";
+    private readonly IRuntimeRecoverySweepCursorStore sweepCursorStore = recoveryCursorStore ?? new InMemoryRuntimeRecoverySweepCursorStore();
 
     // Safety cap on residual-item purge pages per terminal execution per sweep, so a provider that never actually
     // removes an item (Delete returning false) cannot spin this loop forever. Bounded residue is expected — one
@@ -62,7 +116,8 @@ public sealed class RuntimeResumptionService(
                 intentKind: null),
             cancellationToken);
 
-        var executionIds = await DiscoverExecutionIdsAsync(request, cancellationToken);
+        var discovery = await DiscoverExecutionIdsAsync(request, cancellationToken);
+        var executionIds = discovery.ExecutionIds;
 
         var dispatches = new List<RuntimeResumptionDispatch>(executionIds.Count);
         var terminalExecutionsPurged = 0;
@@ -84,6 +139,8 @@ public sealed class RuntimeResumptionService(
 
             dispatches.Add(await RedriveAsync(workflowExecutionId, cancellationToken));
         }
+
+        CommitRecoveryCursor(discovery, dispatches);
 
         var result = new RuntimeResumptionSweepResult(
             outboxAttemptedCount: outboxResult.AttemptedCount,
@@ -147,25 +204,158 @@ public sealed class RuntimeResumptionService(
         return purged;
     }
 
-    private async ValueTask<IReadOnlyCollection<string>> DiscoverExecutionIdsAsync(RuntimeResumptionSweepRequest request, CancellationToken cancellationToken)
+    private void CommitRecoveryCursor(
+        RecoveryDiscovery discovery,
+        IReadOnlyCollection<RuntimeResumptionDispatch> dispatches)
+    {
+        if (!discovery.ShouldUpdateCursor)
+            return;
+
+        // A scan cursor is a claim on the page it just returned. Do not commit that claim when a candidate could not
+        // be re-driven: the next sweep must retry from the original cursor instead of silently partitioning the
+        // failed execution out of recovery until the scan wraps around. Accepted, duplicate, and deferred dispatches
+        // are durable queue outcomes and may advance the page; faulted/rejected outcomes explicitly rewind it.
+        var failed = dispatches.Any(dispatch => dispatch.Outcome is
+            RuntimeResumptionDispatchOutcome.Faulted or RuntimeResumptionDispatchOutcome.Rejected);
+        var cursor = failed ? discovery.PreviousCursor : discovery.CursorToCommit;
+        if (cursor is null)
+            sweepCursorStore.Clear(discovery.Scope, discovery.Scanner);
+        else
+            sweepCursorStore.Set(discovery.Scope, discovery.Scanner, cursor);
+    }
+
+    private async ValueTask<RecoveryDiscovery> DiscoverExecutionIdsAsync(RuntimeResumptionSweepRequest request, CancellationToken cancellationToken)
     {
         var backlog = await workQueue.ListPendingWorkflowExecutionIdsAsync(request.BacklogBatchSize, cancellationToken);
+        var scope = persistenceAccessContextAccessor?.Current.Scope?.Value ?? PersistenceScope.DefaultValue;
+        var scannerName = RecoveryCursorKey(recoveryScanner, request.ExcludedWorkflowExecutionIds);
+        var cursor = sweepCursorStore.Get(scope, scannerName);
+        var scanLimit = Math.Min(request.RecoveryScanBatchSize, RuntimeStorePageRequest.MaximumLimit);
+        if (cursor is not null &&
+            (cursor.LeaseTimeout != request.LeaseTimeout ||
+             cursor.HeartbeatTimeout != request.HeartbeatTimeout ||
+             cursor.Limit != scanLimit))
+        {
+            // A provider cursor is only valid for the stable route/options set that created it. Restart the scan
+            // cycle when a host changes those options rather than replaying a cursor under different predicates.
+            sweepCursorStore.Clear(scope, scannerName);
+            cursor = null;
+        }
 
-        var candidates = await recoveryScanner.ScanAsync(
-            new RuntimeRecoveryScanRequest(
-                now: timeProvider.GetUtcNow(),
-                leaseTimeout: request.LeaseTimeout,
-                heartbeatTimeout: request.HeartbeatTimeout,
-                limit: request.RecoveryScanBatchSize),
-            cancellationToken);
+        var discoverableBacklog = backlog
+            .Where(id => !request.ExcludedWorkflowExecutionIds.Contains(id))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var recoveryCapacity = request.MaxExecutionsPerSweep is { } maxExecutions
+            ? Math.Max(0, maxExecutions - discoverableBacklog.Length)
+            : scanLimit;
+        RuntimeRecoveryCandidate[] candidates;
+        if (recoveryCapacity == 0)
+        {
+            // The backlog already fills this sweep's dispatch cap. Keep the recovery cursor untouched so no
+            // candidate can be skipped merely because unrelated backlog occupied the available slots.
+            candidates = [];
+            return new(
+                MergeExecutionIds(backlog, candidates, request),
+                scope,
+                scannerName,
+                cursor,
+                CursorToCommit: null,
+                ShouldUpdateCursor: false);
+        }
+        else
+        {
+            var scanNow = cursor?.ScanNow ?? timeProvider.GetUtcNow();
+            if (recoveryScanner is not IRuntimeRecoveryPagedScanner { SupportsPaging: true })
+            {
+                // Keep source compatibility for a pre-paging/custom scanner (and for the in-memory scanner wrapped
+                // around one), but do not silently treat its first bounded result as a resumable page. Its legacy
+                // contract is a complete collection and has no cursor channel; the scanner owns any materialization,
+                // while this sweep still clamps the dispatch contribution and never stores a fabricated continuation.
+                var legacyCandidates = await recoveryScanner.ScanAsync(
+                    new RuntimeRecoveryScanRequest(
+                        now: scanNow,
+                        leaseTimeout: request.LeaseTimeout,
+                        heartbeatTimeout: request.HeartbeatTimeout,
+                        limit: scanLimit),
+                    cancellationToken);
+                candidates = legacyCandidates
+                    .Take(Math.Min(scanLimit, recoveryCapacity))
+                    .ToArray();
+                return new(
+                    MergeExecutionIds(backlog, candidates, request),
+                    scope,
+                    scannerName,
+                    PreviousCursor: null,
+                    CursorToCommit: null,
+                    ShouldUpdateCursor: false);
+            }
 
-        return backlog
+            var page = await recoveryScanner.ScanPageAsync(
+                new RuntimeRecoveryScanRequest(
+                    now: scanNow,
+                    leaseTimeout: request.LeaseTimeout,
+                    heartbeatTimeout: request.HeartbeatTimeout,
+                    limit: Math.Min(scanLimit, recoveryCapacity),
+                    continuationToken: cursor?.ContinuationToken),
+                cancellationToken);
+            candidates = page.Items.ToArray();
+            var cursorToCommit = page.NextContinuationToken is { } next
+                ? new RuntimeRecoverySweepCursor(
+                    scanNow,
+                    request.LeaseTimeout,
+                    request.HeartbeatTimeout,
+                    scanLimit,
+                    next)
+                : null;
+            return new(
+                MergeExecutionIds(backlog, candidates, request),
+                scope,
+                scannerName,
+                cursor,
+                cursorToCommit,
+                ShouldUpdateCursor: true);
+        }
+
+    }
+
+    private static IReadOnlyCollection<string> MergeExecutionIds(
+        IReadOnlyCollection<string> backlog,
+        IReadOnlyCollection<RuntimeRecoveryCandidate> candidates,
+        RuntimeResumptionSweepRequest request) =>
+        backlog
             .Concat(candidates.Select(candidate => candidate.WorkflowExecutionId))
             .Where(id => !request.ExcludedWorkflowExecutionIds.Contains(id))
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .Take(request.MaxExecutionsPerSweep ?? int.MaxValue)
             .ToArray();
+
+    private static string RecoveryCursorKey(
+        IRuntimeRecoveryScanner scanner,
+        IReadOnlySet<string> excludedWorkflowExecutionIds)
+    {
+        var scannerName = scanner.GetType().AssemblyQualifiedName ?? scanner.GetType().FullName ?? scanner.GetType().Name;
+        if (excludedWorkflowExecutionIds.Count == 0)
+            return scannerName;
+
+        // Exclusions are a sweep-level filter rather than scanner input. Partition retained cursors by a stable
+        // fingerprint so a cursor that advanced past an excluded candidate cannot hide it on a later unexcluded
+        // sweep. The bounded hash keeps the in-memory cursor key independent of the number/length of IDs.
+        // Hash a length-prefixed sequence rather than a delimiter-joined string. Workflow IDs are caller data, so a
+        // delimiter can otherwise make two distinct exclusion sets share one cursor partition.
+        using var exclusionHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        Span<byte> lengthPrefix = stackalloc byte[sizeof(int)];
+        foreach (var excludedId in excludedWorkflowExecutionIds.Order(StringComparer.Ordinal))
+        {
+            var bytes = Encoding.UTF8.GetBytes(excludedId);
+            BinaryPrimitives.WriteInt32BigEndian(lengthPrefix, bytes.Length);
+            exclusionHash.AppendData(lengthPrefix);
+            exclusionHash.AppendData(bytes);
+        }
+
+        var fingerprint = Convert.ToHexString(exclusionHash.GetHashAndReset());
+        return $"{scannerName}|excluded:{fingerprint}";
     }
 
     private async ValueTask<RuntimeResumptionDispatch> RedriveAsync(string workflowExecutionId, CancellationToken cancellationToken)
@@ -242,4 +432,12 @@ public sealed class RuntimeResumptionService(
         WorkflowExecutionCommandDispatchStatus.Deferred => RuntimeResumptionDispatchOutcome.Deferred,
         _ => RuntimeResumptionDispatchOutcome.Rejected
     };
+
+    private sealed record RecoveryDiscovery(
+        IReadOnlyCollection<string> ExecutionIds,
+        string Scope,
+        string Scanner,
+        RuntimeRecoverySweepCursor? PreviousCursor,
+        RuntimeRecoverySweepCursor? CursorToCommit,
+        bool ShouldUpdateCursor);
 }

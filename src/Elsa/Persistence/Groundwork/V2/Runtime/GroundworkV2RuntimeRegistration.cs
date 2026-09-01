@@ -41,6 +41,14 @@ public static class GroundworkV2RuntimeRegistration
         var target = BindRuntimeTarget(services, targetName);
 
         services.AddPersistenceCore();
+        // Recovery cursors may outlive this process or be consumed by another node. Groundwork therefore refuses
+        // the runtime core's development-only ephemeral signer unless the host supplies RuntimeRecoveryContinuationOptions.SigningKey.
+        services.AddOptions<RuntimeRecoveryContinuationOptions>()
+            .Configure(options => options.AllowEphemeralDevelopmentKey = false);
+        // Register the durable protector here as well as in AddWorkflowRuntime so direct Groundwork composition
+        // cannot accidentally construct a scanner without an authenticated continuation boundary. Resolution fails
+        // closed until the host supplies a stable signing key through RuntimeRecoveryContinuationOptions.
+        services.TryAddSingleton<IRuntimeRecoveryContinuationCodec, HmacRuntimeRecoveryContinuationCodec>();
         services.ClaimWorkflowTestScopeProvider(typeof(GroundworkV2WorkflowTestScopeStore));
         foreach (var unit in ElsaRuntimeV2StorageManifest.CreateUnits())
             services.AddGroundworkStorageUnit(unit, target);
@@ -76,7 +84,11 @@ public static class GroundworkV2RuntimeRegistration
             typeof(ISchedulerStateStore));
         ReplaceScoped<GroundworkV2ExecutionLivenessStateStore>(services, Standard<GroundworkV2ExecutionLivenessStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IExecutionLivenessStateStore));
-        ReplaceScoped<GroundworkV2RuntimeRecoveryScanner>(services, Standard<GroundworkV2RuntimeRecoveryScanner>(target, static (sessions, access, target) => new(sessions, access, target)),
+        ReplaceScoped<GroundworkV2RuntimeRecoveryScanner>(services, provider => new(
+                provider.GetRequiredService<IGroundworkStorageSessionSource>(),
+                provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
+                target,
+                provider.GetRequiredService<IRuntimeRecoveryContinuationCodec>()),
             typeof(IRuntimeRecoveryScanner));
         ReplaceScoped<GroundworkV2WorkflowHoldStateStore>(services, Standard<GroundworkV2WorkflowHoldStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowHoldStateStore));
