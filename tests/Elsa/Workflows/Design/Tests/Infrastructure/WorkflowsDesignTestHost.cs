@@ -5,7 +5,7 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Persistence.Groundwork.Composition;
-using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
+using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Hosting.Services;
 using Elsa.Serialization.Core;
@@ -16,6 +16,7 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations;
+using Groundwork.Sqlite;
 using Groundwork.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -24,9 +25,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Elsa.Workflows.Design.Tests.Infrastructure;
 
 /// <summary>
-/// SQLite Groundwork test host for the workflows-design commands and stores. Composes the same
-/// production SQLite Groundwork unified persistence the design-conformance SQLite fixture uses
-/// (schema applied in-process to a temp file database, then production store/command registrations),
+/// SQLite Groundwork test host for the workflows-design commands and stores. Composes the provider
+/// connection and workflows-design lane directly (schema applied in-process to a temp file database,
+/// then production store/command registrations),
 /// wired to an <see cref="InMemoryDistributedLockProvider"/> and a single
 /// <see cref="CapturingEventPublisher"/> (for the synchronous <c>DraftValidating</c> gate AND the
 /// FR-018/FR-018a lifecycle events + <c>DraftValidated</c>) so command behaviour can be asserted
@@ -86,14 +87,15 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         // feature services, so mirror the design-conformance fixture's feature set.
         new EventsFeature().ConfigureServices(services);
 
-        // Production SQLite Groundwork unified persistence: registers the workflows-design (and
-        // activities-design) stores + commands over one provider connection. The storage session source
-        // applies the pending schema in-process during IShellInitializer, so no external CLI is needed.
-        services.AddGroundworkSqliteUnifiedPersistence(connectionString);
+        // Host-owned composition: register the provider connection and workflows-design lane explicitly.
+        // The storage session source applies the pending schema in-process during IShellInitializer, so
+        // no external CLI is needed.
+        services.AddGroundworkStorageProviderConnection(_ => new SqliteProviderFactory().Create(connectionString));
+        services.AddGroundworkWorkflowsDesignStores();
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
         new ActivitiesDesignReconciliationFeature().ConfigureServices(services);
 
-        // Lock + event publisher + real structure service — registered AFTER the unified/feature
+        // Lock + event publisher + real structure service — registered AFTER the lane
         // composition so the capturing publisher wins as the single IInlineEventPublisher/
         // IDeferredEventPublisher the commands resolve, and the real flattening structure service is used.
         services.AddSingleton<IDistributedLockProvider>(lockProvider);

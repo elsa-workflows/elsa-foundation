@@ -1,11 +1,13 @@
 using CShells.Lifecycle;
+using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.DesignConformance.Tests;
-using Elsa.Persistence.Groundwork.MongoDb.Unified.DependencyInjection;
+using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Groundwork.Kernel;
+using Groundwork.MongoDb;
 using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
@@ -75,7 +77,10 @@ public sealed class MongoDbStandaloneTopologyContractTests(MongoDbStandaloneTopo
         services.AddSingleton(typeof(Microsoft.Extensions.Logging.ILogger<>), typeof(Microsoft.Extensions.Logging.Abstractions.NullLogger<>));
         services.AddSingleton<ISystemClock>(new DesignPersistenceFixtureData.FixedSystemClock(DesignPersistenceFixtureData.Epoch));
         services.AddSingleton<IPayloadSerializer, DesignPersistenceFixtureData.DeterministicPayloadSerializer>();
-        services.AddGroundworkMongoDbUnifiedPersistence(connectionString, databaseName);
+        services.AddGroundworkStorageProviderConnection(_ => new MongoProviderFactory().Create(
+            new MongoUrlBuilder(connectionString) { DatabaseName = databaseName }.ToString()));
+        services.AddGroundworkWorkflowsDesignStores();
+        services.AddGroundworkActivitiesDesignStores();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 }

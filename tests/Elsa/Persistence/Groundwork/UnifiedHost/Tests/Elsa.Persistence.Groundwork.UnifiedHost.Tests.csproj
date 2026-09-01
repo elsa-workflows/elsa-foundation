@@ -11,6 +11,7 @@
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="Groundwork.Kernel" />
     <PackageReference Include="Groundwork.Query.Model" />
+    <PackageReference Include="Groundwork.Sqlite" />
     <PackageReference Include="Groundwork.Store" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="CShells.Abstractions" />
@@ -18,10 +19,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\Sqlite\Unified\Elsa.Persistence.Groundwork.Sqlite.Unified.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\PostgreSql\Unified\Elsa.Persistence.Groundwork.PostgreSql.Unified.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\SqlServer\Unified\Elsa.Persistence.Groundwork.SqlServer.Unified.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\MongoDb\Unified\Elsa.Persistence.Groundwork.MongoDb.Unified.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\V2\Elsa.Persistence.Groundwork.V2.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Distributed\Persistence\Groundwork\Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Dashboard\Persistence\Groundwork\V2\Elsa.Workflows.Dashboard.Persistence.Groundwork.V2.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Diagnostics\Persistence\Groundwork\Elsa.Diagnostics.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Diagnostics\StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />

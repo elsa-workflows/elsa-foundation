@@ -1,9 +1,14 @@
-using Elsa.Persistence.Groundwork.ReferenceComposition;
-using Elsa.Persistence.Groundwork.SqlServer.Unified.DependencyInjection;
+using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Persistence.Groundwork.UnifiedHost.Tests;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
+using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
+using Groundwork.SqlServer;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -20,7 +25,13 @@ public sealed class SqlServerUnifiedGroundworkHostTests(SqlServerContainerFixtur
             .AddLogging()
             .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
             .AddSingleton<ISystemClock, FakeSystemClock>();
-        services.AddGroundworkSqlServerUnifiedPersistence(connectionString);
+        services
+            .AddGroundworkStorageProviderConnection(_ => new SqlServerProviderFactory().Create(connectionString))
+            .AddGroundworkV2RuntimeStores()
+            .AddGroundworkDistributedRuntimeStores()
+            .AddGroundworkWorkflowsDesignStores()
+            .AddGroundworkActivitiesDesignStores()
+            .AddGroundworkPublishingStores();
 
         var provider = services.BuildServiceProvider();
         await provider.InitializeGroundworkStoreAsync();

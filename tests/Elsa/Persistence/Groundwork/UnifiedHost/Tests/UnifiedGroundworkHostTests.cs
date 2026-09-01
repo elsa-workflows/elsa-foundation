@@ -7,8 +7,6 @@ using Elsa.Foundation.Identity.Abstractions.Ownership;
 using Elsa.Locking.Core;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork.ReferenceComposition;
-using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
@@ -25,8 +23,14 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
+using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Dashboard.Persistence.Groundwork.V2;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
+using Groundwork.Sqlite;
 using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -37,10 +41,10 @@ namespace Elsa.Persistence.Groundwork.UnifiedHost.Tests;
 
 /// <summary>
 /// End-to-end proof of the headline goal: <b>one host-selected database backs every Elsa module</b>. The host
-/// composes a single feature (<c>AddGroundworkSqliteUnifiedPersistence</c>) which opens <b>one</b> Groundwork
+/// composes one provider connection and each Groundwork lane explicitly. The host opens <b>one</b> Groundwork
 /// v2 provider connection over a SQLite file, admits every lane's declared storage units into it, and points
-/// every family's neutral ports at it. Nothing here is SQLite- or Groundwork-specific except the one host
-/// registration call.
+/// every family's neutral ports at it. Nothing here is SQLite- or Groundwork-specific except the provider
+/// connection registration.
 /// </summary>
 public class UnifiedGroundworkHostTests
 {
@@ -57,7 +61,14 @@ public class UnifiedGroundworkHostTests
             .AddSingleton<IDistributedLockProvider, ImmediateDistributedLockProvider>()
             .AddScoped<IPersistenceAccessContextAccessor>(_ => TenantAccessContextAccessor.Instance);
         var provider = services
-            .AddGroundworkSqliteUnifiedPersistence(database.ConnectionString)
+            .AddGroundworkStorageProviderConnection(_ => new SqliteProviderFactory().Create(database.ConnectionString))
+            .AddGroundworkV2RuntimeStores()
+            .AddGroundworkDistributedRuntimeStores()
+            .AddGroundworkWorkflowsDesignStores()
+            .AddGroundworkActivitiesDesignStores()
+            .AddGroundworkPublishingStores()
+            .AddGroundworkV2WorkflowRunHealth()
+            .AddGroundworkV2WorkflowPortfolio()
             .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         _ = provider.GetRequiredService<TemporarySqliteDatabase>();
         await provider.InitializeGroundworkStoreAsync();
@@ -73,7 +84,14 @@ public class UnifiedGroundworkHostTests
             .AddSingleton<IDistributedLockProvider, ImmediateDistributedLockProvider>()
             .AddScoped<IPersistenceAccessContextAccessor>(_ => TenantAccessContextAccessor.Instance);
         var provider = services
-            .AddGroundworkSqliteUnifiedPersistence(connectionString)
+            .AddGroundworkStorageProviderConnection(_ => new SqliteProviderFactory().Create(connectionString))
+            .AddGroundworkV2RuntimeStores()
+            .AddGroundworkDistributedRuntimeStores()
+            .AddGroundworkWorkflowsDesignStores()
+            .AddGroundworkActivitiesDesignStores()
+            .AddGroundworkPublishingStores()
+            .AddGroundworkV2WorkflowRunHealth()
+            .AddGroundworkV2WorkflowPortfolio()
             .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         await provider.InitializeGroundworkStoreAsync();
         return provider;
