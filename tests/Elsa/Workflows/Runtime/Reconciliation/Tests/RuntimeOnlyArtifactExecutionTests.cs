@@ -1,5 +1,7 @@
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Reconciliation.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Reconciliation.Tests;
@@ -53,5 +55,36 @@ public sealed class RuntimeOnlyArtifactExecutionTests : IDisposable
             .ToArray();
         Assert.DoesNotContain(loadedAssemblies, name => name!.StartsWith("Elsa.Workflows.Design", StringComparison.Ordinal));
         Assert.DoesNotContain(loadedAssemblies, name => name!.StartsWith("Elsa.Workflows.Publishing", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_stimulus_starts_the_imported_trigger_artifact_and_runs_it_to_completion()
+    {
+        await using var harness = ArtifactImportHarness.Build(_mount);
+        var executable = ArtifactClosureFixture.Executable(
+            ArtifactClosureFixture.AsStartTrigger(ArtifactClosureFixture.ProbeNode("node-trigger")),
+            "definition-trigger");
+        ArtifactClosureFixture.Mount(
+            harness.Services,
+            _mount,
+            "trigger.json",
+            ArtifactClosureFixture.Closure(executable));
+
+        var entry = Assert.Single((await ArtifactImportHarness.ReconcileAsync(harness)).Entries);
+        Assert.Equal(WorkflowArtifactImportOutcome.Imported, entry.Outcome);
+
+        await using var scope = harness.Services.CreateAsyncScope();
+        var routed = await scope.ServiceProvider.GetRequiredService<IStimulusRouter>().RouteAsync(
+            new StimulusDispatchRequest(
+                ArtifactClosureFixture.TriggerStimulusType,
+                ArtifactClosureFixture.TriggerStimulusHash("node-trigger"),
+                mode: StimulusRoutingMode.StartOnly,
+                idempotencyKey: "runtime-only-trigger"));
+
+        var start = Assert.Single(routed.Starts);
+        Assert.Equal(StimulusStartStatus.Started, start.Status);
+        var run = await harness.ReadRunAsync(start.WorkflowExecutionId!);
+        Assert.Equal(WorkflowExecutionStatus.Completed, run.WorkflowState?.Status);
+        Assert.Equal(ActivityExecutionStatus.Completed, run.State("node-trigger").Status);
     }
 }
