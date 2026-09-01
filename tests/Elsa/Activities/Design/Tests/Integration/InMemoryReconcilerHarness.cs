@@ -174,8 +174,11 @@ internal static class InMemoryReconcilerHarness
             if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
             {
                 query = query.Where(x =>
-                    new[] { x.Id, x.ActivityTypeKey, x.Category, x.DisplayName, x.Description }
-                        .Any(value => value?.Contains(filter.SearchTerm, StringComparison.OrdinalIgnoreCase) == true));
+                    x.Id.Contains(filter.SearchTerm, StringComparison.OrdinalIgnoreCase)
+                    || x.ActivityTypeKey.Contains(filter.SearchTerm, StringComparison.OrdinalIgnoreCase)
+                    || x.Category?.Contains(filter.SearchTerm, StringComparison.OrdinalIgnoreCase) == true
+                    || x.DisplayName?.Contains(filter.SearchTerm, StringComparison.OrdinalIgnoreCase) == true
+                    || x.Description?.Contains(filter.SearchTerm, StringComparison.OrdinalIgnoreCase) == true);
             }
 
             return query;
