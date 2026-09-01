@@ -39,13 +39,13 @@ public sealed class OpenIddictIdentityOptions
     public string? EncryptionKey { get; set; }
 
     /// <summary>
-    /// Transitional durable-store connection string retained for callers of the frozen store-oracle
-    /// registration. Provider-neutral behavior does not consume this value.
+    /// Transitional durable-store connection string retained by the frozen EF context and host-owned wiring.
+    /// Provider-neutral behavior does not consume this value.
     /// </summary>
     public string? ConnectionString { get; set; }
 
     /// <summary>
-    /// Transitional startup-schema switch retained for callers of the frozen store-oracle registration.
+    /// Transitional startup-schema switch retained by the frozen EF context and host-owned wiring.
     /// Provider-neutral behavior does not consume this value.
     /// </summary>
     public bool AutoMigrate { get; set; } = true;

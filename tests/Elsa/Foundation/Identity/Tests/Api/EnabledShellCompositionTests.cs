@@ -65,9 +65,9 @@ public sealed class EnabledShellCompositionTests : IAsyncLifetime
                         configureDbContext: builder => builder.UseInMemoryDatabase($"identity-{databaseSuffix}"),
                         initialAdmin: TestAdmin.SeedOptions());
 
-                    services.AddFoundationIdentityOpenIddict(
-                        options => options.IsDevelopmentOrDemo = true,
-                        configureDbContext: builder => builder.UseInMemoryDatabase($"openiddict-{databaseSuffix}"));
+                    services.AddOpenIddictVendorForTests(
+                        builder => builder.UseInMemoryDatabase($"openiddict-{databaseSuffix}"));
+                    services.AddFoundationIdentityOpenIddict(options => options.IsDevelopmentOrDemo = true);
 
                     // Registers the identity API services. The protocol endpoints are mapped through the
                     // explicit IWebShellFeature seam below; the unrelated canary remains FastEndpoints.

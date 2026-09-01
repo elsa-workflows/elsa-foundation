@@ -10,7 +10,9 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Extensions;
 using Elsa.Foundation.Identity.Oidc;
 using Elsa.Foundation.Identity.Oidc.Extensions;
 using Elsa.Foundation.Identity.OpenIddict;
+using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Elsa.Foundation.Identity.OpenIddict.Extensions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Foundation.Identity.Tests;
@@ -25,6 +27,8 @@ public sealed class IdentityProviderModuleTests
         new FoundationIdentityApiFeature().ConfigureServices(services);
         new AspNetCoreIdentityFeature().ConfigureServices(services);
         new OidcAuthenticationFeature().ConfigureServices(services);
+        services.AddOpenIddictVendorForTests(
+            builder => builder.UseInMemoryDatabase($"openiddict-{Guid.NewGuid():n}"));
         new OpenIddictIdentityFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
 
@@ -178,8 +182,11 @@ public sealed class IdentityProviderModuleTests
             options.ProviderId = "local";
             options.IsDevelopmentOrDemo = true;
         });
+        services.AddOpenIddictVendorForTests(
+            builder => builder.UseInMemoryDatabase($"openiddict-{Guid.NewGuid():n}"));
         services.AddFoundationIdentityApi();
         using var provider = services.BuildServiceProvider();
+
         var tokenService = provider.GetRequiredService<ITokenService>();
         var sessionService = provider.GetRequiredService<IAuthSessionService>();
 
