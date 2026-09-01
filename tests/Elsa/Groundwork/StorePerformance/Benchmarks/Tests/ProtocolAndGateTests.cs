@@ -279,6 +279,18 @@ public sealed class ProtocolAndGateTests
     }
 
     [Fact]
+    public void Replacement_gate_rejects_non_finite_thresholds()
+    {
+        var review = new GateReview("bookmark-lookup", "1.0.0", "proposer", "reviewer", "ref", "2026-08-04T00:00:00Z");
+
+        Assert.Throws<PerformanceContractException>(() => GatePolicy.Replacement(GateClass.RuntimeHotPath, double.NaN, .90, 2.0, review));
+        Assert.Throws<PerformanceContractException>(() => GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, double.PositiveInfinity, 2.0, review));
+        Assert.Throws<PerformanceContractException>(() => GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, double.NegativeInfinity, review));
+        Assert.Throws<PerformanceContractException>(() => GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, review, double.NaN));
+        Assert.Throws<PerformanceContractException>(() => GatePolicy.Replacement(GateClass.RuntimeHotPath, 1.10, .90, 2.0, review, double.PositiveInfinity));
+    }
+
+    [Fact]
     public async Task Manually_constructed_matrix_plan_cannot_bypass_diagnostics_admission()
     {
         var diagnostics = WorkloadCatalog.Load(Repository.Root())

@@ -91,8 +91,9 @@ Median-of-three p95 × 3, which is the derivation method the budget document rat
 | `attempt-stale-fence-commit` | 213.3 | 274.9 |
 | `reopen-and-read-committed-bundle` | 2.4 | 0.7 |
 
-These are **recorded measurements, not replacement ceilings**. Replacing the standing ratified 150 ms / 40 ms
-class ceilings needs an independent ratifier, so that document is unchanged and only points here.
+These are **recorded measurements, not replacement ceilings**. Replacing the standing 150 ms / 40 ms class
+ceilings needs an independent ratifier, so that document is unchanged and only points here. The durable-write
+150 ms value is ratified; the 40 ms bounded-read value is adopted under #1176 pending explicit acceptance.
 
 Against the standing ceilings, nothing here fails: the durable write path measures 75 ms (SQLite) and 94 ms
 (PostgreSQL) p95 against a 150 ms ceiling, and the bounded read measures 0.8 ms and 0.25 ms against 40 ms.

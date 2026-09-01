@@ -116,6 +116,20 @@ public sealed class ComparisonIntegrityTests
     }
 
     [Fact]
+    public void Comparison_rejects_operation_identities_with_outer_whitespace()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: [" read"]);
+        fixture.WriteTarget("groundwork", "store", operations: [" read"]);
+        fixture.Bind();
+
+        var result = fixture.Compare();
+
+        Assert.False(result.Complete);
+        Assert.Contains("non-empty operation", result.BlockReason!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Comparison_aggregates_recomputed_raw_metrics_instead_of_tolerated_stored_summaries()
     {
         using var fixture = ArtifactFixture.Create();
@@ -460,10 +474,70 @@ public sealed class ComparisonIntegrityTests
         var comparison = fixture.Compare();
         var verdict = GateEvaluator.Evaluate(GatePolicy.DefaultFor(comparison.WorkloadId), comparison);
 
+        Assert.Equal(PerformanceVerdict.Pass, verdict.Verdict);
         var row = Assert.Single(verdict.Rows);
         Assert.True(double.IsFinite(row.P50Ratio));
         Assert.True(double.IsFinite(row.P95RatioCi.Low));
         Assert.True(double.IsFinite(row.P99RatioCi.High));
+    }
+
+    [Fact]
+    public void Gate_evaluator_rejects_a_hand_constructed_complete_comparison_without_admitted_artifacts()
+    {
+        var operations = new[] { CompleteAggregate("read") };
+        var comparison = new ComparisonResult(
+            1,
+            new string('a', 64),
+            "bookmark-lookup",
+            "1.1.0",
+            "sqlite",
+            "100k",
+            "sqlite/ef/document-type-specific-tables",
+            "sqlite/groundwork/document-type-specific-tables",
+            true,
+            true,
+            operations,
+            operations,
+            null);
+
+        var verdict = GateEvaluator.Evaluate(GatePolicy.DefaultFor(comparison.WorkloadId), comparison);
+
+        Assert.Equal(PerformanceVerdict.Blocked, verdict.Verdict);
+        Assert.Contains("not produced by the admitted artifact comparison path", verdict.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Gate_evaluator_rejects_an_admitted_comparison_after_manifest_identity_is_changed()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ["read"]);
+        fixture.WriteTarget("groundwork", "store", operations: ["read"]);
+        fixture.Bind();
+
+        var comparison = fixture.Compare();
+        var tampered = comparison with { ArtifactManifestSha256 = new string('a', 64) };
+        var verdict = GateEvaluator.Evaluate(GatePolicy.DefaultFor(comparison.WorkloadId), tampered);
+
+        Assert.Equal(PerformanceVerdict.Blocked, verdict.Verdict);
+        Assert.Contains("manifest", verdict.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Gate_evaluator_rejects_an_admitted_comparison_after_aggregate_evidence_is_changed()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ["read"]);
+        fixture.WriteTarget("groundwork", "store", operations: ["read"]);
+        fixture.Bind();
+
+        var comparison = fixture.Compare();
+        var targetOperations = comparison.TargetOperations.ToArray();
+        targetOperations[0] = targetOperations[0] with { P95Milliseconds = [100d, 100d, 100d] };
+        var tampered = comparison with { TargetOperations = targetOperations };
+        var verdict = GateEvaluator.Evaluate(GatePolicy.DefaultFor(comparison.WorkloadId), tampered);
+
+        Assert.Equal(PerformanceVerdict.Blocked, verdict.Verdict);
+        Assert.Contains("raw operation evidence", verdict.Reason, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -575,6 +649,19 @@ public sealed class ComparisonIntegrityTests
             RawLatenciesMilliseconds = latencies
         };
     }
+
+    private static ProcessAggregate CompleteAggregate(string operation) => new(
+        operation,
+        [1d, 1d, 1d],
+        [1d, 1d, 1d],
+        [1d, 1d, 1d],
+        [100d, 100d, 100d],
+        new Dictionary<int, IReadOnlyList<double>>
+        {
+            [1] = Enumerable.Repeat(1d, 100).ToArray(),
+            [2] = Enumerable.Repeat(1d, 100).ToArray(),
+            [3] = Enumerable.Repeat(1d, 100).ToArray()
+        });
 }
 
 internal sealed class ArtifactFixture : IDisposable

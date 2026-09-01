@@ -160,7 +160,8 @@ three *different* evidence kinds for them, which is the contract conceding the s
 This is also why provider-specific diagnostics budgets cannot be expressed as the runtime class constants.
 `GatePolicy.DefaultFor(workloadId)` now derives the workload's class; diagnostics remains `OrdinaryStore`
 and intentionally has no default absolute ceiling, while the eight runtime workloads receive their
-ratified 40 ms bounded-read or 150 ms durable-write backstop. Per-provider diagnostics budgets must still
+40 ms bounded-read or 150 ms durable-write backstop (the 40 ms adoption is recorded under #1176 pending
+explicit acceptance). Per-provider diagnostics budgets must still
 arrive as reviewed policy **files**, keyed by workload *and* provider.
 
 ## What must change in code

@@ -12,7 +12,8 @@ public sealed record GateReview(string WorkloadId, string WorkloadVersion, strin
 /// Ratio gates plus an optional absolute p95 ceiling. The ceiling exists for rows with no comparand to
 /// form a ratio against — the runtime family has never had an EF implementation — and is a
 /// catastrophic-regression backstop, not a precision instrument. The durable-write ceiling was ratified
-/// 2026-08-04 and the bounded-read backstop was adopted under issue #1176 on 2026-09-01; see
+/// 2026-08-04 and the bounded-read backstop was adopted under issue #1176 on 2026-09-01 pending explicit
+/// acceptance; see
 /// specs/094-harden-groundwork-stores/contracts/runtime-absolute-budget-basis.md.
 /// </summary>
 public sealed record GatePolicy(GateClass GateClass, double MaxP95Ratio, double MinThroughputRatio, double MaxP99Ratio, GateReview? Review, double? MaxP95Milliseconds = null)
@@ -35,7 +36,7 @@ public sealed record GatePolicy(GateClass GateClass, double MaxP95Ratio, double 
     public const double RatifiedDurableWritePathP95Milliseconds = 150d;
 
     /// <summary>
-    /// Adopted as the executable backstop under issue #1176 on 2026-09-01 for the five bounded-read runtime
+    /// Adopted as the executable backstop under issue #1176 on 2026-09-01 (pending explicit acceptance) for the five bounded-read runtime
     /// workloads — bookmark-lookup, recovery-scan, due-timer-selection, recurring-schedule-selection, and
     /// trigger-binding-stimulus-lookup. This remains a live catastrophic-regression backstop until a reviewed
     /// per-workload replacement supersedes it.
@@ -44,7 +45,7 @@ public sealed record GatePolicy(GateClass GateClass, double MaxP95Ratio, double 
 
     /// <summary>
     /// The runtime hot path carries an absolute ceiling as well as its ratios. The workload identity is
-    /// required because bounded reads and durable writes have separate ratified class ceilings.
+    /// required because bounded reads and durable writes have separate class ceilings.
     /// </summary>
     public static GatePolicy DefaultFor(string workloadId)
     {
@@ -80,8 +81,8 @@ public sealed record GatePolicy(GateClass GateClass, double MaxP95Ratio, double 
         if (review is null || string.IsNullOrWhiteSpace(review.WorkloadId) || string.IsNullOrWhiteSpace(review.WorkloadVersion) || string.IsNullOrWhiteSpace(review.ProposedBy) || string.IsNullOrWhiteSpace(review.ReviewedBy) || string.IsNullOrWhiteSpace(review.ReviewReference) || !DateTimeOffset.TryParse(review.ReviewedAtUtc, out _) || string.Equals(review.ProposedBy, review.ReviewedBy, StringComparison.OrdinalIgnoreCase)) throw new PerformanceContractException("A workload-specific gate replacement requires an independent reviewed record; self-authored amendments are rejected.");
         var expectedClass = WorkloadGateClass(review.WorkloadId);
         if (gateClass != expectedClass) throw new PerformanceContractException($"A reviewed gate replacement for workload '{review.WorkloadId}' must use its workload-derived gate class '{expectedClass}'.");
-        if (maxP95Ratio <= 0 || minThroughputRatio <= 0 || maxP99Ratio <= 0) throw new PerformanceContractException("Gate ratios must be positive.");
-        if (maxP95Milliseconds is <= 0) throw new PerformanceContractException("An absolute p95 ceiling must be positive when supplied.");
+        if (!PositiveFinite(maxP95Ratio) || !PositiveFinite(minThroughputRatio) || !PositiveFinite(maxP99Ratio)) throw new PerformanceContractException("Gate ratios must be finite and positive.");
+        if (maxP95Milliseconds is { } ceiling && !PositiveFinite(ceiling)) throw new PerformanceContractException("An absolute p95 ceiling must be finite and positive when supplied.");
         // A replacement that omits the ceiling inherits the class default rather than silently dropping
         // it; removing a ratified budget must be a deliberate act, not an omission in a policy file.
         return new GatePolicy(gateClass, maxP95Ratio, minThroughputRatio, maxP99Ratio, review, maxP95Milliseconds ?? DefaultFor(gateClass, review.WorkloadId).MaxP95Milliseconds);
@@ -193,11 +194,12 @@ public static class GateEvaluator
                 comparison,
                 $"Workload '{comparison.WorkloadId}' is blocked from benchmark gating: {blockedReason}.");
         if (!comparison.Complete || !comparison.CorrectnessEqual) return Blocked(policy, comparison, comparison.BlockReason ?? "Comparison is incomplete.");
+        if (!ComparisonAdmission.TryValidate(comparison, out var admissionReason)) return Blocked(policy, comparison, admissionReason);
         if (!policy.TryBindToComparison(comparison, out policy, out var policyBindingReason)) return Blocked(policy, comparison, policyBindingReason);
         if (comparison.OracleOperations is null || comparison.TargetOperations is null || comparison.OracleOperations.Any(operation => operation is null) || comparison.TargetOperations.Any(operation => operation is null)) return Blocked(policy, comparison, "Oracle and target operation sets are required.");
         var oracleOperations = comparison.OracleOperations.OrderBy(operation => operation.Operation, StringComparer.Ordinal).ToArray();
         var targetOperations = comparison.TargetOperations.OrderBy(operation => operation.Operation, StringComparer.Ordinal).ToArray();
-        if (oracleOperations.Length == 0 || targetOperations.Length == 0 || oracleOperations.Any(operation => string.IsNullOrWhiteSpace(operation.Operation)) || targetOperations.Any(operation => string.IsNullOrWhiteSpace(operation.Operation)) || oracleOperations.Select(operation => operation.Operation).Distinct(StringComparer.Ordinal).Count() != oracleOperations.Length || targetOperations.Select(operation => operation.Operation).Distinct(StringComparer.Ordinal).Count() != targetOperations.Length)
+        if (oracleOperations.Length == 0 || targetOperations.Length == 0 || oracleOperations.Any(operation => !OperationIdentity.IsValid(operation.Operation)) || targetOperations.Any(operation => !OperationIdentity.IsValid(operation.Operation)) || oracleOperations.Select(operation => operation.Operation).Distinct(StringComparer.Ordinal).Count() != oracleOperations.Length || targetOperations.Select(operation => operation.Operation).Distinct(StringComparer.Ordinal).Count() != targetOperations.Length)
             return Blocked(policy, comparison, "Oracle and target must contain the same non-empty unique operation set.");
         if (!oracleOperations.Select(operation => operation.Operation).SequenceEqual(targetOperations.Select(operation => operation.Operation), StringComparer.Ordinal)) return Blocked(policy, comparison, "Oracle and target operation sets differ; no operation may be ignored.");
         var rows = new List<GateRow>();
@@ -242,4 +244,11 @@ public static class GateEvaluator
         return new RatioConfidenceInterval(interval.Low, interval.High);
     }
     private static GateResult Blocked(GatePolicy policy, ComparisonResult comparison, string reason) => new(1, comparison.ArtifactManifestSha256, comparison.WorkloadId, comparison.WorkloadVersion, comparison.Provider, comparison.Scale, comparison.OracleTarget, comparison.Target, policy.GateClass, policy.Review, PerformanceVerdict.Blocked, reason, []);
+}
+
+internal static class OperationIdentity
+{
+    internal static bool IsValid(string? operation) =>
+        !string.IsNullOrWhiteSpace(operation) &&
+        string.Equals(operation, operation.Trim(), StringComparison.Ordinal);
 }
