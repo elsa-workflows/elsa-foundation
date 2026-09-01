@@ -10,8 +10,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Groundwork.Kernel" Version="0.4.0-preview.1" />
-    <PackageReference Include="Groundwork.Store" Version="0.4.0-preview.1" />
+    <PackageReference Include="Groundwork.Kernel" Version="0.4.0-preview.2" />
+    <PackageReference Include="Groundwork.Store" Version="0.4.0-preview.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
     <PackageReference Include="xunit" Version="2.9.3" />

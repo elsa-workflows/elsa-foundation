@@ -9,10 +9,10 @@
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" Version="0.0.29-preview.147" />
     <PackageReference Include="Elsa.Platform.PackageManifest.Generator" Version="0.0.1-preview.79" PrivateAssets="all" />
-    <PackageReference Include="Groundwork.MongoDb" Version="0.4.0-preview.1" />
-    <PackageReference Include="Groundwork.PostgreSql" Version="0.4.0-preview.1" />
-    <PackageReference Include="Groundwork.Sqlite" Version="0.4.0-preview.1" />
-    <PackageReference Include="Groundwork.SqlServer" Version="0.4.0-preview.1" />
+    <PackageReference Include="Groundwork.MongoDb" Version="0.4.0-preview.2" />
+    <PackageReference Include="Groundwork.PostgreSql" Version="0.4.0-preview.2" />
+    <PackageReference Include="Groundwork.Sqlite" Version="0.4.0-preview.2" />
+    <PackageReference Include="Groundwork.SqlServer" Version="0.4.0-preview.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
   </ItemGroup>
 
