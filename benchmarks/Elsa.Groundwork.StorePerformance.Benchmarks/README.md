@@ -51,9 +51,12 @@ the median of the three measured p50/p95/p99/throughput values. Its capped paire
 bootstrap *ratio* intervals resample within each process, then take the median process percentile; they
 never flatten samples across processes.
 
-Default gates are the Spec 094 performance-handoff ratios: runtime p95 <= 1.10x and throughput >= 90%;
-ordinary p95 <= 1.25x and throughput >= 80%; both require p99 <= 2.0x. A replacement must carry a distinct
-reviewer, a review reference, and the exact workload id/version; it cannot be self-authored.
+Default gates derive their class from the exact workload id. Runtime hot paths use the Spec 094
+performance-handoff ratios (p95 <= 1.10x, throughput >= 90%, p99 <= 2.0x) plus a 150 ms p95 ceiling for
+durable writes or 40 ms for bounded reads. Ordinary workloads use p95 <= 1.25x, throughput >= 80%, and
+p99 <= 2.0x without a default absolute ceiling. A replacement must use the workload-derived class and
+carry non-empty, distinct proposer/reviewer identities, a review reference, and the exact workload
+id/version; it cannot be self-authored.
 
 The protocol/statistics shape was recovered from the retired Spec 093 design harness at commit `30ec15491`.
 No design targets, SQLite implementation, EF references, or its superseded absolute-budget amendment are

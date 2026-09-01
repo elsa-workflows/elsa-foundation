@@ -65,7 +65,9 @@ internal static class BenchmarkCli
         var comparison = Comparison.Compare(output, Require(args, "--oracle"), Require(args, "--target"), WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()));
         ResultStore.Write(Option(args, "--comparison-result") ?? Path.Combine(output, "comparison.from-gate.v1.json"), comparison);
         var requestedClassOption = Option(args, "--class");
-        var defaultPolicy = GatePolicy.DefaultFor(comparison.WorkloadId);
+        var defaultPolicy = string.IsNullOrWhiteSpace(comparison.WorkloadId)
+            ? GatePolicy.ForBlockedComparison()
+            : GatePolicy.DefaultFor(comparison.WorkloadId);
         var requestedClass = requestedClassOption?.ToLowerInvariant() switch
         {
             null => defaultPolicy.GateClass,

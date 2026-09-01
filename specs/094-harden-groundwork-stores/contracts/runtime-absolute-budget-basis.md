@@ -216,10 +216,10 @@ reachable now.
 
 ### Correction (2026-08-06), resolved 2026-09-01: enforce the bounded-read ceiling
 
-`RatifiedBoundedReadPathP95Milliseconds` (40 ms) is referenced nowhere but its own declaration.
-`GatePolicy.DefaultFor(GateClass.RuntimeHotPath)` applies the 150 ms **durable-write** ceiling to *every*
-runtime workload, including the five bounded-read workloads this document assigns 40 ms. A bounded read
-regressing from 5 ms to 140 ms passes the default gate silently.
+Before this resolution, `RatifiedBoundedReadPathP95Milliseconds` (40 ms) was referenced nowhere but its
+own declaration. `GatePolicy.DefaultFor(GateClass.RuntimeHotPath)` applied the 150 ms **durable-write**
+ceiling to *every* runtime workload, including the five bounded-read workloads this document assigns 40
+ms. A bounded read regressing from 5 ms to 140 ms passed the default gate silently.
 
 The original recommendation was to supersede rather than wire the provisional value. That left a live
 window in which a bounded read could regress from 5 ms to 140 ms and still pass. Issue #1176 therefore

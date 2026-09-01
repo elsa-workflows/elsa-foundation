@@ -288,19 +288,18 @@ A latency harness does **not** need standing up from zero. `benchmarks/` contain
 | `Elsa/Activities/Runtime/Benchmarks` | Activation-scope benchmarks, with committed results |
 
 **The gate thresholds the brief quotes are already implemented.**
-`benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Harness/Gates.cs:43-46`:
+`benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Harness/Gates.cs:48-72`:
 
 ```csharp
-public static GatePolicy DefaultFor(GateClass gateClass) => gateClass == GateClass.RuntimeHotPath
-    ? new(gateClass, 1.10, .90, 2.0, null, RatifiedDurableWritePathP95Milliseconds)
-    : new(gateClass, 1.25, .80, 2.0, null);
+public static GatePolicy DefaultFor(string workloadId) =>
+    DefaultFor(WorkloadGateClass(workloadId), workloadId);
 ```
 
 The ordinary class is exactly p95 ≤ 1.25×, throughput ≥ 80%, p99 ≤ 2× — the diagnostics gate. The
-runtime hot path is *stricter* (1.10 / 0.90 / 2.0) and additionally carries an absolute p95 ceiling.
-Ratios are evaluated on medians across processes with confidence intervals (`Gates.cs:107-115`), and
-gate replacement requires an independently reviewed record — self-authored amendments are rejected
-(`Gates.cs:47`).
+runtime hot path is *stricter* (1.10 / 0.90 / 2.0) and additionally carries a workload-derived 40 ms
+bounded-read or 150 ms durable-write p95 ceiling. Ratios are evaluated on medians across processes with
+confidence intervals (`Gates.cs:113-151`), and gate replacement requires an independently reviewed,
+non-empty distinct proposer/reviewer record — self-authored amendments are rejected (`Gates.cs:75-84`).
 
 ### The blocking gap: there is no EF adapter, anywhere
 

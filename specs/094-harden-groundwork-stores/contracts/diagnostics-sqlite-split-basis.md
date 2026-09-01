@@ -70,9 +70,9 @@ declarations as the durable record of the deferred obligation.
 ### What this authorizes
 
 A SQLite EF-vs-Groundwork ratio verdict for both diagnostics suboperations, under the **existing**
-default policy — `GatePolicy.DefaultFor(GateClass.OrdinaryStore)` = p95 ≤ 1.25×, throughput ≥ 80%,
-p99 ≤ 2× (`Harness/Gates.cs:45`). No new gate machinery. No reviewed replacement policy file. No numeric
-budget.
+default policy — `GatePolicy.DefaultFor("diagnostics-durable-history")` derives `OrdinaryStore` = p95 ≤
+1.25×, throughput ≥ 80%, p99 ≤ 2×. No new gate machinery. No reviewed replacement policy file. No
+numeric budget.
 
 ### What this does not authorize
 
@@ -196,11 +196,10 @@ In order:
   `Comparison.Compare` (`Harness/ArtifactsAndMatrix.cs:498-511`) blocks when
   `source.CommitSha != candidate.CommitSha`, so every such run returns `Blocked` today. See the
   2026-08-06 Tier C correction in [`runtime-absolute-budget-basis.md`](runtime-absolute-budget-basis.md).
-- **Do not express a per-workload absolute ceiling through `GatePolicy.DefaultFor`.** It keys on
-  `GateClass`, not workload. `RatifiedBoundedReadPathP95Milliseconds` is the cautionary precedent:
-  ratified at 40 ms, enforced by nothing, with five bounded-read workloads silently carrying the 150 ms
-  durable-write ceiling instead. `ProtocolAndGateTests.Ratified_bounded_read_ceiling_is_declared_but_enforced_by_no_construction_path`
-  fails if any construction path starts applying it. Route 2 will meet this wall; Route 1 does not.
+- **Do not express provider-specific diagnostics budgets through `GatePolicy.DefaultFor`.** The workload-aware
+  default derives `OrdinaryStore` for diagnostics and intentionally has no absolute ceiling. Route 2 still
+  needs reviewed policy files keyed by workload and provider; the runtime defaults' 40 ms bounded-read and
+  150 ms durable-write ceilings are only the catastrophic-regression backstop for the eight runtime paths.
 
 ## Residual risk
 

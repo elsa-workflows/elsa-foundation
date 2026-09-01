@@ -49,9 +49,14 @@ public sealed record GatePolicy(GateClass GateClass, double MaxP95Ratio, double 
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workloadId);
         return DefaultFor(
-            RuntimeHotPathWorkloads.Contains(workloadId) ? GateClass.RuntimeHotPath : GateClass.OrdinaryStore,
+            WorkloadGateClass(workloadId),
             workloadId);
     }
+
+    internal static GatePolicy ForBlockedComparison() => OrdinaryPolicy(GateClass.OrdinaryStore);
+
+    private static GateClass WorkloadGateClass(string workloadId) =>
+        RuntimeHotPathWorkloads.Contains(workloadId) ? GateClass.RuntimeHotPath : GateClass.OrdinaryStore;
 
     public static GatePolicy DefaultFor(GateClass gateClass, string workloadId)
     {
@@ -64,12 +69,16 @@ public sealed record GatePolicy(GateClass GateClass, double MaxP95Ratio, double 
             return new(gateClass, 1.10, .90, 2.0, null, ceiling);
         }
 
-        return new(gateClass, 1.25, .80, 2.0, null);
+        return OrdinaryPolicy(gateClass);
     }
+
+    private static GatePolicy OrdinaryPolicy(GateClass gateClass) => new(gateClass, 1.25, .80, 2.0, null);
 
     public static GatePolicy Replacement(GateClass gateClass, double maxP95Ratio, double minThroughputRatio, double maxP99Ratio, GateReview review, double? maxP95Milliseconds = null)
     {
-        if (review is null || string.IsNullOrWhiteSpace(review.WorkloadId) || string.IsNullOrWhiteSpace(review.WorkloadVersion) || string.IsNullOrWhiteSpace(review.ReviewReference) || !DateTimeOffset.TryParse(review.ReviewedAtUtc, out _) || string.Equals(review.ProposedBy, review.ReviewedBy, StringComparison.OrdinalIgnoreCase)) throw new PerformanceContractException("A workload-specific gate replacement requires an independent reviewed record; self-authored amendments are rejected.");
+        if (review is null || string.IsNullOrWhiteSpace(review.WorkloadId) || string.IsNullOrWhiteSpace(review.WorkloadVersion) || string.IsNullOrWhiteSpace(review.ProposedBy) || string.IsNullOrWhiteSpace(review.ReviewedBy) || string.IsNullOrWhiteSpace(review.ReviewReference) || !DateTimeOffset.TryParse(review.ReviewedAtUtc, out _) || string.Equals(review.ProposedBy, review.ReviewedBy, StringComparison.OrdinalIgnoreCase)) throw new PerformanceContractException("A workload-specific gate replacement requires an independent reviewed record; self-authored amendments are rejected.");
+        var expectedClass = WorkloadGateClass(review.WorkloadId);
+        if (gateClass != expectedClass) throw new PerformanceContractException($"A reviewed gate replacement for workload '{review.WorkloadId}' must use its workload-derived gate class '{expectedClass}'.");
         if (maxP95Ratio <= 0 || minThroughputRatio <= 0 || maxP99Ratio <= 0) throw new PerformanceContractException("Gate ratios must be positive.");
         if (maxP95Milliseconds is <= 0) throw new PerformanceContractException("An absolute p95 ceiling must be positive when supplied.");
         // A replacement that omits the ceiling inherits the class default rather than silently dropping
@@ -87,7 +96,7 @@ public sealed record GateResult(int SchemaVersion, string ArtifactManifestSha256
 
 public static class GatePolicyFile
 {
-    private static readonly JsonSerializerOptions Options = new() { PropertyNameCaseInsensitive = false, UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
+    private static readonly JsonSerializerOptions Options = new() { PropertyNameCaseInsensitive = false, UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow, RespectRequiredConstructorParameters = true };
     public static GatePolicy Load(string path, string workloadId, string workloadVersion)
     {
         var bytes = File.ReadAllBytes(path);
