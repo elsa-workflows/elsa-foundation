@@ -101,6 +101,9 @@ public class WorkflowsPublishingFeature : IShellFeature
         services.TryAddScoped<IActivityTemplateCompiler, ActivityTemplateCompiler>();
         services.TryAddSingleton<IActivityTemplateAdmissionPolicy, AcceptAllActivityTemplateAdmissionPolicy>();
         services.TryAddScoped<IExecutableNodeMetadataEnricher, ExecutableNodeMetadataEnricher>();
+        // The export producer is destination-agnostic. It reads the executable closure and provenance, while
+        // transport features contribute one or more IWorkflowArtifactExportTarget implementations.
+        services.TryAddScoped<IWorkflowArtifactClosureFactory, WorkflowArtifactClosureFactory>();
         services.AddEventHandler<ExecutableCompilationCollecting, CollectExecutableCompilation>();
         services.AddEventHandler<ExecutableNodeMetadataCollecting, CollectExecutableNodeMetadata>();
         // Publish-on-reconcile (spec 147): independent subscriber on the Design-side reconcile completion
