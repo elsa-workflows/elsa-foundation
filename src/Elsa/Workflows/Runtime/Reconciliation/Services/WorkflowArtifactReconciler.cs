@@ -30,15 +30,6 @@ namespace Elsa.Workflows.Runtime.Reconciliation.Services;
 /// the pass result rather than a thrown exception: one broken export must not be able to take down the deploy.
 /// </para>
 /// <para>
-/// <b>Known caveat, deliberate.</b> The one path that cannot honour "a failed unit writes nothing" literally is a
-/// <em>persistence</em> failure partway through the unit's writes: earlier members are already in the store. The
-/// guarantee that still holds is the one that matters — the unit activates nothing, so no reference, binding or
-/// schedule points at those rows and nothing can execute them. They are unreferenced content-addressed blobs,
-/// reclaimable by reference garbage collection, and a later pass over a repaired mount re-saves them idempotently.
-/// Making this atomic would need a transaction spanning a store whose whole contract is create-only,
-/// content-addressed writes.
-/// </para>
-/// <para>
 /// <b>Activation is one call.</b> The importer never takes a lease, writes a projection, notifies an observer or
 /// compensates — <see cref="IWorkflowActivationCoordinator"/> owns that entire sequence for every path, and a
 /// second copy of it here would be exactly the duplicated authority FR-B-006 exists to remove. The importer's
@@ -122,12 +113,10 @@ public sealed class WorkflowArtifactReconciler(
     /// Runs every closure unit one source offers.
     /// </summary>
     /// <remarks>
-    /// A file that cannot be decoded at all surfaces as <see cref="InvalidWorkflowArtifactClosureException"/> from
-    /// inside the source's iterator. It is recorded as a rejection and this source's enumeration ends — a C#
-    /// async iterator cannot be resumed after its body throws, so "skip the bad file and read the next one" is not
-    /// available behind the pinned <c>IAsyncEnumerable</c> shape. Other sources still run. A pass-aborting
-    /// <see cref="WorkflowArtifactReconciliationException"/> deliberately propagates: a mount that is not there is
-    /// not the same as a mount that is empty.
+    /// Per-input read failures are yielded as entries and do not stop later inputs. A custom source that predates
+    /// that result shape and still throws <see cref="InvalidWorkflowArtifactClosureException"/> remains contained,
+    /// but its iterator necessarily ends. A pass-aborting <see cref="WorkflowArtifactReconciliationException"/>
+    /// deliberately propagates: a mount that is not there is not the same as a mount that is empty.
     /// </remarks>
     private async ValueTask ReconcileSourceAsync(
         IWorkflowArtifactReconciliationSource source,
@@ -137,7 +126,24 @@ public sealed class WorkflowArtifactReconciler(
         try
         {
             await foreach (var file in source.ReadAsync(cancellationToken).WithCancellation(cancellationToken))
+            {
+                var readError = file.ReadError;
+                if (readError is not null || file.Closure is null)
+                {
+                    var diagnostic = readError?.Message ?? $"workflow artifact closure at '{file.Origin}' was empty.";
+                    entries.Add(WorkflowArtifactImportEntry.Rejected(
+                        file.Origin,
+                        source.SourceId,
+                        string.Empty,
+                        null,
+                        null,
+                        WorkflowArtifactRejectionKind.MalformedClosure,
+                        diagnostic));
+                    continue;
+                }
+
                 await ReconcileUnitAsync(source, file, entries, cancellationToken);
+            }
         }
         catch (InvalidWorkflowArtifactClosureException exception)
         {
@@ -163,7 +169,7 @@ public sealed class WorkflowArtifactReconciler(
         List<WorkflowArtifactImportEntry> entries,
         CancellationToken cancellationToken)
     {
-        var closure = file.Closure;
+        var closure = file.Closure!;
 
         // Gate 1+2 — the envelope validates against itself alone: every dependency edge resolves inside the
         // carried set, declared hashes agree, no duplicate identities, no cycles.
@@ -171,6 +177,15 @@ public sealed class WorkflowArtifactReconciler(
         if (!plan.IsValid)
         {
             RejectUnit(entries, source, file, plan.Members, plan.RejectionKind, plan.Diagnostic!);
+            return;
+        }
+
+        // Gate 2a — imported provenance must describe a durable published artifact. The closure's references are
+        // expectations only and are never copied into this engine, but accepting a test-run or draft reference
+        // would still let a non-publishable snapshot be relabelled as the Published reference minted below.
+        if (TryFindProvenanceFault(closure, plan.Members) is { } provenanceFault)
+        {
+            RejectUnit(entries, source, file, plan.Members, WorkflowArtifactRejectionKind.MalformedClosure, provenanceFault);
             return;
         }
 
@@ -184,7 +199,7 @@ public sealed class WorkflowArtifactReconciler(
             return;
         }
 
-        // Gate 2a — recompute every member's canonical content hash BEFORE anything persists. The executable
+        // Gate 2b — recompute every member's canonical content hash BEFORE anything persists. The executable
         // store is create-only and dedups by a content-addressed id, so persisting an unverified payload under a
         // claimed id would let a corrupted file *become* that id's content on a fresh engine, permanently.
         foreach (var member in plan.Members)
@@ -222,30 +237,27 @@ public sealed class WorkflowArtifactReconciler(
             }
         }
 
-        // Persist every member first. Order-free by construction: the store is content-addressed and create-only,
-        // so a save is either a no-op or a first write, and no member's persistence depends on another's.
-        foreach (var member in plan.Members)
+        // Persist the entire closure through the store's atomic batch boundary. Reconciliation's isolation unit is
+        // the closure, so a provider that cannot make every previously absent member visible together fails closed
+        // rather than degrading to sequential writes and leaving an orphaned prefix after a storage fault.
+        try
         {
-            try
-            {
-                await executableStore.SaveAsync(member, cancellationToken);
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                logger.LogError(
-                    exception,
-                    "Workflow artifact '{ArtifactId}' from '{Origin}' could not be persisted.",
-                    member.Identity.ArtifactId,
-                    file.Origin);
-                RejectUnit(
-                    entries,
-                    source,
-                    file,
-                    plan.Members,
-                    WorkflowArtifactRejectionKind.PersistenceFailure,
-                    $"artifact '{member.Identity.ArtifactId}' could not be written to the executable store: {exception.Message}");
-                return;
-            }
+            await executableStore.SaveBatchAsync(plan.Members, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogError(
+                exception,
+                "Workflow artifact closure from '{Origin}' could not be persisted atomically.",
+                file.Origin);
+            RejectUnit(
+                entries,
+                source,
+                file,
+                plan.Members,
+                WorkflowArtifactRejectionKind.PersistenceFailure,
+                $"the closure could not be written atomically to the executable store: {exception.Message}");
+            return;
         }
 
         // Activate dependencies-first so a parent is never live while a child's source reference is still absent —
@@ -291,7 +303,18 @@ public sealed class WorkflowArtifactReconciler(
         // already serves. This is the one place the importer consults engine state to decide, which is why it sits
         // on this side of the planner's envelope-only line.
         var active = await FindActiveReferenceAsync(slot, cancellationToken);
-        if (active is not null && TryResolveSupersession(identity, active) is { } supersession)
+
+        var candidateSource = WorkflowActivationSource.ArtifactReconciliation(source.SourceId);
+        var foreignOwnerMustBeEvaluated = slot?.ActiveActivationId is not null &&
+            slot.Source is { } incumbent &&
+            !incumbent.IsSameOwnerAs(candidateSource) &&
+            !IsSameArtifactActivation(active, file.TenantId, identity.ArtifactId);
+
+        // Ownership is authoritative even when the incumbent's version would otherwise make this candidate look
+        // old or like a same-version hash mismatch. Let the coordinator attempt that foreign transition first so
+        // its conflict/compensation path remains the single place that refuses the slot and the policy is called
+        // only after the refusal. The coordinator's documented same-artifact no-op remains available below.
+        if (!foreignOwnerMustBeEvaluated && active is not null && TryResolveSupersession(identity, active) is { } supersession)
         {
             // A None kind is the verdict's "not a rejection" arm: importable, deliberately not activated.
             if (supersession.Kind == WorkflowArtifactRejectionKind.None)
@@ -337,7 +360,7 @@ public sealed class WorkflowArtifactReconciler(
             MintSourceReference(source, file.TenantId, identity, activationId),
             DefaultSlotName,
             activationId,
-            WorkflowActivationSource.ArtifactReconciliation(source.SourceId),
+            candidateSource,
             slot?.Revision ?? 0);
 
         WorkflowActivationResult result;
@@ -390,71 +413,14 @@ public sealed class WorkflowArtifactReconciler(
                     result.Slot.ActiveActivationId);
 
             case WorkflowActivationOutcome.Conflict when result.Conflict == WorkflowActivationConflict.ForeignSource:
-            {
-                // T118: another activation source owns the slot, and reconciliation never takes it back. Not a
-                // rejection by default — the artifact is fine and its unit imported — but it MUST be loud: while
-                // the slot is held elsewhere, replacing the mounted file changes nothing for this definition, and
-                // an operator who is not told that has no way to discover it.
-                //
-                // The owner is named from the slot's own Source field, exactly as before. There is deliberately
-                // no test for WHO the owner is: reconciliation yields to any foreign owner, and a comparison
-                // against a particular kind here would be the coupling T118 exists to avoid.
-                var incumbent = result.Slot.Source;
-                var owner = incumbent?.Describe() ?? "another activation source";
-
-                // Named generically on purpose: the owner is whatever the slot says, and the runtime must not
-                // learn the vocabulary of any particular activation source to describe it (T118). How a given
-                // source releases a slot is that source's documentation, not this diagnostic's.
-                var ownership =
-                    $"definition '{identity.DefinitionId}' slot '{DefaultSlotName}' is owned by activation source "
-                    + $"'{owner}', which claimed it explicitly. Reconciliation never reclaims a slot another source owns, "
-                    + "so this mounted artifact is ignored for this definition until that source releases the slot. "
-                    + $"{result.Diagnostic}".TrimEnd();
-
-                // T124 — how this is REPORTED is the deployment's call; that it is not activated is not. The
-                // policy runs here, downstream of a refusal that has already happened, and is handed the
-                // incumbent so a host that knows what its own source ids mean can act on that without the runtime
-                // learning any of it. A slot conflict with no owner recorded is an authority defect rather than a
-                // question for a policy, so it takes the safe default without asking.
-                var decision = incumbent is null
-                    ? ArtifactForeignOwnerDecision.Skip
-                    : await foreignOwnerPolicy.DecideAsync(
-                        new ArtifactForeignOwnerContext(identity.DefinitionId, incumbent, command.Source),
-                        cancellationToken);
-
-                if (ReferenceEquals(decision, ArtifactForeignOwnerDecision.Reject))
-                {
-                    logger.LogError(
-                        "Imported artifact '{ArtifactId}' from '{Origin}' was NOT activated for definition '{DefinitionId}': the "
-                        + "'{SlotName}' activation slot is owned by activation source '{Owner}', and this engine's foreign-owner "
-                        + "policy treats that as a rejection.",
-                        identity.ArtifactId,
-                        file.Origin,
-                        identity.DefinitionId,
-                        DefaultSlotName,
-                        owner);
-                }
-                else
-                {
-                    logger.LogWarning(
-                        "Imported artifact '{ArtifactId}' from '{Origin}' was NOT activated for definition '{DefinitionId}': the "
-                        + "'{SlotName}' activation slot is owned by activation source '{Owner}'. Reconciliation never reclaims a "
-                        + "slot another source owns, so updating the mounted artifact will not change what this definition serves "
-                        + "until that source releases it. Diagnostic: {Diagnostic}",
-                        identity.ArtifactId,
-                        file.Origin,
-                        identity.DefinitionId,
-                        DefaultSlotName,
-                        owner,
-                        result.Diagnostic);
-                }
-
-                // Deliberately NOT recorded as unresolved on either answer, for the reason the latest-wins skip is
-                // not: the definition IS live — on the owner's activation — so a dependent that dispatches into it
-                // is not dispatching into nothing. A host calling the condition a rejection is describing its own
-                // expectations, and must not thereby change which artifacts a sibling unit may depend on.
-                return ForeignOwnerEntry(decision, file, source, identity, ownership);
-            }
+                return await ResolveForeignOwnerAsync(
+                    source,
+                    file,
+                    identity,
+                    command.Source,
+                    result.Slot,
+                    result.Diagnostic,
+                    cancellationToken);
 
             case WorkflowActivationOutcome.Conflict:
                 logger.LogWarning(
@@ -489,6 +455,75 @@ public sealed class WorkflowArtifactReconciler(
                     result.Diagnostic ?? $"the activation sequence failed at step {result.FailedStep}.");
         }
     }
+
+    private async ValueTask<WorkflowArtifactImportEntry> ResolveForeignOwnerAsync(
+        IWorkflowArtifactReconciliationSource source,
+        WorkflowArtifactClosureFile file,
+        WorkflowExecutableIdentity identity,
+        WorkflowActivationSource candidateSource,
+        WorkflowActivationSlot slot,
+        string? transitionDiagnostic,
+        CancellationToken cancellationToken)
+    {
+        // T118: another activation source owns the slot, and reconciliation never takes it back. The coordinator
+        // has already refused this transition, whether the refusal was the deliberate pre-ordering ownership check
+        // or a race discovered after the initial read, so this method only turns that refusal into the report entry.
+        var incumbent = slot.Source;
+        var owner = incumbent?.Describe() ?? "another activation source";
+        var ownership =
+            $"definition '{identity.DefinitionId}' slot '{DefaultSlotName}' is owned by activation source "
+            + $"'{owner}', which claimed it explicitly. Reconciliation never reclaims a slot another source owns, "
+            + "so this mounted artifact is ignored for this definition until that source releases the slot. "
+            + $"{transitionDiagnostic}".TrimEnd();
+
+        // T124 — the policy chooses how loudly the refusal is reported, never whether the slot is taken. A slot
+        // conflict with no owner recorded is an authority defect rather than a question for a policy, so it takes
+        // the safe default without asking.
+        var decision = incumbent is null
+            ? ArtifactForeignOwnerDecision.Skip
+            : await foreignOwnerPolicy.DecideAsync(
+                new ArtifactForeignOwnerContext(identity.DefinitionId, incumbent, candidateSource),
+                cancellationToken);
+
+        if (ReferenceEquals(decision, ArtifactForeignOwnerDecision.Reject))
+        {
+            logger.LogError(
+                "Imported artifact '{ArtifactId}' from '{Origin}' was NOT activated for definition '{DefinitionId}': the "
+                + "'{SlotName}' activation slot is owned by activation source '{Owner}', and this engine's foreign-owner "
+                + "policy treats that as a rejection.",
+                identity.ArtifactId,
+                file.Origin,
+                identity.DefinitionId,
+                DefaultSlotName,
+                owner);
+        }
+        else
+        {
+            logger.LogWarning(
+                "Imported artifact '{ArtifactId}' from '{Origin}' was NOT activated for definition '{DefinitionId}': the "
+                + "'{SlotName}' activation slot is owned by activation source '{Owner}'. Reconciliation never reclaims a "
+                + "slot another source owns, so updating the mounted artifact will not change what this definition serves "
+                + "until that source releases it. Diagnostic: {Diagnostic}",
+                identity.ArtifactId,
+                file.Origin,
+                identity.DefinitionId,
+                DefaultSlotName,
+                owner,
+                transitionDiagnostic);
+        }
+
+        // Deliberately NOT recorded as unresolved on either answer: the definition IS live on the owner's
+        // activation, so a dependent that dispatches into it is not dispatching into nothing.
+        return ForeignOwnerEntry(decision, file, source, identity, ownership);
+    }
+
+    private static bool IsSameArtifactActivation(
+        WorkflowExecutableSourceReference? active,
+        string? tenantId,
+        string candidateArtifactId) =>
+        active is { DeletedAt: null } &&
+        StringComparer.Ordinal.Equals(active.ArtifactId, candidateArtifactId) &&
+        StringComparer.Ordinal.Equals(active.TenantId, tenantId);
 
     /// <summary>
     /// Turns an <see cref="IArtifactForeignOwnerPolicy"/> answer into the pass entry that reports it.
@@ -620,6 +655,47 @@ public sealed class WorkflowArtifactReconciler(
                 candidate.ArtifactId,
                 candidate.ArtifactHash));
     }
+
+    /// <summary>
+    /// Gate 2a: a closure may carry only durable Published provenance, and every executable must retain a
+    /// non-draft definition-version id before this importer mints a new Published reference for it.
+    /// </summary>
+    private static string? TryFindProvenanceFault(
+        WorkflowArtifactClosure closure,
+        IReadOnlyList<WorkflowExecutable> members)
+    {
+        foreach (var member in members)
+        {
+            var identity = member.Identity;
+            if (IsDraftOrMissingDefinitionVersion(identity.DefinitionVersionId))
+                return
+                    $"artifact '{identity.ArtifactId}' of definition '{identity.DefinitionId}' carries draft or missing "
+                    + $"definition-version provenance '{identity.DefinitionVersionId}'. Only non-draft published artifacts "
+                    + "can be imported.";
+        }
+
+        foreach (var reference in closure.SourceReferences)
+        {
+            if (reference is null)
+                return "the closure carries a null source reference; published provenance must be complete.";
+
+            if (reference.Scope != WorkflowExecutableReferenceScope.Published)
+                return
+                    $"source reference '{reference.SourceReferenceId}' carries scope '{reference.Scope}'. Only Published "
+                    + "source-reference provenance can be imported.";
+
+            if (IsDraftOrMissingDefinitionVersion(reference.DefinitionVersionId))
+                return
+                    $"source reference '{reference.SourceReferenceId}' carries draft or missing definition-version "
+                    + $"provenance '{reference.DefinitionVersionId}'. Only non-draft published artifacts can be imported.";
+        }
+
+        return null;
+    }
+
+    private static bool IsDraftOrMissingDefinitionVersion(string? definitionVersionId) =>
+        string.IsNullOrWhiteSpace(definitionVersionId) ||
+        definitionVersionId.StartsWith("draft:", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Gate 2b: every member must declare an orderable <c>ArtifactVersion</c>, and one logical
@@ -944,7 +1020,8 @@ public sealed class WorkflowArtifactReconciler(
     /// <c>WorkflowActivationSource</c> field and this string is never parsed.
     /// </remarks>
     private static string BuildActivationId(string sourceId, WorkflowExecutableIdentity identity) =>
-        $"{ActivationIdPrefix}:{sourceId}:{identity.DefinitionId}:{identity.ArtifactId}";
+        $"{ActivationIdPrefix}:{sourceId.Length}:{sourceId}:{identity.DefinitionId.Length}:{identity.DefinitionId}:"
+        + $"{identity.ArtifactId.Length}:{identity.ArtifactId}";
 
     /// <summary>
     /// Records a rejection for every member of a unit that failed a gate, as a named diagnostic on the pass result
@@ -952,9 +1029,8 @@ public sealed class WorkflowArtifactReconciler(
     /// </summary>
     /// <remarks>
     /// Every member is listed, not just the one that failed, because the closure is the isolation unit: none of them
-    /// were imported and an operator reading the result needs to see that. For every gate but
-    /// <see cref="WorkflowArtifactRejectionKind.PersistenceFailure"/> the unit has written nothing at this point —
-    /// see the type-level note for why that one path is the documented exception.
+    /// were imported and an operator reading the result needs to see that. The persistence boundary is atomic, so
+    /// this remains true for storage failures as well as validation failures.
     /// </remarks>
     private void RejectUnit(
         List<WorkflowArtifactImportEntry> entries,
@@ -964,9 +1040,10 @@ public sealed class WorkflowArtifactReconciler(
         WorkflowArtifactRejectionKind kind,
         string diagnostic)
     {
+        var closure = file.Closure ?? throw new InvalidOperationException("A readable closure is required to reject a reconciliation unit.");
         logger.LogError(
             "Workflow artifact closure '{RootArtifactId}' from '{Origin}' was rejected ({Kind}): {Diagnostic}",
-            file.Closure.RootArtifactId,
+            closure.RootArtifactId,
             file.Origin,
             kind,
             diagnostic);
@@ -976,7 +1053,7 @@ public sealed class WorkflowArtifactReconciler(
             entries.Add(WorkflowArtifactImportEntry.Rejected(
                 file.Origin,
                 source.SourceId,
-                file.Closure.RootArtifactId,
+                closure.RootArtifactId,
                 null,
                 null,
                 kind,

@@ -3,9 +3,11 @@ using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Reconciliation.Contracts;
+using Elsa.Workflows.Runtime.Reconciliation.Core.Contracts;
 using Elsa.Workflows.Runtime.Reconciliation.Core.Models;
 using Elsa.Workflows.Runtime.Reconciliation.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -33,7 +35,8 @@ internal static class ArtifactImportHarness
     public static WorkflowExecutionHarness Build(
         string mount,
         Action<IServiceCollection>? configureLast = null,
-        string? tenantId = null) =>
+        string? tenantId = null,
+        IReadOnlyCollection<IWorkflowArtifactReconciliationSource>? sources = null) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new WorkflowsRuntimeTriggersFeature().ConfigureServices(services))
             .WithFeature(services => new JsonWorkflowArtifactReconciliationFeature
@@ -52,7 +55,17 @@ internal static class ArtifactImportHarness
                 services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
                 services.AddSingleton<IActivityTriggerStimulusProvider, ProbeTriggerStimulusProvider>();
             })
-            .ConfigureServices(services => configureLast?.Invoke(services))
+            .ConfigureServices(services =>
+            {
+                if (sources is not null)
+                {
+                    services.RemoveAll<IWorkflowArtifactReconciliationSource>();
+                    foreach (var source in sources)
+                        services.AddSingleton(source);
+                }
+
+                configureLast?.Invoke(services);
+            })
             .Build(Enumerable.Range(1, 32).Select(index => $"activity-execution-{index}").ToArray());
 
     public static async Task<WorkflowArtifactReconciliationResult> ReconcileAsync(WorkflowExecutionHarness harness)

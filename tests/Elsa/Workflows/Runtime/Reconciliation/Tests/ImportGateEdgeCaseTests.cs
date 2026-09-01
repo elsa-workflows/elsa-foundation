@@ -1,5 +1,10 @@
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Reconciliation.Core.Contracts;
 using Elsa.Workflows.Runtime.Reconciliation.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Reconciliation.Tests;
@@ -119,18 +124,308 @@ public sealed class ImportGateEdgeCaseTests : IDisposable
     }
 
     [Fact]
-    public async Task An_unreadable_file_stops_its_own_source_without_taking_down_the_pass()
+    public async Task An_unreadable_file_does_not_stop_later_valid_files_from_the_same_source()
     {
-        // The malformed file is read first (ordinal filename order), so this also pins that a decode failure is
-        // recorded as a rejection rather than thrown out of ReconcileAsync.
+        // The malformed file is read first (ordinal filename order). Its failure is represented as one rejected
+        // input rather than escaping the pass or terminating the iterator, so the valid sibling still imports.
         await using var harness = ArtifactImportHarness.Build(_mount);
         ArtifactClosureFixture.MountRaw(_mount, "a-broken.json", "{\"formatVersion\": 1, \"rootArtifactId\": \"artifact-");
+        var valid = ArtifactClosureFixture.Executable(
+            ArtifactClosureFixture.ProbeNode("node-after-broken"),
+            "definition-after-broken");
+        ArtifactClosureFixture.Mount(harness.Services, _mount, "b-valid.json", ArtifactClosureFixture.Closure(valid));
 
         var result = await ArtifactImportHarness.ReconcileAsync(harness);
 
-        var entry = Assert.Single(result.Entries);
-        Assert.Equal(WorkflowArtifactRejectionKind.MalformedClosure, entry.RejectionKind);
-        Assert.Equal(ArtifactImportHarness.SourceId, entry.SourceId);
-        Assert.Equal(0, result.ImportedCount);
+        var rejected = Assert.Single(result.Entries, entry => entry.Outcome == WorkflowArtifactImportOutcome.Rejected);
+        Assert.Equal(WorkflowArtifactRejectionKind.MalformedClosure, rejected.RejectionKind);
+        Assert.Equal(ArtifactImportHarness.SourceId, rejected.SourceId);
+        Assert.Single(result.Entries, entry => entry.Outcome == WorkflowArtifactImportOutcome.Imported);
+        Assert.Equal(1, result.ImportedCount);
+        Assert.True(await ArtifactImportHarness.IsInStoreAsync(harness, valid.Identity.ArtifactId));
     }
+
+    [Fact]
+    public async Task A_batch_persistence_failure_leaves_no_member_of_the_closure_visible()
+    {
+        var store = new FailingAtomicBatchStore(new InMemoryWorkflowExecutableStore());
+        await using var harness = ArtifactImportHarness.Build(
+            _mount,
+            services =>
+            {
+                services.RemoveAll<IWorkflowExecutableStore>();
+                services.AddSingleton<IWorkflowExecutableStore>(store);
+            });
+        var child = ArtifactClosureFixture.Executable(
+            ArtifactClosureFixture.ProbeNode("node-batch-child"),
+            "definition-batch-child");
+        var parent = ArtifactClosureFixture.Executable(
+            ArtifactClosureFixture.ProbeNode("node-batch-parent"),
+            "definition-batch-parent",
+            dependencies: ArtifactClosureFixture.DependencyOn(child, "node-batch-parent"));
+        ArtifactClosureFixture.Mount(
+            harness.Services,
+            _mount,
+            "atomic-batch.json",
+            ArtifactClosureFixture.Closure(parent, child));
+
+        var result = await ArtifactImportHarness.ReconcileAsync(harness);
+
+        Assert.Equal(2, result.RejectedCount);
+        Assert.All(result.Entries, entry => Assert.Equal(WorkflowArtifactRejectionKind.PersistenceFailure, entry.RejectionKind));
+        Assert.Equal(0, store.SequentialSaveCalls);
+        Assert.Equal(1, store.BatchSaveCalls);
+        Assert.Null(await store.FindAsync(parent.Identity.ArtifactId));
+        Assert.Null(await store.FindAsync(child.Identity.ArtifactId));
+    }
+
+    [Fact]
+    public async Task A_foreign_owner_blocks_an_older_candidate_before_version_ordering()
+    {
+        await using var harness = ArtifactImportHarness.Build(_mount);
+        var incumbent = ArtifactClosureFixture.Executable(
+            ArtifactClosureFixture.ProbeNode("node-incumbent"),
+            "definition-foreign-older",
+            "2.0.0");
+        var candidate = ArtifactClosureFixture.Executable(
+            ArtifactClosureFixture.ProbeNode("node-candidate"),
+            "definition-foreign-older",
+            "1.0.0");
+
+        await ArtifactImportHarness.GiveTheSlotToAsync(
+            harness,
+            WorkflowActivationSource.Publishing,
+            "publishing-foreign-older",
+            incumbent);
+        ArtifactClosureFixture.Mount(harness.Services, _mount, "foreign-older.json", ArtifactClosureFixture.Closure(candidate));
+
+        var entry = Assert.Single((await ArtifactImportHarness.ReconcileAsync(harness)).Entries);
+
+        Assert.Equal(WorkflowArtifactImportOutcome.Skipped, entry.Outcome);
+        Assert.Equal(WorkflowArtifactSkipReason.ForeignSlotOwner, entry.SkipReason);
+        Assert.Contains("publishing", entry.Diagnostic);
+        var slot = await ArtifactImportHarness.FindSlotAsync(harness, incumbent.Identity.DefinitionId);
+        Assert.NotNull(slot?.ActiveActivationId);
+        var activeReference = await ArtifactImportHarness.FindReferenceAsync(harness, slot!.ActiveActivationId!);
+        Assert.NotNull(activeReference);
+        Assert.Equal(incumbent.Identity.ArtifactId, activeReference!.ArtifactId);
+    }
+
+    [Fact]
+    public async Task A_foreign_owner_blocks_an_equal_different_artifact_before_version_ordering()
+    {
+        await using var harness = ArtifactImportHarness.Build(_mount);
+        var incumbent = ArtifactClosureFixture.Executable(
+            ArtifactClosureFixture.ProbeNode("node-incumbent"),
+            "definition-foreign-equal",
+            "1.0.0");
+        var candidate = ArtifactClosureFixture.Executable(
+            ArtifactClosureFixture.ProbeNode("node-candidate"),
+            "definition-foreign-equal",
+            "1.0.0");
+
+        Assert.NotEqual(incumbent.Identity.ArtifactId, candidate.Identity.ArtifactId);
+        await ArtifactImportHarness.GiveTheSlotToAsync(
+            harness,
+            WorkflowActivationSource.Publishing,
+            "publishing-foreign-equal",
+            incumbent);
+        ArtifactClosureFixture.Mount(harness.Services, _mount, "foreign-equal.json", ArtifactClosureFixture.Closure(candidate));
+
+        var entry = Assert.Single((await ArtifactImportHarness.ReconcileAsync(harness)).Entries);
+
+        Assert.Equal(WorkflowArtifactImportOutcome.Skipped, entry.Outcome);
+        Assert.Equal(WorkflowArtifactSkipReason.ForeignSlotOwner, entry.SkipReason);
+        Assert.Contains("publishing", entry.Diagnostic);
+        var slot = await ArtifactImportHarness.FindSlotAsync(harness, incumbent.Identity.DefinitionId);
+        Assert.NotNull(slot?.ActiveActivationId);
+        var activeReference = await ArtifactImportHarness.FindReferenceAsync(harness, slot!.ActiveActivationId!);
+        Assert.NotNull(activeReference);
+        Assert.Equal(incumbent.Identity.ArtifactId, activeReference!.ArtifactId);
+    }
+
+    [Fact]
+    public async Task A_foreign_owner_same_artifact_remains_an_idempotent_no_op()
+    {
+        await using var harness = ArtifactImportHarness.Build(_mount);
+        var executable = ArtifactClosureFixture.Executable(
+            ArtifactClosureFixture.ProbeNode("node-same-artifact"),
+            "definition-foreign-same",
+            "1.0.0");
+
+        await ArtifactImportHarness.GiveTheSlotToAsync(
+            harness,
+            WorkflowActivationSource.Publishing,
+            "publishing-foreign-same",
+            executable);
+        ArtifactClosureFixture.Mount(harness.Services, _mount, "foreign-same.json", ArtifactClosureFixture.Closure(executable));
+
+        var entry = Assert.Single((await ArtifactImportHarness.ReconcileAsync(harness)).Entries);
+
+        Assert.Equal(WorkflowArtifactImportOutcome.AlreadyCurrent, entry.Outcome);
+        Assert.Equal("publishing-foreign-same", entry.ActivationId);
+    }
+
+    [Fact]
+    public async Task A_test_run_source_reference_is_rejected_before_persistence()
+    {
+        await using var harness = ArtifactImportHarness.Build(_mount);
+        var executable = ArtifactClosureFixture.Executable(
+            ArtifactClosureFixture.ProbeNode("node-test-run-provenance"),
+            "definition-test-run-provenance");
+        var closure = new WorkflowArtifactClosure(
+            WorkflowArtifactClosureFormat.CurrentVersion,
+            executable.Identity.ArtifactId,
+            [executable],
+            [SourceReference(executable, WorkflowExecutableReferenceScope.TestRun)],
+            []);
+        ArtifactClosureFixture.Mount(harness.Services, _mount, "test-run-provenance.json", closure);
+
+        var entry = Assert.Single((await ArtifactImportHarness.ReconcileAsync(harness)).Entries);
+
+        Assert.Equal(WorkflowArtifactImportOutcome.Rejected, entry.Outcome);
+        Assert.Equal(WorkflowArtifactRejectionKind.MalformedClosure, entry.RejectionKind);
+        Assert.Contains("Only Published", entry.Diagnostic);
+        Assert.False(await ArtifactImportHarness.IsInStoreAsync(harness, executable.Identity.ArtifactId));
+        Assert.Null(await ArtifactImportHarness.FindSlotAsync(harness, executable.Identity.DefinitionId));
+    }
+
+    [Fact]
+    public async Task A_published_source_reference_with_draft_definition_version_is_rejected_before_persistence()
+    {
+        await using var harness = ArtifactImportHarness.Build(_mount);
+        var executable = ArtifactClosureFixture.Executable(
+            ArtifactClosureFixture.ProbeNode("node-draft-reference"),
+            "definition-draft-reference");
+        var closure = new WorkflowArtifactClosure(
+            WorkflowArtifactClosureFormat.CurrentVersion,
+            executable.Identity.ArtifactId,
+            [executable],
+            [SourceReference(executable, WorkflowExecutableReferenceScope.Published, "draft:snapshot")],
+            []);
+        ArtifactClosureFixture.Mount(harness.Services, _mount, "draft-reference.json", closure);
+
+        var entry = Assert.Single((await ArtifactImportHarness.ReconcileAsync(harness)).Entries);
+
+        Assert.Equal(WorkflowArtifactImportOutcome.Rejected, entry.Outcome);
+        Assert.Equal(WorkflowArtifactRejectionKind.MalformedClosure, entry.RejectionKind);
+        Assert.Contains("draft", entry.Diagnostic);
+        Assert.False(await ArtifactImportHarness.IsInStoreAsync(harness, executable.Identity.ArtifactId));
+        Assert.Null(await ArtifactImportHarness.FindSlotAsync(harness, executable.Identity.DefinitionId));
+    }
+
+    [Fact]
+    public async Task An_artifact_with_draft_definition_version_provenance_is_rejected_before_persistence()
+    {
+        await using var harness = ArtifactImportHarness.Build(_mount);
+        var executable = ArtifactClosureFixture.Executable(
+            ArtifactClosureFixture.ProbeNode("node-draft-artifact"),
+            "definition-draft-artifact");
+        var draft = WithDefinitionVersionId(executable, "draft:snapshot");
+        ArtifactClosureFixture.Mount(harness.Services, _mount, "draft-artifact.json", ArtifactClosureFixture.Closure(draft));
+
+        var entry = Assert.Single((await ArtifactImportHarness.ReconcileAsync(harness)).Entries);
+
+        Assert.Equal(WorkflowArtifactImportOutcome.Rejected, entry.Outcome);
+        Assert.Equal(WorkflowArtifactRejectionKind.MalformedClosure, entry.RejectionKind);
+        Assert.Contains("draft", entry.Diagnostic);
+        Assert.False(await ArtifactImportHarness.IsInStoreAsync(harness, executable.Identity.ArtifactId));
+        Assert.Null(await ArtifactImportHarness.FindSlotAsync(harness, executable.Identity.DefinitionId));
+    }
+
+    [Fact]
+    public async Task Activation_identity_components_are_boundary_safe()
+    {
+        await using var harness = ArtifactImportHarness.Build(
+            _mount,
+            sources:
+            [
+                new FixedSource("a", ArtifactClosureFixture.Executable(ArtifactClosureFixture.ProbeNode("node-root"), "b:c")),
+                new FixedSource("a:b", ArtifactClosureFixture.Executable(ArtifactClosureFixture.ProbeNode("node-root"), "c")),
+            ]);
+
+        var result = await ArtifactImportHarness.ReconcileAsync(harness);
+
+        Assert.Equal(2, result.ImportedCount);
+        var first = await ArtifactImportHarness.FindSlotAsync(harness, "b:c");
+        var second = await ArtifactImportHarness.FindSlotAsync(harness, "c");
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+        Assert.NotEqual(first.ActiveActivationId, second.ActiveActivationId);
+        Assert.Equal(2, (await ArtifactImportHarness.ListAllReferencesAsync(harness)).Count);
+    }
+
+    private sealed class FixedSource(string sourceId, WorkflowExecutable executable) : IWorkflowArtifactReconciliationSource
+    {
+        public string SourceId => sourceId;
+        public string SourceKind => "test";
+
+        public async IAsyncEnumerable<WorkflowArtifactClosureFile> ReadAsync(
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return new WorkflowArtifactClosureFile(
+                $"memory:{sourceId}",
+                ArtifactClosureFixture.Closure(executable));
+            await Task.CompletedTask;
+        }
+    }
+
+    private sealed class FailingAtomicBatchStore(IWorkflowExecutableStore inner) : WorkflowExecutableStoreDecorator(inner)
+    {
+        public int SequentialSaveCalls { get; private set; }
+        public int BatchSaveCalls { get; private set; }
+
+        public override async ValueTask SaveAsync(
+            WorkflowExecutable executable,
+            CancellationToken cancellationToken = default)
+        {
+            SequentialSaveCalls++;
+            await Inner.SaveAsync(executable, cancellationToken);
+            if (SequentialSaveCalls > 1)
+                throw new IOException("simulated second sequential write failure");
+        }
+
+        public override ValueTask SaveBatchAsync(
+            IReadOnlyList<WorkflowExecutable> executables,
+            CancellationToken cancellationToken = default)
+        {
+            BatchSaveCalls++;
+            throw new IOException("simulated atomic batch refusal");
+        }
+    }
+
+    private static WorkflowExecutableSourceReference SourceReference(
+        WorkflowExecutable executable,
+        WorkflowExecutableReferenceScope scope,
+        string? definitionVersionId = null) =>
+        new(
+            SourceReferenceId: $"reference-{scope}",
+            ArtifactId: executable.Identity.ArtifactId,
+            SourceKind: "workflow-artifact-closure",
+            SourceId: "exported-artifacts",
+            SourceVersion: null,
+            DefinitionId: executable.Identity.DefinitionId,
+            DefinitionVersionId: definitionVersionId ?? executable.Identity.DefinitionVersionId,
+            ArtifactVersion: executable.Identity.ArtifactVersion,
+            CreatedAt: ArtifactClosureFixture.CreatedAt,
+            PublishedAt: ArtifactClosureFixture.CreatedAt,
+            Scope: scope);
+
+    private static WorkflowExecutable WithDefinitionVersionId(
+        WorkflowExecutable executable,
+        string definitionVersionId) =>
+        new(
+            identity: executable.Identity with { DefinitionVersionId = definitionVersionId },
+            rootActivity: executable.RootActivity,
+            resumeTargets: executable.ResumeTargets,
+            createdAt: executable.CreatedAt,
+            compatibilityMetadata: executable.CompatibilityMetadata,
+            inputContract: executable.InputContract,
+            dependencies: executable.Dependencies,
+            runtimeRequirements: executable.RuntimeRequirements,
+            storageDriverRequirements: executable.StorageDriverRequirements,
+            incidentStrategy: executable.IncidentStrategy,
+            checkpointCadence: executable.CheckpointCadence,
+            workflowVariables: executable.WorkflowVariables);
 }

@@ -309,6 +309,52 @@ public sealed class CachingWorkflowExecutableStoreTests
     }
 
     [Fact]
+    public async Task SuccessfulSaveBatch_InvalidatesEveryResidentArtifact()
+    {
+        var durableA = NewExecutable("artifact-a", "durable-a");
+        var durableB = NewExecutable("artifact-b", "durable-b");
+        var provider = new InMemoryWorkflowExecutableStore();
+        await provider.SaveBatchAsync([durableA, durableB]);
+        var cache = NewCache(provider);
+
+        Assert.Same(durableA, await cache.FindAsync(durableA.Identity.ArtifactId));
+        Assert.Same(durableB, await cache.FindAsync(durableB.Identity.ArtifactId));
+        Assert.True(await provider.DeleteAsync(durableA.Identity.ArtifactId));
+        Assert.True(await provider.DeleteAsync(durableB.Identity.ArtifactId));
+
+        var replacementA = NewExecutable("artifact-a", "replacement-a");
+        var replacementB = NewExecutable("artifact-b", "replacement-b");
+        await cache.SaveBatchAsync([replacementA, replacementB]);
+
+        Assert.Same(replacementA, await cache.FindAsync(replacementA.Identity.ArtifactId));
+        Assert.Same(replacementB, await cache.FindAsync(replacementB.Identity.ArtifactId));
+    }
+
+    [Fact]
+    public async Task InvalidatingSaveBatch_InvalidatesEveryResidentArtifact()
+    {
+        var durableA = NewExecutable("artifact-a", "durable-a");
+        var durableB = NewExecutable("artifact-b", "durable-b");
+        var provider = new InMemoryWorkflowExecutableStore();
+        await provider.SaveBatchAsync([durableA, durableB]);
+        var state = new WorkflowExecutableCache(new WorkflowExecutableCacheOptions());
+        var cached = new CachingWorkflowExecutableStore(provider, state, "tenant-a", provider.FindAsync);
+        var invalidating = new InvalidatingWorkflowExecutableStore(provider, state, "tenant-a");
+
+        Assert.Same(durableA, await cached.FindAsync(durableA.Identity.ArtifactId));
+        Assert.Same(durableB, await cached.FindAsync(durableB.Identity.ArtifactId));
+        Assert.True(await provider.DeleteAsync(durableA.Identity.ArtifactId));
+        Assert.True(await provider.DeleteAsync(durableB.Identity.ArtifactId));
+
+        var replacementA = NewExecutable("artifact-a", "replacement-a");
+        var replacementB = NewExecutable("artifact-b", "replacement-b");
+        await invalidating.SaveBatchAsync([replacementA, replacementB]);
+
+        Assert.Same(replacementA, await cached.FindAsync(replacementA.Identity.ArtifactId));
+        Assert.Same(replacementB, await cached.FindAsync(replacementB.Identity.ArtifactId));
+    }
+
+    [Fact]
     public async Task FailedSave_LeavesPriorResidentValue()
     {
         var durable = NewExecutable("artifact-a", "durable");

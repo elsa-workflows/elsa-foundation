@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Reconciliation.Core.Exceptions;
 
 namespace Elsa.Workflows.Runtime.Reconciliation.Core.Contracts;
 
@@ -10,7 +11,7 @@ namespace Elsa.Workflows.Runtime.Reconciliation.Core.Contracts;
 /// a future one. Never parsed: it exists so an operator can find the offending input, not so the pipeline can
 /// derive anything from it.
 /// </param>
-/// <param name="Closure">The envelope itself, already parsed by the source.</param>
+/// <param name="Closure">The envelope itself, already parsed by the source; absent only when <paramref name="ReadError"/> is present.</param>
 /// <param name="TenantId">
 /// The tenant to stamp on every source reference minted from this file, or <see langword="null"/> for the
 /// untenanted default (FR-B-002).
@@ -28,7 +29,15 @@ namespace Elsa.Workflows.Runtime.Reconciliation.Core.Contracts;
 /// genuine same-tenant re-import. Per-tenant fan-out is deferred.
 /// </para>
 /// </remarks>
-public sealed record WorkflowArtifactClosureFile(string Origin, WorkflowArtifactClosure Closure, string? TenantId = null);
+/// <param name="ReadError">
+/// A failure scoped to this input. Sources yield it instead of throwing so enumeration can continue with later
+/// inputs; pass-wide failures still throw <see cref="WorkflowArtifactReconciliationException"/>.
+/// </param>
+public sealed record WorkflowArtifactClosureFile(
+    string Origin,
+    WorkflowArtifactClosure? Closure,
+    string? TenantId = null,
+    InvalidWorkflowArtifactClosureException? ReadError = null);
 
 /// <summary>
 /// A source of portable workflow-executable closures for the runtime-side reconciliation lifecycle (FR-B-002).
@@ -59,10 +68,10 @@ public interface IWorkflowArtifactReconciliationSource
     /// </summary>
     /// <remarks>
     /// Failures that make the <em>pass</em> meaningless (a configured folder that does not exist) throw
-    /// <see cref="Exceptions.WorkflowArtifactReconciliationException"/>. Failures scoped to one input (unreadable
-    /// file, malformed JSON, unknown format version) throw
-    /// <see cref="Exceptions.InvalidWorkflowArtifactClosureException"/> carrying that input's origin. Per-artifact
-    /// rejections are never exceptions — they are diagnostics on the pass result.
+    /// <see cref="WorkflowArtifactReconciliationException"/>. Failures scoped to one input (unreadable file,
+    /// malformed JSON, unknown format version) are yielded in
+    /// <see cref="WorkflowArtifactClosureFile.ReadError"/> so later inputs still run. Per-artifact rejections are
+    /// never exceptions — they are diagnostics on the pass result.
     /// </remarks>
     IAsyncEnumerable<WorkflowArtifactClosureFile> ReadAsync(CancellationToken cancellationToken = default);
 }

@@ -38,8 +38,23 @@ public sealed class JsonWorkflowArtifactReconciliationSource(
         foreach (var file in EffectiveFiles())
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var closure = reader.Read(file.FilePath, cancellationToken);
-            yield return new WorkflowArtifactClosureFile(file.FilePath, closure, _options.TenantId);
+            WorkflowArtifactClosureFile result;
+            try
+            {
+                var closure = reader.Read(file.FilePath, cancellationToken);
+                result = new WorkflowArtifactClosureFile(file.FilePath, closure, _options.TenantId);
+            }
+            catch (InvalidWorkflowArtifactClosureException exception)
+            {
+                logger.LogError(
+                    exception,
+                    "Workflow artifact closure at '{Origin}' could not be read; source '{SourceId}' will continue with later inputs.",
+                    exception.Origin,
+                    SourceId);
+                result = new WorkflowArtifactClosureFile(file.FilePath, null, _options.TenantId, exception);
+            }
+
+            yield return result;
         }
 
         // The method is async-iterator-shaped for the contract's benefit (a blob or OCI source genuinely awaits

@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Reconciliation.Core.Options;
 using Elsa.Workflows.Runtime.Reconciliation.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.Reconciliation;
 
@@ -65,12 +66,29 @@ public class JsonWorkflowArtifactReconciliationFeature : WorkflowsArtifactReconc
 
         base.ConfigureServices(services);
 
-        services.AddSingleton(Microsoft.Extensions.Options.Options.Create(Options));
+        // Capture this feature instance's options in the source registration. Registering IOptions<T> globally
+        // makes two JSON features share the last options registration, so both sources read the same mount and
+        // claim the same owner. A snapshot also prevents later feature mutation from changing a built container.
+        var options = SnapshotOptions();
         // TryAdd for the reader (§2.6.2: single implementation, first-wins) — plain Add for the
         // source, which is a fan-in contribution: several mounts legitimately contribute several sources.
         services.TryAddScoped<IWorkflowArtifactClosureReader, JsonWorkflowArtifactClosureReader>();
-        services.AddScoped<IWorkflowArtifactReconciliationSource, JsonWorkflowArtifactReconciliationSource>();
+        services.AddScoped<IWorkflowArtifactReconciliationSource>(serviceProvider =>
+            new JsonWorkflowArtifactReconciliationSource(
+                serviceProvider.GetRequiredService<IWorkflowArtifactClosureReader>(),
+                Microsoft.Extensions.Options.Options.Create(options),
+                serviceProvider.GetRequiredService<ILogger<JsonWorkflowArtifactReconciliationSource>>()));
     }
+
+    private JsonWorkflowArtifactReconciliationOptions SnapshotOptions() =>
+        new()
+        {
+            FilePath = Options.FilePath,
+            Files = Options.Files.ToArray(),
+            FolderPath = Options.FolderPath,
+            SourceId = Options.SourceId,
+            TenantId = Options.TenantId,
+        };
 
     /// <summary>
     /// Fails fast at registration on an invalid composition: a required <c>SourceId</c>, and exactly one of
