@@ -11,16 +11,17 @@ public sealed class ElsaRuntimeV2StorageManifestTests
     {
         var units = ElsaRuntimeV2StorageManifest.CreateUnits();
 
-        Assert.Equal(28, units.Count);
+        Assert.Equal(29, units.Count);
         Assert.Equal(
             [
                 "activityExecutionHierarchy", "activityExecutionInspection", "activityExecutionState",
                 "bookmarkState", "checkpointCommit", "controlPlaneState", "durableTimer", "durableValueState",
                 "executableActivityTemplate", "executableActivityTemplateHashClaim", "incidentState", "operationalState",
                 "postCommitOutbox", "publicationProjectionState", "recurringTriggerSchedule", "schedulerPoison",
-                "schedulerState", "schedulerWorkItem", "workflowAlterationJob", "workflowAlterationPlan", "workflowDispatch",
+                "schedulerState", "schedulerWorkItem", "workflowActivationSlot", "workflowAlterationJob", "workflowAlterationPlan", "workflowDispatch",
                 "workflowExecutable", "workflowExecutableCoordination", "workflowExecutableSourceReference",
-                "workflowExecutionState", "workflowRunHealthState", "workflowTestScope", "workflowTriggerBinding"
+                "workflowExecutionState", "workflowRunHealthState", "workflowTestScope",
+                "workflowTriggerBinding"
             ],
             units.Select(unit => unit.Id.Value).OrderBy(id => id, StringComparer.Ordinal));
 
@@ -59,7 +60,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             ["operationalState"] = ["by_collection", "by_collection_workflow_execution_and_operational_state_id", "by_recovery_detected", "by_recovery_detected_heartbeat_owner", "by_recovery_detected_lease_owner", "by_recovery_detected_ownerless", "by_recovery_heartbeat", "by_recovery_heartbeat_owner", "by_recovery_lease_acquisition", "by_recovery_lease_acquisition_owner", "by_recovery_lease_expiry", "by_recovery_lease_expiry_owner", "by_workflow_execution", "by_workflow_execution_and_operational_state_id"],
             ["postCommitOutbox"] = ["by_claimable_by_intent_kind_time_recorded_id", "by_claimable_by_workflow_and_intent_kind_time_recorded_id", "by_claimable_by_workflow_time_recorded_id", "by_claimable_time_recorded_id", "by_collection", "by_deliverable_by_intent_kind_time_recorded_id", "by_deliverable_by_workflow_and_intent_kind_time_recorded_id", "by_deliverable_by_workflow_time_recorded_id", "by_deliverable_time_recorded_id", "by_outbox_claimable_at", "by_outbox_deliverable_at", "by_outbox_intent_kind", "by_outbox_item_id", "by_outbox_recorded_at", "by_outbox_status", "by_workflow_execution"],
             ["publicationProjectionState"] = ["by_projection_kind_and_artifact_id"],
-            ["recurringTriggerSchedule"] = ["by_active_next_occurrence_and_schedule_id", "by_artifact", "by_artifact_and_schedule_id", "by_collection", "by_next_occurrence", "by_publication", "by_publication_and_schedule_id", "by_recurring_schedule_active", "by_recurring_schedule_id"],
+            ["recurringTriggerSchedule"] = ["by_activation", "by_activation_and_schedule_id", "by_active_next_occurrence_and_schedule_id", "by_artifact", "by_artifact_and_schedule_id", "by_collection", "by_next_occurrence", "by_recurring_schedule_active", "by_recurring_schedule_id"],
             ["schedulerPoison"] = ["by_workflow_execution", "by_workflow_execution_and_failure_window"],
             ["schedulerState"] = ["by_collection"],
             ["schedulerWorkItem"] = ["by_scheduler_work_order", "by_workflow_execution", "by_workflow_execution_and_scheduler_recorded_at_and_order", "by_workflow_execution_and_scheduler_work_order"],
@@ -68,11 +69,12 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             ["workflowDispatch"] = ["by_child_workflow_execution", "by_child_workflow_execution_and_status", "by_collection", "by_created_at", "by_dispatch_id", "by_parent_execution_status_scope_created_at_dispatch_id", "by_parent_workflow_execution", "by_parent_workflow_execution_and_status", "by_parent_workflow_execution_created_at_dispatch_id", "by_parent_workflow_execution_status_created_at_dispatch_id", "by_parent_workflow_execution_test_scope_created_at_dispatch_id", "by_status", "by_status_created_at_dispatch_id", "by_status_test_scope_created_at_dispatch_id", "by_test_scope", "by_test_scope_created_at_dispatch_id"],
             ["workflowExecutable"] = ["by_collection", "by_collection_and_document_id"],
             ["workflowExecutableCoordination"] = [],
-            ["workflowExecutableSourceReference"] = ["by_artifact", "by_artifact_and_document_id", "by_artifact_retired_expiry_and_document_id", "by_collection", "by_collection_and_document_id", "by_collection_retired_expiry_and_document_id", "by_expires_at", "by_expiry_and_document_id", "by_retired", "by_retired_and_document_id", "by_scope", "by_scope_and_document_id", "by_scope_retired_expiry_and_document_id", "by_scope_retired_expiry_definition_and_document_id"],
+            ["workflowExecutableSourceReference"] = ["by_artifact", "by_artifact_and_document_id", "by_artifact_retired_expiry_and_document_id", "by_collection", "by_collection_and_document_id", "by_collection_retired_expiry_and_document_id", "by_definition_version", "by_definition_version_and_document_id", "by_expires_at", "by_expiry_and_document_id", "by_retired", "by_retired_and_document_id", "by_scope", "by_scope_and_document_id", "by_scope_retired_expiry_and_document_id", "by_scope_retired_expiry_definition_and_document_id"],
             ["workflowExecutionState"] = ["by_alteration_capture_tenant_and_execution", "by_attention_fault_history", "by_collection_and_pinned_artifact", "by_collection_and_pinned_artifact_v2", "by_history_order"],
             ["workflowRunHealthState"] = ["by_definition_and_started_at", "by_run_kind_and_started_at", "by_run_kind_status_definition_started_at", "by_run_kind_status_started_at", "by_started_at", "by_status_and_started_at"],
             ["workflowTestScope"] = ["by_collection", "by_expires_at", "by_scope_id", "by_state_and_expires_at", "by_state_and_scope_id", "by_status"],
-            ["workflowTriggerBinding"] = ["by_active", "by_artifact", "by_artifact_and_trigger_binding_id", "by_publication", "by_publication_and_trigger_binding_id", "by_stimulus", "by_stimulus_and_type", "by_stimulus_type", "by_stimulus_type_and_active", "by_trigger_binding_id"]
+            ["workflowTriggerBinding"] = ["by_activation", "by_activation_and_trigger_binding_id", "by_active", "by_artifact", "by_artifact_and_trigger_binding_id", "by_stimulus", "by_stimulus_and_type", "by_stimulus_type", "by_stimulus_type_and_active", "by_trigger_binding_id"],
+            ["workflowActivationSlot"] = ["by_active_activation", "by_active_activation_and_slot_id", "by_definition", "by_definition_and_slot_id"]
         };
         var actualIndexes = units.ToDictionary(
             unit => unit.Id.Value,
@@ -94,6 +96,27 @@ public sealed class ElsaRuntimeV2StorageManifestTests
         var triggerBindings = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingDocumentKind);
         AssertIndex(triggerBindings, "by_stimulus_and_type", ["stimulusLookupKey", "isActive", "triggerBindingId"], included: true);
 
+        var sourceReferences = ElsaRuntimeV2StorageManifest.Require(
+            ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDocumentKind);
+        AssertColumn(
+            sourceReferences,
+            ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDefinitionVersionIdField,
+            PortableType.String,
+            128,
+            nullable: false);
+        AssertIndex(
+            sourceReferences,
+            ElsaRuntimeV2StorageManifest.ByDefinitionVersionIndex,
+            [ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDefinitionVersionIdField]);
+        AssertIndex(
+            sourceReferences,
+            "by_definition_version_and_document_id",
+            [
+                ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDefinitionVersionIdField,
+                ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceIdField
+            ],
+            included: true);
+
         var publicationProjectionState = ElsaRuntimeV2StorageManifest.Require(
             ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind);
         AssertIndex(
@@ -106,6 +129,16 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             ],
             included: true);
         Assert.True(triggerBindings.Indexes.Single(index => index.Name == "by_trigger_binding_id").IsUnique);
+
+        var activationSlots = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDocumentKind);
+        AssertColumn(activationSlots, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDefinitionIdField, PortableType.String, 128, nullable: true);
+        AssertColumn(activationSlots, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotNameField, PortableType.String, 128, nullable: true);
+        AssertColumn(activationSlots, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotActiveActivationIdField, PortableType.String, 128, nullable: true);
+        AssertIndex(activationSlots, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotByDefinition, [ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDefinitionIdField]);
+        AssertIndex(activationSlots, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotByDefinitionAndSlotId, [ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDefinitionIdField, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotNameField, ElsaRuntimeV2StorageManifest.IdField], included: true);
+        AssertIndex(activationSlots, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotByActiveActivation, [ElsaRuntimeV2StorageManifest.WorkflowActivationSlotActiveActivationIdField], unique: true);
+        AssertIndex(activationSlots, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotByActiveActivationAndSlotId, [ElsaRuntimeV2StorageManifest.WorkflowActivationSlotActiveActivationIdField, ElsaRuntimeV2StorageManifest.IdField]);
+        Assert.All(activationSlots.Indexes.Where(index => index.Name.Contains("active_activation", StringComparison.Ordinal)), index => Assert.Equal(MissingValueBehavior.Excluded, index.MissingValues));
 
         var executionState = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind);
         AssertIndex(executionState, "by_collection_and_pinned_artifact", ["collection", "historyArtifactId", "historyArtifactTimestamp", "historyWorkflowExecutionId"]);
@@ -298,7 +331,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             [ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleDocumentKind] =
             [
                 ElsaRuntimeV2StorageManifest.ArtifactIdField,
-                ElsaRuntimeV2StorageManifest.RecurringTriggerSchedulePublicationIdField,
+                ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleActivationIdField,
                 ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleNextOccurrenceField,
                 ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIdField,
                 ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIsActiveField
@@ -397,7 +430,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
                 ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingIsActiveField,
                 ElsaRuntimeV2StorageManifest.TriggerBindingIdField,
                 ElsaRuntimeV2StorageManifest.ArtifactIdField,
-                ElsaRuntimeV2StorageManifest.PublicationIdField
+                ElsaRuntimeV2StorageManifest.ActivationIdField
             ]
         };
 

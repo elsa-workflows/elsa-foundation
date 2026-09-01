@@ -106,6 +106,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IWorkflowEngineTracer>(NullWorkflowEngineTracer.Instance);
 
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
+        services.TryAddSingleton<IWorkflowActivationAuthority, InMemoryWorkflowActivationAuthority>();
+        services.TryAddScoped<IWorkflowActivationCoordinator, WorkflowActivationCoordinator>();
+        services.TryAddScoped<IWorkflowExecutableHasher, WorkflowExecutableHasher>();
         // Burst-scoped reconstructible cache (ADR 0031 item b, spec 111). The accessor is a singleton AsyncLocal (like
         // the live-drain/coalescing accessors); the router pushes a scope per drain gated by the kill switch. The reader
         // is the first consumer — scoped so it composes with whichever IWorkflowExecutableStore the provider registers
@@ -113,6 +116,10 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<RuntimeBurstCacheOptions>();
         services.TryAddSingleton<IWorkflowBurstScopeAccessor, AsyncLocalWorkflowBurstScopeAccessor>();
         services.TryAddScoped<IWorkflowExecutableReader, BurstCachedWorkflowExecutableReader>();
+        // One provider-neutral checker is shared by Publishing preflight and future Runtime artifact
+        // import admission. Hosts compose the serialization/type-registry feature alongside Runtime.
+        services.TryAddScoped<IRuntimeRequirementChecker, RuntimeRequirementChecker>();
+        services.TryAddSingleton<IWorkflowArtifactClosureSerializer, WorkflowArtifactClosureSerializer>();
         services.TryAddSingleton<IExecutableActivityTemplateStore, InMemoryExecutableActivityTemplateStore>();
         services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
         services.AddOptions<ActivityExecutionHierarchyCursorOptions>();

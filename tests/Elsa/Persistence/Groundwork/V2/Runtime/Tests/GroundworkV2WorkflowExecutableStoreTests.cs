@@ -104,6 +104,117 @@ public sealed class GroundworkV2WorkflowExecutableStoreTests
     }
 
     [Fact]
+    public async Task Sqlite_save_batch_inserts_every_artifact_and_coordination_row_atomically()
+    {
+        await using var fixture = Fixture.Create();
+        IWorkflowExecutableStore store = fixture.Store("tenant-a");
+        var batch = new[]
+        {
+            Executable("artifact-batch-a", "1"),
+            Executable("artifact-batch-b", "1")
+        };
+
+        await store.SaveBatchAsync(batch);
+
+        Assert.Equal(BatchWriteOptions.Exact, fixture.LastUnitOfWorkOptions);
+        Assert.Equal(
+            [
+                ElsaRuntimeV2StorageManifest.WorkflowExecutableDocumentKind,
+                ElsaRuntimeV2StorageManifest.WorkflowExecutableCoordinationDocumentKind
+            ],
+            fixture.LastUnitOfWorkUnitIds);
+        foreach (var executable in batch)
+        {
+            Assert.NotNull(await store.FindAsync(executable.Identity.ArtifactId));
+            Assert.True(fixture.RowExists(
+                "tenant-a",
+                ElsaRuntimeV2StorageManifest.WorkflowExecutableCoordinationDocumentKind,
+                executable.Identity.ArtifactId));
+        }
+    }
+
+    [Fact]
+    public async Task Sqlite_save_batch_leaves_existing_members_untouched()
+    {
+        await using var fixture = Fixture.Create();
+        IWorkflowExecutableStore store = fixture.Store("tenant-a");
+        await store.SaveAsync(Executable("artifact-existing", "1"));
+        var executableVersion = fixture.RowVersion(
+            "tenant-a",
+            ElsaRuntimeV2StorageManifest.WorkflowExecutableDocumentKind,
+            "artifact-existing");
+        var coordinationVersion = fixture.RowVersion(
+            "tenant-a",
+            ElsaRuntimeV2StorageManifest.WorkflowExecutableCoordinationDocumentKind,
+            "artifact-existing");
+
+        await store.SaveBatchAsync(
+        [
+            Executable("artifact-existing", "2"),
+            Executable("artifact-new", "1")
+        ]);
+
+        var existing = await store.FindAsync("artifact-existing");
+        Assert.NotNull(existing);
+        Assert.Equal("1", existing!.Identity.ArtifactVersion);
+        Assert.Equal(executableVersion, fixture.RowVersion(
+            "tenant-a",
+            ElsaRuntimeV2StorageManifest.WorkflowExecutableDocumentKind,
+            "artifact-existing"));
+        Assert.Equal(coordinationVersion, fixture.RowVersion(
+            "tenant-a",
+            ElsaRuntimeV2StorageManifest.WorkflowExecutableCoordinationDocumentKind,
+            "artifact-existing"));
+        Assert.Equal("1", (await store.FindAsync("artifact-new"))!.Identity.ArtifactVersion);
+    }
+
+    [Fact]
+    public async Task Sqlite_save_batch_refuses_incomplete_member_without_writing_other_members()
+    {
+        await using var fixture = Fixture.Create();
+        IWorkflowExecutableStore store = fixture.Store("tenant-a");
+        fixture.InsertOrphanCoordination("tenant-a", "artifact-incomplete");
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.SaveBatchAsync(
+        [
+            Executable("artifact-incomplete", "1"),
+            Executable("artifact-never-written", "1")
+        ]).AsTask());
+
+        Assert.Null(await store.FindAsync("artifact-never-written"));
+        Assert.True(fixture.RowExists(
+            "tenant-a",
+            ElsaRuntimeV2StorageManifest.WorkflowExecutableCoordinationDocumentKind,
+            "artifact-incomplete"));
+        Assert.Null(fixture.LastUnitOfWorkOptions);
+    }
+
+    [Fact]
+    public async Task Sqlite_rejected_save_batch_has_no_partially_visible_artifacts()
+    {
+        await using var fixture = Fixture.Create();
+        IWorkflowExecutableStore store = fixture.Store("tenant-a");
+        fixture.FailNextCommitWithOutcomes();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.SaveBatchAsync(
+        [
+            Executable("artifact-rejected-a", "1"),
+            Executable("artifact-rejected-b", "1")
+        ]).AsTask());
+
+        Assert.Null(await store.FindAsync("artifact-rejected-a"));
+        Assert.Null(await store.FindAsync("artifact-rejected-b"));
+        Assert.False(fixture.RowExists(
+            "tenant-a",
+            ElsaRuntimeV2StorageManifest.WorkflowExecutableCoordinationDocumentKind,
+            "artifact-rejected-a"));
+        Assert.False(fixture.RowExists(
+            "tenant-a",
+            ElsaRuntimeV2StorageManifest.WorkflowExecutableCoordinationDocumentKind,
+            "artifact-rejected-b"));
+    }
+
+    [Fact]
     public async Task Sqlite_lease_and_deletion_guard_transitions_are_fenced()
     {
         await using var fixture = Fixture.Create();
@@ -792,13 +903,11 @@ public sealed class GroundworkV2WorkflowExecutableStoreTests
 
         private BatchWriteReport FailureReport()
         {
-            if (staged.Count != 2)
-                throw new InvalidOperationException("The executable exact failure requires two staged rows.");
             return new BatchWriteReport(staged.Select((write, index) => new RowWriteOutcome(
                 write,
                 new WriteOutcome(
-                    index == 0 ? WriteOutcomeStatus.Inserted : WriteOutcomeStatus.ConcurrencyConflict,
-                    index == 0 ? 1 : null))).ToArray());
+                    index % 2 == 0 ? WriteOutcomeStatus.Inserted : WriteOutcomeStatus.ConcurrencyConflict,
+                    index % 2 == 0 ? 1 : null))).ToArray());
         }
     }
 

@@ -80,6 +80,12 @@ is never written to the log; the username xor password half-configured is a star
 | `SigningKey` | Base64-encoded **PKCS#8 RSA private key** used to sign access tokens (RS256). Falls back to `FoundationIdentityOptions.SigningKey`. | **Required.** See generation command below. |
 | `EncryptionKey` | Key material for OpenIddict's encryption credentials. Defaults to a key derived (domain-separated) from `SigningKey`. | Recommended: set a **distinct** value from `SigningKey`. |
 | `ConnectionString` | Sqlite connection string for the token store. Defaults to the shared identity database. | Optional; set for a dedicated token DB. |
+| `AutoMigrate` | Lets Workbench's host-owned OpenIddict EF provider migrate its schema during startup. Defaults to `true`. | Turn off for multi-instance deployments that apply migrations out-of-band. |
+
+`Elsa.Foundation.Identity.OpenIddict` contains only provider-neutral OpenIddict behavior. It no longer references
+EF Core, and the former `configureDbContext` parameter on `AddFoundationIdentityOpenIddict` has been removed.
+Hosts must register an OpenIddict vendor store explicitly before composing the feature. Workbench makes that host
+choice with `OpenIddict.EntityFrameworkCore`; another host may select a different vendor provider.
 
 Generate a signing key:
 
@@ -139,16 +145,14 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
 8. Ensure `ApiSecurity.AllowAnonymous` is **not** set on any shell (it is ignored outside `Development`, but
    remove it to avoid the startup warning).
 9. Host the Studio SPA same-origin, and set `Studio:Auth:Enabled=true`.
-10. **Apply the OpenIddict token-store migrations.** With `IsDevelopmentOrDemo = false`, the auto-initializer
-    that creates/migrates the token schema **does not run** — it is a dev-only convenience. A production host
-    with `FoundationIdentityOpenIddict` enabled but its migrations unapplied faults on the first token
-    issuance (`IssueAsync`, i.e. the first `GET /_elsa/identity/token` after login). Apply them explicitly as
-    a deploy step, against the `OpenIddictIdentityDbContext`:
+10. **Apply the OpenIddict token-store migrations.** Workbench migrates its host-owned vendor EF schema at
+    startup while `AutoMigrate=true`. For multi-instance deployments, set `AutoMigrate=false` and apply the
+    migrations once as a deploy step against Workbench's `OpenIddictIdentityDbContext` before starting nodes:
 
     ```bash
     dotnet ef database update \
       --context OpenIddictIdentityDbContext \
-      --project src/Elsa/Foundation/Identity/OpenIddict
+      --project src/Apps/Elsa.Workbench
     ```
 
     (The ASP.NET Core Identity feature's own `ApplicationIdentityDbContext` likewise relies on relational

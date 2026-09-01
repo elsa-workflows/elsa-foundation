@@ -74,8 +74,6 @@ All routes are relative to the host's Elsa API base path.
 | `GET` | `publishing/value-conversion/profiles` | `workflow-publishing.read` | List safe value-conversion profiles. |
 | `POST` | `publishing/workflows/{versionId}/preflight` | `workflow-publishing.read` | Resolve policy and return trigger changes/conflicts without changing authority. |
 | `POST` | `publishing/workflows/preflight` | `workflow-publishing.read` | Preflight a supplied workflow snapshot and issue a review token. |
-| `GET` | `publishing/workflows/{definitionId}/slots` | `workflow-publishing.read` | List publication slots and visible lifecycle state. |
-| `GET` | `publishing/workflows/{definitionId}/slots/{slotName}` | `workflow-publishing.read` | Read one slot. |
 | `DELETE` | `publishing/workflows/{definitionId}/slots/{slotName}` | `workflow-publishing.manage` | Unpublish the slot authority and its serving projections. |
 | `POST` | `publishing/workflows/{definitionId}/slots/{slotName}/restore` | `workflow-publishing.manage` | Restore the latest eligible retired publication with a new authority transition. |
 | `GET` | `publishing/workflows/{definitionId}/policy` | `workflow-publishing.read` | Read the effective workflow/host policy. |
@@ -93,6 +91,10 @@ All routes are relative to the host's Elsa API base path.
 | `POST` | `publishing/activity-test-runs/{testRunId}/cancel` | `workflow-publishing.manage` | Request cancellation of an activity draft test run. |
 
 The version route excludes the reserved literal `drafts`, so the two test-run routes cannot overlap.
+
+Activation-slot reads are runtime-owned: `GET /runtime/workflows/activation-slots/{definitionId}` and
+`GET /runtime/workflows/activation-slots/{definitionId}/{slotName}` are served by `Elsa.Workflows.Runtime.Api`.
+Publishing keeps the two slot lifecycle commands above, whose responses may include the publication journal view.
 
 Activity publication clients must preflight immediately before publish and submit the returned
 opaque review token, one exact offered version, and a caller-stable idempotency key. Replaying the

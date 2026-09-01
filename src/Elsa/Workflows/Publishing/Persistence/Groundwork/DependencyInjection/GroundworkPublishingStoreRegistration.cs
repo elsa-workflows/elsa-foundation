@@ -36,7 +36,6 @@ public static class GroundworkPublishingStoreRegistration
             provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
             targetName));
 
-        ReplaceScoped<IPublicationSlotStore, GroundworkPublicationSlotStore>(services);
         ReplaceScoped<IPublicationRecordStore, GroundworkPublicationRecordStore>(services);
         ReplaceScoped<IPublicationPolicyStore, GroundworkPublicationPolicyStore>(services);
         ReplaceScoped<IPublicationProjectionIntentStore, GroundworkPublicationProjectionIntentStore>(services);

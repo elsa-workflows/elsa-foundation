@@ -109,6 +109,7 @@ public sealed class GroundworkV2RuntimeRegistrationTests
         AssertScopedAlias<IDurableTimerStore, GroundworkV2DurableTimerStateStore>(services);
         AssertScopedAlias<IWorkflowTriggerBindingStore, GroundworkV2WorkflowTriggerBindingStore>(services);
         AssertScopedAlias<IRecurringTriggerScheduleStore, GroundworkV2RecurringTriggerScheduleStore>(services);
+        AssertScopedAlias<IWorkflowActivationAuthority, GroundworkV2WorkflowActivationAuthority>(services);
     }
 
     [Fact]

@@ -124,6 +124,11 @@ public static class GroundworkV2RuntimeRegistration
             typeof(IWorkflowTriggerBindingStore));
         ReplaceScoped<GroundworkV2RecurringTriggerScheduleStore>(services, Standard<GroundworkV2RecurringTriggerScheduleStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IRecurringTriggerScheduleStore));
+        ReplaceScoped<GroundworkV2WorkflowActivationAuthority>(services, provider => new(
+                provider.GetRequiredService<IGroundworkStorageSessionSource>(),
+                provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
+                provider.GetRequiredService<GroundworkStorageTransactionFactory>(),
+                target), typeof(IWorkflowActivationAuthority));
 
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2CheckpointDurabilityEvidence>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2DispatchStoreDurabilityEvidence>());

@@ -11,8 +11,8 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <remarks>
 /// Everything that is not behavior lives here: source identity (which may dangle across environments), the
 /// artifact-version label, publish/creation timestamps, the reference scope and optional expiry, retirement
-/// facts, publication/slot provenance for Published references, and the embedded <b>Layout Sidecar</b>
-/// (<see cref="Layout"/>). TestRun references remain publication- and slot-less. The layout is a verbatim publish-time
+/// facts, activation/slot provenance for Published references, and the embedded <b>Layout Sidecar</b>
+/// (<see cref="Layout"/>). TestRun references remain activation- and slot-less. The layout is a verbatim publish-time
 /// copy of the definition version's graph geometry (ADR 0035 discipline: opaque, never canonicalized) and
 /// NEVER contributes to the artifact hash — visual arrangement is not behavior (ADR 0039).
 /// </remarks>
@@ -33,7 +33,7 @@ public sealed record WorkflowExecutableSourceReference(
     DateTimeOffset? DeletedAt = null,
     string? DeletedReason = null,
     IReadOnlyList<WorkflowExecutableLayoutRecord>? Layout = null,
-    string? PublicationId = null,
+    string? ActivationId = null,
     string? SlotId = null,
     ExecutableLayoutSidecar? LayoutSidecar = null,
     IReadOnlyList<WorkflowExecutableAuthoredInputRecord>? AuthoredInputs = null,
@@ -59,7 +59,7 @@ public sealed record WorkflowExecutableSourceReference(
         DateTimeOffset? deletedAt,
         string? deletedReason,
         IReadOnlyList<WorkflowExecutableLayoutRecord>? layout,
-        string? publicationId,
+        string? activationId,
         string? slotId,
         IReadOnlyList<WorkflowExecutableAuthoredInputRecord>? authoredInputs)
         : this(
@@ -78,7 +78,7 @@ public sealed record WorkflowExecutableSourceReference(
             deletedAt,
             deletedReason,
             layout,
-            publicationId,
+            activationId,
             slotId,
             LayoutSidecar: null,
             authoredInputs,
@@ -106,7 +106,7 @@ public sealed record WorkflowExecutableSourceReference(
         DateTimeOffset? deletedAt,
         string? deletedReason,
         IReadOnlyList<WorkflowExecutableLayoutRecord>? layout,
-        string? publicationId,
+        string? activationId,
         string? slotId)
         : this(
             sourceReferenceId,
@@ -124,7 +124,7 @@ public sealed record WorkflowExecutableSourceReference(
             deletedAt,
             deletedReason,
             layout,
-            publicationId,
+            activationId,
             slotId,
             LayoutSidecar: null,
             AuthoredInputs: null,
@@ -168,7 +168,7 @@ public sealed record WorkflowExecutableSourceReference(
         out DateTimeOffset? deletedAt,
         out string? deletedReason,
         out IReadOnlyList<WorkflowExecutableLayoutRecord> layout,
-        out string? publicationId,
+        out string? activationId,
         out string? slotId,
         out ExecutableLayoutSidecar layoutSidecar,
         out IReadOnlyList<WorkflowExecutableAuthoredInputRecord> authoredInputs)
@@ -188,7 +188,7 @@ public sealed record WorkflowExecutableSourceReference(
         deletedAt = DeletedAt;
         deletedReason = DeletedReason;
         layout = Layout;
-        publicationId = PublicationId;
+        activationId = ActivationId;
         slotId = SlotId;
         layoutSidecar = LayoutSidecar;
         authoredInputs = AuthoredInputs;
@@ -211,7 +211,7 @@ public sealed record WorkflowExecutableSourceReference(
         out DateTimeOffset? deletedAt,
         out string? deletedReason,
         out IReadOnlyList<WorkflowExecutableLayoutRecord> layout,
-        out string? publicationId,
+        out string? activationId,
         out string? slotId,
         out IReadOnlyList<WorkflowExecutableAuthoredInputRecord> authoredInputs)
     {
@@ -230,7 +230,7 @@ public sealed record WorkflowExecutableSourceReference(
         deletedAt = DeletedAt;
         deletedReason = DeletedReason;
         layout = Layout;
-        publicationId = PublicationId;
+        activationId = ActivationId;
         slotId = SlotId;
         authoredInputs = AuthoredInputs;
     }
@@ -252,7 +252,7 @@ public sealed record WorkflowExecutableSourceReference(
         out DateTimeOffset? deletedAt,
         out string? deletedReason,
         out IReadOnlyList<WorkflowExecutableLayoutRecord> layout,
-        out string? publicationId,
+        out string? activationId,
         out string? slotId)
     {
         sourceReferenceId = SourceReferenceId;
@@ -270,7 +270,7 @@ public sealed record WorkflowExecutableSourceReference(
         deletedAt = DeletedAt;
         deletedReason = DeletedReason;
         layout = Layout;
-        publicationId = PublicationId;
+        activationId = ActivationId;
         slotId = SlotId;
     }
 

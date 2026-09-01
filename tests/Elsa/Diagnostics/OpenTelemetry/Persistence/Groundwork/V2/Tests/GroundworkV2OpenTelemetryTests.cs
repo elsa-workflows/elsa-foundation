@@ -1,5 +1,6 @@
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
+using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 using Elsa.Diagnostics.Persistence.Draining;
 using Groundwork.Kernel;
@@ -42,6 +43,30 @@ public sealed class GroundworkV2OpenTelemetryTests
         Assert.Equal([trace.TraceId], result.Items.Select(item => item.TraceId));
         Assert.Single(detail!.Spans);
         Assert.Equal(resource.Id, detail.Resources.Single().Id);
+    }
+
+    [Fact]
+    public async Task Accepted_capture_marks_the_source_synchronously_and_persists_every_signal_kind()
+    {
+        using var database = new TemporarySqliteDatabase();
+        var registry = new RecordingSourceRegistry();
+        await using var fixture = await OpenStoreAsync(database, start: true, sourceRegistry: registry);
+        var now = new DateTimeOffset(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+        var resource = Resource("resource-capture", "orders", now);
+        var trace = new TelemetryTrace("trace-capture", null, "checkout", now, now, TimeSpan.Zero, SpanStatus.Ok, [resource.Id], [], 1);
+        var span = new TelemetrySpan("span-capture-record", trace.TraceId, "span-capture", null, resource.Id, "checkout", "internal", now, now, SpanStatus.Ok, null, new Dictionary<string, string?>(), [], []);
+        var instrument = Instrument("instrument-capture", resource.Id, "requests");
+
+        await fixture.Store.WriteAsync(new(
+            [resource], [trace], [span], [instrument], [Point("point-capture", instrument, resource.Id, now)], [Log("log-capture", resource.Id, now, "captured")]));
+
+        Assert.Equal([resource.Id], registry.List().Select(item => item.Id));
+        await fixture.Store.CompleteDrainingAsync();
+        Assert.Single((await fixture.Store.QueryResourcesAsync(new() { Take = 10 })).Items);
+        Assert.Single((await fixture.Store.QueryTracesAsync(new() { Take = 10 })).Items);
+        Assert.Single((await fixture.Store.GetTraceAsync(trace.TraceId))!.Spans);
+        Assert.Single((await fixture.Store.QueryMetricsAsync(new() { Take = 10 })).Points);
+        Assert.Single((await fixture.Store.QueryLogsAsync(new() { Take = 10 })).Items);
     }
 
     [Fact]
@@ -97,6 +122,120 @@ public sealed class GroundworkV2OpenTelemetryTests
 
         static TelemetryTrace Trace(string id, TelemetryResource resource, DateTimeOffset start) =>
             new(id, null, "operation", start, start.AddSeconds(1), TimeSpan.FromSeconds(1), SpanStatus.Ok, [resource.Id], [], 1);
+    }
+
+    [Fact]
+    public async Task SQLite_repeated_trace_records_merge_earliest_latest_worst_count_and_workflows()
+    {
+        using var database = new TemporarySqliteDatabase();
+        await using var fixture = await OpenStoreAsync(database);
+        var start = new DateTimeOffset(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+        var resource = Resource("resource-merge", "orders", start);
+        var first = new TelemetryTrace(
+            "trace-merge", null, "checkout", start, start.AddMilliseconds(10), TimeSpan.FromMilliseconds(10),
+            SpanStatus.Error, [resource.Id], [], 2);
+        var second = new TelemetryTrace(
+            "trace-merge", null, "checkout", start.AddSeconds(1), start.AddSeconds(1).AddMilliseconds(25),
+            TimeSpan.FromMilliseconds(25), SpanStatus.Ok, [resource.Id], ["workflow-a"], 3);
+
+        await fixture.Store.WriteAsync(DiagnosticsDrainBatchId.New(), new([resource], [first], [], [], [], []));
+        await fixture.Store.WriteAsync(DiagnosticsDrainBatchId.New(), new([], [second], [], [], [], []));
+
+        var summary = Assert.Single((await fixture.Store.QueryTracesAsync(new() { Take = 10 })).Items);
+        Assert.Equal(start, summary.StartTime);
+        Assert.Equal(second.EndTime, summary.EndTime);
+        Assert.Equal(second.EndTime - start, summary.Duration);
+        Assert.Equal(SpanStatus.Error, summary.Status);
+        Assert.Equal(5, summary.SpanCount);
+        Assert.Equal(["workflow-a"], summary.WorkflowInstanceIds);
+    }
+
+    [Fact]
+    public async Task SQLite_metric_and_log_service_filters_follow_durable_resource_values()
+    {
+        using var database = new TemporarySqliteDatabase();
+        await using var fixture = await OpenStoreAsync(database);
+        var time = new DateTimeOffset(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+        var api = Resource("resource-api", "api", time);
+        var worker = Resource("resource-worker", "worker", time);
+        var apiInstrument = Instrument("instrument-api", api.Id, "queue.depth");
+        var workerInstrument = Instrument("instrument-worker", worker.Id, "queue.depth");
+        var batch = new OpenTelemetryBatch(
+            [api, worker],
+            [],
+            [],
+            [apiInstrument, workerInstrument],
+            [Point("point-api", apiInstrument, api.Id, time), Point("point-worker", workerInstrument, worker.Id, time)],
+            [Log("log-api", api.Id, time, "api"), Log("log-worker", worker.Id, time, "worker")]);
+
+        await fixture.Store.WriteAsync(DiagnosticsDrainBatchId.New(), batch);
+
+        Assert.Equal(["point-api"], (await fixture.Store.QueryMetricsAsync(new() { ServiceName = "api", Take = 10 })).Points.Select(point => point.Id));
+        Assert.Equal(["log-worker"], (await fixture.Store.QueryLogsAsync(new() { ServiceName = "worker", Take = 10 })).Items.Select(log => log.Id));
+    }
+
+    [Fact]
+    public async Task SQLite_case_equivalent_instrument_ids_collapse_without_losing_points()
+    {
+        using var database = new TemporarySqliteDatabase();
+        await using var fixture = await OpenStoreAsync(database);
+        var time = new DateTimeOffset(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+        var resource = Resource("resource-api", "api", time);
+        var lower = Instrument("resource-api:request.count:gauge", resource.Id, "request.count");
+        var upper = Instrument("RESOURCE-API:REQUEST.COUNT:GAUGE", resource.Id, "REQUEST.COUNT");
+
+        await fixture.Store.WriteAsync(DiagnosticsDrainBatchId.New(), new(
+            [resource], [], [], [lower], [Point("point-1", lower, resource.Id, time)], []));
+        await fixture.Store.WriteAsync(DiagnosticsDrainBatchId.New(), new(
+            [], [], [], [upper], [Point("point-2", upper, resource.Id, time.AddSeconds(1))], []));
+
+        var result = await fixture.Store.QueryMetricsAsync(new() { Take = 10 });
+        Assert.Single(result.Instruments);
+        Assert.Equal(["point-1", "point-2"], result.Points.Select(point => point.Id));
+    }
+
+    [Fact]
+    public async Task SQLite_final_retention_keeps_exact_newest_signal_and_catalog_windows()
+    {
+        using var database = new TemporarySqliteDatabase();
+        var options = new OpenTelemetryDiagnosticsOptions
+        {
+            TraceCapacity = 2,
+            SpanCapacity = 2,
+            MetricPointCapacity = 2,
+            LogRecordCapacity = 2,
+            ResourceCapacity = 2,
+            MetricInstrumentCapacity = 2,
+            MaxQuerySize = 20
+        };
+        await using var fixture = await OpenStoreAsync(database, options, start: true);
+        var first = new DateTimeOffset(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+        for (var index = 1; index <= 3; index++)
+        {
+            var time = first.AddSeconds(index);
+            var resource = Resource($"resource-{index}", "orders", time);
+            var trace = new TelemetryTrace($"trace-{index}", null, "operation", time, time, TimeSpan.Zero, SpanStatus.Ok, [resource.Id], [], 1);
+            var span = new TelemetrySpan($"span-record-{index}", trace.TraceId, $"span-{index}", null, resource.Id, "operation", "internal", time, time, SpanStatus.Ok, null, new Dictionary<string, string?>(), [], []);
+            var instrument = Instrument($"instrument-{index}", resource.Id, "requests");
+            await fixture.Store.WriteAsync(new(
+                [resource], [trace], [span], [instrument], [Point($"point-{index}", instrument, resource.Id, time)], [Log($"log-{index}", resource.Id, time, index.ToString())]));
+        }
+
+        await fixture.Store.CompleteDrainingAsync();
+
+        var diagnostics = await fixture.Store.GetDiagnosticsAsync();
+        Assert.Equal((2, 2, 2, 2, 2, 2),
+            (diagnostics.ResourceCount, diagnostics.TraceCount, diagnostics.SpanCount,
+                diagnostics.MetricInstrumentCount, diagnostics.MetricPointCount, diagnostics.LogRecordCount));
+        var traces = await fixture.Store.QueryTracesAsync(new() { Take = 20 });
+        var metrics = await fixture.Store.QueryMetricsAsync(new() { Take = 20 });
+        Assert.Equal(["trace-2", "trace-3"], traces.Items.Select(trace => trace.TraceId));
+        Assert.Null(await fixture.Store.GetTraceAsync("trace-1"));
+        Assert.Single((await fixture.Store.GetTraceAsync("trace-2"))!.Spans);
+        Assert.Single((await fixture.Store.GetTraceAsync("trace-3"))!.Spans);
+        Assert.Equal(["point-2", "point-3"], metrics.Points.Select(point => point.Id));
+        Assert.Equal(["log-2", "log-3"], (await fixture.Store.QueryLogsAsync(new() { Take = 20 })).Items.Select(log => log.Id));
+        Assert.Equal(["resource-3", "resource-2"], (await fixture.Store.QueryResourcesAsync(new() { Take = 20 })).Items.Select(resource => resource.Id));
     }
 
     [Fact]
@@ -168,13 +307,15 @@ public sealed class GroundworkV2OpenTelemetryTests
         TemporarySqliteDatabase database,
         OpenTelemetryDiagnosticsOptions? options = null,
         V2OpenTelemetryBinding? binding = null,
-        bool start = false)
+        bool start = false,
+        IOpenTelemetrySourceRegistry? sourceRegistry = null)
     {
         var connection = new SqliteProviderFactory().Create(database.ConnectionString);
         var store = new GroundworkOpenTelemetryStore(
             connection,
             Options.Create(options ?? new OpenTelemetryDiagnosticsOptions { MaxQuerySize = 100 }),
-            binding ?? V2OpenTelemetryBinding.Default);
+            binding ?? V2OpenTelemetryBinding.Default,
+            sourceRegistry: sourceRegistry);
         IDiagnosticsPersistenceResourceLease? lease = null;
         try
         {
@@ -192,6 +333,18 @@ public sealed class GroundworkV2OpenTelemetryTests
             throw;
         }
     }
+
+    private static TelemetryResource Resource(string id, string service, DateTimeOffset time) =>
+        new(id, service, null, "dotnet", new Dictionary<string, string?>(), time, TelemetryResourceStatus.Active);
+
+    private static MetricInstrument Instrument(string id, string resourceId, string name) =>
+        new(id, resourceId, name, null, null, MetricKind.Gauge, new Dictionary<string, string?>());
+
+    private static MetricPoint Point(string id, MetricInstrument instrument, string resourceId, DateTimeOffset time) =>
+        new(id, instrument.Id, instrument.Name, resourceId, time, 1, null, null, new Dictionary<string, string?>(), null, null);
+
+    private static OtlpLogRecord Log(string id, string resourceId, DateTimeOffset time, string body) =>
+        new(id, resourceId, time, "Information", 9, body, null, null, new Dictionary<string, string?>());
 
     private sealed class OpenTelemetryStoreFixture(
         IStorageProviderConnection connection,
@@ -223,5 +376,16 @@ public sealed class GroundworkV2OpenTelemetryTests
                     File.Delete(candidate);
             }
         }
+    }
+
+    private sealed class RecordingSourceRegistry : IOpenTelemetrySourceRegistry
+    {
+        private readonly Dictionary<string, TelemetryResource> resources = new(StringComparer.OrdinalIgnoreCase);
+
+        public long DroppedCount => 0;
+
+        public void MarkSeen(TelemetryResource resource) => resources[resource.Id] = resource;
+
+        public IReadOnlyCollection<TelemetryResource> List() => resources.Values.ToArray();
     }
 }

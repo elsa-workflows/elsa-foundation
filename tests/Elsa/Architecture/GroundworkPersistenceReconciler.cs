@@ -406,6 +406,7 @@ internal sealed class GroundworkPersistenceReconciler
         Map("runtime", "IWorkflowSchedulerPoisonStore", "runtime-scheduler-poison", "SchedulerPoisonDocumentKind"),
         Map("runtime", "IWorkflowSchedulerWorkQueue", "runtime-scheduler-work-queue", "SchedulerWorkItemDocumentKind"),
         Map("runtime", "IWorkflowTriggerBindingStore", "runtime-trigger-binding", "WorkflowTriggerBindingDocumentKind"),
+        Map("runtime", null, "runtime-publication-projection-state", "WorkflowActivationSlotDocumentKind"),
         Map("runtime", null, "runtime-publication-projection-state", "PublicationProjectionStateDocumentKind"),
         Map("iam", "IUserStore", "iam-user", "IdentityUserDocumentKind"),
         Map("iam", "IUserStore", "iam-user", "UserClaimDocumentKind"),
