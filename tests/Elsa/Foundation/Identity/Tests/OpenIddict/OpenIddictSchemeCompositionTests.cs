@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.OpenIddict;
+using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Elsa.Foundation.Identity.OpenIddict.Extensions;
 using Elsa.Foundation.Identity.Oidc;
 using Elsa.Foundation.Identity.Oidc.Extensions;
@@ -26,6 +27,31 @@ public sealed class OpenIddictSchemeCompositionTests : IAsyncDisposable
     private readonly OpenIddictIdentityFixture _fixture = new();
 
     [Fact]
+    public void Behavior_composite_does_not_register_vendor_persistence_or_lifecycle_ownership()
+    {
+        var services = new ServiceCollection();
+
+        services.AddFoundationIdentityOpenIddict(options => options.IsDevelopmentOrDemo = true);
+
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(OpenIddictIdentityDbContext));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(DbContextOptions<OpenIddictIdentityDbContext>));
+        Assert.DoesNotContain(services, descriptor => descriptor.ImplementationType == typeof(OpenIddictIdentityStoreInitializer));
+    }
+
+    [Fact]
+    public void Legacy_db_context_callback_fails_closed_with_host_registration_guidance()
+    {
+        var services = new ServiceCollection();
+
+        var exception = Assert.Throws<NotSupportedException>(() =>
+            services.AddFoundationIdentityOpenIddict(
+                options => options.IsDevelopmentOrDemo = true,
+                configureDbContext: _ => { }));
+
+        Assert.Contains("host boundary", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Registers_The_Validation_Handler_And_Selector_Schemes()
     {
         var schemes = await _fixture.Services.GetRequiredService<IAuthenticationSchemeProvider>().GetAllSchemesAsync();
@@ -39,6 +65,8 @@ public sealed class OpenIddictSchemeCompositionTests : IAsyncDisposable
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddOpenIddictVendorForTests(
+            builder => builder.UseInMemoryDatabase($"openiddict-{Guid.NewGuid():n}"));
         new OpenIddictIdentityFeature { IsDevelopmentOrDemo = true }.ConfigureServices(services);
 
         using var provider = services.BuildServiceProvider();
@@ -73,10 +101,12 @@ public sealed class OpenIddictSchemeCompositionTests : IAsyncDisposable
         Assert.Equal(OpenIddictIdentityDefaults.SelectorScheme, options.DefaultAuthenticateScheme);
         Assert.Equal(OpenIddictIdentityDefaults.SelectorScheme, options.DefaultChallengeScheme);
 
-        static void AddOpenIddict(IServiceCollection services) =>
-            services.AddFoundationIdentityOpenIddict(
-                options => options.IsDevelopmentOrDemo = true,
-                configureDbContext: builder => builder.UseInMemoryDatabase($"openiddict-{Guid.NewGuid():n}"));
+        static void AddOpenIddict(IServiceCollection services)
+        {
+            services.AddOpenIddictVendorForTests(
+                builder => builder.UseInMemoryDatabase($"openiddict-{Guid.NewGuid():n}"));
+            services.AddFoundationIdentityOpenIddict(options => options.IsDevelopmentOrDemo = true);
+        }
     }
 
     [Fact]
@@ -103,9 +133,9 @@ public sealed class OpenIddictSchemeCompositionTests : IAsyncDisposable
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddFoundationIdentityOidc();
-        services.AddFoundationIdentityOpenIddict(
-            options => options.IsDevelopmentOrDemo = true,
-            configureDbContext: builder => builder.UseInMemoryDatabase($"openiddict-{Guid.NewGuid():n}"));
+        services.AddOpenIddictVendorForTests(
+            builder => builder.UseInMemoryDatabase($"openiddict-{Guid.NewGuid():n}"));
+        services.AddFoundationIdentityOpenIddict(options => options.IsDevelopmentOrDemo = true);
         using var provider = services.BuildServiceProvider();
 
         var context = CreateContext(provider, authorization: $"Bearer {CreateForeignJwt()}");
@@ -128,9 +158,9 @@ public sealed class OpenIddictSchemeCompositionTests : IAsyncDisposable
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddAuthentication().AddCookie("Elsa.Identity.Cookie");
-        services.AddFoundationIdentityOpenIddict(
-            options => options.IsDevelopmentOrDemo = true,
-            configureDbContext: builder => builder.UseInMemoryDatabase($"openiddict-{Guid.NewGuid():n}"));
+        services.AddOpenIddictVendorForTests(
+            builder => builder.UseInMemoryDatabase($"openiddict-{Guid.NewGuid():n}"));
+        services.AddFoundationIdentityOpenIddict(options => options.IsDevelopmentOrDemo = true);
         using var provider = services.BuildServiceProvider();
 
         var context = CreateContext(provider, cookie: "Elsa.Identity.Cookie=session-value");

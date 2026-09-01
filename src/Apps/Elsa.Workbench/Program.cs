@@ -104,6 +104,12 @@ builder.Configuration
     .AddCommandLine(args);
 var configuration = builder.Configuration;
 
+// OpenIddict's protocol behavior is composed by the shell feature, but its vendor EF store is host-owned. Bind the
+// default shell's persistence settings at the root so the host-level initializer and every copied shell service
+// provider select the same demo in-memory store or durable SQLite store. The behavior composite deliberately does not
+// register a DbContext, an EF store, or an initializer; this is the Workbench's explicit vendor choice.
+builder.Services.AddWorkbenchOpenIddictVendor(configuration);
+
 // Opt-in cold-start phase instrument (spec 129). Null unless Elsa:Boot:PhaseTiming:Enabled is set, so the host
 // registers no boot services and pays nothing when the switch is off. When on, the timeline is a root singleton
 // consumed by the first-request middleware, the shell-activation observer, and the ApplicationStarted hook.

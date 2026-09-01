@@ -83,7 +83,7 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | Open.Linq.AsyncExtensions | 1.2.0 | Elsa.Persistence.EFCore (1.2.0) |
 | OpenIddict.Abstractions | 7.5.0 | Elsa.Foundation.Identity.OpenIddict.Behavior (7.5.0) |
 | OpenIddict.AspNetCore | 7.5.0 | Elsa.Foundation.Identity.OpenIddict.Behavior (7.5.0) |
-| OpenIddict.EntityFrameworkCore | 7.5.0 | Elsa.Foundation.Identity.OpenIddict (7.5.0) |
+| OpenIddict.EntityFrameworkCore | 7.5.0 | Elsa.Foundation.Identity.OpenIddict (7.5.0)<br>Elsa.Workbench (7.5.0) |
 | System.CommandLine | 2.0.8 | Elsa.Persistence.EFCore (2.0.8) |
 | System.Reflection.MetadataLoadContext | 10.0.8 | Elsa.Activities.Design.Reconciliation.Clr (10.0.8) |
 | Testcontainers.MongoDb | 4.12.0 | Elsa.Activities.Design.Persistence.Groundwork.V2.ProviderMatrix.Tests (4.12.0)<br>Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests (4.12.0)<br>Elsa.Diagnostics.Persistence.Tests (4.12.0)<br>Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests (4.12.0)<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.V2.ProviderMatrix.Tests (4.12.0)<br>Elsa.Foundation.Identity.Persistence.Groundwork.V2.ProviderMatrix.Tests (4.12.0)<br>Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests (4.12.0)<br>Elsa.Persistence.Groundwork.MongoDb.UnifiedHost.Tests (4.12.0)<br>Elsa.Persistence.Groundwork.Testing (4.12.0)<br>Elsa.Secrets.Persistence.Groundwork.V2.ProviderMatrix.Tests (4.12.0)<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests (4.12.0) |
@@ -1053,6 +1053,7 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Workbench](../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj) | source | Nuplane.Admin | 0.0.9-preview.61 |
 | [Elsa.Workbench](../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj) | source | Nuplane.Loading | 0.0.9-preview.61 |
 | [Elsa.Workbench](../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj) | source | Nuplane.Sources.Directory | 0.0.9-preview.61 |
+| [Elsa.Workbench](../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj) | source | OpenIddict.EntityFrameworkCore | 7.5.0 |
 | [Elsa.Workflows.Dashboard](../../src/Elsa/Workflows/Dashboard/Elsa.Workflows.Dashboard.csproj) | source | CShells.Abstractions | 0.0.29-preview.147 |
 | [Elsa.Workflows.Dashboard](../../src/Elsa/Workflows/Dashboard/Elsa.Workflows.Dashboard.csproj) | source | CShells.AspNetCore.Abstractions | 0.0.29-preview.147 |
 | [Elsa.Workflows.Dashboard](../../src/Elsa/Workflows/Dashboard/Elsa.Workflows.Dashboard.csproj) | source | Elsa.Platform.PackageManifest.Generator | 0.0.1-preview.79 |
