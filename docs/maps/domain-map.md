@@ -6,10 +6,10 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 
 ## Summary
 
-- Source projects: 147
-- Test projects: 107
+- Source projects: 149
+- Test projects: 108
 - Domains: 27
-- Direct cross-domain references: 704
+- Direct cross-domain references: 713
 
 ## Domains
 
@@ -40,7 +40,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Studio | 3 | 2 | contract<br>feature/implementation<br>test |
 | Elsa.Tasks | 3 | 1 | contract<br>feature/implementation<br>helper<br>test |
 | Elsa.Workbench | 1 | 0 | host |
-| Elsa.Workflows | 32 | 21 | contract<br>feature/implementation<br>test |
+| Elsa.Workflows | 34 | 22 | contract<br>feature/implementation<br>test |
 | Elsa3 | 4 | 1 | feature/implementation<br>test |
 
 ## Projects
@@ -186,6 +186,8 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Workflows.Runtime](../../src/Elsa/Workflows/Runtime/Elsa.Workflows.Runtime.csproj) | source | Elsa.Workflows | Runtime | feature/implementation | Elsa.Activities.Runtime.Core<br>Elsa.Persistence.Core<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Http](../../src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | source | Elsa.Workflows | Runtime.Http | feature/implementation | Elsa.Http.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | source | Elsa.Workflows | Runtime.JavaScript | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Primitives<br>Elsa.Workflows.Primitives<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Workflows.Runtime.Reconciliation.Core](../../src/Elsa/Workflows/Runtime/Reconciliation/Core/Elsa.Workflows.Runtime.Reconciliation.Core.csproj) | source | Elsa.Workflows | Runtime.Reconciliation.Core | contract | Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Workflows.Runtime.Reconciliation](../../src/Elsa/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation.csproj) | source | Elsa.Workflows | Runtime.Reconciliation | feature/implementation | Elsa.Activities.Runtime<br>Elsa.Locking.Core<br>Elsa.Persistence.Core<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Reconciliation.Core |
 | [Elsa.Workflows.Runtime.ReferenceGarbageCollection](../../src/Elsa/Workflows/Runtime/ReferenceGarbageCollection/Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj) | source | Elsa.Workflows | Runtime.ReferenceGarbageCollection | feature/implementation | Elsa.Persistence.Core<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Resumption](../../src/Elsa/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj) | source | Elsa.Workflows | Runtime.Resumption | feature/implementation | Elsa.Persistence.Core<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Scheduling](../../src/Elsa/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj) | source | Elsa.Workflows | Runtime.Scheduling | feature/implementation | Elsa.Persistence.Core<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
@@ -296,6 +298,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests](../../tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests.csproj) | test | Elsa.Workflows | Runtime.Distributed.Persistence.Groundwork.Tests | test | Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
 | [Elsa.Workflows.Runtime.Distributed.Tests](../../tests/Elsa/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj) | test | Elsa.Workflows | Runtime.Distributed.Tests | test | Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Persistence.Core<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Distributed<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
 | [Elsa.Workflows.Runtime.Http.Tests](../../tests/Elsa/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj) | test | Elsa.Workflows | Runtime.Http.Tests | test | Elsa.Http.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Http |
+| [Elsa.Workflows.Runtime.Reconciliation.Tests](../../tests/Elsa/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj) | test | Elsa.Workflows | Runtime.Reconciliation.Tests | test | Elsa.Activities.Testing<br>Elsa.Persistence.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Reconciliation<br>Elsa.Workflows.Runtime.Reconciliation.Core |
 | [Elsa.Workflows.Runtime.Resumption.Tests](../../tests/Elsa/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj) | test | Elsa.Workflows | Runtime.Resumption.Tests | test | Elsa.Persistence.Core<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Resumption |
 | [Elsa.Workflows.Runtime.Scheduling.Tests](../../tests/Elsa/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj) | test | Elsa.Workflows | Runtime.Scheduling.Tests | test | Elsa.Persistence.Core<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Scheduling |
 | [Elsa.Workflows.Runtime.Tests](../../tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj) | test | Elsa.Workflows | Runtime.Tests | test | Elsa.Persistence.Core<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.ReferenceGarbageCollection<br>Elsa.Workflows.Runtime.Resumption |
@@ -976,6 +979,15 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | Elsa.Workflows | [Elsa.Expressions.JavaScript.Rendering.Core](../../src/Elsa/Expressions/JavaScript/Rendering/Core/Elsa.Expressions.JavaScript.Rendering.Core.csproj) | Elsa.Expressions |
 | [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | Elsa.Workflows | [Elsa.Foundation.Identity.Abstractions](../../src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj) | Elsa.Foundation |
 | [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | Elsa.Workflows | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
+| [Elsa.Workflows.Runtime.Reconciliation](../../src/Elsa/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation.csproj) | Elsa.Workflows | [Elsa.Activities.Runtime](../../src/Elsa/Activities/Runtime/Elsa.Activities.Runtime.csproj) | Elsa.Activities |
+| [Elsa.Workflows.Runtime.Reconciliation](../../src/Elsa/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation.csproj) | Elsa.Workflows | [Elsa.Locking.Core](../../src/Elsa/Locking/Core/Elsa.Locking.Core.csproj) | Elsa.Locking |
+| [Elsa.Workflows.Runtime.Reconciliation](../../src/Elsa/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation.csproj) | Elsa.Workflows | [Elsa.Persistence.Core](../../src/Elsa/Persistence/Core/Elsa.Persistence.Core.csproj) | Elsa.Persistence |
+| [Elsa.Workflows.Runtime.Reconciliation](../../src/Elsa/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation.csproj) | Elsa.Workflows | [Elsa.Serialization.Core](../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj) | Elsa.Serialization |
+| [Elsa.Workflows.Runtime.Reconciliation](../../src/Elsa/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation.csproj) | Elsa.Workflows | [Elsa.Tasks.Core](../../src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj) | Elsa.Tasks |
+| [Elsa.Workflows.Runtime.Reconciliation.Core](../../src/Elsa/Workflows/Runtime/Reconciliation/Core/Elsa.Workflows.Runtime.Reconciliation.Core.csproj) | Elsa.Workflows | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
+| [Elsa.Workflows.Runtime.Reconciliation.Core](../../src/Elsa/Workflows/Runtime/Reconciliation/Core/Elsa.Workflows.Runtime.Reconciliation.Core.csproj) | Elsa.Workflows | [Elsa.Serialization.Core](../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj) | Elsa.Serialization |
+| [Elsa.Workflows.Runtime.Reconciliation.Tests](../../tests/Elsa/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj) | Elsa.Workflows | [Elsa.Activities.Testing](../../tests/Elsa/Activities/Testing/Elsa.Activities.Testing.csproj) | Elsa.Activities |
+| [Elsa.Workflows.Runtime.Reconciliation.Tests](../../tests/Elsa/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj) | Elsa.Workflows | [Elsa.Persistence.Core](../../src/Elsa/Persistence/Core/Elsa.Persistence.Core.csproj) | Elsa.Persistence |
 | [Elsa.Workflows.Runtime.ReferenceGarbageCollection](../../src/Elsa/Workflows/Runtime/ReferenceGarbageCollection/Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj) | Elsa.Workflows | [Elsa.Persistence.Core](../../src/Elsa/Persistence/Core/Elsa.Persistence.Core.csproj) | Elsa.Persistence |
 | [Elsa.Workflows.Runtime.ReferenceGarbageCollection](../../src/Elsa/Workflows/Runtime/ReferenceGarbageCollection/Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj) | Elsa.Workflows | [Elsa.Tasks.Core](../../src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj) | Elsa.Tasks |
 | [Elsa.Workflows.Runtime.ReferenceGarbageCollection](../../src/Elsa/Workflows/Runtime/ReferenceGarbageCollection/Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj) | Elsa.Workflows | [Elsa.Tasks.Schedules](../../src/Elsa/Tasks/Schedules/Elsa.Tasks.Schedules.csproj) | Elsa.Tasks |

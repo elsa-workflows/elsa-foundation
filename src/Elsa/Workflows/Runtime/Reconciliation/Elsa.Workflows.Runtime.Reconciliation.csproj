@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="Core\Elsa.Workflows.Runtime.Reconciliation.Core.csproj" />
+    <ProjectReference Include="..\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\Elsa.Workflows.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\Locking\Core\Elsa.Locking.Core.csproj" />
+    <ProjectReference Include="..\..\..\Persistence\Core\Elsa.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\..\Serialization\Core\Elsa.Serialization.Core.csproj" />
+    <ProjectReference Include="..\..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
+    <!-- Needed for [TaskDependency(typeof(RegisterActivityTypesStartupTask))]: the import gate's
+         activity-type-presence axis is meaningless before the startup assembly scan completes.
+         Acceptable per research D1/D5 — this feature is a leaf and any executing runtime composes
+         ActivitiesRuntime anyway. -->
+    <ProjectReference Include="..\..\..\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Nested project folders live under the same domain root; keep SDK globs scoped to this project. -->
+    <Compile Remove="Core/**/*" />
+    <EmbeddedResource Remove="Core/**/*" />
+    <None Remove="Core/**/*" />
+  </ItemGroup>
+
+</Project>

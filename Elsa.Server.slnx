@@ -304,6 +304,10 @@
     <Project Path="src/Elsa/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Tracing/Elsa.Workflows.Runtime.Tracing.csproj" />
   </Folder>
+  <Folder Name="/src/Elsa/Workflows/Runtime/Reconciliation/">
+    <Project Path="src/Elsa/Workflows/Runtime/Reconciliation/Core/Elsa.Workflows.Runtime.Reconciliation.Core.csproj" />
+    <Project Path="src/Elsa/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation.csproj" />
+  </Folder>
   <Folder Name="/src/Elsa/Workflows/Runtime/Distributed/">
     <Project Path="src/Elsa/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed.csproj" />
   </Folder>
@@ -610,6 +614,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Runtime/Http/">
     <Project Path="tests/Elsa/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Workflows/Runtime/Reconciliation/">
+    <Project Path="tests/Elsa/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Runtime/Distributed/">
     <Project Path="tests/Elsa/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj" />

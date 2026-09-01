@@ -89,7 +89,7 @@ public class WorkflowsPublishingFeature : IShellFeature
         services.TryAddScoped<ActivityResultConversionPlanLinker>();
         services.TryAddScoped<RuntimeInputBindingCompiler>();
         services.TryAddScoped<RuntimeOutputCaptureCompiler>();
-        services.TryAddScoped<WorkflowExecutableHasher>();
+        services.TryAddScoped<Elsa.Workflows.Publishing.Services.WorkflowExecutableHasher>();
         services.TryAddScoped<ActivityTreeProjector>();
         services.TryAddScoped<WorkflowExecutableAuthoredInputsSidecar>();
         services.TryAddScoped<ExecutableNodeCompiler>();

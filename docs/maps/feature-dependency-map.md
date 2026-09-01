@@ -6,10 +6,10 @@ Records CShells feature identity, public feature properties, and dependency evid
 
 ## Summary
 
-- Feature classes: 108
+- Feature classes: 109
 - Concrete features missing explicit ShellFeature ID: 2
 - Duplicate explicit feature IDs: 0
-- Feature-bearing source projects: 96
+- Feature-bearing source projects: 97
 - IConfiguration feature-registration shape observed from: `src/Apps/Elsa.Workbench/appsettings.json`
 
 ## IConfiguration Shape Evidence
@@ -128,6 +128,7 @@ No duplicate explicit feature IDs were discovered.
 | WorkflowsRuntimeHttp | WorkflowsRuntimeHttpFeature | False | Elsa.Workflows.Runtime.Http | AuthorizationHandlerType: string<br>FaultHandlerType: string<br>RouteResolverType: string | code default<br>type-name selection signal | [WorkflowsRuntimeHttpFeature.cs](../../src/Elsa/Workflows/Runtime/Http/WorkflowsRuntimeHttpFeature.cs) |
 | JavaScriptEndpoints | JavaScriptActivitiesEndpointsFeature | False | Elsa.Workflows.Runtime.JavaScript | - | - | [JavaScriptActivitiesEndpointsFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesEndpointsFeature.cs) |
 | JavaScriptActivities | JavaScriptActivitiesFeature | False | Elsa.Workflows.Runtime.JavaScript | - | - | [JavaScriptActivitiesFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesFeature.cs) |
+| - | WorkflowsArtifactReconciliationFeature | True | Elsa.Workflows.Runtime.Reconciliation | Sources: virtual IEnumerable<IWorkflowArtifactReconciliationSource><br>StartupTaskOptions: WorkflowArtifactReconcilerStartupTaskOptions | - | [WorkflowsArtifactReconciliationFeature.cs](../../src/Elsa/Workflows/Runtime/Reconciliation/WorkflowsArtifactReconciliationFeature.cs) |
 | WorkflowsRuntimeReferenceGarbageCollection | WorkflowsRuntimeReferenceGarbageCollectionFeature | False | Elsa.Workflows.Runtime.ReferenceGarbageCollection | ArtifactCreationGracePeriodMinutes: double<br>MaxBackoffIntervalMinutes: double<br>SweepIntervalMinutes: double | code default<br>sensitive or deployment-specific value signal | [WorkflowsRuntimeReferenceGarbageCollectionFeature.cs](../../src/Elsa/Workflows/Runtime/ReferenceGarbageCollection/WorkflowsRuntimeReferenceGarbageCollectionFeature.cs) |
 | WorkflowsRuntimeResumption | WorkflowsRuntimeResumptionFeature | False | Elsa.Workflows.Runtime.Resumption | BacklogBatchSize: int<br>HeartbeatTimeoutMinutes: double<br>LeaseTimeoutMinutes: double<br>MaxBackoffIntervalMinutes: double<br>MaxExecutionsPerSweep: int<br>OutboxBatchSize: int<br>RecoveryScanBatchSize: int<br>SweepIntervalSeconds: double | code default | [WorkflowsRuntimeResumptionFeature.cs](../../src/Elsa/Workflows/Runtime/Resumption/WorkflowsRuntimeResumptionFeature.cs) |
 | WorkflowsRuntimeRecurringTriggers | WorkflowsRuntimeRecurringTriggersFeature | False | Elsa.Workflows.Runtime.Scheduling | MaxBackoffIntervalMinutes: double<br>MaxSchedulesPerTick: int<br>SweepIntervalSeconds: double | code default | [WorkflowsRuntimeRecurringTriggersFeature.cs](../../src/Elsa/Workflows/Runtime/Scheduling/WorkflowsRuntimeRecurringTriggersFeature.cs) |
