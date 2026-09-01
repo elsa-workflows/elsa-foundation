@@ -214,23 +214,26 @@ Consequence for the sunset condition: the first production-provider run can popu
 `performanceVerdict`, because a verdict requires a comparison. Those are separable, and only the first is
 reachable now.
 
-### Correction (2026-08-06): the bounded-read ceiling is not enforced
+### Correction (2026-08-06), resolved 2026-09-01: enforce the bounded-read ceiling
 
 `RatifiedBoundedReadPathP95Milliseconds` (40 ms) is referenced nowhere but its own declaration.
 `GatePolicy.DefaultFor(GateClass.RuntimeHotPath)` applies the 150 ms **durable-write** ceiling to *every*
 runtime workload, including the five bounded-read workloads this document assigns 40 ms. A bounded read
 regressing from 5 ms to 140 ms passes the default gate silently.
 
-Recommended resolution is to **supersede rather than wire**: once per-workload measured ceilings land in
-reviewed policy files, both class constants are dead by design, and making `DefaultFor(GateClass)`
-workload-aware would change its signature and every call site only to enforce a provisional number the
-sunset condition already retires. Recorded here so the gap is not mistaken for a live gate.
+The original recommendation was to supersede rather than wire the provisional value. That left a live
+window in which a bounded read could regress from 5 ms to 140 ms and still pass. Issue #1176 therefore
+made `DefaultFor` workload-aware and applies the already-ratified 40 ms ceiling to the five bounded-read
+workloads. Durable writes retain 150 ms. Reviewed per-workload policies still supersede these class
+ceilings under the existing sunset condition; enforcement now protects the interval before those
+measurements exist.
 
-**Interim, 2026-08-07 (#1176).** Gate behavior is unchanged and the wire-or-supersede choice is still
-open. What landed is documentation plus a pin: the constant's XML doc now states that nothing enforces it,
-and `ProtocolAndGateTests.Ratified_bounded_read_ceiling_is_declared_but_enforced_by_no_construction_path`
-fails if any construction path starts applying it or if the harness references it anywhere but its own
-declaration — so whichever option is chosen, the correction has to be made in the same change.
+**Resolution, 2026-09-01 (#1176).** The CLI derives the default gate class from the exact comparison
+workload and rejects an unreviewed `--class` override; all five declared bounded reads are pinned to
+40 ms, durable writes remain pinned to 150 ms, and reviewed replacements inherit the correct workload
+class when they omit an explicit ceiling. The former
+"enforced by nothing" regression test has been replaced by executable coverage for every bounded-read
+workload.
 
 ## Field evidence for the shape: Tier A's own gate flakes
 

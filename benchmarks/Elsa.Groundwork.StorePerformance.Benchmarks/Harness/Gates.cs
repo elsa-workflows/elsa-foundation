@@ -16,33 +16,56 @@ public sealed record GateReview(string WorkloadId, string WorkloadVersion, strin
 /// </summary>
 public sealed record GatePolicy(GateClass GateClass, double MaxP95Ratio, double MinThroughputRatio, double MaxP99Ratio, GateReview? Review, double? MaxP95Milliseconds = null)
 {
-    /// <summary>Ratified 2026-08-04 for the durable write path. This is the only ceiling any construction
-    /// path applies; see the bounded-read constant below for the one that does not.</summary>
+    private static readonly IReadOnlySet<string> BoundedReadWorkloads = new HashSet<string>(
+        [
+            "bookmark-lookup",
+            "recovery-scan",
+            "due-timer-selection",
+            "recurring-schedule-selection",
+            "trigger-binding-stimulus-lookup"
+        ],
+        StringComparer.Ordinal);
+
+    private static readonly IReadOnlySet<string> RuntimeHotPathWorkloads = new HashSet<string>(
+        BoundedReadWorkloads.Concat(["checkpoint-commit", "queue-drain", "outbox-drain"]),
+        StringComparer.Ordinal);
+
+    /// <summary>Ratified 2026-08-04 for the durable write path.</summary>
     public const double RatifiedDurableWritePathP95Milliseconds = 150d;
 
     /// <summary>
     /// Ratified 2026-08-04 for the five bounded-read runtime workloads — bookmark-lookup, recovery-scan,
-    /// due-timer-selection, recurring-schedule-selection, trigger-binding-stimulus-lookup — and
-    /// <b>enforced by nothing</b>. <see cref="DefaultFor"/> keys on <see cref="GateClass"/>, not on
-    /// workload, so those five carry the 150 ms durable-write ceiling instead: 3.75x looser than ratified.
-    /// A bounded read regressing from 5 ms to 140 ms passes the default gate. Only a reviewed policy file
-    /// naming the value per workload (<see cref="Replacement"/>) enforces it today.
-    /// Whether to wire this or supersede it once measured per-workload ceilings land is an open
-    /// ratification decision — issue #1176, and the "the bounded-read ceiling is not enforced" correction
-    /// in specs/094-harden-groundwork-stores/contracts/runtime-absolute-budget-basis.md. Do not read this
-    /// declaration as a live gate.
+    /// due-timer-selection, recurring-schedule-selection, and trigger-binding-stimulus-lookup. Issue #1176
+    /// made the default policy workload-aware so this is a live catastrophic-regression backstop until a
+    /// reviewed per-workload replacement supersedes it.
     /// </summary>
     public const double RatifiedBoundedReadPathP95Milliseconds = 40d;
 
     /// <summary>
-    /// The runtime hot path carries an absolute ceiling as well as its ratios. Leaving it unset would let a
-    /// workload inside its relative comparison sail past the latency budget the ceiling exists to enforce.
-    /// The ceiling applied is the durable-write one for <i>every</i> runtime workload, bounded reads
-    /// included; this method has no workload argument to distinguish them.
+    /// The runtime hot path carries an absolute ceiling as well as its ratios. The workload identity is
+    /// required because bounded reads and durable writes have separate ratified class ceilings.
     /// </summary>
-    public static GatePolicy DefaultFor(GateClass gateClass) => gateClass == GateClass.RuntimeHotPath
-        ? new(gateClass, 1.10, .90, 2.0, null, RatifiedDurableWritePathP95Milliseconds)
-        : new(gateClass, 1.25, .80, 2.0, null);
+    public static GatePolicy DefaultFor(string workloadId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workloadId);
+        return DefaultFor(
+            RuntimeHotPathWorkloads.Contains(workloadId) ? GateClass.RuntimeHotPath : GateClass.OrdinaryStore,
+            workloadId);
+    }
+
+    public static GatePolicy DefaultFor(GateClass gateClass, string workloadId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workloadId);
+        if (gateClass == GateClass.RuntimeHotPath)
+        {
+            var ceiling = BoundedReadWorkloads.Contains(workloadId)
+                ? RatifiedBoundedReadPathP95Milliseconds
+                : RatifiedDurableWritePathP95Milliseconds;
+            return new(gateClass, 1.10, .90, 2.0, null, ceiling);
+        }
+
+        return new(gateClass, 1.25, .80, 2.0, null);
+    }
 
     public static GatePolicy Replacement(GateClass gateClass, double maxP95Ratio, double minThroughputRatio, double maxP99Ratio, GateReview review, double? maxP95Milliseconds = null)
     {
@@ -51,7 +74,7 @@ public sealed record GatePolicy(GateClass GateClass, double MaxP95Ratio, double 
         if (maxP95Milliseconds is <= 0) throw new PerformanceContractException("An absolute p95 ceiling must be positive when supplied.");
         // A replacement that omits the ceiling inherits the class default rather than silently dropping
         // it; removing a ratified budget must be a deliberate act, not an omission in a policy file.
-        return new GatePolicy(gateClass, maxP95Ratio, minThroughputRatio, maxP99Ratio, review, maxP95Milliseconds ?? DefaultFor(gateClass).MaxP95Milliseconds);
+        return new GatePolicy(gateClass, maxP95Ratio, minThroughputRatio, maxP99Ratio, review, maxP95Milliseconds ?? DefaultFor(gateClass, review.WorkloadId).MaxP95Milliseconds);
     }
 }
 public sealed record ReviewedGateReplacement(int SchemaVersion, string WorkloadId, string WorkloadVersion, GateClass GateClass, double MaxP95Ratio, double MinThroughputRatio, double MaxP99Ratio, GateReview Review, double? MaxP95Milliseconds = null);

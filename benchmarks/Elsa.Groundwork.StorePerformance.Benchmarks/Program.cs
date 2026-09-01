@@ -64,9 +64,19 @@ internal static class BenchmarkCli
         var output = Require(args, "--out");
         var comparison = Comparison.Compare(output, Require(args, "--oracle"), Require(args, "--target"), WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()));
         ResultStore.Write(Option(args, "--comparison-result") ?? Path.Combine(output, "comparison.from-gate.v1.json"), comparison);
-        var requestedClass = string.Equals(Option(args, "--class"), "runtime", StringComparison.OrdinalIgnoreCase) ? GateClass.RuntimeHotPath : GateClass.OrdinaryStore;
+        var requestedClassOption = Option(args, "--class");
+        var defaultPolicy = GatePolicy.DefaultFor(comparison.WorkloadId);
+        var requestedClass = requestedClassOption?.ToLowerInvariant() switch
+        {
+            null => defaultPolicy.GateClass,
+            "runtime" => GateClass.RuntimeHotPath,
+            "ordinary" => GateClass.OrdinaryStore,
+            _ => throw new PerformanceContractException("gate --class must be runtime or ordinary.")
+        };
         var replacement = Option(args, "--replacement");
-        var policy = !comparison.Complete || !comparison.CorrectnessEqual || replacement is null ? GatePolicy.DefaultFor(requestedClass) : GatePolicyFile.Load(replacement, comparison.WorkloadId, comparison.WorkloadVersion);
+        if (replacement is null && requestedClass != defaultPolicy.GateClass)
+            return Fail($"Workload '{comparison.WorkloadId}' requires gate class '{defaultPolicy.GateClass}'; an unreviewed --class override is not permitted.");
+        var policy = !comparison.Complete || !comparison.CorrectnessEqual || replacement is null ? defaultPolicy : GatePolicyFile.Load(replacement, comparison.WorkloadId, comparison.WorkloadVersion);
         if (replacement is not null && policy.GateClass != requestedClass && Option(args, "--class") is not null) return Fail("The reviewed replacement gate class does not match --class.");
         var verdict = GateEvaluator.Evaluate(policy, comparison);
         var result = ResultStore.Write(Option(args, "--result") ?? Path.Combine(output, "gate.v1.json"), new GateReport(verdict, replacement is null || !comparison.Complete || !comparison.CorrectnessEqual ? null : GatePolicyFile.Hash(replacement)));

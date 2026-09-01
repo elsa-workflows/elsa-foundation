@@ -152,7 +152,7 @@ public sealed class ComparisonIntegrityTests
         fixture.Bind();
 
         var comparison = fixture.Compare();
-        var gate = GateEvaluator.Evaluate(GatePolicy.DefaultFor(GateClass.OrdinaryStore), comparison);
+        var gate = GateEvaluator.Evaluate(GatePolicy.DefaultFor(GateClass.OrdinaryStore, comparison.WorkloadId), comparison);
 
         Assert.False(comparison.Complete);
         Assert.Equal(PerformanceVerdict.Blocked, gate.Verdict);
@@ -167,7 +167,7 @@ public sealed class ComparisonIntegrityTests
         fixture.Bind();
 
         var comparison = fixture.Compare();
-        var gate = GateEvaluator.Evaluate(GatePolicy.DefaultFor(GateClass.OrdinaryStore), comparison);
+        var gate = GateEvaluator.Evaluate(GatePolicy.DefaultFor(GateClass.OrdinaryStore, comparison.WorkloadId), comparison);
 
         Assert.False(comparison.Complete);
         Assert.Contains(ReproducibleWorkloadScenarioCatalog.BlockedReasonCode, comparison.BlockReason);
@@ -457,12 +457,48 @@ public sealed class ComparisonIntegrityTests
         fixture.WriteTarget("groundwork", "store", operations: ["read"]);
         fixture.Bind();
 
-        var verdict = GateEvaluator.Evaluate(GatePolicy.DefaultFor(GateClass.OrdinaryStore), fixture.Compare());
+        var comparison = fixture.Compare();
+        var verdict = GateEvaluator.Evaluate(GatePolicy.DefaultFor(GateClass.OrdinaryStore, comparison.WorkloadId), comparison);
 
         var row = Assert.Single(verdict.Rows);
         Assert.True(double.IsFinite(row.P50Ratio));
         Assert.True(double.IsFinite(row.P95RatioCi.Low));
         Assert.True(double.IsFinite(row.P99RatioCi.High));
+    }
+
+    [Fact]
+    public void Bounded_read_absolute_ceiling_rejects_a_ratio_neutral_140_millisecond_regression()
+    {
+        static OperationSample At140Milliseconds(OperationSample operation)
+        {
+            var latencies = Enumerable.Repeat(140d, operation.RawLatenciesMilliseconds.Count).ToArray();
+            return operation with
+            {
+                P50Milliseconds = 140d,
+                P95Milliseconds = 140d,
+                P99Milliseconds = 140d,
+                RawLatenciesMilliseconds = latencies
+            };
+        }
+
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ["read"], transform: At140Milliseconds);
+        fixture.WriteTarget("groundwork", "store", operations: ["read"], transform: At140Milliseconds);
+        fixture.Bind();
+
+        var comparison = fixture.Compare();
+        var verdict = GateEvaluator.Evaluate(
+            GatePolicy.DefaultFor(GateClass.RuntimeHotPath, comparison.WorkloadId),
+            comparison);
+
+        Assert.True(comparison.Complete);
+        Assert.True(comparison.CorrectnessEqual);
+        Assert.Equal(PerformanceVerdict.Redesign, verdict.Verdict);
+        var row = Assert.Single(verdict.Rows);
+        Assert.Equal(1d, row.P95Ratio);
+        Assert.Equal(GatePolicy.RatifiedBoundedReadPathP95Milliseconds, row.MaxP95Milliseconds);
+        Assert.Equal(140d, row.P95Milliseconds);
+        Assert.False(row.Pass);
     }
 
     [Fact]
