@@ -13,7 +13,7 @@ namespace Elsa.Diagnostics.Persistence.Tests;
 
 public sealed partial class DiagnosticsPersistenceArchitectureTests
 {
-    private const string CurrentGroundworkVersion = "0.4.0-preview.2";
+    private const string CurrentGroundworkVersion = "0.4.0-preview.3";
     private const string DiagnosticsLedgerGroundworkVersion = "0.4.0-preview.1";
     private static string RepoRoot { get; } = FindRepoRoot();
     private static readonly string DiagnosticsSourceRoot = Path.Combine(RepoRoot, "src", "Elsa", "Diagnostics");

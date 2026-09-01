@@ -2,7 +2,7 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
-    <PackageReference Include="Groundwork.Testing" VersionOverride="0.4.0-preview.2" />
+    <PackageReference Include="Groundwork.Testing" VersionOverride="0.4.0-preview.3" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
