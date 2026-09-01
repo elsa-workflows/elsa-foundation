@@ -241,6 +241,9 @@ public static class ArtifactSafety
     private static readonly Regex SensitiveContent = new("(?i)(password|pwd|connection\\s*string|account[_-]?key|access[_-]?key|server|host|endpoint|data[ _-]?source|database|initial[ _-]?catalog|port|user[ _-]?id|uid)\\s*[:=](?!\\s*[@$:?])\\s*|authorization\\s*:\\s*bearer\\s+\\S+", RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private static readonly Regex Sha1 = new("^[0-9a-f]{40}$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private static readonly Regex Sha256 = new("^[0-9a-f]{64}$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    // Provider projections use stable snake_case field names (for example, min_pool_size). Keep this
+    // distinct from connection-name rejection below: underscores are safe metadata syntax, while keys
+    // naming hosts, databases, or credentials remain forbidden.
     private static readonly Regex Identifier = new("^[A-Za-z0-9._-]+$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private static readonly Regex PackageVersion = new("^[0-9A-Za-z][0-9A-Za-z.+-]*$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private static readonly Regex SafeSeed = new("^[A-Za-z0-9._:-]+$", RegexOptions.CultureInvariant | RegexOptions.Compiled);

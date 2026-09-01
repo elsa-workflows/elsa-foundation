@@ -1,4 +1,6 @@
 using System.Data.Common;
+using System.Security.Cryptography;
+using System.Text;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Groundwork.Store;
 using Microsoft.Data.SqlClient;
@@ -65,12 +67,21 @@ internal static class ProviderProbe
 
     internal static string MongoTopology(BsonDocument hello)
     {
-        if (hello.TryGetValue("setName", out var setName) &&
+        var sessions = hello.TryGetValue("logicalSessionTimeoutMinutes", out var timeout) &&
+            timeout.BsonType is BsonType.Int32 or BsonType.Int64 && timeout.ToInt64() > 0;
+        var writable = hello.TryGetValue("isWritablePrimary", out var primary) &&
+            primary.BsonType == BsonType.Boolean && primary.AsBoolean;
+        var wireVersion = hello.TryGetValue("maxWireVersion", out var wire) &&
+            wire.BsonType is BsonType.Int32 or BsonType.Int64 ? wire.ToInt64() : -1;
+
+        if (sessions && writable && wireVersion >= 7 &&
+            hello.TryGetValue("setName", out var setName) &&
             setName.BsonType == BsonType.String &&
             !string.IsNullOrWhiteSpace(setName.AsString))
             return "transaction-capable-replica-set";
 
-        if (hello.TryGetValue("msg", out var message) &&
+        if (sessions && writable && wireVersion >= 8 &&
+            hello.TryGetValue("msg", out var message) &&
             message.BsonType == BsonType.String &&
             string.Equals(message.AsString, "isdbgrid", StringComparison.Ordinal))
             return "transaction-capable-sharded-cluster";
@@ -103,7 +114,8 @@ internal static class ProviderProbe
                 ["cache"] = settings.Cache.ToString(),
                 ["pooling"] = settings.Pooling.ToString(),
                 ["journal_mode"] = journalMode,
-                ["synchronous"] = synchronous
+                ["synchronous"] = synchronous,
+                ["options_digest"] = ConnectionOptionsDigest(settings.ConnectionString)
             });
     }
 
@@ -117,6 +129,9 @@ internal static class ProviderProbe
         await connection.OpenAsync(cancellationToken);
         var version = await ScalarAsync(connection, "SHOW server_version;", cancellationToken);
 
+        // The wire handshake establishes product/version only. Require the independently captured
+        // launcher attestation before emitting the stronger frozen container topology label.
+        var containerDigest = RequireContainerAttestation("postgresql");
         return new Result(
             "postgresql",
             connectionType,
@@ -124,9 +139,19 @@ internal static class ProviderProbe
             "real-postgresql-container",
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
+                ["container_image_digest"] = containerDigest,
                 ["pooling"] = settings.Pooling.ToString(),
                 ["multiplexing"] = settings.Multiplexing.ToString(),
-                ["ssl_mode"] = settings.SslMode.ToString()
+                ["ssl_mode"] = settings.SslMode.ToString(),
+                ["min_pool_size"] = settings.MinPoolSize.ToString(),
+                ["max_pool_size"] = settings.MaxPoolSize.ToString(),
+                ["timeout"] = settings.Timeout.ToString(),
+                ["command_timeout"] = settings.CommandTimeout.ToString(),
+                ["idle_lifetime"] = settings.ConnectionIdleLifetime.ToString(),
+                ["pruning_interval"] = settings.ConnectionPruningInterval.ToString(),
+                ["keep_alive"] = settings.KeepAlive.ToString(),
+                ["no_reset_on_close"] = settings.NoResetOnClose.ToString(),
+                ["options_digest"] = ConnectionOptionsDigest(settings.ConnectionString)
             });
     }
 
@@ -143,6 +168,9 @@ internal static class ProviderProbe
             "SELECT CONVERT(varchar(128), SERVERPROPERTY('ProductVersion'));",
             cancellationToken);
 
+        // The wire handshake establishes product/version only. Require the independently captured
+        // launcher attestation before emitting the stronger frozen container topology label.
+        var containerDigest = RequireContainerAttestation("sqlserver");
         return new Result(
             "sqlserver",
             connectionType,
@@ -150,10 +178,17 @@ internal static class ProviderProbe
             "real-sqlserver-container",
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
+                ["container_image_digest"] = containerDigest,
                 ["pooling"] = settings.Pooling.ToString(),
                 ["encrypt"] = settings.Encrypt.ToString(),
-                ["trust_server_certificate"] = settings.TrustServerCertificate.ToString(),
-                ["multiple_active_result_sets"] = settings.MultipleActiveResultSets.ToString()
+                ["trust_certificate"] = settings.TrustServerCertificate.ToString(),
+                ["multiple_active_result_sets"] = settings.MultipleActiveResultSets.ToString(),
+                ["min_pool_size"] = settings.MinPoolSize.ToString(),
+                ["max_pool_size"] = settings.MaxPoolSize.ToString(),
+                ["connect_timeout"] = settings.ConnectTimeout.ToString(),
+                ["load_balance_timeout"] = settings.LoadBalanceTimeout.ToString(),
+                ["packet_size"] = settings.PacketSize.ToString(),
+                ["options_digest"] = ConnectionOptionsDigest(settings.ConnectionString)
             });
     }
 
@@ -185,14 +220,78 @@ internal static class ProviderProbe
                 ["retry_reads"] = settings.RetryReads.ToString(),
                 ["retry_writes"] = settings.RetryWrites.ToString(),
                 ["direct_connection"] = settings.DirectConnection.ToString(),
-                ["load_balanced"] = settings.LoadBalanced.ToString()
+                ["load_balanced"] = settings.LoadBalanced.ToString(),
+                ["max_pool_size"] = settings.MaxConnectionPoolSize.ToString(),
+                ["min_pool_size"] = settings.MinConnectionPoolSize.ToString(),
+                ["wait_queue_timeout"] = settings.WaitQueueTimeout.ToString(),
+                ["connect_timeout"] = settings.ConnectTimeout.ToString(),
+                ["selection_timeout"] = settings.ServerSelectionTimeout.ToString(),
+                ["socket_timeout"] = settings.SocketTimeout.ToString(),
+                ["heartbeat_interval"] = settings.HeartbeatInterval.ToString(),
+                ["heartbeat_timeout"] = settings.HeartbeatTimeout.ToString(),
+                ["use_tls"] = settings.UseTls.ToString(),
+                ["tls_insecure"] = settings.AllowInsecureTls.ToString(),
+                ["read_concern"] = settings.ReadConcern?.Level.ToString() ?? "default",
+                ["read_preference"] = settings.ReadPreference?.ReadPreferenceMode.ToString() ?? "default",
+                ["write_concern"] = settings.WriteConcern?.W.ToString() ?? "default",
+                ["write_concern_timeout"] = settings.WriteConcern?.WTimeout.ToString() ?? "default",
+                ["options_digest"] = ConnectionOptionsDigest(connectionString)
             });
     }
 
     private static bool IsMemory(SqliteConnectionStringBuilder settings) =>
         settings.Mode == SqliteOpenMode.Memory ||
         string.Equals(settings.DataSource, ":memory:", StringComparison.OrdinalIgnoreCase) ||
-        settings.DataSource.StartsWith("file::memory:", StringComparison.OrdinalIgnoreCase);
+        settings.DataSource.StartsWith("file::memory:", StringComparison.OrdinalIgnoreCase) ||
+        IsMemoryUri(settings.DataSource);
+
+    private static bool IsMemoryUri(string dataSource)
+    {
+        if (string.IsNullOrWhiteSpace(dataSource))
+            return false;
+
+        var queryStart = dataSource.IndexOf('?', StringComparison.Ordinal);
+        if (queryStart < 0)
+            return false;
+
+        var query = Uri.UnescapeDataString(dataSource[(queryStart + 1)..]);
+        return query
+            .Split(['&', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(part => part.Split('=', 2, StringSplitOptions.TrimEntries))
+            .Any(pair => pair.Length == 2 &&
+                         string.Equals(Uri.UnescapeDataString(pair[0]).Trim(), "mode", StringComparison.OrdinalIgnoreCase) &&
+                         string.Equals(Uri.UnescapeDataString(pair[1]).Trim(), "memory", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string RequireContainerAttestation(string provider)
+    {
+        return ValidateContainerAttestation(provider, Environment.GetEnvironmentVariable(AttestationVariable(provider)));
+    }
+
+    internal static string ValidateContainerAttestation(string provider, string? value)
+    {
+        var variable = AttestationVariable(provider);
+        if (value is null ||
+            !value.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) ||
+            value.Length != "sha256:".Length + 64 ||
+            value["sha256:".Length..].Any(character => !Uri.IsHexDigit(character)))
+            throw new PerformanceContractException(
+                $"Provider '{provider}' requires launcher-bound container attestation in {variable} " +
+                "using the form sha256:<64-hex-digest>.");
+
+        return value.ToLowerInvariant();
+    }
+
+    private static string AttestationVariable(string provider) => provider switch
+    {
+        "postgresql" => "ELSA_BENCH_POSTGRES_CONTAINER_ATTESTATION",
+        "sqlserver" => "ELSA_BENCH_SQLSERVER_CONTAINER_ATTESTATION",
+        _ => throw new PerformanceContractException($"Provider '{provider}' does not support container attestation.")
+    };
+
+    internal static string ConnectionOptionsDigest(string canonicalConnectionString) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonicalConnectionString.Trim())))
+            .ToLowerInvariant();
 
     private static async Task<string> ScalarAsync(
         DbConnection connection,

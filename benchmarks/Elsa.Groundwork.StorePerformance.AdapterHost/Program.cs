@@ -45,6 +45,10 @@ static async Task<int> CapturePlan(string[] args)
 {
     var request = RunRequestWire.Parse(HostArguments.Require(args, "capture-plan", "--request"));
     var outputDirectory = HostArguments.Require(args, "capture-plan", "--out");
+    // Admission is deliberately before connection lookup/probing and before staging can create a file.
+    // Requests are untrusted JSON: ArtifactAdmission also runs ArtifactSafety.ValidateRequest, which
+    // rejects malformed metadata, connection material, and unsafe evidence references at this boundary.
+    CapturePlanAdmission.Ensure(request);
     var connectionString = ProviderConnections.RequireConnectionString(request.Provider);
     var observed = await ProviderProbe.ReadAsync(request.Provider, connectionString);
     var reference = NativePlanEvidenceStaging.ReferenceFor(request.WorkloadId, request.Provider);
