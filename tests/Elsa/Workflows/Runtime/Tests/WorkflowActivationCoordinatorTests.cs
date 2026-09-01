@@ -316,6 +316,53 @@ public sealed class WorkflowActivationCoordinatorTests
     }
 
     [Fact]
+    public async Task Cancellation_after_predecessor_reference_retirement_restores_the_predecessor_reference()
+    {
+        var harness = new Harness();
+        var incumbent = await harness.ActivateAsync("incumbent", "artifact-1");
+        using var cancellation = new CancellationTokenSource();
+        harness.References.CancelAfterRetire = cancellation;
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await harness.Coordinator.ActivateAsync(
+                harness.Command("candidate", "artifact-2", expectedRevision: incumbent.Slot.Revision), cancellation.Token));
+
+        Assert.Equal("incumbent", (await harness.Authority.FindAsync("definition-1", "default"))!.ActiveActivationId);
+        Assert.Single(await harness.BindingsForAsync("incumbent"));
+        Assert.Empty(await harness.BindingsForAsync("candidate"));
+        Assert.Null((await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("incumbent")))!.DeletedAt);
+        Assert.Equal(
+            WorkflowActivationCoordinator.FailedRetireReason,
+            (await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("candidate")))!.DeletedReason);
+    }
+
+    [Fact]
+    public async Task Cancellation_after_predecessor_reference_retirement_does_not_overwrite_a_superseding_reference()
+    {
+        var harness = new Harness();
+        var incumbent = await harness.ActivateAsync("incumbent", "artifact-1");
+        var predecessor = await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("incumbent"));
+        using var cancellation = new CancellationTokenSource();
+        harness.References.ReplaceAfterRetire = predecessor! with
+        {
+            ArtifactId = "artifact-newer",
+            ActivationId = "newer",
+            DeletedAt = null,
+            DeletedReason = null
+        };
+        harness.References.CancelAfterRetire = cancellation;
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await harness.Coordinator.ActivateAsync(
+                harness.Command("candidate", "artifact-2", expectedRevision: incumbent.Slot.Revision), cancellation.Token));
+
+        var current = await harness.References.FindAsync(WorkflowActivationReferenceIdentity.Create("incumbent"));
+        Assert.Equal("artifact-newer", current!.ArtifactId);
+        Assert.Equal("newer", current.ActivationId);
+        Assert.Null(current.DeletedAt);
+    }
+
+    [Fact]
     public async Task Cancellation_after_deactivation_slot_flip_restores_authority_and_projection()
     {
         var harness = new Harness();
@@ -596,6 +643,8 @@ public sealed class WorkflowActivationCoordinatorTests
     {
         public bool ThrowOnRetire { get; set; }
         public CancellationTokenSource? CancelAfterSave { get; set; }
+        public CancellationTokenSource? CancelAfterRetire { get; set; }
+        public WorkflowExecutableSourceReference? ReplaceAfterRetire { get; set; }
 
         public async ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default)
         {
@@ -614,12 +663,24 @@ public sealed class WorkflowActivationCoordinatorTests
         public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(WorkflowExecutableSourceReferencePageQuery query, CancellationToken cancellationToken = default) => inner.ListPageAsync(query, cancellationToken);
         public ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(WorkflowExecutableArtifactCandidateBatch candidates, DateTimeOffset now, CancellationToken cancellationToken = default) => inner.ListUnreferencedArtifactIdsAsync(candidates, now, cancellationToken);
 
-        public ValueTask<bool> RetireAsync(string sourceReferenceId, DateTimeOffset deletedAt, string? reason = null, CancellationToken cancellationToken = default)
+        public async ValueTask<bool> RetireAsync(string sourceReferenceId, DateTimeOffset deletedAt, string? reason = null, CancellationToken cancellationToken = default)
         {
             calls.Add("reference:retire");
             if (ThrowOnRetire && reason == WorkflowActivationCoordinator.ReplacedRetireReason)
                 throw new InvalidOperationException("predecessor retirement failed");
-            return inner.RetireAsync(sourceReferenceId, deletedAt, reason, cancellationToken);
+            var retired = await inner.RetireAsync(sourceReferenceId, deletedAt, reason, cancellationToken);
+            if (ReplaceAfterRetire is { } replacement)
+            {
+                ReplaceAfterRetire = null;
+                await inner.SaveAsync(replacement, cancellationToken);
+            }
+            if (CancelAfterRetire is { } source)
+            {
+                CancelAfterRetire = null;
+                source.Cancel();
+                throw new OperationCanceledException(cancellationToken);
+            }
+            return retired;
         }
 
         public ValueTask<bool> DeleteAsync(string sourceReferenceId, CancellationToken cancellationToken = default) => inner.DeleteAsync(sourceReferenceId, cancellationToken);

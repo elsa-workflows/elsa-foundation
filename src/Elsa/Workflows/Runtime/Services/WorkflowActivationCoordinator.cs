@@ -347,19 +347,54 @@ public sealed class WorkflowActivationCoordinator(
             return await FailAsync(command, reference, transition, WorkflowActivationStep.TriggerObserverNotification, exception);
         }
 
+        WorkflowExecutableSourceReference? predecessorReference = null;
+        if (transition.ReplacedActivationId is { } replacedActivationId &&
+            !StringComparer.Ordinal.Equals(replacedActivationId, command.ActivationId))
+        {
+            try
+            {
+                // Capture the live predecessor before its retirement. The read is intentionally uncancelled so a
+                // cancellation at this boundary can still distinguish an unattempted retirement from an ambiguous
+                // one and compensation can avoid restoring a superseding writer's reference.
+                predecessorReference = await sourceReferenceStore.FindAsync(
+                    WorkflowActivationReferenceIdentity.Create(replacedActivationId),
+                    CancellationToken.None);
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                await CompensateAsync(command, reference, transition);
+                throw;
+            }
+            catch (Exception exception) when (NotRequestedCancellation(exception, CancellationToken.None))
+            {
+                return await FailAsync(command, reference, transition, WorkflowActivationStep.PredecessorReferenceRetirement, exception);
+            }
+        }
+
+        var predecessorReferenceRetirementAttempted = false;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
+            predecessorReferenceRetirementAttempted = predecessorReference is not null;
             await RetirePredecessorReferenceAsync(command, transition.ReplacedActivationId, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            await CompensateAsync(command, reference, transition);
+            await CompensateAsync(command, reference, transition, predecessorReference, predecessorReferenceRetirementAttempted);
             throw;
         }
         catch (Exception exception) when (NotRequestedCancellation(exception, cancellationToken))
         {
-            return await FailAsync(command, reference, transition, WorkflowActivationStep.PredecessorReferenceRetirement, exception);
+            return await FailAsync(
+                command,
+                reference,
+                transition,
+                WorkflowActivationStep.PredecessorReferenceRetirement,
+                exception,
+                predecessorReference,
+                predecessorReferenceRetirementAttempted);
         }
 
         return new(true, WorkflowActivationOutcome.Activated, transition.Slot, reference, transition.ReplacedActivationId);
@@ -421,7 +456,9 @@ public sealed class WorkflowActivationCoordinator(
         WorkflowExecutableSourceReference reference,
         WorkflowActivationTransition? activatedSlot,
         WorkflowActivationStep failedStep,
-        Exception failure)
+        Exception failure,
+        WorkflowExecutableSourceReference? predecessorReference = null,
+        bool predecessorReferenceRetirementAttempted = false)
     {
         logger?.LogWarning(
             failure,
@@ -431,7 +468,12 @@ public sealed class WorkflowActivationCoordinator(
             command.SlotName,
             failedStep);
 
-        var compensationFailure = await CompensateAsync(command, reference, activatedSlot);
+        var compensationFailure = await CompensateAsync(
+            command,
+            reference,
+            activatedSlot,
+            predecessorReference,
+            predecessorReferenceRetirementAttempted);
         return new(
             false,
             WorkflowActivationOutcome.Failed,
@@ -501,7 +543,9 @@ public sealed class WorkflowActivationCoordinator(
     private async ValueTask<string?> CompensateAsync(
         WorkflowActivationCommand command,
         WorkflowExecutableSourceReference reference,
-        WorkflowActivationTransition? activatedSlot)
+        WorkflowActivationTransition? activatedSlot,
+        WorkflowExecutableSourceReference? predecessorReference = null,
+        bool predecessorReferenceRetirementAttempted = false)
     {
         var failures = new List<string>();
         var flipped = activatedSlot is { Succeeded: true };
@@ -513,6 +557,11 @@ public sealed class WorkflowActivationCoordinator(
 
         await CaptureAsync(failures, "Candidate projection compensation", () => RemoveProjectionsAsync(command.ActivationId, CancellationToken.None));
         await CaptureAsync(failures, "Reference compensation", () => RetireFailedReferenceAsync(command, reference));
+        if (predecessorReferenceRetirementAttempted)
+            await CaptureAsync(
+                failures,
+                "Predecessor reference compensation",
+                () => RestorePredecessorReferenceAsync(predecessorReference));
         if (flipped)
             await CaptureAsync(
                 failures,
@@ -520,6 +569,47 @@ public sealed class WorkflowActivationCoordinator(
                 () => NotifyTriggerObserversAsync(activatedSlot!.ReplacedActivationId ?? command.ActivationId, command.Executable.Identity.ArtifactId, CancellationToken.None));
         return failures.Count == 0 ? null : string.Join(" ", failures);
     }
+
+    private async ValueTask RestorePredecessorReferenceAsync(WorkflowExecutableSourceReference? predecessorReference)
+    {
+        // A predecessor that was already retired before this sequence must remain retired. Likewise, do not create a
+        // missing reference or overwrite a live/different record that another writer may have installed meanwhile.
+        if (predecessorReference is not { DeletedAt: null })
+            return;
+
+        var current = await sourceReferenceStore.FindAsync(predecessorReference.SourceReferenceId, CancellationToken.None);
+        if (current is not { DeletedAt: not null } ||
+            !StringComparer.Ordinal.Equals(current.DeletedReason, ReplacedRetireReason) ||
+            !IsSameReference(current, predecessorReference))
+            return;
+
+        // Source-reference creation is deliberately create-only in the v2 adapter. DeleteAsync rechecks the row
+        // with its provider CAS before removing the retirement, so a superseding writer wins instead of being
+        // overwritten by this compensation. SaveAsync then recreates the captured live reference with no caller
+        // cancellation token; if a writer fills the key between those operations, create-only save refuses it.
+        if (!await sourceReferenceStore.DeleteAsync(predecessorReference.SourceReferenceId, CancellationToken.None))
+            return;
+        await sourceReferenceStore.SaveAsync(predecessorReference, CancellationToken.None);
+    }
+
+    private static bool IsSameReference(
+        WorkflowExecutableSourceReference current,
+        WorkflowExecutableSourceReference captured) =>
+        StringComparer.Ordinal.Equals(current.SourceReferenceId, captured.SourceReferenceId) &&
+        StringComparer.Ordinal.Equals(current.ArtifactId, captured.ArtifactId) &&
+        StringComparer.Ordinal.Equals(current.SourceKind, captured.SourceKind) &&
+        StringComparer.Ordinal.Equals(current.SourceId, captured.SourceId) &&
+        StringComparer.Ordinal.Equals(current.SourceVersion, captured.SourceVersion) &&
+        StringComparer.Ordinal.Equals(current.DefinitionId, captured.DefinitionId) &&
+        StringComparer.Ordinal.Equals(current.DefinitionVersionId, captured.DefinitionVersionId) &&
+        StringComparer.Ordinal.Equals(current.ArtifactVersion, captured.ArtifactVersion) &&
+        current.CreatedAt == captured.CreatedAt &&
+        current.PublishedAt == captured.PublishedAt &&
+        current.Scope == captured.Scope &&
+        current.ExpiresAt == captured.ExpiresAt &&
+        StringComparer.Ordinal.Equals(current.ActivationId, captured.ActivationId) &&
+        StringComparer.Ordinal.Equals(current.SlotId, captured.SlotId) &&
+        StringComparer.Ordinal.Equals(current.TenantId, captured.TenantId);
 
     private async ValueTask<WorkflowActivationTransition?> InferActivationTransitionAfterCancellationAsync(
         WorkflowActivationCommand command,
