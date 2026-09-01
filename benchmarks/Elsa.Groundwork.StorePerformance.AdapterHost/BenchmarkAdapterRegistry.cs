@@ -34,6 +34,8 @@ internal static class BenchmarkAdapterRegistry
                 new TriggerBindingStimulusLookupAdapter(request, connectionString, outputDirectory),
             { WorkloadId: RuntimeRecurringScheduleSelectionWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: GroundworkV2Adapter, PhysicalForm: RecurringScheduleSelectionAdapter.PhysicalForm } =>
                 new RecurringScheduleSelectionAdapter(request, connectionString, outputDirectory),
+            { WorkloadId: IamNormalizedLookupWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: GroundworkV2Adapter, PhysicalForm: IamNormalizedLookupAdapter.PhysicalForm } =>
+                new IamNormalizedLookupAdapter(request, connectionString, outputDirectory),
             { WorkloadId: DistributedPlacementTakeoverWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: GroundworkV2Adapter, PhysicalForm: DistributedPlacementTakeoverAdapter.PhysicalForm } =>
                 new DistributedPlacementTakeoverAdapter(request, connectionString, outputDirectory),
             _ => throw new PerformanceContractException(

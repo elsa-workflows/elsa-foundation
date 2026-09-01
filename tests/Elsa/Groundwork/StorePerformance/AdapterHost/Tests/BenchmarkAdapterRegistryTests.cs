@@ -74,6 +74,19 @@ public sealed class BenchmarkAdapterRegistryTests
     }
 
     [Fact]
+    public async Task Dispatches_iam_normalized_lookup_update_to_its_exact_groundwork_physical_form()
+    {
+        await using var adapter = BenchmarkAdapterRegistry.Create(
+            Request("iam-normalized-lookup-update", IamNormalizedLookupAdapter.PhysicalForm),
+            "unused",
+            "unused");
+
+        Assert.IsType<IamNormalizedLookupAdapter>(adapter);
+        var workload = WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()).Workloads["iam-normalized-lookup-update"];
+        Assert.Contains(IamNormalizedLookupAdapter.PhysicalForm, workload.PhysicalFormsFor646);
+    }
+
+    [Fact]
     public async Task Queue_drain_operations_are_not_admitted_before_correctness_preparation()
     {
         await using var adapter = BenchmarkAdapterRegistry.Create(
@@ -119,6 +132,51 @@ public sealed class BenchmarkAdapterRegistryTests
         var exception = Assert.Throws<PerformanceContractException>(() => adapter.Operations);
 
         Assert.Contains("before correctness preparation", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Iam_normalized_lookup_update_operations_are_not_admitted_before_correctness_preparation()
+    {
+        await using var adapter = BenchmarkAdapterRegistry.Create(
+            Request("iam-normalized-lookup-update", IamNormalizedLookupAdapter.PhysicalForm),
+            "unused",
+            "unused");
+
+        var exception = Assert.Throws<PerformanceContractException>(() => adapter.Operations);
+
+        Assert.Contains("before correctness preparation", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Gives_each_iam_matrix_process_a_distinct_deterministic_persistence_scope()
+    {
+        await using var warmup = (IamNormalizedLookupAdapter)BenchmarkAdapterRegistry.Create(
+            Request("iam-normalized-lookup-update", IamNormalizedLookupAdapter.PhysicalForm) with
+            {
+                ProcessKind = ProcessKind.Warmup,
+                ProcessIndex = 0
+            },
+            "unused",
+            "unused");
+        await using var measured = (IamNormalizedLookupAdapter)BenchmarkAdapterRegistry.Create(
+            Request("iam-normalized-lookup-update", IamNormalizedLookupAdapter.PhysicalForm) with
+            {
+                ProcessKind = ProcessKind.Measured,
+                ProcessIndex = 1
+            },
+            "unused",
+            "unused");
+        await using var measuredRetry = (IamNormalizedLookupAdapter)BenchmarkAdapterRegistry.Create(
+            Request("iam-normalized-lookup-update", IamNormalizedLookupAdapter.PhysicalForm) with
+            {
+                ProcessKind = ProcessKind.Measured,
+                ProcessIndex = 1
+            },
+            "unused",
+            "unused");
+
+        Assert.NotEqual(warmup.PersistenceScope, measured.PersistenceScope);
+        Assert.Equal(measured.PersistenceScope, measuredRetry.PersistenceScope);
     }
 
     [Fact]
@@ -196,6 +254,9 @@ public sealed class BenchmarkAdapterRegistryTests
     [InlineData("recurring-schedule-selection", "shared-documents-with-linked-index-tables", "groundwork-v2")]
     [InlineData("recurring-schedule-selection", "dedicated-recurring-schedule-documents", "other-adapter")]
     [InlineData("recurring-schedule-selection", "dedicated-recurring-schedule-documents", "groundwork-v2", "9.9.9")]
+    [InlineData("iam-normalized-lookup-update", "shared-documents-with-linked-index-tables", "groundwork-v2")]
+    [InlineData("iam-normalized-lookup-update", "entity-type-specific-physical-tables-current-identity-shape", "other-adapter")]
+    [InlineData("iam-normalized-lookup-update", "entity-type-specific-physical-tables-current-identity-shape", "groundwork-v2", "9.9.9")]
     [InlineData("placement-takeover", "shared-documents-with-linked-index-tables", "groundwork-v2")]
     [InlineData("placement-takeover", "dedicated-placement-lease-documents", "other-adapter")]
     [InlineData("placement-takeover", "dedicated-placement-lease-documents", "groundwork-v2", "9.9.9")]

@@ -1,5 +1,7 @@
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
@@ -9,6 +11,7 @@ using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
 using Groundwork.Kernel;
 using Groundwork.Store;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Groundwork.StorePerformance.AdapterHost;
@@ -60,7 +63,8 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
         CancellationToken cancellationToken,
         WritePathRoundTripObserver? observer = null,
         IStorageProviderConnection? existingConnection = null,
-        bool includeDistributedRuntimeStores = false)
+        bool includeDistributedRuntimeStores = false,
+        bool includeGroundworkIdentityStores = false)
     {
         observer ??= new WritePathRoundTripObserver(providerName);
         var ownsConnection = existingConnection is null;
@@ -85,6 +89,9 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
             // default scope cannot commit the workload's tenant-stamped states at all. Verified against a
             // live provider, not inferred: the first correctness run failed exactly there.
             services.AddPersistenceCore(persistenceScope);
+
+            if (includeGroundworkIdentityStores)
+                services.AddFoundationAspNetCoreIdentityGroundwork();
 
             // The observer GroundworkStorageSessionSource resolves and forwards to every session and unit
             // of work it opens. Singleton because the harness snapshots one cumulative count for the
@@ -234,6 +241,17 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
             services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>());
     }
 
+    /// <summary>Mints the public ASP.NET Core Identity managers over the Groundwork-backed stores.</summary>
+    public RuntimeIdentityClient CreateIdentityClient()
+    {
+        var scope = provider.CreateAsyncScope();
+        scopes.Add(scope);
+        var services = scope.ServiceProvider;
+        return new RuntimeIdentityClient(
+            services.GetRequiredService<UserManager<AspNetCoreIdentityUser>>(),
+            services.GetRequiredService<RoleManager<IdentityRole>>());
+    }
+
     public async ValueTask DisposeAsync()
     {
         foreach (var scope in scopes)
@@ -275,3 +293,8 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
         }
     }
 }
+
+/// <summary>Public ASP.NET Core Identity manager contracts composed over the adapter's Groundwork stores.</summary>
+internal sealed record RuntimeIdentityClient(
+    UserManager<AspNetCoreIdentityUser> Users,
+    RoleManager<IdentityRole> Roles);

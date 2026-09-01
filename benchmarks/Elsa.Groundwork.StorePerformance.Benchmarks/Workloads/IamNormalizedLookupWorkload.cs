@@ -114,6 +114,133 @@ public sealed class IamNormalizedLookupWorkload
         return new IamNormalizedLookupResult(ComputeInputFingerprint(), digest, operations, observableResults);
     }
 
+    /// <summary>
+    /// Prepares the seven bounded Identity operations that remain after canonical fixture creation. The
+    /// canonical user, role, and relationship are established by the correctness phase; each returned
+    /// operation invokes only one public Identity route, while revision fixtures for the two update routes
+    /// are refreshed in their preparation callbacks outside the measurement window.
+    /// </summary>
+    public async ValueTask<IReadOnlyList<IIamNormalizedLookupWorkloadOperation>> PrepareMeasuredOperationsAsync(
+        IIamIdentityWorkloadAdapter adapter,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(adapter);
+        if (ComputeInputFingerprint() != ExpectedInputFingerprint ||
+            !OperationSequence.SequenceEqual(
+                [
+                    "create-canonical-user",
+                    "create-noise-users",
+                    "create-canonical-role",
+                    "link-user-role",
+                    "find-user-by-normalized-name",
+                    "find-user-by-normalized-email",
+                    "find-role-by-normalized-name",
+                    "list-user-roles",
+                    "list-role-users",
+                    "accept-current-revision-update",
+                    "reject-stale-revision-update"
+                ],
+                StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException("The Identity workload operation sequence no longer matches its frozen measured contract.");
+        }
+
+        var canonicalUser = await adapter.FindUserByIdAsync(UserId, cancellationToken)
+            ?? throw new InvalidOperationException("The measured Identity setup requires the canonical user from correctness preparation.");
+        var canonicalRole = await adapter.FindRoleByNormalizedNameAsync(NormalizedRoleName, cancellationToken)
+            ?? throw new InvalidOperationException("The measured Identity setup requires the canonical role from correctness preparation.");
+        var roleNames = await adapter.GetRolesAsync(canonicalUser, cancellationToken);
+        if (!roleNames.Contains(RoleName, StringComparer.Ordinal))
+            throw new InvalidOperationException("The measured Identity setup requires the canonical user-role link from correctness preparation.");
+        var roleUsers = await adapter.GetUsersInRoleAsync(NormalizedRoleName, cancellationToken);
+        if (!roleUsers.Any(user => user.Id == UserId))
+            throw new InvalidOperationException("The measured Identity setup requires the canonical role-user link from correctness preparation.");
+
+        var currentUpdates = new Dictionary<long, AspNetCoreIdentityUser>();
+        var staleUpdates = new Dictionary<long, AspNetCoreIdentityUser>();
+        return
+        [
+            new IamNormalizedLookupWorkloadOperation(
+                OperationSequence[4],
+                (_, _) => ValueTask.CompletedTask,
+                async (_, token) =>
+                {
+                    var user = await adapter.FindUserByNormalizedNameAsync(NormalizedUserName, token);
+                    if (user?.Id != UserId)
+                        throw new InvalidOperationException("The measured normalized-name lookup did not return the canonical user.");
+                }),
+            new IamNormalizedLookupWorkloadOperation(
+                OperationSequence[5],
+                (_, _) => ValueTask.CompletedTask,
+                async (_, token) =>
+                {
+                    var user = await adapter.FindUserByNormalizedEmailAsync(NormalizedEmail, token);
+                    if (user?.Id != UserId)
+                        throw new InvalidOperationException("The measured normalized-email lookup did not return the canonical user.");
+                }),
+            new IamNormalizedLookupWorkloadOperation(
+                OperationSequence[6],
+                (_, _) => ValueTask.CompletedTask,
+                async (_, token) =>
+                {
+                    var role = await adapter.FindRoleByNormalizedNameAsync(NormalizedRoleName, token);
+                    if (role?.Id != canonicalRole.Id)
+                        throw new InvalidOperationException("The measured normalized-role lookup did not return the canonical role.");
+                }),
+            new IamNormalizedLookupWorkloadOperation(
+                OperationSequence[7],
+                (_, _) => ValueTask.CompletedTask,
+                async (_, token) =>
+                {
+                    var names = await adapter.GetRolesAsync(canonicalUser, token);
+                    if (!names.Contains(RoleName, StringComparer.Ordinal))
+                        throw new InvalidOperationException("The measured user-role lookup did not return the canonical role.");
+                }),
+            new IamNormalizedLookupWorkloadOperation(
+                OperationSequence[8],
+                (_, _) => ValueTask.CompletedTask,
+                async (_, token) =>
+                {
+                    var users = await adapter.GetUsersInRoleAsync(NormalizedRoleName, token);
+                    if (!users.Any(user => user.Id == UserId))
+                        throw new InvalidOperationException("The measured role-user lookup did not return the canonical user.");
+                }),
+            new IamNormalizedLookupWorkloadOperation(
+                OperationSequence[9],
+                async (invocation, token) =>
+                {
+                    var user = await adapter.FindUserByIdAsync(UserId, token)
+                        ?? throw new InvalidOperationException("The current-revision operation could not reload the canonical user.");
+                    user.DisplayName = $"Ada Bench {OperationIdentity(invocation)}";
+                    currentUpdates[invocation] = user;
+                },
+                async (invocation, token) =>
+                {
+                    if (!currentUpdates.TryGetValue(invocation, out var user))
+                        throw new InvalidOperationException("The current-revision operation was invoked without its prepared user.");
+                    AssertSucceeded(await adapter.UpdateUserAsync(user, token), "measured-current-revision-update");
+                }),
+            new IamNormalizedLookupWorkloadOperation(
+                OperationSequence[10],
+                async (invocation, token) =>
+                {
+                    var current = await adapter.FindUserByIdAsync(UserId, token)
+                        ?? throw new InvalidOperationException("The stale-revision operation could not reload the canonical user.");
+                    var stale = CopyUser(current);
+                    current.DisplayName = $"Ada Current {OperationIdentity(invocation)}";
+                    AssertSucceeded(await adapter.UpdateUserAsync(current, token), "prepare-stale-revision-update");
+                    staleUpdates[invocation] = stale;
+                },
+                async (invocation, token) =>
+                {
+                    if (!staleUpdates.TryGetValue(invocation, out var stale))
+                        throw new InvalidOperationException("The stale-revision operation was invoked without its prepared user.");
+                    if ((await adapter.UpdateUserAsync(stale, token)).Succeeded)
+                        throw new InvalidOperationException("The measured stale-revision update was accepted.");
+                })
+        ];
+    }
+
     public static IEnumerable<AspNetCoreIdentityUser> NoiseUsers()
     {
         for (var index = 0; index < 16; index++)
@@ -177,6 +304,32 @@ public sealed class IamNormalizedLookupWorkload
             throw new InvalidOperationException($"{operation} failed: {string.Join("; ", result.Errors.Select(error => error.Description))}");
     }
 
+    private static string OperationIdentity(long invocation) =>
+        invocation < 0
+            ? $"warmup-{(-invocation):D4}"
+            : invocation.ToString("D8", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static AspNetCoreIdentityUser CopyUser(AspNetCoreIdentityUser source) => new()
+    {
+        Id = source.Id,
+        TenantId = source.TenantId,
+        UserName = source.UserName,
+        NormalizedUserName = source.NormalizedUserName,
+        Email = source.Email,
+        NormalizedEmail = source.NormalizedEmail,
+        EmailConfirmed = source.EmailConfirmed,
+        PasswordHash = source.PasswordHash,
+        SecurityStamp = source.SecurityStamp,
+        ConcurrencyStamp = source.ConcurrencyStamp,
+        PhoneNumber = source.PhoneNumber,
+        PhoneNumberConfirmed = source.PhoneNumberConfirmed,
+        TwoFactorEnabled = source.TwoFactorEnabled,
+        LockoutEnd = source.LockoutEnd,
+        LockoutEnabled = source.LockoutEnabled,
+        AccessFailedCount = source.AccessFailedCount,
+        DisplayName = source.DisplayName
+    };
+
     private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
 }
 
@@ -192,6 +345,28 @@ public interface IIamIdentityWorkloadAdapter
     Task<IList<AspNetCoreIdentityUser>> GetUsersInRoleAsync(string normalizedRoleName, CancellationToken cancellationToken);
     Task<AspNetCoreIdentityUser?> FindUserByIdAsync(string userId, CancellationToken cancellationToken);
     Task<IdentityResult> UpdateUserAsync(AspNetCoreIdentityUser user, CancellationToken cancellationToken);
+}
+
+/// <summary>One workload-owned bounded public Identity operation for process measurement.</summary>
+public interface IIamNormalizedLookupWorkloadOperation
+{
+    string Id { get; }
+    ValueTask PrepareInvocationAsync(long invocation, CancellationToken cancellationToken = default);
+    ValueTask InvokeAsync(long invocation, CancellationToken cancellationToken = default);
+}
+
+internal sealed class IamNormalizedLookupWorkloadOperation(
+    string id,
+    Func<long, CancellationToken, ValueTask> prepare,
+    Func<long, CancellationToken, ValueTask> invoke) : IIamNormalizedLookupWorkloadOperation
+{
+    public string Id { get; } = id;
+
+    public ValueTask PrepareInvocationAsync(long invocation, CancellationToken cancellationToken = default) =>
+        prepare(invocation, cancellationToken);
+
+    public ValueTask InvokeAsync(long invocation, CancellationToken cancellationToken = default) =>
+        invoke(invocation, cancellationToken);
 }
 
 public sealed record IamNormalizedLookupResult(

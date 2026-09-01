@@ -21,6 +21,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Elsa.Groundwork.StorePerformance.Benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks.csproj" />
+    <ProjectReference Include="../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj" />
     <ProjectReference Include="../../src/Elsa/Persistence/Groundwork/V2/Providers/Elsa.Persistence.Groundwork.V2.Providers.csproj" />
     <ProjectReference Include="../../src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj" />
   </ItemGroup>
