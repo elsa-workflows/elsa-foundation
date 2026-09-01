@@ -25,6 +25,20 @@ public sealed class WorkbenchReferenceCompositionTests
             Environment.NewLine + string.Join(Environment.NewLine, violations));
     }
 
+    [Fact]
+    public void Workbench_does_not_consume_Elsa_Unified_Groundwork_composition()
+    {
+        var workbenchDirectory = Path.Combine(RepoRoot, "src", "Apps", "Elsa.Workbench");
+        var program = File.ReadAllText(Path.Combine(workbenchDirectory, "Program.cs"));
+        var project = File.ReadAllText(Path.Combine(workbenchDirectory, "Elsa.Workbench.csproj"));
+
+        Assert.DoesNotContain("GroundworkUnified", program, StringComparison.Ordinal);
+        Assert.DoesNotContain("GroundworkUnified", project, StringComparison.Ordinal);
+        Assert.DoesNotContain("Persistence.Groundwork.PostgreSql.Unified", project, StringComparison.Ordinal);
+        Assert.DoesNotContain("Persistence.Groundwork.Sqlite.Unified", project, StringComparison.Ordinal);
+        Assert.DoesNotContain("ReferenceComposition", project, StringComparison.Ordinal);
+    }
+
     private static IEnumerable<string> FindViolations(string path, string source)
     {
         var displayPath = Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/');
