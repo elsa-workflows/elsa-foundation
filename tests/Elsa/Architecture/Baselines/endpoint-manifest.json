@@ -2205,6 +2205,45 @@
       "contentTypes": [
         "application/json"
       ],
+      "displayName": "HTTP: GET publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/executable-export",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Core.Models.WorkflowArtifactClosure",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflows/{param:regex(^(?!drafts$).\u002B$)}/executable-export"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsExportWorkflowExecutableClosureEndpoint"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
       "displayName": "HTTP: POST /publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/preflight",
       "methods": [
         "POST"
