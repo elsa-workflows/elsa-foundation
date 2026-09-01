@@ -7,6 +7,7 @@ using Groundwork.PostgreSql;
 using Groundwork.Sqlite;
 using Groundwork.SqlServer;
 using Groundwork.Store;
+using MongoDB.Driver;
 using Testcontainers.MongoDb;
 using Testcontainers.MsSql;
 using Testcontainers.PostgreSql;
@@ -96,7 +97,7 @@ public sealed class GroundworkV2DistributedProviderMatrixTests
         StringComparer.OrdinalIgnoreCase.Equals(Environment.GetEnvironmentVariable("CI"), "true") ||
         StringComparer.Ordinal.Equals(Environment.GetEnvironmentVariable("CI"), "1");
 
-    private sealed class NativeProviderRuntime(
+    internal sealed class NativeProviderRuntime(
         string providerName,
         string connectionString,
         IAsyncDisposable? container,
@@ -164,10 +165,16 @@ public sealed class GroundworkV2DistributedProviderMatrixTests
         {
             var instance = new MongoDbBuilder("mongo:7.0.37").WithReplicaSet("rs0").Build();
             await instance.StartAsync();
-            var raw = instance.GetConnectionString();
-            var queryStart = raw.IndexOf('?', StringComparison.Ordinal);
-            var server = (queryStart < 0 ? raw : raw[..queryStart]).TrimEnd('/');
-            return new("mongodb", $"{server}/elsa?replicaSet=rs0&authSource=admin&directConnection=true", instance, null);
+            return new("mongodb", BuildMongoConnectionString(instance.GetConnectionString(), "elsa"), instance, null);
         }
+
+        internal static string BuildMongoConnectionString(string connectionString, string databaseName) =>
+            new MongoUrlBuilder(connectionString)
+            {
+                DatabaseName = databaseName,
+                ReplicaSetName = "rs0",
+                AuthenticationSource = "admin",
+                DirectConnection = true
+            }.ToString();
     }
 }

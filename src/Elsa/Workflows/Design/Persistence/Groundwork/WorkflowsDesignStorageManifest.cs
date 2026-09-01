@@ -5,19 +5,27 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork;
 /// <summary>
 /// The provider-neutral Groundwork v2 catalog for workflow-design persistence.
 /// Projection values are written as first-class row values; the JSON payload is retained only for
-/// aggregate materialization. Every named route is backed by an explicit public-v2 index.
+/// aggregate materialization. Provider routes use only indexes whose declared key widths fit the
+/// public portable budget; exact name/description filtering uses fixed-width lookup hashes and
+/// substring filtering uses the bounded identity candidate probe.
 /// </summary>
 public static class WorkflowsDesignStorageManifest
 {
     public const string SchemaVersion = "1.0.0";
+    // The definition projection changed incompatibly when the portable ID lookup hash was added.
+    // Keep the envelope version stable, but provision a new physical table for this clean
+    // pre-GA baseline so Groundwork never attempts to add a required, non-canonical projection
+    // column or retain the removed wide indexes in place.
+    public const int DefinitionStorageSchemaVersion = 2;
     public const int IdentityMaximumLength = 128;
     public const int TextMaximumLength = 256;
     public const int SchemaVersionMaximumLength = 32;
-    // Workflow definition identifiers use Groundwork's provider-independent Unicode
-    // ordinal-ignore-case key. The key is indexed on its own: adding the raw-id tie-breaker
-    // would exceed the strict 1700-byte portable index budget at the ratified 128-character
-    // identity bound, while a key-only unique index preserves case-insensitive identity.
-    public const int DefinitionIdSearchKeyMaximumLength = IdentityMaximumLength * 6;
+    // The provider-independent Unicode ordinal-ignore-case key uses six hexadecimal characters
+    // plus a boundary marker per UTF-16 code unit. It is retained for substring matching, but is
+    // deliberately not indexed: its maximum width is larger than the strict portable index cap.
+    public const int DefinitionIdSearchKeyMaximumLength = IdentityMaximumLength * 7;
+    public const int DefinitionIdLookupHashMaximumLength = 64;
+    public const int DefinitionTextLookupHashMaximumLength = 64;
 
     public const string WorkflowDefinitionDocumentKind = "workflowDefinition";
     public const string WorkflowDefinitionVersionDocumentKind = "workflowDefinitionVersion";
@@ -39,6 +47,9 @@ public static class WorkflowsDesignStorageManifest
     public const string DefinitionNameField = "name";
     public const string DefinitionDescriptionField = "description";
     public const string DefinitionIdSearchKeyField = "definitionIdSearchKey";
+    public const string DefinitionIdLookupHashField = "definitionIdLookupHash";
+    public const string DefinitionNameLookupHashField = "definitionNameLookupHash";
+    public const string DefinitionDescriptionLookupHashField = "definitionDescriptionLookupHash";
     public const string DefinitionDeletedAtField = "deletedAt";
     public const string DefinitionDeletedReasonField = "deletedReason";
     public const string DefinitionIsSourceOwnedField = "isSourceOwned";
@@ -82,6 +93,8 @@ public static class WorkflowsDesignStorageManifest
     // identities above retain the public route names; these names are the provider-facing indexes.
     public const string DefinitionByIdIndex = "definition_by_id_list_v2";
     public const string DefinitionByIdSearchIndex = "definition_by_id_search_v2";
+    // These route identities use fixed-width exact lookup hashes, keeping the candidate route
+    // narrow while the source column remains the authority for ordinal equality.
     public const string DefinitionByNameIndex = "definition_by_name_v2";
     public const string DefinitionByDescriptionIndex = "definition_by_description_v2";
     public const string VersionByDefinitionIndex = "versions_by_definition_v2";
@@ -104,13 +117,16 @@ public static class WorkflowsDesignStorageManifest
         CreateUnits().Single(unit => StringComparer.Ordinal.Equals(unit.Id.Value, unitId));
 
     private static StorageUnit DefinitionUnit() =>
-        StorageUnit.Declare(WorkflowDefinitionDocumentKind, "elsa_workflow_definitions")
+        StorageUnit.Declare(WorkflowDefinitionDocumentKind, "elsa_workflow_definitions_v2")
             .String(IdField, IdentityMaximumLength, column => column.Required())
             .String(SchemaVersionField, SchemaVersionMaximumLength, column => column.Required())
             .Json(ContentField, column => column.Required())
             .String(TenantIdField, IdentityMaximumLength)
             .String(DefinitionIdField, IdentityMaximumLength, column => column.Required())
             .String(DefinitionIdSearchKeyField, DefinitionIdSearchKeyMaximumLength, column => column.Required())
+            .String(DefinitionIdLookupHashField, DefinitionIdLookupHashMaximumLength, column => column.Required())
+            .String(DefinitionNameLookupHashField, DefinitionTextLookupHashMaximumLength)
+            .String(DefinitionDescriptionLookupHashField, DefinitionTextLookupHashMaximumLength)
             .String(DefinitionNameField, TextMaximumLength, column => column.Collation(PortableCollation.UnicodeOrdinalIgnoreCase))
             .String(DefinitionDescriptionField, TextMaximumLength, column => column.Collation(PortableCollation.UnicodeOrdinalIgnoreCase))
             .Timestamp(DefinitionDeletedAtField)
@@ -121,11 +137,11 @@ public static class WorkflowsDesignStorageManifest
             .Key(IdField)
             .OptimisticConcurrency(ConcurrencyTokenField)
             .UniqueIndex(DefinitionByIdIndex, DefinitionIdField)
-            .UniqueIndex(DefinitionByIdSearchIndex, DefinitionIdSearchKeyField)
-            .UniqueIndex(DefinitionByNameIndex, index => index.Ascending(DefinitionNameField).Ascending(DefinitionIdField))
-            .UniqueIndex(DefinitionByDescriptionIndex, index => index.Ascending(DefinitionDescriptionField).Ascending(DefinitionIdField))
+            .UniqueIndex(DefinitionByIdSearchIndex, DefinitionIdLookupHashField)
+            .Index(DefinitionByNameIndex, index => index.Ascending(DefinitionNameLookupHashField).Ascending(DefinitionIdField))
+            .Index(DefinitionByDescriptionIndex, index => index.Ascending(DefinitionDescriptionLookupHashField).Ascending(DefinitionIdField))
             .Scoped()
-            .Build();
+            .Build() with { SchemaVersion = DefinitionStorageSchemaVersion };
 
     private static StorageUnit VersionUnit() =>
         StorageUnit.Declare(WorkflowDefinitionVersionDocumentKind, "elsa_workflow_definition_versions")
