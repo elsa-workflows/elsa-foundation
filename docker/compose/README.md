@@ -202,8 +202,8 @@ leaves the two containers — the browser neither sees nor sends it.
 
 ## 5. Verify Postgres persistence
 
-The stack composes Elsa.Workbench with unified Postgres persistence (via the mounted
-`elsa-workbench.shells.json`), so workflow/activity data lives in the `postgres` service. Confirm it:
+The stack composes Elsa.Workbench with an explicit Groundwork Postgres provider and persistence lanes (via the
+mounted `elsa-workbench.shells.json`), so workflow/activity data lives in the `postgres` service. Confirm it:
 
 ```bash
 docker compose exec postgres psql -U elsa -d elsa -c '\dt'
@@ -253,7 +253,7 @@ docker compose logs -f elsa-workbench        # or: postgres, elsa-studio
 var on the `elsa-workbench` service (there is a commented-out example in `docker-compose.yml`):
 
 ```
-CShells__Shells__default__Features__GroundworkUnifiedPersistencePostgreSql__ConnectionString=Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa
+CShells__Shells__default__Features__GroundworkProviderPostgreSql__ConnectionString=Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa
 ```
 
 **Override the Elsa host management key** — change it on **both** services so they still match:

@@ -50,10 +50,15 @@
             "MaxSegmentCheckpoints": 50
           },
           "WorkflowsRuntimeTriggers": {},
-          "GroundworkUnifiedPersistenceSqlite": {
+          "GroundworkProviderSqlite": {},
+          "GroundworkWorkflowRuntime": {
             "CacheWorkflowExecutables": true,
             "WorkflowExecutableCacheCapacity": 256
           },
+          "ActivitiesDesignGroundworkPersistence": {},
+          "WorkflowsDesignGroundworkPersistence": {},
+          "WorkflowsRuntimeDistributedGroundworkPersistence": {},
+          "GroundworkWorkflowDashboard": {},
           "FoundationAgentAbstractions": {},
           "FoundationAgentApi": {},
           "FoundationWorkflowsAgent": {},

@@ -2,7 +2,7 @@
 .SYNOPSIS
     Groundwork release-adoption proof: author -> save/reload -> publish -> execute/suspend -> resume.
 .DESCRIPTION
-    Drives the real Elsa.Workbench HTTP API against its GroundworkUnifiedPersistenceSqlite composition.
+    Drives the real Elsa.Workbench HTTP API against its explicit Groundwork SQLite provider and persistence lanes.
     The version GET after submit is the persistence round-trip; the Event bookmark and later completion
     prove the published executable and runtime checkpoint survive the Groundwork store boundary.
 #>
