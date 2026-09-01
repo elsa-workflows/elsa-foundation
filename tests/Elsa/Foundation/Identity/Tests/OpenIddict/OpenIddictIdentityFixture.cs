@@ -23,13 +23,14 @@ public sealed class OpenIddictIdentityFixture : IAsyncDisposable
 
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddOpenIddictVendorForTests(
+            builder => ConfigureInMemoryStore(builder, databaseName));
         services.AddFoundationIdentityOpenIddict(
             options =>
             {
                 options.IsDevelopmentOrDemo = true;
                 configure?.Invoke(options);
-            },
-            configureDbContext: builder => ConfigureInMemoryStore(builder, databaseName));
+            });
 
         Services = services.BuildServiceProvider();
 

@@ -8,6 +8,7 @@
 	<ItemGroup>
 		<PackageReference Include="CShells.Management.Api" />
 		<PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+		<PackageReference Include="OpenIddict.EntityFrameworkCore" />
 		<PackageReference Include="Nuplane" />
 		<PackageReference Include="Nuplane.Admin" />
 		<PackageReference Include="Nuplane.Loading" />
