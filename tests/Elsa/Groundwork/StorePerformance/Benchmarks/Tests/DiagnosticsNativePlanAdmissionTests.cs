@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using Xunit;
@@ -122,7 +123,8 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             "",
             "primary-key-read",
             "",
-            "SELECT * FROM elsa_otel_trace_summaries_v3 WHERE __groundwork_scope = @scope AND traceKey = @traceKey",
+            "SELECT traceKey, traceId, payload FROM elsa_otel_trace_summaries_v3 " +
+            "WHERE traceKey = @key_traceKey AND __groundwork_scope = @__groundwork_scope;",
             specification.PhysicalCardinality,
             true,
             true,
@@ -272,7 +274,14 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 specification.Ordering));
         using var directory = new TemporaryDirectory();
         var path = Path.Combine(directory.FullName, "continuation.raw.json");
-        var command = "SELECT * FROM elsa_otel_spans_v2 WHERE __groundwork_scope = @scope AND traceKey = @traceKey AND ((startTime > @start) OR (startTime = @startEqual AND spanId > @span) OR (startTime = @startEqual2 AND spanId = @spanEqual AND sequence > @sequence)) ORDER BY startTime ASC, spanId ASC, sequence ASC LIMIT 127";
+        var command =
+            "SELECT * FROM \"elsa_otel_spans_v2\" WHERE " +
+            "((\"__groundwork_scope\" COLLATE GROUNDWORK_UTF16_ORDINAL IS NOT NULL AND \"__groundwork_scope\" COLLATE GROUNDWORK_UTF16_ORDINAL = @p0) " +
+            "AND (\"traceKey\" COLLATE GROUNDWORK_UTF16_ORDINAL IS NOT NULL AND \"traceKey\" COLLATE GROUNDWORK_UTF16_ORDINAL = @p1)) " +
+            "AND ((((\"startTime\" IS NOT NULL AND \"startTime\" > @p2) OR \"startTime\" IS NULL) " +
+            "OR ((\"startTime\" IS NOT NULL AND \"startTime\" = @p3) AND ((\"spanId\" COLLATE GROUNDWORK_UTF16_ORDINAL IS NOT NULL AND \"spanId\" COLLATE GROUNDWORK_UTF16_ORDINAL > @p4) OR \"spanId\" COLLATE GROUNDWORK_UTF16_ORDINAL IS NULL)) " +
+            "OR ((\"startTime\" IS NOT NULL AND \"startTime\" = @p5) AND (\"spanId\" COLLATE GROUNDWORK_UTF16_ORDINAL IS NOT NULL AND \"spanId\" COLLATE GROUNDWORK_UTF16_ORDINAL = @p6) AND ((\"sequence\" IS NOT NULL AND \"sequence\" > @p7) OR \"sequence\" IS NULL))) " +
+            "ORDER BY \"startTime\" ASC, \"spanId\" COLLATE GROUNDWORK_UTF16_ORDINAL ASC, \"sequence\" ASC LIMIT @p8;";
         var artifact = new DiagnosticsNativePlanArtifact(
             1,
             "sqlite",
@@ -352,6 +361,245 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             fixture.Adapter,
             fixture.Route,
             fixture.Path);
+    }
+
+    [Fact]
+    public void Mongo_explain_command_binds_the_physical_scoped_collection_and_actual_aggregate_shape()
+    {
+        using var fixture = Fixture.Create("mongodb", "resources-by-status");
+
+        DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path);
+    }
+
+    [Fact]
+    public void Mongo_explain_command_rejects_the_logical_collection_name()
+    {
+        using var fixture = Fixture.Create(
+            "mongodb",
+            "resources-by-last-seen",
+            command: Fixture.MongoAggregateCommand(
+                DiagnosticsNativePlanContract.For(
+                    DiagnosticsNativePlanContract.GroundworkAdapter,
+                    "resources-by-last-seen"),
+                collection: "elsa_otel_resources_v2"));
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb", fixture.Adapter, fixture.Route, fixture.Path));
+    }
+
+    [Fact]
+    public void Mongo_explain_command_rejects_a_synthetic_scope_predicate()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            command: Fixture.MongoAggregateCommand(
+                specification,
+                match: "{\"__groundwork_scope\":{\"$eq\":\"scope\"}}"));
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb", fixture.Adapter, fixture.Route, fixture.Path));
+    }
+
+    [Fact]
+    public void Mongo_explain_command_rejects_a_wrong_route_predicate()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-status");
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            command: Fixture.MongoAggregateCommand(
+                specification,
+                match: "{\"serviceNameKey\":\"wrong-route\"}"));
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb", fixture.Adapter, fixture.Route, fixture.Path));
+    }
+
+    [Fact]
+    public void Mongo_explain_command_rejects_a_missing_actual_command()
+    {
+        using var fixture = Fixture.Create(
+            "mongodb",
+            "resources-by-last-seen",
+            attachCommandToNativePlan: false);
+
+        var exception = Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb", fixture.Adapter, fixture.Route, fixture.Path));
+        Assert.Contains("actual aggregate/find command", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Mongo_explain_command_rejects_ambiguous_actual_commands()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var command = Fixture.MongoAggregateCommand(specification);
+        var second = Fixture.MongoAggregateCommand(specification, collection: Fixture.MongoPhysicalCollection(specification) + "_other");
+        var nativePlan = $$"""
+            {
+              "queryPlanner": { "winningPlan": { "stage": "IXSCAN", "indexName": "elsa_otel_resources_last_seen" } },
+              "command": {{command}},
+              "nested": { "command": {{second}} }
+            }
+            """;
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            command,
+            nativePlan,
+            attachCommandToNativePlan: false);
+
+        var exception = Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb", fixture.Adapter, fixture.Route, fixture.Path));
+        Assert.Contains("exactly one actual aggregate/find command", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Mongo_explain_command_must_match_the_command_retained_in_the_explain_response()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        using var fixture = Fixture.Create("mongodb", specification.RouteIdentity);
+        var envelope = JsonNode.Parse(File.ReadAllText(fixture.Path))!.AsObject();
+        envelope["commandText"] = Fixture.MongoAggregateCommand(
+            specification,
+            match: "{\"serviceNameKey\":\"not-this-route\"}");
+        File.WriteAllText(fixture.Path, envelope.ToJsonString());
+
+        var exception = Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb", fixture.Adapter, fixture.Route, fixture.Path));
+        Assert.Contains("does not match the actual command", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Mongo_aggregate_command_requires_all_order_terms_and_the_frozen_limit()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var command = JsonNode.Parse(Fixture.MongoAggregateCommand(specification))!.AsObject();
+        var pipeline = command["pipeline"]!.AsArray();
+        pipeline[1]!["$sort"]!.AsObject().Remove("id");
+        pipeline[2]!["$limit"] = 1;
+        using var fixture = Fixture.Create("mongodb", specification.RouteIdentity, command: command.ToJsonString());
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb", fixture.Adapter, fixture.Route, fixture.Path));
+    }
+
+    [Fact]
+    public void Mongo_aggregate_command_accepts_a_bounded_keyset_continuation_shape()
+    {
+        var constituent = DiagnosticsNativePlanContract.TraceDetailConstituents(
+                DiagnosticsNativePlanContract.GroundworkAdapter)
+            .Single(item => item.RouteIdentity == "trace-detail/spans-by-trace-key-start-id");
+        var routeSpecification = new DiagnosticsNativeRouteSpec(
+            constituent.RouteIdentity,
+            constituent.TableName,
+            constituent.IndexName,
+            constituent.Ordering[0].Column,
+            constituent.PredicateColumn,
+            constituent.PhysicalCardinality,
+            constituent.FiniteLimit,
+            constituent.StorageScopeRequired,
+            false,
+            constituent.Ordering);
+        var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("mongodb", routeSpecification);
+        var command = JsonSerializer.Serialize(new
+        {
+            aggregate = Fixture.MongoPhysicalCollection(routeSpecification),
+            pipeline = new object[]
+            {
+                new Dictionary<string, object> { ["$match"] = new Dictionary<string, string> { ["traceKey"] = "trace" } },
+                new Dictionary<string, object>
+                {
+                    ["$match"] = new Dictionary<string, object>
+                    {
+                        ["$or"] = new object[]
+                        {
+                            new Dictionary<string, object> { ["startTime"] = new Dictionary<string, int> { ["$gt"] = 1 } },
+                            new Dictionary<string, object>
+                            {
+                                ["$and"] = new object[]
+                                {
+                                    new Dictionary<string, object> { ["startTime"] = new Dictionary<string, int> { ["$eq"] = 1 } },
+                                    new Dictionary<string, object> { ["spanId"] = new Dictionary<string, string> { ["$gt"] = "span" } }
+                                }
+                            },
+                            new Dictionary<string, object>
+                            {
+                                ["$and"] = new object[]
+                                {
+                                    new Dictionary<string, object> { ["startTime"] = new Dictionary<string, int> { ["$eq"] = 1 } },
+                                    new Dictionary<string, object> { ["spanId"] = new Dictionary<string, string> { ["$eq"] = "span" } },
+                                    new Dictionary<string, object> { ["sequence"] = new Dictionary<string, int> { ["$gt"] = 1 } }
+                                }
+                            }
+                        }
+                    }
+                },
+                new Dictionary<string, object>
+                {
+                    ["$sort"] = new Dictionary<string, int> { ["startTime"] = 1, ["spanId"] = 1, ["sequence"] = 1 }
+                },
+                new Dictionary<string, int> { ["$limit"] = constituent.FiniteLimit }
+            },
+            cursor = new { }
+        });
+        var nativePlan = new JsonObject
+        {
+            ["queryPlanner"] = new JsonObject
+            {
+                ["winningPlan"] = new JsonObject { ["stage"] = "IXSCAN", ["indexName"] = physicalIndex }
+            },
+            ["command"] = JsonNode.Parse(command)
+        }.ToJsonString();
+        using var directory = new TemporaryDirectory();
+        var path = System.IO.Path.Combine(directory.FullName, "spans-mongo.raw.json");
+        var artifact = new DiagnosticsNativePlanArtifact(
+            1,
+            "mongodb",
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            constituent.RouteIdentity,
+            constituent.TableName,
+            constituent.IndexName,
+            physicalIndex,
+            command,
+            nativePlan);
+        File.WriteAllText(path, JsonSerializer.Serialize(artifact));
+        var evidence = new DiagnosticsTraceDetailConstituentEvidence(
+            constituent.RouteIdentity,
+            "spans-mongo.raw.json",
+            new string('a', 64),
+            "index-search",
+            physicalIndex,
+            command,
+            constituent.PhysicalCardinality,
+            false,
+            true,
+            constituent.FiniteLimit,
+            constituent.PublicRowBound,
+            constituent.PublicRowBound,
+            constituent.MaxInvocationCount,
+            constituent.MaxInvocationCount);
+
+        DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
+            "mongodb",
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            evidence,
+            path);
     }
 
     [Theory]
@@ -524,12 +772,13 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             string provider,
             string routeIdentity,
             string? command = null,
-            string? nativePlan = null)
+            string? nativePlan = null,
+            bool attachCommandToNativePlan = true)
         {
             var spec = DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, routeIdentity);
             command ??= provider switch
             {
-                "mongodb" => $"{{\"collection\":\"{spec.TableName}\",\"filter\":{{\"__groundwork_scope\":{{\"$eq\":\"scope\"}}}},\"sort\":{{\"lastSeen\":-1,\"idOrderKey\":1,\"id\":1}},\"limit\":127}}",
+                "mongodb" => MongoAggregateCommand(spec),
                 _ => "SELECT * FROM elsa_otel_resources_v2 WHERE __groundwork_scope = @scope ORDER BY lastSeen DESC, idOrderKey ASC, id ASC LIMIT 127"
             };
             var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(provider, spec);
@@ -541,7 +790,44 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 "mongodb" => $"{{\"winningPlan\":{{\"stage\":\"IXSCAN\",\"indexName\":\"{physicalIndex}\"}}}}",
                 _ => throw new ArgumentOutOfRangeException(nameof(provider))
             };
+            if (provider == "mongodb" && attachCommandToNativePlan)
+            {
+                var plan = JsonNode.Parse(nativePlan)?.AsObject() ??
+                           throw new InvalidOperationException("Mongo fixture plan must be an object.");
+                plan["command"] = JsonNode.Parse(command) ??
+                                   throw new InvalidOperationException("Mongo fixture command must be valid JSON.");
+                nativePlan = plan.ToJsonString();
+            }
             return new Fixture(provider, routeIdentity, command, nativePlan);
+        }
+
+        internal static string MongoPhysicalCollection(DiagnosticsNativeRouteSpec specification) =>
+            $"{specification.TableName}__scope__{new string('A', 64)}";
+
+        internal static string MongoAggregateCommand(
+            DiagnosticsNativeRouteSpec specification,
+            string? collection = null,
+            string? match = null)
+        {
+            using var matchDocument = JsonDocument.Parse(match ??
+                (specification.PredicateColumn is null
+                    ? "{}"
+                    : $"{{\"{specification.PredicateColumn}\":1}}"));
+            var sort = specification.EffectiveOrdering.ToDictionary(
+                term => term.Column,
+                term => term.Direction == RuntimeNativeOrderDirection.Descending ? -1 : 1,
+                StringComparer.Ordinal);
+            return JsonSerializer.Serialize(new
+            {
+                aggregate = collection ?? MongoPhysicalCollection(specification),
+                pipeline = new object[]
+                {
+                    new Dictionary<string, JsonElement> { ["$match"] = matchDocument.RootElement.Clone() },
+                    new Dictionary<string, object> { ["$sort"] = sort },
+                    new Dictionary<string, int> { ["$limit"] = specification.FiniteLimit }
+                },
+                cursor = new { }
+            });
         }
 
         public void Dispose()
@@ -560,7 +846,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 "index-search",
                 DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(provider, spec),
                 spec.PhysicalCardinality,
-                spec.StorageScopeRequired,
+                DiagnosticsNativePlanContract.ExpectedStorageScopePredicate(provider, spec),
                 spec.PredicateColumn is not null,
                 spec.FiniteLimit,
                 spec.FiniteLimit);

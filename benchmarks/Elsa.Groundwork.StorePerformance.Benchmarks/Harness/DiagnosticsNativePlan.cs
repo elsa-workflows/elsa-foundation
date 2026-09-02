@@ -30,8 +30,8 @@ public sealed record DiagnosticsNativeRouteSpec(
     bool Descending = true,
     IReadOnlyList<RuntimeNativeOrderTerm>? Ordering = null)
 {
-    /// <summary>Groundwork injects this equality into every scoped query; the EF oracle isolates scopes
-    /// with separate files and therefore has no synthetic scope column.</summary>
+    /// <summary>Relational Groundwork injects this equality into every scoped query. MongoDB isolates
+    /// scopes with a provider-owned physical collection and therefore has no synthetic scope field.</summary>
     public IReadOnlyList<RuntimeNativeOrderTerm> EffectiveOrdering => Ordering ??
         (OrderColumn is null
             ? []
@@ -250,6 +250,11 @@ public static class DiagnosticsNativePlanContract
         return GroundworkPhysicalIndexNames.For(provider, specification.TableName, specification.IndexName);
     }
 
+    /// <summary>Returns whether the retained command must prove a synthetic scope predicate. MongoDB
+    /// proves the same isolation boundary through its physical scoped collection name.</summary>
+    public static bool ExpectedStorageScopePredicate(string provider, DiagnosticsNativeRouteSpec specification) =>
+        specification.StorageScopeRequired && !string.Equals(provider, "mongodb", StringComparison.Ordinal);
+
     public static void ValidateEnvelope(
         string provider,
         string adapter,
@@ -282,7 +287,7 @@ public static class DiagnosticsNativePlanContract
         if (route.PhysicalCardinality != specification.PhysicalCardinality ||
             route.FiniteLimit != specification.FiniteLimit ||
             route.MaterializedCandidateCount != specification.FiniteLimit ||
-            route.HasStorageScopePredicate != specification.StorageScopeRequired ||
+            route.HasStorageScopePredicate != ExpectedStorageScopePredicate(provider, specification) ||
             route.HasRoutePredicate != (specification.PredicateColumn is not null))
             throw new PerformanceContractException(
                 $"Diagnostics native-plan route '{route.RouteIdentity}' has unbound cardinality, finite-page, or predicate facts.");
@@ -293,7 +298,7 @@ public static class DiagnosticsNativePlanContract
                 $"Diagnostics route '{specification.RouteIdentity}' does not bind its provider-owned physical index name.");
 
         if (string.Equals(provider, "mongodb", StringComparison.Ordinal))
-            ValidateMongoCommand(artifact.CommandText, specification);
+            ValidateMongoCommand(artifact.CommandText, specification, artifact.NativePlan);
         else
             ValidateSqlCommand(artifact.CommandText, specification);
 
@@ -336,7 +341,8 @@ public static class DiagnosticsNativePlanContract
             evidence.MaxInvocationCount != specification.MaxInvocationCount ||
             evidence.MaterializedCandidateCount != evidence.PublicRowBound ||
             evidence.MaterializedCandidateCount > checked(evidence.FiniteLimit * evidence.ObservedCommandCount) ||
-            evidence.HasStorageScopePredicate != specification.StorageScopeRequired ||
+            evidence.HasStorageScopePredicate !=
+                (specification.StorageScopeRequired && !string.Equals(provider, "mongodb", StringComparison.Ordinal)) ||
             evidence.HasRoutePredicate != true ||
             string.IsNullOrWhiteSpace(evidence.CommandText))
             throw new PerformanceContractException(
@@ -395,7 +401,7 @@ public static class DiagnosticsNativePlanContract
             false,
             specification.Ordering);
         if (string.Equals(provider, "mongodb", StringComparison.Ordinal))
-            ValidateMongoCommand(artifact.CommandText, routeSpecification);
+            ValidateMongoCommand(artifact.CommandText, routeSpecification, artifact.NativePlan);
         else
             ValidateSqlCommand(artifact.CommandText, routeSpecification);
 
@@ -465,50 +471,61 @@ public static class DiagnosticsNativePlanContract
             return;
         }
 
-        var normalized = command.Replace("[", "", StringComparison.Ordinal)
-            .Replace("]", "", StringComparison.Ordinal)
-            .Replace("\"", "", StringComparison.Ordinal)
-            .Replace("`", "", StringComparison.Ordinal);
+        var normalized = NormalizeSqlCommand(command);
         if (normalized.Contains(" OR ", StringComparison.OrdinalIgnoreCase) ||
             normalized.Contains(" ORDER BY ", StringComparison.OrdinalIgnoreCase) ||
             Regex.IsMatch(normalized, @"\bOFFSET\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
             Regex.IsMatch(normalized, @"\b(?:LIMIT|TOP)\s*\(?\s*(?!1\b)\d+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
             !Regex.IsMatch(normalized, $@"\bFROM\s+{Regex.Escape(specification.TableName)}\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             throw new PerformanceContractException($"Diagnostics point read '{specification.RouteIdentity}' is not an unsorted primary-key lookup.");
-        var where = Regex.Match(normalized, @"\bWHERE\s+(?<where>.*)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Groups["where"].Value.Trim();
-        var atoms = string.IsNullOrWhiteSpace(where)
-            ? []
-            : Regex.Split(where, @"\s+AND\s+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
-                .Select(atom => atom.Trim().Trim('(', ')'))
-                .ToArray();
+        var where = Regex.Match(
+            normalized,
+            @"\bWHERE\s+(?<where>.*?)(?:;|$)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline).Groups["where"].Value.Trim();
         var required = new[] { "__groundwork_scope", specification.PredicateColumn };
-        if (atoms.Length != required.Length || required.Any(column =>
-                atoms.Count(atom => Regex.IsMatch(atom, $@"^{Regex.Escape(column)}\s*=\s*(?:@\w+|\?|\$\d+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)) != 1))
+        if (!ContainsOnlyExactEqualityPredicates(where, required, allowNullGuards: false))
             throw new PerformanceContractException($"Diagnostics point read '{specification.RouteIdentity}' must contain only scope and its exact key predicate.");
     }
 
     private static void ValidateSqlContinuationPredicate(string where, DiagnosticsNativeRouteSpec specification)
     {
         var parameter = @"(?:@\w+|\?|\$\d+)";
-        var basePredicate = new[] { "__groundwork_scope", specification.PredicateColumn! }
-            .Select(column => Regex.Escape(column))
-            .Select(column => $@"\b{column}\s*=\s*{parameter}")
-            .ToArray();
+        var baseColumns = new[] { "__groundwork_scope", specification.PredicateColumn! };
         var keyset = where;
-        foreach (var predicate in basePredicate)
+        foreach (var column in baseColumns)
         {
+            var predicate = $@"\b{Regex.Escape(column)}\b\s*=\s*{parameter}";
             if (Regex.Matches(keyset, predicate, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count != 1)
                 throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' continuation does not retain its exact scope and route predicates.");
             keyset = Regex.Replace(keyset, predicate, string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            keyset = Regex.Replace(
+                keyset,
+                $@"\b{Regex.Escape(column)}\b\s+IS\s+NOT\s+NULL",
+                string.Empty,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         }
 
-        if (!keyset.Contains(" OR ", StringComparison.OrdinalIgnoreCase) ||
-            keyset.Contains("<", StringComparison.Ordinal) ||
-            specification.EffectiveOrdering.Any(term => !Regex.IsMatch(keyset, $@"\b{Regex.Escape(term.Column)}\b\s*(?:=|>)\s*{parameter}", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)))
+        if (specification.EffectiveOrdering.Count > 1 &&
+            !keyset.Contains(" OR ", StringComparison.OrdinalIgnoreCase))
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' continuation does not retain its complete ascending keyset predicate.");
 
-        var allowed = string.Join("|", specification.EffectiveOrdering.Select(term => Regex.Escape(term.Column)).Concat(["AND", "OR"]));
-        var remainder = Regex.Replace(keyset, $@"(?:\b(?:{allowed})\b|{parameter}|[()=><]|\s+)", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        var remainder = keyset;
+        foreach (var term in specification.EffectiveOrdering)
+        {
+            var column = Regex.Escape(term.Column);
+            var after = term.Direction == RuntimeNativeOrderDirection.Ascending ? ">" : "<";
+            if (!Regex.IsMatch(
+                    keyset,
+                    $@"\b{column}\b\s*{Regex.Escape(after)}\s*{parameter}",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' continuation does not retain its complete ascending keyset predicate.");
+
+            remainder = Regex.Replace(remainder, $@"\b{column}\b\s+IS\s+NOT\s+NULL", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            remainder = Regex.Replace(remainder, $@"\b{column}\b\s+IS\s+NULL", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            remainder = Regex.Replace(remainder, $@"\b{column}\b\s*=\s*{parameter}", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            remainder = Regex.Replace(remainder, $@"\b{column}\b\s*{Regex.Escape(after)}\s*{parameter}", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+        remainder = Regex.Replace(remainder, @"\b(?:AND|OR)\b|[();\s]", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         if (!string.IsNullOrWhiteSpace(remainder) ||
             keyset.Contains(" OR 1", StringComparison.OrdinalIgnoreCase) ||
             keyset.Contains("CASE", StringComparison.OrdinalIgnoreCase))
@@ -517,15 +534,7 @@ public static class DiagnosticsNativePlanContract
 
     private static void ValidateSqlCommand(string command, DiagnosticsNativeRouteSpec specification)
     {
-        var normalized = command.Replace("[", "", StringComparison.Ordinal)
-            .Replace("]", "", StringComparison.Ordinal)
-            .Replace("\"", "", StringComparison.Ordinal)
-            .Replace("`", "", StringComparison.Ordinal);
-        normalized = Regex.Replace(
-            normalized,
-            @"\s+COLLATE\s+[A-Za-z_][A-Za-z0-9_.]*",
-            string.Empty,
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+        var normalized = NormalizeSqlCommand(command);
 
         if (!Regex.IsMatch(normalized, $@"\bFROM\s+{Regex.Escape(specification.TableName)}\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
             !Regex.IsMatch(
@@ -557,19 +566,44 @@ public static class DiagnosticsNativePlanContract
             requiredAtoms.Add("__groundwork_scope");
         if (specification.PredicateColumn is not null)
             requiredAtoms.Add(specification.PredicateColumn);
-        const string parameter = @"(?:@\w+|\?|\$\d+)";
-        if (requiredAtoms.Any(column =>
-                Regex.Matches(where, $@"\b{Regex.Escape(column)}\b\s*=\s*{parameter}", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count != 1))
+        if (!ContainsOnlyExactEqualityPredicates(where, requiredAtoms, allowNullGuards: true))
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command must contain only its exact equality predicates and no extra conditions.");
+    }
+
+    private static string NormalizeSqlCommand(string command)
+    {
+        var normalized = command.Replace("[", "", StringComparison.Ordinal)
+            .Replace("]", "", StringComparison.Ordinal)
+            .Replace("\"", "", StringComparison.Ordinal)
+            .Replace("`", "", StringComparison.Ordinal);
+        return Regex.Replace(
+            normalized,
+            @"\s+COLLATE\s+[A-Za-z_][A-Za-z0-9_.]*",
+            string.Empty,
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+    }
+
+    private static bool ContainsOnlyExactEqualityPredicates(
+        string where,
+        IReadOnlyList<string> requiredColumns,
+        bool allowNullGuards)
+    {
+        const string parameter = @"(?:@\w+|\?|\$\d+)";
+        if (requiredColumns.Any(column =>
+                Regex.Matches(where, $@"\b{Regex.Escape(column)}\b\s*=\s*{parameter}", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count != 1))
+            return false;
 
         var remainder = where;
-        foreach (var column in requiredAtoms)
+        foreach (var column in requiredColumns)
         {
-            remainder = Regex.Replace(
-                remainder,
-                $@"\b{Regex.Escape(column)}\b\s+IS\s+NOT\s+NULL",
-                string.Empty,
-                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (allowNullGuards)
+            {
+                remainder = Regex.Replace(
+                    remainder,
+                    $@"\b{Regex.Escape(column)}\b\s+IS\s+NOT\s+NULL",
+                    string.Empty,
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            }
             remainder = Regex.Replace(
                 remainder,
                 $@"\b{Regex.Escape(column)}\b\s*=\s*{parameter}",
@@ -577,8 +611,7 @@ public static class DiagnosticsNativePlanContract
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         }
         remainder = Regex.Replace(remainder, @"\bAND\b|[();\s]", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        if (remainder.Length != 0)
-            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command must contain only its exact equality predicates and no extra conditions.");
+        return remainder.Length == 0;
     }
 
     private static void ValidateSqlOrdering(string command, DiagnosticsNativeRouteSpec specification)
@@ -703,92 +736,285 @@ public static class DiagnosticsNativePlanContract
         }
     }
 
-    private static void ValidateMongoCommand(string command, DiagnosticsNativeRouteSpec specification)
+    private static void ValidateMongoCommand(
+        string command,
+        DiagnosticsNativeRouteSpec specification,
+        string rawPlan)
     {
-        using var document = ParseJson(command, "MongoDB command");
-        var root = document.RootElement;
-        var collection = root.TryGetProperty("collection", out var collectionValue) && collectionValue.ValueKind == JsonValueKind.String
-            ? collectionValue.GetString()
-            : root.TryGetProperty("find", out var findValue) && findValue.ValueKind == JsonValueKind.String
-                ? findValue.GetString()
-                : null;
-        if (!string.Equals(collection, specification.TableName, StringComparison.Ordinal))
-            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' MongoDB command does not bind its exact collection.");
-        if (!root.TryGetProperty("limit", out var limit) || !limit.TryGetInt32(out var finiteLimit) || finiteLimit != specification.FiniteLimit)
-            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' MongoDB command does not bind its finite page.");
-        if (!root.TryGetProperty("sort", out var sort) || sort.ValueKind != JsonValueKind.Object ||
-            !ValidateMongoOrdering(sort, specification))
-            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' MongoDB command does not bind its complete ordered term list.");
-        if (!root.TryGetProperty("filter", out var filter) || filter.ValueKind != JsonValueKind.Object)
-            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' MongoDB command does not retain a structured filter.");
-        var filterNames = filter.EnumerateObject().Select(property => property.Name).ToArray();
-        var keyset = default(JsonElement);
-        var continuation = specification.RouteIdentity.StartsWith("trace-detail/", StringComparison.Ordinal) &&
-                           filter.TryGetProperty("$or", out keyset);
-        var expectedNames = (specification.StorageScopeRequired ? new[] { "__groundwork_scope" } : Array.Empty<string>())
-            .Concat(specification.PredicateColumn is null ? Array.Empty<string>() : [specification.PredicateColumn])
-            .Concat(continuation ? ["$or"] : [])
-            .ToArray();
-        if (!filterNames.Order(StringComparer.Ordinal).SequenceEqual(expectedNames.Order(StringComparer.Ordinal), StringComparer.Ordinal) ||
-            filter.EnumerateObject().Where(property => property.Name != "$or").Any(property =>
-                property.Value.ValueKind != JsonValueKind.Object ||
-                !property.Value.TryGetProperty("$eq", out var equality) ||
-                property.Value.EnumerateObject().Count() != 1 ||
-                equality.ValueKind == JsonValueKind.Undefined) ||
-            continuation && !ValidateMongoContinuationFilter(keyset, specification))
-            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' MongoDB command must retain only exact equality predicates.");
+        // The observer's preview.8 text is only "MongoDB.Aggregate(page)". Reparse the retained
+        // server explain response and require the envelope command to be byte-structurally the same
+        // native command, so neither a logical collection nor a synthetic scope field can be claimed.
+        MongoExplainCommandInspector.RequireCommandMatchesExplain(command, rawPlan);
+        var actual = MongoExplainCommandInspector.ParseCommandText(command);
+        var isAggregate = actual.TryGetProperty("aggregate", out var aggregate) &&
+                          aggregate.ValueKind == JsonValueKind.String;
+        var isFind = actual.TryGetProperty("find", out var find) &&
+                     find.ValueKind == JsonValueKind.String;
+        if (isAggregate == isFind)
+            throw new PerformanceContractException(
+                $"Diagnostics route '{specification.RouteIdentity}' MongoDB command must be exactly one aggregate or find command.");
+
+        var collection = (isAggregate ? aggregate : find).GetString();
+        ValidateMongoPhysicalCollection(collection, specification);
+
+        if (isAggregate)
+            ValidateMongoAggregateCommand(actual, specification);
+        else
+            ValidateMongoFindCommand(actual, specification);
     }
+
+    private static void ValidateMongoPhysicalCollection(string? collection, DiagnosticsNativeRouteSpec specification)
+    {
+        var prefix = specification.TableName + "__scope__";
+        if (string.IsNullOrWhiteSpace(collection) ||
+            string.Equals(collection, specification.TableName, StringComparison.Ordinal) ||
+            !collection.StartsWith(prefix, StringComparison.Ordinal))
+            throw new PerformanceContractException(
+                $"Diagnostics route '{specification.RouteIdentity}' MongoDB command must bind its scoped physical collection, not logical collection '{specification.TableName}'.");
+
+        var suffix = collection[prefix.Length..];
+        if (suffix.Length != 64 || suffix.Any(character =>
+                !((character is >= '0' and <= '9') || (character is >= 'A' and <= 'F'))))
+            throw new PerformanceContractException(
+                $"Diagnostics route '{specification.RouteIdentity}' MongoDB command does not bind the exact scoped physical collection name.");
+    }
+
+    private static void ValidateMongoAggregateCommand(JsonElement command, DiagnosticsNativeRouteSpec specification)
+    {
+        if (!command.TryGetProperty("pipeline", out var pipeline) || pipeline.ValueKind != JsonValueKind.Array ||
+            !command.TryGetProperty("cursor", out var cursor) || cursor.ValueKind != JsonValueKind.Object)
+            throw new PerformanceContractException(
+                $"Diagnostics route '{specification.RouteIdentity}' MongoDB aggregate command must retain its pipeline and cursor shape.");
+        if (ContainsMongoProperty(pipeline, "__groundwork_scope"))
+            throw new PerformanceContractException(
+                $"Diagnostics route '{specification.RouteIdentity}' MongoDB command must not fabricate a __groundwork_scope predicate.");
+
+        var stages = pipeline.EnumerateArray().Where(stage => stage.ValueKind == JsonValueKind.Object).ToArray();
+        var matchStages = stages.Where(stage => stage.TryGetProperty("$match", out var match) && match.ValueKind == JsonValueKind.Object)
+            .Select(stage => stage.GetProperty("$match")).ToArray();
+        if (matchStages.Length == 0 || !ValidateMongoRoutePredicate(matchStages[0], specification))
+            throw new PerformanceContractException(
+                $"Diagnostics route '{specification.RouteIdentity}' MongoDB aggregate command must retain only its exact route predicate.");
+
+        var continuationStages = matchStages.Skip(1).ToArray();
+        if (continuationStages.Length != 0 &&
+            (!specification.RouteIdentity.StartsWith("trace-detail/", StringComparison.Ordinal) ||
+             continuationStages.Length != 1 ||
+             !continuationStages[0].TryGetProperty("$or", out var keyset) ||
+             !ValidateMongoContinuationFilter(keyset, specification)))
+            throw new PerformanceContractException(
+                $"Diagnostics route '{specification.RouteIdentity}' MongoDB aggregate command contains an invalid continuation predicate.");
+
+        var sortStages = stages.Where(stage => stage.TryGetProperty("$sort", out var sort) && sort.ValueKind == JsonValueKind.Object)
+            .Select(stage => stage.GetProperty("$sort")).ToArray();
+        if (sortStages.Length != 1 || !ValidateMongoPipelineOrdering(pipeline, sortStages[0], specification))
+            throw new PerformanceContractException(
+                $"Diagnostics route '{specification.RouteIdentity}' MongoDB aggregate command does not bind its complete effective ordering.");
+
+        var limits = stages.Where(stage => stage.TryGetProperty("$limit", out _)).ToArray();
+        if (limits.Length != 1 || !limits[0].GetProperty("$limit").TryGetInt32(out var finiteLimit) ||
+            finiteLimit != specification.FiniteLimit)
+            throw new PerformanceContractException(
+                $"Diagnostics route '{specification.RouteIdentity}' MongoDB aggregate command does not bind its finite page limit.");
+    }
+
+    private static void ValidateMongoFindCommand(JsonElement command, DiagnosticsNativeRouteSpec specification)
+    {
+        if (!command.TryGetProperty("filter", out var filter) || filter.ValueKind != JsonValueKind.Object ||
+            !ValidateMongoRoutePredicate(filter, specification))
+            throw new PerformanceContractException(
+                $"Diagnostics route '{specification.RouteIdentity}' MongoDB find command must retain only its exact route predicate.");
+        if (filter.TryGetProperty("$or", out var keyset))
+        {
+            if (!specification.RouteIdentity.StartsWith("trace-detail/", StringComparison.Ordinal) ||
+                !ValidateMongoContinuationFilter(keyset, specification))
+                throw new PerformanceContractException(
+                    $"Diagnostics route '{specification.RouteIdentity}' MongoDB find command contains an invalid continuation predicate.");
+        }
+
+        if (!command.TryGetProperty("sort", out var sort) || sort.ValueKind != JsonValueKind.Object ||
+            !ValidateMongoOrdering(sort, specification) ||
+            !command.TryGetProperty("limit", out var limit) || !limit.TryGetInt32(out var finiteLimit) ||
+            finiteLimit != specification.FiniteLimit)
+            throw new PerformanceContractException(
+                $"Diagnostics route '{specification.RouteIdentity}' MongoDB find command does not bind its complete ordering and finite page limit.");
+    }
+
+    private static bool ValidateMongoRoutePredicate(JsonElement filter, DiagnosticsNativeRouteSpec specification)
+    {
+        if (filter.ValueKind != JsonValueKind.Object)
+            return false;
+        var properties = filter.EnumerateObject().Where(property => property.Name != "$or").ToArray();
+        var expected = specification.PredicateColumn is null ? Array.Empty<string>() : [specification.PredicateColumn];
+        return properties.Length == expected.Length &&
+               properties.Select(property => property.Name).Order(StringComparer.Ordinal)
+                   .SequenceEqual(expected.Order(StringComparer.Ordinal), StringComparer.Ordinal) &&
+               properties.All(property => IsMongoEqualityValue(property.Value));
+    }
+
+    private static bool IsMongoEqualityValue(JsonElement value) =>
+        value.ValueKind is JsonValueKind.String or JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False or JsonValueKind.Null ||
+        value.ValueKind == JsonValueKind.Object && value.EnumerateObject().Count() == 1 &&
+        value.TryGetProperty("$eq", out var equality) &&
+        equality.ValueKind is not JsonValueKind.Object and not JsonValueKind.Array;
 
     private static bool ValidateMongoContinuationFilter(JsonElement keyset, DiagnosticsNativeRouteSpec specification)
     {
         if (keyset.ValueKind != JsonValueKind.Array)
             return false;
         var branches = keyset.EnumerateArray().ToArray();
-        if (branches.Length != specification.EffectiveOrdering.Count)
+        var ordering = specification.EffectiveOrdering;
+        if (branches.Length != ordering.Count)
             return false;
         for (var index = 0; index < branches.Length; index++)
         {
-            if (branches[index].ValueKind != JsonValueKind.Object)
-                return false;
-            if (index > 0 && (branches[index].EnumerateObject().Count() != 1 ||
-                              !branches[index].TryGetProperty("$and", out var conjunctionValue) ||
-                              conjunctionValue.ValueKind != JsonValueKind.Array))
-                return false;
-            var fields = index == 0
-                ? branches[index].EnumerateObject().ToArray()
+            var terms = index == 0
+                ? [branches[index]]
                 : branches[index].TryGetProperty("$and", out var conjunction) && conjunction.ValueKind == JsonValueKind.Array
-                    ? conjunction.EnumerateArray().SelectMany(item => item.ValueKind == JsonValueKind.Object
-                        ? item.EnumerateObject()
-                        : []).ToArray()
+                    ? conjunction.EnumerateArray().ToArray()
                     : [];
-            if (fields.Length != index + 1)
+            if (terms.Length != index + 1)
                 return false;
-            for (var fieldIndex = 0; fieldIndex < fields.Length; fieldIndex++)
+            for (var termIndex = 0; termIndex < terms.Length; termIndex++)
             {
-                if (!string.Equals(fields[fieldIndex].Name, specification.EffectiveOrdering[fieldIndex].Column, StringComparison.Ordinal) ||
-                    fields[fieldIndex].Value.ValueKind != JsonValueKind.Object ||
-                    fields[fieldIndex].Value.EnumerateObject().Count() != 1)
-                    return false;
-                var operatorName = fields[fieldIndex].Value.EnumerateObject().First().Name;
-                var expected = fieldIndex == index ? "$gt" : "$eq";
-                if (!string.Equals(operatorName, expected, StringComparison.Ordinal))
+                var term = ordering[termIndex];
+                if (termIndex < index
+                    ? !ValidateMongoContinuationEquality(terms[termIndex], term)
+                    : !ValidateMongoContinuationAfter(terms[termIndex], term))
                     return false;
             }
         }
         return true;
     }
 
-    private static bool ValidateMongoOrdering(JsonElement sort, DiagnosticsNativeRouteSpec specification)
+    private static bool ValidateMongoContinuationEquality(JsonElement value, RuntimeNativeOrderTerm term)
     {
-        var actual = sort.EnumerateObject()
-            .Select(property => property.Value.TryGetInt32(out var direction)
-                ? new RuntimeNativeOrderTerm(property.Name, direction == -1 ? RuntimeNativeOrderDirection.Descending : RuntimeNativeOrderDirection.Ascending)
-                : null)
-            .ToArray();
-        return actual.Length == specification.EffectiveOrdering.Count &&
-               actual.Zip(specification.EffectiveOrdering).All(pair =>
-                   string.Equals(pair.First?.Column, pair.Second.Column, StringComparison.Ordinal) &&
-                   pair.First?.Direction == pair.Second.Direction);
+        if (value.ValueKind == JsonValueKind.Object && value.EnumerateObject().Count() == 1 &&
+            value.TryGetProperty(term.Column, out var equality))
+            return IsMongoEqualityValue(equality);
+        return value.ValueKind == JsonValueKind.Object &&
+               ContainsMongoOperator(value, "$eq") && ContainsMongoString(value, "$" + term.Column);
+    }
+
+    private static bool ValidateMongoContinuationAfter(JsonElement value, RuntimeNativeOrderTerm term)
+    {
+        var operatorName = term.Direction == RuntimeNativeOrderDirection.Ascending ? "$gt" : "$lt";
+        if (value.ValueKind == JsonValueKind.Object && value.EnumerateObject().Count() == 1 &&
+            value.TryGetProperty(term.Column, out var strict))
+            return strict.ValueKind == JsonValueKind.Object && strict.EnumerateObject().Count() == 1 &&
+                   strict.TryGetProperty(operatorName, out var operand) && IsMongoScalar(operand);
+
+        // A non-null Mongo cursor uses an $expr ordinal comparison for string columns and wraps
+        // the strict term with a null branch when the portable null order is Last.
+        if (value.ValueKind == JsonValueKind.Object && value.TryGetProperty("$or", out var alternatives) &&
+            alternatives.ValueKind == JsonValueKind.Array)
+        {
+            var branches = alternatives.EnumerateArray().ToArray();
+            return branches.Length == 2 &&
+                   branches.Count(branch => ValidateMongoStrictAfter(branch, term, operatorName)) == 1 &&
+                   branches.Count(branch => ValidateMongoNullAfter(branch, term)) == 1;
+        }
+        return ValidateMongoStrictAfter(value, term, operatorName);
+    }
+
+    private static bool ValidateMongoStrictAfter(JsonElement value, RuntimeNativeOrderTerm term, string operatorName)
+    {
+        if (value.ValueKind == JsonValueKind.Object && value.EnumerateObject().Count() == 1 &&
+            value.TryGetProperty(term.Column, out var strict))
+            return strict.ValueKind == JsonValueKind.Object && strict.EnumerateObject().Count() == 1 &&
+                   strict.TryGetProperty(operatorName, out var operand) && IsMongoScalar(operand);
+        return value.ValueKind == JsonValueKind.Object &&
+               ContainsMongoOperator(value, operatorName) &&
+               ContainsMongoOperator(value, "$ne") &&
+               ContainsMongoString(value, "$" + term.Column);
+    }
+
+    private static bool ValidateMongoNullAfter(JsonElement value, RuntimeNativeOrderTerm term) =>
+        value.ValueKind == JsonValueKind.Object && value.EnumerateObject().Count() == 1 &&
+        value.TryGetProperty(term.Column, out var nullValue) && nullValue.ValueKind == JsonValueKind.Null;
+
+    private static bool ValidateMongoPipelineOrdering(
+        JsonElement pipeline,
+        JsonElement sort,
+        DiagnosticsNativeRouteSpec specification)
+    {
+        if (ValidateMongoOrdering(sort, specification))
+            return true;
+
+        var expected = new List<(string Column, RuntimeNativeOrderDirection Direction)>();
+        foreach (var (term, index) in specification.EffectiveOrdering.Select((term, index) => (term, index)))
+        {
+            expected.Add(("_groundwork_null_rank_" + index, RuntimeNativeOrderDirection.Ascending));
+            expected.Add((IsMongoStringOrderColumn(term.Column) ? "_groundwork_ordinal_key_" + index : term.Column, term.Direction));
+        }
+        var actual = ParseMongoOrdering(sort);
+        if (actual.Count != expected.Count || !actual.Zip(expected).All(pair =>
+                pair.First.Column == pair.Second.Column && pair.First.Direction == pair.Second.Direction))
+            return false;
+
+        var setFields = pipeline.EnumerateArray()
+            .Where(stage => stage.ValueKind == JsonValueKind.Object && stage.TryGetProperty("$set", out _))
+            .SelectMany(stage => stage.GetProperty("$set").EnumerateObject().Select(property => property.Name))
+            .ToHashSet(StringComparer.Ordinal);
+        for (var index = 0; index < specification.EffectiveOrdering.Count; index++)
+        {
+            if (!setFields.Contains($"_groundwork_null_rank_{index}") ||
+                IsMongoStringOrderColumn(specification.EffectiveOrdering[index].Column) &&
+                !setFields.Contains($"_groundwork_ordinal_key_{index}"))
+                return false;
+        }
+        return true;
+    }
+
+    private static bool IsMongoStringOrderColumn(string column) =>
+        column is "id" or "idOrderKey" or "serviceNameKey" or "traceKey" or "spanId";
+
+    private static bool ValidateMongoOrdering(JsonElement sort, DiagnosticsNativeRouteSpec specification) =>
+        ParseMongoOrdering(sort).Count == specification.EffectiveOrdering.Count &&
+        ParseMongoOrdering(sort).Zip(specification.EffectiveOrdering).All(pair =>
+            string.Equals(pair.First.Column, pair.Second.Column, StringComparison.Ordinal) &&
+            pair.First.Direction == pair.Second.Direction);
+
+    private static List<(string Column, RuntimeNativeOrderDirection Direction)> ParseMongoOrdering(JsonElement sort) =>
+        sort.ValueKind != JsonValueKind.Object
+            ? []
+            : sort.EnumerateObject().Select(property =>
+            {
+                if (!property.Value.TryGetInt32(out var direction) || direction is not (-1 or 1))
+                    return (Column: string.Empty, Direction: (RuntimeNativeOrderDirection)(-1));
+                return (Column: property.Name, Direction: direction == -1
+                    ? RuntimeNativeOrderDirection.Descending
+                    : RuntimeNativeOrderDirection.Ascending);
+            }).ToList();
+
+    private static bool IsMongoScalar(JsonElement value) =>
+        value.ValueKind is JsonValueKind.String or JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False or JsonValueKind.Null;
+
+    private static bool ContainsMongoOperator(JsonElement value, string name)
+    {
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            if (value.TryGetProperty(name, out _))
+                return true;
+            return value.EnumerateObject().Any(property => ContainsMongoOperator(property.Value, name));
+        }
+        return value.ValueKind == JsonValueKind.Array && value.EnumerateArray().Any(item => ContainsMongoOperator(item, name));
+    }
+
+    private static bool ContainsMongoString(JsonElement value, string expected)
+    {
+        if (value.ValueKind == JsonValueKind.String)
+            return string.Equals(value.GetString(), expected, StringComparison.Ordinal);
+        if (value.ValueKind == JsonValueKind.Object)
+            return value.EnumerateObject().Any(property => ContainsMongoString(property.Value, expected));
+        return value.ValueKind == JsonValueKind.Array && value.EnumerateArray().Any(item => ContainsMongoString(item, expected));
+    }
+
+    private static bool ContainsMongoProperty(JsonElement value, string name)
+    {
+        if (value.ValueKind == JsonValueKind.Object)
+            return value.EnumerateObject().Any(property => property.Name == name || ContainsMongoProperty(property.Value, name));
+        return value.ValueKind == JsonValueKind.Array && value.EnumerateArray().Any(item => ContainsMongoProperty(item, name));
     }
 
     private static void ValidateMongoPlan(string plan, DiagnosticsNativeRouteSpec specification, string physicalIndexName)

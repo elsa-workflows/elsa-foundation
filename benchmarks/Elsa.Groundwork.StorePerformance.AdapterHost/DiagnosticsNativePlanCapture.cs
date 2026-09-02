@@ -105,7 +105,6 @@ internal static class DiagnosticsNativePlanCapture
                     var result = await InvokeRouteAsync(scopes.Primary, route, limit, cancellationToken);
                     if (result != limit)
                         throw new PerformanceContractException($"Diagnostics native route '{route}' returned {result} rows; expected {limit}.");
-                    var command = RequireGroundworkCommand(adapter.CommandObserver.Commands, specification);
                     var physicalIndexName = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(request.Provider, specification);
                     var nativePath = RequireNativeArtifacts(
                         explainDirectory,
@@ -114,6 +113,9 @@ internal static class DiagnosticsNativePlanCapture
                         specification.IndexName,
                         1)[0];
                     var rawPlan = IamNativePlanParser.NormalizeForArtifact(request.Provider, File.ReadAllText(nativePath));
+                    var command = string.Equals(request.Provider, "mongodb", StringComparison.Ordinal)
+                        ? CaptureMongoCommand(adapter.CommandObserver.Commands, specification, rawPlan)
+                        : RequireGroundworkCommand(adapter.CommandObserver.Commands, specification);
                     var rawReference = ArtifactStore.RawPlanName($"diagnostics.{request.Provider}.{request.MeasurementSetId}.{route}.raw.json");
                     var rawPath = Path.Combine(outputDirectory, rawReference);
                     var artifact = new DiagnosticsNativePlanArtifact(1, request.Provider, request.Adapter, route, specification.TableName, specification.IndexName, physicalIndexName, command, rawPlan);
@@ -124,7 +126,7 @@ internal static class DiagnosticsNativePlanCapture
                         "index-search",
                         physicalIndexName,
                         specification.PhysicalCardinality,
-                        specification.StorageScopeRequired,
+                        DiagnosticsNativePlanContract.ExpectedStorageScopePredicate(request.Provider, specification),
                         specification.PredicateColumn is not null,
                         limit,
                         limit);
@@ -465,6 +467,25 @@ internal static class DiagnosticsNativePlanCapture
         if (matches.Length != 1)
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' must emit exactly one provider query against '{specification.TableName}'; observed {matches.Length}.");
         return matches[0].CommandText!;
+    }
+
+    private static string CaptureMongoCommand(
+        IReadOnlyList<ProviderCommandEvent> commands,
+        DiagnosticsNativeRouteSpec specification,
+        string rawPlan)
+    {
+        var matches = commands.Where(command => !command.IsProbe &&
+            command.Operation.EndsWith(".query", StringComparison.Ordinal) &&
+            command.Kind == ProviderCommandKind.Read).ToArray();
+        if (matches.Length != 1)
+            throw new PerformanceContractException(
+                $"Diagnostics route '{specification.RouteIdentity}' must emit exactly one MongoDB provider query; observed {matches.Length}.");
+
+        // Groundwork 0.4.0-preview.8 intentionally exposes only a descriptive observer label for
+        // MongoDB reads. The retained explain response is the authoritative source of the physical
+        // collection, filter, ordering, and limit, so persist that actual command verbatim.
+        return MongoExplainCommandInspector.SerializeCommand(
+            MongoExplainCommandInspector.ExtractCommand(rawPlan));
     }
 
     internal static IReadOnlyList<string> RequireNativeArtifacts(
