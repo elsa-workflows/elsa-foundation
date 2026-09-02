@@ -40,7 +40,8 @@ internal static class DiagnosticsNativePlanCapture
         await adapter.PrepareAsync(cancellationToken);
         var scopes = await adapter.OpenScopedClientsAsync(cancellationToken);
         await SeedStructuredLogFixtureAsync(scopes.Primary.StructuredLogs, cancellationToken);
-        await scopes.Primary.OpenTelemetry.WriteAsync(DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatch(), cancellationToken);
+        foreach (var batch in DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatches())
+            await scopes.Primary.OpenTelemetry.WriteAsync(batch, cancellationToken);
         await adapter.FlushAsync(cancellationToken);
         adapter.CommandObserver.ClearCommands();
 
@@ -198,7 +199,8 @@ internal static class DiagnosticsNativePlanCapture
         await adapter.PrepareAsync(cancellationToken);
         var scopes = await adapter.OpenScopedClientsAsync(cancellationToken);
         await SeedStructuredLogFixtureAsync(scopes.Primary.StructuredLogs, cancellationToken);
-        await scopes.Primary.OpenTelemetry.WriteAsync(DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatch(), cancellationToken);
+        foreach (var batch in DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatches())
+            await scopes.Primary.OpenTelemetry.WriteAsync(batch, cancellationToken);
         await adapter.FlushAsync(cancellationToken);
         var observations = new List<DiagnosticsOracleRouteObservation>(DiagnosticsDurableHistoryWorkload.NativeRouteLimits.Count);
         foreach (var (route, limit) in DiagnosticsDurableHistoryWorkload.NativeRouteLimits)
