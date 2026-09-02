@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json.Nodes;
 using Xunit;
 
@@ -262,6 +263,52 @@ public sealed class GroundworkPerformanceHandoffTests
         Assert.Contains("RequireWithin", harness, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Operator_runner_process_guard_matches_exact_pids_and_fails_closed()
+    {
+        var runnerPath = Path.Combine(RepoRoot, "tools", "groundwork", "run-e3-medium-baseline.py");
+        const string assertions = """
+import runpy
+import sys
+
+module = runpy.run_path(sys.argv[1])
+process_pid = module["process_pid"]
+own_pid = 1234
+blocked_tokens = ("dotnet", "msbuild", "vstest", "testhost", "xunit")
+
+cases = [
+    (" 1234 dotnet test", False, 1234),
+    ("91234 dotnet test", False, 91234),
+    ('"dotnet.exe","1234","Console","1","12,345 K"', True, 1234),
+    ('"dotnet.exe","91234","Console","1","12,345 K"', True, 91234),
+    ('"dotnet.exe","not-a-pid","Console","1","12,345 K"', True, None),
+    ("malformed dotnet row", False, None),
+    ("", False, None),
+]
+for line, windows, expected in cases:
+    actual = process_pid(line, windows=windows)
+    assert actual == expected, (line, windows, expected, actual)
+
+processes = [
+    " 1234 dotnet test",
+    "91234 dotnet test",
+    "malformed dotnet row",
+    "5678 harmless-process",
+]
+blocked = [
+    line
+    for line in processes
+    if process_pid(line, windows=False) != own_pid
+    and any(token in line.lower() for token in blocked_tokens)
+]
+assert blocked == ["91234 dotnet test", "malformed dotnet row"], blocked
+""";
+
+        var result = RunPython(assertions, runnerPath);
+
+        Assert.True(result.ExitCode == 0, result.Error);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("blocked")]
@@ -299,6 +346,39 @@ public sealed class GroundworkPerformanceHandoffTests
         .Single(entry => entry["id"]!.GetValue<string>() == id);
 
     private static JsonObject ReadJson(string path) => JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+
+    private static (int ExitCode, string Error) RunPython(string script, string runnerPath)
+    {
+        foreach (var executable in new[] { "python3", "python" })
+        {
+            try
+            {
+                var startInfo = new ProcessStartInfo(executable)
+                {
+                    WorkingDirectory = RepoRoot,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false
+                };
+                startInfo.ArgumentList.Add("-c");
+                startInfo.ArgumentList.Add(script);
+                startInfo.ArgumentList.Add(runnerPath);
+                using var process = Process.Start(startInfo);
+                if (process is null)
+                    continue;
+                var output = process.StandardOutput.ReadToEnd();
+                var error = process.StandardError.ReadToEnd();
+                process.WaitForExit();
+                return (process.ExitCode, string.Join(Environment.NewLine, output, error));
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                // Try the next conventional Python executable name.
+            }
+        }
+
+        return (-1, "Python is required to validate the Groundwork operator runner.");
+    }
 
     private static string WorkloadSchemaPath => Path.Combine(
         RepoRoot,
