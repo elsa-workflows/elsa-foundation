@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-25
 
-**Status**: Draft
+**Status**: Implemented — merged in PR #474
 
 **Input**: User description: "Reduce noise in the workflow designer's activity Inspector by organizing activity inputs, outputs, variables, slots, identity details, and version information into focused inner tabs."
 

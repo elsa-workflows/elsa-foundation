@@ -128,7 +128,7 @@
 - [x] T026 Run the focused Chromium browser test and review light and black-glass screenshots at normal/minimum widths in `tests/browser/activity-inspector-tabs.spec.ts`
 - [x] T027 Perform an independent correctness/accessibility/architecture review of changes under `src/Elsa.Studio.Workflows/Client/src/` and `tests/browser/` and resolve every material finding
 - [x] T028 Mark completed tasks and record final verification evidence in `specs/093-activity-inspector-tabs/tasks.md`
-- [ ] T029 Commit the changes listed in `specs/093-activity-inspector-tabs/tasks.md`, push `codex/activity-inspector-tabs`, open a draft organization PR against `main`, wait for required checks, address review/CI failures, mark ready, and merge via Model B
+- [x] T029 Commit the changes listed in `specs/093-activity-inspector-tabs/tasks.md`, push `codex/activity-inspector-tabs`, open a draft organization PR against `main`, wait for required checks, address review/CI failures, mark ready, and merge via Model B
 - [ ] T030 Fetch `origin/main` after merge and audit the landed commit against every FR/SC and quickstart command in `specs/093-activity-inspector-tabs/`
 
 ---
