@@ -264,6 +264,28 @@ public sealed class AbsoluteBudgetTests
         }
         finally { File.Delete(policyPath); }
     }
+
+    [Fact]
+    public async Task Budget_gate_cli_preserves_an_incomplete_measurement_without_loading_a_policy()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget(
+            "groundwork",
+            "store",
+            ArtifactFixture.BookmarkOperations,
+            omitFromRun: (2, ArtifactFixture.BookmarkOperations[0]));
+        fixture.Bind();
+        var measurement = Measurement.Measure(fixture.Directory, WorkloadCatalog.Load(Repository.Root()));
+
+        var exitCode = await BenchmarkCli.RunForTestAsync(["budget-gate", "--out", fixture.Directory]);
+
+        Assert.Equal(2, exitCode);
+        using var report = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(fixture.Directory, "budget-gate.v1.json")));
+        var verdict = report.RootElement.GetProperty("Payload").GetProperty("Verdict");
+        Assert.Equal((int)PerformanceVerdict.Blocked, verdict.GetProperty("Verdict").GetInt32());
+        Assert.Equal(measurement.BlockReason, verdict.GetProperty("Reason").GetString());
+        Assert.Equal(JsonValueKind.Null, report.RootElement.GetProperty("Payload").GetProperty("PolicySha256").ValueKind);
+    }
 }
 
 /// <summary>Small, deterministic envelope fixture for exercising diagnostics admission without running a provider.

@@ -321,6 +321,12 @@ public static class AbsoluteBudgetEvaluator
 
     internal static AbsoluteBudgetResult BlockedForContractFailure(string reason) => Blocked(reason);
 
+    internal static AbsoluteBudgetResult BlockedForIncompleteMeasurement(MeasurementResult measurement)
+    {
+        ArgumentNullException.ThrowIfNull(measurement);
+        return Blocked(measurement.BlockReason ?? "Measurement is incomplete.", measurement);
+    }
+
     private static AbsoluteBudgetResult Blocked(string reason, MeasurementResult? measurement = null) =>
         new(1, measurement?.ArtifactManifestSha256 ?? "", measurement?.WorkloadId ?? "", measurement?.WorkloadVersion ?? "", measurement?.Provider ?? "", measurement?.Scale ?? "", measurement?.Target ?? "", null, PerformanceVerdict.Blocked, reason, []);
 

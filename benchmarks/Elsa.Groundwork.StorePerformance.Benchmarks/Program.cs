@@ -141,11 +141,18 @@ internal static class BenchmarkCli
             throw new PerformanceContractException("budget-gate derives its admitted measurement from --out and does not accept --measurement-result.");
         var measurementPath = ArtifactOutputAdmission.RequireWithin(Path.Combine(output, "measurement.v1.json"), output, repositoryRoot);
         ResultStore.Write(measurementPath, measurement);
+        var resultPath = ArtifactOutputAdmission.RequireWithin(
+            Option(args, "--result") ?? Path.Combine(output, "budget-gate.v1.json"), output, repositoryRoot);
+        if (!measurement.Complete || !measurement.CorrectnessValid)
+        {
+            var blocked = AbsoluteBudgetEvaluator.BlockedForIncompleteMeasurement(measurement);
+            var blockedResult = ResultStore.Write(resultPath, new AbsoluteBudgetReport(blocked, null));
+            Console.WriteLine($"Absolute budget result: {blockedResult}");
+            return 2;
+        }
         var policyPath = Option(args, "--policy") ?? Option(args, "--budget-policy") ?? throw new PerformanceContractException("budget-gate requires --policy.");
         var policy = AbsoluteBudgetPolicyFile.Load(policyPath, measurement.WorkloadId, measurement.WorkloadVersion, measurement.Provider);
         var verdict = AbsoluteBudgetEvaluator.Evaluate(policy, measurement);
-        var resultPath = ArtifactOutputAdmission.RequireWithin(
-            Option(args, "--result") ?? Path.Combine(output, "budget-gate.v1.json"), output, repositoryRoot);
         var result = ResultStore.Write(resultPath, new AbsoluteBudgetReport(verdict, AbsoluteBudgetPolicyFile.Hash(policyPath)));
         Console.WriteLine($"Absolute budget result: {result}");
         return verdict.Verdict == PerformanceVerdict.Pass ? 0 : 2;
