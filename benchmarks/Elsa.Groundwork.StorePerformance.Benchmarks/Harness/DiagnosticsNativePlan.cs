@@ -95,8 +95,7 @@ public static class DiagnosticsNativePlanContract
                 route != "structured-log-replay",
                 route switch
                 {
-                    "resources-by-last-seen" => [new("lastSeen", RuntimeNativeOrderDirection.Descending), new("id", RuntimeNativeOrderDirection.Ascending)],
-                    "resources-by-status" or "resources-by-service" => [new("lastSeen", RuntimeNativeOrderDirection.Descending), new("id", RuntimeNativeOrderDirection.Ascending)],
+                    "resources-by-last-seen" or "resources-by-status" or "resources-by-service" => [new("lastSeen", RuntimeNativeOrderDirection.Descending), new("idOrderKey", RuntimeNativeOrderDirection.Ascending)],
                     "traces-by-last-seen" => [new("startTime", RuntimeNativeOrderDirection.Descending), new("traceKey", RuntimeNativeOrderDirection.Ascending)],
                     "metrics-by-last-seen" or "logs-by-last-seen" => [new("timestamp", RuntimeNativeOrderDirection.Descending), new("id", RuntimeNativeOrderDirection.Ascending)],
                     "structured-log-recent" => [new("sequence", RuntimeNativeOrderDirection.Descending)],
@@ -112,13 +111,11 @@ public static class DiagnosticsNativePlanContract
             "resources-by-status" => adapter == EfAdapter
                 ? Specification(EfTable, "IX_PersistedTelemetryResource_Status", "LastSeen", "Status", DiagnosticsDurableHistoryWorkload.ResourceCount)
                 : Specification(GroundworkTable, "elsa_otel_resources_status_last_seen", "lastSeen", "status", DiagnosticsDurableHistoryWorkload.ResourceCount, true),
-            // ServiceName + LastSeen + Id exceeds the strict portable key budget at the public
-            // 512-code-unit bounds. The preview ordinal-identity projection does not alter the
-            // declaration budget (and expands the generated physical strings), so this remains
-            // an explicit blocked route until the query/schema contract is redesigned.
+            // The service and ID identities keep the complete seek/order key inside Groundwork's
+            // strict portable key budget without shortening the public resource fields.
             "resources-by-service" => adapter == EfAdapter
                 ? Specification(EfTable, "IX_PersistedTelemetryResource_ServiceName", "LastSeen", "ServiceName", DiagnosticsDurableHistoryWorkload.ResourceCount)
-                : Specification(GroundworkTable, "", "lastSeen", "serviceName", DiagnosticsDurableHistoryWorkload.ResourceCount, true),
+                : Specification(GroundworkTable, "elsa_otel_resources_service_last_seen", "lastSeen", "serviceNameKey", DiagnosticsDurableHistoryWorkload.ResourceCount, true),
             "traces-by-last-seen" => adapter == EfAdapter
                 ? Specification("TelemetryTraces", "IX_PersistedTelemetryTrace_StartTime", "StartTime", null, DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream)
                 : Specification("elsa_otel_trace_summaries_v3", "elsa_otel_trace_summaries_start", "startTime", null, DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream, true),

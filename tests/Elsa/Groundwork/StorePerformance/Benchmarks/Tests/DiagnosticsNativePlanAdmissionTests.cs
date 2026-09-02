@@ -16,12 +16,12 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         Assert.Equal(("elsa_otel_resources_v2", "elsa_otel_resources_last_seen"), (resource.TableName, resource.IndexName));
         Assert.Equal(("elsa_otel_trace_summaries_v3", "elsa_otel_trace_summaries_start"), (trace.TableName, trace.IndexName));
         Assert.Equal("elsa_otel_resources_status_last_seen", DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, "resources-by-status").IndexName);
-        Assert.Empty(DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, "resources-by-service").IndexName);
+        Assert.Equal("elsa_otel_resources_service_last_seen", DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, "resources-by-service").IndexName);
         Assert.Equal("elsa_otel_metric_points_timestamp", DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, "metrics-by-last-seen").IndexName);
         Assert.Equal("elsa_otel_logs_timestamp", DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, "logs-by-last-seen").IndexName);
         Assert.Equal("elsa_structured_logs_sequence_order", DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, "structured-log-recent").IndexName);
         Assert.Equal("elsa_structured_logs_sequence_order", DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, "structured-log-replay").IndexName);
-        Assert.Equal(7, DiagnosticsDurableHistoryWorkload.NativeRouteLimits.Keys.Count(route =>
+        Assert.Equal(8, DiagnosticsDurableHistoryWorkload.NativeRouteLimits.Keys.Count(route =>
             !string.IsNullOrWhiteSpace(DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, route).IndexName)));
     }
 
@@ -46,7 +46,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     {
         var blocked = new[]
         {
-            "resources-by-service", "trace-detail"
+            "trace-detail"
         };
 
         Assert.All(blocked, route =>
@@ -57,6 +57,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
 
     [Theory]
     [InlineData("resources-by-status", "status", true)]
+    [InlineData("resources-by-service", "serviceNameKey", true)]
     [InlineData("metrics-by-last-seen", null, true)]
     [InlineData("logs-by-last-seen", null, true)]
     [InlineData("structured-log-recent", null, true)]
@@ -255,8 +256,8 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             var spec = DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, routeIdentity);
             command ??= provider switch
             {
-                "mongodb" => $"{{\"collection\":\"{spec.TableName}\",\"filter\":{{\"__groundwork_scope\":{{\"$eq\":\"scope\"}}}},\"sort\":{{\"lastSeen\":-1,\"id\":1}},\"limit\":127}}",
-                _ => "SELECT * FROM elsa_otel_resources_v2 WHERE __groundwork_scope = @scope ORDER BY lastSeen DESC, id ASC LIMIT 127"
+                "mongodb" => $"{{\"collection\":\"{spec.TableName}\",\"filter\":{{\"__groundwork_scope\":{{\"$eq\":\"scope\"}}}},\"sort\":{{\"lastSeen\":-1,\"idOrderKey\":1}},\"limit\":127}}",
+                _ => "SELECT * FROM elsa_otel_resources_v2 WHERE __groundwork_scope = @scope ORDER BY lastSeen DESC, idOrderKey ASC LIMIT 127"
             };
             var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(provider, spec);
             nativePlan ??= provider switch
