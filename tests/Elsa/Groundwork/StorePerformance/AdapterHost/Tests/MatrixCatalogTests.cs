@@ -47,7 +47,8 @@ public sealed class MatrixCatalogTests
                      "trigger-binding-stimulus-lookup",
                      "recurring-schedule-selection",
                      "due-timer-selection",
-                     "placement-takeover"
+                     "placement-takeover",
+                     "outbox-drain"
                  })
         {
             var registration = Single(registrations, workload, "groundwork-v2");

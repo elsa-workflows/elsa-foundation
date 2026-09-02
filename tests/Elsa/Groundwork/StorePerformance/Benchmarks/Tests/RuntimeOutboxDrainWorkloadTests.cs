@@ -49,6 +49,11 @@ public sealed class RuntimeOutboxDrainWorkloadTests
         Assert.Equal(
             RuntimeOutboxDrainWorkload.RetryableEntries,
             adapter.Shared.Items.Values.Count(item => item.Status == RuntimePostCommitOutboxStatus.FailedRetryable));
+        var measuredClaim = Assert.Single(
+            adapter.Shared.ClaimRequests,
+            request => request.OwnerId.StartsWith("measured-claim-", StringComparison.Ordinal));
+        Assert.Null(measuredClaim.WorkflowExecutionId);
+        Assert.Null(measuredClaim.IntentKind);
     }
 
     [Theory]
@@ -189,6 +194,7 @@ public sealed class RuntimeOutboxDrainWorkloadTests
         public int ContentionAttempts { get; set; }
         public int PrimaryCompletions { get; set; }
         public List<DateTimeOffset> ClaimRequestTimes { get; } = [];
+        public List<RuntimePostCommitOutboxClaimRequest> ClaimRequests { get; } = [];
         public List<string> Events { get; } = [];
     }
 
@@ -232,6 +238,7 @@ public sealed class RuntimeOutboxDrainWorkloadTests
             lock (_backing.Gate)
             {
                 _backing.ClaimRequestTimes.Add(request.Now);
+                _backing.ClaimRequests.Add(request);
                 if (request.OwnerId.StartsWith("outbox-contender-", StringComparison.Ordinal))
                     _backing.ContentionAttempts++;
                 if (_fault == OutboxFault.MissingSentinel && request.WorkflowExecutionId == "outbox-drain-contention")

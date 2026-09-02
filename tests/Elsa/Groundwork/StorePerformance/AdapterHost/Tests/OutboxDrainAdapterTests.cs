@@ -8,6 +8,60 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost.Tests;
 public sealed class OutboxDrainAdapterTests
 {
     [Fact]
+    public async Task Captures_canonical_unfiltered_claim_route_with_the_declared_sqlite_index()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"groundwork-outbox-capture-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var connectionString = $"Data Source={Path.Combine(root, "outbox-capture.db")}";
+
+        try
+        {
+            var observed = await ProviderProbe.ReadAsync("sqlite", connectionString);
+            var request = Request() with
+            {
+                ProviderVersion = observed.Version,
+                ProviderTopology = observed.Topology,
+                ProviderConfiguration = observed.Configuration,
+                NativePlanEvidenceReference = NativePlanEvidenceStaging.ReferenceFor(
+                    RuntimeOutboxDrainWorkload.WorkloadId,
+                    "sqlite",
+                    "set")
+            };
+
+            var digest = await OutboxDrainNativePlanCapture.CaptureAsync(
+                request,
+                connectionString,
+                root,
+                observed);
+
+            var evidencePath = Path.Combine(root, request.NativePlanEvidenceReference);
+            var document = NativePlanEvidenceStaging.Read(evidencePath);
+            Assert.Equal(digest, NativePlanEvidenceStaging.Sha256(evidencePath));
+            var route = Assert.Single(document.Routes);
+            var specification = RuntimeNativePlanContract.For(request.WorkloadId, "list-claimable");
+            Assert.Equal("list-claimable", route.RouteIdentity);
+            Assert.Equal(
+                RuntimeNativePlanContract.ExpectedPhysicalIndexName("sqlite", specification),
+                route.IndexName);
+            Assert.Equal(RuntimeOutboxDrainWorkload.OutboxEntryCount, route.PhysicalCardinality);
+            Assert.Equal(RuntimeOutboxDrainWorkload.BatchSize, route.FiniteLimit);
+            Assert.Equal(RuntimeOutboxDrainWorkload.BatchSize + 1, route.NativeFetchLimit);
+            Assert.Equal(RuntimeOutboxDrainWorkload.BatchSize, route.MaterializedCandidateCount);
+            RuntimeNativePlanContract.ValidateEnvelope(
+                request.WorkloadId,
+                request.Provider,
+                request.Adapter,
+                route,
+                Path.Combine(root, route.RawPlanReference));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Runs_frozen_correctness_and_prepares_operations_over_real_sqlite_runtime_stores()
     {
         var root = Path.Combine(Path.GetTempPath(), $"groundwork-outbox-adapter-{Guid.NewGuid():N}");

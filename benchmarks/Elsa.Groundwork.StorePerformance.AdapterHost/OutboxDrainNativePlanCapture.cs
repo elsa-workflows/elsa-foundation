@@ -1,19 +1,16 @@
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
-using Elsa.Workflows.Runtime.Distributed.Contracts;
-using Groundwork.Kernel;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 
 /// <summary>
-/// Captures the current public placement-owner route from a freshly executed Groundwork v2 fixture.
-/// The route is deliberately invoked through <see cref="IExecutionPlacementStore"/> so the retained
-/// command and provider plan describe production behavior rather than a direct provider query.
+/// Captures the frozen canonical unfiltered claimable route through the public fenced outbox store.
+/// The correctness run establishes the exact 1,024-row fixture; its untouched due tail supplies a
+/// full public page without inventing rows solely for explain capture.
 /// </summary>
-internal static class DistributedPlacementNativePlanCapture
+internal static class OutboxDrainNativePlanCapture
 {
-    private const string InitialOwner = "worker-alpha";
-
     public static async Task<string> CaptureAsync(
         RunRequest request,
         string connectionString,
@@ -24,36 +21,35 @@ internal static class DistributedPlacementNativePlanCapture
         RuntimeNativePlanCaptureSupport.EnsureRequest(
             request,
             observed,
-            DistributedPlacementTakeoverWorkload.WorkloadId,
-            DistributedPlacementTakeoverAdapter.PhysicalForm);
+            RuntimeOutboxDrainWorkload.WorkloadId,
+            OutboxDrainAdapter.PhysicalForm);
 
-        await using var adapter = new DistributedPlacementTakeoverAdapter(
+        await using var adapter = new OutboxDrainAdapter(
             request,
             connectionString,
             outputDirectory,
             captureCommands: true);
         await adapter.PrepareAsync(cancellationToken);
-        await new DistributedPlacementTakeoverWorkload().ExecuteAsync(adapter, cancellationToken);
+        await new RuntimeOutboxDrainWorkload().ExecuteAsync(adapter, cancellationToken);
         var clients = await adapter.OpenIndependentClientsAsync(cancellationToken);
         var observer = adapter.CommandObserver;
-        var specification = RuntimeNativePlanContract.For(
-            request.WorkloadId,
-            "list-owned-live-placements");
+        var specification = RuntimeNativePlanContract.For(request.WorkloadId, "list-claimable");
 
         await using var explain = await NativeExplainCaptureGate.EnterAsync(
-            $"groundwork-placement-{request.Provider}-{request.MeasurementSetId}",
+            $"groundwork-outbox-{request.Provider}-{request.MeasurementSetId}",
             cancellationToken);
         observer.ClearCommands();
         var before = Directory.EnumerateFiles(explain.Directory).ToHashSet(StringComparer.Ordinal);
-        var leases = await clients.Primary.ListOwnedAsync(
-            new ExecutionPlacementLeaseListRequest(
-                InitialOwner,
-                DistributedPlacementTakeoverWorkload.FixedNowUtc,
-                DistributedPlacementTakeoverWorkload.TakeoverCandidates),
+        var claims = await clients.Primary.Claims.ClaimAsync(
+            new RuntimePostCommitOutboxClaimRequest(
+                "native-plan-capture",
+                RuntimeOutboxDrainWorkload.FixedNowUtc,
+                TimeSpan.FromMinutes(1),
+                specification.FiniteLimit),
             cancellationToken);
-        if (leases.Count != specification.FiniteLimit)
+        if (claims.Count != specification.FiniteLimit)
             throw new PerformanceContractException(
-                $"Runtime placement route '{specification.RouteIdentity}' returned {leases.Count} rows; expected {specification.FiniteLimit}.");
+                $"Runtime outbox route '{specification.RouteIdentity}' returned {claims.Count} claims; expected {specification.FiniteLimit}.");
 
         var command = RuntimeNativePlanCaptureSupport.RequireRouteCommand(observer.Commands, specification);
         var nativePath = RuntimeNativePlanCaptureSupport.RequireNativeArtifact(
@@ -83,7 +79,7 @@ internal static class DistributedPlacementNativePlanCapture
             specification.StorageScopeRequired,
             specification.PredicateColumn is not null,
             specification.FiniteLimit,
-            leases.Count)
+            claims.Count)
         {
             NativeFetchLimit = specification.NativeFetchLimit
         };

@@ -169,7 +169,10 @@ internal static class RuntimeScheduleNativePlanCapture
                 specification.StorageScopeRequired,
                 specification.PredicateColumn is not null,
                 specification.FiniteLimit,
-                materialized);
+                materialized)
+            {
+                NativeFetchLimit = specification.NativeFetchLimit
+            };
             RuntimeNativePlanContract.ValidateEnvelope(
                 request.WorkloadId,
                 request.Provider,

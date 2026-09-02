@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
@@ -51,7 +52,12 @@ public sealed record NativeRouteEvidence(
     bool HasStorageScopePredicate,
     bool HasRoutePredicate,
     int FiniteLimit,
-    int MaterializedCandidateCount);
+    int MaterializedCandidateCount)
+{
+    /// <summary>The actual provider row bound, including any continuation lookahead.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int NativeFetchLimit { get; init; }
+}
 public sealed record DiagnosticsOracleRouteObservation(
     string RouteIdentity,
     IReadOnlyList<string> CommandTexts,

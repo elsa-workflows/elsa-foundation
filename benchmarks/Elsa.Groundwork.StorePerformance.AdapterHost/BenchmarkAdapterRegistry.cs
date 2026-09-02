@@ -36,7 +36,7 @@ internal static class BenchmarkAdapterRegistry
             GroundworkProviders, NativePlanCaptureKind.Unsupported,
             static (request, connection, output) => new QueueDrainAdapter(request, connection, output)),
         Registration(RuntimeOutboxDrainWorkload.WorkloadId, WorkloadVersion, GroundworkV2Adapter, OutboxDrainAdapter.PhysicalForm,
-            GroundworkProviders, NativePlanCaptureKind.Unsupported,
+            GroundworkProviders, NativePlanCaptureKind.Complete,
             static (request, connection, output) => new OutboxDrainAdapter(request, connection, output)),
         Registration(RuntimeTriggerBindingStimulusLookupWorkload.WorkloadId, WorkloadVersion, GroundworkV2Adapter, TriggerBindingStimulusLookupAdapter.PhysicalForm,
             GroundworkProviders, NativePlanCaptureKind.Complete,

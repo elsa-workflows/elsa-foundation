@@ -74,7 +74,10 @@ internal static class TriggerBindingNativePlanCapture
                 specification.StorageScopeRequired,
                 specification.PredicateColumn is not null,
                 specification.FiniteLimit,
-                materialized);
+                materialized)
+            {
+                NativeFetchLimit = specification.NativeFetchLimit
+            };
             RuntimeNativePlanContract.ValidateEnvelope(
                 request.WorkloadId,
                 request.Provider,

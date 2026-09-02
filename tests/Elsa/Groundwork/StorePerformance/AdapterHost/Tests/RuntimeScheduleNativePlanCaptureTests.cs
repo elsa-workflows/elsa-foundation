@@ -115,6 +115,7 @@ public sealed class RuntimeScheduleNativePlanCaptureTests
         Assert.True(route.HasRoutePredicate);
         Assert.Equal(specification.PhysicalCardinality, route.PhysicalCardinality);
         Assert.Equal(specification.FiniteLimit, route.FiniteLimit);
+        Assert.Equal(specification.NativeFetchLimit, route.NativeFetchLimit);
         Assert.Equal(specification.FiniteLimit, route.MaterializedCandidateCount);
         RuntimeNativePlanContract.ValidateEnvelope(
             request.WorkloadId,

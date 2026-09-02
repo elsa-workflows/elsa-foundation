@@ -200,6 +200,20 @@ static async Task<int> CapturePlan(string[] args)
         return 0;
     }
 
+    if (string.Equals(request.WorkloadId, RuntimeOutboxDrainWorkload.WorkloadId, StringComparison.Ordinal))
+    {
+        var outboxDigest = await OutboxDrainNativePlanCapture.CaptureAsync(
+            request,
+            connectionString,
+            outputDirectory,
+            observed,
+            CancellationToken.None);
+        Console.WriteLine($"native-plan-evidence={request.NativePlanEvidenceReference}");
+        Console.WriteLine($"native-plan-sha256={outboxDigest}");
+        Console.WriteLine("native-plan-routes=1");
+        return 0;
+    }
+
     if (string.Equals(request.WorkloadId, DiagnosticsDurableHistoryWorkload.WorkloadId, StringComparison.Ordinal))
     {
         // Diagnostics has declared provider-native routes. It must never fall through to the

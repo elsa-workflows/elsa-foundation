@@ -64,7 +64,8 @@ internal static class GroundworkV2PostCommitOutboxStorageConventions
         EnsureProjection(values, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, item.Intent.WorkflowExecutionId);
         EnsureProjection(values, ElsaRuntimeV2StorageManifest.PostCommitOutboxStatusField, (int)item.Status);
         EnsureProjection(values, ElsaRuntimeV2StorageManifest.PostCommitOutboxDeliverableAtField, DeliverableAt(item));
-        EnsureProjection(values, ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField, ClaimableAt(item));
+        EnsureProjection(values, ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableIsEligibleField, IsClaimable(item));
+        EnsureProjection(values, ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField, ClaimableOrderAt(item));
         EnsureProjection(values, ElsaRuntimeV2StorageManifest.PostCommitOutboxRecordedAtField, item.RecordedAt);
         EnsureProjection(values, ElsaRuntimeV2StorageManifest.PostCommitOutboxItemIdField, ProjectionId(item.OutboxItemId));
         EnsureProjection(values, ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindField, item.Intent.Kind);
@@ -88,7 +89,8 @@ internal static class GroundworkV2PostCommitOutboxStorageConventions
             [ElsaRuntimeV2StorageManifest.CollectionField] = ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind,
             [ElsaRuntimeV2StorageManifest.PostCommitOutboxStatusField] = (int)item.Status,
             [ElsaRuntimeV2StorageManifest.PostCommitOutboxDeliverableAtField] = DeliverableAt(item),
-            [ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField] = ClaimableAt(item),
+            [ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableIsEligibleField] = IsClaimable(item),
+            [ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField] = ClaimableOrderAt(item),
             [ElsaRuntimeV2StorageManifest.PostCommitOutboxRecordedAtField] = item.RecordedAt,
             [ElsaRuntimeV2StorageManifest.PostCommitOutboxItemIdField] = ProjectionId(item.OutboxItemId),
             [ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindField] = item.Intent.Kind
@@ -105,12 +107,20 @@ internal static class GroundworkV2PostCommitOutboxStorageConventions
             : null;
     }
 
-    public static DateTimeOffset? ClaimableAt(RuntimePostCommitOutboxItem item)
+    public static bool IsClaimable(RuntimePostCommitOutboxItem item)
     {
         ValidateItem(item);
         return item.Status == RuntimePostCommitOutboxStatus.Delivering
-            ? item.DeliveryVisibleAfter
-            : DeliverableAt(item);
+            ? item.DeliveryVisibleAfter is not null
+            : DeliverableAt(item) is not null;
+    }
+
+    public static DateTimeOffset ClaimableOrderAt(RuntimePostCommitOutboxItem item)
+    {
+        ValidateItem(item);
+        return item.Status == RuntimePostCommitOutboxStatus.Delivering
+            ? item.DeliveryVisibleAfter ?? DateTimeOffset.MaxValue
+            : DeliverableAt(item) ?? DateTimeOffset.MaxValue;
     }
 
     public static bool PendingItemsEquivalent(
@@ -185,6 +195,24 @@ internal static class GroundworkV2PostCommitOutboxStorageConventions
                 long value => checked((int)value),
                 JsonElement element when element.TryGetInt32(out var value) => value,
                 _ => throw new InvalidDataException($"Groundwork post-commit outbox row projection '{field}' is not an integer.")
+            }
+            : throw new InvalidDataException($"Groundwork post-commit outbox row is missing projection '{field}'.");
+        if (actual != expected)
+            throw new InvalidDataException($"Groundwork post-commit outbox row projection '{field}' does not match its current content.");
+    }
+
+    private static void EnsureProjection(
+        IReadOnlyDictionary<string, object?> values,
+        string field,
+        bool expected)
+    {
+        var actual = values.TryGetValue(field, out var raw)
+            ? raw switch
+            {
+                bool value => value,
+                JsonElement { ValueKind: JsonValueKind.True } => true,
+                JsonElement { ValueKind: JsonValueKind.False } => false,
+                _ => throw new InvalidDataException($"Groundwork post-commit outbox row projection '{field}' is not a Boolean.")
             }
             : throw new InvalidDataException($"Groundwork post-commit outbox row is missing projection '{field}'.");
         if (actual != expected)

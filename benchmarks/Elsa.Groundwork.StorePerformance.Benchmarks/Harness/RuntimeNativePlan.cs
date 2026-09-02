@@ -21,7 +21,11 @@ public sealed record RuntimeNativeRouteSpec(
     string? PredicateColumn,
     int PhysicalCardinality,
     int FiniteLimit,
-    bool StorageScopeRequired = true);
+    bool StorageScopeRequired = true)
+{
+    /// <summary>The provider-side page includes Groundwork's one-row continuation lookahead.</summary>
+    public int NativeFetchLimit => checked(FiniteLimit + 1);
+}
 
 public sealed record RuntimeNativePredicateSpec(string Column, string Operator);
 
@@ -53,6 +57,7 @@ public static class RuntimeNativePlanContract
     private const string PlacementTable = "elsa_distributed_execution_placement";
     private const string DurableTimerTable = "runtime_durable_timer";
     private const string RecurringScheduleTable = "runtime_recurring_trigger_schedule";
+    private const string OutboxTable = "runtime_post_commit_outbox";
 
     public static RuntimeNativeRouteSpec For(string workloadId, string routeIdentity) => workloadId switch
     {
@@ -157,6 +162,19 @@ public static class RuntimeNativePlanContract
                 RuntimeRecurringScheduleSelectionWorkload.PageSize),
             _ => throw UnknownRoute(routeIdentity)
         },
+        RuntimeOutboxDrainWorkload.WorkloadId => routeIdentity switch
+        {
+            "list-claimable" => new(
+                routeIdentity,
+                OutboxTable,
+                "by_claimable_time_recorded_id",
+                ["claimableAt", "outboxRecordedAt", "outboxItemId", "id"],
+                [new("claimableIsEligible", "="), new("claimableAt", "<=")],
+                "claimableAt",
+                RuntimeOutboxDrainWorkload.OutboxEntryCount,
+                RuntimeOutboxDrainWorkload.BatchSize),
+            _ => throw UnknownRoute(routeIdentity)
+        },
         _ => throw new PerformanceContractException(
             $"Runtime native-plan admission does not support workload '{workloadId}'.")
     };
@@ -170,6 +188,7 @@ public static class RuntimeNativePlanContract
         DistributedPlacementTakeoverWorkload.WorkloadId => [For(workloadId, "list-owned-live-placements")],
         RuntimeDueTimerSelectionWorkload.WorkloadId => [For(workloadId, "list-due")],
         RuntimeRecurringScheduleSelectionWorkload.WorkloadId => [For(workloadId, "list-due"), For(workloadId, "page-by-publication")],
+        RuntimeOutboxDrainWorkload.WorkloadId => [For(workloadId, "list-claimable")],
         _ => throw new PerformanceContractException($"Runtime native-plan admission does not support workload '{workloadId}'.")
     };
 
@@ -237,6 +256,7 @@ public static class RuntimeNativePlanContract
         if (route.PhysicalCardinality != specification.PhysicalCardinality ||
             !string.Equals(route.PlanClassification, "index-search", StringComparison.Ordinal) ||
             route.FiniteLimit != specification.FiniteLimit ||
+            route.NativeFetchLimit != specification.NativeFetchLimit ||
             route.MaterializedCandidateCount != specification.FiniteLimit ||
             route.HasStorageScopePredicate != specification.StorageScopeRequired ||
             route.HasRoutePredicate != (specification.PredicateColumn is not null))
@@ -287,13 +307,13 @@ public static class RuntimeNativePlanContract
             throw InvalidCommand(specification, "a bounded, non-materializing page shape");
 
         const string parameter = @"(?:[@$][A-Za-z_0-9]+|\?)";
-        var limit = $@"(?:{specification.FiniteLimit}|{parameter})";
+        var limit = $@"(?:{specification.NativeFetchLimit}|{parameter})";
         if (!Regex.IsMatch(normalized, $@"\bFROM\s+{Regex.Escape(specification.TableName)}\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
             !Regex.IsMatch(
                 normalized,
                 $@"\b(?:LIMIT\s+{limit}|FETCH\s+(?:FIRST|NEXT)\s+{limit}\s+ROWS?|TOP\s*\(?\s*{limit}\s*\)?)",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
-            throw InvalidCommand(specification, "exact table or finite limit");
+            throw InvalidCommand(specification, "exact table or native lookahead limit");
 
         var order = Regex.Match(
             normalized,
@@ -400,8 +420,8 @@ public static class RuntimeNativePlanContract
                 : null;
         if (!string.Equals(collection, specification.TableName, StringComparison.Ordinal))
             throw InvalidCommand(specification, "exact collection");
-        if (!root.TryGetProperty("limit", out var limit) || !TryFiniteLimit(limit, specification.FiniteLimit))
-            throw InvalidCommand(specification, "exact finite limit");
+        if (!root.TryGetProperty("limit", out var limit) || !TryFiniteLimit(limit, specification.NativeFetchLimit))
+            throw InvalidCommand(specification, "exact native lookahead limit");
         if (!root.TryGetProperty("sort", out var sort) || sort.ValueKind != JsonValueKind.Object ||
             !SortMatches(sort, specification.OrderColumns))
             throw InvalidCommand(specification, "exact deterministic ordering");

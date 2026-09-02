@@ -53,6 +53,12 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStoreTests
         Assert.Equal(
             GroundworkV2PostCommitOutboxPhysicalId(id),
             row!.Values.Values[ElsaRuntimeV2StorageManifest.PostCommitOutboxItemIdField]);
+        Assert.Equal(
+            false,
+            row.Values.Values[ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableIsEligibleField]);
+        Assert.Equal(
+            DateTimeOffset.MaxValue,
+            row.Values.Values[ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField]);
     }
 
     [Fact]
@@ -87,16 +93,23 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStoreTests
     public async Task Candidate_routes_are_bounded_and_ordered_by_the_declared_manifest_prefix()
     {
         var unit = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind);
-        var requests = new List<QueryRequest>();
+        var requests = new List<(QueryRequest Request, QueryRenderOptions? Options)>();
         var source = new RecordingSessionSource(new RecordingSession(unit, requests), unit);
         var store = new GroundworkV2RuntimePostCommitOutboxStore(source, Access("tenant-a"));
 
         Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, int.MaxValue)));
         Assert.Empty(await store.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
             "owner-a", Now, TimeSpan.FromMinutes(1), int.MaxValue, "workflow-a", "test.intent")));
+        Assert.Empty(await store.ClaimAsync(new RuntimePostCommitOutboxClaimRequest(
+            "owner-b", Now, TimeSpan.FromMinutes(1), int.MaxValue)));
 
-        Assert.Equal(2, requests.Count);
-        Assert.All(requests, request => Assert.Equal(RuntimeStorePageRequest.MaximumLimit, request.Paging.Limit));
+        Assert.Equal(3, requests.Count);
+        Assert.All(requests, captured => Assert.Equal(RuntimeStorePageRequest.MaximumLimit, captured.Request.Paging.Limit));
+        Assert.Null(requests[0].Options);
+        Assert.Null(requests[1].Options);
+        Assert.Equal(
+            ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableIndex,
+            requests[2].Options?.SelectedIndex);
         Assert.Equal(
             [
                 ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField,
@@ -105,7 +118,14 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStoreTests
                 ElsaRuntimeV2StorageManifest.PostCommitOutboxRecordedAtField,
                 ElsaRuntimeV2StorageManifest.PostCommitOutboxItemIdField
             ],
-            requests[1].Order.Select(term => term.Column.Name));
+            requests[1].Request.Order.Select(term => term.Column.Name));
+        Assert.Equal(
+            [
+                ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField,
+                ElsaRuntimeV2StorageManifest.PostCommitOutboxRecordedAtField,
+                ElsaRuntimeV2StorageManifest.PostCommitOutboxItemIdField
+            ],
+            requests[2].Request.Order.Select(term => term.Column.Name));
     }
 
     [Fact]
@@ -164,7 +184,7 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStoreTests
         var values = GroundworkV2PostCommitOutboxStorageConventions.Values(item).Values
             .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
         values[ElsaRuntimeV2StorageManifest.PostCommitOutboxDeliverableAtField] = null;
-        values[ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField] = null;
+        values[ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableIsEligibleField] = false;
         var unit = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind);
         var session = fixture.Connection.OpenSession(unit, StorageAccess.Scoped(new StorageScope("tenant-a")));
         Assert.Equal(
@@ -763,14 +783,16 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStoreTests
                 : ElsaRuntimeV2StorageManifest.Require(unitId);
     }
 
-    private sealed class RecordingSession(StorageUnit unit, ICollection<QueryRequest> requests) : SynchronousStorageSessionTestDouble, IStorageSession
+    private sealed class RecordingSession(
+        StorageUnit unit,
+        ICollection<(QueryRequest Request, QueryRenderOptions? Options)> requests) : SynchronousStorageSessionTestDouble, IStorageSession
     {
         public StorageUnit Unit { get; } = unit;
         public StorageAccess Access => StorageAccess.Scoped(new StorageScope("tenant-a"));
         public StoredEntry? Read(StorageKey key) => null;
         public QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null)
         {
-            requests.Add(request);
+            requests.Add((request, options));
             return new QueryMaterializedResult([], null, null);
         }
 

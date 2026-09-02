@@ -279,7 +279,12 @@ public sealed class ElsaRuntimeV2StorageManifestTests
         AssertColumn(operational, ElsaRuntimeV2StorageManifest.RecoveryHeartbeatOwnerIdField, PortableType.String, ElsaRuntimeV2StorageManifest.IdMaximumLength);
         var outbox = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind);
         AssertColumn(outbox, ElsaRuntimeV2StorageManifest.PostCommitOutboxStatusField, PortableType.Int32, null);
-        AssertColumn(outbox, ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindField, PortableType.String, ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindProjectionLength);
+        AssertColumn(outbox, ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableIsEligibleField, PortableType.Boolean, null, nullable: false);
+        AssertColumn(outbox, ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField, PortableType.DateTimeOffset, null, nullable: false);
+        AssertColumn(outbox, ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindField, PortableType.String, ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindProjectionLength, nullable: false);
+        AssertIndex(outbox, ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableIndex,
+            [ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableIsEligibleField, ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField, ElsaRuntimeV2StorageManifest.PostCommitOutboxRecordedAtField, ElsaRuntimeV2StorageManifest.PostCommitOutboxItemIdField, ElsaRuntimeV2StorageManifest.IdField],
+            included: true);
 
         foreach (var unit in units)
         {
@@ -399,6 +404,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
                 ElsaRuntimeV2StorageManifest.CollectionField,
                 ElsaRuntimeV2StorageManifest.PostCommitOutboxStatusField,
                 ElsaRuntimeV2StorageManifest.PostCommitOutboxDeliverableAtField,
+                ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableIsEligibleField,
                 ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField,
                 ElsaRuntimeV2StorageManifest.PostCommitOutboxRecordedAtField,
                 ElsaRuntimeV2StorageManifest.PostCommitOutboxItemIdField,
