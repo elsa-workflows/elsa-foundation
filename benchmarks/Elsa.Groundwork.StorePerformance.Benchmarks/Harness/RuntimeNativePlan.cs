@@ -27,10 +27,13 @@ public sealed record RuntimeNativeRouteSpec(
     int? ScalarResultCount = null,
     RuntimeNativeLatestPerKeySpec? LatestPerKey = null,
     string TieBreakerColumn = "id",
-    IReadOnlyList<string>? DistinctProjectionColumns = null)
+    IReadOnlyList<string>? DistinctProjectionColumns = null,
+    string? ScalarProjectionColumn = null)
 {
     /// <summary>The provider-side page includes Groundwork's one-row continuation lookahead.</summary>
-    public int NativeFetchLimit => ResultShape == RuntimeNativeResultShape.ScalarCount ? 0 : checked(FiniteLimit + 1);
+    public int NativeFetchLimit => ResultShape == RuntimeNativeResultShape.ScalarCount
+        ? ScalarProjectionColumn is null ? 0 : 1
+        : checked(FiniteLimit + 1);
 
     public bool UsesLatestPerKey => LatestPerKey is not null;
 
@@ -90,6 +93,7 @@ public static class RuntimeNativePlanContract
     private const string OutboxTable = "runtime_post_commit_outbox";
     private const string SchedulerWorkTable = "runtime_scheduler_work_item";
     private const string CommandTransportTable = "elsa_distributed_command_transport";
+    private const string CommandStreamHeadTable = "elsa_distributed_command_stream_head";
 
     public static RuntimeNativeRouteSpec For(string workloadId, string routeIdentity) => workloadId switch
     {
@@ -239,36 +243,34 @@ public static class RuntimeNativePlanContract
                 CommandTransportTable,
                 "elsa_distributed_command_execution_sequence",
                 ["sequence"],
-                [new("workflowExecutionId", "="), new("visibleAt", "<=")],
+                [new("workflowExecutionId", "=")],
                 "workflowExecutionId",
                 DistributedCommandSendLeaseAckWorkload.CommandsPerWorkflow,
                 DistributedCommandSendLeaseAckWorkload.BatchSize / DistributedCommandSendLeaseAckWorkload.ConcurrentLeasers,
                 TieBreakerColumn: "transportItemId"),
             "list-visible-command-executions" => new(
                 routeIdentity,
-                CommandTransportTable,
-                "elsa_distributed_command_pending_execution_identity",
-                [WorkflowExecutionOrdinalKeyColumn],
-                [new("visibleAt", "<=")],
-                "visibleAt",
-                DistributedCommandSendLeaseAckWorkload.WorkflowCount * DistributedCommandSendLeaseAckWorkload.CommandsPerWorkflow -
-                DistributedCommandSendLeaseAckWorkload.BatchSize,
+                CommandStreamHeadTable,
+                "elsa_distributed_command_pending_head_execution",
+                ["pendingVisibleAt", "workflowExecutionId"],
+                [new("pendingVisibleAt", "<=")],
+                "pendingVisibleAt",
                 DistributedCommandSendLeaseAckWorkload.WorkflowCount,
-                Ordering: [new(WorkflowExecutionOrdinalKeyColumn, RuntimeNativeOrderDirection.Ascending)],
-                TieBreakerColumn: "transportItemId",
-                DistinctProjectionColumns: ["workflowExecutionId", WorkflowExecutionOrdinalKeyColumn]),
+                DistributedCommandSendLeaseAckWorkload.WorkflowCount,
+                TieBreakerColumn: "streamHeadId"),
             "count-pending-commands-by-execution" => new(
                 routeIdentity,
-                CommandTransportTable,
-                "elsa_distributed_command_execution_sequence",
-                [],
+                CommandStreamHeadTable,
+                "elsa_distributed_command_head_count_execution",
+                ["workflowExecutionId"],
                 [new("workflowExecutionId", "=")],
                 "workflowExecutionId",
-                DistributedCommandSendLeaseAckWorkload.CommandsPerWorkflow,
+                DistributedCommandSendLeaseAckWorkload.WorkflowCount,
                 0,
                 ResultShape: RuntimeNativeResultShape.ScalarCount,
                 ScalarResultCount: DistributedCommandSendLeaseAckWorkload.CommandsPerWorkflow,
-                TieBreakerColumn: "transportItemId"),
+                TieBreakerColumn: "streamHeadId",
+                ScalarProjectionColumn: "pendingCount"),
             _ => throw UnknownRoute(routeIdentity)
         },
         _ => throw new PerformanceContractException(
@@ -397,6 +399,8 @@ public static class RuntimeNativePlanContract
 
     private static void ValidateSqlCommand(string command, RuntimeNativeRouteSpec specification)
     {
+        var usesScalarProjection = specification.ResultShape == RuntimeNativeResultShape.ScalarCount &&
+                                   specification.ScalarProjectionColumn is not null;
         var normalized = command.Replace("[", "", StringComparison.Ordinal)
             .Replace("]", "", StringComparison.Ordinal)
             .Replace("\"", "", StringComparison.Ordinal)
@@ -408,7 +412,19 @@ public static class RuntimeNativePlanContract
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
         var hasDistinct = Regex.IsMatch(normalized, @"\bSELECT\s+DISTINCT\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         var hasMaterializingShape = Regex.IsMatch(normalized, @"\b(?:GROUP\s+BY|OVER|ROW_NUMBER|UNION)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        if (Regex.IsMatch(normalized, @"\bOFFSET\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
+        var offsets = Regex.Matches(
+            normalized,
+            @"\bOFFSET\s+(?<value>[@$][A-Za-z_0-9]+|\?|[-+]?\d+)(?:\s+ROWS?)?\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        var hasOffset = Regex.IsMatch(normalized, @"\bOFFSET\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        // Groundwork's cardinality normalization fixes this offset to zero. Provider-command
+        // observation retains parameter names but not values, so relational providers may expose
+        // either the literal zero or its bound parameter here. Non-zero literals remain provably invalid.
+        var scalarOffset = offsets.Count == 1 ? offsets[0].Groups["value"].Value : null;
+        var hasOnlyRequiredScalarOffset = usesScalarProjection && scalarOffset is not null &&
+                                          (string.Equals(scalarOffset, "0", StringComparison.Ordinal) ||
+                                           scalarOffset[0] is '@' or '$' or '?');
+        if ((hasOffset && !hasOnlyRequiredScalarOffset) ||
             (specification.UsesProjectedDistinct && (!hasDistinct || hasMaterializingShape)) ||
             (!specification.UsesProjectedDistinct && !specification.UsesLatestPerKey && (hasDistinct || hasMaterializingShape)) ||
             (specification.UsesLatestPerKey && !Regex.IsMatch(normalized, @"\b(?:DISTINCT|GROUP\s+BY|PARTITION\s+BY|ROW_NUMBER|OVER)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)))
@@ -423,12 +439,14 @@ public static class RuntimeNativePlanContract
             throw InvalidCommand(specification, "exact table");
         if (specification.UsesProjectedDistinct)
             ValidateProjectedDistinctShape(normalized, specification);
-        if (specification.ResultShape == RuntimeNativeResultShape.Page &&
+        if ((specification.ResultShape == RuntimeNativeResultShape.Page || usesScalarProjection) &&
             !Regex.IsMatch(
                 normalized,
                 $@"\b(?:LIMIT\s+{limit}|FETCH\s+(?:FIRST|NEXT)\s+{limit}\s+ROWS?|TOP\s*\(?\s*{limit}\s*\)?)",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             throw InvalidCommand(specification, "exact native lookahead limit");
+        if (usesScalarProjection)
+            ValidateScalarProjectionShape(normalized, specification);
 
         // LatestPerKey uses an inner window ORDER BY as well as the public route ordering. The
         // contract binds the final (outer) ORDER BY, which is the ordering observed by callers.
@@ -437,7 +455,7 @@ public static class RuntimeNativePlanContract
             ? string.Empty
             : Regex.Match(
                 normalized[(orderStart + "ORDER BY".Length)..],
-                @"(?<order>.*?)(?:\bLIMIT\b|\bFETCH\b|$)",
+                @"(?<order>.*?)(?:\bLIMIT\b|\bOFFSET\b|\bFETCH\b|$)",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline).Groups["order"].Value;
         var allowedOrderColumns = specification.OrderColumns.Append(specification.TieBreakerColumn).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var orderTerms = order.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -473,7 +491,7 @@ public static class RuntimeNativePlanContract
             var direction = string.Equals(match.Groups["direction"].Value, "DESC", StringComparison.OrdinalIgnoreCase)
                 ? RuntimeNativeOrderDirection.Descending
                 : RuntimeNativeOrderDirection.Ascending;
-            if (specification.ResultShape != RuntimeNativeResultShape.ScalarCount &&
+            if ((specification.ResultShape != RuntimeNativeResultShape.ScalarCount || usesScalarProjection) &&
                 !allowedOrderColumns.Contains(orderedColumn))
                 throw InvalidCommand(specification, $"declared deterministic ordering column '{orderedColumn}'");
             actualOrder.Add(new RuntimeNativeOrderTerm(orderedColumn, direction));
@@ -490,7 +508,7 @@ public static class RuntimeNativePlanContract
                             OrderEquals(expectedOrder, actualOrder.Take(expectedOrder.Count)) &&
                             string.Equals(actualOrder[^1].Column, specification.TieBreakerColumn, StringComparison.OrdinalIgnoreCase) &&
                             actualOrder[^1].Direction == RuntimeNativeOrderDirection.Ascending);
-        if (specification.ResultShape == RuntimeNativeResultShape.ScalarCount)
+        if (specification.ResultShape == RuntimeNativeResultShape.ScalarCount && !usesScalarProjection)
             orderMatches = orderTerms.Length == 0 ||
                            (actualOrder.Count == 2 &&
                             string.Equals(actualOrder[0].Column, "__groundwork_count_only", StringComparison.OrdinalIgnoreCase) &&
@@ -595,6 +613,35 @@ public static class RuntimeNativePlanContract
         }
     }
 
+    private static void ValidateScalarProjectionShape(string normalized, RuntimeNativeRouteSpec specification)
+    {
+        var expected = specification.ScalarProjectionColumn ??
+                       throw InvalidCommand(specification, "declared scalar projection");
+        var projection = Regex.Match(
+            normalized,
+            $@"\bSELECT\s+(?<columns>.*?)\s+FROM\s+{Regex.Escape(specification.TableName)}\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+        var allowed = specification.EffectiveOrdering.Select(order => order.Column)
+            .Append(specification.TieBreakerColumn)
+            .Append(expected)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var actual = projection.Success
+            ? projection.Groups["columns"].Value
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(item => Regex.Match(
+                    item,
+                    @"^(?:[A-Za-z_][A-Za-z0-9_]*\.)?(?<column>[A-Za-z_][A-Za-z0-9_]*)(?:\s+AS\s+[A-Za-z_][A-Za-z0-9_]*)?$",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                .ToArray()
+            : [];
+        if (!projection.Success || actual.Length == 0 || actual.Any(match => !match.Success) ||
+            !actual.Any(match => string.Equals(match.Groups["column"].Value, expected, StringComparison.OrdinalIgnoreCase)) ||
+            actual.Any(match => !allowed.Contains(match.Groups["column"].Value)))
+        {
+            throw InvalidCommand(specification, $"exact scalar projection '{expected}'");
+        }
+    }
+
     private static void ValidateLatestPerKeyShape(string normalized, RuntimeNativeRouteSpec specification)
     {
         var latest = specification.LatestPerKey ?? throw InvalidCommand(specification, "declared LatestPerKey shape");
@@ -609,6 +656,8 @@ public static class RuntimeNativePlanContract
 
     private static void ValidateMongoCommand(string command, RuntimeNativeRouteSpec specification)
     {
+        var usesScalarProjection = specification.ResultShape == RuntimeNativeResultShape.ScalarCount &&
+                                   specification.ScalarProjectionColumn is not null;
         using var document = ParseJson(command, "MongoDB command");
         var root = document.RootElement;
         var collection = root.TryGetProperty("collection", out var collectionValue) && collectionValue.ValueKind == JsonValueKind.String
@@ -618,13 +667,29 @@ public static class RuntimeNativePlanContract
                 : null;
         if (!string.Equals(collection, specification.TableName, StringComparison.Ordinal))
             throw InvalidCommand(specification, "exact collection");
-        if (specification.ResultShape == RuntimeNativeResultShape.Page &&
+        if ((specification.ResultShape == RuntimeNativeResultShape.Page || usesScalarProjection) &&
             (!root.TryGetProperty("limit", out var limit) || !TryFiniteLimit(limit, specification.NativeFetchLimit)))
             throw InvalidCommand(specification, "exact native lookahead limit");
-        if (specification.ResultShape == RuntimeNativeResultShape.Page &&
+        if ((specification.ResultShape == RuntimeNativeResultShape.Page || usesScalarProjection) &&
             (!root.TryGetProperty("sort", out var sort) || sort.ValueKind != JsonValueKind.Object ||
              !SortMatches(sort, specification.EffectiveOrdering)))
             throw InvalidCommand(specification, "exact deterministic ordering");
+        if (usesScalarProjection)
+        {
+            var allowed = specification.EffectiveOrdering.Select(order => order.Column)
+                .Append(specification.TieBreakerColumn)
+                .Append(specification.ScalarProjectionColumn!)
+                .ToHashSet(StringComparer.Ordinal);
+            if (!root.TryGetProperty("projection", out var projection) ||
+                projection.ValueKind != JsonValueKind.Object ||
+                !projection.TryGetProperty(specification.ScalarProjectionColumn!, out var selected) ||
+                selected.ValueKind != JsonValueKind.Number || selected.GetInt32() != 1 ||
+                projection.EnumerateObject().Any(property =>
+                    property.Value.ValueKind == JsonValueKind.Number && property.Value.GetInt32() == 1 && !allowed.Contains(property.Name)))
+            {
+                throw InvalidCommand(specification, $"exact scalar projection '{specification.ScalarProjectionColumn}'");
+            }
+        }
         if (!root.TryGetProperty("filter", out var filter) || filter.ValueKind != JsonValueKind.Object)
             throw InvalidCommand(specification, "structured predicates");
         var names = filter.EnumerateObject().Select(property => property.Name).ToHashSet(StringComparer.Ordinal);

@@ -20,13 +20,14 @@ public static class DistributedGroundworkStorageManifest
 
     public const string PlacementByOwnerExpiryIndex = "elsa_distributed_placement_owner_expiry";
     public const string CommandByExecutionSequenceIndex = "elsa_distributed_command_execution_sequence";
-    public const string PendingCommandByExecutionIdentityIndex = "elsa_distributed_command_pending_execution_identity";
-    public const int WorkflowExecutionOrdinalKeyMaximumLength = DistributedRuntimeIdentityConstraints.MaximumLength * 4;
+    public const string CommandByExecutionVisibilityIndex = "elsa_distributed_command_execution_visibility";
+    public const string PendingCommandHeadByExecutionIndex = "elsa_distributed_command_pending_head_execution";
+    public const string CommandHeadCountByExecutionIndex = "elsa_distributed_command_head_count_execution";
     // transport:{escaped execution id}:{Int64 sequence}; every UTF-16 code unit may expand to %XX.
     public const int TransportItemIdMaximumLength = 10 + (DistributedRuntimeIdentityConstraints.MaximumLength * 3) + 1 + 19;
 
     public const string WorkflowExecutionIdField = "workflowExecutionId";
-    public const string WorkflowExecutionOrdinalKeyField = "__groundwork_ordinal_workflow_execution_id";
+    public const string CommandStreamHeadIdField = "streamHeadId";
     public const string TransportItemIdField = "transportItemId";
     public const string OwnerIdField = "ownerId";
     public const string PlacementTokenField = "placementToken";
@@ -38,6 +39,9 @@ public static class DistributedGroundworkStorageManifest
     public const string LeaseTokenField = "leaseToken";
     public const string SequenceField = "sequence";
     public const string LastSequenceField = "lastSequence";
+    public const string PendingCountField = "pendingCount";
+    public const string PendingVisibleAtField = "pendingVisibleAt";
+    public const string PendingSequenceField = "pendingSequence";
     public const string PayloadField = "payload";
 
     // Stable identities retained for diagnostics and query evidence. v2 queries carry their
@@ -70,10 +74,19 @@ public static class DistributedGroundworkStorageManifest
 
     public static StorageUnit CreateCommandStreamHeadUnit() =>
         StorageUnit.Declare(CommandStreamHeadUnitId, CommandStreamHeadUnitName)
+            .String(CommandStreamHeadIdField, DistributedRuntimeIdentityConstraints.MaximumLength, column => column.Required())
             .String(WorkflowExecutionIdField, DistributedRuntimeIdentityConstraints.MaximumLength, column => column.Required())
             .Int64(LastSequenceField, column => column.Required())
+            .Int64(PendingCountField, column => column.Required())
+            .Timestamp(PendingVisibleAtField, column => column.Required())
+            .Int64(PendingSequenceField, column => column.Required())
             .Json(PayloadField, column => column.Required())
-            .Key(WorkflowExecutionIdField)
+            .Key(CommandStreamHeadIdField)
+            .Index(PendingCommandHeadByExecutionIndex, index => index
+                .Ascending(PendingVisibleAtField)
+                .Ascending(WorkflowExecutionIdField)
+                .Ascending(CommandStreamHeadIdField))
+            .Index(CommandHeadCountByExecutionIndex, WorkflowExecutionIdField, CommandStreamHeadIdField, PendingCountField)
             .OptimisticConcurrency()
             .Scoped()
             .Build();
@@ -81,8 +94,7 @@ public static class DistributedGroundworkStorageManifest
     public static StorageUnit CreateCommandTransportUnit() =>
         StorageUnit.Declare(CommandTransportUnitId, CommandTransportUnitName)
             .String(TransportItemIdField, TransportItemIdMaximumLength, column => column.Required())
-            .String(WorkflowExecutionIdField, DistributedRuntimeIdentityConstraints.MaximumLength, column =>
-                column.Required().OrdinalIdentity(WorkflowExecutionOrdinalKeyField))
+            .String(WorkflowExecutionIdField, DistributedRuntimeIdentityConstraints.MaximumLength, column => column.Required())
             .Int64(SequenceField, column => column.Required())
             .Timestamp(EnqueuedAtField, column => column.Required())
             .Timestamp(VisibleAtField, column => column.Required())
@@ -91,10 +103,7 @@ public static class DistributedGroundworkStorageManifest
             .Json(PayloadField, column => column.Required())
             .Key(TransportItemIdField)
             .Index(CommandByExecutionSequenceIndex, WorkflowExecutionIdField, SequenceField, TransportItemIdField)
-            .Index(PendingCommandByExecutionIdentityIndex, index => index
-                .UseOrdinalIdentities()
-                .Ascending(WorkflowExecutionIdField)
-                .Ascending(VisibleAtField))
+            .Index(CommandByExecutionVisibilityIndex, WorkflowExecutionIdField, VisibleAtField, SequenceField)
             .OptimisticConcurrency()
             .Scoped()
             .Build();

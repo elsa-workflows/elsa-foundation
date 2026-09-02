@@ -6,9 +6,9 @@ using Groundwork.Kernel;
 namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 
 /// <summary>
-/// Captures every frozen public command-transport read route after correctness has settled. The
-/// list route is captured first because leasing is a real state transition which would otherwise
-/// change the visible-row cardinality of the subsequent route.
+/// Captures every frozen public command-transport read route after correctness has settled. Leasing
+/// changes the stream-head summary, but the frozen fixture retains a visible tail after the bounded
+/// lease so the subsequent list and count routes keep their declared cardinalities.
 /// </summary>
 internal static class DistributedCommandNativePlanCapture
 {
@@ -62,7 +62,10 @@ internal static class DistributedCommandNativePlanCapture
                     $"Runtime command route '{specification.RouteIdentity}' returned scalar count {result.ScalarCount}; expected {specification.ScalarResultCount}.");
             }
 
-            var command = RuntimeNativePlanCaptureSupport.RequireRouteCommand(observer.Commands, specification);
+            var command = RuntimeNativePlanCaptureSupport.RequireRouteCommand(
+                observer.Commands,
+                specification,
+                allowAuxiliaryQueries: specification.RouteIdentity == "lease-visible-commands-by-execution");
             var nativePath = RuntimeNativePlanCaptureSupport.RequireNativeArtifact(
                 explain.Directory,
                 before,

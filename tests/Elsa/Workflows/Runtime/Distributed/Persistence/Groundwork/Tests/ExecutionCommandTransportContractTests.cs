@@ -119,6 +119,28 @@ public sealed class ExecutionCommandTransportContractTests
     }
 
     [Fact]
+    public async Task PendingHeadTracksLeaseAckAndFinalRemovalAcrossRestart()
+    {
+        await using var harness = await DistributedStoreHarness.CreateAsync(DistributedStoreHarness.GroundworkSqlite);
+        await harness.Transport.SendAsync(ExecutionId, Envelope("env-1"), Now);
+        await harness.Transport.SendAsync(ExecutionId, Envelope("env-2"), Now);
+
+        var leased = await harness.Transport.LeaseAsync(ExecutionId, NodeA, Now, LeaseDuration, 10);
+        Assert.Equal(2, leased.Count);
+        Assert.Empty(await harness.Transport.ListPendingExecutionIdsAsync(Now, 10));
+
+        var reopened = await harness.ReopenTransportAsync();
+        Assert.True(await reopened.AckAsync(ExecutionId, leased[0].TransportItemId, NodeA, leased[0].LeaseToken!.Value, Now.AddSeconds(1)));
+        Assert.Empty(await reopened.ListPendingExecutionIdsAsync(Now.AddSeconds(1), 10));
+        Assert.True(await reopened.AckAsync(ExecutionId, leased[1].TransportItemId, NodeA, leased[1].LeaseToken!.Value, Now.AddSeconds(1)));
+        Assert.Empty(await reopened.ListPendingExecutionIdsAsync(Now.AddSeconds(1), 10));
+
+        var next = await reopened.SendAsync(ExecutionId, Envelope("env-3"), Now.AddSeconds(2));
+        Assert.Equal(3, next.Sequence);
+        Assert.Equal([ExecutionId], await reopened.ListPendingExecutionIdsAsync(Now.AddSeconds(2), 10));
+    }
+
+    [Fact]
     public async Task ConcurrentSqliteLeasesReplenishAContendedPageUntilBothCallsFill()
     {
         await using var fixture = await QueryBarrierFixture.CreateAsync();

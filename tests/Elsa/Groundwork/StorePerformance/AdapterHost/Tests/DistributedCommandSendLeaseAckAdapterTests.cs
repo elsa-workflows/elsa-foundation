@@ -81,9 +81,9 @@ public sealed class DistributedCommandSendLeaseAckAdapterTests
     {
         var routes = new[]
         {
-            Route(request, "lease-visible-commands-by-execution", 8),
-            Route(request, "list-visible-command-executions", 128),
-            Route(request, "count-pending-commands-by-execution", 128)
+            Route(request, "lease-visible-commands-by-execution"),
+            Route(request, "list-visible-command-executions"),
+            Route(request, "count-pending-commands-by-execution")
         };
         foreach (var route in routes)
         {
@@ -122,26 +122,34 @@ public sealed class DistributedCommandSendLeaseAckAdapterTests
         return NativePlanEvidenceStaging.Write(staging, document);
     }
 
-    private static NativeRouteEvidence Route(RunRequest request, string identity, int finiteLimit)
+    private static NativeRouteEvidence Route(RunRequest request, string identity)
     {
+        var specification = RuntimeNativePlanContract.For(request.WorkloadId, identity);
+        var physicalIndex = RuntimeNativePlanContract.ExpectedPhysicalIndexName(request.Provider, specification);
         var rawReference = $"{request.WorkloadId}.{request.Provider}.{request.MeasurementSetId}.{identity}.raw.json";
         var raw = JsonSerializer.Serialize(new
         {
             schemaVersion = 1,
             route = identity,
-            providerPlan = $"EXPLAIN {identity} USING ix-command-transport"
+            providerPlan = $"EXPLAIN {identity} USING {physicalIndex}"
         });
         return new NativeRouteEvidence(
             RouteIdentity: identity,
             RawPlanReference: rawReference,
             RawPlanSha256: Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw))).ToLowerInvariant(),
             PlanClassification: "bounded-index-seek",
-            IndexName: "ix-command-transport",
-            PhysicalCardinality: 8192,
+            IndexName: physicalIndex,
+            PhysicalCardinality: specification.PhysicalCardinality,
             HasStorageScopePredicate: true,
-            HasRoutePredicate: true,
-            FiniteLimit: finiteLimit,
-            MaterializedCandidateCount: 1);
+            HasRoutePredicate: specification.PredicateColumn is not null,
+            FiniteLimit: specification.FiniteLimit,
+            MaterializedCandidateCount: specification.ResultShape == RuntimeNativeResultShape.Page ? specification.FiniteLimit : 0,
+            ResultShape: specification.ResultShape,
+            ScalarResultCount: specification.ScalarResultCount,
+            UsesLatestPerKey: specification.UsesLatestPerKey)
+        {
+            NativeFetchLimit = specification.NativeFetchLimit
+        };
     }
 
     private static RunRequest Request() => new(

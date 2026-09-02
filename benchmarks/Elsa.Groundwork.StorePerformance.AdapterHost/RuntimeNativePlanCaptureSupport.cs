@@ -38,7 +38,8 @@ internal static class RuntimeNativePlanCaptureSupport
 
     public static ProviderCommandEvent RequireRouteCommand(
         IReadOnlyList<ProviderCommandEvent> commands,
-        RuntimeNativeRouteSpec specification)
+        RuntimeNativeRouteSpec specification,
+        bool allowAuxiliaryQueries = false)
     {
         var matches = commands.Where(command =>
                 !command.IsProbe &&
@@ -47,9 +48,11 @@ internal static class RuntimeNativePlanCaptureSupport
                 !string.IsNullOrWhiteSpace(command.CommandText) &&
                 command.CommandText.Contains(specification.TableName, StringComparison.OrdinalIgnoreCase))
             .ToArray();
-        if (matches.Length != 1)
+        if (matches.Length == 0 || (!allowAuxiliaryQueries && matches.Length != 1))
             throw new PerformanceContractException(
-                $"Runtime route '{specification.RouteIdentity}' must emit exactly one provider query against '{specification.TableName}'; observed {matches.Length}.");
+                allowAuxiliaryQueries
+                    ? $"Runtime route '{specification.RouteIdentity}' must emit a provider query against '{specification.TableName}'."
+                    : $"Runtime route '{specification.RouteIdentity}' must emit exactly one provider query against '{specification.TableName}'; observed {matches.Length}.");
         return matches[0];
     }
 

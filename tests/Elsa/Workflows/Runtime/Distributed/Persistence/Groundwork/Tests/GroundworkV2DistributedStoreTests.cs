@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -13,6 +14,7 @@ using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Sqlite;
 using Groundwork.Store;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -108,8 +110,12 @@ public sealed class GroundworkV2DistributedStoreTests
             StorageAccess.Scoped(new StorageScope("tenant-a")));
         var values = new StorageValues(new Dictionary<string, object?>
         {
+            [DistributedGroundworkStorageManifest.CommandStreamHeadIdField] = "execution-1",
             [DistributedGroundworkStorageManifest.WorkflowExecutionIdField] = "execution-1",
             [DistributedGroundworkStorageManifest.LastSequenceField] = 3L,
+            [DistributedGroundworkStorageManifest.PendingCountField] = 0L,
+            [DistributedGroundworkStorageManifest.PendingVisibleAtField] = DateTimeOffset.MaxValue,
+            [DistributedGroundworkStorageManifest.PendingSequenceField] = 0L,
             [DistributedGroundworkStorageManifest.PayloadField] = "{\"workflowExecutionId\":\"execution-other\",\"lastSequence\":3}"
         });
         Assert.True(session.Insert(values, WriteOptions.CreateOnly).Succeeded);
@@ -161,23 +167,7 @@ public sealed class GroundworkV2DistributedStoreTests
         });
         var transport = Assert.Single(units, unit => unit.Id.Value == DistributedGroundworkStorageManifest.CommandTransportUnitId);
         Assert.Equal(DistributedGroundworkStorageManifest.TransportItemIdMaximumLength, transport.Columns.Single(column => column.Name == DistributedGroundworkStorageManifest.TransportItemIdField).MaxLength);
-        var workflowExecution = transport.Columns.Single(column => column.Name == DistributedGroundworkStorageManifest.WorkflowExecutionIdField);
-        Assert.Equal(
-            DistributedGroundworkStorageManifest.WorkflowExecutionOrdinalKeyField,
-            Assert.IsType<OrdinalIdentityDefinition>(workflowExecution.OrdinalIdentity).PhysicalColumn);
-        Assert.DoesNotContain(
-            transport.Columns,
-            column => column.Name == DistributedGroundworkStorageManifest.WorkflowExecutionOrdinalKeyField);
-        var pendingIndex = Assert.Single(transport.Indexes, index => index.Name == DistributedGroundworkStorageManifest.PendingCommandByExecutionIdentityIndex);
-        Assert.True(pendingIndex.UseOrdinalIdentities);
-        Assert.Equal(
-            [
-                new IndexColumn(DistributedGroundworkStorageManifest.WorkflowExecutionIdField, SortDirection.Ascending),
-                new IndexColumn(DistributedGroundworkStorageManifest.VisibleAtField, SortDirection.Ascending)
-            ],
-            pendingIndex.Columns);
         var executionIndex = Assert.Single(transport.Indexes, index => index.Name == DistributedGroundworkStorageManifest.CommandByExecutionSequenceIndex);
-        Assert.False(executionIndex.UseOrdinalIdentities);
         Assert.Equal(
             [
                 new IndexColumn(DistributedGroundworkStorageManifest.WorkflowExecutionIdField, SortDirection.Ascending),
@@ -185,6 +175,35 @@ public sealed class GroundworkV2DistributedStoreTests
                 new IndexColumn(DistributedGroundworkStorageManifest.TransportItemIdField, SortDirection.Ascending)
             ],
             executionIndex.Columns);
+        var visibilityIndex = Assert.Single(transport.Indexes, index => index.Name == DistributedGroundworkStorageManifest.CommandByExecutionVisibilityIndex);
+        Assert.Equal(
+            [
+                new IndexColumn(DistributedGroundworkStorageManifest.WorkflowExecutionIdField, SortDirection.Ascending),
+                new IndexColumn(DistributedGroundworkStorageManifest.VisibleAtField, SortDirection.Ascending),
+                new IndexColumn(DistributedGroundworkStorageManifest.SequenceField, SortDirection.Ascending)
+            ],
+            visibilityIndex.Columns);
+        var streamHead = Assert.Single(units, unit => unit.Id.Value == DistributedGroundworkStorageManifest.CommandStreamHeadUnitId);
+        Assert.Equal([DistributedGroundworkStorageManifest.CommandStreamHeadIdField], streamHead.Key.Columns);
+        Assert.Contains(streamHead.Columns, column => column.Name == DistributedGroundworkStorageManifest.PendingCountField);
+        Assert.Contains(streamHead.Columns, column => column.Name == DistributedGroundworkStorageManifest.PendingVisibleAtField);
+        Assert.Contains(streamHead.Columns, column => column.Name == DistributedGroundworkStorageManifest.PendingSequenceField);
+        var pendingHeadIndex = Assert.Single(streamHead.Indexes, index => index.Name == DistributedGroundworkStorageManifest.PendingCommandHeadByExecutionIndex);
+        Assert.Equal(
+            [
+                new IndexColumn(DistributedGroundworkStorageManifest.PendingVisibleAtField, SortDirection.Ascending),
+                new IndexColumn(DistributedGroundworkStorageManifest.WorkflowExecutionIdField, SortDirection.Ascending),
+                new IndexColumn(DistributedGroundworkStorageManifest.CommandStreamHeadIdField, SortDirection.Ascending)
+            ],
+            pendingHeadIndex.Columns);
+        var countHeadIndex = Assert.Single(streamHead.Indexes, index => index.Name == DistributedGroundworkStorageManifest.CommandHeadCountByExecutionIndex);
+        Assert.Equal(
+            [
+                new IndexColumn(DistributedGroundworkStorageManifest.WorkflowExecutionIdField, SortDirection.Ascending),
+                new IndexColumn(DistributedGroundworkStorageManifest.CommandStreamHeadIdField, SortDirection.Ascending),
+                new IndexColumn(DistributedGroundworkStorageManifest.PendingCountField, SortDirection.Ascending)
+            ],
+            countHeadIndex.Columns);
         var references = typeof(GroundworkExecutionCommandTransport).Assembly.GetReferencedAssemblies();
         Assert.DoesNotContain(references, reference => reference.Name is "Groundwork.Core" or "Groundwork.Documents");
     }
@@ -202,6 +221,43 @@ public sealed class GroundworkV2DistributedStoreTests
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType.FullName?.Contains("GroundworkLane", StringComparison.Ordinal) == true);
         using var provider = services.BuildServiceProvider();
         Assert.False(provider.GetRequiredService<IWorkflowExecutionLeaseFencingCapability>().IsAvailable);
+    }
+
+    [Fact]
+    public async Task SqlitePendingExecutionPlanUsesTheDeclaredHeadIndexWithoutDistinctOrSort()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        await fixture.Transport.SendAsync("execution-plan", Envelope("execution-plan", "plan-1"), Now);
+        for (var index = 0; index < 100; index++)
+        {
+            var executionId = $"future-{index:D3}";
+            await fixture.Transport.SendAsync(executionId, Envelope(executionId, executionId), Now);
+            Assert.Single(await fixture.Transport.LeaseAsync(executionId, "plan-owner", Now, TimeSpan.FromHours(1), 1));
+        }
+
+        var pending = await fixture.Transport.ListPendingExecutionIdsAsync(Now, 10);
+        Assert.Equal(["execution-plan"], pending);
+
+        var evidence = ExplainLastHeadQuery(fixture, DistributedGroundworkStorageManifest.PendingVisibleAtField, 10);
+        Assert.Contains("ORDER BY", evidence.Command, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("INDEXED BY", evidence.Command, StringComparison.OrdinalIgnoreCase);
+        AssertAdmittedHeadPlan(evidence);
+    }
+
+    [Fact]
+    public async Task SqlitePendingCountPlanUsesTheCoveringHeadCountIndex()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        await fixture.Transport.SendAsync("execution-count-plan", Envelope("execution-count-plan", "plan-1"), Now);
+
+        Assert.Equal(1, await fixture.Transport.CountPendingAsync("execution-count-plan"));
+
+        var evidence = ExplainLastHeadQuery(fixture, DistributedGroundworkStorageManifest.PendingCountField, 1);
+        Assert.Contains(DistributedGroundworkStorageManifest.PendingCountField, evidence.Command, StringComparison.Ordinal);
+        Assert.DoesNotContain("COUNT(", evidence.Command, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("LIMIT", evidence.Command, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ORDER BY", evidence.Command, StringComparison.OrdinalIgnoreCase);
+        AssertAdmittedHeadPlan(evidence);
     }
 
     [Theory]
@@ -267,20 +323,70 @@ public sealed class GroundworkV2DistributedStoreTests
         Now,
         partition: new WorkflowExecutionPartition(partition));
 
+    private static SqlitePlanEvidence ExplainLastHeadQuery(Fixture fixture, string indexedColumn, int numericParameter)
+    {
+        var query = fixture.Observer.Commands.Last(command =>
+            command.Kind == ProviderCommandKind.Read &&
+            command.CommandText?.Contains(DistributedGroundworkStorageManifest.CommandStreamHeadUnitName, StringComparison.Ordinal) == true);
+        var commandText = Assert.IsType<string>(query.CommandText);
+        using var connection = new SqliteConnection(fixture.ConnectionString);
+        connection.Open();
+        connection.CreateCollation("GROUNDWORK_UTF16_ORDINAL", (left, right) => StringComparer.Ordinal.Compare(left, right));
+        using var indexCommand = connection.CreateCommand();
+        indexCommand.CommandText = "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = $table AND sql LIKE $column";
+        indexCommand.Parameters.AddWithValue("$table", DistributedGroundworkStorageManifest.CommandStreamHeadUnitName);
+        indexCommand.Parameters.AddWithValue("$column", $"%{indexedColumn}%");
+        var physicalIndex = Assert.IsType<string>(indexCommand.ExecuteScalar());
+        using var explain = connection.CreateCommand();
+        explain.CommandText = $"EXPLAIN QUERY PLAN {commandText.TrimEnd().TrimEnd(';')}";
+        foreach (Match match in Regex.Matches(commandText, "[@$][A-Za-z_][A-Za-z0-9_]*"))
+        {
+            if (explain.Parameters.Contains(match.Value))
+                continue;
+            object value = match.Value.Contains("scope", StringComparison.OrdinalIgnoreCase)
+                ? "tenant-a"
+                : match.Value.Contains("visible", StringComparison.OrdinalIgnoreCase)
+                    ? Now.ToString("O")
+                    : match.Value.Contains("workflow", StringComparison.OrdinalIgnoreCase)
+                        ? "execution-count-plan"
+                        : numericParameter;
+            explain.Parameters.AddWithValue(match.Value, value);
+        }
+        using var reader = explain.ExecuteReader();
+        var details = new List<string>();
+        while (reader.Read())
+            details.Add(reader.GetString(3));
+        return new(commandText, physicalIndex, string.Join(" | ", details));
+    }
+
+    private static void AssertAdmittedHeadPlan(SqlitePlanEvidence evidence)
+    {
+        Assert.Contains(evidence.PhysicalIndex, evidence.Plan, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain($"SCAN {DistributedGroundworkStorageManifest.CommandStreamHeadUnitName}", evidence.Plan, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("TEMP B-TREE", evidence.Plan, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DISTINCT", evidence.Plan, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("MATERIALIZE", evidence.Plan, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private sealed record SqlitePlanEvidence(string Command, string PhysicalIndex, string Plan);
+
     private sealed class Fixture : IAsyncDisposable
     {
         private readonly TemporaryDatabase database;
         private readonly IStorageProviderConnection connection;
         public DirectSessionSource Sessions { get; }
+        public ProviderCommandObserver Observer { get; }
+        public string ConnectionString => database.ConnectionString;
         public IPersistenceAccessContextAccessor Access(string scope = "tenant-a") => new FixedAccessor(scope);
         public GroundworkExecutionPlacementStore Placement { get; }
         public GroundworkExecutionCommandTransport Transport { get; }
 
-        private Fixture(TemporaryDatabase database, IStorageProviderConnection connection, DirectSessionSource sessions)
+        private Fixture(TemporaryDatabase database, IStorageProviderConnection connection, DirectSessionSource sessions, ProviderCommandObserver observer)
         {
             this.database = database;
             this.connection = connection;
             Sessions = sessions;
+            Observer = observer;
             Placement = new GroundworkExecutionPlacementStore(sessions, Access());
             Transport = new GroundworkExecutionCommandTransport(sessions, Access());
         }
@@ -292,7 +398,8 @@ public sealed class GroundworkV2DistributedStoreTests
             var units = DistributedGroundworkStorageManifest.CreateUnits();
             foreach (var unit in units)
                 connection.Schema.Apply(unit);
-            return ValueTask.FromResult(new Fixture(database, connection, new DirectSessionSource(connection, units)));
+            var observer = new ProviderCommandObserver();
+            return ValueTask.FromResult(new Fixture(database, connection, new DirectSessionSource(connection, units, observer), observer));
         }
 
         public ValueTask DisposeAsync()
@@ -303,11 +410,11 @@ public sealed class GroundworkV2DistributedStoreTests
         }
     }
 
-    private sealed class DirectSessionSource(IStorageProviderConnection connection, IReadOnlyList<StorageUnit> units) : IGroundworkStorageSessionSource
+    private sealed class DirectSessionSource(IStorageProviderConnection connection, IReadOnlyList<StorageUnit> units, IProviderCommandObserver? observer = null) : IGroundworkStorageSessionSource
     {
         private readonly Dictionary<string, StorageUnit> byId = units.ToDictionary(unit => unit.Id.Value, StringComparer.Ordinal);
-        public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) => connection.OpenSession(byId[unitId], access);
-        public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, IReadOnlyList<string> unitIds, string? targetName = null) => connection.BeginUnitOfWork(access, options, unitIds.Select(unitId => byId[unitId]).ToArray());
+        public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) => connection.OpenSession(byId[unitId], access, observer);
+        public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, IReadOnlyList<string> unitIds, string? targetName = null) => connection.BeginUnitOfWork(access, options, observer, unitIds.Select(unitId => byId[unitId]).ToArray());
         public StorageUnit Unit(string unitId, string? targetName = null) => byId[unitId];
     }
 
