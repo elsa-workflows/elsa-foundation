@@ -202,6 +202,8 @@ public static class ElsaRuntimeV2StorageManifest
     public const string ByOutboxRecordedAtIndex = "by_outbox_recorded_at";
     public const string ByOutboxItemIdIndex = "by_outbox_item_id";
     public const string ByOutboxIntentKindIndex = "by_outbox_intent_kind";
+    public const string BookmarkByStimulusAndTypeAndIdentityIndex = "by_stimulus_and_type_and_bookmark_identity";
+    public const string BookmarkByStimulusTypeAndIdentityIndex = "by_stimulus_type_and_bookmark_identity";
     public const string DurableTimerByDueTimeAndTimerIdIndex = "by_due_time_and_timer_id";
     public const string RecurringScheduleByActiveNextOccurrenceAndScheduleIdIndex = "by_active_next_occurrence_and_schedule_id";
     public const string RecurringScheduleByActivationAndScheduleIdIndex = "by_activation_and_schedule_id";
@@ -246,10 +248,10 @@ public static class ElsaRuntimeV2StorageManifest
     private static IReadOnlyList<StorageUnit> CreateAll() =>
     [
         Unit(BookmarkStateDocumentKind, "runtime_bookmark_state", [
-            String(WorkflowExecutionIdField, RuntimeExecutionIdProjectionLength), String(StimulusHashField, StimulusHashProjectionLength), String(StimulusTypeField, StimulusTypeProjectionLength), String(StimulusLookupKeyField, BookmarkStimulusLookupKeyProjectionLength), String(StimulusTypeLookupKeyField, BookmarkStimulusLookupKeyProjectionLength), String(BookmarkIdField, RuntimeExecutionIdProjectionLength)], [
+            String(WorkflowExecutionIdField, RuntimeExecutionIdProjectionLength, required: true), String(StimulusHashField, StimulusHashProjectionLength, required: true), String(StimulusTypeField, StimulusTypeProjectionLength, required: true), String(StimulusLookupKeyField, BookmarkStimulusLookupKeyProjectionLength, required: true), String(StimulusTypeLookupKeyField, BookmarkStimulusLookupKeyProjectionLength, required: true), String(BookmarkIdField, RuntimeExecutionIdProjectionLength, required: true)], [
             Index(ByWorkflowExecutionIndex, WorkflowExecutionIdField), Index(ByStimulusIndex, StimulusHashField), Index(ByStimulusTypeIndex, StimulusTypeField),
-            IncludedIndex("by_stimulus_and_type_and_bookmark_identity", StimulusLookupKeyField, WorkflowExecutionIdField, BookmarkIdField),
-            IncludedIndex("by_stimulus_type_and_bookmark_identity", StimulusTypeLookupKeyField, WorkflowExecutionIdField, BookmarkIdField),
+            IncludedIndex(BookmarkByStimulusAndTypeAndIdentityIndex, StimulusLookupKeyField, WorkflowExecutionIdField, BookmarkIdField, IdField),
+            IncludedIndex(BookmarkByStimulusTypeAndIdentityIndex, StimulusTypeLookupKeyField, WorkflowExecutionIdField, BookmarkIdField, IdField),
             IncludedIndex("by_workflow_execution_and_bookmark_id", WorkflowExecutionIdField, BookmarkIdField)]),
         Unit(WorkflowExecutableDocumentKind, "runtime_workflow_executable", [String(CollectionField, 128), String(WorkflowExecutableArtifactIdField, 128)], [Index(ByCollectionIndex, CollectionField), IncludedIndex("by_collection_and_document_id", CollectionField, WorkflowExecutableArtifactIdField)]),
         Unit(WorkflowExecutableCoordinationDocumentKind, "runtime_workflow_executable_coordination", [], []),

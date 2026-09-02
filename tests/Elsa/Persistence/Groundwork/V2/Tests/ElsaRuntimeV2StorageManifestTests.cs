@@ -230,10 +230,14 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             PortableType.String,
             ElsaRuntimeV2StorageManifest.DurableTimerClaimOrderKeyProjectionLength);
         var bookmark = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind);
-        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.StimulusHashField, PortableType.String, ElsaRuntimeV2StorageManifest.StimulusHashProjectionLength);
-        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.StimulusTypeField, PortableType.String, ElsaRuntimeV2StorageManifest.StimulusTypeProjectionLength);
-        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.StimulusLookupKeyField, PortableType.String, ElsaRuntimeV2StorageManifest.BookmarkStimulusLookupKeyProjectionLength);
-        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.StimulusTypeLookupKeyField, PortableType.String, ElsaRuntimeV2StorageManifest.BookmarkStimulusLookupKeyProjectionLength);
+        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, PortableType.String, ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength, nullable: false);
+        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.BookmarkIdField, PortableType.String, ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength, nullable: false);
+        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.StimulusHashField, PortableType.String, ElsaRuntimeV2StorageManifest.StimulusHashProjectionLength, nullable: false);
+        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.StimulusTypeField, PortableType.String, ElsaRuntimeV2StorageManifest.StimulusTypeProjectionLength, nullable: false);
+        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.StimulusLookupKeyField, PortableType.String, ElsaRuntimeV2StorageManifest.BookmarkStimulusLookupKeyProjectionLength, nullable: false);
+        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.StimulusTypeLookupKeyField, PortableType.String, ElsaRuntimeV2StorageManifest.BookmarkStimulusLookupKeyProjectionLength, nullable: false);
+        AssertIndex(bookmark, ElsaRuntimeV2StorageManifest.BookmarkByStimulusAndTypeAndIdentityIndex, [ElsaRuntimeV2StorageManifest.StimulusLookupKeyField, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, ElsaRuntimeV2StorageManifest.BookmarkIdField, ElsaRuntimeV2StorageManifest.IdField], included: true);
+        AssertIndex(bookmark, ElsaRuntimeV2StorageManifest.BookmarkByStimulusTypeAndIdentityIndex, [ElsaRuntimeV2StorageManifest.StimulusTypeLookupKeyField, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, ElsaRuntimeV2StorageManifest.BookmarkIdField, ElsaRuntimeV2StorageManifest.IdField], included: true);
         AssertColumn(
             ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind),
             ElsaRuntimeV2StorageManifest.WorkflowDispatchIdField,
