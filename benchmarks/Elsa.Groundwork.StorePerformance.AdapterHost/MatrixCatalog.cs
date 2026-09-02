@@ -108,6 +108,8 @@ internal static class MatrixCatalog
         NativePlanCaptureKind.Complete => ("complete", "capture.native-plan.ready"),
         NativePlanCaptureKind.PartialBlocked => ("partial-blocked", "capture.native-plan.partial-blocked"),
         NativePlanCaptureKind.CorrectnessOnly => ("correctness-only", "capture.native-plan.correctness-only"),
+        NativePlanCaptureKind.CorrectnessReadyNativePlanBlocked =>
+            ("correctness-ready-native-plan-blocked", BenchmarkAdapterRegistry.MongoRuntimeNativePlanBlockedReason),
         _ => ("unsupported", "capture.native-plan.not-implemented")
     };
 }

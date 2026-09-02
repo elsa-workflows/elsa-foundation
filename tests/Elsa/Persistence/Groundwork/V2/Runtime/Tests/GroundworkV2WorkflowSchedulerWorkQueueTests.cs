@@ -419,13 +419,16 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueueTests
         Assert.Equal(["wf-a", "wf-b"], await queue.ListPendingWorkflowExecutionIdsAsync(2));
         var query = Assert.Single(requests);
         Assert.Equal(2, query.Paging.Limit);
-        Assert.Equal(ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, query.LatestPerKey!.Key.Name);
-        Assert.Equal(ElsaRuntimeV2StorageManifest.SchedulerWorkRecordedAtField, query.LatestPerKey.Timestamp.Name);
-        Assert.Collection(
-            query.Order,
-            first => Assert.Equal(ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, first.Column.Name),
-            second => Assert.Equal(ElsaRuntimeV2StorageManifest.SchedulerWorkRecordedAtField, second.Column.Name),
-            third => Assert.Equal(ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField, third.Column.Name));
+        Assert.True(query.Distinct);
+        Assert.Null(query.LatestPerKey);
+        Assert.Equal(
+            [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField],
+            query.Projection.Columns.Select(column => column.Name));
+        var order = Assert.Single(query.Order);
+        Assert.Equal(ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, order.Column.Name);
+        var predicate = Assert.IsType<Predicate.Equal>(query.Where);
+        Assert.Equal(ElsaRuntimeV2StorageManifest.CollectionField, predicate.Column.Name);
+        Assert.Equal(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, predicate.Value.Value);
         Assert.Null(query.Paging.ContinuationToken);
     }
 

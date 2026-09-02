@@ -161,15 +161,23 @@ public sealed class GroundworkV2DistributedStoreTests
         });
         var transport = Assert.Single(units, unit => unit.Id.Value == DistributedGroundworkStorageManifest.CommandTransportUnitId);
         Assert.Equal(DistributedGroundworkStorageManifest.TransportItemIdMaximumLength, transport.Columns.Single(column => column.Name == DistributedGroundworkStorageManifest.TransportItemIdField).MaxLength);
-        var pendingIndex = Assert.Single(transport.Indexes, index => index.Name == DistributedGroundworkStorageManifest.PendingCommandByExecutionSequenceIndex);
+        var workflowExecution = transport.Columns.Single(column => column.Name == DistributedGroundworkStorageManifest.WorkflowExecutionIdField);
+        Assert.Equal(
+            DistributedGroundworkStorageManifest.WorkflowExecutionOrdinalKeyField,
+            Assert.IsType<OrdinalIdentityDefinition>(workflowExecution.OrdinalIdentity).PhysicalColumn);
+        Assert.DoesNotContain(
+            transport.Columns,
+            column => column.Name == DistributedGroundworkStorageManifest.WorkflowExecutionOrdinalKeyField);
+        var pendingIndex = Assert.Single(transport.Indexes, index => index.Name == DistributedGroundworkStorageManifest.PendingCommandByExecutionIdentityIndex);
+        Assert.True(pendingIndex.UseOrdinalIdentities);
         Assert.Equal(
             [
                 new IndexColumn(DistributedGroundworkStorageManifest.WorkflowExecutionIdField, SortDirection.Ascending),
-                new IndexColumn(DistributedGroundworkStorageManifest.SequenceField, SortDirection.Descending),
-                new IndexColumn(DistributedGroundworkStorageManifest.TransportItemIdField, SortDirection.Ascending)
+                new IndexColumn(DistributedGroundworkStorageManifest.VisibleAtField, SortDirection.Ascending)
             ],
             pendingIndex.Columns);
         var executionIndex = Assert.Single(transport.Indexes, index => index.Name == DistributedGroundworkStorageManifest.CommandByExecutionSequenceIndex);
+        Assert.False(executionIndex.UseOrdinalIdentities);
         Assert.Equal(
             [
                 new IndexColumn(DistributedGroundworkStorageManifest.WorkflowExecutionIdField, SortDirection.Ascending),

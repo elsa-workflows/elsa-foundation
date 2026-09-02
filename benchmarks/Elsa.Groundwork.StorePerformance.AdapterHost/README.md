@@ -13,15 +13,15 @@ substrate.
 | `WritePathRoundTripObserver` — the exact provider-native round-trip counter | **done**, compiles |
 | `ProviderConnections` — opens a real v2 connection for all four providers | **done**, compiles |
 | `probe-provider` | **done** — reads native server identity, topology, and sanitized driver settings |
-| `describe-matrix` | **done** — emits the schema-v2 exact 13-workload/15-registration catalog plus the AdapterHost and harness source revisions consumed by the operator runner |
-| `capture-plan` | **complete** for checkpoint, IAM, recovery, and both Secret targets; **partial/blocked** for diagnostics; the other eight routed workloads fail closed as not implemented |
+| `describe-matrix` | **done** — emits the schema-v2 exact 13-workload/17-registration catalog plus the AdapterHost and harness source revisions consumed by the operator runner |
+| `capture-plan` | **complete** for checkpoint, bookmark, recovery, outbox, trigger, recurring, due-timer, placement, and both Secret targets; relational queue/command are implemented and awaiting final Groundwork package plus live-plan validation; MongoDB queue/command are correctness-ready but native-plan blocked; **partial/blocked** for diagnostics |
 | optional-observer `src/` seam on `GroundworkV2RuntimeCheckpointWriter` | **done**, compiles |
 | `RuntimeStoreComposition` — DI composition, unit admission, distinct clients | **done**, compiles |
 | `CheckpointCommitAdapter` — correctness half, over the production commit path | **done**, compiles |
 | `RecoveryScanAdapter` — bounded public recovery paging and four native routes | **implemented**, focused workload tests pass; live provider capture remains operator-driven |
 | `verify-correctness` command | **done** — separate from plan capture and timed execution |
 | the five measured operations | **implemented** in the workload-owned phase adapter; no timed cohort claimed |
-| current-version measured cohorts | **not yet retained**; the runner admits timing only for registrations with complete or explicitly routeless evidence and checks for an idle host immediately before execution |
+| current-version measured cohorts | **not yet retained**; the runner admits timing only for registrations with complete or explicitly routeless evidence, keeps correctness-ready/native-plan-blocked registrations out of timing, and checks for an idle host immediately before execution |
 
 Nothing here has produced a measurement yet. No number in this project has been measured on v2.
 

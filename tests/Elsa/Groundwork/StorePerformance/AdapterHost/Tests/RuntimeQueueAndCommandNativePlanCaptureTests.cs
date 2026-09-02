@@ -37,7 +37,7 @@ public sealed class RuntimeQueueAndCommandNativePlanCaptureTests
             Assert.Equal(
                 ["list-pending-scheduler-workflow-executions", "list-by-workflow-execution"],
                 document.Routes.Select(route => route.RouteIdentity));
-            AssertRoute(root, request, document.Routes[0], RuntimeNativeResultShape.Page, 16, 16, true, false);
+            AssertRoute(root, request, document.Routes[0], RuntimeNativeResultShape.Page, 16, 16, false, true);
             AssertRoute(root, request, document.Routes[1], RuntimeNativeResultShape.Page, 32, 32, false, true);
         }
         finally
@@ -76,7 +76,7 @@ public sealed class RuntimeQueueAndCommandNativePlanCaptureTests
 
             Assert.Equal(digest, NativePlanEvidenceStaging.Sha256(Path.Combine(root, request.NativePlanEvidenceReference)));
             Assert.Equal(3, document.Routes.Count);
-            AssertRoute(root, request, document.Routes.Single(route => route.RouteIdentity == "list-visible-command-executions"), RuntimeNativeResultShape.Page, 128, 128, true, true);
+            AssertRoute(root, request, document.Routes.Single(route => route.RouteIdentity == "list-visible-command-executions"), RuntimeNativeResultShape.Page, 128, 128, false, true);
             AssertRoute(root, request, document.Routes.Single(route => route.RouteIdentity == "lease-visible-commands-by-execution"), RuntimeNativeResultShape.Page, 8, 8, false, true);
             AssertRoute(root, request, document.Routes.Single(route => route.RouteIdentity == "count-pending-commands-by-execution"), RuntimeNativeResultShape.ScalarCount, 0, 64, false, true);
         }

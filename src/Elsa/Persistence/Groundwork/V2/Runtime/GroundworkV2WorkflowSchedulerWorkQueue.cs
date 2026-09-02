@@ -176,29 +176,29 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
 
         var table = new TableId(unit.Name);
         var workflow = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField);
-        var recordedAt = Column(table, ElsaRuntimeV2StorageManifest.SchedulerWorkRecordedAtField);
-        var order = Column(table, ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField);
-        var requiredIndexFields = new Predicate.And([
-            NotNull(Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, nullableOverride: true)),
-            NotNull(Column(table, ElsaRuntimeV2StorageManifest.SchedulerWorkRecordedAtField, nullableOverride: true)),
-            NotNull(Column(table, ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField, nullableOverride: true)),
-            NotNull(Column(table, ElsaRuntimeV2StorageManifest.IdField, nullableOverride: true))]);
+        var collection = Column(table, ElsaRuntimeV2StorageManifest.CollectionField);
+        var options = unit.CreateQueryRenderOptions(
+            ElsaRuntimeV2StorageManifest.SchedulerWorkPendingExecutionIdentityIndex);
         var result = Open().Query(new QueryRequest(
             table,
-            requiredIndexFields,
-            [
-                new OrderTerm(workflow, OrderDirection.Ascending, NullOrder.Last),
-                new OrderTerm(recordedAt, OrderDirection.Descending, NullOrder.First),
-                new OrderTerm(order, OrderDirection.Ascending, NullOrder.Last)
-            ],
-            Projection.All,
+            Equal(collection, ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind),
+            [new OrderTerm(workflow, OrderDirection.Ascending, NullOrder.Last)],
+            Projection.ColumnsOnly(workflow),
             Paging.Keyset(limit),
-            new LatestPerKey(workflow, recordedAt)),
-            unit.CreateQueryRenderOptions(ElsaRuntimeV2StorageManifest.SchedulerWorkByExecutionRecordedAtAndOrderIndex));
+            distinct: true),
+            options);
 
         return ValueTask.FromResult<IReadOnlyCollection<string>>(
-            result.Rows.Select(row => Deserialize(row).Item.WorkflowExecutionId).ToArray());
+            result.Rows
+                .Select(row => StringValue(row, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField))
+                .ToArray());
     }
+
+    private static string StringValue(IReadOnlyDictionary<string, object?> row, string field) => row[field] switch
+    {
+        string value => value,
+        _ => throw new InvalidOperationException($"The Groundwork row field '{field}' is not a string.")
+    };
 
     public ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkClaim>> ListActiveClaimsAsync(
         string workflowExecutionId,
@@ -614,9 +614,6 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
 
     private static Predicate Equal(ColumnRef column, string value) =>
         new Predicate.Equal(column, QueryConstant.Of(column, value));
-
-    private static Predicate NotNull(ColumnRef column) =>
-        new Predicate.ColumnCompare(column, CompareOp.GreaterThanOrEqual, column);
 
     private static Paging PagingFor(int limit, string? continuationToken) =>
         continuationToken is null

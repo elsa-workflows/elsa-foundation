@@ -66,6 +66,28 @@ public sealed class IamNativePlanParserTests
     }
 
     [Fact]
+    public void Secret_plan_rejects_an_unproduced_optimizer_subquery_scan()
+    {
+        Assert.Throws<PerformanceContractException>(() =>
+            IamNativePlanParser.ParseSecret(
+                "sqlite",
+                "2\t0\t0\tSEARCH s USING INDEX IX_Secrets_TenantId_Status_Name (TenantId=? AND Status=?)\n" +
+                "20\t0\t0\tSCAN (subquery-1)"));
+    }
+
+    [Fact]
+    public void Secret_plan_accepts_an_indexed_optimizer_subquery_coroutine()
+    {
+        var parsed = IamNativePlanParser.ParseSecret(
+            "sqlite",
+            "2\t0\t0\tCO-ROUTINE (subquery-1)\n" +
+            "5\t2\t0\tSEARCH s USING INDEX IX_Secrets_TenantId_Status_Name (TenantId=? AND Status=?)\n" +
+            "20\t0\t0\tSCAN (subquery-1)");
+
+        Assert.Equal("IX_Secrets_TenantId_Status_Name", parsed.PhysicalIndexName);
+    }
+
+    [Fact]
     public void Secret_sql_predicates_are_proved_from_the_where_clause_not_field_name_substrings()
     {
         var proof = SecretRoutePredicateInspector.InspectSql(

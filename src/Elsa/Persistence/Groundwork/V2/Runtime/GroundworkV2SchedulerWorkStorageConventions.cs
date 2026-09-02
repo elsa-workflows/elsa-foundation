@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Kernel;
 using Groundwork.Store;
 
 namespace Elsa.Persistence.Groundwork.Runtime;

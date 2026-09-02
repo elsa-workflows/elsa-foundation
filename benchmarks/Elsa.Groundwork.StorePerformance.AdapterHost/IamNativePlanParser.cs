@@ -19,10 +19,6 @@ internal static class IamNativePlanParser
         @"\bSEARCH\b[^\r\n]*\bUSING\s+(?:COVERING\s+)?INDEX\s+[\x22'`\[]?(?<index>[^\s\x22'`\]()]+)[\x22'`\]]?",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
-    private static readonly Regex SqliteScan = new(
-        @"\bSCAN\b",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
-
     private static readonly Regex UnsafeXmlName = new(
         "(?i)(password|pwd|credential|connection|string|secret|account[_-]?key|access[_-]?key|token|server|host|endpoint|data[_-]?source|database|initial[_-]?catalog|port|user[_-]?id|uid)",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
@@ -49,9 +45,9 @@ internal static class IamNativePlanParser
     /// but its provider plan can contain several branches (for example, one bounded page branch and
     /// one count branch) plus an include lookup for versions. The route table must expose one physical
     /// index across its branches; requiring one textual SEARCH would incorrectly reject that real shape.
-    /// Every physical-table SCAN is rejected. SQLite may report iteration over a derived subquery or
-    /// Groundwork's materialized base result as SCAN nodes around a windowed LatestPerKey route; those
-    /// are not source-table access paths and are therefore not rejected here.
+    /// Every physical-table SCAN is rejected. SQLite may report iteration over a closed Groundwork
+    /// result alias, or over an optimizer subquery whose matching coroutine contains the indexed
+    /// source search; those provider-derived result scans are not source-table access paths.
     /// </summary>
     public static ParsedPlan ParseSecret(string provider, string rawPlan)
     {
@@ -60,9 +56,7 @@ internal static class IamNativePlanParser
         if (!string.Equals(provider, "sqlite", StringComparison.Ordinal))
             return Parse(provider, rawPlan);
 
-        var scanLines = rawPlan
-            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(line => SqliteScan.IsMatch(line) && !IsDerivedResultScan(line))
+        var scanLines = SqliteExplainPlanInspector.PhysicalScanLines(rawPlan)
             .Take(3)
             .ToArray();
         if (scanLines.Length != 0)
@@ -88,12 +82,6 @@ internal static class IamNativePlanParser
                 "Secret SQLite native plan must use exactly one physical index across its bounded page and total-count branches.");
         return new ParsedPlan("sqlite-explain-query-plan", indexes[0], "index-search", rawPlan);
     }
-
-    private static bool IsDerivedResultScan(string line) =>
-        Regex.IsMatch(
-            line,
-            @"\bSCAN\s+(?:\(subquery-\d+\)|__groundwork_base|__(?:groundwork_total|groundwork_page))(?:\s|$)",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     /// <summary>
     /// Removes only connection-bearing metadata that a provider may include in its native artifact.

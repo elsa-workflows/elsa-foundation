@@ -75,6 +75,30 @@ public sealed class RuntimeNativePlanContractTests
         Assert.Equal(1024, outbox.PhysicalCardinality);
         Assert.Equal(32, outbox.FiniteLimit);
         Assert.Equal(33, outbox.NativeFetchLimit);
+
+        var queue = RuntimeNativePlanContract.ForWorkload(RuntimeQueueDrainWorkload.WorkloadId);
+        Assert.Equal(
+            ["list-pending-scheduler-workflow-executions", "list-by-workflow-execution"],
+            queue.Select(route => route.RouteIdentity));
+        Assert.Equal([RuntimeNativePlanContract.WorkflowExecutionOrdinalKeyColumn], queue[0].OrderColumns);
+        Assert.Equal(["workflowExecutionId", RuntimeNativePlanContract.WorkflowExecutionOrdinalKeyColumn], queue[0].DistinctProjectionColumns);
+        Assert.Equal([new RuntimeNativePredicateSpec("collection", "=")], queue[0].Predicates);
+        Assert.Equal([new RuntimeNativePredicateSpec("workflowExecutionId", "=")], queue[1].Predicates);
+        Assert.Equal("workflowExecutionId", queue[1].PredicateColumn);
+
+        var commands = RuntimeNativePlanContract.ForWorkload(DistributedCommandSendLeaseAckWorkload.WorkloadId);
+        Assert.Equal(
+            ["lease-visible-commands-by-execution", "list-visible-command-executions", "count-pending-commands-by-execution"],
+            commands.Select(route => route.RouteIdentity));
+        Assert.Equal(
+            [new RuntimeNativePredicateSpec("workflowExecutionId", "="), new RuntimeNativePredicateSpec("visibleAt", "<=")],
+            commands[0].Predicates);
+        Assert.Equal([RuntimeNativePlanContract.WorkflowExecutionOrdinalKeyColumn], commands[1].OrderColumns);
+        Assert.Equal(
+            ["workflowExecutionId", RuntimeNativePlanContract.WorkflowExecutionOrdinalKeyColumn],
+            commands[1].DistinctProjectionColumns);
+        Assert.Equal([new RuntimeNativePredicateSpec("workflowExecutionId", "=")], commands[2].Predicates);
+        Assert.Equal("workflowExecutionId", commands[2].PredicateColumn);
     }
 
     [Fact]
@@ -303,6 +327,7 @@ public sealed class RuntimeNativePlanContractTests
                     File.Delete(rejected);
                 }
             }
+
         }
         finally
         {
@@ -356,6 +381,38 @@ public sealed class RuntimeNativePlanContractTests
                     specification.IndexName,
                     invalidCommand,
                     plan));
+                try
+                {
+                    Assert.Throws<PerformanceContractException>(() =>
+                        RuntimeNativePlanContract.ValidateEnvelope(
+                            RuntimeDueTimerSelectionWorkload.WorkloadId,
+                            "mongodb",
+                            RuntimeNativePlanContract.GroundworkAdapter,
+                            route,
+                            rejected));
+                }
+                finally
+                {
+                    File.Delete(rejected);
+                }
+            }
+
+            foreach (var invalidPlan in new[]
+                     {
+                         "{\"queryPlanner\":{\"winningPlan\":{\"stage\":\"IXSCAN\",\"indexName\":\"by_due_time_and_timer_id\"}},\"stages\":[{\"$sort\":{\"timerDueTime\":1}}]}",
+                         "{\"queryPlanner\":{\"winningPlan\":{\"stage\":\"IXSCAN\",\"indexName\":\"by_due_time_and_timer_id\"}},\"stages\":[{\"$group\":{\"_id\":\"$workflowExecutionId\"}}]}"
+                     })
+            {
+                var rejected = WriteArtifact(new RuntimeNativePlanArtifact(
+                    1,
+                    "mongodb",
+                    RuntimeNativePlanContract.GroundworkAdapter,
+                    specification.RouteIdentity,
+                    specification.TableName,
+                    specification.IndexName,
+                    specification.IndexName,
+                    command,
+                    invalidPlan));
                 try
                 {
                     Assert.Throws<PerformanceContractException>(() =>
@@ -438,15 +495,16 @@ public sealed class RuntimeNativePlanContractTests
     }
 
     [Fact]
-    public void Latest_per_key_command_must_bind_declared_partition_and_order_shape()
+    public void Projected_distinct_command_must_bind_declared_tuple_and_order_shape()
     {
         var specification = RuntimeNativePlanContract.For(
             DistributedCommandSendLeaseAckWorkload.WorkloadId,
             "list-visible-command-executions");
         var physicalIndex = RuntimeNativePlanContract.ExpectedPhysicalIndexName("sqlite", specification);
-        var route = Route(specification, physicalIndex, latestPerKey: true);
-        var plan = $"2\t0\tSEARCH {specification.TableName} USING INDEX {physicalIndex} (__groundwork_scope=?)";
-        var command = "WITH __groundwork_base AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY workflowExecutionId ORDER BY enqueuedAt DESC, transportItemId ASC) AS __groundwork_latest_rank FROM elsa_distributed_command_transport WHERE __groundwork_scope = @p0 AND visibleAt <= @p1) SELECT * FROM __groundwork_base WHERE __groundwork_latest_rank = 1 ORDER BY workflowExecutionId ASC, sequence DESC, transportItemId ASC LIMIT @p2";
+        var route = Route(specification, physicalIndex);
+        var plan = $"2\t0\tSEARCH {specification.TableName} USING COVERING INDEX {physicalIndex} (__groundwork_scope=?)";
+        var ordinal = RuntimeNativePlanContract.WorkflowExecutionOrdinalKeyColumn;
+        var command = $"SELECT DISTINCT workflowExecutionId, {ordinal} FROM elsa_distributed_command_transport WHERE __groundwork_scope = @p0 AND visibleAt <= @p1 ORDER BY {ordinal} ASC LIMIT @p2";
         var accepted = WriteArtifact(new RuntimeNativePlanArtifact(
             1,
             "sqlite",
@@ -469,9 +527,10 @@ public sealed class RuntimeNativePlanContractTests
 
             foreach (var invalidCommand in new[]
                      {
-                         command.Replace("PARTITION BY workflowExecutionId", "PARTITION BY sequence", StringComparison.Ordinal),
-                         command.Replace("ORDER BY enqueuedAt DESC", "ORDER BY sequence DESC", StringComparison.Ordinal),
-                         command.Replace("transportItemId ASC) AS __groundwork_latest_rank", "sequence ASC) AS __groundwork_latest_rank", StringComparison.Ordinal)
+                         command.Replace("SELECT DISTINCT", "SELECT", StringComparison.Ordinal),
+                         command.Replace($"workflowExecutionId, {ordinal}", $"{ordinal}, workflowExecutionId", StringComparison.Ordinal),
+                         command.Replace($"ORDER BY {ordinal} ASC", "ORDER BY workflowExecutionId ASC", StringComparison.Ordinal),
+                         command.Replace(" ORDER BY", $" GROUP BY {ordinal}, workflowExecutionId ORDER BY", StringComparison.Ordinal)
                      })
             {
                 var rejected = WriteArtifact(new RuntimeNativePlanArtifact(
@@ -499,10 +558,77 @@ public sealed class RuntimeNativePlanContractTests
                     File.Delete(rejected);
                 }
             }
+
+            foreach (var invalidPlan in new[]
+                     {
+                         plan + "\n20\t0\t0\tUSE TEMP B-TREE FOR ORDER BY",
+                         plan + "\n20\t0\t0\tSCAN (subquery-1)"
+                     })
+            {
+                var rejected = WriteArtifact(new RuntimeNativePlanArtifact(
+                    1,
+                    "sqlite",
+                    RuntimeNativePlanContract.GroundworkAdapter,
+                    specification.RouteIdentity,
+                    specification.TableName,
+                    specification.IndexName,
+                    physicalIndex,
+                    command,
+                    invalidPlan));
+                try
+                {
+                    Assert.Throws<PerformanceContractException>(() =>
+                        RuntimeNativePlanContract.ValidateEnvelope(
+                            DistributedCommandSendLeaseAckWorkload.WorkloadId,
+                            "sqlite",
+                            RuntimeNativePlanContract.GroundworkAdapter,
+                            route,
+                            rejected));
+                }
+                finally
+                {
+                    File.Delete(rejected);
+                }
+            }
         }
         finally
         {
             File.Delete(accepted);
+        }
+    }
+
+    [Fact]
+    public void Scalar_count_plan_rejects_sqlite_materialization()
+    {
+        var specification = RuntimeNativePlanContract.For(
+            DistributedCommandSendLeaseAckWorkload.WorkloadId,
+            "count-pending-commands-by-execution");
+        var physicalIndex = RuntimeNativePlanContract.ExpectedPhysicalIndexName("sqlite", specification);
+        var route = Route(specification, physicalIndex);
+        var artifact = WriteArtifact(new RuntimeNativePlanArtifact(
+            1,
+            "sqlite",
+            RuntimeNativePlanContract.GroundworkAdapter,
+            specification.RouteIdentity,
+            specification.TableName,
+            specification.IndexName,
+            physicalIndex,
+            "SELECT COUNT(*) FROM elsa_distributed_command_transport WHERE __groundwork_scope = @p0 AND workflowExecutionId = @p1",
+            $"2\t0\t0\tSEARCH {specification.TableName} USING COVERING INDEX {physicalIndex} (__groundwork_scope=? AND workflowExecutionId=?)\n20\t0\t0\tMATERIALIZE __groundwork_total"));
+
+        try
+        {
+            Assert.Throws<PerformanceContractException>(() =>
+                RuntimeNativePlanContract.ValidateEnvelope(
+                    DistributedCommandSendLeaseAckWorkload.WorkloadId,
+                    "sqlite",
+                    RuntimeNativePlanContract.GroundworkAdapter,
+                    route,
+                    artifact));
+        }
+        finally
+        {
+            File.Delete(artifact);
         }
     }
 

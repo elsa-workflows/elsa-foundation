@@ -130,7 +130,7 @@ public sealed class GroundworkExecutionCommandTransport(
                 var entry = session.Read(Key(DistributedGroundworkStorageManifest.TransportItemIdField, itemId));
                 if (entry is null)
                     continue;
-                var item = Deserialize<ExecutionCommandTransportItem>(entry.Values.Values);
+                var item = DeserializeItem(entry.Values.Values);
                 if (!item.IsVisible(now))
                     continue;
                 var next = item.Lease(ownerId, now + leaseDuration);
@@ -171,7 +171,7 @@ public sealed class GroundworkExecutionCommandTransport(
         var entry = session.Read(Key(DistributedGroundworkStorageManifest.TransportItemIdField, transportItemId));
         if (entry is null)
             return ValueTask.FromResult(false);
-        var item = Deserialize<ExecutionCommandTransportItem>(entry.Values.Values);
+        var item = DeserializeItem(entry.Values.Values);
         if (!StringComparer.Ordinal.Equals(item.WorkflowExecutionId, workflowExecutionId) ||
             !StringComparer.Ordinal.Equals(item.LeasedByOwnerId, ownerId) ||
             item.LeaseToken != leaseToken || item.IsVisible(now))
@@ -188,15 +188,16 @@ public sealed class GroundworkExecutionCommandTransport(
         cancellationToken.ThrowIfCancellationRequested();
         var session = Session(DistributedGroundworkStorageManifest.CommandTransportUnitId);
         var unit = sessions.Unit(DistributedGroundworkStorageManifest.CommandTransportUnitId, targetName);
+        var options = unit.CreateQueryRenderOptions(DistributedGroundworkStorageManifest.PendingCommandByExecutionIdentityIndex);
         var result = session.Query(new QueryRequest(
             new TableId(DistributedGroundworkStorageManifest.CommandTransportUnitName),
             new Predicate.Range(Columns.VisibleAt, null, Bound.Inclusive(QueryConstant.Of(Columns.VisibleAt, now))),
-            [new OrderTerm(Columns.WorkflowExecutionId, OrderDirection.Ascending, NullOrder.Last), new OrderTerm(Columns.Sequence, OrderDirection.Descending, NullOrder.Last)],
-            Projection.All,
+            [new OrderTerm(Columns.WorkflowExecutionId, OrderDirection.Ascending, NullOrder.Last)],
+            Projection.ColumnsOnly(Columns.WorkflowExecutionId),
             Paging.Keyset(maxItems),
-            new LatestPerKey(Columns.WorkflowExecutionId, Columns.EnqueuedAt)),
-            unit.CreateQueryRenderOptions(DistributedGroundworkStorageManifest.PendingCommandByExecutionSequenceIndex));
-        IReadOnlyCollection<string> ids = result.Rows.Select(row => StringValue(row, DistributedGroundworkStorageManifest.WorkflowExecutionIdField)).Distinct(StringComparer.Ordinal).ToArray();
+            distinct: true),
+            options);
+        IReadOnlyCollection<string> ids = result.Rows.Select(PendingWorkflowExecutionId).ToArray();
         return ValueTask.FromResult(ids);
     }
 
@@ -213,7 +214,7 @@ public sealed class GroundworkExecutionCommandTransport(
             Projection.All,
             Paging.None,
             ResultShape.TotalCount.Instance),
-            unit.CreateQueryRenderOptions(DistributedGroundworkStorageManifest.PendingCommandByExecutionSequenceIndex));
+            unit.CreateQueryRenderOptions(DistributedGroundworkStorageManifest.CommandByExecutionSequenceIndex));
         return ValueTask.FromResult(checked((int)(result.TotalCount ?? result.Rows.Count)));
     }
 
@@ -245,6 +246,29 @@ public sealed class GroundworkExecutionCommandTransport(
 
     private static T Deserialize<T>(IReadOnlyDictionary<string, object?> values) =>
         DistributedGroundworkDocuments.Deserialize<T>(values, DistributedGroundworkStorageManifest.PayloadField);
+
+    private static ExecutionCommandTransportItem DeserializeItem(IReadOnlyDictionary<string, object?> values)
+    {
+        var item = Deserialize<ExecutionCommandTransportItem>(values);
+        EnsureProjection(values, DistributedGroundworkStorageManifest.WorkflowExecutionIdField, item.WorkflowExecutionId);
+        return item;
+    }
+
+    private static void EnsureProjection(
+        IReadOnlyDictionary<string, object?> values,
+        string field,
+        string expected)
+    {
+        if (!values.TryGetValue(field, out var raw) ||
+            raw is not string actual ||
+            !StringComparer.Ordinal.Equals(actual, expected))
+        {
+            throw new InvalidDataException($"Groundwork command projection '{field}' does not match its current content.");
+        }
+    }
+
+    private static string PendingWorkflowExecutionId(IReadOnlyDictionary<string, object?> row) =>
+        StringValue(row, DistributedGroundworkStorageManifest.WorkflowExecutionIdField);
 
     private static string StringValue(IReadOnlyDictionary<string, object?> row, string field) => row[field] switch
     {

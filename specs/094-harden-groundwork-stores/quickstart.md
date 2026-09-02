@@ -1318,7 +1318,10 @@ final-seed rejection test, and compares the full poison record returned by `List
 queue suite is **17/17**, the complete benchmark-harness test
 project is **231/231**, the benchmark project warnings-as-errors build is clean, both changed-code
 path-restricted formatter checks pass, and `git diff --check` is clean. These are container-free
-correctness checks; provider and restart evidence remain deliberately unclaimed.
+correctness checks; provider and restart evidence remain deliberately unclaimed. MongoDB correctness
+remains admitted, but its native-plan and timing target is explicitly blocked because the Groundwork
+observer emits descriptive commands for the distinct route, whose `$sort`/`$group` materialization is
+not a bounded native plan.
 
 The three initial adversarial reviews examined `8c1c27e..8b3cb89f`. Evidence integrity passed, but
 correctness requested changes because the runner trusted returned contention claims without first
@@ -1369,7 +1372,10 @@ all 128 visible workflow IDs and exactly 8,176 pending commands.
 
 This is shared-backing public-contract correctness only. It does not claim provider or process
 restart durability, native-plan evidence, timing, EF comparison, a physical-form verdict,
-coverage-ledger evidence, or Spec 094 task completion. T100 remains unchecked.
+coverage-ledger evidence, or Spec 094 task completion. T100 remains unchecked. MongoDB correctness
+remains admitted, but its native-plan and timing target is explicitly blocked because the Groundwork
+observer emits descriptive commands for the distinct route, whose `$sort`/`$group` materialization is
+not a bounded native plan.
 
 Root verification rejected the worker’s initial **12/12** result because send acknowledgements did
 not compare the full command/envelope shape, concurrent lease responses were hashed in client order

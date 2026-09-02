@@ -61,7 +61,7 @@ public sealed class CapturePlanAdmissionTests
     }
 
     [Theory]
-    [InlineData("Groundwork.Store", "0.4.0-preview.6")]
+    [InlineData("Groundwork.Store", "0.4.0-preview.8")]
     [InlineData("Groundwork.Sqlite", "0.4.0-preview.5")]
     public void Capture_plan_rejects_non_current_provider_package_provenance(string package, string version)
     {
@@ -98,6 +98,54 @@ public sealed class CapturePlanAdmissionTests
         try
         {
             Assert.EndsWith(Path.GetFileName(output), CapturePlanAdmission.Ensure(request, output), StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(output))
+                Directory.Delete(output, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("queue-drain", "dedicated-scheduler-work-documents")]
+    [InlineData("command-send-lease-ack", "dedicated-command-transport-documents")]
+    public void Capture_plan_rejects_mongo_runtime_distinct_routes_before_provider_or_output_access(
+        string workloadId,
+        string physicalForm)
+    {
+        var workload = WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()).Workloads[workloadId];
+        var output = ExternalOutput();
+        var request = Request() with
+        {
+            WorkloadId = workload.Id,
+            WorkloadVersion = workload.Version,
+            Provider = "mongodb",
+            ProviderVersion = "8.0.0",
+            ProviderTopology = workload.RequiredProviderEvidence["mongodb"],
+            ProviderConfiguration = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["mode"] = "candidate"
+            },
+            Adapter = BenchmarkAdapterRegistry.GroundworkV2Adapter,
+            PhysicalForm = physicalForm,
+            PackageVersions = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Groundwork.MongoDb"] = "0.4.0-preview.8"
+            },
+            Seed = workload.Input.Seed,
+            InputFingerprintSha256 = workload.Input.FingerprintSha256,
+            NativePlanEvidenceReference = NativePlanEvidenceStaging.ReferenceFor(workload.Id, "mongodb", "set")
+        };
+
+        try
+        {
+            var exception = Assert.Throws<PerformanceContractException>(() =>
+                CapturePlanAdmission.Ensure(request, output));
+
+            Assert.Contains(BenchmarkAdapterRegistry.MongoRuntimeNativePlanBlockedReason, exception.Message, StringComparison.Ordinal);
+            Assert.Contains("correctness path remains admitted", exception.Message, StringComparison.Ordinal);
+            Assert.Contains("descriptive observer command", exception.Message, StringComparison.Ordinal);
+            Assert.False(Directory.Exists(output));
         }
         finally
         {
@@ -413,7 +461,7 @@ public sealed class CapturePlanAdmissionTests
         HostFingerprintSha256: new string('d', 64),
         PackageVersions: new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["Groundwork.Sqlite"] = "0.4.0-preview.6"
+            ["Groundwork.Sqlite"] = "0.4.0-preview.8"
         },
         Seed: "spec094-checkpoint-commit-v1.1",
         InputFingerprintSha256: "ee4cef346ca64739bbe7cfc84ee3f74e6acefec582f537c685991ca73c62ce13",
@@ -477,7 +525,7 @@ public sealed class CapturePlanAdmissionTests
         HarnessAssemblySha256: new string('b', 64),
         PackageVersions: new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["Groundwork.Sqlite"] = "0.4.0-preview.6"
+            ["Groundwork.Sqlite"] = "0.4.0-preview.8"
         },
         CompositionFingerprint: new string('c', 64),
         HostFingerprintSha256: new string('d', 64),

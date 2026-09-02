@@ -26,12 +26,15 @@ public sealed record RuntimeNativeRouteSpec(
     RuntimeNativeResultShape ResultShape = RuntimeNativeResultShape.Page,
     int? ScalarResultCount = null,
     RuntimeNativeLatestPerKeySpec? LatestPerKey = null,
-    string TieBreakerColumn = "id")
+    string TieBreakerColumn = "id",
+    IReadOnlyList<string>? DistinctProjectionColumns = null)
 {
     /// <summary>The provider-side page includes Groundwork's one-row continuation lookahead.</summary>
     public int NativeFetchLimit => ResultShape == RuntimeNativeResultShape.ScalarCount ? 0 : checked(FiniteLimit + 1);
 
     public bool UsesLatestPerKey => LatestPerKey is not null;
+
+    public bool UsesProjectedDistinct => DistinctProjectionColumns is { Count: > 0 };
 
     public IReadOnlyList<RuntimeNativeOrderTerm> EffectiveOrdering => Ordering ??
         OrderColumns.Select(column => new RuntimeNativeOrderTerm(column, RuntimeNativeOrderDirection.Ascending)).ToArray();
@@ -77,6 +80,7 @@ public static class RuntimeNativePlanContract
 {
     public const string GroundworkAdapter = "groundwork-v2";
     public const string RouteContract = "provider-native-routes";
+    public const string WorkflowExecutionOrdinalKeyColumn = "__groundwork_ordinal_workflow_execution_id";
     private const string TriggerTable = "runtime_workflow_trigger_binding";
     private const string BookmarkTable = "runtime_bookmark_state";
     private const string SourceReferenceTable = "runtime_workflow_executable_source_reference";
@@ -208,18 +212,15 @@ public static class RuntimeNativePlanContract
             "list-pending-scheduler-workflow-executions" => new(
                 routeIdentity,
                 SchedulerWorkTable,
-                "by_workflow_execution_and_scheduler_recorded_at_and_order",
-                ["workflowExecutionId", "recordedAt", "orderKey"],
-                [],
-                null,
+                "by_scheduler_work_execution_identity",
+                [WorkflowExecutionOrdinalKeyColumn],
+                [new("collection", "=")],
+                "collection",
                 RuntimeQueueDrainWorkload.WorkflowCount * RuntimeQueueDrainWorkload.WorkItemsPerWorkflow -
                 (RuntimeQueueDrainWorkload.BatchSize - RuntimeQueueDrainWorkload.RetryableItems),
                 RuntimeQueueDrainWorkload.BatchSize,
-                Ordering: [
-                    new("workflowExecutionId", RuntimeNativeOrderDirection.Ascending),
-                    new("recordedAt", RuntimeNativeOrderDirection.Descending),
-                    new("orderKey", RuntimeNativeOrderDirection.Ascending)],
-                LatestPerKey: new("workflowExecutionId", "recordedAt")),
+                Ordering: [new(WorkflowExecutionOrdinalKeyColumn, RuntimeNativeOrderDirection.Ascending)],
+                DistinctProjectionColumns: ["workflowExecutionId", WorkflowExecutionOrdinalKeyColumn]),
             "list-by-workflow-execution" => new(
                 routeIdentity,
                 SchedulerWorkTable,
@@ -246,22 +247,20 @@ public static class RuntimeNativePlanContract
             "list-visible-command-executions" => new(
                 routeIdentity,
                 CommandTransportTable,
-                "elsa_distributed_command_pending_execution_sequence",
-                ["workflowExecutionId", "sequence"],
+                "elsa_distributed_command_pending_execution_identity",
+                [WorkflowExecutionOrdinalKeyColumn],
                 [new("visibleAt", "<=")],
                 "visibleAt",
                 DistributedCommandSendLeaseAckWorkload.WorkflowCount * DistributedCommandSendLeaseAckWorkload.CommandsPerWorkflow -
                 DistributedCommandSendLeaseAckWorkload.BatchSize,
                 DistributedCommandSendLeaseAckWorkload.WorkflowCount,
-                Ordering: [
-                    new("workflowExecutionId", RuntimeNativeOrderDirection.Ascending),
-                    new("sequence", RuntimeNativeOrderDirection.Descending)],
-                LatestPerKey: new("workflowExecutionId", "enqueuedAt"),
-                TieBreakerColumn: "transportItemId"),
+                Ordering: [new(WorkflowExecutionOrdinalKeyColumn, RuntimeNativeOrderDirection.Ascending)],
+                TieBreakerColumn: "transportItemId",
+                DistinctProjectionColumns: ["workflowExecutionId", WorkflowExecutionOrdinalKeyColumn]),
             "count-pending-commands-by-execution" => new(
                 routeIdentity,
                 CommandTransportTable,
-                "elsa_distributed_command_pending_execution_sequence",
+                "elsa_distributed_command_execution_sequence",
                 [],
                 [new("workflowExecutionId", "=")],
                 "workflowExecutionId",
@@ -407,8 +406,11 @@ public static class RuntimeNativePlanContract
             @"\s+COLLATE\s+[A-Za-z_][A-Za-z0-9_.]*",
             string.Empty,
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+        var hasDistinct = Regex.IsMatch(normalized, @"\bSELECT\s+DISTINCT\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        var hasMaterializingShape = Regex.IsMatch(normalized, @"\b(?:GROUP\s+BY|OVER|ROW_NUMBER|UNION)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         if (Regex.IsMatch(normalized, @"\bOFFSET\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
-            (!specification.UsesLatestPerKey && Regex.IsMatch(normalized, @"\b(?:DISTINCT|GROUP\s+BY|OVER|ROW_NUMBER|UNION)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)) ||
+            (specification.UsesProjectedDistinct && (!hasDistinct || hasMaterializingShape)) ||
+            (!specification.UsesProjectedDistinct && !specification.UsesLatestPerKey && (hasDistinct || hasMaterializingShape)) ||
             (specification.UsesLatestPerKey && !Regex.IsMatch(normalized, @"\b(?:DISTINCT|GROUP\s+BY|PARTITION\s+BY|ROW_NUMBER|OVER)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)))
             throw InvalidCommand(specification, "a bounded, non-materializing page shape");
 
@@ -419,6 +421,8 @@ public static class RuntimeNativePlanContract
         var limit = $@"(?:{specification.NativeFetchLimit}|{parameter})";
         if (!Regex.IsMatch(normalized, $@"\bFROM\s+{Regex.Escape(specification.TableName)}\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             throw InvalidCommand(specification, "exact table");
+        if (specification.UsesProjectedDistinct)
+            ValidateProjectedDistinctShape(normalized, specification);
         if (specification.ResultShape == RuntimeNativeResultShape.Page &&
             !Regex.IsMatch(
                 normalized,
@@ -505,6 +509,7 @@ public static class RuntimeNativePlanContract
         var where = whereMatch.Groups["where"].Value;
         var nullableGuardColumns = specification.OrderColumns
             .Append(specification.TieBreakerColumn)
+            .Concat(specification.DistinctProjectionColumns ?? [])
             .Concat(specification.Predicates.Select(predicate => predicate.Column))
             .Append("__groundwork_scope")
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -566,6 +571,30 @@ public static class RuntimeNativePlanContract
             throw InvalidCommand(specification, "only the declared route predicates and their null guards");
     }
 
+    private static void ValidateProjectedDistinctShape(string normalized, RuntimeNativeRouteSpec specification)
+    {
+        var projection = Regex.Match(
+            normalized,
+            $@"\bSELECT\s+DISTINCT\s+(?<columns>.*?)\s+FROM\s+{Regex.Escape(specification.TableName)}\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+        if (!projection.Success)
+            throw InvalidCommand(specification, "exact projected distinct tuple");
+
+        var actual = projection.Groups["columns"].Value
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(item => Regex.Match(
+                item,
+                @"^(?:[A-Za-z_][A-Za-z0-9_]*\.)?(?<column>[A-Za-z_][A-Za-z0-9_]*)(?:\s+AS\s+[A-Za-z_][A-Za-z0-9_]*)?$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            .ToArray();
+        if (actual.Any(match => !match.Success) ||
+            specification.DistinctProjectionColumns is not { } expected ||
+            !actual.Select(match => match.Groups["column"].Value).SequenceEqual(expected, StringComparer.OrdinalIgnoreCase))
+        {
+            throw InvalidCommand(specification, "exact projected distinct tuple");
+        }
+    }
+
     private static void ValidateLatestPerKeyShape(string normalized, RuntimeNativeRouteSpec specification)
     {
         var latest = specification.LatestPerKey ?? throw InvalidCommand(specification, "declared LatestPerKey shape");
@@ -620,19 +649,9 @@ public static class RuntimeNativePlanContract
     {
         var lines = plan.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var unsafeLine = lines.FirstOrDefault(line => Regex.IsMatch(line, @"\b(?:USE\s+)?TEMP(?:ORARY)?\s+B[- ]TREE\b|\b(?:MATERIAL|MATERIALIZE|MATERIALIZED)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant));
-        // SQLite implements LatestPerKey with a windowed derived relation. Depending on the
-        // provider's null-ordering lowering, that truthful route shape can require a temporary
-        // ordering tree even while the source-table access uses the declared index. Keep this
-        // execution fact in the retained plan; boundedness and source access remain strict.
-        // TotalCount is a scalar result, but Groundwork still emits a provider-owned page/count
-        // wrapper with deterministic ordering. SQLite may materialize that wrapper even though the
-        // source rows are reached through the declared index. Keep the observed plan truthful; the
-        // scalar shape has no bounded page-performance claim to make here.
-        if (unsafeLine is not null && !specification.UsesLatestPerKey &&
-            specification.ResultShape != RuntimeNativeResultShape.ScalarCount)
+        if (unsafeLine is not null)
             throw InvalidPlan(specification, $"SQLite sort or materialization spill ('{unsafeLine}')");
-        if (lines.Any(line => Regex.IsMatch(line, @"\bSCAN\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) &&
-                             !Regex.IsMatch(line, @"\bSCAN\s+(?:\(subquery-\d+\)|__groundwork_base|__(?:groundwork_total|groundwork_page))(?:\s|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)))
+        if (SqliteExplainPlanInspector.PhysicalScanLines(plan).Count != 0)
             throw InvalidPlan(specification, "SQLite physical scan");
         var searches = lines.Where(line => Regex.IsMatch(line, @"\bSEARCH\b.*\bUSING\s+(?:COVERING\s+)?INDEX\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).ToArray();
         if (searches.Length == 0 || searches.Any(line => !line.Contains(physicalIndex, StringComparison.Ordinal)))
@@ -695,6 +714,7 @@ public static class RuntimeNativePlanContract
                                 (value.GetString()?.Contains("COLLSCAN", StringComparison.OrdinalIgnoreCase) == true ||
                                  value.GetString()?.Contains("SORT", StringComparison.OrdinalIgnoreCase) == true ||
                                  value.GetString()?.Contains("MATERIAL", StringComparison.OrdinalIgnoreCase) == true)) ||
+            HasMongoMaterializingStage(document.RootElement) ||
             HasSpillMarker(document.RootElement))
             throw InvalidPlan(specification, "MongoDB collection scan, sort, spill, or materialization");
         var matches = FindObjects(document.RootElement, "indexName")
@@ -702,6 +722,27 @@ public static class RuntimeNativePlanContract
             .ToArray();
         if (matches.Length != 1 || !stages.Any(stage => stage.TryGetProperty("stage", out var value) && value.GetString() == "IXSCAN"))
             throw InvalidPlan(specification, $"the exact MongoDB index '{physicalIndex}'");
+    }
+
+    private static bool HasMongoMaterializingStage(JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in value.EnumerateObject())
+            {
+                if (property.Name is "$sort" or "$group")
+                    return true;
+                if (HasMongoMaterializingStage(property.Value))
+                    return true;
+            }
+        }
+        else if (value.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in value.EnumerateArray())
+                if (HasMongoMaterializingStage(item))
+                    return true;
+        }
+        return false;
     }
 
     private static bool SortMatches(JsonElement sort, IReadOnlyList<RuntimeNativeOrderTerm> ordering)

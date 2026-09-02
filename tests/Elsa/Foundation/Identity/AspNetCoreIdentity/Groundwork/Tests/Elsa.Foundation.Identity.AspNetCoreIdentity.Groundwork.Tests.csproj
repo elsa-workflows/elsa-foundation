@@ -6,8 +6,8 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
-    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.4.0-preview.6" />
-    <PackageReference Include="Groundwork.Testing" VersionOverride="0.4.0-preview.6" />
+    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.4.0-preview.8" />
+    <PackageReference Include="Groundwork.Testing" VersionOverride="0.4.0-preview.8" />
     <PackageReference Include="CShells.FastEndpoints" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />

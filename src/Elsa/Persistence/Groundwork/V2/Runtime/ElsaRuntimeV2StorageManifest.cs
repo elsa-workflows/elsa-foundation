@@ -19,8 +19,10 @@ public static class ElsaRuntimeV2StorageManifest
     public const int SchemaVersionMaximumLength = 32;
     public const int RuntimeStatusProjectionLength = 32;
     public const int RuntimeExecutionIdProjectionLength = 128;
+    public const int RuntimeExecutionOrdinalKeyProjectionLength = RuntimeExecutionIdProjectionLength * 4;
     public const int RuntimeTenantProjectionLength = 256;
     public const int RuntimeCollectionProjectionLength = 128;
+    public const int SchedulerWorkCollectionProjectionLength = 32;
     public const int DurableTimerClaimOrderKeyProjectionLength = 84;
     public const int SchedulerWorkOrderKeyProjectionLength = 170;
     public const int BookmarkStimulusLookupKeyProjectionLength = 64;
@@ -74,6 +76,7 @@ public static class ElsaRuntimeV2StorageManifest
     public const string WorkflowActivationSlotDocumentKind = "workflowActivationSlot";
 
     public const string WorkflowExecutionIdField = "workflowExecutionId";
+    public const string WorkflowExecutionOrdinalKeyField = "__groundwork_ordinal_workflow_execution_id";
     public const string CollectionField = "collection";
     public const string StimulusHashField = "stimulusHash";
     public const string StimulusTypeField = "stimulusType";
@@ -222,7 +225,7 @@ public static class ElsaRuntimeV2StorageManifest
     public const string SourceReferenceByScopeAndIdIndex = "by_scope_and_document_id";
     public const string SourceReferenceByScopeLiveAndIdIndex = "by_scope_retired_expiry_and_document_id";
     public const string BySchedulerWorkOrderIndex = "by_scheduler_work_order";
-    public const string SchedulerWorkByExecutionRecordedAtAndOrderIndex = "by_workflow_execution_and_scheduler_recorded_at_and_order";
+    public const string SchedulerWorkPendingExecutionIdentityIndex = "by_scheduler_work_execution_identity";
     public const string ByTimerIdIndex = "by_timer_id";
     public const string ByRecurringScheduleIdIndex = "by_recurring_schedule_id";
     public const string ByRecurringScheduleActiveIndex = "by_recurring_schedule_active";
@@ -279,7 +282,7 @@ public static class ElsaRuntimeV2StorageManifest
         Unit(CheckpointCommitDocumentKind, "runtime_checkpoint_commit", [String(CollectionField, 128)], [Index(ByCollectionIndex, CollectionField)]),
         Unit(PostCommitOutboxDocumentKind, "runtime_post_commit_outbox", [String(WorkflowExecutionIdField, 128, required: true), String(CollectionField, 128), Int32(PostCommitOutboxStatusField), DateTime(PostCommitOutboxDeliverableAtField), Boolean(PostCommitOutboxClaimableIsEligibleField, required: true), DateTime(PostCommitOutboxClaimableAtField, required: true), DateTime(PostCommitOutboxRecordedAtField, required: true), String(PostCommitOutboxItemIdField, PostCommitOutboxItemIdProjectionLength, required: true), String(PostCommitOutboxIntentKindField, PostCommitOutboxIntentKindProjectionLength, required: true)], [Index(ByWorkflowExecutionIndex, WorkflowExecutionIdField), Index(ByCollectionIndex, CollectionField), Index(ByOutboxStatusIndex, PostCommitOutboxStatusField), Index(ByOutboxDeliverableAtIndex, PostCommitOutboxDeliverableAtField), Index(ByOutboxClaimableAtIndex, PostCommitOutboxClaimableAtField), Index(ByOutboxRecordedAtIndex, PostCommitOutboxRecordedAtField), Index(ByOutboxItemIdIndex, PostCommitOutboxItemIdField), Index(ByOutboxIntentKindIndex, PostCommitOutboxIntentKindField), IncludedIndex(PostCommitOutboxClaimableIndex, PostCommitOutboxClaimableIsEligibleField, PostCommitOutboxClaimableAtField, PostCommitOutboxRecordedAtField, PostCommitOutboxItemIdField, IdField), Index(PostCommitOutboxClaimableByWorkflowIndex, WorkflowExecutionIdField, PostCommitOutboxClaimableIsEligibleField, PostCommitOutboxClaimableAtField, PostCommitOutboxRecordedAtField, PostCommitOutboxItemIdField), Index(PostCommitOutboxClaimableByIntentKindIndex, PostCommitOutboxIntentKindField, PostCommitOutboxClaimableIsEligibleField, PostCommitOutboxClaimableAtField, PostCommitOutboxRecordedAtField, PostCommitOutboxItemIdField), Index(PostCommitOutboxClaimableByWorkflowAndIntentKindIndex, WorkflowExecutionIdField, PostCommitOutboxIntentKindField, PostCommitOutboxClaimableIsEligibleField, PostCommitOutboxClaimableAtField, PostCommitOutboxRecordedAtField, PostCommitOutboxItemIdField), Index("by_deliverable_time_recorded_id", PostCommitOutboxDeliverableAtField, PostCommitOutboxRecordedAtField, PostCommitOutboxItemIdField), Index("by_deliverable_by_workflow_time_recorded_id", WorkflowExecutionIdField, PostCommitOutboxDeliverableAtField, PostCommitOutboxRecordedAtField, PostCommitOutboxItemIdField), Index("by_deliverable_by_intent_kind_time_recorded_id", PostCommitOutboxIntentKindField, PostCommitOutboxDeliverableAtField, PostCommitOutboxRecordedAtField, PostCommitOutboxItemIdField), Index("by_deliverable_by_workflow_and_intent_kind_time_recorded_id", WorkflowExecutionIdField, PostCommitOutboxIntentKindField, PostCommitOutboxDeliverableAtField, PostCommitOutboxRecordedAtField, PostCommitOutboxItemIdField)]),
         Unit(WorkflowDispatchDocumentKind, "runtime_workflow_dispatch", [String(CollectionField, 128), String(ParentWorkflowExecutionIdField, 128), String(ChildWorkflowExecutionIdField, 128), String(StatusField, 32), String(TestScopeIdField, 128), DateTime(WorkflowDispatchCreatedAtField), String(WorkflowDispatchIdField, WorkflowDispatchIdProjectionLength)], [Index(ByCollectionIndex, CollectionField), Index(ByParentWorkflowExecutionIndex, ParentWorkflowExecutionIdField), Index(ByChildWorkflowExecutionIndex, ChildWorkflowExecutionIdField), Index(ByStatusIndex, StatusField), Index(ByTestScopeIndex, TestScopeIdField), Index(ByCreatedAtIndex, WorkflowDispatchCreatedAtField), Index(ByDispatchIdIndex, WorkflowDispatchIdField), Index("by_child_workflow_execution_and_status", ChildWorkflowExecutionIdField, StatusField), Index("by_parent_workflow_execution_and_status", ParentWorkflowExecutionIdField, StatusField), Index("by_parent_workflow_execution_created_at_dispatch_id", ParentWorkflowExecutionIdField, WorkflowDispatchCreatedAtField, WorkflowDispatchIdField), Index("by_parent_workflow_execution_status_created_at_dispatch_id", ParentWorkflowExecutionIdField, StatusField, WorkflowDispatchCreatedAtField, WorkflowDispatchIdField), Index("by_parent_execution_status_scope_created_at_dispatch_id", ParentWorkflowExecutionIdField, StatusField, TestScopeIdField, WorkflowDispatchCreatedAtField, WorkflowDispatchIdField), Index("by_parent_workflow_execution_test_scope_created_at_dispatch_id", ParentWorkflowExecutionIdField, TestScopeIdField, WorkflowDispatchCreatedAtField, WorkflowDispatchIdField), Index("by_status_created_at_dispatch_id", StatusField, WorkflowDispatchCreatedAtField, WorkflowDispatchIdField), Index("by_status_test_scope_created_at_dispatch_id", StatusField, TestScopeIdField, WorkflowDispatchCreatedAtField, WorkflowDispatchIdField), Index("by_test_scope_created_at_dispatch_id", TestScopeIdField, WorkflowDispatchCreatedAtField, WorkflowDispatchIdField)]),
-        Unit(SchedulerWorkItemDocumentKind, "runtime_scheduler_work_item", [String(SchedulerWorkOrderKeyField, SchedulerWorkOrderKeyProjectionLength, required: true), DateTime(SchedulerWorkRecordedAtField, required: true), String(WorkflowExecutionIdField, RuntimeExecutionIdProjectionLength, required: true), String(CollectionField, RuntimeCollectionProjectionLength), String(SchedulerWorkClaimOwnerIdField, IdMaximumLength), Int64(SchedulerWorkFencingTokenField)], [IncludedIndex(BySchedulerWorkOrderIndex, WorkflowExecutionIdField, SchedulerWorkOrderKeyField, IdField), Index(ByWorkflowExecutionIndex, WorkflowExecutionIdField), IncludedIndex("by_workflow_execution_and_scheduler_work_order", CollectionField, WorkflowExecutionIdField, SchedulerWorkOrderKeyField)], declaration => declaration.Index(SchedulerWorkByExecutionRecordedAtAndOrderIndex, index => index.Ascending(WorkflowExecutionIdField).Descending(SchedulerWorkRecordedAtField).Ascending(SchedulerWorkOrderKeyField).Ascending(IdField).ExcludeMissingValues())),
+        Unit(SchedulerWorkItemDocumentKind, "runtime_scheduler_work_item", [String(SchedulerWorkOrderKeyField, SchedulerWorkOrderKeyProjectionLength, required: true), DateTime(SchedulerWorkRecordedAtField, required: true), String(WorkflowExecutionIdField, RuntimeExecutionIdProjectionLength, required: true, ordinalIdentity: WorkflowExecutionOrdinalKeyField), String(CollectionField, SchedulerWorkCollectionProjectionLength, required: true), String(SchedulerWorkClaimOwnerIdField, IdMaximumLength), Int64(SchedulerWorkFencingTokenField)], [IncludedIndex(BySchedulerWorkOrderIndex, WorkflowExecutionIdField, SchedulerWorkOrderKeyField, IdField), OrdinalIdentityIndex(SchedulerWorkPendingExecutionIdentityIndex, CollectionField, WorkflowExecutionIdField)]),
         Unit(SchedulerPoisonDocumentKind, "runtime_scheduler_poison", [String(WorkflowExecutionIdField, RuntimeExecutionIdProjectionLength), String(SchedulerPoisonWorkItemIdField, SchedulerPoisonWorkItemProjectionLength), DateTime(SchedulerPoisonFirstFailedAtField), DateTime(SchedulerPoisonLastFailedAtField)], [Index(ByWorkflowExecutionIndex, WorkflowExecutionIdField), IncludedIndex("by_workflow_execution_and_failure_window", WorkflowExecutionIdField, SchedulerPoisonFirstFailedAtField, SchedulerPoisonLastFailedAtField, SchedulerPoisonWorkItemIdField)]),
         Unit(DurableTimerDocumentKind, "runtime_durable_timer", [String(CollectionField, RuntimeCollectionProjectionLength), String(WorkflowExecutionIdField, RuntimeExecutionIdProjectionLength), String(DurableTimerIdField, RuntimeExecutionIdProjectionLength, required: true), DateTime(DurableTimerDueTimeField, required: true), String(DurableTimerClaimOrderKeyField, DurableTimerClaimOrderKeyProjectionLength)], [Index(ByCollectionIndex, CollectionField), Index(ByWorkflowExecutionIndex, WorkflowExecutionIdField), IncludedIndex(DurableTimerByDueTimeAndTimerIdIndex, DurableTimerDueTimeField, DurableTimerIdField, IdField), Index(ByTimerIdIndex, DurableTimerIdField), IncludedIndex("by_workflow_execution_and_timer_id", WorkflowExecutionIdField, DurableTimerIdField), IncludedIndex("by_claim_order", DurableTimerClaimOrderKeyField)]),
         Unit(WorkflowRunHealthStateDocumentKind, "runtime_workflow_run_health_state", [String(WorkflowRunHealthDefinitionIdField, required: true), Int32(WorkflowRunHealthRunKindField, required: true), DateTime(WorkflowRunHealthStartedAtField), Int32(WorkflowRunHealthStatusField, required: true), Int64(WorkflowRunHealthIncidentCountField, required: true), Int64(WorkflowRunHealthIncidentBearingCountField, required: true)], [
@@ -291,7 +294,7 @@ public static class ElsaRuntimeV2StorageManifest
             IncludedIndex("by_run_kind_status_definition_started_at", WorkflowRunHealthRunKindField, WorkflowRunHealthStatusField, WorkflowRunHealthDefinitionIdField, WorkflowRunHealthStartedAtField)
         ], AddWorkflowRunHealthAggregations),
         Unit(WorkflowTriggerBindingDocumentKind, "runtime_workflow_trigger_binding", [String(StimulusHashField, StimulusHashProjectionLength), String(StimulusTypeField, WorkflowTriggerBindingStimulusTypeProjectionLength), String(StimulusLookupKeyField, BookmarkStimulusLookupKeyProjectionLength), String(StimulusTypeLookupKeyField, BookmarkStimulusLookupKeyProjectionLength), Boolean(WorkflowTriggerBindingIsActiveField), String(TriggerBindingIdField, RuntimeExecutionIdProjectionLength), String(ArtifactIdField, RuntimeExecutionIdProjectionLength), String(ActivationIdField, RuntimeExecutionIdProjectionLength)], [Index(WorkflowTriggerBindingByActive, WorkflowTriggerBindingIsActiveField), Index(ByArtifactIndex, ArtifactIdField), IncludedIndex(TriggerBindingByArtifactAndIdIndex, ArtifactIdField, TriggerBindingIdField), Index(ByActivationIndex, ActivationIdField), IncludedIndex(TriggerBindingByActivationAndIdIndex, ActivationIdField, TriggerBindingIdField), Index(ByStimulusIndex, StimulusHashField), IncludedIndex(TriggerBindingByStimulusAndTypeIndex, StimulusLookupKeyField, WorkflowTriggerBindingIsActiveField, TriggerBindingIdField), Index(ByStimulusTypeIndex, StimulusTypeField), IncludedIndex(TriggerBindingByStimulusTypeAndActiveIndex, StimulusTypeLookupKeyField, WorkflowTriggerBindingIsActiveField, TriggerBindingIdField), UniqueIndex("by_trigger_binding_id", TriggerBindingIdField)]),
-        Unit(RecurringTriggerScheduleDocumentKind, "runtime_recurring_trigger_schedule", [String(CollectionField, 128), String(ArtifactIdField, 128, required: true), String(RecurringTriggerScheduleActivationIdField, 128, required: true), String(RecurringTriggerScheduleIdField, 128, required: true), Boolean(RecurringTriggerScheduleIsActiveField, required: true), DateTime(RecurringTriggerScheduleNextOccurrenceField, required: true)], [IncludedIndex(RecurringScheduleByActiveNextOccurrenceAndScheduleIdIndex, RecurringTriggerScheduleIsActiveField, RecurringTriggerScheduleNextOccurrenceField, RecurringTriggerScheduleIdField, IdField), IncludedIndex(RecurringScheduleByArtifactAndScheduleIdIndex, ArtifactIdField, RecurringTriggerScheduleIdField, IdField), Index(ByCollectionIndex, CollectionField), Index("by_next_occurrence", RecurringTriggerScheduleNextOccurrenceField), IncludedIndex(RecurringScheduleByActivationAndScheduleIdIndex, RecurringTriggerScheduleActivationIdField, RecurringTriggerScheduleIdField, IdField), Index(ByRecurringScheduleActiveIndex, RecurringTriggerScheduleIsActiveField), Index(ByRecurringScheduleIdIndex, RecurringTriggerScheduleIdField)]),
+        Unit(RecurringTriggerScheduleDocumentKind, "runtime_recurring_trigger_schedule", [String(CollectionField, 128), String(ArtifactIdField, 128, required: true), String(RecurringTriggerScheduleActivationIdField, 128), String(RecurringTriggerScheduleIdField, 128, required: true), Boolean(RecurringTriggerScheduleIsActiveField, required: true), DateTime(RecurringTriggerScheduleNextOccurrenceField, required: true)], [IncludedIndex(RecurringScheduleByActiveNextOccurrenceAndScheduleIdIndex, RecurringTriggerScheduleIsActiveField, RecurringTriggerScheduleNextOccurrenceField, RecurringTriggerScheduleIdField, IdField), IncludedIndex(RecurringScheduleByArtifactAndScheduleIdIndex, ArtifactIdField, RecurringTriggerScheduleIdField, IdField), Index(ByCollectionIndex, CollectionField), Index("by_next_occurrence", RecurringTriggerScheduleNextOccurrenceField), IncludedIndex(RecurringScheduleByActivationAndScheduleIdIndex, RecurringTriggerScheduleActivationIdField, RecurringTriggerScheduleIdField, IdField), Index(ByRecurringScheduleActiveIndex, RecurringTriggerScheduleIsActiveField), Index(ByRecurringScheduleIdIndex, RecurringTriggerScheduleIdField)]),
         Unit(WorkflowActivationSlotDocumentKind, "runtime_workflow_activation_slot", [String(WorkflowActivationSlotDefinitionIdField, RuntimeExecutionIdProjectionLength), String(WorkflowActivationSlotNameField, 128), String(WorkflowActivationSlotActiveActivationIdField, RuntimeExecutionIdProjectionLength)], [Index(WorkflowActivationSlotByDefinition, WorkflowActivationSlotDefinitionIdField), IncludedIndex(WorkflowActivationSlotByDefinitionAndSlotId, WorkflowActivationSlotDefinitionIdField, WorkflowActivationSlotNameField, IdField), UniqueIndex(WorkflowActivationSlotByActiveActivation, WorkflowActivationSlotActiveActivationIdField), IncludedExcludedIndex(WorkflowActivationSlotByActiveActivationAndSlotId, WorkflowActivationSlotActiveActivationIdField, IdField)]),
         Unit(PublicationProjectionStateDocumentKind, "runtime_publication_projection_state", [String(PublicationProjectionKindField, 128), String(PublicationProjectionArtifactIdField, RuntimeExecutionIdProjectionLength)], [IncludedIndex("by_projection_kind_and_artifact_id", PublicationProjectionKindField, PublicationProjectionArtifactIdField, IdField)])
     ];
@@ -386,8 +389,12 @@ public static class ElsaRuntimeV2StorageManifest
             .Count("failedCount"));
     }
 
-    private static ColumnSpec String(string name, int maxLength = IdMaximumLength, bool required = false) =>
-        new(name, PortableType.String, maxLength, required);
+    private static ColumnSpec String(
+        string name,
+        int maxLength = IdMaximumLength,
+        bool required = false,
+        string? ordinalIdentity = null) =>
+        new(name, PortableType.String, maxLength, required, ordinalIdentity);
 
     private static ColumnSpec Int64(string name, bool required = false) => new(name, PortableType.Int64, Required: required);
 
@@ -402,12 +409,20 @@ public static class ElsaRuntimeV2StorageManifest
     private static IndexSpec IncludedIndex(string name, params string[] columns) =>
         new(name, columns, false, MissingValueBehavior.Included);
 
+    private static IndexSpec OrdinalIdentityIndex(string name, params string[] columns) =>
+        new(name, columns, false, MissingValueBehavior.Included, UseOrdinalIdentities: true);
+
     private static IndexSpec IncludedExcludedIndex(string name, params string[] columns) =>
         new(name, columns, false, MissingValueBehavior.Excluded);
 
     private static IndexSpec UniqueIndex(string name, params string[] columns) => new(name, columns, true);
 
-    private sealed record ColumnSpec(string Name, PortableType Type, int? MaxLength = null, bool Required = false)
+    private sealed record ColumnSpec(
+        string Name,
+        PortableType Type,
+        int? MaxLength = null,
+        bool Required = false,
+        string? OrdinalIdentity = null)
     {
         public void AddTo(StorageDeclarationBuilder declaration)
         {
@@ -418,6 +433,8 @@ public static class ElsaRuntimeV2StorageManifest
                     {
                         if (Required)
                             column.Required();
+                        if (OrdinalIdentity is not null)
+                            column.OrdinalIdentity(OrdinalIdentity);
                     });
                     break;
                 case PortableType.Int64:
@@ -458,7 +475,8 @@ public static class ElsaRuntimeV2StorageManifest
         string Name,
         IReadOnlyList<string> Columns,
         bool Unique,
-        MissingValueBehavior MissingValues = MissingValueBehavior.Excluded)
+        MissingValueBehavior MissingValues = MissingValueBehavior.Excluded,
+        bool UseOrdinalIdentities = false)
     {
         public void AddTo(StorageDeclarationBuilder declaration)
         {
@@ -468,6 +486,8 @@ public static class ElsaRuntimeV2StorageManifest
                     index.Column(column);
                 if (MissingValues == MissingValueBehavior.Excluded)
                     index.ExcludeMissingValues();
+                if (UseOrdinalIdentities)
+                    index.UseOrdinalIdentities();
             };
 
             if (Unique)

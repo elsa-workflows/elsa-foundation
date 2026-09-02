@@ -206,17 +206,16 @@
     diagnostic streams while runtime session opening stays read-only. Focused diagnostics,
     adapter, composition, and unified-host gates passed as summarized in `quickstart.md`.
 
-### Current exact 0.4.0-preview.6 pin-alignment checkpoint
+### Groundwork 0.4.0-preview.8 candidate pin-alignment checkpoint (unpublished)
 
-- The active Groundwork family is pinned exactly to `0.4.0-preview.6` in central props and explicit
-  project/script overrides, backed by upstream tag `v0.4.0-preview.6`, production commit
-  `2f4d483c969e058ece3331584e5a5504edd47264`, and Feedz publication run `33591586325`.
-  Focused diagnostics restores completed, the shared project built, the
-  v2 Structured Logs suite passed 28/32 with four unavailable-provider skips, and the v2
-  OpenTelemetry suite passed 28/33 with five unavailable-provider skips. No preview.6 compile or
-  API break was found; existing NU1903 SSH.NET warnings remain. This is focused package/API
-  compatibility evidence only, not four-provider promotion, #646 performance evidence, EF
-  deletion, or #642 completion.
+- Central props and explicit project/script overrides are staged for `0.4.0-preview.8`, but that
+  Groundwork version is not yet published and therefore has no immutable release tag, production
+  commit, or Feedz publication run to cite. Focused restores and tests used a locally packed
+  candidate. Real SQLite native-plan capture then exposed release-blocking ordinal-identity query
+  and index-shape gaps, so this checkpoint makes no published-package or final compatibility claim.
+  Existing NU1903 SSH.NET warnings remain. This is candidate pin-alignment and focused local
+  evidence only, not four-provider promotion, #646 performance evidence, EF deletion, or #642
+  completion.
 
 ### Historical exact 0.4.0-preview.3 recertification checkpoint (immutable)
 

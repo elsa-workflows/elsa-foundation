@@ -63,7 +63,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             ["recurringTriggerSchedule"] = ["by_activation_and_schedule_id", "by_active_next_occurrence_and_schedule_id", "by_artifact_and_schedule_id", "by_collection", "by_next_occurrence", "by_recurring_schedule_active", "by_recurring_schedule_id"],
             ["schedulerPoison"] = ["by_workflow_execution", "by_workflow_execution_and_failure_window"],
             ["schedulerState"] = ["by_collection"],
-            ["schedulerWorkItem"] = ["by_scheduler_work_order", "by_workflow_execution", "by_workflow_execution_and_scheduler_recorded_at_and_order", "by_workflow_execution_and_scheduler_work_order"],
+            ["schedulerWorkItem"] = ["by_scheduler_work_execution_identity", "by_scheduler_work_order"],
             ["workflowAlterationJob"] = ["alteration_job_checkpoint", "alteration_jobs_counts", "by_claimable_at", "by_plan_and_capture_ordinal", "by_plan_and_claimable_at", "by_plan_status_and_claimable_at", "checkpointCommitId", "status"],
             ["workflowAlterationPlan"] = ["by_collection", "by_tenant_and_idempotency_key", "by_tenant_and_status", "status", "unique_tenant_and_idempotency_key"],
             ["workflowDispatch"] = ["by_child_workflow_execution", "by_child_workflow_execution_and_status", "by_collection", "by_created_at", "by_dispatch_id", "by_parent_execution_status_scope_created_at_dispatch_id", "by_parent_workflow_execution", "by_parent_workflow_execution_and_status", "by_parent_workflow_execution_created_at_dispatch_id", "by_parent_workflow_execution_status_created_at_dispatch_id", "by_parent_workflow_execution_test_scope_created_at_dispatch_id", "by_status", "by_status_created_at_dispatch_id", "by_status_test_scope_created_at_dispatch_id", "by_test_scope", "by_test_scope_created_at_dispatch_id"],
@@ -93,7 +93,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
 
         var schedules = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleDocumentKind);
         AssertColumn(schedules, ElsaRuntimeV2StorageManifest.ArtifactIdField, PortableType.String, 128, nullable: false);
-        AssertColumn(schedules, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleActivationIdField, PortableType.String, 128, nullable: false);
+        AssertColumn(schedules, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleActivationIdField, PortableType.String, 128, nullable: true);
         AssertColumn(schedules, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIdField, PortableType.String, 128, nullable: false);
         AssertColumn(schedules, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIsActiveField, PortableType.Boolean, null, nullable: false);
         AssertColumn(schedules, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleNextOccurrenceField, PortableType.DateTimeOffset, null, nullable: false);
@@ -215,25 +215,40 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             PortableType.DateTimeOffset,
             null,
             nullable: false);
+        var schedulerWork = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind);
         AssertColumn(
-            ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind),
+            schedulerWork,
             ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField,
             PortableType.String,
             ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength,
             nullable: false);
-        var schedulerWork = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind);
+        var workflowExecution = schedulerWork.Columns.Single(column =>
+            column.Name == ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField);
+        Assert.Equal(
+            ElsaRuntimeV2StorageManifest.WorkflowExecutionOrdinalKeyField,
+            Assert.IsType<OrdinalIdentityDefinition>(workflowExecution.OrdinalIdentity).PhysicalColumn);
+        Assert.DoesNotContain(
+            schedulerWork.Columns,
+            column => column.Name == ElsaRuntimeV2StorageManifest.WorkflowExecutionOrdinalKeyField);
+        AssertColumn(
+            schedulerWork,
+            ElsaRuntimeV2StorageManifest.CollectionField,
+            PortableType.String,
+            ElsaRuntimeV2StorageManifest.SchedulerWorkCollectionProjectionLength,
+            nullable: false);
         AssertIndex(schedulerWork, ElsaRuntimeV2StorageManifest.BySchedulerWorkOrderIndex, [
             ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField,
             ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField,
             ElsaRuntimeV2StorageManifest.IdField], included: true);
         var pendingExecutions = Assert.Single(schedulerWork.Indexes, index =>
-            index.Name == ElsaRuntimeV2StorageManifest.SchedulerWorkByExecutionRecordedAtAndOrderIndex);
+            index.Name == ElsaRuntimeV2StorageManifest.SchedulerWorkPendingExecutionIdentityIndex);
+        Assert.True(pendingExecutions.UseOrdinalIdentities);
+        Assert.False(schedulerWork.Indexes.Single(index =>
+            index.Name == ElsaRuntimeV2StorageManifest.BySchedulerWorkOrderIndex).UseOrdinalIdentities);
         Assert.Equal(
             [
-                new IndexColumn(ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, SortDirection.Ascending),
-                new IndexColumn(ElsaRuntimeV2StorageManifest.SchedulerWorkRecordedAtField, SortDirection.Descending),
-                new IndexColumn(ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField, SortDirection.Ascending),
-                new IndexColumn(ElsaRuntimeV2StorageManifest.IdField, SortDirection.Ascending)
+                new IndexColumn(ElsaRuntimeV2StorageManifest.CollectionField, SortDirection.Ascending),
+                new IndexColumn(ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, SortDirection.Ascending)
             ],
             pendingExecutions.Columns);
         var schedulerPoison = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.SchedulerPoisonDocumentKind);
