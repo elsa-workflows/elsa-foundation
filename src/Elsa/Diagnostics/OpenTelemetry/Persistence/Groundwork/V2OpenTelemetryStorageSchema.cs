@@ -167,7 +167,8 @@ public static class V2OpenTelemetryStorageSchema
             .Timestamp(Timestamp, c => c.Required()),
         index => index
             .Descending(Timestamp)
-            .Ascending(Id),
+            .Ascending(Id)
+            .Ascending(Sequence),
         MetricPointTimestampIndex);
 
     public static StorageUnit CreateLogs() => CreateSignal(
@@ -185,7 +186,8 @@ public static class V2OpenTelemetryStorageSchema
             .Timestamp(Timestamp, c => c.Required()),
         index => index
             .Descending(Timestamp)
-            .Ascending(Id),
+            .Ascending(Id)
+            .Ascending(Sequence),
         LogTimestampIndex,
         builder => builder.Index(LogTraceDetailIndex, index => index
             .Ascending(TraceKey)
@@ -205,17 +207,20 @@ public static class V2OpenTelemetryStorageSchema
             .Key(Id)
             .Index(ResourceLastSeenIndex, index => index
                 .Descending(LastSeen)
-                .Ascending(IdOrderKey))
+                .Ascending(IdOrderKey)
+                .Ascending(Id))
             .Index("elsa_otel_resources_service", ServiceName)
             .Index("elsa_otel_resources_status", Status)
             .Index(ResourceStatusLastSeenIndex, index => index
                 .Ascending(Status)
                 .Descending(LastSeen)
-                .Ascending(IdOrderKey))
+                .Ascending(IdOrderKey)
+                .Ascending(Id))
             .Index(ResourceServiceLastSeenIndex, index => index
                 .Ascending(ServiceNameKey)
                 .Descending(LastSeen)
-                .Ascending(IdOrderKey))
+                .Ascending(IdOrderKey)
+                .Ascending(Id))
             .Scoped()
             .Retention(0, LastSeen)
             .Build();

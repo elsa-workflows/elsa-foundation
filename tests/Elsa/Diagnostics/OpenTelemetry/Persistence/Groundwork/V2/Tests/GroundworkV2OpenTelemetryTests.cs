@@ -62,21 +62,24 @@ public sealed class GroundworkV2OpenTelemetryTests
         Assert.Equal(
             [
                 new IndexColumn(V2OpenTelemetryStorageSchema.LastSeen, SortDirection.Descending),
-                new IndexColumn(V2OpenTelemetryStorageSchema.IdOrderKey)
+                new IndexColumn(V2OpenTelemetryStorageSchema.IdOrderKey),
+                new IndexColumn(V2OpenTelemetryStorageSchema.Id)
             ],
             Assert.Single(resources.Indexes, index => index.Name == "elsa_otel_resources_last_seen").Columns);
         Assert.Equal(
             [
                 new IndexColumn(V2OpenTelemetryStorageSchema.Status),
                 new IndexColumn(V2OpenTelemetryStorageSchema.LastSeen, SortDirection.Descending),
-                new IndexColumn(V2OpenTelemetryStorageSchema.IdOrderKey)
+                new IndexColumn(V2OpenTelemetryStorageSchema.IdOrderKey),
+                new IndexColumn(V2OpenTelemetryStorageSchema.Id)
             ],
             Assert.Single(resources.Indexes, index => index.Name == "elsa_otel_resources_status_last_seen").Columns);
         Assert.Equal(
             [
                 new IndexColumn(V2OpenTelemetryStorageSchema.ServiceNameKey),
                 new IndexColumn(V2OpenTelemetryStorageSchema.LastSeen, SortDirection.Descending),
-                new IndexColumn(V2OpenTelemetryStorageSchema.IdOrderKey)
+                new IndexColumn(V2OpenTelemetryStorageSchema.IdOrderKey),
+                new IndexColumn(V2OpenTelemetryStorageSchema.Id)
             ],
             Assert.Single(resources.Indexes, index => index.Name == "elsa_otel_resources_service_last_seen").Columns);
         var portability = PortabilityValidator.Validate(resources);
@@ -85,13 +88,15 @@ public sealed class GroundworkV2OpenTelemetryTests
         Assert.Equal(
             [
                 new IndexColumn(V2OpenTelemetryStorageSchema.Timestamp, SortDirection.Descending),
-                new IndexColumn(V2OpenTelemetryStorageSchema.Id)
+                new IndexColumn(V2OpenTelemetryStorageSchema.Id),
+                new IndexColumn(V2OpenTelemetryStorageSchema.Sequence)
             ],
             Assert.Single(metrics.Indexes, index => index.Name == "elsa_otel_metric_points_timestamp").Columns);
         Assert.Equal(
             [
                 new IndexColumn(V2OpenTelemetryStorageSchema.Timestamp, SortDirection.Descending),
-                new IndexColumn(V2OpenTelemetryStorageSchema.Id)
+                new IndexColumn(V2OpenTelemetryStorageSchema.Id),
+                new IndexColumn(V2OpenTelemetryStorageSchema.Sequence)
             ],
             Assert.Single(logs.Indexes, index => index.Name == "elsa_otel_logs_timestamp").Columns);
 

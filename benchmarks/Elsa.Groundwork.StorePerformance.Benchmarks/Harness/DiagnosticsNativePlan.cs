@@ -186,9 +186,19 @@ public static class DiagnosticsNativePlanContract
                 route != "structured-log-replay",
                 route switch
                 {
-                    "resources-by-last-seen" or "resources-by-status" or "resources-by-service" => [new("lastSeen", RuntimeNativeOrderDirection.Descending), new("idOrderKey", RuntimeNativeOrderDirection.Ascending)],
+                    "resources-by-last-seen" or "resources-by-status" or "resources-by-service" =>
+                    [
+                        new("lastSeen", RuntimeNativeOrderDirection.Descending),
+                        new("idOrderKey", RuntimeNativeOrderDirection.Ascending),
+                        new("id", RuntimeNativeOrderDirection.Ascending)
+                    ],
                     "traces-by-last-seen" => [new("startTime", RuntimeNativeOrderDirection.Descending), new("traceKey", RuntimeNativeOrderDirection.Ascending)],
-                    "metrics-by-last-seen" or "logs-by-last-seen" => [new("timestamp", RuntimeNativeOrderDirection.Descending), new("id", RuntimeNativeOrderDirection.Ascending)],
+                    "metrics-by-last-seen" or "logs-by-last-seen" =>
+                    [
+                        new("timestamp", RuntimeNativeOrderDirection.Descending),
+                        new("id", RuntimeNativeOrderDirection.Ascending),
+                        new("sequence", RuntimeNativeOrderDirection.Ascending)
+                    ],
                     "structured-log-recent" => [new("sequence", RuntimeNativeOrderDirection.Descending)],
                     "structured-log-replay" => [new("sequence", RuntimeNativeOrderDirection.Ascending)],
                     _ => []
@@ -511,16 +521,17 @@ public static class DiagnosticsNativePlanContract
             .Replace("]", "", StringComparison.Ordinal)
             .Replace("\"", "", StringComparison.Ordinal)
             .Replace("`", "", StringComparison.Ordinal);
-        if (normalized.Contains("CASE", StringComparison.OrdinalIgnoreCase) ||
-            normalized.Contains(" OR 1=1", StringComparison.OrdinalIgnoreCase) ||
-            normalized.Contains(" OR 1 = 1", StringComparison.OrdinalIgnoreCase) ||
-            normalized.Contains(" OR TRUE", StringComparison.OrdinalIgnoreCase) ||
-            System.Text.RegularExpressions.Regex.IsMatch(normalized, @"\b(?:LOWER|UPPER|COALESCE|CAST|SUBSTR|DATE|DATETIME)\s*\(", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant))
-            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command contains a computed or tautological predicate.");
+        normalized = Regex.Replace(
+            normalized,
+            @"\s+COLLATE\s+[A-Za-z_][A-Za-z0-9_.]*",
+            string.Empty,
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
 
         if (!Regex.IsMatch(normalized, $@"\bFROM\s+{Regex.Escape(specification.TableName)}\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
-            (specification.OrderColumn is not null && !Regex.IsMatch(normalized, $@"\bORDER\s+BY\s+[\w.]*{Regex.Escape(specification.OrderColumn)}[\w.]*\s+{(specification.Descending ? "DESC" : "ASC")}", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)) ||
-            !Regex.IsMatch(normalized, $@"\b(?:LIMIT\s+{specification.FiniteLimit}\b|TOP\s*\(?\s*{specification.FiniteLimit}\b)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            !Regex.IsMatch(
+                normalized,
+                $@"\b(?:LIMIT\s+(?:{specification.FiniteLimit}\b|[@$][A-Za-z_0-9]+|\?)|FETCH\s+(?:FIRST|NEXT)\s+(?:{specification.FiniteLimit}\b|[@$][A-Za-z_0-9]+|\?)\s+ROWS?|TOP\s*\(?\s*(?:{specification.FiniteLimit}\b|[@$][A-Za-z_0-9]+|\?)\s*\)?)",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command does not bind its exact table, descending order, and finite page.");
 
         ValidateSqlOrdering(normalized, specification);
@@ -532,44 +543,84 @@ public static class DiagnosticsNativePlanContract
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command contains an unbound boolean predicate.");
 
         var where = Regex.Match(normalized, @"\bWHERE\s+(?<where>.*?)(?:\bORDER\s+BY\b|\bLIMIT\b|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Groups["where"].Value.Trim();
+        if (Regex.IsMatch(where, @"\b(?:CASE|SELECT|LOWER|UPPER|COALESCE|CAST|SUBSTR|DATE|DATETIME)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
+            Regex.IsMatch(where, @"\bOR\s+(?:1\s*=\s*1|TRUE)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command contains a computed or tautological predicate.");
         if (continuation)
         {
             ValidateSqlContinuationPredicate(where, specification);
             return;
         }
 
-        var atoms = string.IsNullOrWhiteSpace(where)
-            ? []
-            : Regex.Split(where, @"\s+AND\s+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
-                .Select(atom => atom.Trim().Trim('(', ')'))
-                .ToArray();
         var requiredAtoms = new List<string>();
         if (specification.StorageScopeRequired)
             requiredAtoms.Add("__groundwork_scope");
         if (specification.PredicateColumn is not null)
             requiredAtoms.Add(specification.PredicateColumn);
-        if (atoms.Length != requiredAtoms.Count || requiredAtoms.Any(column =>
-                atoms.Count(atom => Regex.IsMatch(atom, $@"^{Regex.Escape(column)}\s*=\s*(?:@\w+|\?|\$\d+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)) != 1))
+        const string parameter = @"(?:@\w+|\?|\$\d+)";
+        if (requiredAtoms.Any(column =>
+                Regex.Matches(where, $@"\b{Regex.Escape(column)}\b\s*=\s*{parameter}", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count != 1))
+            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command must contain only its exact equality predicates and no extra conditions.");
+
+        var remainder = where;
+        foreach (var column in requiredAtoms)
+        {
+            remainder = Regex.Replace(
+                remainder,
+                $@"\b{Regex.Escape(column)}\b\s+IS\s+NOT\s+NULL",
+                string.Empty,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            remainder = Regex.Replace(
+                remainder,
+                $@"\b{Regex.Escape(column)}\b\s*=\s*{parameter}",
+                string.Empty,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+        remainder = Regex.Replace(remainder, @"\bAND\b|[();\s]", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (remainder.Length != 0)
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command must contain only its exact equality predicates and no extra conditions.");
     }
 
     private static void ValidateSqlOrdering(string command, DiagnosticsNativeRouteSpec specification)
     {
-        var match = Regex.Match(command, @"\bORDER\s+BY\s+(?<order>.*?)(?:\bLIMIT\b|\bOFFSET\b|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        var actual = string.IsNullOrWhiteSpace(match.Groups["order"].Value)
-            ? []
-            : match.Groups["order"].Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-                .Select(term => Regex.Match(term.Trim(), @"(?:[\w]+\.)?(?<column>[\w]+)\s+(?<direction>ASC|DESC)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
-                .Select(term => term.Success
-                    ? new RuntimeNativeOrderTerm(term.Groups["column"].Value, string.Equals(term.Groups["direction"].Value, "DESC", StringComparison.OrdinalIgnoreCase)
-                        ? RuntimeNativeOrderDirection.Descending
-                        : RuntimeNativeOrderDirection.Ascending)
-                    : null)
-                .ToArray();
-        if (actual.Length != specification.EffectiveOrdering.Count ||
-            actual.Any(term => term is null) ||
+        var match = Regex.Match(command, @"\bORDER\s+BY\s+(?<order>.*?)(?:\bLIMIT\b|\bOFFSET\b|\bFETCH\b|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+        var terms = match.Groups["order"].Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var actual = new List<RuntimeNativeOrderTerm>(terms.Length);
+        string? pendingNullOrdering = null;
+        foreach (var term in terms)
+        {
+            var trimmed = term.Trim().TrimEnd(';');
+            var nullOrdering = Regex.Match(
+                trimmed,
+                @"^CASE\s+WHEN\s+(?<column>[A-Za-z_][A-Za-z0-9_]*)\s+IS\s+NULL\s+THEN\s+(?:0\s+ELSE\s+1|1\s+ELSE\s+0)\s+END\s+ASC$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (nullOrdering.Success)
+            {
+                if (pendingNullOrdering is not null)
+                    throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command does not bind its complete ordered term list.");
+                pendingNullOrdering = nullOrdering.Groups["column"].Value;
+                continue;
+            }
+
+            var ordered = Regex.Match(
+                trimmed,
+                @"^(?:[A-Za-z_][A-Za-z0-9_]*\.)?(?<column>[A-Za-z_][A-Za-z0-9_]*)\s+(?<direction>ASC|DESC)$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (!ordered.Success || pendingNullOrdering is not null &&
+                !string.Equals(pendingNullOrdering, ordered.Groups["column"].Value, StringComparison.OrdinalIgnoreCase))
+                throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command does not bind its complete ordered term list.");
+            pendingNullOrdering = null;
+            actual.Add(new RuntimeNativeOrderTerm(
+                ordered.Groups["column"].Value,
+                string.Equals(ordered.Groups["direction"].Value, "DESC", StringComparison.OrdinalIgnoreCase)
+                    ? RuntimeNativeOrderDirection.Descending
+                    : RuntimeNativeOrderDirection.Ascending));
+        }
+
+        if (pendingNullOrdering is not null ||
+            actual.Count != specification.EffectiveOrdering.Count ||
             !actual.Zip(specification.EffectiveOrdering).All(pair =>
-                string.Equals(pair.First!.Column, pair.Second.Column, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(pair.First.Column, pair.Second.Column, StringComparison.OrdinalIgnoreCase) &&
                 pair.First.Direction == pair.Second.Direction))
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command does not bind its complete ordered term list.");
     }

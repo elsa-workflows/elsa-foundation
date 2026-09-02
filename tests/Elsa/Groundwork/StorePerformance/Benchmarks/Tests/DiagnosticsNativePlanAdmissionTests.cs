@@ -428,11 +428,32 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             using var fixture = Fixture.Create(
                 "sqlite",
                 "resources-by-last-seen",
-                command: $"SELECT * FROM elsa_otel_resources_v2 WHERE {predicate} ORDER BY lastSeen DESC LIMIT 127");
+                command: $"SELECT * FROM elsa_otel_resources_v2 WHERE {predicate} ORDER BY lastSeen DESC, idOrderKey ASC, id ASC LIMIT 127");
 
             Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
                 "sqlite", fixture.Adapter, fixture.Route, fixture.Path));
         }
+    }
+
+    [Fact]
+    public void Groundwork_sqlite_route_admits_exact_total_boolean_scope_and_identity_order()
+    {
+        using var fixture = Fixture.Create(
+            "sqlite",
+            "resources-by-last-seen",
+            command:
+                "SELECT * FROM \"elsa_otel_resources_v2\" " +
+                "WHERE (\"__groundwork_scope\" COLLATE GROUNDWORK_UTF16_ORDINAL IS NOT NULL AND " +
+                "\"__groundwork_scope\" COLLATE GROUNDWORK_UTF16_ORDINAL = @p0) " +
+                "ORDER BY \"lastSeen\" DESC, \"idOrderKey\" COLLATE GROUNDWORK_UTF16_ORDINAL ASC, " +
+                "CASE WHEN \"id\" COLLATE GROUNDWORK_UTF16_ORDINAL IS NULL THEN 0 ELSE 1 END ASC, " +
+                "\"id\" COLLATE GROUNDWORK_UTF16_ORDINAL ASC LIMIT @p1;");
+
+        DiagnosticsNativePlanContract.ValidateEnvelope(
+            "sqlite",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path);
     }
 
     [Fact]
@@ -441,7 +462,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         using var fixture = Fixture.Create(
             "sqlite",
             "resources-by-last-seen",
-            command: "SELECT * FROM elsa_otel_resources_v2 ORDER BY lastSeen DESC LIMIT 127");
+            command: "SELECT * FROM elsa_otel_resources_v2 ORDER BY lastSeen DESC, idOrderKey ASC, id ASC LIMIT 127");
 
         Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
             "sqlite", fixture.Adapter, fixture.Route, fixture.Path));
@@ -508,8 +529,8 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             var spec = DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, routeIdentity);
             command ??= provider switch
             {
-                "mongodb" => $"{{\"collection\":\"{spec.TableName}\",\"filter\":{{\"__groundwork_scope\":{{\"$eq\":\"scope\"}}}},\"sort\":{{\"lastSeen\":-1,\"idOrderKey\":1}},\"limit\":127}}",
-                _ => "SELECT * FROM elsa_otel_resources_v2 WHERE __groundwork_scope = @scope ORDER BY lastSeen DESC, idOrderKey ASC LIMIT 127"
+                "mongodb" => $"{{\"collection\":\"{spec.TableName}\",\"filter\":{{\"__groundwork_scope\":{{\"$eq\":\"scope\"}}}},\"sort\":{{\"lastSeen\":-1,\"idOrderKey\":1,\"id\":1}},\"limit\":127}}",
+                _ => "SELECT * FROM elsa_otel_resources_v2 WHERE __groundwork_scope = @scope ORDER BY lastSeen DESC, idOrderKey ASC, id ASC LIMIT 127"
             };
             var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(provider, spec);
             nativePlan ??= provider switch
