@@ -8,6 +8,7 @@ separate commands. Every mutating or timed command is a dry run unless --execute
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import os
@@ -341,18 +342,40 @@ def require_phase(registration: dict[str, Any], phase: str) -> None:
         )
 
 
+def process_pid(line: str, *, windows: bool) -> int | None:
+    stripped = line.strip()
+    if not stripped:
+        return None
+    if windows:
+        try:
+            fields = next(csv.reader([stripped]))
+        except csv.Error:
+            return None
+        if len(fields) < 2:
+            return None
+        raw_pid = fields[1]
+    else:
+        raw_pid = stripped.split(maxsplit=1)[0]
+    try:
+        return int(raw_pid)
+    except ValueError:
+        return None
+
+
 def require_idle_host() -> None:
     root = repository_root()
-    if os.name == "nt":
+    windows = os.name == "nt"
+    if windows:
         processes = run_text(["tasklist", "/fo", "csv", "/nh"], cwd=root).splitlines()
     else:
         processes = run_text(["ps", "-Ao", "pid=,command="], cwd=root).splitlines()
-    own_pid = str(os.getpid())
+    own_pid = os.getpid()
     blocked_tokens = ("dotnet", "msbuild", "vstest", "testhost", "xunit")
     blocked = [
         line.strip()
         for line in processes
-        if own_pid not in line and any(token in line.lower() for token in blocked_tokens)
+        if process_pid(line, windows=windows) != own_pid
+        and any(token in line.lower() for token in blocked_tokens)
     ]
     if blocked:
         sample = "; ".join(blocked[:5])
