@@ -20,7 +20,7 @@ $sequence = Invoke-Step "resolve Sequence" { Get-ActivityVersionId -Ctx $ctx -Ty
 $event = Invoke-Step "resolve Event" { Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Primitives.Activities.Event' }
 $tag = Get-Random -Maximum 999999
 $eventName = "groundwork-release-$tag"
-$expectedOutput = "groundwork-0.4.0-preview.3-$tag"
+$expectedOutput = "groundwork-0.4.0-preview.5-$tag"
 
 $wait = New-EventWaitNode -NodeId "wait" -EventVersionId $event -EventName $eventName
 $complete = New-SetOutputNode -NodeId "complete" -OutputName "GroundworkRelease" -Value $expectedOutput
