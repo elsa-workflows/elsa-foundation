@@ -53,6 +53,15 @@ public static class V2OpenTelemetryStorageSchema
     public const string BatchId = "batchId";
     public const string CreatedAt = "createdAt";
 
+    internal const string TraceSummaryStartIndex = "elsa_otel_trace_summaries_start";
+    internal const string SpanTraceDetailIndex = "elsa_otel_spans_trace_detail";
+    internal const string MetricPointTimestampIndex = "elsa_otel_metric_points_timestamp";
+    internal const string LogTimestampIndex = "elsa_otel_logs_timestamp";
+    internal const string LogTraceDetailIndex = "elsa_otel_logs_trace_detail";
+    internal const string ResourceLastSeenIndex = "elsa_otel_resources_last_seen";
+    internal const string ResourceStatusLastSeenIndex = "elsa_otel_resources_status_last_seen";
+    internal const string ResourceServiceLastSeenIndex = "elsa_otel_resources_service_last_seen";
+
     public static IReadOnlyList<StorageUnit> CreateUnits() =>
     [
         CreateTraces(),
@@ -122,7 +131,7 @@ public static class V2OpenTelemetryStorageSchema
                 .ElementSearchKey(PortableCollation.UnicodeOrdinalIgnoreCase, 512))
             .Json(Payload, c => c.Required())
             .Key(TraceKey)
-            .Index("elsa_otel_trace_summaries_start", index =>
+            .Index(TraceSummaryStartIndex, index =>
                 index.Descending(StartTime).Ascending(TraceKey))
             .OptimisticConcurrency()
             .Scoped()
@@ -145,7 +154,7 @@ public static class V2OpenTelemetryStorageSchema
             .Ascending(StartTime)
             .Ascending(SpanId)
             .Ascending(Sequence),
-        "elsa_otel_spans_trace_detail");
+        SpanTraceDetailIndex);
 
     public static StorageUnit CreateMetricPoints() => CreateSignal(
         MetricPointUnitId,
@@ -159,7 +168,7 @@ public static class V2OpenTelemetryStorageSchema
         index => index
             .Descending(Timestamp)
             .Ascending(Id),
-        "elsa_otel_metric_points_timestamp");
+        MetricPointTimestampIndex);
 
     public static StorageUnit CreateLogs() => CreateSignal(
         LogUnitId,
@@ -177,8 +186,8 @@ public static class V2OpenTelemetryStorageSchema
         index => index
             .Descending(Timestamp)
             .Ascending(Id),
-        "elsa_otel_logs_timestamp",
-        builder => builder.Index("elsa_otel_logs_trace_detail", index => index
+        LogTimestampIndex,
+        builder => builder.Index(LogTraceDetailIndex, index => index
             .Ascending(TraceKey)
             .Ascending(Timestamp)
             .Ascending(Id)
@@ -194,16 +203,16 @@ public static class V2OpenTelemetryStorageSchema
             .Timestamp(LastSeen, c => c.Required())
             .Json(Payload, c => c.Required())
             .Key(Id)
-            .Index("elsa_otel_resources_last_seen", index => index
+            .Index(ResourceLastSeenIndex, index => index
                 .Descending(LastSeen)
                 .Ascending(IdOrderKey))
             .Index("elsa_otel_resources_service", ServiceName)
             .Index("elsa_otel_resources_status", Status)
-            .Index("elsa_otel_resources_status_last_seen", index => index
+            .Index(ResourceStatusLastSeenIndex, index => index
                 .Ascending(Status)
                 .Descending(LastSeen)
                 .Ascending(IdOrderKey))
-            .Index("elsa_otel_resources_service_last_seen", index => index
+            .Index(ResourceServiceLastSeenIndex, index => index
                 .Ascending(ServiceNameKey)
                 .Descending(LastSeen)
                 .Ascending(IdOrderKey))

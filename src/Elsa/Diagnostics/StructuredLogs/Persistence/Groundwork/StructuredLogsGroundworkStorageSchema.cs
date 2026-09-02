@@ -16,6 +16,9 @@ public static class StructuredLogsGroundworkStorageSchema
     public const string PayloadField = "payload";
     public const string TimestampField = "timestamp";
 
+    internal const string ReplayIndex = "elsa_structured_logs_replay";
+    internal const string SequenceOrderIndex = "elsa_structured_logs_sequence_order";
+
 
     /// <summary>
     /// The v2 public storage declaration. The ProviderSequence is the sole row identity and is
@@ -42,10 +45,10 @@ public static class StructuredLogsGroundworkStorageSchema
             .Index("elsa_structured_logs_level", LevelField)
             .Index("elsa_structured_logs_category", CategoryKeyField)
             .Index("elsa_structured_logs_source", SourceKeyField)
-            .Index("elsa_structured_logs_replay", ReplayTokenField)
+            .Index(ReplayIndex, ReplayTokenField)
             // A single-column B-tree can be scanned in either direction by all supported
             // providers, so this descending declaration serves both recent and replay routes.
-            .Index("elsa_structured_logs_sequence_order", index => index.Descending(SequenceField))
+            .Index(SequenceOrderIndex, index => index.Descending(SequenceField))
             .Scoped()
             .AppendIdempotency(TimeSpan.FromHours(1), "elsa_structured_logs_append")
             .Retention(keepNewest, SequenceField)

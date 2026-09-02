@@ -128,12 +128,24 @@ public sealed class GroundworkOpenTelemetryStore :
             predicates.Add(new Predicate.Or([
                 new Predicate.Substring(ResourceColumns.Id, filter.Search, Anchor.Contains),
                 new Predicate.Substring(ResourceColumns.ServiceName, filter.Search, Anchor.Contains)]));
+        var selectedIndex = string.IsNullOrWhiteSpace(filter.Search) switch
+        {
+            false => null,
+            true when !string.IsNullOrWhiteSpace(filter.ServiceName) && filter.Status is null =>
+                V2OpenTelemetryStorageSchema.ResourceServiceLastSeenIndex,
+            true when string.IsNullOrWhiteSpace(filter.ServiceName) && filter.Status is not null =>
+                V2OpenTelemetryStorageSchema.ResourceStatusLastSeenIndex,
+            true when string.IsNullOrWhiteSpace(filter.ServiceName) && filter.Status is null =>
+                V2OpenTelemetryStorageSchema.ResourceLastSeenIndex,
+            _ => null
+        };
         var rows = Query(
             sessions.Resources,
             predicates,
             ResourceColumns.LastSeen,
             take,
             descending: true,
+            selectedIndex,
             ResourceColumns.IdOrderKey).Rows;
         return new(rows.Select(V2OpenTelemetryCodec.Deserialize<TelemetryResource>).ToArray(), sourceRegistry?.DroppedCount ?? 0);
     }
@@ -175,6 +187,7 @@ public sealed class GroundworkOpenTelemetryStore :
                 TraceSummaryColumns.StartTime,
                 take,
                 descending: true,
+                source.Count == 0 ? V2OpenTelemetryStorageSchema.TraceSummaryStartIndex : null,
                 TraceSummaryColumns.TraceKey)
             .Rows.Select(V2OpenTelemetryCodec.DeserializeTraceSummary).Reverse().ToArray();
         return ValueTask.FromResult(new OpenTelemetryTraceResult(traces, Interlocked.Read(ref droppedTraces)));
@@ -198,13 +211,29 @@ public sealed class GroundworkOpenTelemetryStore :
         {
             new Predicate.Equal(SpanColumns.TraceKey, QueryConstant.Of(SpanColumns.TraceKey, traceKey))
         };
-        var spans = QueryAll(sessions.Spans, tracePredicate, SpanColumns.StartTime, maxQuerySize, cancellationToken, SpanColumns.SpanId, SpanColumns.Sequence)
+        var spans = QueryAll(
+                sessions.Spans,
+                tracePredicate,
+                SpanColumns.StartTime,
+                maxQuerySize,
+                V2OpenTelemetryStorageSchema.SpanTraceDetailIndex,
+                cancellationToken,
+                SpanColumns.SpanId,
+                SpanColumns.Sequence)
             .Select(V2OpenTelemetryCodec.Deserialize<TelemetrySpan>).ToArray();
         var logPredicate = new[]
         {
             new Predicate.Equal(LogColumns.TraceKey, QueryConstant.Of(LogColumns.TraceKey, traceKey))
         };
-        var logs = QueryAll(sessions.Logs, logPredicate, LogColumns.Timestamp, maxQuerySize, cancellationToken, LogColumns.Id, LogColumns.Sequence)
+        var logs = QueryAll(
+                sessions.Logs,
+                logPredicate,
+                LogColumns.Timestamp,
+                maxQuerySize,
+                V2OpenTelemetryStorageSchema.LogTraceDetailIndex,
+                cancellationToken,
+                LogColumns.Id,
+                LogColumns.Sequence)
             .Select(V2OpenTelemetryCodec.Deserialize<OtlpLogRecord>).ToArray();
         var resources = trace.ResourceIds
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -231,7 +260,14 @@ public sealed class GroundworkOpenTelemetryStore :
         AddEqual(predicates, MetricColumns.ServiceName, filter.ServiceName);
         AddSubstring(predicates, MetricColumns.InstrumentName, filter.InstrumentName);
         AddRange(predicates, MetricColumns.Timestamp, filter.From, filter.To);
-        var points = Query(sessions.MetricPoints, predicates, MetricColumns.Timestamp, take, descending: true, MetricColumns.Id)
+        var points = Query(
+                sessions.MetricPoints,
+                predicates,
+                MetricColumns.Timestamp,
+                take,
+                descending: true,
+                predicates.Count == 0 ? V2OpenTelemetryStorageSchema.MetricPointTimestampIndex : null,
+                MetricColumns.Id)
             .Rows.Select(V2OpenTelemetryCodec.Deserialize<MetricPoint>).Reverse().ToArray();
         var instruments = points.Select(point => point.InstrumentId)
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -260,7 +296,14 @@ public sealed class GroundworkOpenTelemetryStore :
         AddSubstring(predicates, LogColumns.SeverityText, filter.Severity);
         AddSubstring(predicates, LogColumns.Body, filter.Search);
         AddRange(predicates, LogColumns.Timestamp, filter.From, filter.To);
-        var logs = Query(sessions.Logs, predicates, LogColumns.Timestamp, take, descending: true, LogColumns.Id)
+        var logs = Query(
+                sessions.Logs,
+                predicates,
+                LogColumns.Timestamp,
+                take,
+                descending: true,
+                predicates.Count == 0 ? V2OpenTelemetryStorageSchema.LogTimestampIndex : null,
+                LogColumns.Id)
             .Rows.Select(V2OpenTelemetryCodec.Deserialize<OtlpLogRecord>).Reverse().ToArray();
         return ValueTask.FromResult(new OpenTelemetryLogResult(logs, Interlocked.Read(ref droppedLogs)));
     }
@@ -531,6 +574,7 @@ public sealed class GroundworkOpenTelemetryStore :
                                 QueryConstant.Of(TraceColumns.TraceKey, traceKey))],
                             TraceColumns.Sequence,
                             maxQuerySize,
+                            null,
                             cancellationToken)
                         .ToArray();
                     if (remaining.Length == 0)
@@ -661,8 +705,9 @@ public sealed class GroundworkOpenTelemetryStore :
         ColumnRef orderColumn,
         int take,
         bool descending,
+        string? selectedIndex,
         params ColumnRef[] tieBreakers) =>
-        QueryPage(session, predicates, orderColumn, take, descending, null, tieBreakers);
+        QueryPage(session, predicates, orderColumn, take, descending, selectedIndex, null, tieBreakers);
 
     private static QueryMaterializedResult QueryPage(
         IStorageSession session,
@@ -670,6 +715,7 @@ public sealed class GroundworkOpenTelemetryStore :
         ColumnRef orderColumn,
         int take,
         bool descending,
+        string? selectedIndex,
         string? continuation,
         IReadOnlyList<ColumnRef> tieBreakers)
     {
@@ -677,12 +723,14 @@ public sealed class GroundworkOpenTelemetryStore :
         order.Add(new(orderColumn, descending ? OrderDirection.Descending : OrderDirection.Ascending, descending ? NullOrder.First : NullOrder.Last));
         foreach (var tieBreaker in tieBreakers)
             order.Add(new(tieBreaker, OrderDirection.Ascending, NullOrder.Last));
-        return session.Query(new QueryRequest(
-            new TableId(session.Unit.Name),
-            All(predicates.ToArray()) ?? Predicate.AlwaysTrue.Instance,
-            order.ToImmutable(),
-            Projection.All,
-            continuation is null ? Paging.Keyset(take) : Paging.Continuation(continuation, take)));
+        return session.Query(
+            new QueryRequest(
+                new TableId(session.Unit.Name),
+                All(predicates.ToArray()) ?? Predicate.AlwaysTrue.Instance,
+                order.ToImmutable(),
+                Projection.All,
+                continuation is null ? Paging.Keyset(take) : Paging.Continuation(continuation, take)),
+            session.Unit.CreateQueryRenderOptions(selectedIndex));
     }
 
     private static IReadOnlyList<IReadOnlyDictionary<string, object?>> QueryAll(
@@ -690,6 +738,7 @@ public sealed class GroundworkOpenTelemetryStore :
         IEnumerable<Predicate> predicates,
         ColumnRef orderColumn,
         int pageSize,
+        string? selectedIndex,
         CancellationToken cancellationToken,
         params ColumnRef[] tieBreakers)
     {
@@ -698,7 +747,7 @@ public sealed class GroundworkOpenTelemetryStore :
         do
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var page = QueryPage(session, predicates, orderColumn, pageSize, false, continuation, tieBreakers);
+            var page = QueryPage(session, predicates, orderColumn, pageSize, false, selectedIndex, continuation, tieBreakers);
             rows.AddRange(page.Rows);
             continuation = page.NextContinuationToken;
         } while (continuation is not null);
