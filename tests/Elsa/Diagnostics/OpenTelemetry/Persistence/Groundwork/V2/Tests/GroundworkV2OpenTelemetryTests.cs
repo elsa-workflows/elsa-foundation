@@ -4,6 +4,7 @@ using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 using Elsa.Diagnostics.Persistence.Draining;
 using Groundwork.Kernel;
+using Groundwork.Query.Model;
 using Groundwork.Sqlite;
 using Groundwork.Store;
 using Microsoft.Extensions.Options;
@@ -30,6 +31,13 @@ public sealed class GroundworkV2OpenTelemetryTests
             index.Columns.SequenceEqual([new IndexColumn(V2OpenTelemetryStorageSchema.TraceKey)]));
         Assert.NotNull(traces.RetentionIdempotency);
 
+        var spans = Assert.Single(units, unit => unit.Id.Value == V2OpenTelemetryStorageSchema.SpanUnitId);
+        Assert.Contains(spans.Columns, column =>
+            column.Name == V2OpenTelemetryStorageSchema.TraceKey && column.MaxLength == 64 && !column.IsNullable);
+        var logs = Assert.Single(units, unit => unit.Id.Value == V2OpenTelemetryStorageSchema.LogUnitId);
+        Assert.Contains(logs.Columns, column =>
+            column.Name == V2OpenTelemetryStorageSchema.TraceKey && column.MaxLength == 64 && column.IsNullable);
+
         var summaries = Assert.Single(units, unit => unit.Id.Value == V2OpenTelemetryStorageSchema.TraceSummaryUnitId);
         Assert.Equal("elsa_otel_trace_summaries_v3", summaries.Name);
         Assert.True(summaries.Concurrency.IsOptimistic);
@@ -38,6 +46,12 @@ public sealed class GroundworkV2OpenTelemetryTests
             column => column.Name == V2OpenTelemetryStorageSchema.WorkflowInstanceIds);
         Assert.Equal(PortableCollation.UnicodeOrdinalIgnoreCase, workflowIds.ElementSearchKey!.Collation);
         Assert.Equal(512, workflowIds.ElementSearchKey.MaximumElementCodeUnits);
+        Assert.Contains(summaries.Columns, column =>
+            column.Name == V2OpenTelemetryStorageSchema.TraceIdSearchKey && column.MaxLength == 1536 && !column.IsNullable);
+        Assert.Contains(summaries.Columns, column =>
+            column.Name == V2OpenTelemetryStorageSchema.NameSearchKey && column.MaxLength == 6144 && column.IsNullable);
+        Assert.Contains(summaries.Columns, column =>
+            column.Name == V2OpenTelemetryStorageSchema.ServiceNames && column.Type == PortableType.Json && !column.IsNullable);
         var order = Assert.Single(summaries.Indexes,
             index => index.Name == "elsa_otel_trace_summaries_start");
         Assert.Equal(
@@ -46,6 +60,9 @@ public sealed class GroundworkV2OpenTelemetryTests
                 new IndexColumn(V2OpenTelemetryStorageSchema.TraceKey)
             ],
             order.Columns);
+
+        var ledger = Assert.Single(units, unit => unit.Id.Value == V2OpenTelemetryStorageSchema.CaptureLedgerUnitId);
+        Assert.Equal("elsa_otel_capture_ledger_v3", ledger.Name);
     }
 
     [Fact]
@@ -118,7 +135,7 @@ public sealed class GroundworkV2OpenTelemetryTests
     }
 
     [Fact]
-    public async Task SQLite_source_filter_is_applied_before_trace_reduction_and_exact_append_replays()
+    public async Task SQLite_trace_summary_filters_after_reduction_and_exact_capture_replays()
     {
         using var database = new TemporarySqliteDatabase();
         await using var fixture = await OpenStoreAsync(database);
@@ -137,7 +154,7 @@ public sealed class GroundworkV2OpenTelemetryTests
         var api = await store.QueryTracesAsync(new OpenTelemetryTraceFilter { ServiceName = "api", Take = 10 });
         var all = await store.QueryTracesAsync(new OpenTelemetryTraceFilter { Take = 10 });
 
-        Assert.Equal(1, api.Items.Single().SpanCount);
+        Assert.Equal(2, api.Items.Single().SpanCount);
         Assert.Equal(2, all.Items.Single().SpanCount);
 
         static TelemetryResource Resource(string id, string service) =>
@@ -145,6 +162,213 @@ public sealed class GroundworkV2OpenTelemetryTests
 
         static TelemetryTrace Trace(string id, TelemetryResource resource, DateTimeOffset start) =>
             new(id, null, "operation", start, start.AddSeconds(1), TimeSpan.FromSeconds(1), SpanStatus.Ok, [resource.Id], [], 1);
+    }
+
+    [Fact]
+    public async Task SQLite_capture_ledger_refuses_same_batch_identity_with_different_typed_content()
+    {
+        using var database = new TemporarySqliteDatabase();
+        await using var fixture = await OpenStoreAsync(database);
+        var batchId = DiagnosticsDrainBatchId.New();
+
+        await fixture.Store.WriteAsync(batchId, CaptureBatch("trace-original"));
+        var exception = await Assert.ThrowsAnyAsync<InvalidOperationException>(async () =>
+            await fixture.Store.WriteAsync(batchId, CaptureBatch("trace-conflict")));
+
+        Assert.Contains("batch identity", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(
+            ["trace-original"],
+            (await fixture.Store.QueryTracesAsync(new() { Take = 10 })).Items.Select(trace => trace.TraceId));
+    }
+
+    [Fact]
+    public async Task SQLite_capture_replay_identity_is_independent_of_mutable_catalog_enrichment()
+    {
+        using var database = new TemporarySqliteDatabase();
+        await using var fixture = await OpenStoreAsync(database);
+        var now = new DateTimeOffset(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+        var original = Resource("resource-replay", "orders-v1", now);
+        var updated = Resource(original.Id, "orders-v2", now.AddMinutes(1));
+        var trace = new TelemetryTrace(
+            "trace-catalog-replay", null, "operation", now, now, TimeSpan.Zero,
+            SpanStatus.Ok, [original.Id], [], 1);
+        var traceBatch = new OpenTelemetryBatch([], [trace], [], [], [], []);
+        var traceBatchId = DiagnosticsDrainBatchId.New();
+
+        await fixture.Store.WriteAsync(DiagnosticsDrainBatchId.New(), new([original], [], [], [], [], []));
+        await fixture.Store.WriteAsync(traceBatchId, traceBatch);
+        await fixture.Store.WriteAsync(DiagnosticsDrainBatchId.New(), new([updated], [], [], [], [], []));
+        await fixture.Store.WriteAsync(traceBatchId, traceBatch);
+
+        Assert.Equal(
+            [trace.TraceId],
+            (await fixture.Store.QueryTracesAsync(new() { ServiceName = "orders-v1", Take = 10 }))
+            .Items.Select(item => item.TraceId));
+        Assert.Empty((await fixture.Store.QueryTracesAsync(new() { ServiceName = "orders-v2", Take = 10 })).Items);
+    }
+
+    [Fact]
+    public async Task SQLite_capture_refuses_corrupt_persisted_summary_metadata_without_partial_append()
+    {
+        using var database = new TemporarySqliteDatabase();
+        await using var fixture = await OpenStoreAsync(database);
+        var traceId = "trace-corrupt-summary";
+        await fixture.Store.WriteAsync(DiagnosticsDrainBatchId.New(), CaptureBatch(traceId));
+        var summaryUnit = Assert.Single(
+            V2OpenTelemetryStorageSchema.CreateUnits(),
+            unit => unit.Id.Value == V2OpenTelemetryStorageSchema.TraceSummaryUnitId);
+        using (var summaries = fixture.Connection.OpenOwnedSession(
+                   summaryUnit,
+                   StorageAccess.Scoped(V2OpenTelemetryBinding.Default.StorageScope)))
+        {
+            var traceKey = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(PortableStringComparison.CreateSearchKey(
+                    traceId,
+                    PortableStringComparisonPolicy.UnicodeOrdinalIgnoreCase))));
+            var key = new StorageKey(new Dictionary<string, object?>
+            {
+                [V2OpenTelemetryStorageSchema.TraceKey] = traceKey
+            });
+            var existing = summaries.Read(key);
+            Assert.NotNull(existing);
+            var corrupt = existing!.Values.Values.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            corrupt[V2OpenTelemetryStorageSchema.ServiceNames] = "{not-json";
+            Assert.True(summaries.Upsert(new StorageValues(corrupt)).Succeeded);
+        }
+
+        await Assert.ThrowsAsync<InvalidDataException>(async () =>
+            await fixture.Store.WriteAsync(DiagnosticsDrainBatchId.New(), CaptureBatch(traceId)));
+
+        var traceUnit = Assert.Single(
+            V2OpenTelemetryStorageSchema.CreateUnits(),
+            unit => unit.Id.Value == V2OpenTelemetryStorageSchema.TraceUnitId);
+        using var traces = fixture.Connection.OpenOwnedSession(
+            traceUnit,
+            StorageAccess.Scoped(V2OpenTelemetryBinding.Default.StorageScope));
+        var table = new TableId(traceUnit.Name);
+        var sequence = new ColumnRef(
+            table,
+            V2OpenTelemetryStorageSchema.Sequence,
+            QueryType.Int64,
+            isNullable: false);
+        var count = traces.Query(new QueryRequest(
+            table,
+            Predicate.AlwaysTrue.Instance,
+            [new OrderTerm(sequence, OrderDirection.Ascending, NullOrder.Last)],
+            Projection.ColumnsOnly(sequence),
+            Paging.Keyset(1),
+            ResultShape.TotalCount.Instance));
+        Assert.Equal(1, count.TotalCount);
+    }
+
+    [Fact]
+    public async Task SQLite_v3_summary_filters_array_elements_case_insensitively_and_orders_deterministically()
+    {
+        using var database = new TemporarySqliteDatabase();
+        await using var fixture = await OpenStoreAsync(database);
+        var start = new DateTimeOffset(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+        var api = Resource("Resource-API", "Orders-API", start);
+        var worker = Resource("resource-worker", "orders-worker", start);
+        var first = new TelemetryTrace(
+            "trace-first", null, "checkout", start, start.AddSeconds(1), TimeSpan.FromSeconds(1),
+            SpanStatus.Ok, [api.Id], ["Tenant/WORKFLOW-Alpha-123"], 1);
+        var second = new TelemetryTrace(
+            "trace-second", null, "checkout", start, start.AddSeconds(1), TimeSpan.FromSeconds(1),
+            SpanStatus.Ok, [worker.Id], ["tenant/workflow-beta-456"], 1);
+
+        await fixture.Store.WriteAsync(DiagnosticsDrainBatchId.New(), new([api, worker], [first, second], [], [], [], []));
+
+        var workflow = await fixture.Store.QueryTracesAsync(new() { WorkflowInstanceId = "workflow-alpha", Take = 10 });
+        var resource = await fixture.Store.QueryTracesAsync(new() { ResourceId = "resource-api", Take = 10 });
+        var service = await fixture.Store.QueryTracesAsync(new() { ServiceName = "orders-api", Take = 10 });
+        var firstOrder = (await fixture.Store.QueryTracesAsync(new() { Take = 10 })).Items.Select(item => item.TraceId).ToArray();
+        var secondOrder = (await fixture.Store.QueryTracesAsync(new() { Take = 10 })).Items.Select(item => item.TraceId).ToArray();
+
+        Assert.Equal([first.TraceId], workflow.Items.Select(item => item.TraceId));
+        Assert.Equal([first.TraceId], resource.Items.Select(item => item.TraceId));
+        Assert.Equal([first.TraceId], service.Items.Select(item => item.TraceId));
+        Assert.Equal(firstOrder, secondOrder);
+    }
+
+    [Fact]
+    public async Task SQLite_v3_summary_search_and_detail_use_case_insensitive_canonical_trace_identity()
+    {
+        using var database = new TemporarySqliteDatabase();
+        await using var fixture = await OpenStoreAsync(database);
+        var now = new DateTimeOffset(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+        var resource = Resource("resource-unicode", "orders", now);
+        var trace = new TelemetryTrace(
+            "Trace-ÄBC", null, "Über Checkout", now, now.AddSeconds(1), TimeSpan.FromSeconds(1),
+            SpanStatus.Ok, [resource.Id], [], 1);
+        var span = new TelemetrySpan(
+            "span-record-unicode", "trace-äbc", "span-unicode", null, resource.Id, "checkout", "server",
+            now, now.AddSeconds(1), SpanStatus.Ok, null, new Dictionary<string, string?>(), [], []);
+        var log = new OtlpLogRecord(
+            "log-unicode", resource.Id, now, "Information", 9, "captured", "TRACE-ÄBC", span.SpanId,
+            new Dictionary<string, string?>());
+
+        await fixture.Store.WriteAsync(DiagnosticsDrainBatchId.New(), new([resource], [trace], [span], [], [], [log]));
+
+        Assert.Equal([trace.TraceId], (await fixture.Store.QueryTracesAsync(new() { TraceId = "äb", Take = 10 })).Items.Select(item => item.TraceId));
+        Assert.Equal([trace.TraceId], (await fixture.Store.QueryTracesAsync(new() { Search = "ÜBER", Take = 10 })).Items.Select(item => item.TraceId));
+        var detail = await fixture.Store.GetTraceAsync("TRACE-äbc");
+        Assert.Equal([span.SpanId], detail!.Spans.Select(item => item.SpanId));
+        Assert.Equal([log.Id], detail.Logs.Select(item => item.Id));
+    }
+
+    [Fact]
+    public async Task SQLite_v3_summary_preserves_every_service_on_a_multi_resource_trace()
+    {
+        using var database = new TemporarySqliteDatabase();
+        await using var fixture = await OpenStoreAsync(database);
+        var now = new DateTimeOffset(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+        var api = Resource("resource-api", "orders-api", now);
+        var worker = Resource("resource-worker", "orders-worker", now);
+        var trace = new TelemetryTrace(
+            "trace-multi-resource", null, "operation", now, now, TimeSpan.Zero,
+            SpanStatus.Ok, [api.Id, worker.Id], [], 1);
+
+        await fixture.Store.WriteAsync(DiagnosticsDrainBatchId.New(), new([api, worker], [trace], [], [], [], []));
+
+        Assert.Equal(
+            [trace.TraceId],
+            (await fixture.Store.QueryTracesAsync(new() { ServiceName = "ORDERS-WORKER", Take = 10 }))
+            .Items.Select(item => item.TraceId));
+    }
+
+    [Fact]
+    public async Task V3_trace_queries_honor_pre_cancelled_tokens()
+    {
+        using var database = new TemporarySqliteDatabase();
+        await using var fixture = await OpenStoreAsync(database);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await fixture.Store.QueryTracesAsync(new(), cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await fixture.Store.GetTraceAsync("trace", cancellation.Token));
+    }
+
+    [Fact]
+    public async Task SQLite_v3_summary_refuses_over_bound_element_cardinality_without_partial_capture()
+    {
+        using var database = new TemporarySqliteDatabase();
+        await using var fixture = await OpenStoreAsync(database);
+        var now = new DateTimeOffset(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+        var resource = Resource("resource-bound", "orders", now);
+        var trace = new TelemetryTrace(
+            "trace-bound", null, "operation", now, now, TimeSpan.Zero,
+            SpanStatus.Ok, [resource.Id],
+            Enumerable.Range(0, 5_001)
+                .Select(index => $"workflow-{index}").ToArray(),
+            1);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+            await fixture.Store.WriteAsync(DiagnosticsDrainBatchId.New(), new([resource], [trace], [], [], [], [])));
+
+        Assert.Empty((await fixture.Store.QueryTracesAsync(new() { Take = 10 })).Items);
+        Assert.Empty((await fixture.Store.QueryResourcesAsync(new() { Take = 10 })).Items);
     }
 
     [Fact]
@@ -262,6 +486,64 @@ public sealed class GroundworkV2OpenTelemetryTests
     }
 
     [Fact]
+    public async Task SQLite_trace_retention_recomputes_a_partially_retained_summary()
+    {
+        using var database = new TemporarySqliteDatabase();
+        await using var fixture = await OpenStoreAsync(
+            database,
+            new OpenTelemetryDiagnosticsOptions { TraceCapacity = 2, MaxQuerySize = 20 },
+            start: true);
+        var start = new DateTimeOffset(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+        var api = Resource("resource-retention-api", "orders-api", start);
+        var worker = Resource("resource-retention-worker", "orders-worker", start);
+        var unrelated = Resource("resource-retention-other", "other", start);
+        var first = new TelemetryTrace(
+            "trace-shared", null, "operation", start, start, TimeSpan.Zero,
+            SpanStatus.Error, [api.Id], ["workflow-old"], 1);
+        var other = new TelemetryTrace(
+            "trace-other", null, "operation", start.AddSeconds(1), start.AddSeconds(1), TimeSpan.Zero,
+            SpanStatus.Ok, [unrelated.Id], [], 4);
+        var latest = new TelemetryTrace(
+            "trace-shared", null, "operation", start.AddSeconds(2), start.AddSeconds(2), TimeSpan.Zero,
+            SpanStatus.Ok, [api.Id, worker.Id], ["workflow-new"], 2);
+
+        await fixture.Store.WriteAsync(new([api, worker, unrelated], [first], [], [], [], []));
+        await fixture.Store.WriteAsync(new([], [other], [], [], [], []));
+        await fixture.Store.WriteAsync(new([], [latest], [], [], [], []));
+        await fixture.Store.CompleteDrainingAsync();
+
+        var shared = (await fixture.Store.GetTraceAsync("TRACE-SHARED"))!.Trace;
+        Assert.Equal(latest.StartTime, shared.StartTime);
+        Assert.Equal(SpanStatus.Ok, shared.Status);
+        Assert.Equal(2, shared.SpanCount);
+        Assert.Equal(["workflow-new"], shared.WorkflowInstanceIds);
+        Assert.Equal(
+            [latest.TraceId],
+            (await fixture.Store.QueryTracesAsync(new() { ServiceName = "orders-api", Take = 10 }))
+            .Items.Select(trace => trace.TraceId));
+        Assert.Equal(
+            [latest.TraceId],
+            (await fixture.Store.QueryTracesAsync(new() { ServiceName = "orders-worker", Take = 10 }))
+            .Items.Select(trace => trace.TraceId));
+    }
+
+    [Fact]
+    public async Task SQLite_zero_trace_retention_removes_raw_history_and_its_summary()
+    {
+        using var database = new TemporarySqliteDatabase();
+        await using var fixture = await OpenStoreAsync(
+            database,
+            new OpenTelemetryDiagnosticsOptions { TraceCapacity = 0, MaxQuerySize = 20 },
+            start: true);
+
+        await fixture.Store.WriteAsync(DiagnosticsDrainBatchId.New(), CaptureBatch("trace-zero-retention"));
+        await fixture.Store.CompleteDrainingAsync();
+
+        Assert.Null(await fixture.Store.GetTraceAsync("trace-zero-retention"));
+        Assert.Equal(0, (await fixture.Store.GetDiagnosticsAsync()).TraceCount);
+    }
+
+    [Fact]
     public async Task SQLite_concurrent_identical_batch_writers_converge()
     {
         using var database = new TemporarySqliteDatabase();
@@ -288,6 +570,84 @@ public sealed class GroundworkV2OpenTelemetryTests
         await Task.WhenAll(writes);
 
         Assert.Equal([trace.TraceId], (await first.QueryTracesAsync(new OpenTelemetryTraceFilter())).Items.Select(item => item.TraceId));
+    }
+
+    [Theory]
+    [InlineData(CommitFault.BeforeCommit)]
+    [InlineData(CommitFault.AfterCommit)]
+    public async Task SQLite_atomic_capture_retries_rollback_and_acknowledgement_loss_without_duplicates(
+        CommitFault fault)
+    {
+        using var database = new TemporarySqliteDatabase();
+        using var inner = new SqliteProviderFactory().Create(database.ConnectionString);
+        using var connection = new FaultInjectingConnection(inner, fault);
+        await using var store = new GroundworkOpenTelemetryStore(
+            connection,
+            Options.Create(new OpenTelemetryDiagnosticsOptions { MaxQuerySize = 100 }),
+            V2OpenTelemetryBinding.Default);
+        await using var lease = await ((IDiagnosticsPersistenceStartupResource)store).AcquireAsync();
+        var batch = CaptureBatch("fault-trace");
+
+        await store.WriteAsync(DiagnosticsDrainBatchId.New(), batch);
+
+        var trace = Assert.Single((await store.QueryTracesAsync(new() { Take = 10 })).Items);
+        Assert.Equal("fault-trace", trace.TraceId);
+        Assert.Equal(1, trace.SpanCount);
+        Assert.Equal(1, (await store.GetDiagnosticsAsync()).TraceCount);
+    }
+
+    [Fact]
+    public async Task SQLite_retention_acknowledgement_loss_replays_one_stable_operation()
+    {
+        using var database = new TemporarySqliteDatabase();
+        using var inner = new SqliteProviderFactory().Create(database.ConnectionString);
+        using var connection = new FaultInjectingConnection(
+            inner,
+            CommitFault.AfterCommit,
+            faultAtCommit: 3,
+            recordRetentionOperations: true);
+        await using var store = new GroundworkOpenTelemetryStore(
+            connection,
+            Options.Create(new OpenTelemetryDiagnosticsOptions
+            {
+                TraceCapacity = 1,
+                MaxQuerySize = 100
+            }),
+            V2OpenTelemetryBinding.Default);
+        await using var lease = await ((IDiagnosticsPersistenceStartupResource)store).AcquireAsync();
+        store.Start();
+
+        await store.WriteAsync(DiagnosticsDrainBatchId.New(), CaptureBatch("retention-old"));
+        await store.WriteAsync(DiagnosticsDrainBatchId.New(), CaptureBatch("retention-new"));
+        await store.CompleteDrainingAsync();
+
+        Assert.True(connection.RetentionOperations.Count >= 2);
+        Assert.All(
+            connection.RetentionOperations,
+            operation => Assert.Equal(connection.RetentionOperations[0], operation));
+        Assert.Null(await store.GetTraceAsync("retention-old"));
+        Assert.Equal("retention-new", Assert.Single((await store.QueryTracesAsync(new() { Take = 10 })).Items).TraceId);
+        Assert.Equal(1, (await store.GetDiagnosticsAsync()).TraceCount);
+    }
+
+    [Fact]
+    public async Task Readiness_refuses_before_schema_or_drain_when_a_required_capability_is_missing()
+    {
+        using var database = new TemporarySqliteDatabase();
+        using var inner = new SqliteProviderFactory().Create(database.ConnectionString);
+        using var connection = new FaultInjectingConnection(
+            inner,
+            fault: null,
+            hiddenCapability: BatchWriteCapabilities.ExactRetentionAffectedKeys);
+        await using var store = new GroundworkOpenTelemetryStore(
+            connection,
+            Options.Create(new OpenTelemetryDiagnosticsOptions()),
+            V2OpenTelemetryBinding.Default);
+
+        var exception = await Assert.ThrowsAsync<NotSupportedException>(async () =>
+            await ((IDiagnosticsPersistenceStartupResource)store).AcquireAsync());
+
+        Assert.Contains(BatchWriteCapabilities.ExactRetentionAffectedKeys.Value, exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -369,11 +729,214 @@ public sealed class GroundworkV2OpenTelemetryTests
     private static OtlpLogRecord Log(string id, string resourceId, DateTimeOffset time, string body) =>
         new(id, resourceId, time, "Information", 9, body, null, null, new Dictionary<string, string?>());
 
+    private static OpenTelemetryBatch CaptureBatch(string traceId)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var resource = Resource($"{traceId}-resource", "orders", now);
+        var trace = new TelemetryTrace(
+            traceId, null, "operation", now, now, TimeSpan.Zero,
+            SpanStatus.Ok, [resource.Id], [], 1);
+        return new([resource], [trace], [], [], [], []);
+    }
+
+    public enum CommitFault
+    {
+        BeforeCommit,
+        AfterCommit
+    }
+
+    private sealed class FaultInjectingConnection(
+        IStorageProviderConnection inner,
+        CommitFault? fault,
+        CapabilityId? hiddenCapability = null,
+        int faultAtCommit = 1,
+        bool recordRetentionOperations = false) : IStorageProviderConnection
+    {
+        private readonly List<OperationId> retentionOperations = [];
+        private int commitCount;
+        private CommitFault? Fault { get; } = fault;
+        private int FaultAtCommit { get; } = faultAtCommit;
+        private bool RecordRetentionOperations { get; } = recordRetentionOperations;
+
+        public IReadOnlyList<OperationId> RetentionOperations
+        {
+            get
+            {
+                lock (retentionOperations)
+                    return retentionOperations.ToArray();
+            }
+        }
+
+        public IProviderCatalog Catalog => inner.Catalog;
+        public ISchemaCoordinator Schema => inner.Schema;
+        public IReadOnlyList<CapabilityDescriptor> Capabilities => inner.Capabilities
+            .Where(capability => capability.Id != hiddenCapability)
+            .ToArray();
+
+        public IStorageSession OpenSession(
+            StorageUnit unit,
+            StorageAccess access,
+            IProviderCommandObserver? observer = null) =>
+            inner.OpenSession(unit, access, observer);
+
+        public IOwnedStorageSession OpenOwnedSession(
+            StorageUnit unit,
+            StorageAccess access,
+            IProviderCommandObserver? observer = null) =>
+            inner.OpenOwnedSession(unit, access, observer);
+
+        public IUnitOfWork BeginUnitOfWork(StorageAccess access, params StorageUnit[] units) =>
+            Wrap(inner.BeginUnitOfWork(access, units));
+
+        public IUnitOfWork BeginUnitOfWork(
+            StorageAccess access,
+            BatchWriteOptions options,
+            params StorageUnit[] units) =>
+            Wrap(inner.BeginUnitOfWork(access, options, units));
+
+        public IUnitOfWork BeginUnitOfWork(
+            StorageAccess access,
+            BatchWriteOptions options,
+            IProviderCommandObserver? observer,
+            params StorageUnit[] units) =>
+            Wrap(inner.BeginUnitOfWork(access, options, observer, units));
+
+        public void Dispose() { }
+
+        private IUnitOfWork Wrap(IUnitOfWork work) => new FaultInjectingUnitOfWork(this, work);
+
+        private sealed class FaultInjectingUnitOfWork(
+            FaultInjectingConnection owner,
+            IUnitOfWork inner) : IUnitOfWork
+        {
+            public IStorageSession OpenSession(StorageUnit unit)
+            {
+                var session = inner.OpenSession(unit);
+                return owner.RecordRetentionOperations && unit.Id.Value == V2OpenTelemetryStorageSchema.TraceUnitId
+                    ? new RecordingRetentionSession(owner, session)
+                    : session;
+            }
+            public void Stage(RowWrite write) => inner.Stage(write);
+            public BatchWriteSummary Commit() => inner.Commit();
+            public BatchWriteReport CommitWithOutcomes() => inner.CommitWithOutcomes();
+
+            public async ValueTask<BatchWriteReport> CommitWithOutcomesAsync(
+                CancellationToken cancellationToken = default)
+            {
+                if (owner.Fault is null)
+                    return await inner.CommitWithOutcomesAsync(cancellationToken);
+                var currentCommit = Interlocked.Increment(ref owner.commitCount);
+                if (currentCommit == owner.FaultAtCommit && owner.Fault == CommitFault.BeforeCommit)
+                {
+                    inner.Rollback();
+                    throw new IOException("Injected rollback before commit.");
+                }
+
+                var report = await inner.CommitWithOutcomesAsync(cancellationToken);
+                if (currentCommit == owner.FaultAtCommit)
+                    throw new IOException("Injected acknowledgement loss after commit.");
+                return report;
+            }
+
+            public ValueTask<BatchWriteSummary> CommitAsync(CancellationToken cancellationToken = default) =>
+                inner.CommitAsync(cancellationToken);
+
+            public void Rollback() => inner.Rollback();
+            public void Dispose() => inner.Dispose();
+        }
+
+        private sealed class RecordingRetentionSession(
+            FaultInjectingConnection owner,
+            IStorageSession inner) :
+            IStorageSession,
+            IExactAppendStorageSession,
+            IExactRetentionStorageSession,
+            IExactRetentionAffectedKeysStorageSession
+        {
+            public StorageUnit Unit => inner.Unit;
+            public StorageAccess Access => inner.Access;
+            public StoredEntry? Read(StorageKey key) => inner.Read(key);
+            public ValueTask<StoredEntry?> ReadAsync(
+                StorageKey key,
+                CancellationToken cancellationToken = default) => inner.ReadAsync(key, cancellationToken);
+            public QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null) =>
+                inner.Query(request, options);
+            public ValueTask<QueryMaterializedResult> QueryAsync(
+                QueryRequest request,
+                QueryRenderOptions? options = null,
+                CancellationToken cancellationToken = default) => inner.QueryAsync(request, options, cancellationToken);
+            public AggregationResult Aggregate(AggregationQuery query) => inner.Aggregate(query);
+            public ValueTask<AggregationResult> AggregateAsync(
+                AggregationQuery query,
+                CancellationToken cancellationToken = default) => inner.AggregateAsync(query, cancellationToken);
+            public WriteOutcome Insert(StorageValues values, WriteOptions? options = null) => inner.Insert(values, options);
+            public ValueTask<WriteOutcome> InsertAsync(
+                StorageValues values,
+                WriteOptions? options = null,
+                CancellationToken cancellationToken = default) => inner.InsertAsync(values, options, cancellationToken);
+            public WriteOutcome Update(StorageValues values, WriteOptions? options = null) => inner.Update(values, options);
+            public ValueTask<WriteOutcome> UpdateAsync(
+                StorageValues values,
+                WriteOptions? options = null,
+                CancellationToken cancellationToken = default) => inner.UpdateAsync(values, options, cancellationToken);
+            public WriteOutcome Upsert(StorageValues values, WriteOptions? options = null) => inner.Upsert(values, options);
+            public ValueTask<WriteOutcome> UpsertAsync(
+                StorageValues values,
+                WriteOptions? options = null,
+                CancellationToken cancellationToken = default) => inner.UpsertAsync(values, options, cancellationToken);
+            public WriteOutcome Delete(StorageKey key, WriteOptions? options = null) => inner.Delete(key, options);
+            public ValueTask<WriteOutcome> DeleteAsync(
+                StorageKey key,
+                WriteOptions? options = null,
+                CancellationToken cancellationToken = default) => inner.DeleteAsync(key, options, cancellationToken);
+            public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) =>
+                inner.Append(operationId, values);
+            public ValueTask<WriteOutcome> AppendAsync(
+                OperationId operationId,
+                IReadOnlyList<StorageValues> values,
+                CancellationToken cancellationToken = default) => inner.AppendAsync(operationId, values, cancellationToken);
+
+            public AppendOutcomeReport AppendWithOutcomes(
+                OperationId operationId,
+                IReadOnlyList<StorageValues> values) =>
+                ((IExactAppendStorageSession)inner).AppendWithOutcomes(operationId, values);
+
+            public ValueTask<AppendOutcomeReport> AppendWithOutcomesAsync(
+                OperationId operationId,
+                IReadOnlyList<StorageValues> values,
+                CancellationToken cancellationToken = default) =>
+                ((IExactAppendStorageSession)inner).AppendWithOutcomesAsync(operationId, values, cancellationToken);
+
+            public RetentionOperationResult ApplyRetention(
+                OperationId operationId,
+                RetentionExecutionOptions? options = null)
+            {
+                Record(operationId);
+                return ((IExactRetentionStorageSession)inner).ApplyRetention(operationId, options);
+            }
+
+            public ValueTask<RetentionOperationResult> ApplyRetentionAsync(
+                OperationId operationId,
+                RetentionExecutionOptions? options = null)
+            {
+                Record(operationId);
+                return ((IExactRetentionStorageSession)inner).ApplyRetentionAsync(operationId, options);
+            }
+
+            private void Record(OperationId operationId)
+            {
+                lock (owner.retentionOperations)
+                    owner.retentionOperations.Add(operationId);
+            }
+        }
+    }
+
     private sealed class OpenTelemetryStoreFixture(
         IStorageProviderConnection connection,
         GroundworkOpenTelemetryStore store,
         IDiagnosticsPersistenceResourceLease lease) : IAsyncDisposable
     {
+        public IStorageProviderConnection Connection => connection;
         public GroundworkOpenTelemetryStore Store => store;
 
         public async ValueTask DisposeAsync()
