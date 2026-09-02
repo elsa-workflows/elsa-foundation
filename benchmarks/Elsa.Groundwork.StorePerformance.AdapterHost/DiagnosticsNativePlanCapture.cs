@@ -268,8 +268,12 @@ internal static class DiagnosticsNativePlanCapture
         Elsa.Diagnostics.StructuredLogs.Core.Contracts.IStructuredLogStore store,
         CancellationToken cancellationToken)
     {
+        const int acknowledgementWindow = 1_000;
+        var acknowledgements = new List<Task<Elsa.Diagnostics.StructuredLogs.Core.Models.StructuredLogEntry>>(
+            acknowledgementWindow);
         for (var index = 0; index < DiagnosticsDurableHistoryWorkload.AppendedRecordsPerStream; index++)
-            await store.AppendAsync(new Elsa.Diagnostics.StructuredLogs.Core.Models.StructuredLogEntry
+        {
+            acknowledgements.Add(store.AppendAsync(new Elsa.Diagnostics.StructuredLogs.Core.Models.StructuredLogEntry
             {
                 Sequence = index + 1,
                 Timestamp = DiagnosticsDurableHistoryWorkload.FixedNowUtc.AddMilliseconds(index),
@@ -281,7 +285,15 @@ internal static class DiagnosticsNativePlanCapture
                 MessageTemplate = "native-plan {Index}",
                 Properties = [new Elsa.Diagnostics.StructuredLogs.Core.Models.LogProperty("index", index.ToString(System.Globalization.CultureInfo.InvariantCulture))],
                 SourceId = "spec094-native-plan"
-            }, cancellationToken);
+            }, cancellationToken).AsTask());
+            if (acknowledgements.Count != acknowledgementWindow)
+                continue;
+
+            await Task.WhenAll(acknowledgements);
+            acknowledgements.Clear();
+        }
+        if (acknowledgements.Count != 0)
+            await Task.WhenAll(acknowledgements);
     }
 
     private static async Task<IReadOnlyList<DiagnosticsTraceDetailConstituentEvidence>> CaptureTraceDetailConstituentsAsync(
