@@ -253,7 +253,12 @@ public static class DiagnosticsNativePlanContract
     /// <summary>Returns whether the retained command must prove a synthetic scope predicate. MongoDB
     /// proves the same isolation boundary through its physical scoped collection name.</summary>
     public static bool ExpectedStorageScopePredicate(string provider, DiagnosticsNativeRouteSpec specification) =>
-        specification.StorageScopeRequired && !string.Equals(provider, "mongodb", StringComparison.Ordinal);
+        ExpectedStorageScopePredicate(provider, specification.StorageScopeRequired);
+
+    /// <summary>Returns whether a route with the supplied scope requirement must expose a synthetic
+    /// scope predicate for the named provider.</summary>
+    public static bool ExpectedStorageScopePredicate(string provider, bool storageScopeRequired) =>
+        storageScopeRequired && !string.Equals(provider, "mongodb", StringComparison.Ordinal);
 
     public static void ValidateEnvelope(
         string provider,
@@ -446,28 +451,12 @@ public static class DiagnosticsNativePlanContract
     {
         if (string.Equals(provider, "mongodb", StringComparison.Ordinal))
         {
-            using var document = ParseJson(command, "MongoDB command");
-            var root = document.RootElement;
-            var collection = root.TryGetProperty("collection", out var collectionValue) && collectionValue.ValueKind == JsonValueKind.String
-                ? collectionValue.GetString()
-                : root.TryGetProperty("find", out var findValue) && findValue.ValueKind == JsonValueKind.String
-                    ? findValue.GetString()
-                    : null;
-            var hasValidLimit = !root.TryGetProperty("limit", out var limit) ||
-                                (limit.ValueKind == JsonValueKind.Number && limit.TryGetInt32(out var finiteLimit) && finiteLimit == 1);
-            if (!string.Equals(collection, specification.TableName, StringComparison.Ordinal) ||
-                root.TryGetProperty("sort", out _) || !hasValidLimit)
-                throw new PerformanceContractException($"Diagnostics point read '{specification.RouteIdentity}' is not an unsorted primary-key lookup.");
-            if (!root.TryGetProperty("filter", out var filter) || filter.ValueKind != JsonValueKind.Object)
-                throw new PerformanceContractException($"Diagnostics point read '{specification.RouteIdentity}' does not bind scope and its exact key predicate.");
-            var mongoRequired = new[] { "__groundwork_scope", specification.PredicateColumn };
-            var names = filter.EnumerateObject().Select(property => property.Name).ToArray();
-            if (!names.Order(StringComparer.Ordinal).SequenceEqual(mongoRequired.Order(StringComparer.Ordinal), StringComparer.Ordinal) ||
-                filter.EnumerateObject().Any(property =>
-                    property.Value.ValueKind != JsonValueKind.Object ||
-                    property.Value.EnumerateObject().Count() != 1 ||
-                    !property.Value.TryGetProperty("$eq", out _)))
-                throw new PerformanceContractException($"Diagnostics point read '{specification.RouteIdentity}' must contain only exact scope and key equalities.");
+            // Groundwork preview.8 deliberately keeps MongoDB point-read values out of observer
+            // artifacts. The exact provider operation still proves the Read/FindOne seam; the
+            // package version and source-bound storage unit establish its _id and scoped collection.
+            if (!string.Equals(command, "MongoDB.FindOne", StringComparison.Ordinal))
+                throw new PerformanceContractException(
+                    $"Diagnostics point read '{specification.RouteIdentity}' is not the exact MongoDB FindOne operation.");
             return;
         }
 

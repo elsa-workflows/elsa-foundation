@@ -142,6 +142,41 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     }
 
     [Fact]
+    public void Mongo_trace_detail_primary_key_evidence_requires_the_exact_observed_find_one_seam()
+    {
+        var specification = DiagnosticsNativePlanContract.TraceDetailConstituents(
+                DiagnosticsNativePlanContract.GroundworkAdapter)
+            .Single(item => item.RouteIdentity == "trace-detail/summary-by-trace-key");
+        var evidence = new DiagnosticsTraceDetailConstituentEvidence(
+            specification.RouteIdentity,
+            "",
+            "",
+            "primary-key-read",
+            "",
+            "MongoDB.FindOne",
+            specification.PhysicalCardinality,
+            false,
+            true,
+            specification.FiniteLimit,
+            1,
+            1,
+            1,
+            1);
+
+        DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
+            "mongodb",
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            evidence,
+            null);
+        Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
+                "mongodb",
+                DiagnosticsNativePlanContract.GroundworkAdapter,
+                evidence with { CommandText = "MongoDB.Find" },
+                null));
+    }
+
+    [Fact]
     public void Trace_detail_signal_evidence_requires_the_complete_bounded_ordered_index_plan()
     {
         var specification = DiagnosticsNativePlanContract.TraceDetailConstituents(

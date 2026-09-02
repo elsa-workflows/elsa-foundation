@@ -317,12 +317,38 @@ internal static class DiagnosticsNativePlanCapture
         var commands = commandObserver.Commands
             .Where(command => !command.IsProbe && command.Kind == ProviderCommandKind.Read && !string.IsNullOrWhiteSpace(command.CommandText))
             .ToArray();
+        var mongo = string.Equals(request.Provider, "mongodb", StringComparison.Ordinal);
+        var mongoQueryCommands = mongo
+            ? commands.Where(command => command.Operation == "mongodb.query").ToArray()
+            : [];
+        var mongoPointCommands = mongo
+            ? commands.Where(command => command.Operation == "mongodb.read").ToArray()
+            : [];
+        var mongoQueryOffset = 0;
+        var mongoPointOffset = 0;
         var evidence = new List<DiagnosticsTraceDetailConstituentEvidence>(specifications.Count);
         foreach (var specification in specifications)
         {
-            var matching = commands.Where(command => command.CommandText!.Contains(specification.TableName, StringComparison.OrdinalIgnoreCase)).ToArray();
-            var queryCommands = matching.Where(command => command.Operation.EndsWith(".query", StringComparison.Ordinal)).ToArray();
-            var pointCommands = matching.Where(command => !command.Operation.EndsWith(".query", StringComparison.Ordinal)).ToArray();
+            ProviderCommandEvent[] queryCommands;
+            ProviderCommandEvent[] pointCommands;
+            if (mongo)
+            {
+                queryCommands = specification.OperationKind == DiagnosticsTraceDetailOperationKind.BoundedOrderedQuery
+                    ? mongoQueryCommands.Skip(mongoQueryOffset).Take(specification.MaxInvocationCount).ToArray()
+                    : [];
+                pointCommands = specification.OperationKind == DiagnosticsTraceDetailOperationKind.PrimaryKeyRead
+                    ? mongoPointCommands.Skip(mongoPointOffset).Take(specification.MaxInvocationCount).ToArray()
+                    : [];
+                mongoQueryOffset += queryCommands.Length;
+                mongoPointOffset += pointCommands.Length;
+            }
+            else
+            {
+                var matching = commands.Where(command =>
+                    command.CommandText!.Contains(specification.TableName, StringComparison.OrdinalIgnoreCase)).ToArray();
+                queryCommands = matching.Where(command => command.Operation.EndsWith(".query", StringComparison.Ordinal)).ToArray();
+                pointCommands = matching.Where(command => !command.Operation.EndsWith(".query", StringComparison.Ordinal)).ToArray();
+            }
             var observedCount = specification.OperationKind == DiagnosticsTraceDetailOperationKind.BoundedOrderedQuery
                 ? queryCommands.Length
                 : pointCommands.Length;
@@ -337,9 +363,9 @@ internal static class DiagnosticsNativePlanCapture
                 "trace-detail/resources-by-id" => detail.Resources.Count,
                 _ => 1
             };
-            var command = (specification.OperationKind == DiagnosticsTraceDetailOperationKind.BoundedOrderedQuery ? queryCommands : pointCommands)[0].CommandText!;
             if (specification.OperationKind == DiagnosticsTraceDetailOperationKind.PrimaryKeyRead)
             {
+                var command = pointCommands[0].CommandText!;
                 var pointEvidence = new DiagnosticsTraceDetailConstituentEvidence(
                     specification.RouteIdentity,
                     "",
@@ -348,7 +374,9 @@ internal static class DiagnosticsNativePlanCapture
                     "",
                     command,
                     specification.PhysicalCardinality,
-                    specification.StorageScopeRequired,
+                    DiagnosticsNativePlanContract.ExpectedStorageScopePredicate(
+                        request.Provider,
+                        specification.StorageScopeRequired),
                     true,
                     specification.FiniteLimit,
                     specification.PublicRowBound,
@@ -392,8 +420,11 @@ internal static class DiagnosticsNativePlanCapture
             var pages = new List<DiagnosticsTraceDetailPageEvidence>(queryCommands.Length);
             for (var pageIndex = 0; pageIndex < queryCommands.Length; pageIndex++)
             {
-                var pageCommand = queryCommands[pageIndex].CommandText!;
                 var rawPlan = IamNativePlanParser.NormalizeForArtifact(request.Provider, File.ReadAllText(nativePaths[pageIndex]));
+                var pageCommand = mongo
+                    ? MongoExplainCommandInspector.SerializeCommand(
+                        MongoExplainCommandInspector.ExtractCommand(rawPlan))
+                    : queryCommands[pageIndex].CommandText!;
                 var pageReference = ArtifactStore.RawPlanName(
                     $"diagnostics.{request.Provider}.{request.MeasurementSetId}.{ConstituentSlug(specification.RouteIdentity)}.page-{pageIndex:D4}.raw.json");
                 var pagePath = Path.Combine(outputDirectory, pageReference);
@@ -415,7 +446,9 @@ internal static class DiagnosticsNativePlanCapture
                     physicalIndexName,
                     pageCommand,
                     specification.PhysicalCardinality,
-                    specification.StorageScopeRequired,
+                    DiagnosticsNativePlanContract.ExpectedStorageScopePredicate(
+                        request.Provider,
+                        specification.StorageScopeRequired),
                     true,
                     specification.FiniteLimit,
                     specification.PublicRowBound,
@@ -455,7 +488,9 @@ internal static class DiagnosticsNativePlanCapture
                 physicalIndexName,
                 firstPage.CommandText,
                 specification.PhysicalCardinality,
-                specification.StorageScopeRequired,
+                DiagnosticsNativePlanContract.ExpectedStorageScopePredicate(
+                    request.Provider,
+                    specification.StorageScopeRequired),
                 true,
                 specification.FiniteLimit,
                 specification.PublicRowBound,
@@ -466,6 +501,11 @@ internal static class DiagnosticsNativePlanCapture
             evidence.Add(constituentEvidence);
             before = Directory.EnumerateFiles(explainDirectory).ToHashSet(StringComparer.Ordinal);
         }
+
+        if (mongo && (mongoQueryOffset != mongoQueryCommands.Length || mongoPointOffset != mongoPointCommands.Length))
+            throw new PerformanceContractException(
+                $"Diagnostics trace-detail capture observed unclassified MongoDB provider commands: " +
+                $"query={mongoQueryCommands.Length - mongoQueryOffset}, point={mongoPointCommands.Length - mongoPointOffset}.");
 
         return evidence;
     }
