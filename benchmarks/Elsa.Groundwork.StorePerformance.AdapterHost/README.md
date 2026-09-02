@@ -229,7 +229,7 @@ names and central versions, and the canonical Release AdapterHost handshake; an 
 cannot stand in for the registered host. Optional comparison and gate result files must remain under the
 admitted output tree, including on blocked-report fallback paths.
 
-Before provider access, `capture`, `correctness`, and `run` recompute the same composition descriptor used by
+Before provider access, `capture-plan`, `verify-correctness`, and `run` recompute the same composition descriptor used by
 `describe-composition`. The Python runner calls that command during `target_context`; it supplies the resulting
 digest in every request and treats a supplied `--composition` as an expected-value assertion. The descriptor
 contains the selected Groundwork registry's target, unit ID/name, schema version, and `SchemaSubject.Fingerprint`,
