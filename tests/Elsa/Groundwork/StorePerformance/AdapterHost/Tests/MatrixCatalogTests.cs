@@ -38,11 +38,9 @@ public sealed class MatrixCatalogTests
         Assert.Equal(["Groundwork.PostgreSql"], checkpoint.ProviderPackages["postgresql"]);
 
         var bookmark = Single(registrations, "bookmark-lookup", "groundwork-v2");
-        Assert.Equal("unsupported", bookmark.CapturePlanStatus);
-        Assert.Equal("blocked", bookmark.CorrectnessStatus);
-        Assert.Equal("capture.native-plan.not-implemented", bookmark.CorrectnessReason);
-        Assert.Equal("blocked", bookmark.TimingStatus);
-        Assert.Equal("capture.native-plan.not-implemented", bookmark.TimingReason);
+        Assert.Equal("complete", bookmark.CapturePlanStatus);
+        Assert.Equal("ready", bookmark.CorrectnessStatus);
+        Assert.Equal("ready", bookmark.TimingStatus);
 
         foreach (var workload in new[]
                  {

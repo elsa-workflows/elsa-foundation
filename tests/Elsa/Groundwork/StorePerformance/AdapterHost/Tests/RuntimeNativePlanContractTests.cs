@@ -10,6 +10,22 @@ public sealed class RuntimeNativePlanContractTests
     [Fact]
     public void Frozen_runtime_routes_bind_the_current_units_indexes_order_and_page_limits()
     {
+        var bookmarkRoutes = RuntimeNativePlanContract.ForWorkload(RuntimeBookmarkLookupWorkload.WorkloadId);
+        Assert.Equal(
+            ["list-by-stimulus-and-type", "list-by-stimulus-type"],
+            bookmarkRoutes.Select(route => route.RouteIdentity));
+        Assert.All(bookmarkRoutes, route =>
+        {
+            Assert.Equal("runtime_bookmark_state", route.TableName);
+            Assert.Equal(["workflowExecutionId", "bookmarkId"], route.OrderColumns);
+            Assert.Equal(8192, route.PhysicalCardinality);
+            Assert.Equal(25, route.FiniteLimit);
+        });
+        Assert.Equal("by_stimulus_and_type_and_bookmark_identity", bookmarkRoutes[0].IndexName);
+        Assert.Equal("stimulusLookupKey", bookmarkRoutes[0].PredicateColumn);
+        Assert.Equal("by_stimulus_type_and_bookmark_identity", bookmarkRoutes[1].IndexName);
+        Assert.Equal("stimulusTypeLookupKey", bookmarkRoutes[1].PredicateColumn);
+
         var triggerRoutes = RuntimeNativePlanContract.ForWorkload(RuntimeTriggerBindingStimulusLookupWorkload.WorkloadId);
         Assert.Equal(
             ["list-by-stimulus-and-type", "list-by-stimulus-type", "page-live-by-scope"],

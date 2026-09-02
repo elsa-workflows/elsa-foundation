@@ -130,6 +130,20 @@ static async Task<int> CapturePlan(string[] args)
         return 0;
     }
 
+    if (string.Equals(request.WorkloadId, RuntimeBookmarkLookupWorkload.WorkloadId, StringComparison.Ordinal))
+    {
+        var bookmarkDigest = await BookmarkLookupNativePlanCapture.CaptureAsync(
+            request,
+            connectionString,
+            outputDirectory,
+            observed,
+            CancellationToken.None);
+        Console.WriteLine($"native-plan-evidence={request.NativePlanEvidenceReference}");
+        Console.WriteLine($"native-plan-sha256={bookmarkDigest}");
+        Console.WriteLine("native-plan-routes=2");
+        return 0;
+    }
+
     if (string.Equals(request.WorkloadId, RuntimeTriggerBindingStimulusLookupWorkload.WorkloadId, StringComparison.Ordinal))
     {
         var triggerDigest = await TriggerBindingNativePlanCapture.CaptureAsync(

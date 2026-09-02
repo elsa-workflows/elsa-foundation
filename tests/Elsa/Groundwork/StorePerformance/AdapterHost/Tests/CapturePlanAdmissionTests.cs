@@ -80,7 +80,7 @@ public sealed class CapturePlanAdmissionTests
     }
 
     [Fact]
-    public void Capture_plan_refuses_a_registered_workload_without_a_real_capture_implementation()
+    public void Capture_plan_admits_a_registered_workload_with_a_real_capture_implementation()
     {
         var workload = WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()).Workloads[RuntimeBookmarkLookupWorkload.WorkloadId];
         var request = Request() with
@@ -94,10 +94,16 @@ public sealed class CapturePlanAdmissionTests
             NativePlanEvidenceReference = NativePlanEvidenceStaging.ReferenceFor(workload.Id, "sqlite", "set")
         };
 
-        var exception = Assert.Throws<PerformanceContractException>(() => CapturePlanAdmission.Ensure(request, ExternalOutput()));
-
-        Assert.Contains("not implemented", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("no zero-route evidence will be synthesized", exception.Message, StringComparison.Ordinal);
+        var output = ExternalOutput();
+        try
+        {
+            Assert.EndsWith(Path.GetFileName(output), CapturePlanAdmission.Ensure(request, output), StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(output))
+                Directory.Delete(output, recursive: true);
+        }
     }
 
     [Fact]

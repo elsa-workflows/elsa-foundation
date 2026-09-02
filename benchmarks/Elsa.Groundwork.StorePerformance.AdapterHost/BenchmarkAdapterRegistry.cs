@@ -27,7 +27,7 @@ internal static class BenchmarkAdapterRegistry
             GroundworkProviders, NativePlanCaptureKind.Routeless,
             static (request, connection, output) => new CheckpointCommitAdapter(request, connection, output)),
         Registration(RuntimeBookmarkLookupWorkload.WorkloadId, WorkloadVersion, GroundworkV2Adapter, BookmarkLookupAdapter.PhysicalForm,
-            GroundworkProviders, NativePlanCaptureKind.Unsupported,
+            GroundworkProviders, NativePlanCaptureKind.Complete,
             static (request, connection, output) => new BookmarkLookupAdapter(request, connection, output)),
         Registration(RuntimeRecoveryScanWorkload.WorkloadId, RecoveryWorkloadVersion, GroundworkV2Adapter, RecoveryScanAdapter.PhysicalForm,
             GroundworkProviders, NativePlanCaptureKind.Complete,

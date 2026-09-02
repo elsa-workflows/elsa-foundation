@@ -48,6 +48,7 @@ public static class RuntimeNativePlanContract
     public const string GroundworkAdapter = "groundwork-v2";
     public const string RouteContract = "provider-native-routes";
     private const string TriggerTable = "runtime_workflow_trigger_binding";
+    private const string BookmarkTable = "runtime_bookmark_state";
     private const string SourceReferenceTable = "runtime_workflow_executable_source_reference";
     private const string PlacementTable = "elsa_distributed_execution_placement";
     private const string DurableTimerTable = "runtime_durable_timer";
@@ -55,6 +56,28 @@ public static class RuntimeNativePlanContract
 
     public static RuntimeNativeRouteSpec For(string workloadId, string routeIdentity) => workloadId switch
     {
+        RuntimeBookmarkLookupWorkload.WorkloadId => routeIdentity switch
+        {
+            "list-by-stimulus-and-type" => new(
+                routeIdentity,
+                BookmarkTable,
+                "by_stimulus_and_type_and_bookmark_identity",
+                ["workflowExecutionId", "bookmarkId"],
+                [new("stimulusLookupKey", "=")],
+                "stimulusLookupKey",
+                RuntimeBookmarkLookupWorkload.WorkflowCount * RuntimeBookmarkLookupWorkload.BookmarksPerWorkflow,
+                RuntimeBookmarkLookupWorkload.PageSize),
+            "list-by-stimulus-type" => new(
+                routeIdentity,
+                BookmarkTable,
+                "by_stimulus_type_and_bookmark_identity",
+                ["workflowExecutionId", "bookmarkId"],
+                [new("stimulusTypeLookupKey", "=")],
+                "stimulusTypeLookupKey",
+                RuntimeBookmarkLookupWorkload.WorkflowCount * RuntimeBookmarkLookupWorkload.BookmarksPerWorkflow,
+                RuntimeBookmarkLookupWorkload.PageSize),
+            _ => throw UnknownRoute(routeIdentity)
+        },
         RuntimeTriggerBindingStimulusLookupWorkload.WorkloadId => routeIdentity switch
         {
             "list-by-stimulus-and-type" => new(
@@ -140,6 +163,8 @@ public static class RuntimeNativePlanContract
 
     public static IReadOnlyList<RuntimeNativeRouteSpec> ForWorkload(string workloadId) => workloadId switch
     {
+        RuntimeBookmarkLookupWorkload.WorkloadId =>
+        [For(workloadId, "list-by-stimulus-and-type"), For(workloadId, "list-by-stimulus-type")],
         RuntimeTriggerBindingStimulusLookupWorkload.WorkloadId =>
         [For(workloadId, "list-by-stimulus-and-type"), For(workloadId, "list-by-stimulus-type"), For(workloadId, "page-live-by-scope")],
         DistributedPlacementTakeoverWorkload.WorkloadId => [For(workloadId, "list-owned-live-placements")],

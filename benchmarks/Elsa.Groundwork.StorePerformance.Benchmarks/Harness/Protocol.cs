@@ -485,10 +485,12 @@ public static class ArtifactAdmission
             ArtifactStore.ValidateRawPlanFile(rawPlanPath);
             if (diagnosticsWorkload)
                 DiagnosticsNativePlanContract.ValidateEnvelope(request.Provider, request.Adapter, route, rawPlanPath);
-            if (workload.Id is RuntimeTriggerBindingStimulusLookupWorkload.WorkloadId or
-                DistributedPlacementTakeoverWorkload.WorkloadId or
-                RuntimeDueTimerSelectionWorkload.WorkloadId or
-                RuntimeRecurringScheduleSelectionWorkload.WorkloadId)
+            if (string.Equals(request.Adapter, RuntimeNativePlanContract.GroundworkAdapter, StringComparison.Ordinal) &&
+                workload.Id is (RuntimeBookmarkLookupWorkload.WorkloadId or
+                    RuntimeTriggerBindingStimulusLookupWorkload.WorkloadId or
+                    DistributedPlacementTakeoverWorkload.WorkloadId or
+                    RuntimeDueTimerSelectionWorkload.WorkloadId or
+                    RuntimeRecurringScheduleSelectionWorkload.WorkloadId))
                 RuntimeNativePlanContract.ValidateEnvelope(request.WorkloadId, request.Provider, request.Adapter, route, rawPlanPath);
             if (string.Equals(workload.Id, SecretCreateReadListWorkload.WorkloadId, StringComparison.Ordinal))
                 SecretRetainedNativePlan.Validate(
