@@ -11,15 +11,16 @@ Groundwork public-repository comparator, while the historical v1.0 hashes remain
 blocked history. Its executable source is the separate
 specs/094-harden-groundwork-stores/workloads/secret-create-read-list-v1.1.json successor file;
 iam-secrets.json remains byte-for-byte historical input. Diagnostics remains blocked until numeric
-absolute budgets and an executable absolute-budget gate are independently reviewed.
+absolute budgets are independently ratified and supplied to the executable absolute-budget gate.
 
 The thirteenth workload, `diagnostics-durable-history`, is the program-owner-ratified 2026-07-25
 extension. It keeps Structured Logs and OpenTelemetry as separate suboperations under one reproducible
 input/result vector. SQLite uses the retained same-provider EF diagnostics oracle. SQL Server,
 PostgreSQL, and MongoDB require workload-specific numeric absolute budgets plus correctness,
-native-plan, physical-form, and provider-work evidence. The policy shape is ratified, but the numeric
-budgets and evaluator do not yet exist; `gate.diagnostics.absolute-budget-required` prevents the
-default ratio gate from being silently applied to those three providers.
+native-plan, physical-form, and provider-work evidence. The policy shape is still a proposal pending independent review, and the numeric
+budgets are not yet ratified; `gate.diagnostics.absolute-budget-required` prevents the default ratio
+gate from being silently applied to those three providers. The generic no-comparand evaluator exists,
+but it accepts only an explicit independently reviewed policy and has no diagnostics defaults.
 
 `matrix <scale>` executes one untimed adapter-host warm-up process followed by three independent measured
 adapter-host processes. A measured artifact carries the frozen seed/input fingerprint, provider-native plan
@@ -44,7 +45,16 @@ cohort; the second may join only that same cohort and must have a distinct measu
 must be fresh, every child artifact is validated against its complete request immediately, and the manifest is
 rebuilt over both complete sets. Stale same-set paths, mixed cohorts, partial sets, extra files, and evidence
 tampering fail closed. The cohort directory may otherwise contain only the default `comparison.v1.json`,
-`comparison.from-gate.v1.json`, and `gate.v1.json` result files; write custom result paths outside it.
+`comparison.from-gate.v1.json`, `gate.v1.json`, `measurement.v1.json`, and `budget-gate.v1.json` result files;
+write custom result paths outside it.
+
+`measure` validates one complete four-process target without an oracle and emits a distinct no-comparand
+measurement result. `budget-gate` derives a fresh admitted measurement from that manifest-bound artifact
+directory and applies an independently reviewed, provider/workload-scoped
+absolute policy with p95, p99, and throughput bounds for every budget-bearing operation. A reviewed class map
+may share a budget across operations and must explicitly mark non-timing operations `NotHotPath`. It never
+falls back to ratio gates; missing, extra, ambiguous, or double-defined entries fail closed. No default or
+numeric diagnostics policy is shipped here — those values remain a program-owner ratification decision.
 
 `compare` rejects incomplete or internally inconsistent targets (including a missing operation, changed input,
 different commit, different physical host, changed machine environment, or provider/form outside the frozen
@@ -87,6 +97,13 @@ dotnet run --project benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks -- \
 dotnet run --project benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks -- \
   gate --out <artifact-directory> --oracle <provider/adapter/form> --target <provider/adapter/form> \
   [--class runtime|ordinary] [--replacement <reviewed-gate.v1.json>] [--result <gate.json>]
+
+dotnet run --project benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks -- \
+  measure --out <artifact-directory> [--result <measurement.json>]
+
+dotnet run --project benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks -- \
+  budget-gate --out <artifact-directory> --policy <absolute-budget-policy.json> \
+  [--result <budget-gate.json>]
 ```
 
 Provider and physical-form identities are admitted by the frozen workload catalog. Adapter identities remain

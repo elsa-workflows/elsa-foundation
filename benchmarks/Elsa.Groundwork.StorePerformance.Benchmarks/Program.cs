@@ -21,6 +21,8 @@ internal static class BenchmarkCli
                 "matrix" => await MatrixAsync(args[1..]),
                 "compare" => Compare(args[1..], requireCleanCurrentBuild),
                 "gate" => Gate(args[1..], requireCleanCurrentBuild),
+                "measure" => Measure(args[1..], requireCleanCurrentBuild),
+                "budget-gate" or "absolute-budget-gate" => BudgetGate(args[1..], requireCleanCurrentBuild),
                 "host-fingerprint" => HostFingerprintCommand(),
                 "workload-vectors" => WorkloadVectorsCommand(),
                 "help" or "--help" or "-h" => Help(),
@@ -111,6 +113,43 @@ internal static class BenchmarkCli
         Console.WriteLine($"Gate result: {result}");
         return verdict.Verdict == PerformanceVerdict.Pass ? 0 : 2;
     }
+
+    private static int Measure(string[] args, bool requireCleanCurrentBuild)
+    {
+        var output = Require(args, "--out");
+        var repositoryRoot = SourceProvenance.FindRepositoryRoot();
+        output = ArtifactOutputAdmission.RequireExternal(output, repositoryRoot);
+        if (requireCleanCurrentBuild)
+            SourceProvenance.RequireCleanCurrentBuild(repositoryRoot, (typeof(BenchmarkCli).Assembly, "benchmark harness"));
+        var measurement = Measurement.Measure(output, WorkloadCatalog.Load(repositoryRoot));
+        var resultPath = ArtifactOutputAdmission.RequireWithin(
+            Option(args, "--result") ?? Path.Combine(output, "measurement.v1.json"), output, repositoryRoot);
+        ResultStore.Write(resultPath, measurement);
+        Console.WriteLine($"Measurement result: {resultPath}");
+        return measurement.Complete ? 0 : 2;
+    }
+
+    private static int BudgetGate(string[] args, bool requireCleanCurrentBuild)
+    {
+        var output = Require(args, "--out");
+        var repositoryRoot = SourceProvenance.FindRepositoryRoot();
+        output = ArtifactOutputAdmission.RequireExternal(output, repositoryRoot);
+        if (requireCleanCurrentBuild)
+            SourceProvenance.RequireCleanCurrentBuild(repositoryRoot, (typeof(BenchmarkCli).Assembly, "benchmark harness"));
+        var measurement = Measurement.Measure(output, WorkloadCatalog.Load(repositoryRoot));
+        if (args.Contains("--measurement-result", StringComparer.Ordinal))
+            throw new PerformanceContractException("budget-gate derives its admitted measurement from --out and does not accept --measurement-result.");
+        var measurementPath = ArtifactOutputAdmission.RequireWithin(Path.Combine(output, "measurement.v1.json"), output, repositoryRoot);
+        ResultStore.Write(measurementPath, measurement);
+        var policyPath = Option(args, "--policy") ?? Option(args, "--budget-policy") ?? throw new PerformanceContractException("budget-gate requires --policy.");
+        var policy = AbsoluteBudgetPolicyFile.Load(policyPath, measurement.WorkloadId, measurement.WorkloadVersion, measurement.Provider);
+        var verdict = AbsoluteBudgetEvaluator.Evaluate(policy, measurement);
+        var resultPath = ArtifactOutputAdmission.RequireWithin(
+            Option(args, "--result") ?? Path.Combine(output, "budget-gate.v1.json"), output, repositoryRoot);
+        var result = ResultStore.Write(resultPath, new AbsoluteBudgetReport(verdict, AbsoluteBudgetPolicyFile.Hash(policyPath)));
+        Console.WriteLine($"Absolute budget result: {result}");
+        return verdict.Verdict == PerformanceVerdict.Pass ? 0 : 2;
+    }
     private static string Require(string[] args, string option) => Option(args, option) ?? throw new PerformanceContractException($"{args.FirstOrDefault() ?? "command"} requires {option}.");
     private static string? Option(string[] args, string name) { for (var i = 0; i < args.Length - 1; i++) if (args[i] == name) return args[i + 1]; return null; }
     private static IEnumerable<string> Options(string[] args, string name) { for (var i = 0; i < args.Length - 1; i++) if (args[i] == name) yield return args[i + 1]; }
@@ -126,11 +165,14 @@ internal static class BenchmarkCli
     }
     private static int HostFingerprintCommand() { Console.WriteLine(HostFingerprint.CaptureSha256()); return 0; }
     private static int WorkloadVectorsCommand() { Console.WriteLine(ReproducibleWorkloadScenarioCatalog.SerializeDefinitionSummary()); return 0; }
-    private static int Help() { Console.WriteLine("#646 store performance harness\n  host-fingerprint\n  workload-vectors (prints reproducible contract definitions; it does not execute adapters)\n  matrix <scale> --cohort <safe-id> --measurement-set <safe-id> --workload <id> --provider <provider> --provider-version <version> --provider-setting <name=value> --adapter <adapter> --form <physical-form> --commit <40-hex-sha> --composition <64-hex-fingerprint> --package <name=version> --native-plan <identity> --native-plan-evidence <safe-top-level.json> --native-plan-sha256 <64-hex-content-digest> --out <artifact-directory> --child-command <adapter-host>\n  compare --out <artifact-directory> --oracle <provider/adapter/form> --target <provider/adapter/form> [--result <comparison.json>]\n  gate --out <artifact-directory> --oracle <provider/adapter/form> --target <provider/adapter/form> [--class runtime|ordinary] [--replacement <reviewed-gate.v1.json>] [--comparison-result <comparison.json>] [--result <gate.json>]"); return 0; }
+    private static int Help() { Console.WriteLine("#646 store performance harness\n  host-fingerprint\n  workload-vectors (prints reproducible contract definitions; it does not execute adapters)\n  matrix <scale> --cohort <safe-id> --measurement-set <safe-id> --workload <id> --provider <provider> --provider-version <version> --provider-setting <name=value> --adapter <adapter> --form <physical-form> --commit <40-hex-sha> --composition <64-hex-fingerprint> --package <name=version> --native-plan <identity> --native-plan-evidence <safe-top-level.json> --native-plan-sha256 <64-hex-content-digest> --out <artifact-directory> --child-command <adapter-host>\n  compare --out <artifact-directory> --oracle <provider/adapter/form> --target <provider/adapter/form> [--result <comparison.json>]\n  gate --out <artifact-directory> --oracle <provider/adapter/form> --target <provider/adapter/form> [--class runtime|ordinary] [--replacement <reviewed-gate.v1.json>] [--comparison-result <comparison.json>] [--result <gate.json>]\n  measure --out <artifact-directory> [--result <measurement.json>]\n  budget-gate --out <artifact-directory> --policy <absolute-budget-policy.json> [--result <budget-gate.json>]"); return 0; }
     private static int FailCommand(string[] args, string message)
     {
-        if (string.Equals(args.FirstOrDefault(), "gate", StringComparison.Ordinal) && Option(args, "--out") is { Length: > 0 } output)
-            TryWriteBlockedGateReport(output, message);
+        if (Option(args, "--out") is { Length: > 0 } output)
+        {
+            if (string.Equals(args.FirstOrDefault(), "gate", StringComparison.Ordinal)) TryWriteBlockedGateReport(output, message);
+            if (args.FirstOrDefault() is "budget-gate" or "absolute-budget-gate") TryWriteBlockedBudgetReport(output, message);
+        }
         return Fail(message);
     }
 
@@ -150,6 +192,18 @@ internal static class BenchmarkCli
         {
             // Preserve the original CLI failure when the requested output path cannot be written.
         }
+    }
+
+    private static void TryWriteBlockedBudgetReport(string output, string reason)
+    {
+        try
+        {
+            var repositoryRoot = SourceProvenance.FindRepositoryRoot();
+            var admittedOutput = ArtifactOutputAdmission.RequireExternal(output, repositoryRoot);
+            var result = ArtifactOutputAdmission.RequireWithin(Path.Combine(admittedOutput, "budget-gate.v1.json"), admittedOutput, repositoryRoot);
+            ResultStore.Write(result, new AbsoluteBudgetReport(AbsoluteBudgetEvaluator.BlockedForContractFailure(reason), null));
+        }
+        catch { }
     }
 
     private static int Fail(string message) { Console.Error.WriteLine($"error: {message}"); return 2; }
