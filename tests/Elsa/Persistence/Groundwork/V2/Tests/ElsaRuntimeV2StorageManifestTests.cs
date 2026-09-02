@@ -52,7 +52,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             ["bookmarkState"] = ["by_stimulus", "by_stimulus_and_type_and_bookmark_identity", "by_stimulus_type", "by_stimulus_type_and_bookmark_identity", "by_workflow_execution", "by_workflow_execution_and_bookmark_id"],
             ["checkpointCommit"] = ["by_collection"],
             ["controlPlaneState"] = ["by_collection", "by_workflow_execution"],
-            ["durableTimer"] = ["by_claim_order", "by_collection", "by_due_time", "by_due_time_and_timer_id", "by_timer_id", "by_workflow_execution", "by_workflow_execution_and_timer_id"],
+            ["durableTimer"] = ["by_claim_order", "by_collection", "by_due_time_and_timer_id", "by_timer_id", "by_workflow_execution", "by_workflow_execution_and_timer_id"],
             ["durableValueState"] = ["by_workflow_execution", "by_workflow_execution_and_durable_value_id"],
             ["executableActivityTemplate"] = ["by_collection", "by_collection_and_document_id", "by_template_hash"],
             ["executableActivityTemplateHashClaim"] = [],
@@ -85,8 +85,10 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             Assert.Equal(expected, actualIndexes[unitId]);
 
         var timers = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind);
+        AssertColumn(timers, ElsaRuntimeV2StorageManifest.DurableTimerDueTimeField, PortableType.DateTimeOffset, null, nullable: false);
+        AssertColumn(timers, ElsaRuntimeV2StorageManifest.DurableTimerIdField, PortableType.String, ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength, nullable: false);
         AssertIndex(timers, "by_claim_order", ["claimOrderKey"], included: true);
-        AssertIndex(timers, "by_due_time_and_timer_id", [ElsaRuntimeV2StorageManifest.DurableTimerDueTimeField, ElsaRuntimeV2StorageManifest.DurableTimerIdField], included: true);
+        AssertIndex(timers, "by_due_time_and_timer_id", [ElsaRuntimeV2StorageManifest.DurableTimerDueTimeField, ElsaRuntimeV2StorageManifest.DurableTimerIdField, ElsaRuntimeV2StorageManifest.IdField], included: true);
         AssertIndex(timers, "by_workflow_execution_and_timer_id", [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, ElsaRuntimeV2StorageManifest.DurableTimerIdField], included: true);
 
         var incidents = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.IncidentStateDocumentKind);
