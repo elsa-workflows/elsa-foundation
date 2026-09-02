@@ -1,5 +1,5 @@
 using Elsa.Persistence.Groundwork.V2.Testing;
-using Elsa.Persistence.Core.Design;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;

@@ -648,6 +648,28 @@ No direct ledger row cites `covered by`, `replaced by`, or a named replacement. 
 name passing EF-independent evidence for every preserved objective before T040 can authorize any
 removal.
 
+## Issue #1482 Identity-EF reconciliation (2026-09-01)
+
+The implementation slice for issue [#1482](https://github.com/elsa-workflows/elsa-foundation/issues/1482)
+has now reconciled the preliminary Identity EF rows against the current source. This is an explicit
+Identity-only deletion slice; it does not claim that the broader #646 performance gate or spec 144's
+final absolute-zero work unit has completed.
+
+| Retired preliminary subject | Current disposition and evidence |
+|---|---|
+| `EfCoreIdentityStoreTests.User_RoundTrips_By_Id_And_Email_With_Roles_And_Permissions` | Retired with the EF store; the provider-neutral relationship objective is covered by `IdentityGroundworkStoreTests.User_RoundTrips_By_Id_And_Email` and `AspNetCoreIdentityRelationshipContractTests.User_claims_logins_roles_and_tokens_round_trip_through_deterministic_relationships`. |
+| `EfCoreIdentityStoreTests.User_Save_Is_An_Upsert` | Retired under the clean-break Groundwork contract; `IdentityGroundworkStoreTests.Application_Save_Is_An_Upsert` covers the durable upsert semantics and the revision-aware suite covers the current user write contract. |
+| `EfCoreIdentityStoreTests.Role_RoundTrips_By_Id_And_Lists_By_Tenant` | Replaced by `IdentityGroundworkStoreTests.Role_Lists_By_Tenant_And_Survives_Restart`. |
+| `EfCoreIdentityStoreTests.ExternalIdentity_RoundTrips_By_Subject_And_Lists_For_User` | Replaced by `IdentityGroundworkStoreTests.ExternalIdentity_RoundTrips_By_Subject_And_Lists_For_User`. |
+| `EfCoreIdentityStoreTests.TenantMembership_RoundTrips` | Replaced by `IdentityGroundworkStoreTests.TenantMembership_RoundTrips_And_Survives_Restart`. |
+| `IamNormalizedLookupSqliteCorrectnessTests.Ef_identity_store_contracts_produce_the_ratified_digest` | Retired with the EF comparand; the same class retains `Groundwork_store_contracts_produce_the_ratified_digest` and the native-plan correctness route. No #646 performance verdict is inferred. |
+| `IdentityAppParityTests`, `TenantMembershipStoreDifferentialTests`, and their support comparand/probe files | Retired as temporary EF-vs-Groundwork comparators when the EF comparand was deleted. Their recorded divergence findings remain in `specs/094-harden-groundwork-stores/divergence-ledger.md`; no comparison result is promoted to a #646 verdict. |
+
+The shared API and ASP.NET Core Identity fixtures were moved to `IdentityV2TestPersistence` and
+`AddFoundationAspNetCoreIdentityGroundwork`; their OpenIddict vendor EF context remains deliberately
+retained. The deleted Identity EF fixture, frozen oracle/ratchet, and Identity-only test project edge
+are absent from the current source and generated test map.
+
 ## Reproducibility and addendum methodology
 
 T003 used a literal source matcher followed by Fact/Theory source-method enumeration. Expected result: 49 matched source files, 40 xUnit-bearing files, 9 support-only files, 299 direct-token rows. Parameterized display variants are represented by their one source method.

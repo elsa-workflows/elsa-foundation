@@ -18,7 +18,6 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Reconciliation\Elsa.Workflows.Runtime.Reconciliation.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Elsa.Workflows.Runtime.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
     <!-- Shared runtime execution harness: US1's acceptance scenarios require a real engine that actually runs
          what the importer activated, not a recording double. -->
     <ProjectReference Include="..\..\..\..\Activities\Testing\Elsa.Activities.Testing.csproj" />

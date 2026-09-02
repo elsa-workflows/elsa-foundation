@@ -1,5 +1,5 @@
 using Elsa.Attention.Core;
-using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Models;

@@ -1,7 +1,7 @@
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
-using Elsa.Persistence.Core;
-using Elsa.Persistence.Core.DependencyInjection;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -20,7 +20,7 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// suspended workflows at their due time through the existing bookmark-resume dispatcher.
 /// </summary>
 /// <remarks>
-/// Compose this together with a durable runtime persistence provider (e.g. the Groundwork SQLite or Unified
+/// Compose this together with a durable runtime persistence provider (e.g. the Groundwork SQLite or Workbench
 /// feature) to make a <c>Delay</c> survive a restart; without a durable store the pump still runs but timers
 /// live only in memory. The pump is delivered as an <see cref="IRecurringTask"/>, so it depends on the Tasks
 /// feature for its execution lifecycle. The runtime API feature must also be composed — the pump resolves

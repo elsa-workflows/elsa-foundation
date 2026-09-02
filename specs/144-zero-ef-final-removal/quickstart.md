@@ -683,6 +683,34 @@ changed in response to the failing run.
 
 No database-server container, provider suite, or performance run was started in this checkpoint.
 
+### 2026-09-01 Identity EF deletion slice (#1482)
+
+Issue [#1482](https://github.com/elsa-workflows/elsa-foundation/issues/1482) removes the Elsa
+ASP.NET Core Identity EF leaf from the current source. The project, migrations, stores, design-time
+factory, frozen oracle baseline/ratchet, and `EfCoreIdentityStoreTests` are deleted together. The
+Identity API and ASP.NET Core Identity fixtures now compose `IdentityV2TestPersistence` and
+`AddFoundationAspNetCoreIdentityGroundwork`; the OpenIddict vendor EF context remains in the tests
+and Workbench as required by ADR 0042.
+
+The temporary `ef-core-surface.json` scoreboard was refreshed in the same slice and passes its
+shrink-only ratchet. Current counts are: 7 EF projects, 13 direct package edges, 8 central package
+versions, 17 direct project edges, 19 static transitive project consumers, 40 static transitive
+package consumers, 78 restored package consumers, 5 migrations, 9 contexts, 25 registrations, and
+1 host configuration entry. These remaining entries are outside #1482's Identity scope.
+
+Container-free evidence for this slice:
+
+- `dotnet restore Elsa.Server.slnx --nologo` — passed (known NU1903 SSH.NET warning remains).
+- `dotnet build tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj --no-restore --nologo` — passed with no errors.
+- Focused Identity test run — 71 passed, 0 skipped, 0 failed after the Groundwork fixture conversion; the permission-shell assertion accepts the host's valid 401/403 authentication failure contract.
+- `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj --no-build --nologo --filter FullyQualifiedName~EfCoreSurfaceRatchetTests.Ef_core_surface_matches_the_reviewed_shrink_only_baseline` — passed.
+- Generated-map check after refresh — passed; the refreshed test, feature, package, project, domain, and finding maps no longer list deleted Identity EF files.
+
+This is an explicitly scoped deletion slice, not the completion of spec 144. Issue #646 remains open
+without an accepted final performance verdict, so T011 and the final absolute-zero/permanent-guard
+tasks remain open. No diagnostics EF project, OpenIddict vendor EF boundary, generic EF kernel, or
+sibling Plasma slice was changed by this implementation.
+
 #### Phase-2 currency re-verification (2026-08-13, required by the re-entry condition)
 
 Re-verified at the post-refactor head. **No gate opened; no task is checked by this note.**

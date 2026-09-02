@@ -1,9 +1,14 @@
 # Contract: Identity Test-Objective Ledger
 
+> **Retirement amendment (2026-09-01):** The temporary ASP.NET Core Identity EF oracle and its
+> `EfCoreIdentityStoreTests` were retired by issue [#1482](https://github.com/elsa-workflows/elsa-foundation/issues/1482).
+> The EF-named rows below are historical pre-retirement provenance; current replacement evidence and
+> the deletion reconciliation live in [spec 144's retention ledger](../../144-zero-ef-final-removal/test-retention-ledger.md).
+
 ## Rule
 
-The EF project remains a source-only frozen temporary oracle. Frozen means no new EF behavior, schema,
-migration, package, dependency edge, or test objective. The 2026-08-17 project-owner direction is an
+The former EF project was a source-only frozen temporary oracle until issue #1482 retired it. Frozen
+means no new EF behavior, schema, migration, package, dependency edge, or test objective. The 2026-08-17 project-owner direction is an
 explicit clean break: every still-valid behavior gains a public-v2 replacement, while v1 storage-shape,
 unconditional-upsert, migration, fallback, alias, and compatibility objectives are retired. The exact
 25-objective replacement denominator is enforced by `AspNetCoreIdentityV2AcceptanceCatalog`; provider

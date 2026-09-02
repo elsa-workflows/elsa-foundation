@@ -1,9 +1,15 @@
-using Elsa.Persistence.Groundwork.MongoDb.Unified.DependencyInjection;
-using Elsa.Persistence.Groundwork.ReferenceComposition;
+using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Persistence.Groundwork.UnifiedHost.Tests;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
+using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
+using Groundwork.MongoDb;
+using MongoDB.Driver;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -21,7 +27,14 @@ public sealed class MongoDbUnifiedGroundworkHostTests(MongoDbReplicaSetFixture f
             .AddLogging()
             .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
             .AddSingleton<ISystemClock, FakeSystemClock>();
-        services.AddGroundworkMongoDbUnifiedPersistence(connectionString, databaseName);
+        services
+            .AddGroundworkStorageProviderConnection(_ => new MongoProviderFactory().Create(
+                new MongoUrlBuilder(connectionString) { DatabaseName = databaseName }.ToString()))
+            .AddGroundworkV2RuntimeStores()
+            .AddGroundworkDistributedRuntimeStores()
+            .AddGroundworkWorkflowsDesignStores()
+            .AddGroundworkActivitiesDesignStores()
+            .AddGroundworkPublishingStores();
 
         var provider = services.BuildServiceProvider();
         await provider.InitializeGroundworkStoreAsync();

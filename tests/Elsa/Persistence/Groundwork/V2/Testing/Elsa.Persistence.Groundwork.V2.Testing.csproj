@@ -9,13 +9,13 @@
     <PackageReference Include="Groundwork.Kernel" />
     <PackageReference Include="Groundwork.Query.Model" />
     <PackageReference Include="Groundwork.Store" />
-    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.4.0-preview.3" />
-    <PackageReference Include="Groundwork.Testing" VersionOverride="0.4.0-preview.3" />
+    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.4.0-preview.5" />
+    <PackageReference Include="Groundwork.Testing" VersionOverride="0.4.0-preview.5" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\V2\Elsa.Persistence.Groundwork.V2.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
 
 </Project>

@@ -38,11 +38,11 @@ The composition root registers only sources belonging to selected features. Runt
 - Keep a global store and prefix document IDs: rejected because point reads, queries, mutations, and units of work can still cross scope.
 - Put a mutable ambient scope on the singleton: rejected because cancellation, async flow, pooling, and concurrent requests can leak state.
 
-## Decision 4: Add a provider-neutral persistence-scope contract in `Elsa.Persistence.Core`
+## Decision 4: Place provider-neutral persistence-scope contracts with runtime store contracts
 
-**Decision**: Define the small provider-neutral scope/access context in the existing `Elsa.Persistence.Core` package. Groundwork adapters map tenant scope to `StorageScope` and `DocumentStoreAccess.Scoped`; explicitly global storage maps to `DocumentStoreAccess.Global`; privileged operations are classified independently, require a named Elsa capability/purpose, and map to the appropriate privileged access kind. Manifests become tenant-scoped by default.
+**Decision**: Define the small provider-neutral scope/access context in `Elsa.Workflows.Runtime.Core`, alongside the runtime `I*Store` contracts that consume it. Groundwork adapters map tenant scope to `StorageScope` and `DocumentStoreAccess.Scoped`; explicitly global storage maps to `DocumentStoreAccess.Global`; privileged operations are classified independently, require a named Elsa capability/purpose, and map to the appropriate privileged access kind. Manifests become tenant-scoped by default.
 
-Domain contracts that already carry a tenant use that explicit value and verify it agrees with the active scope. Contracts without a tenant use the scoped accessor. A single-tenant host registers a nonblank default scope (the default literal is `default`); a null/absent tenant never means global. Global and cross-scope operations are individually classified in the ledger. No Groundwork type appears in `Elsa.Persistence.Core` or domain core projects.
+Domain contracts that already carry a tenant use that explicit value and verify it agrees with the active scope. Contracts without a tenant use the scoped accessor. A single-tenant host registers a nonblank default scope (the default literal is `default`); a null/absent tenant never means global. Global and cross-scope operations are individually classified in the ledger. No Groundwork type appears in `Elsa.Workflows.Runtime.Core` or domain core projects.
 
 **Rationale**: A coherent provider-neutral persistence concern already exists and is narrower than `Elsa.Primitives`. Scope must cover loads, saves, deletes, queries, mutations, and UoW acquisition rather than only tenant-filtered queries.
 
@@ -207,7 +207,7 @@ evidence or invalid-objective rationale, named architect, decision, and date.
 ## Primary Affected Paths
 
 - `Directory.Packages.props`
-- `src/Elsa/Persistence/Core/`
+- `src/Elsa/Workflows/Runtime/Core/`
 - `src/Elsa/Persistence/Groundwork/Scoping/GroundworkStoreSessionSource.cs`
 - `src/Elsa/Persistence/Groundwork/Unified/GroundworkUnifiedManifest.cs`
 - `src/Elsa/Persistence/Groundwork/{Stores,Querying,Serialization}/`

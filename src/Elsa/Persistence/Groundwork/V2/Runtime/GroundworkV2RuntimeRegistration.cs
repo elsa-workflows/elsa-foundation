@@ -1,5 +1,3 @@
-using Elsa.Persistence.Core;
-using Elsa.Persistence.Core.DependencyInjection;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Workflows.Runtime.Attention;

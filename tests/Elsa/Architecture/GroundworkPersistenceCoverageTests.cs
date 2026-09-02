@@ -285,38 +285,15 @@ public sealed class GroundworkPersistenceCoverageTests
     }
 
     [Fact]
-    public void Unified_groundwork_provider_registration_does_not_select_identity_implicitly()
+    public void Retired_groundwork_provider_composition_projects_are_absent()
     {
-        var providerRegistrations = Directory
-            .EnumerateFiles(Path.Combine(RepoRoot, "src", "Elsa", "Persistence", "Groundwork"), "*UnifiedRegistration.cs", SearchOption.AllDirectories)
-            .Select(path => (Path: Path.GetRelativePath(RepoRoot, path).Replace('\\', '/'), Source: File.ReadAllText(path)))
-            .Where(candidate => candidate.Source.Contains("AddGroundworkIdentityStores", StringComparison.Ordinal))
-            .Select(candidate => candidate.Path)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-
-        Assert.True(
-            providerRegistrations.Length == 0,
-            "Unified Groundwork providers must expose substrate only; Identity must be selected by the explicit ASP.NET Core Identity Groundwork feature. Offending files: " +
-            string.Join(", ", providerRegistrations));
-    }
-
-    [Fact]
-    public void Unified_groundwork_provider_projects_do_not_reference_identity_implementations()
-    {
-        var providerProjects = Directory
+        var retiredProjects = Directory
             .EnumerateFiles(Path.Combine(RepoRoot, "src", "Elsa", "Persistence", "Groundwork"), "*.Unified.csproj", SearchOption.AllDirectories)
-            .Select(path => (Path: Path.GetRelativePath(RepoRoot, path).Replace('\\', '/'), Source: File.ReadAllText(path)))
-            .Where(candidate => candidate.Source.Contains("Foundation\\Identity", StringComparison.Ordinal) ||
-                                candidate.Source.Contains("Foundation/Identity", StringComparison.Ordinal))
-            .Select(candidate => candidate.Path)
+            .Select(path => Path.GetRelativePath(RepoRoot, path).Replace('\\', '/'))
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.True(
-            providerProjects.Length == 0,
-            "Unified Groundwork provider projects must not directly reference Identity implementations. Offending projects: " +
-            string.Join(", ", providerProjects));
+        Assert.Empty(retiredProjects);
     }
 
     [Fact]

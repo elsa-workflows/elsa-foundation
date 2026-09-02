@@ -84,6 +84,10 @@ that opens it, and the schema composed from the lanes bound to it. A host declar
 to a target by name. Since [#1156](https://github.com/elsa-workflows/elsa-foundation/issues/1156) a host may
 declare several, so design data and runtime state can live in different databases:
 
+Provider-specific feature classes and factory selection are host-owned. For example, Workbench defines the
+`GroundworkProviderSqlite` (and equivalent provider) shell features; this persistence assembly only supplies
+the provider-neutral ports and target/lane contracts that those host features compose.
+
 ```jsonc
 "GroundworkProviderSqlite": {},
 "GroundworkTargets": { "Targets": {
@@ -106,47 +110,19 @@ switches to per-target queries with in-memory correlation when they differ.
 
 ### Applying a split host's schema
 
-`Groundwork.Tool` runs in its own process and activates a schema source parameterlessly, so it cannot see
-which lane a host bound where. Export the plan from the composed host and point the tool at it, one target at
-a time:
+The host passes each target name to the provider connection and lane registrations. Startup admission then
+inspects the physical schema for the units selected by that host; missing units and definition drift fail
+before a store is used. Keep transaction-spanning lanes on one target, and apply independent target schemas
+separately through the provider's normal deployment tooling.
 
-```csharp
-provider.WriteGroundworkDeploymentDescriptor("groundwork-targets.json");
-```
-
-```bash
-dotnet tool run groundwork -- apply \
-  --manifest-type Elsa.Persistence.Groundwork.Unified.Composition.GroundworkTargetDeploymentSchema \
-  --manifest-assembly <path>/Elsa.Persistence.Groundwork.Unified.dll \
-  --manifest-option descriptor=groundwork-targets.json \
-  --manifest-option target=authoring \
-  --provider sqlite --connection-env ELSA_DESIGN_CONNECTION
-```
-
-The descriptor is read, never guessed at. The tool refuses when it is missing, unreadable, of an unknown
-format version, silent about the requested target, carrying a manifest identity this build does not derive,
-or no longer accounting for exactly the lanes the host composes. It never falls back to the host-wide union,
-because doing that silently is the over-provisioning this replaces. Re-export the descriptor whenever the
-host's feature composition changes; the last check is what turns a stale one into an error rather than a
-wrong schema.
-
-Unsplit hosts need none of this: with no target named, the descriptor has one `default` entry carrying the
-bare `elsa-documents` identity, and the shipped whole-host deployment sources keep working unchanged.
-
-The unified and runtime-only shell features remain as **presets** that declare one target and bind the
-relevant lanes to it. The provider choice is the host's; runtime and domain code reference only the neutral
-ports.
+The provider choice is the host's; runtime and domain code reference only neutral ports.
 
 | Shell feature | Provider | Scope | Registration |
 |---|---|---|---|
-| `GroundworkRuntimePersistenceSqlite` | SQLite | Runtime only | `SqliteGroundworkRuntimePersistenceShellFeature` |
-| `GroundworkUnifiedPersistenceSqlite` | SQLite | Six provider-level families; Identity explicit | `AddGroundworkSqliteUnifiedPersistence` |
-| `GroundworkRuntimePersistencePostgreSql` | PostgreSQL | Runtime only | `PostgreSqlGroundworkRuntimePersistenceShellFeature` |
-| `GroundworkUnifiedPersistencePostgreSql` | PostgreSQL | Six provider-level families; Identity explicit | `AddGroundworkPostgreSqlUnifiedPersistence` |
-| `GroundworkRuntimePersistenceSqlServer` | SQL Server | Runtime only | `SqlServerGroundworkRuntimePersistenceShellFeature` |
-| `GroundworkUnifiedPersistenceSqlServer` | SQL Server | Six provider-level families; Identity explicit | `AddGroundworkSqlServerUnifiedPersistence` |
-| `GroundworkRuntimePersistenceMongoDb` | MongoDB replica set | Runtime only | `MongoDbGroundworkRuntimePersistenceShellFeature` |
-| `GroundworkUnifiedPersistenceMongoDb` | MongoDB replica set | Six provider-level families; Identity explicit | `AddGroundworkMongoDbUnifiedPersistence` |
+| `GroundworkProviderSqlite` | SQLite | Host-selected provider connection | `AddGroundworkSqliteProvider` |
+| `GroundworkProviderPostgreSql` | PostgreSQL | Host-selected provider connection | `AddGroundworkPostgreSqlProvider` |
+| `GroundworkProviderSqlServer` | SQL Server | Host-selected provider connection | `AddGroundworkSqlServerProvider` |
+| `GroundworkProviderMongoDb` | MongoDB replica set | Host-selected provider connection | `AddGroundworkMongoDbProvider` |
 
 **Optional cross-drain group commit (spec 115).** `AddGroundworkRuntimeGroupCommit(options?)` — called
 after `AddGroundworkRuntimeStores()` — registers a process-wide `RuntimeGroupCommitCoordinator` that folds
@@ -154,19 +130,19 @@ concurrent checkpoint commits contending for the single durable writer into one 
 fsync (`RuntimeGroupCommitOptions.MaxBatchSize`, default 64). Off unless registered; a lone committer is
 never batched, and a failed batch degrades to per-member individual commits.
 
-The unified features share one host-selected provider-neutral manifest snapshot for Runtime, Secrets,
+The host-selected features share one provider-neutral manifest snapshot for Runtime, Secrets,
 Distributed Runtime, Workflows Design, Activities Design, and Publishing. Identity contributes its own
 manifest only when the host explicitly selects it and uses the matching deployment schema.
 `DiagnosticsGroundworkPersistence` is the corresponding atomic host feature for Structured Logs and
 OpenTelemetry: it selects both Groundwork adapters, contributes the combined diagnostics document schema,
-and selects a deployment schema that also exposes the five diagnostic-record streams. The selected unified
-provider leaf supplies the matching `IDiagnosticRecordStoreSessionFactory`; the streams must be applied by
+and selects a deployment schema that also exposes the five diagnostic-record streams. The selected provider
+leaf supplies the matching `IDiagnosticRecordStoreSessionFactory`; the streams must be applied by
 `Groundwork.Tool` before runtime admission when startup auto-apply is disabled. When
-`AutoApplySchemaOnStartup` is enabled, the unified provider also registers a provider-native
+`AutoApplySchemaOnStartup` is enabled, the host provider feature also registers a provider-native
 `IDiagnosticRecordDeploymentApplier`: a `Prepare`-phase initializer creates only missing streams, rejects
 definition drift before mutation, and re-inspects the complete deployment before diagnostics startup.
 SQLite stays the default composition; PostgreSQL is opt-in via
-`shells.json` (e.g. `"GroundworkUnifiedPersistencePostgreSql": { "Options": { "ConnectionString": "Host=…" } }`).
+`shells.json` (for example, enable `GroundworkProviderPostgreSql` alongside the lane features it needs).
 
 **Startup admission — async initialization.** Runtime startup inspects the deployment-applied physical schema
 and publishes immutable provider resources, so it is not done inside the synchronous `ConfigureServices`
@@ -177,13 +153,13 @@ a provider-owned `GroundworkStoreSessionSource`. Each scoped adapter invocation 
 Groundwork session bound to the current provider-neutral `PersistenceAccessContext`; no mutable ambient scope or
 application-wide store instance is retained. The `Prepare` phase guarantees the source is ready before any
 initializer reads it, and both host lifecycles await the initializer before request handling begins. The
-four unified provider registrations and provider shell-feature signatures are unchanged. A
+The provider connection and lane registration signatures are explicit. A
 bare `IServiceProvider` built without a host lifecycle (e.g. some tests) has no hook to run the initializer, so
 it must drive it explicitly before the first provider operation. `IDocumentStore` resolves beforehand as a
 `GroundworkScopedDocumentStore`; its first operation throws a descriptive `InvalidOperationException` until the
 session source is admitted. Resolution itself never blocks or performs provider I/O.
 
-Unified providers register a second `Prepare` initializer at order `1`, after document admission at order `0`.
+The diagnostics host feature registers a second `Prepare` initializer at order `1`, after document admission at order `0`.
 It participates only when the selected deployment source declares diagnostic-record streams. With startup
 auto-apply disabled it performs no mutation and the existing diagnostics admission reports missing streams;
 with auto-apply enabled it calls the provider deployment applier. Runtime diagnostic session factories remain
@@ -295,30 +271,17 @@ projection-state id discriminator), `ProjectionNoun` (error-message family), `It
 validation, and non-publication operations stay its own. Shipped derivations:
 `GroundworkWorkflowTriggerBindingStore`, `GroundworkRecurringTriggerScheduleStore`.
 
-## Writing a Groundwork persistence shell feature (`GroundworkPersistenceShellFeatureBase`)
+## Writing a Groundwork persistence shell feature
 
-The nine Groundwork persistence shell features share their manifest-setting surface through three abstract
-bases in `Elsa.Persistence.Groundwork`, so the wording and defaults of the shared settings cannot drift
-between providers. A new provider or host feature derives from the narrowest fitting base:
+Provider selection and persistence-lane composition are separate host concerns. The Workbench provider
+features derive from `GroundworkProviderFeatureBase` and expose the connection string and optional target;
+they register only the provider-owned `IStorageProviderConnection`. The host then enables the lane features
+it needs, such as `GroundworkWorkflowRuntime` and the workflow/activity design features. The runtime feature
+owns its target and workflow-executable cache settings and calls `AddGroundworkV2RuntimeStores` directly.
 
-- **`GroundworkPersistenceShellFeatureBase`** — the root. Supplies the workflow-executable cache settings
-  (`CacheWorkflowExecutables`, `WorkflowExecutableCacheCapacity`), the protected
-  `CreateWorkflowExecutableCacheOptions()` factory that turns them into `WorkflowExecutableCacheOptions`,
-  and the protected `ValueOrDefault(configured, fallback)` helper for connection-string fallbacks.
-  `ConfigureServices` is abstract; the derived feature owns its registration order.
-- **`GroundworkRuntimePersistenceShellFeatureBase`** — for per-provider runtime-lane features
-  (SQLite / PostgreSQL / SQL Server / MongoDB). Adds the runtime-lane `AutoApplySchemaOnStartup`.
-- **`GroundworkUnifiedPersistenceShellFeatureBase`** — for per-provider unified features. Adds the
-  unified-lane `AutoApplySchemaOnStartup` (its description also covers diagnostic-record streams) and the
-  `ShellFeatureContext` constructor plumbing, exposed as the protected `Context` property.
-
-Provider-specific settings (connection string, MongoDB's `DatabaseName`, SQLite's access-bound store cache)
-stay on the concrete feature. The unified base lives here rather than in
-`Elsa.Persistence.Groundwork.Unified` because that project deliberately keeps a single project reference.
-
-> §E6 R1 naming exception (recorded): the two derived base names run over the four-component budget on
-> purpose, to stay parallel with the nine concrete `<Provider>Groundwork<Lane>PersistenceShellFeature`
-> names that predate the rule.
+New host features should keep provider settings on the provider feature, lane settings on the lane feature,
+and compose the corresponding registration explicitly. This keeps a provider adapter independent of the
+host's choice of runtime, design, publishing, dashboard, or other persistence lanes.
 
 ## Cross-references
 

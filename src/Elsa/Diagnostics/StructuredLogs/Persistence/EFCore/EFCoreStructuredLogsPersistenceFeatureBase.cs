@@ -13,17 +13,11 @@ namespace Elsa.Diagnostics.StructuredLogs.Persistence.EFCore;
 
 /// <summary>
 /// Base persistence feature that swaps the default in-memory <see cref="IStructuredLogStore"/> for the
-/// EF Core-backed <see cref="EfCoreStructuredLogStore"/>. Command/query machinery of the persistence base
-/// is disabled (this is a single append-only table with a bespoke store, not a read-model domain).
+/// EF Core-backed <see cref="EfCoreStructuredLogStore"/>. The store is a single append-only table with
+/// bespoke persistence rather than a read-model domain.
 /// </summary>
 public abstract class EFCoreStructuredLogsPersistenceFeatureBase : EFCorePersistenceShellFeatureBase<StructuredLogsDbContext>
 {
-    protected EFCoreStructuredLogsPersistenceFeatureBase()
-    {
-        UseCommands = false;
-        UseQueries = false;
-    }
-
     /// <summary>
     /// Routes this context's EF Core logging to <see cref="NullLoggerFactory"/>. Without this, every
     /// "Executed DbCommand" the store emits would be captured by the diagnostics <c>ILoggerProvider</c>,

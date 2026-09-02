@@ -17,12 +17,6 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore;
 /// </summary>
 public abstract class EFCoreOpenTelemetryPersistenceFeatureBase : EFCorePersistenceShellFeatureBase<OpenTelemetryDbContext>
 {
-    protected EFCoreOpenTelemetryPersistenceFeatureBase()
-    {
-        UseCommands = false;
-        UseQueries = false;
-    }
-
     protected override Action<IServiceProvider, DbContextOptionsBuilder> DbContextOptionsBuilder { get; set; } =
         (_, builder) => builder.UseLoggerFactory(NullLoggerFactory.Instance);
 

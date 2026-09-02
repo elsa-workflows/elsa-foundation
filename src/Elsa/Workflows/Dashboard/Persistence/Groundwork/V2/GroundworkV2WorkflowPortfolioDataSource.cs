@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
-using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Serialization.Core;

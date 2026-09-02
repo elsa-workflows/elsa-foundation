@@ -6,12 +6,13 @@ using Elsa.Events;
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
-using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Persistence.Groundwork.DesignConformance.Tests;
-using Elsa.Persistence.Groundwork.MongoDb.Unified.DependencyInjection;
-using Elsa.Persistence.Groundwork.ReferenceComposition;
+using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Tasks.Core;
@@ -23,6 +24,7 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Design.Validations;
 using Elsa.Workflows.Design.Validations.Core.Events;
+using Groundwork.MongoDb;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Collections.Concurrent;
@@ -309,7 +311,10 @@ internal sealed class MongoDbDesignPersistenceContractFixture : IDesignPersisten
                 _events));
         services.AddSingleton<IActivityStructureService, EmptyActivityStructureService>();
         services.AddDesignPersistencePublicationDeletionGuard();
-        services.AddGroundworkMongoDbUnifiedPersistence(_connectionString, _databaseName);
+        services.AddGroundworkStorageProviderConnection(_ => new MongoProviderFactory().Create(
+            new MongoDB.Driver.MongoUrlBuilder(_connectionString) { DatabaseName = _databaseName }.ToString()));
+        services.AddGroundworkWorkflowsDesignStores();
+        services.AddGroundworkActivitiesDesignStores();
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
         new ActivitiesDesignReconciliationFeature().ConfigureServices(services);
         services.AddScoped<IEventHandler<DraftValidating>>(

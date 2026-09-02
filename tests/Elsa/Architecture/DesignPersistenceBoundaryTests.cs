@@ -147,7 +147,6 @@ public sealed class DesignPersistenceBoundaryTests
     [InlineData("src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj", true)]
     [InlineData("src/Elsa/Workflows/Design/Persistence/Groundwork/Elsa.Workflows.Design.Persistence.Groundwork.csproj", true)]
     [InlineData("src/Elsa/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj", false)]
-    [InlineData("src/Elsa/Persistence/Core/Elsa.Persistence.Core.csproj", false)]
     public void Groundwork_project_classification_is_correct(string relativePath, bool expected) =>
         Assert.Equal(expected, IsGroundworkProjectPath(relativePath));
 
@@ -155,17 +154,13 @@ public sealed class DesignPersistenceBoundaryTests
     [InlineData("Groundwork.Documents", true)]
     [InlineData("Groundwork", true)]
     [InlineData("Microsoft.Extensions.DependencyInjection", false)]
-    [InlineData("Elsa.Persistence.Core", false)]
+    [InlineData("Elsa.Persistence.EFCore", false)]
     public void Groundwork_package_classification_is_correct(string package, bool expected) =>
         Assert.Equal(expected, IsGroundworkPackage(package));
 
     // ---------------------------------------------------------------------------------------------
-    // Part 2 — complete provider-registration coverage
+    // Part 2 — complete lane-registration coverage and deletion guards
     // ---------------------------------------------------------------------------------------------
-
-    /// <summary>The four Groundwork providers that must each compose the full design surface.</summary>
-    private static readonly IReadOnlySet<string> ExpectedProviders =
-        new HashSet<string>(["Sqlite", "SqlServer", "PostgreSql", "MongoDb"], StringComparer.Ordinal);
 
     /// <summary>
     /// The design registration methods and the tokens each must contain: the lane binding that lets a
@@ -210,52 +205,72 @@ public sealed class DesignPersistenceBoundaryTests
             "src/Elsa/Workflows/Publishing/Persistence/Groundwork/DependencyInjection/GroundworkPublishingStoreRegistration.cs")
     ];
 
-    private const string StoreFamiliesRegistration =
-        "src/Elsa/Persistence/Groundwork/ReferenceComposition/GroundworkUnifiedStoreFamiliesRegistration.cs";
-
     [Fact]
-    public void Exactly_the_four_expected_providers_expose_a_unified_registration()
+    public void Retired_unified_groundwork_surfaces_stay_deleted_and_unreferenced()
     {
-        var providers = DiscoverProviderRegistrations().Keys.ToHashSet(StringComparer.Ordinal);
+        var retiredPaths = new[]
+        {
+            "src/Elsa/Persistence/Groundwork/ReferenceComposition",
+            "src/Elsa/Persistence/Groundwork/Sqlite/Unified",
+            "src/Elsa/Persistence/Groundwork/PostgreSql/Unified",
+            "src/Elsa/Persistence/Groundwork/SqlServer/Unified",
+            "src/Elsa/Persistence/Groundwork/MongoDb/Unified"
+        };
+
+        Assert.All(
+            retiredPaths,
+            path => Assert.False(Directory.Exists(FullPath(path)), $"Retired Groundwork surface still exists: {path}"));
+
+        var forbiddenTokens = new[]
+        {
+            "GroundworkUnifiedPersistence",
+            "GroundworkUnifiedStoreFamilies",
+            "GroundworkSqliteUnifiedPersistence",
+            "GroundworkPostgreSqlUnifiedPersistence",
+            "GroundworkSqlServerUnifiedPersistence",
+            "GroundworkMongoDbUnifiedPersistence",
+            "Elsa.Persistence.Groundwork.ReferenceComposition",
+            "Elsa.Persistence.Groundwork.Sqlite.Unified.",
+            "Elsa.Persistence.Groundwork.PostgreSql.Unified.",
+            "Elsa.Persistence.Groundwork.SqlServer.Unified.",
+            "Elsa.Persistence.Groundwork.MongoDb.Unified."
+        };
+        var activeFiles = new[] { "src", "tests", "benchmarks" }
+            .Select(root => Path.Combine(RepoRoot, root))
+            .Where(Directory.Exists)
+            .SelectMany(root => Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories))
+            .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .Where(file => !file.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+            // These guards contain the retired names as negative-control assertions.
+            .Where(file => !file.EndsWith("DesignPersistenceBoundaryTests.cs", StringComparison.Ordinal))
+            .Where(file => !file.EndsWith("WorkbenchCompositionTests.cs", StringComparison.Ordinal))
+            .Where(file => !file.EndsWith("ArchitectureGuardTests.cs", StringComparison.Ordinal))
+            .Append(FullPath("Elsa.Server.slnx"));
+        var violations = activeFiles
+            .Select(file => (Path: Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/'), Source: File.ReadAllText(file)))
+            .SelectMany(candidate => forbiddenTokens
+                .Where(token => candidate.Source.Contains(token, StringComparison.Ordinal))
+                .Select(token => $"{candidate.Path}: {token}"))
+            .ToArray();
 
         Assert.True(
-            providers.SetEquals(ExpectedProviders),
-            "The set of Groundwork provider unified registrations drifted from the four design-covered " +
-            $"providers. Expected [{string.Join(", ", ExpectedProviders.Order())}], found " +
-            $"[{string.Join(", ", providers.Order())}]. A new provider must compose the design families " +
-            "(and this roster updated); a removed provider must drop out of the design contract.");
+            violations.Length == 0,
+            "Retired Groundwork composition surfaces must not remain in active source, project, test, or solution files:" +
+            Environment.NewLine + string.Join(Environment.NewLine, violations));
     }
 
     [Fact]
-    public void Every_provider_registration_composes_the_design_families_and_a_provider_connection()
+    public void Workbench_composes_provider_and_lanes_without_a_legacy_aggregate()
     {
-        var violations = new List<string>();
-        foreach (var (provider, path) in DiscoverProviderRegistrations().OrderBy(x => x.Key, StringComparer.Ordinal))
-        {
-            var source = ReadSource(path);
-            // Design store set + both design manifest sources arrive through the shared families call.
-            if (!source.Contains("AddGroundworkUnifiedStoreFamilies(", StringComparison.Ordinal))
-                violations.Add($"{provider}: does not call AddGroundworkUnifiedStoreFamilies (design store set + manifest sources).");
-            // Every lane in that set declares v2 units, and the session source admits them at startup against
-            // the target's connection. A preset that composes the lanes but no connection fails at boot.
-            if (!source.Contains("AddGroundworkStorageProviderConnection(", StringComparison.Ordinal))
-                violations.Add($"{provider}: does not open a Groundwork v2 provider connection.");
-        }
+        var program = ReadSource(FullPath("src/Apps/Elsa.Workbench/Program.cs"));
+        var registration = ReadSource(FullPath("src/Apps/Elsa.Workbench/Groundwork/GroundworkProviderRegistration.cs"));
 
-        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
-    }
-
-    // The readiness guard was the v1 document store's: each provider leaf wired a Start-phase validator over
-    // its own admitted schema. Under v2 the storage session source admits every declared unit itself, so the
-    // guard has no separate owner to assert and the per-provider registration it hung off no longer exists.
-
-    [Fact]
-    public void The_shared_store_families_registration_composes_both_design_lanes()
-    {
-        var source = ReadSource(FullPath(StoreFamiliesRegistration));
-
-        Assert.Contains("AddGroundworkWorkflowsDesignStores(", source, StringComparison.Ordinal);
-        Assert.Contains("AddGroundworkActivitiesDesignStores(", source, StringComparison.Ordinal);
+        Assert.Contains("typeof(GroundworkSqliteProviderFeature)", program, StringComparison.Ordinal);
+        Assert.Contains("typeof(GroundworkWorkflowRuntimeFeature)", program, StringComparison.Ordinal);
+        Assert.Contains("typeof(WorkflowsDesignGroundworkPersistenceFeature)", program, StringComparison.Ordinal);
+        Assert.Contains("typeof(ActivitiesDesignGroundworkPersistenceFeature)", program, StringComparison.Ordinal);
+        Assert.Contains("AddGroundworkStorageProviderConnection", registration, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -346,22 +361,6 @@ public sealed class DesignPersistenceBoundaryTests
         Assert.Equal(["IOrphanStore"], FindOrphanReplacements(orphaned));
     }
 
-    /// <summary>
-    /// Negative control: the provider-set assertion must reject both an added and a missing provider,
-    /// proving the roster comparison in
-    /// <see cref="Exactly_the_four_expected_providers_expose_a_unified_registration"/> has teeth.
-    /// </summary>
-    [Fact]
-    public void Provider_set_comparison_rejects_drift()
-    {
-        var extra = new HashSet<string>(ExpectedProviders, StringComparer.Ordinal) { "Cassandra" };
-        var missing = ExpectedProviders.Where(p => p != "MongoDb").ToHashSet(StringComparer.Ordinal);
-
-        Assert.False(extra.SetEquals(ExpectedProviders));
-        Assert.False(missing.SetEquals(ExpectedProviders));
-        Assert.True(ExpectedProviders.SetEquals(new HashSet<string>(ExpectedProviders, StringComparer.Ordinal)));
-    }
-
     // ---------------------------------------------------------------------------------------------
     // Source-scan helpers
     // ---------------------------------------------------------------------------------------------
@@ -382,19 +381,6 @@ public sealed class DesignPersistenceBoundaryTests
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
-    }
-
-    private static readonly Regex ProviderRegistrationPattern =
-        new(@"Groundwork(?<provider>Sqlite|SqlServer|PostgreSql|MongoDb)UnifiedRegistration\.cs$", RegexOptions.Compiled);
-
-    private static Dictionary<string, string> DiscoverProviderRegistrations()
-    {
-        var root = Path.Combine(RepoRoot, "src", "Elsa", "Persistence", "Groundwork");
-        return Directory.EnumerateFiles(root, "Groundwork*UnifiedRegistration.cs", SearchOption.AllDirectories)
-            .Where(path => path.Replace('\\', '/').Contains("/Unified/DependencyInjection/", StringComparison.Ordinal))
-            .Select(path => (path, match: ProviderRegistrationPattern.Match(path.Replace('\\', '/'))))
-            .Where(entry => entry.match.Success)
-            .ToDictionary(entry => entry.match.Groups["provider"].Value, entry => entry.path, StringComparer.Ordinal);
     }
 
     private static string ReadSource(string fullPath) => File.ReadAllText(fullPath);
