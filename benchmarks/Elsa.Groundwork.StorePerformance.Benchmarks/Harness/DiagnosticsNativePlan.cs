@@ -34,18 +34,36 @@ public sealed record DiagnosticsNativeRouteSpec(
 
 /// <summary>
 /// Single source of truth for every scale-bearing diagnostics read executed by the frozen workload.
-/// Unindexed Groundwork routes are intentionally represented with an empty index and are emitted as
-/// blocked evidence; they must never be converted into synthetic index-search claims. No instrument route
-/// is listed because the public <c>IOpenTelemetryStore</c> contract has no instrument-catalog query.
+/// Unindexed/materializing/fanout Groundwork routes are intentionally represented with an empty index and
+/// are emitted as blocked evidence without invoking their unbounded query shape; they must never be
+/// converted into synthetic index-search claims. No instrument route is listed because the public
+/// <c>IOpenTelemetryStore</c> contract has no instrument-catalog query.
 /// </summary>
 public static class DiagnosticsNativePlanContract
 {
+    private const string BlockedPlanMarker = "blocked provider plan:";
     public const string GroundworkAdapter = "groundwork-v2";
     public const string EfAdapter = "ef-diagnostics-oracle";
     public const string EfCorrectnessOnlyRouteContract = "ef-correctness-only-unbounded-resource-routes";
     public const string BlockedRouteContract = "provider-native-routes-blocked";
     public const string GroundworkTable = "elsa_otel_resources_v2";
     public const string EfTable = "TelemetryResources";
+
+    /// <summary>
+    /// Identifies provider-plan failures that are a valid blocked-route outcome. Contract and
+    /// command-binding failures remain hard failures: capture must not turn a changed table, index, or
+    /// predicate into a blocked route and thereby hide schema drift.
+    /// </summary>
+    internal static bool IsExpectedBlockedPlanFailure(PerformanceContractException exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        return exception.Message.Contains(BlockedPlanMarker, StringComparison.Ordinal);
+    }
+
+    private static PerformanceContractException BlockedPlan(
+        DiagnosticsNativeRouteSpec specification,
+        string detail) =>
+        new($"Diagnostics route '{specification.RouteIdentity}' {BlockedPlanMarker} {detail}.");
 
     public static DiagnosticsNativeRouteSpec For(string adapter, string route)
     {
@@ -209,10 +227,10 @@ public static class DiagnosticsNativePlanContract
                 line,
                 @"\b(?:USE\s+)?TEMP(?:ORARY)?\s+B[- ]TREE\b|\bMATERIAL(?:IZE|IZED|IZATION)\b",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)))
-            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' retained a SQLite sort or materialization spill.");
+            throw BlockedPlan(specification, "SQLite sort or materialization spill");
         if (lines.Any(line => System.Text.RegularExpressions.Regex.IsMatch(line, $@"\bSCAN\s+(?:{System.Text.RegularExpressions.Regex.Escape(specification.TableName)}|{System.Text.RegularExpressions.Regex.Escape(specification.TableName.Trim('"'))})\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant) &&
                              !line.Contains("USING INDEX " + specification.IndexName, StringComparison.OrdinalIgnoreCase)))
-            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' retained a SQLite table scan.");
+            throw BlockedPlan(specification, "SQLite table scan");
         if (string.IsNullOrWhiteSpace(specification.IndexName))
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' has no declared provider-native index and is blocked pending a storage redesign.");
         var search = lines.Where(line => line.Contains(specification.TableName, StringComparison.OrdinalIgnoreCase) &&
@@ -233,11 +251,11 @@ public static class DiagnosticsNativePlanContract
                               string.Equals(kind.GetString(), "Materialize", StringComparison.OrdinalIgnoreCase))) ||
             FindObjects(document.RootElement, "Sort Method").Any() ||
             HasSpillMarker(document.RootElement))
-            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' retained a PostgreSQL sort or materialization spill.");
+            throw BlockedPlan(specification, "PostgreSQL sort or materialization spill");
         if (nodes.Any(node => node.TryGetProperty("Node Type", out var kind) &&
                              kind.ValueKind == JsonValueKind.String &&
                              kind.GetString()?.Contains("Seq Scan", StringComparison.OrdinalIgnoreCase) == true))
-            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' retained a PostgreSQL sequential scan.");
+            throw BlockedPlan(specification, "PostgreSQL sequential scan");
         var matches = nodes.Where(node => node.TryGetProperty("Node Type", out var kind) &&
                                           kind.ValueKind == JsonValueKind.String &&
                                           kind.GetString() is "Index Scan" or "Index Only Scan" &&
@@ -264,9 +282,9 @@ public static class DiagnosticsNativePlanContract
                 document.Descendants().Any(element => element.Name.LocalName is "SpillOccurred" or "SpillWarning" or "SpillToTempDb") ||
                 document.Descendants().SelectMany(element => element.Attributes()).Any(attribute =>
                     attribute.Name.LocalName.Contains("Spill", StringComparison.OrdinalIgnoreCase) && IsPositiveFlag(attribute.Value)))
-                throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' retained a SQL Server sort or materialization spill.");
+                throw BlockedPlan(specification, "SQL Server sort or materialization spill");
             if (relops.Any(element => element.Attribute("PhysicalOp")?.Value.Contains("Scan", StringComparison.OrdinalIgnoreCase) == true))
-                throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' retained a SQL Server scan.");
+                throw BlockedPlan(specification, "SQL Server scan");
             var matches = relops.Where(element => element.Attribute("PhysicalOp")?.Value == "Index Seek" &&
                 element.Descendants().Any(objectElement => objectElement.Name.LocalName == "Object" &&
                     objectElement.Attribute("Table")?.Value.Trim('[', ']') == specification.TableName &&
@@ -320,10 +338,10 @@ public static class DiagnosticsNativePlanContract
                                 (value.GetString()?.Contains("SORT", StringComparison.OrdinalIgnoreCase) == true ||
                                  value.GetString()?.Contains("MATERIAL", StringComparison.OrdinalIgnoreCase) == true)) ||
             HasSpillMarker(document.RootElement))
-            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' retained a MongoDB sort or materialization spill.");
+            throw BlockedPlan(specification, "MongoDB sort or materialization spill");
         if (stages.Any(stage => stage.TryGetProperty("stage", out var value) && value.ValueKind == JsonValueKind.String &&
                                 string.Equals(value.GetString(), "COLLSCAN", StringComparison.OrdinalIgnoreCase)))
-            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' retained a MongoDB collection scan.");
+            throw BlockedPlan(specification, "MongoDB collection scan");
         var matches = FindObjects(document.RootElement, "indexName")
             .Where(value => value.TryGetProperty("indexName", out var index) && index.ValueKind == JsonValueKind.String && index.GetString() == specification.IndexName)
             .ToArray();
