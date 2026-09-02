@@ -2,6 +2,7 @@ using Elsa.Groundwork.StorePerformance.AdapterHost;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
+using System.Text.Json;
 
 // The matrix runner spawns this host once per process in a cohort. Every failure path exits non-zero with
 // the contract message on stderr: the runner treats a child that cannot honour its request as a blocked
@@ -12,11 +13,12 @@ try
     return command switch
     {
         "probe-provider" => await ProbeProvider(args),
+        "describe-matrix" => DescribeMatrix(),
         "capture-plan" => await CapturePlan(args),
         "verify-correctness" => await VerifyCorrectness(args),
         "run" => await Run(args),
         _ => throw new PerformanceContractException(
-            $"Unknown adapter-host command '{command}'. Supported: probe-provider, capture-plan, verify-correctness, run.")
+            $"Unknown adapter-host command '{command}'. Supported: describe-matrix, probe-provider, capture-plan, verify-correctness, run.")
     };
 }
 catch (PerformanceContractException exception)
@@ -25,11 +27,43 @@ catch (PerformanceContractException exception)
     return 2;
 }
 
+static int DescribeMatrix()
+{
+    var repositoryRoot = SourceProvenance.FindRepositoryRoot();
+    SourceProvenance.RequireCleanCurrentBuild(
+        repositoryRoot,
+        (typeof(MatrixCatalog).Assembly, "adapter host"),
+        (typeof(SourceProvenance).Assembly, "benchmark harness"));
+    var document = MatrixCatalog.Build(repositoryRoot);
+    Console.WriteLine(JsonSerializer.Serialize(document, ArtifactStore.JsonOptions));
+    return 0;
+}
+
+static RunRequest AdmitCurrentInvocation(string[] args, string command)
+{
+    var request = RunRequestWire.Parse(HostArguments.Require(args, command, "--request"));
+    var repositoryRoot = SourceProvenance.FindRepositoryRoot();
+    SourceProvenance.RequireCleanHead(repositoryRoot, request.CommitSha);
+    SourceProvenance.RequireAssemblyRevision(typeof(MatrixCatalog).Assembly, request.CommitSha, "adapter host");
+    SourceProvenance.RequireAssemblyRevision(typeof(SourceProvenance).Assembly, request.CommitSha, "benchmark harness");
+    return request;
+}
+
+static void AdmitOutput(string[] args, string command) =>
+    ArtifactOutputAdmission.RequireExternal(
+        HostArguments.Require(args, command, "--out"),
+        SourceProvenance.FindRepositoryRoot());
+
 // Reads the provider's own identity off a live connection. ValidateCorrectness binds the observed
 // provider configuration to the requested one entry for entry, so these values must be read rather than
 // guessed — this is the command whose output the operator pastes into capture-plan and matrix.
 static async Task<int> ProbeProvider(string[] args)
 {
+    var repositoryRoot = SourceProvenance.FindRepositoryRoot();
+    SourceProvenance.RequireCleanCurrentBuild(
+        repositoryRoot,
+        (typeof(MatrixCatalog).Assembly, "adapter host"),
+        (typeof(SourceProvenance).Assembly, "benchmark harness"));
     var provider = HostArguments.Require(args, "probe-provider", "--provider");
     var connectionString = ProviderConnections.RequireConnectionString(provider);
     var probe = await ProviderProbe.ReadAsync(provider, connectionString);
@@ -49,7 +83,8 @@ static async Task<int> CapturePlan(string[] args)
     // Admission is deliberately before connection lookup/probing and before staging can create a file.
     // Requests are untrusted JSON: ArtifactAdmission also runs ArtifactSafety.ValidateRequest, which
     // rejects malformed metadata, connection material, and unsafe evidence references at this boundary.
-    CapturePlanAdmission.Ensure(request);
+    outputDirectory = CapturePlanAdmission.Ensure(request, outputDirectory);
+    AdmitCurrentInvocation(args, "capture-plan");
     var connectionString = ProviderConnections.RequireConnectionString(request.Provider);
     var observed = await ProviderProbe.ReadAsync(request.Provider, connectionString);
 
@@ -118,6 +153,10 @@ static async Task<int> CapturePlan(string[] args)
         return 0;
     }
 
+    if (!string.Equals(request.WorkloadId, RuntimeCheckpointCommitWorkload.WorkloadId, StringComparison.Ordinal))
+        throw new PerformanceContractException(
+            $"Native-plan capture dispatch is missing for admitted workload '{request.WorkloadId}'.");
+
     var reference = NativePlanEvidenceStaging.ReferenceFor(request.WorkloadId, request.Provider, request.MeasurementSetId);
     if (!string.Equals(reference, request.NativePlanEvidenceReference, StringComparison.Ordinal))
         throw new PerformanceContractException(
@@ -136,6 +175,8 @@ static async Task<int> CapturePlan(string[] args)
 // ProcessMeasurement then warms and times those same phases without rebuilding their private fixtures.
 static async Task<int> Run(string[] args)
 {
+    AdmitOutput(args, "run");
+    AdmitCurrentInvocation(args, "run");
     var admitted = SecretRunAdmission.ParseAndResolve(
         args,
         "run",
@@ -153,6 +194,8 @@ static async Task<int> Run(string[] args)
 // the workload-owned timed phases after this same baseline has passed.
 static async Task<int> VerifyCorrectness(string[] args)
 {
+    AdmitOutput(args, "verify-correctness");
+    AdmitCurrentInvocation(args, "verify-correctness");
     var admitted = SecretRunAdmission.ParseAndResolve(
         args,
         "verify-correctness",

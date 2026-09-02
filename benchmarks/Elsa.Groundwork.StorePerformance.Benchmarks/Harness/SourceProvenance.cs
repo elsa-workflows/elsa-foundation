@@ -16,9 +16,11 @@ public static class SourceProvenance
 
     public static void RequireCleanHead(string repositoryRoot, string requestedCommitSha)
     {
-        var actualCommitSha = Git(repositoryRoot, "rev-parse", "HEAD").Trim();
+        var actualCommitSha = CurrentHead(repositoryRoot);
         Validate(requestedCommitSha, actualCommitSha, string.IsNullOrWhiteSpace(Git(repositoryRoot, "status", "--porcelain=v1", "--untracked-files=all")));
     }
+
+    public static string CurrentHead(string repositoryRoot) => Git(repositoryRoot, "rev-parse", "HEAD").Trim();
 
     public static void Validate(string requestedCommitSha, string actualCommitSha, bool isClean)
     {
@@ -26,6 +28,45 @@ public static class SourceProvenance
             throw new PerformanceContractException($"matrix --commit must equal the current repository HEAD ({actualCommitSha}).");
         if (!isClean)
             throw new PerformanceContractException("matrix requires a clean repository so retained evidence identifies an exact source snapshot.");
+    }
+
+    public static string AssemblyRevision(Assembly assembly)
+    {
+        ArgumentNullException.ThrowIfNull(assembly);
+        var informationalVersion = assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion;
+        var separator = informationalVersion?.LastIndexOf('+') ?? -1;
+        var revision = separator >= 0 ? informationalVersion![(separator + 1)..] : "";
+        if (revision.Length != 40 || revision.Any(character => character is not (>= '0' and <= '9' or >= 'a' and <= 'f')))
+            throw new PerformanceContractException(
+                $"Assembly '{assembly.GetName().Name}' does not carry an exact source revision.");
+        return revision;
+    }
+
+    public static void ValidateAssemblyRevision(string subject, string assemblyRevision, string requestedCommitSha)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(subject);
+        if (!string.Equals(assemblyRevision, requestedCommitSha, StringComparison.Ordinal))
+            throw new PerformanceContractException(
+                $"The {subject} binary was built from '{assemblyRevision}', not requested commit '{requestedCommitSha}'. Rebuild Release binaries from the clean current source.");
+    }
+
+    public static void RequireAssemblyRevision(Assembly assembly, string requestedCommitSha, string subject) =>
+        ValidateAssemblyRevision(subject, AssemblyRevision(assembly), requestedCommitSha);
+
+    public static string RequireCleanCurrentBuild(
+        string repositoryRoot,
+        params (Assembly Assembly, string Subject)[] assemblies)
+    {
+        var commitSha = CurrentHead(repositoryRoot);
+        Validate(
+            commitSha,
+            commitSha,
+            string.IsNullOrWhiteSpace(Git(repositoryRoot, "status", "--porcelain=v1", "--untracked-files=all")));
+        foreach (var (assembly, subject) in assemblies)
+            RequireAssemblyRevision(assembly, commitSha, subject);
+        return commitSha;
     }
 
     public static string HarnessAssemblySha256()

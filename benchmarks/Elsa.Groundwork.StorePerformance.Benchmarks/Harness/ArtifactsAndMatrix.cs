@@ -373,8 +373,16 @@ public static class ProcessMatrixRunner
             if (run.CommitSha != anchor.CommitSha || run.HarnessAssemblySha256 != anchor.HarnessAssemblySha256)
                 throw new PerformanceContractException("Every planned child must use one exact source snapshot and harness assembly.");
         }
-        SourceProvenance.RequireCleanHead(SourceProvenance.FindRepositoryRoot(), anchor.CommitSha);
+        var repositoryRoot = SourceProvenance.FindRepositoryRoot();
+        outputDirectory = ArtifactOutputAdmission.RequireExternal(outputDirectory, repositoryRoot);
+        SourceProvenance.RequireCleanHead(repositoryRoot, anchor.CommitSha);
         SourceProvenance.RequireHarnessAssembly(anchor.HarnessAssemblySha256);
+        ProviderPackageProvenance.RequireExactCurrent(
+            repositoryRoot,
+            anchor.Adapter,
+            anchor.Provider,
+            anchor.PackageVersions);
+        childCommand = await AdapterChildAdmission.RequireAsync(repositoryRoot, childCommand, anchor, cancellationToken);
         await RunCoreAsync(
             plan,
             outputDirectory,

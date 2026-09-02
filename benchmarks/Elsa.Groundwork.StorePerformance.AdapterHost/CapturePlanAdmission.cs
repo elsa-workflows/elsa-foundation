@@ -11,10 +11,12 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 /// </summary>
 internal static class CapturePlanAdmission
 {
-    public static void Ensure(RunRequest request)
+    public static string Ensure(RunRequest request, string outputDirectory)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var catalog = WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot());
+        var repositoryRoot = SourceProvenance.FindRepositoryRoot();
+        var admittedOutput = ArtifactOutputAdmission.RequireExternal(outputDirectory, repositoryRoot);
+        var catalog = WorkloadCatalog.Load(repositoryRoot);
         var workload = catalog.Workloads.TryGetValue(request.WorkloadId, out var candidate)
             ? candidate
             : throw new PerformanceContractException($"Workload '{request.WorkloadId}' is not in the frozen catalog.");
@@ -22,13 +24,19 @@ internal static class CapturePlanAdmission
             ArtifactAdmission.ValidateEvidenceRequest(workload, request);
         else
             ArtifactAdmission.ValidateRequest(workload, request);
-        if (!string.Equals(request.WorkloadId, RuntimeCheckpointCommitWorkload.WorkloadId, StringComparison.Ordinal) &&
-            !string.Equals(request.WorkloadId, IamNormalizedLookupWorkload.WorkloadId, StringComparison.Ordinal) &&
-            !string.Equals(request.WorkloadId, SecretCreateReadListWorkload.WorkloadId, StringComparison.Ordinal) &&
-            !string.Equals(request.WorkloadId, RuntimeRecoveryScanWorkload.WorkloadId, StringComparison.Ordinal) &&
-            !string.Equals(request.WorkloadId, DiagnosticsDurableHistoryWorkload.WorkloadId, StringComparison.Ordinal))
+        ProviderPackageProvenance.RequireExactCurrent(
+            repositoryRoot,
+            request.Adapter,
+            request.Provider,
+            request.PackageVersions);
+        var registration = BenchmarkAdapterRegistry.Describe().SingleOrDefault(candidate => candidate.Matches(request));
+        if (registration is null)
             throw new PerformanceContractException(
-                "The capture-plan command supports only checkpoint-commit, iam-normalized-lookup-update, secret-create-read-list, recovery-scan, and diagnostics-durable-history.");
+                $"No adapter is registered for capture-plan target '{request.WorkloadId}/{request.WorkloadVersion}/{request.Adapter}/{request.PhysicalForm}/{request.Provider}'.");
+        if (registration.NativePlanCapture == NativePlanCaptureKind.Unsupported)
+            throw new PerformanceContractException(
+                $"Native-plan capture is not implemented for '{request.WorkloadId}/{request.Adapter}/{request.PhysicalForm}'; " +
+                "the matrix remains blocked and no zero-route evidence will be synthesized.");
 
         var expectedReference = NativePlanEvidenceStaging.ReferenceFor(
             request.WorkloadId,
@@ -37,5 +45,6 @@ internal static class CapturePlanAdmission
         if (!string.Equals(request.NativePlanEvidenceReference, expectedReference, StringComparison.Ordinal))
             throw new PerformanceContractException(
                 $"Native-plan evidence must use '{expectedReference}' as --native-plan-evidence; received '{request.NativePlanEvidenceReference}'.");
+        return admittedOutput;
     }
 }

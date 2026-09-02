@@ -415,7 +415,7 @@ public sealed class BenchmarkAdapterRegistryTests
         var exception = Assert.Throws<PerformanceContractException>(() =>
             BenchmarkAdapterRegistry.Create(Request(workloadId, physicalForm, workloadVersion, adapter), "unused", "unused"));
 
-        Assert.Contains("exact workload/adapter/physical form", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("exact workload/version/adapter/physical form/provider", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -424,7 +424,7 @@ public sealed class BenchmarkAdapterRegistryTests
         var exception = Assert.Throws<PerformanceContractException>(() =>
             BenchmarkAdapterRegistry.Create(Request("bookmark-lookup", "document-type-specific-tables", "9.9.9"), "unused", "unused"));
 
-        Assert.Contains("exact workload/adapter/physical form", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("exact workload/version/adapter/physical form/provider", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -434,7 +434,7 @@ public sealed class BenchmarkAdapterRegistryTests
             BenchmarkAdapterRegistry.Create(
                 Request("recovery-scan", RecoveryScanAdapter.PhysicalForm, "1.1.0"), "unused", "unused"));
 
-        Assert.Contains("exact workload/adapter/physical form", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("exact workload/version/adapter/physical form/provider", exception.Message, StringComparison.Ordinal);
     }
 
     private static RunRequest Request(string workloadId, string physicalForm, string workloadVersion = "1.1.0", string adapter = BenchmarkAdapterRegistry.GroundworkV2Adapter) => new(

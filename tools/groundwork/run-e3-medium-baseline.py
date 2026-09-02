@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Validate real #646 plan evidence and run the four E3 medium workload matrices.
+"""Drive #646 evidence phases from the AdapterHost's authoritative matrix catalog.
 
-Measured children record provider-native round trips per invocation. Timed execution
-fails closed if an unrelated build/test runtime is present on the host.
+Correctness, native-plan capture, timed measurement, comparison, and gate evaluation are
+separate commands. Every mutating or timed command is a dry run unless --execute is present.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -19,9 +20,9 @@ from pathlib import Path
 from typing import Any
 
 
-WORKLOADS = ("checkpoint-commit", "bookmark-lookup", "queue-drain", "outbox-drain")
 PROVIDERS = ("sqlite", "postgresql", "sqlserver", "mongodb")
-FORM = "shared-documents-with-linked-index-tables"
+SAFE_IDENTIFIER = re.compile(r"^[A-Za-z0-9._-]+$")
+LOWER_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 
 def repository_root() -> Path:
@@ -39,111 +40,278 @@ def sha256(path: Path) -> str:
 
 def ensure_external(path: Path, root: Path, name: str) -> Path:
     resolved = path.expanduser().resolve()
-    if resolved == root or root in resolved.parents:
-        raise ValueError(f"{name} must live outside the repository worktree: {resolved}")
+    if resolved == root or root in resolved.parents or resolved in root.parents:
+        raise ValueError(f"{name} must be disjoint from the repository worktree: {resolved}")
     return resolved
 
 
 def executable(path: Path) -> Path:
-    if os.name == "nt":
-        path = path.with_suffix(".exe")
-    if not path.is_file():
+    candidate = path.with_suffix(".exe") if os.name == "nt" else path
+    if not candidate.is_file():
         raise ValueError(
-            f"Release adapter host is missing at {path}. Build it once before capturing evidence: "
+            f"Release adapter host is missing at {candidate}. Build it first with: "
             "dotnet build benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/"
             "Elsa.Groundwork.StorePerformance.AdapterHost.csproj -c Release --nologo"
         )
-    return path
+    return candidate
 
 
-def probe_provider(child: Path, provider: str) -> dict[str, Any]:
-    result = subprocess.run(
-        [str(child), "probe-provider", "--provider", provider],
-        check=True,
-        capture_output=True,
-        text=True,
+def release_binaries(root: Path) -> tuple[Path, Path]:
+    child = executable(
+        root / "benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/bin/Release/net10.0/"
+        "Elsa.Groundwork.StorePerformance.AdapterHost"
     )
-    flags: dict[str, Any] = {"settings": {}}
-    for line in result.stdout.splitlines():
-        fields = line.split()
-        if len(fields) == 2 and fields[0] == "--provider-version":
-            flags["provider_version"] = fields[1]
-        elif len(fields) == 2 and fields[0] == "--composition":
-            flags["composition"] = fields[1]
-        elif len(fields) == 2 and fields[0] == "--provider-setting":
-            key, separator, value = fields[1].partition("=")
-            if not separator:
+    harness = (
+        root / "benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/bin/Release/net10.0/"
+        "Elsa.Groundwork.StorePerformance.Benchmarks.dll"
+    )
+    child_harness = child.parent / harness.name
+    if not harness.is_file() or not child_harness.is_file() or sha256(harness) != sha256(child_harness):
+        raise ValueError(
+            "Release harness and AdapterHost harness copies are missing or have different digests; "
+            "build both from the same clean source before capturing evidence"
+        )
+    return child, harness
+
+
+def run_text(command: list[str], *, cwd: Path) -> str:
+    result = subprocess.run(command, cwd=cwd, check=False, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise ValueError(f"{Path(command[0]).name} failed with exit code {result.returncode}")
+    return result.stdout.strip()
+
+
+def strict_json(text: str, source: str) -> Any:
+    def object_without_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        document: dict[str, Any] = {}
+        for name, value in pairs:
+            if name in document:
+                raise ValueError(f"{source} contains duplicate JSON property '{name}'")
+            document[name] = value
+        return document
+
+    try:
+        return json.loads(text, object_pairs_hook=object_without_duplicates)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"{source} contains invalid JSON: {error}") from error
+
+
+def matrix_catalog(root: Path, child: Path) -> dict[str, Any]:
+    try:
+        output = run_text([str(child), "describe-matrix"], cwd=root)
+    except ValueError as error:
+        raise ValueError(
+            "AdapterHost describe-matrix failed; rebuild the Release AdapterHost and harness from current HEAD"
+        ) from error
+    document = strict_json(output, "AdapterHost describe-matrix")
+    if document.get("SchemaVersion") != 2 or not isinstance(document.get("Registrations"), list):
+        raise ValueError("AdapterHost describe-matrix did not emit the schema-v2 registration catalog")
+    revision = source_provenance(root)
+    build = document.get("Build")
+    if not isinstance(build, dict) or build.get("AdapterHostRevision") != revision or build.get("HarnessRevision") != revision:
+        raise ValueError(
+            "Release AdapterHost and benchmark harness must both be rebuilt from the clean current repository HEAD"
+        )
+    return document
+
+
+def select_registration(catalog: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+    matches = [
+        item
+        for item in catalog["Registrations"]
+        if item.get("WorkloadId") == args.workload
+        and item.get("Adapter") == args.adapter
+        and item.get("PhysicalForm") == args.form
+        and args.provider in item.get("Providers", [])
+    ]
+    if len(matches) != 1:
+        raise ValueError(
+            "no unique current registration matches "
+            f"{args.workload}/{args.adapter}/{args.form}/{args.provider}; run the status command"
+        )
+    return matches[0]
+
+
+def probe_provider(root: Path, child: Path, provider: str) -> dict[str, Any]:
+    output = run_text([str(child), "probe-provider", "--provider", provider], cwd=root)
+    probe: dict[str, Any] = {"settings": {}}
+    for line in output.splitlines():
+        name, separator, value = line.partition("=")
+        if not separator:
+            raise ValueError(f"probe-provider emitted a malformed line: {line}")
+        if name == "provider":
+            probe["provider"] = value
+        elif name == "connection-type":
+            probe["connection_type"] = value
+        elif name == "provider-version":
+            probe["provider_version"] = value
+        elif name == "provider-topology":
+            probe["topology"] = value
+        elif name == "provider-setting":
+            key, setting_separator, setting_value = value.partition("=")
+            if not setting_separator or not key or not setting_value:
                 raise ValueError("probe-provider emitted a malformed provider setting")
-            flags["settings"][key] = value
-        elif line.startswith("topology"):
-            flags["topology"] = fields[-1]
-    required = ("provider_version", "composition", "topology")
-    missing = [name for name in required if name not in flags]
-    if missing or not flags["settings"]:
-        raise ValueError(f"probe-provider omitted required values: {', '.join(missing) or 'provider settings'}")
-    return flags
+            probe["settings"][key] = setting_value
+    required = ("provider", "connection_type", "provider_version", "topology")
+    missing = [name for name in required if not probe.get(name)]
+    if missing or not probe["settings"]:
+        raise ValueError(
+            f"probe-provider omitted required values: {', '.join(missing) or 'provider settings'}"
+        )
+    if probe["provider"] != provider:
+        raise ValueError(f"probe-provider returned '{probe['provider']}' for requested provider '{provider}'")
+    return probe
 
 
-def groundwork_packages(root: Path) -> dict[str, str]:
-    versions: dict[str, str] = {}
+def provider_packages(root: Path, registration: dict[str, Any], provider: str) -> dict[str, str]:
+    central_versions: dict[str, str] = {}
     for element in ET.parse(root / "Directory.Packages.props").getroot().iter():
         if element.tag.rsplit("}", 1)[-1] != "PackageVersion":
             continue
         name = element.attrib.get("Include", "")
-        if name.startswith("Groundwork."):
-            versions[name] = element.attrib.get("Version", "")
-    if not versions or any(not version for version in versions.values()):
-        raise ValueError("Directory.Packages.props does not declare complete Groundwork package provenance")
+        central_versions[name] = element.attrib.get("Version", "")
+
+    names = registration.get("ProviderPackages", {}).get(provider)
+    if not isinstance(names, list) or not names or any(not isinstance(name, str) or not name for name in names):
+        raise ValueError(
+            f"the matrix catalog has no provider package provenance for "
+            f"{registration['Adapter']}/{provider}"
+        )
+
+    versions = {name: central_versions.get(name, "") for name in names}
+    if any(not version for version in versions.values()):
+        missing = ", ".join(name for name, version in versions.items() if not version)
+        raise ValueError(f"Directory.Packages.props does not declare provider package provenance: {missing}")
     return dict(sorted(versions.items()))
 
 
-def workload_contracts(root: Path) -> dict[str, dict[str, Any]]:
-    payload = json.loads(
-        (root / "specs/094-harden-groundwork-stores/workloads/runtime.json").read_text(encoding="utf-8")
-    )
-    return {item["id"]: item for item in payload["workloads"] if item["id"] in WORKLOADS}
+def source_provenance(root: Path) -> str:
+    commit = run_text(["git", "rev-parse", "HEAD"], cwd=root)
+    dirty = run_text(["git", "status", "--porcelain", "--untracked-files=all"], cwd=root)
+    if dirty:
+        raise ValueError("#646 evidence requires a clean repository; commit the exact source first")
+    return commit
 
 
-def validate_document(
-    path: Path,
-    workload: str,
-    provider: str,
-    commit: str,
-    harness_digest: str,
+def host_fingerprint(root: Path, harness: Path) -> str:
+    value = run_text(["dotnet", str(harness), "host-fingerprint"], cwd=root)
+    if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+        raise ValueError("the harness did not emit a lowercase SHA-256 host fingerprint")
+    return value
+
+
+def evidence_reference(args: argparse.Namespace) -> str:
+    return f"{args.workload}.{args.provider}.{args.measurement_set}.native-plan.json"
+
+
+def validate_target_arguments(args: argparse.Namespace) -> None:
+    for name in ("cohort", "measurement_set", "scale"):
+        value = getattr(args, name)
+        if not SAFE_IDENTIFIER.fullmatch(value):
+            raise ValueError(f"--{name.replace('_', '-')} must be a safe identifier")
+    if not LOWER_SHA256.fullmatch(args.composition):
+        raise ValueError("--composition must be a lowercase SHA-256 fingerprint")
+    if args.native_plan_identity and not SAFE_IDENTIFIER.fullmatch(args.native_plan_identity):
+        raise ValueError("--native-plan-identity must be a safe identifier")
+
+
+def request_document(
+    registration: dict[str, Any],
     probe: dict[str, Any],
-    contract: dict[str, Any],
+    args: argparse.Namespace,
+    provenance: dict[str, Any],
+    content_digest: str,
 ) -> dict[str, Any]:
-    try:
-        document = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise ValueError(f"cannot read native-plan evidence {path}: {error}") from error
-    expected = {
-        "SchemaVersion": 2,
-        "WorkloadId": workload,
-        "WorkloadVersion": contract["version"],
-        "Provider": provider,
-        "Adapter": "groundwork",
-        "PhysicalForm": FORM,
-        "Scale": "medium",
-        "CommitSha": commit,
-        "HarnessAssemblySha256": harness_digest,
-        "CompositionFingerprint": probe["composition"],
+    expected_topology = registration["RequiredProviderTopologies"].get(args.provider)
+    if probe["topology"] != expected_topology:
+        raise ValueError(
+            f"live provider topology '{probe['topology']}' does not match current workload topology "
+            f"'{expected_topology}'"
+        )
+    identity = args.native_plan_identity or (
+        f"{args.workload}-{args.provider}-{args.measurement_set}-native-plan"
+    )
+    return {
+        "ComparisonCohortId": args.cohort,
+        "MeasurementSetId": args.measurement_set,
+        "WorkloadId": registration["WorkloadId"],
+        "WorkloadVersion": registration["WorkloadVersion"],
+        "Provider": args.provider,
         "ProviderVersion": probe["provider_version"],
         "ProviderTopology": probe["topology"],
         "ProviderConfiguration": probe["settings"],
-        "Seed": contract["input"]["seed"],
-        "InputFingerprintSha256": contract["input"]["fingerprintSha256"],
+        "Adapter": registration["Adapter"],
+        "PhysicalForm": registration["PhysicalForm"],
+        "Scale": args.scale,
+        "CommitSha": provenance["commit"],
+        "HarnessAssemblySha256": provenance["harness"],
+        "CompositionFingerprint": args.composition,
+        "HostFingerprintSha256": provenance["host"],
+        "PackageVersions": provenance["packages"],
+        "Seed": registration["Seed"],
+        "InputFingerprintSha256": registration["InputFingerprintSha256"],
+        "NativePlanIdentity": identity,
+        "NativePlanEvidenceReference": evidence_reference(args),
+        "NativePlanContentSha256": content_digest,
+        "ProcessKind": 1,
+        "ProcessIndex": 0,
+    }
+
+
+def validate_evidence(
+    path: Path,
+    request: dict[str, Any],
+    registration: dict[str, Any],
+    *,
+    timing: bool,
+) -> dict[str, Any]:
+    try:
+        document = strict_json(path.read_text(encoding="utf-8"), path.name)
+    except OSError as error:
+        raise ValueError(f"cannot read native-plan evidence {path}: {error}") from error
+    expected = {
+        "SchemaVersion": 2,
+        "ComparisonCohortId": request["ComparisonCohortId"],
+        "MeasurementSetId": request["MeasurementSetId"],
+        "WorkloadId": request["WorkloadId"],
+        "WorkloadVersion": request["WorkloadVersion"],
+        "Provider": request["Provider"],
+        "Adapter": request["Adapter"],
+        "PhysicalForm": request["PhysicalForm"],
+        "Scale": request["Scale"],
+        "CommitSha": request["CommitSha"],
+        "HarnessAssemblySha256": request["HarnessAssemblySha256"],
+        "CompositionFingerprint": request["CompositionFingerprint"],
+        "HostFingerprintSha256": request["HostFingerprintSha256"],
+        "ProviderVersion": request["ProviderVersion"],
+        "ProviderTopology": request["ProviderTopology"],
+        "ProviderConfiguration": request["ProviderConfiguration"],
+        "Seed": request["Seed"],
+        "InputFingerprintSha256": request["InputFingerprintSha256"],
+        "Identity": request["NativePlanIdentity"],
     }
     mismatches = [name for name, value in expected.items() if document.get(name) != value]
     if mismatches:
-        raise ValueError(f"{path.name} does not match current provenance: {', '.join(mismatches)}")
+        raise ValueError(f"{path.name} does not match current request provenance: {', '.join(mismatches)}")
+
     routes = document.get("Routes")
-    if not isinstance(routes, list):
-        raise ValueError(f"{path.name} has no Routes array")
-    required_routes = contract["requiredNativeRoutes"]
-    actual_routes = [route.get("RouteIdentity") for route in routes if isinstance(route, dict)]
-    if sorted(actual_routes) != sorted(required_routes) or len(actual_routes) != len(set(actual_routes)):
-        raise ValueError(f"{path.name} does not contain exactly the required native routes")
+    blocked = document.get("BlockedRoutes")
+    if blocked is None:
+        blocked = []
+    if not isinstance(routes, list) or not isinstance(blocked, list):
+        raise ValueError(f"{path.name} must contain Routes and BlockedRoutes arrays")
+    if any(not isinstance(route, dict) or not isinstance(route.get("RouteIdentity"), str) for route in routes):
+        raise ValueError(f"{path.name} contains an invalid native route entry")
+    if any(not isinstance(route, str) or not route for route in blocked):
+        raise ValueError(f"{path.name} contains an invalid blocked route identity")
+    route_names = [route["RouteIdentity"] for route in routes]
+    required = registration["RequiredNativeRoutes"]
+    if timing and sorted(route_names) != sorted(required):
+        raise ValueError(f"{path.name} does not capture every required native route for timing")
+    if sorted(route_names + blocked) != sorted(required):
+        raise ValueError(f"{path.name} does not account for every required route as captured or blocked")
+    if len(route_names + blocked) != len(set(route_names + blocked)):
+        raise ValueError(f"{path.name} contains duplicate captured/blocked route identities")
     for route in routes:
         reference = route.get("RawPlanReference")
         expected_digest = route.get("RawPlanSha256")
@@ -155,155 +323,219 @@ def validate_document(
     return document
 
 
-def matrix_command(
-    root: Path,
-    child: Path,
-    output: Path,
-    provider: str,
-    document: dict[str, Any],
-    packages: dict[str, str],
-    evidence_path: Path,
-) -> list[str]:
-    harness_project = root / "benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks"
-    command = [
-        "dotnet", "run", "--no-build", "-c", "Release", "--project", str(harness_project), "--",
-        "matrix", "medium",
-        "--cohort", document["ComparisonCohortId"],
-        "--measurement-set", document["MeasurementSetId"],
-        "--workload", document["WorkloadId"],
-        "--provider", provider,
-        "--provider-version", document["ProviderVersion"],
-        "--adapter", "groundwork",
-        "--form", FORM,
-        "--commit", document["CommitSha"],
-        "--composition", document["CompositionFingerprint"],
-        "--native-plan", document["Identity"],
-        "--native-plan-evidence", evidence_path.name,
-        "--native-plan-sha256", sha256(evidence_path),
-        "--out", str(output / document["WorkloadId"]),
-        "--child-command", str(child),
-    ]
-    for name, version in packages.items():
-        command.extend(("--package", f"{name}={version}"))
-    for name, value in sorted(document["ProviderConfiguration"].items()):
-        command.extend(("--provider-setting", f"{name}={value}"))
-    return command
+def require_phase(registration: dict[str, Any], phase: str) -> None:
+    if phase == "capture" and registration["CapturePlanStatus"] == "unsupported":
+        raise ValueError(
+            f"capture is blocked: {registration['CapturePlanReason']} for "
+            f"{registration['WorkloadId']}/{registration['Adapter']}"
+        )
+    if phase == "correctness" and registration["CorrectnessStatus"] != "ready":
+        raise ValueError(
+            f"correctness is blocked: {registration['CorrectnessReason']} for "
+            f"{registration['WorkloadId']}/{registration['Adapter']}"
+        )
+    if phase == "measure" and registration["TimingStatus"] != "ready":
+        raise ValueError(
+            f"timing is blocked: {registration['TimingReason']} for "
+            f"{registration['WorkloadId']}/{registration['Adapter']}"
+        )
 
 
 def require_idle_host() -> None:
-    """Fail closed when unrelated build/test runtimes would contaminate timed samples."""
+    root = repository_root()
     if os.name == "nt":
-        result = subprocess.run(
-            ["tasklist", "/fo", "csv", "/nh"],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        processes = result.stdout.splitlines()
+        processes = run_text(["tasklist", "/fo", "csv", "/nh"], cwd=root).splitlines()
     else:
-        result = subprocess.run(
-            ["ps", "-Ao", "pid=,command="],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        processes = result.stdout.splitlines()
-
+        processes = run_text(["ps", "-Ao", "pid=,command="], cwd=root).splitlines()
+    own_pid = str(os.getpid())
     blocked_tokens = ("dotnet", "msbuild", "vstest", "testhost", "xunit")
-    blocked = [line.strip() for line in processes if any(token in line.lower() for token in blocked_tokens)]
+    blocked = [
+        line.strip()
+        for line in processes
+        if own_pid not in line and any(token in line.lower() for token in blocked_tokens)
+    ]
     if blocked:
         sample = "; ".join(blocked[:5])
         suffix = "" if len(blocked) <= 5 else f"; and {len(blocked) - 5} more"
-        raise ValueError(
-            "timed E3 execution requires an idle host; unrelated build/test processes are active: "
-            + sample
-            + suffix
-        )
+        raise ValueError(f"timed execution requires an idle host; active build/test processes: {sample}{suffix}")
+
+
+def command_text(command: list[str]) -> None:
+    print(shlex.join(command), flush=True)
+
+
+def target_context(args: argparse.Namespace) -> tuple[Path, Path, Path, dict[str, Any], dict[str, Any]]:
+    validate_target_arguments(args)
+    root = repository_root()
+    child, harness = release_binaries(root)
+    registration = select_registration(matrix_catalog(root, child), args)
+    provenance = {
+        "commit": source_provenance(root),
+        "harness": sha256(harness),
+        "host": host_fingerprint(root, harness),
+        "packages": provider_packages(root, registration, args.provider),
+    }
+    return root, child, harness, registration, provenance
+
+
+def status(args: argparse.Namespace) -> int:
+    root = repository_root()
+    child, _ = release_binaries(root)
+    catalog = matrix_catalog(root, child)
+    if args.json:
+        print(json.dumps(catalog, indent=2))
+        return 0
+    print("workload\tversion\tadapter\tform\tproviders\tcapture\tcorrectness\ttiming\treason")
+    for item in catalog["Registrations"]:
+        print("\t".join([
+            item["WorkloadId"], item["WorkloadVersion"], item["Adapter"], item["PhysicalForm"],
+            ",".join(item["Providers"]), item["CapturePlanStatus"], item["CorrectnessStatus"],
+            item["TimingStatus"], item["TimingReason"],
+        ]))
+    return 0
+
+
+def capture(args: argparse.Namespace) -> int:
+    root, child, _, registration, provenance = target_context(args)
+    require_phase(registration, "capture")
+    evidence = ensure_external(args.evidence_dir, root, "--evidence-dir")
+    probe = probe_provider(root, child, args.provider)
+    request = request_document(registration, probe, args, provenance, "0" * 64)
+    command = [str(child), "capture-plan", "--request", json.dumps(request, separators=(",", ":")), "--out", str(evidence)]
+    command_text(command)
+    if args.execute:
+        subprocess.run(command, cwd=root, check=True)
+    else:
+        print("Dry run only. Re-run with --execute to capture provider-native evidence.")
+    return 0
+
+
+def correctness(args: argparse.Namespace) -> int:
+    root, child, _, registration, provenance = target_context(args)
+    require_phase(registration, "correctness")
+    evidence = ensure_external(args.evidence_dir, root, "--evidence-dir")
+    output = ensure_external(args.out, root, "--out")
+    probe = probe_provider(root, child, args.provider)
+    path = evidence / evidence_reference(args)
+    request = request_document(registration, probe, args, provenance, sha256(path))
+    validate_evidence(path, request, registration, timing=False)
+    command = [str(child), "verify-correctness", "--request", json.dumps(request, separators=(",", ":")), "--out", str(output)]
+    command_text(command)
+    if args.execute:
+        environment = os.environ.copy()
+        environment["ELSA_BENCH_NATIVE_PLAN_STAGING"] = str(evidence)
+        subprocess.run(command, cwd=root, env=environment, check=True)
+    else:
+        print("Dry run only. Re-run with --execute to verify correctness; no timing will run.")
+    return 0
+
+
+def measure(args: argparse.Namespace) -> int:
+    root, child, harness, registration, provenance = target_context(args)
+    require_phase(registration, "measure")
+    evidence = ensure_external(args.evidence_dir, root, "--evidence-dir")
+    output = ensure_external(args.out, root, "--out")
+    probe = probe_provider(root, child, args.provider)
+    path = evidence / evidence_reference(args)
+    request = request_document(registration, probe, args, provenance, sha256(path))
+    document = validate_evidence(path, request, registration, timing=True)
+    command = [
+        "dotnet", str(harness), "matrix", args.scale,
+        "--cohort", args.cohort,
+        "--measurement-set", args.measurement_set,
+        "--workload", registration["WorkloadId"],
+        "--provider", args.provider,
+        "--provider-version", probe["provider_version"],
+        "--adapter", registration["Adapter"],
+        "--form", registration["PhysicalForm"],
+        "--commit", request["CommitSha"],
+        "--composition", args.composition,
+        "--native-plan", document["Identity"],
+        "--native-plan-evidence", path.name,
+        "--native-plan-sha256", sha256(path),
+        "--out", str(output),
+        "--child-command", str(child),
+    ]
+    for name, version in request["PackageVersions"].items():
+        command.extend(("--package", f"{name}={version}"))
+    for name, value in sorted(probe["settings"].items()):
+        command.extend(("--provider-setting", f"{name}={value}"))
+    command_text(command)
+    if args.execute:
+        require_idle_host()
+        environment = os.environ.copy()
+        environment["ELSA_BENCH_NATIVE_PLAN_STAGING"] = str(evidence)
+        subprocess.run(command, cwd=root, env=environment, check=True)
+    else:
+        print("Dry run only. Re-run with --execute on an idle host to launch timed measurement.")
+    return 0
+
+
+def compare_or_gate(args: argparse.Namespace) -> int:
+    root = repository_root()
+    child, harness = release_binaries(root)
+    matrix_catalog(root, child)
+    output = ensure_external(args.out, root, "--out")
+    command = ["dotnet", str(harness), args.command, "--out", str(output), "--oracle", args.oracle, "--target", args.target]
+    if args.command == "gate" and args.replacement:
+        command.extend(("--replacement", str(args.replacement.expanduser().resolve())))
+    command_text(command)
+    if args.execute:
+        subprocess.run(command, cwd=root, check=True)
+    else:
+        print(f"Dry run only. Re-run with --execute to {args.command} retained measurement sets.")
+    return 0
+
+
+def add_target_arguments(parser: argparse.ArgumentParser, *, output: bool) -> None:
+    parser.add_argument("--provider", required=True, choices=PROVIDERS)
+    parser.add_argument("--workload", required=True)
+    parser.add_argument("--adapter", required=True)
+    parser.add_argument("--form", required=True)
+    parser.add_argument("--cohort", required=True)
+    parser.add_argument("--measurement-set", required=True)
+    parser.add_argument("--composition", required=True)
+    parser.add_argument("--native-plan-identity")
+    parser.add_argument("--scale", default="medium")
+    parser.add_argument("--evidence-dir", required=True, type=Path)
+    if output:
+        parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--execute", action="store_true")
+
+
+def parser() -> argparse.ArgumentParser:
+    root = argparse.ArgumentParser(description=__doc__)
+    commands = root.add_subparsers(dest="command", required=True)
+    status_parser = commands.add_parser("status", help="show current registration and phase readiness")
+    status_parser.add_argument("--json", action="store_true")
+    add_target_arguments(commands.add_parser("capture", help="capture provider-native plan evidence"), output=False)
+    add_target_arguments(commands.add_parser("correctness", help="run correctness only"), output=True)
+    add_target_arguments(commands.add_parser("measure", help="run the timed matrix only"), output=True)
+    for name in ("compare", "gate"):
+        phase = commands.add_parser(name, help=f"{name} retained measurement sets")
+        phase.add_argument("--out", required=True, type=Path)
+        phase.add_argument("--oracle", required=True)
+        phase.add_argument("--target", required=True)
+        phase.add_argument("--execute", action="store_true")
+        if name == "gate":
+            phase.add_argument("--replacement", type=Path)
+    return root
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--provider", required=True, choices=PROVIDERS)
-    parser.add_argument("--evidence-dir", required=True, type=Path)
-    parser.add_argument("--out", required=True, type=Path)
-    parser.add_argument("--execute", action="store_true", help="run after validation; otherwise print exact commands")
-    args = parser.parse_args()
-    root = repository_root()
+    args = parser().parse_args()
     try:
-        evidence = ensure_external(args.evidence_dir, root, "--evidence-dir")
-        output = ensure_external(args.out, root, "--out")
-    except ValueError as error:
+        if args.command == "status":
+            return status(args)
+        if args.command == "capture":
+            return capture(args)
+        if args.command == "correctness":
+            return correctness(args)
+        if args.command == "measure":
+            return measure(args)
+        return compare_or_gate(args)
+    except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as error:
         return fail(str(error))
-
-    missing = [
-        f"{workload}.{args.provider}.native-plan.json"
-        for workload in WORKLOADS
-        if not (evidence / f"{workload}.{args.provider}.native-plan.json").is_file()
-    ]
-    if missing:
-        return fail(
-            "required real provider evidence is missing: "
-            + ", ".join(missing)
-            + ". The runner will not synthesize routed plans or round-trip figures. "
-              "Capture provider-native plans first; the AdapterHost capture-plan command currently emits "
-              "routed evidence for SQLite and the routeless checkpoint-commit document."
-        )
-
-    try:
-        child = executable(
-            root / "benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/bin/Release/net10.0/"
-            "Elsa.Groundwork.StorePerformance.AdapterHost"
-        )
-        harness = root / "benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/bin/Release/net10.0/"
-        harness /= "Elsa.Groundwork.StorePerformance.Benchmarks.dll"
-        child_harness = child.parent / harness.name
-        if not harness.is_file() or not child_harness.is_file() or sha256(harness) != sha256(child_harness):
-            raise ValueError("Release harness and AdapterHost harness copies are missing or have different digests; build once, then recapture evidence")
-        commit = subprocess.run(
-            ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True
-        ).stdout.strip()
-        if subprocess.run(
-            ["git", "status", "--porcelain", "--untracked-files=all"],
-            cwd=root,
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout:
-            raise ValueError("the matrix requires a clean repository; commit the exact source before running")
-        probe = probe_provider(child, args.provider)
-        packages = groundwork_packages(root)
-        contracts = workload_contracts(root)
-        commands: list[list[str]] = []
-        for workload in WORKLOADS:
-            path = evidence / f"{workload}.{args.provider}.native-plan.json"
-            document = validate_document(
-                path,
-                workload,
-                args.provider,
-                commit,
-                sha256(harness),
-                probe,
-                contracts[workload],
-            )
-            commands.append(matrix_command(root, child, output, args.provider, document, packages, path))
-    except (ValueError, KeyError, subprocess.CalledProcessError) as error:
-        return fail(str(error))
-
-    environment = os.environ.copy()
-    environment["ELSA_BENCH_NATIVE_PLAN_STAGING"] = str(evidence)
-    for command in commands:
-        print(shlex.join(command), flush=True)
-        if args.execute:
-            try:
-                require_idle_host()
-                subprocess.run(command, cwd=root, env=environment, check=True)
-            except ValueError as error:
-                return fail(str(error))
-            except subprocess.CalledProcessError as error:
-                return fail(f"matrix for {command[command.index('--workload') + 1]} exited {error.returncode}")
-    if not args.execute:
-        print("Validated all four evidence sets. Re-run with --execute to launch the matrices.")
-    return 0
 
 
 if __name__ == "__main__":

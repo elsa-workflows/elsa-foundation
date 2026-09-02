@@ -213,6 +213,36 @@ public sealed class GroundworkPerformanceHandoffTests
         Assert.Equal("benchmark.ready", workload["benchmarkAdmission"]!["reason"]!.GetValue<string>());
     }
 
+    [Fact]
+    public void Operator_runner_uses_the_live_registry_and_keeps_evidence_phases_separate()
+    {
+        var runner = File.ReadAllText(Path.Combine(RepoRoot, "tools", "groundwork", "run-e3-medium-baseline.py"));
+
+        Assert.Contains("describe-matrix", runner, StringComparison.Ordinal);
+        Assert.Contains("AdapterHostRevision", runner, StringComparison.Ordinal);
+        Assert.Contains("HarnessRevision", runner, StringComparison.Ordinal);
+        Assert.DoesNotContain("WORKLOADS =", runner, StringComparison.Ordinal);
+        foreach (var command in new[] { "capture", "correctness", "measure" })
+            Assert.Contains($"commands.add_parser(\"{command}\"", runner, StringComparison.Ordinal);
+        Assert.Contains("for name in (\"compare\", \"gate\")", runner, StringComparison.Ordinal);
+        Assert.Contains("Dry run only", runner, StringComparison.Ordinal);
+        Assert.Contains("require_idle_host()", runner, StringComparison.Ordinal);
+
+        var adapterHost = File.ReadAllText(Path.Combine(
+            RepoRoot,
+            "benchmarks",
+            "Elsa.Groundwork.StorePerformance.AdapterHost",
+            "Program.cs"));
+        var harness = File.ReadAllText(Path.Combine(
+            RepoRoot,
+            "benchmarks",
+            "Elsa.Groundwork.StorePerformance.Benchmarks",
+            "Program.cs"));
+        Assert.Contains("RequireCleanCurrentBuild", adapterHost, StringComparison.Ordinal);
+        Assert.Contains("RequireCleanCurrentBuild", harness, StringComparison.Ordinal);
+        Assert.Contains("RequireWithin", harness, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("blocked")]

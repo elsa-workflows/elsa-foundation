@@ -93,6 +93,53 @@ public sealed class ProtocolAndGateTests
     }
 
     [Fact]
+    public void Binary_revision_is_embedded_and_rejects_a_stale_release_build()
+    {
+        var revision = SourceProvenance.AssemblyRevision(typeof(SourceProvenance).Assembly);
+
+        Assert.Matches("^[0-9a-f]{40}$", revision);
+        SourceProvenance.ValidateAssemblyRevision("benchmark harness", revision, revision);
+        var exception = Assert.Throws<PerformanceContractException>(() =>
+            SourceProvenance.ValidateAssemblyRevision("benchmark harness", revision, new string('f', 40)));
+
+        Assert.Contains("binary was built from", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("Rebuild Release binaries", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Matrix_child_admission_rejects_an_alternate_executable()
+    {
+        var repositoryRoot = SourceProvenance.FindRepositoryRoot();
+
+        var exception = Assert.Throws<PerformanceContractException>(() =>
+            AdapterChildAdmission.RequireCanonicalPath(repositoryRoot, Environment.ProcessPath!));
+
+        Assert.Contains("canonical Release AdapterHost", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Provider_package_provenance_requires_exact_current_names_and_versions()
+    {
+        var repositoryRoot = SourceProvenance.FindRepositoryRoot();
+        var expected = ProviderPackageProvenance.CurrentVersions(repositoryRoot, "groundwork-v2", "sqlite");
+
+        Assert.Equal("0.4.0-preview.6", expected["Groundwork.Sqlite"]);
+        ProviderPackageProvenance.RequireExactCurrent(repositoryRoot, "groundwork-v2", "sqlite", expected);
+        Assert.Throws<PerformanceContractException>(() =>
+            ProviderPackageProvenance.RequireExactCurrent(
+                repositoryRoot,
+                "groundwork-v2",
+                "sqlite",
+                new Dictionary<string, string> { ["Groundwork.Store"] = "0.4.0-preview.6" }));
+        Assert.Throws<PerformanceContractException>(() =>
+            ProviderPackageProvenance.RequireExactCurrent(
+                repositoryRoot,
+                "groundwork-v2",
+                "sqlite",
+                new Dictionary<string, string> { ["Groundwork.Sqlite"] = "0.4.0-preview.5" }));
+    }
+
+    [Fact]
     public async Task Adapter_child_rejects_a_different_host_before_preparation_or_timing()
     {
         var actualHost = HostFingerprint.CaptureSha256();
@@ -637,7 +684,7 @@ public sealed class ProtocolAndGateTests
         fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
         fixture.Bind();
 
-        var exitCode = await BenchmarkCli.RunAsync(
+        var exitCode = await BenchmarkCli.RunForTestAsync(
         [
             "gate",
             "--out", fixture.Directory,
@@ -658,7 +705,7 @@ public sealed class ProtocolAndGateTests
         using var fixture = ArtifactFixture.Create();
         Directory.CreateDirectory(fixture.Directory);
 
-        var exitCode = await BenchmarkCli.RunAsync(
+        var exitCode = await BenchmarkCli.RunForTestAsync(
         [
             "gate",
             "--out", fixture.Directory,
@@ -690,7 +737,7 @@ public sealed class ProtocolAndGateTests
         fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations, transform: At140Milliseconds);
         fixture.Bind();
 
-        var exitCode = await BenchmarkCli.RunAsync(
+        var exitCode = await BenchmarkCli.RunForTestAsync(
         [
             "gate",
             "--out", fixture.Directory,
@@ -715,7 +762,7 @@ public sealed class ProtocolAndGateTests
         fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations);
         fixture.Bind();
 
-        var exitCode = await BenchmarkCli.RunAsync(
+        var exitCode = await BenchmarkCli.RunForTestAsync(
         [
             "gate",
             "--out", fixture.Directory,
@@ -735,7 +782,7 @@ public sealed class ProtocolAndGateTests
         Directory.CreateDirectory(fixture.Directory);
         File.WriteAllText(Path.Combine(fixture.Directory, "artifact-manifest.v2.json"), "{");
 
-        var exitCode = await BenchmarkCli.RunAsync(
+        var exitCode = await BenchmarkCli.RunForTestAsync(
         [
             "gate",
             "--out", fixture.Directory,
@@ -745,6 +792,75 @@ public sealed class ProtocolAndGateTests
 
         Assert.Equal(2, exitCode);
         Assert.Equal((int)PerformanceVerdict.Blocked, ReadGateVerdict(fixture.Directory));
+    }
+
+    [Fact]
+    public async Task Gate_cli_does_not_write_a_fallback_report_inside_the_repository()
+    {
+        var forbidden = Path.Combine(SourceProvenance.FindRepositoryRoot(), $"elsa646-forbidden-{Guid.NewGuid():N}");
+
+        var exitCode = await BenchmarkCli.RunForTestAsync(
+        [
+            "gate",
+            "--out", forbidden,
+            "--oracle", "sqlite/ef/document-type-specific-tables",
+            "--target", "sqlite/groundwork/document-type-specific-tables"
+        ]);
+
+        Assert.Equal(2, exitCode);
+        Assert.False(Directory.Exists(forbidden));
+    }
+
+    [Fact]
+    public async Task Compare_cli_rejects_a_result_path_outside_the_admitted_output()
+    {
+        using var fixture = ArtifactFixture.Create();
+        Directory.CreateDirectory(fixture.Directory);
+        var forbidden = Path.Combine(SourceProvenance.FindRepositoryRoot(), $"elsa646-result-{Guid.NewGuid():N}.json");
+
+        var exitCode = await BenchmarkCli.RunForTestAsync(
+        [
+            "compare",
+            "--out", fixture.Directory,
+            "--oracle", "sqlite/ef/document-type-specific-tables",
+            "--target", "sqlite/groundwork/document-type-specific-tables",
+            "--result", forbidden
+        ]);
+
+        Assert.Equal(2, exitCode);
+        Assert.False(File.Exists(forbidden));
+    }
+
+    [Fact]
+    public async Task Gate_cli_rejects_a_result_symlink_into_the_repository()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        using var fixture = ArtifactFixture.Create();
+        Directory.CreateDirectory(fixture.Directory);
+        var link = Path.Combine(fixture.Directory, "repository-link");
+        Directory.CreateSymbolicLink(link, SourceProvenance.FindRepositoryRoot());
+        var forbiddenName = $"elsa646-result-{Guid.NewGuid():N}.json";
+        try
+        {
+            var exitCode = await BenchmarkCli.RunForTestAsync(
+            [
+                "gate",
+                "--out", fixture.Directory,
+                "--oracle", "sqlite/ef/document-type-specific-tables",
+                "--target", "sqlite/groundwork/document-type-specific-tables",
+                "--comparison-result", Path.Combine(link, forbiddenName)
+            ]);
+
+            Assert.Equal(2, exitCode);
+            Assert.False(File.Exists(Path.Combine(SourceProvenance.FindRepositoryRoot(), forbiddenName)));
+            Assert.True(File.Exists(Path.Combine(fixture.Directory, "gate.v1.json")));
+        }
+        finally
+        {
+            Directory.Delete(link);
+        }
     }
 
     [Fact]

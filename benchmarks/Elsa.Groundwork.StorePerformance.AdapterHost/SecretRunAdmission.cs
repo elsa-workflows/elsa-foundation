@@ -28,7 +28,9 @@ internal static class SecretRunAdmission
 
         var request = RunRequestWire.Parse(HostArguments.Require(args, command, "--request"));
         var outputDirectory = HostArguments.Require(args, command, "--out");
-        var catalog = WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot());
+        var repositoryRoot = SourceProvenance.FindRepositoryRoot();
+        outputDirectory = ArtifactOutputAdmission.RequireExternal(outputDirectory, repositoryRoot);
+        var catalog = WorkloadCatalog.Load(repositoryRoot);
         var workload = catalog.Workloads.TryGetValue(request.WorkloadId, out var candidate)
             ? candidate
             : throw new PerformanceContractException($"Workload '{request.WorkloadId}' is not in the frozen catalog.");
@@ -37,6 +39,11 @@ internal static class SecretRunAdmission
             ArtifactAdmission.ValidateEvidenceRequest(workload, request);
         else
             ArtifactAdmission.ValidateRequest(workload, request);
+        ProviderPackageProvenance.RequireExactCurrent(
+            repositoryRoot,
+            request.Adapter,
+            request.Provider,
+            request.PackageVersions);
         return new AdmittedAdapterRun(
             request,
             outputDirectory,
