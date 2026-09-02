@@ -1,5 +1,6 @@
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
+using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
@@ -85,6 +86,19 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
             Assert.NotSame(scopes.Primary, scopes.Secondary);
             Assert.NotSame(scopes.Primary.OpenTelemetry, scopes.Secondary.OpenTelemetry);
             Assert.NotSame(scopes.Primary.StructuredLogs, scopes.Secondary.StructuredLogs);
+
+            adapter.CommandObserver.ClearCommands();
+            await scopes.Primary.OpenTelemetry.QueryResourcesAsync(
+                new OpenTelemetryResourceFilter { Take = 1 },
+                CancellationToken.None);
+            await scopes.Primary.StructuredLogs.GetRecentAsync(
+                new StructuredLogFilter { MaxCount = 1 },
+                CancellationToken.None);
+
+            Assert.Collection(
+                adapter.CommandObserver.Commands,
+                command => Assert.Contains("elsa_otel_resources_v2", command.CommandText, StringComparison.OrdinalIgnoreCase),
+                command => Assert.Contains("elsa_structured_logs", command.CommandText, StringComparison.OrdinalIgnoreCase));
         }
         finally
         {

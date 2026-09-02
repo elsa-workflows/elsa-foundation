@@ -45,6 +45,7 @@ public sealed class GroundworkOpenTelemetryStore :
     private readonly int instrumentCapacity;
     private readonly int maxQuerySize;
     private readonly TimeProvider timeProvider;
+    private readonly IProviderCommandObserver? commandObserver;
     private long droppedTraces;
     private long droppedSpans;
     private long droppedMetricPoints;
@@ -56,7 +57,8 @@ public sealed class GroundworkOpenTelemetryStore :
         V2OpenTelemetryBinding binding,
         TimeProvider? timeProvider = null,
         IOpenTelemetrySourceRegistry? sourceRegistry = null,
-        IDiagnosticsPersistenceObserver? observer = null)
+        IDiagnosticsPersistenceObserver? observer = null,
+        IProviderCommandObserver? commandObserver = null)
     {
         this.connection = connection ?? throw new ArgumentNullException(nameof(connection));
         ArgumentNullException.ThrowIfNull(options);
@@ -64,6 +66,7 @@ public sealed class GroundworkOpenTelemetryStore :
         binding.Validate();
         this.sourceRegistry = sourceRegistry;
         this.timeProvider = timeProvider ?? TimeProvider.System;
+        this.commandObserver = commandObserver;
         schema = new();
         sessions = new();
         (traceCapacity, spanCapacity, metricPointCapacity, logCapacity, resourceCapacity, instrumentCapacity, maxQuerySize) =
@@ -330,6 +333,7 @@ public sealed class GroundworkOpenTelemetryStore :
                 using var work = connection.BeginUnitOfWork(
                     StorageAccess.Scoped(binding.StorageScope),
                     BatchWriteOptions.Exact,
+                    commandObserver,
                     schema.Units.ToArray());
                 var transaction = V2Sessions.Open(work, schema.Units);
                 var ledgerKey = new StorageKey(new Dictionary<string, object?>
@@ -496,6 +500,7 @@ public sealed class GroundworkOpenTelemetryStore :
                 using var work = connection.BeginUnitOfWork(
                     StorageAccess.Scoped(binding.StorageScope),
                     BatchWriteOptions.Exact,
+                    commandObserver,
                     schema.Unit(V2OpenTelemetryStorageSchema.TraceUnitId),
                     summaryUnit);
                 var traceSession = work.OpenSession(schema.Unit(V2OpenTelemetryStorageSchema.TraceUnitId));
@@ -984,7 +989,7 @@ public sealed class GroundworkOpenTelemetryStore :
                 owner.EnsureRequiredCapabilities();
                 foreach (var unit in owner.schema.Units)
                     connection.Schema.Apply(unit);
-                owner.sessions.Publish(connection, owner.binding);
+                owner.sessions.Publish(connection, owner.binding, owner.commandObserver);
                 var created = new Lease(owner);
                 lock (gate)
                     lease = created;
@@ -1042,11 +1047,14 @@ public sealed class GroundworkOpenTelemetryStore :
             return sessions;
         }
 
-        internal void Publish(IStorageProviderConnection connection, V2OpenTelemetryBinding binding)
+        internal void Publish(
+            IStorageProviderConnection connection,
+            V2OpenTelemetryBinding binding,
+            IProviderCommandObserver? observer)
         {
             var access = StorageAccess.Scoped(binding.StorageScope);
             var units = new V2OpenTelemetryStorageSchemaSet().Units;
-            Bind(units.Select(unit => connection.OpenSession(unit, access)).ToArray());
+            Bind(units.Select(unit => connection.OpenSession(unit, access, observer)).ToArray());
         }
 
         private void Bind(IReadOnlyList<IStorageSession> opened)

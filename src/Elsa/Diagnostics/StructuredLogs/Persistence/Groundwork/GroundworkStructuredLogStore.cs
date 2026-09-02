@@ -44,6 +44,7 @@ public sealed class GroundworkStructuredLogStore :
     private readonly StorageUnit unit;
     private readonly int maxRecentQuerySize;
     private readonly int maxRetainedEntries;
+    private readonly IProviderCommandObserver? commandObserver;
     private readonly DiagnosticsDrain<PendingAppend, StructuredLogEntry> drain;
     private readonly V2StartupResource? startupResource;
     private int disposed;
@@ -75,6 +76,7 @@ public sealed class GroundworkStructuredLogStore :
         unit = session.Unit;
         maxRecentQuerySize = Math.Clamp(options.Value.MaxRecentQuerySize, 1, DefaultMaxRecentQuerySize);
         this.maxRetainedEntries = maxRetainedEntries;
+        commandObserver = null;
         drain = CreateDrain(options.Value, retentionInterval, observer);
     }
 
@@ -88,7 +90,8 @@ public sealed class GroundworkStructuredLogStore :
         StructuredLogStoreBinding binding,
         int maxRetainedEntries = 100_000,
         int retentionInterval = 5_000,
-        IDiagnosticsPersistenceObserver? observer = null)
+        IDiagnosticsPersistenceObserver? observer = null,
+        IProviderCommandObserver? commandObserver = null)
     {
         ArgumentNullException.ThrowIfNull(connection);
         ArgumentNullException.ThrowIfNull(options);
@@ -103,6 +106,7 @@ public sealed class GroundworkStructuredLogStore :
         unit = StructuredLogsGroundworkStorageSchema.CreateUnit();
         maxRecentQuerySize = Math.Clamp(options.Value.MaxRecentQuerySize, 1, DefaultMaxRecentQuerySize);
         this.maxRetainedEntries = maxRetainedEntries;
+        this.commandObserver = commandObserver;
         startupResource = new(this, connection);
         drain = CreateDrain(options.Value, retentionInterval, observer);
     }
@@ -550,7 +554,8 @@ public sealed class GroundworkStructuredLogStore :
                 connection.Schema.Apply(owner.unit);
                 var opened = connection.OpenSession(
                     owner.unit,
-                    StorageAccess.Scoped(StructuredLogsGroundworkStorageSchema.ScopeFor(owner.binding)));
+                    StorageAccess.Scoped(StructuredLogsGroundworkStorageSchema.ScopeFor(owner.binding)),
+                    owner.commandObserver);
                 owner.PublishSession(opened);
                 var created = new V2ResourceLease(owner);
                 lock (gate)

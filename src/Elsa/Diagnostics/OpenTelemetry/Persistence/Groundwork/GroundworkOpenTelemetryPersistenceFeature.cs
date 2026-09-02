@@ -2,6 +2,7 @@ using CShells.Features;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.Persistence.Extensions;
+using Groundwork.Kernel;
 using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -39,7 +40,8 @@ public class GroundworkOpenTelemetryPersistenceFeature : IShellFeature
                     serviceProvider.GetRequiredService<IOptions<OpenTelemetryDiagnosticsOptions>>(),
                     serviceProvider.GetRequiredService<V2OpenTelemetryBinding>(),
                     sourceRegistry: serviceProvider.GetService<IOpenTelemetrySourceRegistry>(),
-                    observer: serviceProvider.GetService<Elsa.Diagnostics.Persistence.Observability.IDiagnosticsPersistenceObserver>())));
+                    observer: serviceProvider.GetService<Elsa.Diagnostics.Persistence.Observability.IDiagnosticsPersistenceObserver>(),
+                    commandObserver: serviceProvider.GetService<IProviderCommandObserver>())));
         }
         services.AddDiagnosticsPersistenceLifecycle<GroundworkOpenTelemetryStore>();
     }

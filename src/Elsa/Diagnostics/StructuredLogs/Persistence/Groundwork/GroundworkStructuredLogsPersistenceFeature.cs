@@ -4,6 +4,7 @@ using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Core.Options;
 using Elsa.Diagnostics.StructuredLogs.Storage;
+using Groundwork.Kernel;
 using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -36,7 +37,8 @@ public class GroundworkStructuredLogsPersistenceFeature :
                     serviceProvider.GetRequiredService<IStorageProviderConnection>(),
                     serviceProvider.GetRequiredService<IOptions<StructuredLogsOptions>>(),
                     serviceProvider.GetRequiredService<StructuredLogStoreBinding>(),
-                    observer: serviceProvider.GetService<Elsa.Diagnostics.Persistence.Observability.IDiagnosticsPersistenceObserver>())));
+                    observer: serviceProvider.GetService<Elsa.Diagnostics.Persistence.Observability.IDiagnosticsPersistenceObserver>(),
+                    commandObserver: serviceProvider.GetService<IProviderCommandObserver>())));
         }
         services.AddDiagnosticsPersistenceLifecycle<GroundworkStructuredLogStore>();
     }
