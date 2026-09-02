@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
@@ -47,9 +46,7 @@ internal static class BenchmarkCompositionFingerprint
         var features = selection.Features
             .Select(feature => feature with
             {
-                StorageUnitIds = units
-                    .Where(unit => feature.StorageUnitIds.Contains(unit.UnitId, StringComparer.Ordinal))
-                    .Select(unit => unit.UnitId)
+                StorageUnitIds = feature.StorageUnitIds
                     .Order(StringComparer.Ordinal)
                     .ToArray()
             })
@@ -177,7 +174,7 @@ internal static class BenchmarkCompositionFingerprint
     {
         [JsonIgnore]
         public string Fingerprint => Convert.ToHexString(SHA256.HashData(
-                Encoding.UTF8.GetBytes(JsonSerializer.Serialize(this, ArtifactStore.JsonOptions))))
+                JsonSerializer.SerializeToUtf8Bytes(this, ArtifactStore.JsonOptions)))
             .ToLowerInvariant();
 
         public void Validate()
