@@ -170,6 +170,20 @@ public sealed class ExecutionCommandTransportContractTests
     }
 
     [Fact]
+    public async Task LeaseContinuesPastAnInvisiblePrefixToFillTheRequestedBatch()
+    {
+        await using var harness = await DistributedStoreHarness.CreateAsync(DistributedStoreHarness.GroundworkSqlite);
+        for (var index = 0; index < 6; index++)
+            await harness.Transport.SendAsync(ExecutionId, Envelope($"env-{index:D2}"), Now);
+
+        var first = await harness.Transport.LeaseAsync(ExecutionId, NodeA, Now, LeaseDuration, 3);
+        Assert.Equal([1L, 2L, 3L], first.Select(item => item.Sequence));
+
+        var replenished = await harness.Transport.LeaseAsync(ExecutionId, NodeB, Now.AddSeconds(1), LeaseDuration, 3);
+        Assert.Equal([4L, 5L, 6L], replenished.Select(item => item.Sequence));
+    }
+
+    [Fact]
     public async Task CancelledLeaseStopsBeforeScanningTheFirstPage()
     {
         await using var harness = await DistributedStoreHarness.CreateAsync(DistributedStoreHarness.GroundworkSqlite);

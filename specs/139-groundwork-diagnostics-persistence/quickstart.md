@@ -510,18 +510,17 @@ only. It does not import a #646 performance verdict, delete either diagnostics
 EF oracle, complete T047/T050-T055/T057, promote a final evidence generation,
 or authorize #642 closure.
 
-## Groundwork 0.4.0-preview.8 candidate pin-alignment checkpoint (unpublished)
+## Groundwork 0.4.0-preview.8 consumption checkpoint
 
 The repository's central package pins, explicit project overrides, diagnostics consumers, and
-release-lifecycle checks are staged for `0.4.0-preview.8`. That Groundwork version is still an
-unpublished release candidate: there is not yet an immutable release tag, production commit, or
-Feedz publication run to cite. Focused restores and tests used a locally packed candidate and prove
-only local compilation and behavior of that candidate. Real SQLite native-plan capture subsequently
-found release-blocking ordinal-identity query and index-shape gaps, so no published-package or final
-compatibility conclusion is claimed here. Existing NU1903 SSH.NET vulnerability warnings remain
-unchanged.
+release-lifecycle checks consume the published `0.4.0-preview.8` family. The immutable
+[`v0.4.0-preview.8`](https://github.com/valence-works/groundwork-v2/releases/tag/v0.4.0-preview.8)
+release targets Groundwork commit `372ea1445485e0a08aa412436d0f3f9253bf0270`; its Feedz publication
+and feed verification workflow completed successfully. Elsa then restored and tested from a fresh
+NuGet cache using that Feedz source. The earlier ordinal-identity query and index-shape findings were
+fixed before publication. Existing NU1903 SSH.NET vulnerability warnings remain unchanged.
 
-This is candidate pin-alignment and focused local evidence only. It does not import a
+This is published-package consumption and focused compatibility evidence only. It does not import a
 #646 performance verdict, promote a new four-provider evidence receipt, delete either diagnostics
 EF oracle, complete T050/T051/T052/T053/T054/T055/T057, or authorize #642 closure. The preview.3
 recertification below remains historical and immutable.

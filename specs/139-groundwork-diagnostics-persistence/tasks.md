@@ -206,16 +206,15 @@
     diagnostic streams while runtime session opening stays read-only. Focused diagnostics,
     adapter, composition, and unified-host gates passed as summarized in `quickstart.md`.
 
-### Groundwork 0.4.0-preview.8 candidate pin-alignment checkpoint (unpublished)
+### Groundwork 0.4.0-preview.8 consumption checkpoint
 
-- Central props and explicit project/script overrides are staged for `0.4.0-preview.8`, but that
-  Groundwork version is not yet published and therefore has no immutable release tag, production
-  commit, or Feedz publication run to cite. Focused restores and tests used a locally packed
-  candidate. Real SQLite native-plan capture then exposed release-blocking ordinal-identity query
-  and index-shape gaps, so this checkpoint makes no published-package or final compatibility claim.
-  Existing NU1903 SSH.NET warnings remain. This is candidate pin-alignment and focused local
-  evidence only, not four-provider promotion, #646 performance evidence, EF deletion, or #642
-  completion.
+- Central props and explicit project/script overrides consume the published
+  [`v0.4.0-preview.8`](https://github.com/valence-works/groundwork-v2/releases/tag/v0.4.0-preview.8)
+  family at Groundwork commit `372ea1445485e0a08aa412436d0f3f9253bf0270`. Its Feedz publication
+  and verification workflow passed, and Elsa restored and tested the family from a fresh NuGet cache.
+  The earlier ordinal-identity query and index-shape findings were fixed before publication. Existing
+  NU1903 SSH.NET warnings remain. This is published-package compatibility evidence only, not
+  four-provider promotion, #646 performance evidence, EF deletion, or #642 completion.
 
 ### Historical exact 0.4.0-preview.3 recertification checkpoint (immutable)
 
