@@ -61,6 +61,35 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
     }
 
     [Fact]
+    public async Task SQLite_scoped_clients_share_the_one_process_connection_but_remain_distinct()
+    {
+        var root = Directory.CreateTempSubdirectory("diagnostics-shared-sqlite-");
+        var connectionString = $"Data Source={Path.Combine(root.FullName, "diagnostics.db")};Mode=ReadWriteCreate;Cache=Shared";
+        try
+        {
+            var observed = await ProviderProbe.ReadAsync("sqlite", connectionString, CancellationToken.None);
+            var request = Request() with
+            {
+                ProviderVersion = observed.Version,
+                ProviderTopology = observed.Topology,
+                ProviderConfiguration = observed.Configuration
+            };
+            await using var adapter = new DiagnosticsDurableHistoryAdapter(request, connectionString, root.FullName);
+
+            await adapter.PrepareAsync(CancellationToken.None);
+            var scopes = await adapter.OpenScopedClientsAsync(CancellationToken.None);
+
+            Assert.NotSame(scopes.Primary, scopes.Secondary);
+            Assert.NotSame(scopes.Primary.OpenTelemetry, scopes.Secondary.OpenTelemetry);
+            Assert.NotSame(scopes.Primary.StructuredLogs, scopes.Secondary.StructuredLogs);
+        }
+        finally
+        {
+            root.Delete(true);
+        }
+    }
+
+    [Fact]
     public void Frozen_sequence_and_native_route_cardinalities_match_the_catalog()
     {
         var workload = WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()).Workloads[

@@ -7,6 +7,7 @@ using Elsa.Diagnostics.StructuredLogs.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
+using Groundwork.Store;
 
 namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 
@@ -31,6 +32,7 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
     private readonly WritePathRoundTripObserver observer = new(request.Provider, captureCommands: true);
     private readonly List<RuntimeStoreComposition> compositions = [];
     private readonly List<DiagnosticsDurableHistoryClient> clients = [];
+    private IStorageProviderConnection? connection;
     private ProviderProbe.Result? observedProvider;
 
     public IProviderRoundTripObserver? RoundTripObserver => observer;
@@ -60,6 +62,7 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
             throw new PerformanceContractException(
                 $"Provider '{request.Provider}' reports version '{observedProvider.Version}', not the requested '{request.ProviderVersion}'.");
 
+        connection = ProviderConnections.Open(request.Provider, connectionString);
         try
         {
             await OpenCompositionAsync("primary", "primary", cancellationToken);
@@ -138,11 +141,19 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
 
     public async ValueTask DisposeAsync()
     {
-        foreach (var composition in compositions.AsEnumerable().Reverse())
-            await composition.DisposeAsync();
-        compositions.Clear();
-        clients.Clear();
-        observedProvider = null;
+        try
+        {
+            foreach (var composition in compositions.AsEnumerable().Reverse())
+                await composition.DisposeAsync();
+        }
+        finally
+        {
+            connection?.Dispose();
+            connection = null;
+            compositions.Clear();
+            clients.Clear();
+            observedProvider = null;
+        }
     }
 
     private async Task OpenCompositionAsync(
@@ -156,6 +167,8 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
             $"{persistenceScope}-{suffix}",
             cancellationToken,
             observer,
+            connection ?? throw new PerformanceContractException(
+                "The diagnostics adapter has no shared provider connection; PrepareAsync must run first."),
             includeGroundworkDiagnostics: true,
             structuredLogBinding: new StructuredLogStoreBinding(
                 TenantFor(bindingScope),
