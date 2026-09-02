@@ -12,7 +12,11 @@ internal static class V2OpenTelemetryCodec
 {
     internal const int MaximumSummaryElementCodeUnits = 512;
     internal const int MaximumSummaryElementCount = 5_000;
-    internal const int MaximumSummaryNameCodeUnits = 1024;
+    // UnicodeOrdinalIgnoreCase search keys expand to at most six ASCII code units per
+    // source code unit. SQL Server's portable ordinary-string ceiling is nvarchar(4000),
+    // so 666 is the largest whole source bound that remains valid on every provider.
+    internal const int MaximumSummaryNameCodeUnits = 666;
+    internal const int MaximumSummaryNameSearchKeyCodeUnits = MaximumSummaryNameCodeUnits * 6;
     internal const int MaximumCanonicalSearchKeyCodeUnits = MaximumSummaryElementCodeUnits * 6;
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)

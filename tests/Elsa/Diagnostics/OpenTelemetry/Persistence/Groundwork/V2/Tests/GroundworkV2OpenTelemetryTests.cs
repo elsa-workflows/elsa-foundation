@@ -49,7 +49,11 @@ public sealed class GroundworkV2OpenTelemetryTests
         Assert.Contains(summaries.Columns, column =>
             column.Name == V2OpenTelemetryStorageSchema.TraceIdSearchKey && column.MaxLength == 1536 && !column.IsNullable);
         Assert.Contains(summaries.Columns, column =>
-            column.Name == V2OpenTelemetryStorageSchema.NameSearchKey && column.MaxLength == 6144 && column.IsNullable);
+            column.Name == V2OpenTelemetryStorageSchema.Name &&
+            column.MaxLength == 666 && column.IsNullable);
+        Assert.Contains(summaries.Columns, column =>
+            column.Name == V2OpenTelemetryStorageSchema.NameSearchKey &&
+            column.MaxLength == 3996 && column.IsNullable);
         Assert.Contains(summaries.Columns, column =>
             column.Name == V2OpenTelemetryStorageSchema.ServiceNames && column.Type == PortableType.Json && !column.IsNullable);
         var order = Assert.Single(summaries.Indexes,
@@ -63,6 +67,32 @@ public sealed class GroundworkV2OpenTelemetryTests
 
         var ledger = Assert.Single(units, unit => unit.Id.Value == V2OpenTelemetryStorageSchema.CaptureLedgerUnitId);
         Assert.Equal("elsa_otel_capture_ledger_v3", ledger.Name);
+    }
+
+    [Fact]
+    public async Task Trace_summary_refuses_names_beyond_the_cross_provider_search_key_bound()
+    {
+        using var database = new TemporarySqliteDatabase();
+        await using var fixture = await OpenStoreAsync(database, start: true);
+        var now = DateTimeOffset.UtcNow;
+        var trace = new TelemetryTrace(
+            "trace-name-bound",
+            null,
+            new string('n', 667),
+            now,
+            now,
+            TimeSpan.Zero,
+            SpanStatus.Ok,
+            ["resource-name-bound"],
+            [],
+            1);
+
+        var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+            await fixture.Store.WriteAsync(
+                DiagnosticsDrainBatchId.New(),
+                new OpenTelemetryBatch([], [trace], [], [], [], [])));
+
+        Assert.Contains("666-code-unit bound", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

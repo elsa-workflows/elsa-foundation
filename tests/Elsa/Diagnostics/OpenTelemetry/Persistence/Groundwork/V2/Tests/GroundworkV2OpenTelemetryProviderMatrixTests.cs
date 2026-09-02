@@ -9,6 +9,7 @@ using Groundwork.Sqlite;
 using Groundwork.SqlServer;
 using Groundwork.Store;
 using Microsoft.Extensions.Options;
+using MongoDB.Driver;
 using Testcontainers.MongoDb;
 using Testcontainers.MsSql;
 using Testcontainers.PostgreSql;
@@ -77,7 +78,10 @@ public sealed class GroundworkV2OpenTelemetryProviderMatrixTests
             {
                 container = new MongoDbBuilder("mongo:7.0.37").Build();
                 await container.StartAsync();
-                configured = container.GetConnectionString();
+                configured = new MongoUrlBuilder(container.GetConnectionString())
+                {
+                    DatabaseName = "elsa_v2_diagnostics_standalone"
+                }.ToString();
             }
 
             using var connection = new MongoProviderFactory().Create(configured!);

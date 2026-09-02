@@ -1102,7 +1102,11 @@ public sealed class GroundworkOpenTelemetryStore :
         internal static ColumnRef TraceKey => Column(V2OpenTelemetryStorageSchema.TraceKey, QueryType.String, false, 64);
         internal static ColumnRef TraceId => Column(V2OpenTelemetryStorageSchema.TraceId, QueryType.String, false, 256);
         internal static ColumnRef TraceIdSearchKey => Column(V2OpenTelemetryStorageSchema.TraceIdSearchKey, QueryType.String, false, 1536);
-        internal static ColumnRef NameSearchKey => Column(V2OpenTelemetryStorageSchema.NameSearchKey, QueryType.String, true, 6144);
+        internal static ColumnRef NameSearchKey => Column(
+            V2OpenTelemetryStorageSchema.NameSearchKey,
+            QueryType.String,
+            true,
+            V2OpenTelemetryCodec.MaximumSummaryNameSearchKeyCodeUnits);
         internal static ColumnRef Status => Column(V2OpenTelemetryStorageSchema.Status, QueryType.Int64, false);
         internal static ColumnRef StartTime => Column(V2OpenTelemetryStorageSchema.StartTime, QueryType.DateTimeOffset, false);
         internal static ColumnRef Name => Column(V2OpenTelemetryStorageSchema.Name, QueryType.String, true);
