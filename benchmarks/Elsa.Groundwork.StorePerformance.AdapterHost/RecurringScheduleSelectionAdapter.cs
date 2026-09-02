@@ -15,7 +15,8 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 internal sealed class RecurringScheduleSelectionAdapter(
     RunRequest request,
     string connectionString,
-    string outputDirectory)
+    string outputDirectory,
+    WritePathRoundTripObserver? commandObserver = null)
     : IBenchmarkAdapter, IRuntimeRecurringScheduleSelectionWorkloadAdapter
 {
     internal const string PhysicalForm = "dedicated-recurring-schedule-documents";
@@ -44,7 +45,8 @@ internal sealed class RecurringScheduleSelectionAdapter(
             request.Provider,
             connectionString,
             persistenceScope,
-            cancellationToken);
+            cancellationToken,
+            commandObserver);
         observedProvider = observed;
         composition = created;
     }

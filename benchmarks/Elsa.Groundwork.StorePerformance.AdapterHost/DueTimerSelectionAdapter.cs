@@ -14,7 +14,8 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 internal sealed class DueTimerSelectionAdapter(
     RunRequest request,
     string connectionString,
-    string outputDirectory)
+    string outputDirectory,
+    WritePathRoundTripObserver? commandObserver = null)
     : IBenchmarkAdapter, IDueTimerSelectionWorkloadAdapter
 {
     internal const string PhysicalForm = "dedicated-durable-timer-documents";
@@ -42,7 +43,8 @@ internal sealed class DueTimerSelectionAdapter(
             request.Provider,
             connectionString,
             persistenceScope,
-            cancellationToken);
+            cancellationToken,
+            commandObserver);
         observedProvider = observed;
         composition = created;
     }

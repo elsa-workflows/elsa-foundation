@@ -438,6 +438,7 @@ public static class ArtifactAdmission
         ValidateIamNativeRoutes(workload, routes);
         ValidateSecretNativeRoutes(workload, routes);
         ValidateRecoveryNativeRoutes(workload, routes);
+        ValidateRuntimeScheduleNativeRoutes(workload, routes);
         ValidateSecretConcurrency(workload, request, nativePlan.ProviderConcurrency);
         if (efCorrectnessOnly && routes.Count != 0)
             throw new PerformanceContractException("The EF diagnostics correctness-only evidence must not claim provider-native bounded routes.");
@@ -492,6 +493,11 @@ public static class ArtifactAdmission
                     File.ReadAllText(rawPlanPath));
             if (string.Equals(workload.Id, RuntimeRecoveryScanWorkload.WorkloadId, StringComparison.Ordinal))
                 RecoveryRetainedNativePlan.Validate(
+                    request.Provider,
+                    route,
+                    File.ReadAllText(rawPlanPath));
+            if (workload.Id is "due-timer-selection" or "recurring-schedule-selection")
+                RuntimeScheduleNativePlan.Validate(
                     request.Provider,
                     route,
                     File.ReadAllText(rawPlanPath));
@@ -614,6 +620,37 @@ public static class ArtifactAdmission
         if (!routeNamesMatch || !routeFactsMatch)
             throw new PerformanceContractException(
                 "Recovery native-plan evidence must contain exactly the four frozen route names and bind physical cardinality 2048, one materialized candidate, and a finite limit of one.");
+    }
+
+    private static void ValidateRuntimeScheduleNativeRoutes(
+        PerformanceWorkload workload,
+        IReadOnlyList<NativeRouteEvidence> routes)
+    {
+        var expectedRoutes = workload.Id switch
+        {
+            "due-timer-selection" => new[] { "list-due" },
+            "recurring-schedule-selection" => new[] { "list-due", "page-by-publication" },
+            _ => null
+        };
+        if (expectedRoutes is null)
+            return;
+
+        if (routes.Count != expectedRoutes.Length ||
+            !routes.Select(route => route.RouteIdentity).Order(StringComparer.Ordinal)
+                .SequenceEqual(expectedRoutes.Order(StringComparer.Ordinal), StringComparer.Ordinal))
+            throw new PerformanceContractException(
+                $"{workload.Id} native-plan evidence must contain exactly its frozen bounded route identities.");
+
+        foreach (var route in routes)
+        {
+            var definition = RuntimeScheduleNativePlan.Definition(workload.Id, route.RouteIdentity);
+            if (route.PhysicalCardinality != definition.PhysicalCardinality ||
+                route.FiniteLimit != definition.FiniteLimit ||
+                route.MaterializedCandidateCount != definition.MaterializedCandidateCount)
+                throw new PerformanceContractException(
+                    $"{workload.Id} route '{route.RouteIdentity}' does not bind its frozen physical cardinality, finite limit, and materialized count.");
+
+        }
     }
 
     private static void ValidateDiagnosticsNativeRoutes(
