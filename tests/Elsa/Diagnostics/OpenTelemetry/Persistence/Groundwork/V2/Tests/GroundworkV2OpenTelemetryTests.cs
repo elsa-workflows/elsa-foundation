@@ -552,6 +552,8 @@ public sealed class GroundworkV2OpenTelemetryTests
         Assert.Single((await fixture.Store.GetTraceAsync("trace-3"))!.Spans);
         Assert.Equal(["point-2", "point-3"], metrics.Points.Select(point => point.Id));
         Assert.Equal(["log-2", "log-3"], (await fixture.Store.QueryLogsAsync(new() { Take = 20 })).Items.Select(log => log.Id));
+        Assert.Equal(["point-3"], (await fixture.Store.QueryMetricsAsync(new() { Take = 1 })).Points.Select(point => point.Id));
+        Assert.Equal(["log-3"], (await fixture.Store.QueryLogsAsync(new() { Take = 1 })).Items.Select(log => log.Id));
         Assert.Equal(["resource-3", "resource-2"], (await fixture.Store.QueryResourcesAsync(new() { Take = 20 })).Items.Select(resource => resource.Id));
     }
 
