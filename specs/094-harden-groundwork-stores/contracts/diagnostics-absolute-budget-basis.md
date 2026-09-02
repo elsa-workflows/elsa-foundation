@@ -1,14 +1,32 @@
 # Proposal: an absolute-budget basis and executable gate for the three oracle-less diagnostics providers
 
-Status: **PROPOSAL — needs an independent reviewer and one first measurement.**
+Status: **EXECUTABLE SHAPE REVIEWED IN PR #1514 — numeric policies still need first measurements and ratification.**
 Proposed by the EF-Core-oracle scoping analysis
 ([`docs/reports/ef-core-oracle-scoping-2026-08.md`](../../../docs/reports/ef-core-oracle-scoping-2026-08.md), PR #1279).
-Reviewer: **unassigned.** Numeric values: **deliberately absent** — see
+Independent reviewer: **#646 control-room review, recorded in PR #1514.** Numeric values:
+**deliberately absent** — see
 [The numbers are not in this document](#the-numbers-are-not-in-this-document).
 
 This document is the **proposal half**, in the same sense as
 [`runtime-absolute-budget-basis.md`](runtime-absolute-budget-basis.md). It authorizes no edit, sets no
 number, and produces no verdict.
+
+## Executable shape decision
+
+The executable implementation decision for this proposal is now recorded in the #646 delivery slice.
+The no-comparand workflow is deliberately separate from the ratio workflow: `MeasurementResult`,
+`AbsoluteBudgetPolicy`, and `AbsoluteBudgetEvaluator` implement `measure` and `budget-gate`, while
+`ComparisonResult`, `GatePolicy`, and `GateEvaluator` remain unchanged. The five proposed budget-bearing
+classes — durable append, bounded read, grouped reduction, exact count, and retention write — plus the
+four explicit `NotHotPath` operations (the two restart observations and the two correctness-only
+operations) are the adopted policy shape. This reverses the earlier 093 omission because diagnostics
+has three providers without an oracle to compare against; it does not authorize numeric values.
+
+Numeric budgets and the first provider measurements remain unratified. Each concrete provider policy
+and its numeric ratification must be recorded on a later #646 pull request or issue before that policy
+or any verdict is merged, and the overall diagnostics gate remains blocked until that evidence exists.
+In particular, p99 and throughput belong only to `AbsoluteBudgetPolicy`; they are not added to the
+existing ratio `GatePolicy`.
 
 **Companion:** [`diagnostics-sqlite-split-basis.md`](diagnostics-sqlite-split-basis.md) covers the SQLite
 half (Route 1) and is a **hard prerequisite** for this one — see
@@ -170,7 +188,7 @@ Additive, but larger than Route 1 by a wide margin.
 
 | # | Change | Location |
 |---:|---|---|
-| 1 | Add `MaxP99Milliseconds` and `MinThroughputPerSecond` to `GatePolicy`, `ReviewedGateReplacement`, and `GateRow`, inherited-on-omission exactly as `MaxP95Milliseconds` already is. | `Harness/Gates.cs:17`, `:57`, `:62` |
+| 1 | ~~Add `MaxP99Milliseconds` and `MinThroughputPerSecond` to the ratio gate types.~~ **Superseded.** Keep p99 and throughput in the separate `AbsoluteBudgetPolicy` path so ratio and no-comparand workflows remain independent. | `Harness/AbsoluteBudgets.cs` |
 | 2 | Add a **measurement** mode to the artifact/comparison layer: one complete four-process measurement set with no comparand, distinct from a `ComparisonResult`. It must keep every existing binding (cohort, machine environment, workload/version/provider/scale/seed/input fingerprint, correctness digest) and drop only the oracle. | `Harness/ArtifactsAndMatrix.cs:498-512` |
 | 3 | Add an absolute-only evaluation path that emits `Pass`/`Redesign` from the three bounds alone, with no ratio terms, and populates rows with measured-vs-budget per operation. | `Harness/Gates.cs:81-119` |
 | 4 | Extend the policy-file loader to carry a **per-provider** budget table keyed by operation class, and reject a file that omits a class the workload's operation sequence contains. Silence on an operation must be an error, not a pass. | `Harness/Gates.cs:65-79` (`GatePolicyFile`) |

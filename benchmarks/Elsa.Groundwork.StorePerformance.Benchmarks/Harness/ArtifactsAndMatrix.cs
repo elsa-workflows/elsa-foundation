@@ -218,7 +218,7 @@ public static class ArtifactStore
         }
     }
     internal static bool IsAllowedResultFile(string name) =>
-        name is "comparison.v1.json" or "comparison.from-gate.v1.json" or "gate.v1.json";
+        name is "comparison.v1.json" or "comparison.from-gate.v1.json" or "gate.v1.json" or "measurement.v1.json" or "budget-gate.v1.json";
     private static bool SafeIdentifier(string value) => Regex.IsMatch(value, "^[A-Za-z0-9._-]+$");
     private static string Safe(string value) => Regex.IsMatch(value, "^[A-Za-z0-9._-]+$") ? value : throw new PerformanceContractException("Artifact identity contains an unsafe path value.");
     internal static void RejectDuplicateProperties(JsonElement value)
@@ -695,7 +695,13 @@ public static class Comparison
     private static ComparisonResult Blocked(string manifestHash, string oracleTarget, string target, RunRequest? request, string reason) =>
         Admitted(new ComparisonResult(1, manifestHash, request?.WorkloadId ?? "", request?.WorkloadVersion ?? "", request?.Provider ?? "", request?.Scale ?? "", oracleTarget, target, false, false, [], [], reason));
 
-    private static TargetValidation ValidateSet(IReadOnlyList<ProcessArtifact> artifacts, WorkloadCatalog catalog, string outputDirectory)
+    internal static TargetValidation ValidateSet(IReadOnlyList<ProcessArtifact> artifacts, WorkloadCatalog catalog, string outputDirectory) =>
+        ValidateSetCore(artifacts, catalog, outputDirectory, allowDiagnosticsAbsoluteBudget: false);
+
+    internal static TargetValidation ValidateSetForAbsoluteMeasurement(IReadOnlyList<ProcessArtifact> artifacts, WorkloadCatalog catalog, string outputDirectory) =>
+        ValidateSetCore(artifacts, catalog, outputDirectory, allowDiagnosticsAbsoluteBudget: true);
+
+    private static TargetValidation ValidateSetCore(IReadOnlyList<ProcessArtifact> artifacts, WorkloadCatalog catalog, string outputDirectory, bool allowDiagnosticsAbsoluteBudget)
     {
         if (artifacts.Count != 4) return TargetValidation.Invalid(null, "A comparison target must include exactly four process artifacts.");
         var anchor = artifacts[0].Request;
@@ -719,7 +725,10 @@ public static class Comparison
         if (!workload.RequiredProviders.Contains(anchor.Provider, StringComparer.Ordinal) ||
             !workload.PhysicalFormsFor646.Contains(anchor.PhysicalForm, StringComparer.Ordinal))
             return TargetValidation.Invalid(anchor, "A comparison target does not match a frozen workload/provider/form contract.");
-        if (BenchmarkAdmissionGuard.TryGetBlockedReason(workload, out var blockedReason))
+        if (BenchmarkAdmissionGuard.TryGetBlockedReason(workload, out var blockedReason) &&
+            !(allowDiagnosticsAbsoluteBudget &&
+              string.Equals(workload.Id, DiagnosticsDurableHistoryWorkload.WorkloadId, StringComparison.Ordinal) &&
+              string.Equals(blockedReason, ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode, StringComparison.Ordinal)))
             return TargetValidation.Invalid(
                 anchor,
                 $"Workload '{workload.Id}' is blocked from benchmark comparison: {blockedReason}.");
@@ -730,7 +739,13 @@ public static class Comparison
         if (artifacts.Any(item => item.Protocol != BenchmarkProtocol.Acceptance || !item.CorrectnessPassed)) return TargetValidation.Invalid(anchor, "A target has incomplete acceptance protocol or correctness evidence.");
         try
         {
-            foreach (var artifact in artifacts) ArtifactAdmission.Validate(workload, artifact, outputDirectory);
+            foreach (var artifact in artifacts)
+            {
+                if (allowDiagnosticsAbsoluteBudget)
+                    ArtifactAdmission.ValidateForAbsoluteMeasurement(workload, artifact, outputDirectory);
+                else
+                    ArtifactAdmission.Validate(workload, artifact, outputDirectory);
+            }
         }
         catch (PerformanceContractException exception)
         {
@@ -747,7 +762,7 @@ public static class Comparison
         return TargetValidation.Validated(anchor, correctness, machine, expectedNames);
     }
 
-    private static bool SameEvidence(CorrectnessEvidence first, CorrectnessEvidence second) =>
+    internal static bool SameEvidence(CorrectnessEvidence first, CorrectnessEvidence second) =>
         first.ObservedResultDigestSha256 == second.ObservedResultDigestSha256 &&
         first.ObservedProviderVersion == second.ObservedProviderVersion &&
         first.ObservedProviderTopology == second.ObservedProviderTopology &&
@@ -757,7 +772,7 @@ public static class Comparison
         first.NativePlan.ContentSha256 == second.NativePlan.ContentSha256 &&
         first.NativePlan.ProviderConcurrency == second.NativePlan.ProviderConcurrency &&
         first.NativePlan.Routes.SequenceEqual(second.NativePlan.Routes);
-    private static IReadOnlyList<ProcessAggregate> Aggregate(IEnumerable<ProcessArtifact> artifacts) => artifacts
+    internal static IReadOnlyList<ProcessAggregate> Aggregate(IEnumerable<ProcessArtifact> artifacts) => artifacts
         .Where(item => item.Request.ProcessKind == ProcessKind.Measured)
         .SelectMany(item => item.Operations.Select(operation => (item.Request.ProcessIndex, Operation: operation)))
         .GroupBy(item => item.Operation.Operation, StringComparer.Ordinal)
@@ -770,7 +785,7 @@ public static class Comparison
             group.ToDictionary(item => item.ProcessIndex, item => item.Operation.RawLatenciesMilliseconds, EqualityComparer<int>.Default)))
         .OrderBy(item => item.Operation, StringComparer.Ordinal)
         .ToArray();
-    private sealed record TargetValidation(bool Valid, RunRequest? Anchor, CorrectnessEvidence? Correctness, MachineMetadata? Machine, IReadOnlyList<string> OperationNames, string? Error)
+    internal sealed record TargetValidation(bool Valid, RunRequest? Anchor, CorrectnessEvidence? Correctness, MachineMetadata? Machine, IReadOnlyList<string> OperationNames, string? Error)
     {
         public static TargetValidation Invalid(RunRequest? anchor, string error) => new(false, anchor, null, null, [], error);
         public static TargetValidation Validated(RunRequest anchor, CorrectnessEvidence correctness, MachineMetadata machine, IReadOnlyList<string> names) => new(true, anchor, correctness, machine, names, null);

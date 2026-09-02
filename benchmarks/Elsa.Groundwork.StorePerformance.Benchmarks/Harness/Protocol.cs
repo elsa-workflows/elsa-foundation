@@ -343,11 +343,20 @@ public static class ProcessMeasurement
 
 public static class ArtifactAdmission
 {
-    public static void Validate(PerformanceWorkload workload, ProcessArtifact artifact, string outputDirectory)
+    public static void Validate(PerformanceWorkload workload, ProcessArtifact artifact, string outputDirectory) =>
+        ValidateCore(workload, artifact, outputDirectory, allowDiagnosticsAbsoluteBudget: false);
+
+    internal static void ValidateForAbsoluteMeasurement(PerformanceWorkload workload, ProcessArtifact artifact, string outputDirectory) =>
+        ValidateCore(workload, artifact, outputDirectory, allowDiagnosticsAbsoluteBudget: true);
+
+    private static void ValidateCore(PerformanceWorkload workload, ProcessArtifact artifact, string outputDirectory, bool allowDiagnosticsAbsoluteBudget)
     {
         if (artifact.SchemaVersion != 2 || artifact.Protocol != BenchmarkProtocol.Acceptance || !artifact.CorrectnessPassed)
             throw new PerformanceContractException("Process artifacts require schema v2, the acceptance protocol, and passing correctness evidence.");
-        ValidateRequest(workload, artifact.Request);
+        if (allowDiagnosticsAbsoluteBudget)
+            ValidateEvidenceRequest(workload, artifact.Request);
+        else
+            ValidateRequest(workload, artifact.Request);
         if (artifact.Correctness is null || artifact.Machine is null || artifact.Operations is null)
             throw new PerformanceContractException("Process artifacts require correctness, machine, and operation fields.");
         ValidateCorrectness(workload, artifact.Request, artifact.Correctness, outputDirectory);
