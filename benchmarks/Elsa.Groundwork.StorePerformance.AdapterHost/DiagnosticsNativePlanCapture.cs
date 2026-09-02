@@ -107,7 +107,12 @@ internal static class DiagnosticsNativePlanCapture
                         throw new PerformanceContractException($"Diagnostics native route '{route}' returned {result} rows; expected {limit}.");
                     var command = RequireGroundworkCommand(adapter.CommandObserver.Commands, specification);
                     var physicalIndexName = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(request.Provider, specification);
-                    var nativePath = RequireNativeArtifact(explainDirectory, before, request.Provider, physicalIndexName);
+                    var nativePath = RequireNativeArtifacts(
+                        explainDirectory,
+                        before,
+                        request.Provider,
+                        specification.IndexName,
+                        1)[0];
                     var rawPlan = IamNativePlanParser.NormalizeForArtifact(request.Provider, File.ReadAllText(nativePath));
                     var rawReference = ArtifactStore.RawPlanName($"diagnostics.{request.Provider}.{request.MeasurementSetId}.{route}.raw.json");
                     var rawPath = Path.Combine(outputDirectory, rawReference);
@@ -460,18 +465,6 @@ internal static class DiagnosticsNativePlanCapture
         if (matches.Length != 1)
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' must emit exactly one provider query against '{specification.TableName}'; observed {matches.Length}.");
         return matches[0].CommandText!;
-    }
-
-    private static string RequireNativeArtifact(string directory, IReadOnlySet<string> before, string provider, string physicalIndexName)
-    {
-        var extension = IamNativePlanParser.RawPlanExtension(provider);
-        var suffix = $"-{physicalIndexName}{extension}";
-        var matches = Directory.EnumerateFiles(directory)
-            .Where(path => !before.Contains(path) && Path.GetFileName(path).EndsWith(suffix, StringComparison.Ordinal))
-            .ToArray();
-        if (matches.Length != 1)
-            throw new PerformanceContractException($"Diagnostics route must emit exactly one provider-native explain artifact for '{physicalIndexName}'; observed {matches.Length}.");
-        return matches[0];
     }
 
     internal static IReadOnlyList<string> RequireNativeArtifacts(
