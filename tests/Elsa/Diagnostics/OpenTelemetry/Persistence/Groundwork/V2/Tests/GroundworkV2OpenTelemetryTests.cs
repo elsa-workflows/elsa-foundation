@@ -34,9 +34,53 @@ public sealed class GroundworkV2OpenTelemetryTests
         var spans = Assert.Single(units, unit => unit.Id.Value == V2OpenTelemetryStorageSchema.SpanUnitId);
         Assert.Contains(spans.Columns, column =>
             column.Name == V2OpenTelemetryStorageSchema.TraceKey && column.MaxLength == 64 && !column.IsNullable);
+        Assert.Equal(
+            [
+                new IndexColumn(V2OpenTelemetryStorageSchema.TraceKey),
+                new IndexColumn(V2OpenTelemetryStorageSchema.StartTime),
+                new IndexColumn(V2OpenTelemetryStorageSchema.SpanId),
+                new IndexColumn(V2OpenTelemetryStorageSchema.Sequence)
+            ],
+            Assert.Single(spans.Indexes, index => index.Name == "elsa_otel_spans_trace_detail").Columns);
         var logs = Assert.Single(units, unit => unit.Id.Value == V2OpenTelemetryStorageSchema.LogUnitId);
         Assert.Contains(logs.Columns, column =>
             column.Name == V2OpenTelemetryStorageSchema.TraceKey && column.MaxLength == 64 && column.IsNullable);
+        Assert.Equal(
+            [
+                new IndexColumn(V2OpenTelemetryStorageSchema.TraceKey),
+                new IndexColumn(V2OpenTelemetryStorageSchema.Timestamp),
+                new IndexColumn(V2OpenTelemetryStorageSchema.Id),
+                new IndexColumn(V2OpenTelemetryStorageSchema.Sequence)
+            ],
+            Assert.Single(logs.Indexes, index => index.Name == "elsa_otel_logs_trace_detail").Columns);
+
+        var resources = Assert.Single(units, unit => unit.Id.Value == V2OpenTelemetryStorageSchema.ResourceUnitId);
+        Assert.Equal(
+            [
+                new IndexColumn(V2OpenTelemetryStorageSchema.LastSeen, SortDirection.Descending),
+                new IndexColumn(V2OpenTelemetryStorageSchema.Id)
+            ],
+            Assert.Single(resources.Indexes, index => index.Name == "elsa_otel_resources_last_seen").Columns);
+        Assert.Equal(
+            [
+                new IndexColumn(V2OpenTelemetryStorageSchema.Status),
+                new IndexColumn(V2OpenTelemetryStorageSchema.LastSeen, SortDirection.Descending),
+                new IndexColumn(V2OpenTelemetryStorageSchema.Id)
+            ],
+            Assert.Single(resources.Indexes, index => index.Name == "elsa_otel_resources_status_last_seen").Columns);
+        var metrics = Assert.Single(units, unit => unit.Id.Value == V2OpenTelemetryStorageSchema.MetricPointUnitId);
+        Assert.Equal(
+            [
+                new IndexColumn(V2OpenTelemetryStorageSchema.Timestamp, SortDirection.Descending),
+                new IndexColumn(V2OpenTelemetryStorageSchema.Id)
+            ],
+            Assert.Single(metrics.Indexes, index => index.Name == "elsa_otel_metric_points_timestamp").Columns);
+        Assert.Equal(
+            [
+                new IndexColumn(V2OpenTelemetryStorageSchema.Timestamp, SortDirection.Descending),
+                new IndexColumn(V2OpenTelemetryStorageSchema.Id)
+            ],
+            Assert.Single(logs.Indexes, index => index.Name == "elsa_otel_logs_timestamp").Columns);
 
         var summaries = Assert.Single(units, unit => unit.Id.Value == V2OpenTelemetryStorageSchema.TraceSummaryUnitId);
         Assert.Equal("elsa_otel_trace_summaries_v3", summaries.Name);

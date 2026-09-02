@@ -8,17 +8,37 @@ namespace Elsa.Groundwork.StorePerformance.Benchmarks.Tests;
 public sealed class DiagnosticsNativePlanAdmissionTests
 {
     [Fact]
-    public void Current_v3_route_contract_admits_only_declared_order_covering_indexes()
+    public void Current_route_contract_admits_only_declared_order_covering_indexes()
     {
         var resource = DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, "resources-by-last-seen");
         var trace = DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, "traces-by-last-seen");
 
         Assert.Equal(("elsa_otel_resources_v2", "elsa_otel_resources_last_seen"), (resource.TableName, resource.IndexName));
         Assert.Equal(("elsa_otel_trace_summaries_v3", "elsa_otel_trace_summaries_start"), (trace.TableName, trace.IndexName));
-        Assert.Empty(DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, "resources-by-status").IndexName);
+        Assert.Equal("elsa_otel_resources_status_last_seen", DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, "resources-by-status").IndexName);
         Assert.Empty(DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, "resources-by-service").IndexName);
-        Assert.Equal(2, DiagnosticsDurableHistoryWorkload.NativeRouteLimits.Keys.Count(route =>
+        Assert.Equal("elsa_otel_metric_points_timestamp", DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, "metrics-by-last-seen").IndexName);
+        Assert.Equal("elsa_otel_logs_timestamp", DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, "logs-by-last-seen").IndexName);
+        Assert.Equal("elsa_structured_logs_sequence_order", DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, "structured-log-recent").IndexName);
+        Assert.Equal("elsa_structured_logs_sequence_order", DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, "structured-log-replay").IndexName);
+        Assert.Equal(7, DiagnosticsDurableHistoryWorkload.NativeRouteLimits.Keys.Count(route =>
             !string.IsNullOrWhiteSpace(DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, route).IndexName)));
+    }
+
+    [Fact]
+    public void Groundwork_indexes_bind_logical_names_to_provider_physical_names()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+
+        Assert.Equal(specification.IndexName,
+            DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("mongodb", specification));
+        Assert.StartsWith("__groundwork_ix_", DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("sqlite", specification));
+        Assert.NotEqual(specification.IndexName,
+            DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("postgresql", specification));
+        Assert.NotEqual(specification.IndexName,
+            DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("sqlserver", specification));
     }
 
     [Fact]
@@ -26,19 +46,32 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     {
         var blocked = new[]
         {
-            "resources-by-status",
-            "resources-by-service",
-            "trace-detail",
-            "metrics-by-last-seen",
-            "logs-by-last-seen",
-            "structured-log-recent",
-            "structured-log-replay"
+            "resources-by-service", "trace-detail"
         };
 
         Assert.All(blocked, route =>
             Assert.Empty(DiagnosticsNativePlanContract.For(
                 DiagnosticsNativePlanContract.GroundworkAdapter,
                 route).IndexName));
+    }
+
+    [Theory]
+    [InlineData("resources-by-status", "status", true)]
+    [InlineData("metrics-by-last-seen", null, true)]
+    [InlineData("logs-by-last-seen", null, true)]
+    [InlineData("structured-log-recent", null, true)]
+    [InlineData("structured-log-replay", null, false)]
+    public void Groundwork_frozen_routes_bind_exact_order_and_predicate_shape(
+        string route,
+        string? predicate,
+        bool descending)
+    {
+        var specification = DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, route);
+
+        Assert.NotEqual(string.Empty, specification.IndexName);
+        Assert.Equal(predicate, specification.PredicateColumn);
+        Assert.Equal(descending, specification.Descending);
+        Assert.True(specification.StorageScopeRequired);
     }
 
     [Fact]
@@ -161,12 +194,37 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             "sqlite", fixture.Adapter, fixture.Route, fixture.Path));
     }
 
+    [Fact]
+    public void Provider_owned_physical_index_mismatch_is_rejected()
+    {
+        using var fixture = Fixture.Create("postgresql", "resources-by-last-seen");
+        var expected = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(
+            "postgresql",
+            DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, "resources-by-last-seen"));
+        File.WriteAllText(fixture.Path, File.ReadAllText(fixture.Path).Replace(expected, "wrong_physical_index", StringComparison.Ordinal));
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "postgresql", fixture.Adapter, fixture.Route, fixture.Path));
+    }
+
+    [Fact]
+    public void Complete_ordered_terms_are_required_in_the_provider_command()
+    {
+        using var fixture = Fixture.Create(
+            "sqlite",
+            "resources-by-last-seen",
+            command: "SELECT * FROM elsa_otel_resources_v2 WHERE __groundwork_scope = @scope ORDER BY lastSeen DESC LIMIT 127");
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "sqlite", fixture.Adapter, fixture.Route, fixture.Path));
+    }
+
     private sealed class Fixture : IDisposable
     {
         private Fixture(string provider, string routeIdentity, string commandText, string nativePlan)
         {
             Adapter = DiagnosticsNativePlanContract.GroundworkAdapter;
-            Route = RouteFor(Adapter, routeIdentity);
+            Route = RouteFor(Adapter, provider, routeIdentity);
             var artifact = new DiagnosticsNativePlanArtifact(
                 1,
                 provider,
@@ -174,6 +232,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 routeIdentity,
                 RouteSpec.TableName,
                 RouteSpec.IndexName,
+                DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(provider, RouteSpec),
                 commandText,
                 nativePlan);
             Directory = System.IO.Directory.CreateTempSubdirectory("diagnostics-native-plan-");
@@ -196,15 +255,16 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             var spec = DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, routeIdentity);
             command ??= provider switch
             {
-                "mongodb" => $"{{\"collection\":\"{spec.TableName}\",\"filter\":{{\"__groundwork_scope\":{{\"$eq\":\"scope\"}}}},\"sort\":{{\"lastSeen\":-1}},\"limit\":127}}",
-                _ => "SELECT * FROM elsa_otel_resources_v2 WHERE __groundwork_scope = @scope ORDER BY lastSeen DESC LIMIT 127"
+                "mongodb" => $"{{\"collection\":\"{spec.TableName}\",\"filter\":{{\"__groundwork_scope\":{{\"$eq\":\"scope\"}}}},\"sort\":{{\"lastSeen\":-1,\"id\":1}},\"limit\":127}}",
+                _ => "SELECT * FROM elsa_otel_resources_v2 WHERE __groundwork_scope = @scope ORDER BY lastSeen DESC, id ASC LIMIT 127"
             };
+            var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(provider, spec);
             nativePlan ??= provider switch
             {
-                "sqlite" => "2 0 SEARCH elsa_otel_resources_v2 USING INDEX elsa_otel_resources_last_seen (__groundwork_scope=?)",
-                "postgresql" => "[{\"Plan\":{\"Node Type\":\"Index Scan\",\"Relation Name\":\"elsa_otel_resources_v2\",\"Index Name\":\"elsa_otel_resources_last_seen\"}}]",
-                "sqlserver" => "<ShowPlanXML><RelOp PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[elsa_otel_resources_v2]\" Index=\"[elsa_otel_resources_last_seen]\" /></IndexScan></RelOp></ShowPlanXML>",
-                "mongodb" => "{\"winningPlan\":{\"stage\":\"IXSCAN\",\"indexName\":\"elsa_otel_resources_last_seen\"}}",
+                "sqlite" => $"2 0 SEARCH elsa_otel_resources_v2 USING INDEX {physicalIndex} (__groundwork_scope=?)",
+                "postgresql" => $"[{{\"Plan\":{{\"Node Type\":\"Index Scan\",\"Relation Name\":\"elsa_otel_resources_v2\",\"Index Name\":\"{physicalIndex}\"}}}}]",
+                "sqlserver" => $"<ShowPlanXML><RelOp PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[elsa_otel_resources_v2]\" Index=\"[{physicalIndex}]\" /></IndexScan></RelOp></ShowPlanXML>",
+                "mongodb" => $"{{\"winningPlan\":{{\"stage\":\"IXSCAN\",\"indexName\":\"{physicalIndex}\"}}}}",
                 _ => throw new ArgumentOutOfRangeException(nameof(provider))
             };
             return new Fixture(provider, routeIdentity, command, nativePlan);
@@ -216,7 +276,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 Directory.Delete(true);
         }
 
-        private static NativeRouteEvidence RouteFor(string adapter, string routeIdentity)
+        private static NativeRouteEvidence RouteFor(string adapter, string provider, string routeIdentity)
         {
             var spec = DiagnosticsNativePlanContract.For(adapter, routeIdentity);
             return new NativeRouteEvidence(
@@ -224,7 +284,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 "route.raw.json",
                 new string('a', 64),
                 "index-search",
-                spec.IndexName,
+                DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(provider, spec),
                 spec.PhysicalCardinality,
                 spec.StorageScopeRequired,
                 spec.PredicateColumn is not null,

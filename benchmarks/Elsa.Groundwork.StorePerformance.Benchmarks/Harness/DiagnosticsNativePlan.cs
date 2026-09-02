@@ -14,6 +14,7 @@ public sealed record DiagnosticsNativePlanArtifact(
     [property: JsonPropertyName("routeIdentity")] string RouteIdentity,
     [property: JsonPropertyName("tableName")] string TableName,
     [property: JsonPropertyName("indexName")] string IndexName,
+    [property: JsonPropertyName("physicalIndexName")] string PhysicalIndexName,
     [property: JsonPropertyName("commandText")] string CommandText,
     [property: JsonPropertyName("nativePlan")] string NativePlan);
 
@@ -26,17 +27,22 @@ public sealed record DiagnosticsNativeRouteSpec(
     int PhysicalCardinality,
     int FiniteLimit,
     bool StorageScopeRequired = false,
-    bool Descending = true)
+    bool Descending = true,
+    IReadOnlyList<RuntimeNativeOrderTerm>? Ordering = null)
 {
     /// <summary>Groundwork injects this equality into every scoped query; the EF oracle isolates scopes
     /// with separate files and therefore has no synthetic scope column.</summary>
+    public IReadOnlyList<RuntimeNativeOrderTerm> EffectiveOrdering => Ordering ??
+        (OrderColumn is null
+            ? []
+            : [new RuntimeNativeOrderTerm(OrderColumn, Descending ? RuntimeNativeOrderDirection.Descending : RuntimeNativeOrderDirection.Ascending)]);
 }
 
 /// <summary>
 /// Single source of truth for every scale-bearing diagnostics read executed by the frozen workload.
-/// Unindexed/materializing/fanout Groundwork routes are intentionally represented with an empty index and
-/// are emitted as blocked evidence without invoking their unbounded query shape; they must never be
-/// converted into synthetic index-search claims. No instrument route is listed because the public
+/// Fanout Groundwork routes are intentionally represented with an empty index and are emitted as
+/// blocked evidence without invoking their unbounded query shape; they must never be converted into
+/// synthetic index-search claims. No instrument route is listed because the public
 /// <c>IOpenTelemetryStore</c> contract has no instrument-catalog query.
 /// </summary>
 public static class DiagnosticsNativePlanContract
@@ -86,7 +92,17 @@ public static class DiagnosticsNativePlanContract
                 cardinality,
                 DiagnosticsDurableHistoryWorkload.NativeRouteLimits[route],
                 scope,
-                route != "structured-log-replay");
+                route != "structured-log-replay",
+                route switch
+                {
+                    "resources-by-last-seen" => [new("lastSeen", RuntimeNativeOrderDirection.Descending), new("id", RuntimeNativeOrderDirection.Ascending)],
+                    "resources-by-status" or "resources-by-service" => [new("lastSeen", RuntimeNativeOrderDirection.Descending), new("id", RuntimeNativeOrderDirection.Ascending)],
+                    "traces-by-last-seen" => [new("startTime", RuntimeNativeOrderDirection.Descending), new("traceKey", RuntimeNativeOrderDirection.Ascending)],
+                    "metrics-by-last-seen" or "logs-by-last-seen" => [new("timestamp", RuntimeNativeOrderDirection.Descending), new("id", RuntimeNativeOrderDirection.Ascending)],
+                    "structured-log-recent" => [new("sequence", RuntimeNativeOrderDirection.Descending)],
+                    "structured-log-replay" => [new("sequence", RuntimeNativeOrderDirection.Ascending)],
+                    _ => []
+                });
 
         return route switch
         {
@@ -95,32 +111,45 @@ public static class DiagnosticsNativePlanContract
                 : Specification(GroundworkTable, "elsa_otel_resources_last_seen", "lastSeen", null, DiagnosticsDurableHistoryWorkload.ResourceCount, true),
             "resources-by-status" => adapter == EfAdapter
                 ? Specification(EfTable, "IX_PersistedTelemetryResource_Status", "LastSeen", "Status", DiagnosticsDurableHistoryWorkload.ResourceCount)
-                : Specification(GroundworkTable, "", "lastSeen", "status", DiagnosticsDurableHistoryWorkload.ResourceCount, true),
+                : Specification(GroundworkTable, "elsa_otel_resources_status_last_seen", "lastSeen", "status", DiagnosticsDurableHistoryWorkload.ResourceCount, true),
+            // ServiceName + LastSeen + Id exceeds the strict portable key budget at the public
+            // 512-code-unit bounds. The preview ordinal-identity projection does not alter the
+            // declaration budget (and expands the generated physical strings), so this remains
+            // an explicit blocked route until the query/schema contract is redesigned.
             "resources-by-service" => adapter == EfAdapter
                 ? Specification(EfTable, "IX_PersistedTelemetryResource_ServiceName", "LastSeen", "ServiceName", DiagnosticsDurableHistoryWorkload.ResourceCount)
                 : Specification(GroundworkTable, "", "lastSeen", "serviceName", DiagnosticsDurableHistoryWorkload.ResourceCount, true),
             "traces-by-last-seen" => adapter == EfAdapter
                 ? Specification("TelemetryTraces", "IX_PersistedTelemetryTrace_StartTime", "StartTime", null, DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream)
                 : Specification("elsa_otel_trace_summaries_v3", "elsa_otel_trace_summaries_start", "startTime", null, DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream, true),
-            // GetTraceAsync reads its summary by key, then spans and logs by trace key. The two signal
-            // units have no matching secondary index, so the whole public route remains blocked.
+            // GetTraceAsync is a fanout. Its summary/resource key reads have no named secondary plan
+            // artifact and the public API has no resource-fanout cap, so keep the top-level route blocked.
             "trace-detail" => adapter == EfAdapter
                 ? Specification("TelemetryTraces", "", null, "TraceId", DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream)
                 : Specification("elsa_otel_trace_summaries_v3", "", null, "traceKey", DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream, true),
             "metrics-by-last-seen" => adapter == EfAdapter
                 ? Specification("MetricPoints", "", "Timestamp", null, DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream)
-                : Specification("elsa_otel_metric_points_v2", "", "timestamp", null, DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream, true),
+                : Specification("elsa_otel_metric_points_v2", "elsa_otel_metric_points_timestamp", "timestamp", null, DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream, true),
             "logs-by-last-seen" => adapter == EfAdapter
                 ? Specification("OtlpLogRecords", "", "Timestamp", null, DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream)
-                : Specification("elsa_otel_logs_v2", "", "timestamp", null, DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream, true),
+                : Specification("elsa_otel_logs_v2", "elsa_otel_logs_timestamp", "timestamp", null, DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream, true),
             "structured-log-recent" => adapter == EfAdapter
                 ? Specification("StructuredLogEntries", "IX_PersistedStructuredLogEntry_Sequence", "Id", null, DiagnosticsDurableHistoryWorkload.AppendedRecordsPerStream)
-                : Specification("elsa_structured_logs", "", "sequence", null, DiagnosticsDurableHistoryWorkload.AppendedRecordsPerStream, true),
+                : Specification("elsa_structured_logs", "elsa_structured_logs_sequence_order", "sequence", null, DiagnosticsDurableHistoryWorkload.AppendedRecordsPerStream, true),
             "structured-log-replay" => adapter == EfAdapter
                 ? Specification("StructuredLogEntries", "IX_PersistedStructuredLogEntry_Sequence", "Id", null, DiagnosticsDurableHistoryWorkload.AppendedRecordsPerStream)
-                : Specification("elsa_structured_logs", "", "sequence", null, DiagnosticsDurableHistoryWorkload.AppendedRecordsPerStream, true),
+                : Specification("elsa_structured_logs", "elsa_structured_logs_sequence_order", "sequence", null, DiagnosticsDurableHistoryWorkload.AppendedRecordsPerStream, true),
             _ => throw new PerformanceContractException($"Diagnostics native-plan admission does not support route '{route}'.")
         };
+    }
+
+    public static string ExpectedPhysicalIndexName(string provider, DiagnosticsNativeRouteSpec specification)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(provider);
+        ArgumentNullException.ThrowIfNull(specification);
+        if (string.IsNullOrWhiteSpace(specification.IndexName))
+            return string.Empty;
+        return GroundworkPhysicalIndexNames.For(provider, specification.TableName, specification.IndexName);
     }
 
     public static void ValidateEnvelope(
@@ -145,7 +174,9 @@ public static class DiagnosticsNativePlanContract
         var specification = For(adapter, route.RouteIdentity);
         if (artifact.SchemaVersion != 1 || artifact.Provider != provider || artifact.Adapter != adapter ||
             artifact.RouteIdentity != route.RouteIdentity || artifact.TableName != specification.TableName ||
-            artifact.IndexName != specification.IndexName || string.IsNullOrWhiteSpace(artifact.CommandText) ||
+            artifact.IndexName != specification.IndexName ||
+            artifact.PhysicalIndexName != ExpectedPhysicalIndexName(provider, specification) ||
+            string.IsNullOrWhiteSpace(artifact.CommandText) ||
             string.IsNullOrWhiteSpace(artifact.NativePlan))
             throw new PerformanceContractException(
                 $"Diagnostics native-plan envelope does not bind route '{route.RouteIdentity}' to its exact provider, adapter, table, and index.");
@@ -158,6 +189,11 @@ public static class DiagnosticsNativePlanContract
             throw new PerformanceContractException(
                 $"Diagnostics native-plan route '{route.RouteIdentity}' has unbound cardinality, finite-page, or predicate facts.");
 
+        var physicalIndexName = ExpectedPhysicalIndexName(provider, specification);
+        if (route.IndexName != physicalIndexName)
+            throw new PerformanceContractException(
+                $"Diagnostics route '{specification.RouteIdentity}' does not bind its provider-owned physical index name.");
+
         if (string.Equals(provider, "mongodb", StringComparison.Ordinal))
             ValidateMongoCommand(artifact.CommandText, specification);
         else
@@ -166,16 +202,16 @@ public static class DiagnosticsNativePlanContract
         switch (provider)
         {
             case "sqlite":
-                ValidateSqlitePlan(artifact.NativePlan, specification);
+                ValidateSqlitePlan(artifact.NativePlan, specification, physicalIndexName);
                 break;
             case "postgresql":
-                ValidatePostgreSqlPlan(artifact.NativePlan, specification);
+                ValidatePostgreSqlPlan(artifact.NativePlan, specification, physicalIndexName);
                 break;
             case "sqlserver":
-                ValidateSqlServerPlan(artifact.NativePlan, specification);
+                ValidateSqlServerPlan(artifact.NativePlan, specification, physicalIndexName);
                 break;
             case "mongodb":
-                ValidateMongoPlan(artifact.NativePlan, specification);
+                ValidateMongoPlan(artifact.NativePlan, specification, physicalIndexName);
                 break;
             default:
                 throw new PerformanceContractException($"Diagnostics native-plan admission does not support provider '{provider}'.");
@@ -200,6 +236,8 @@ public static class DiagnosticsNativePlanContract
             !Regex.IsMatch(normalized, $@"\b(?:LIMIT\s+{specification.FiniteLimit}\b|TOP\s*\(?\s*{specification.FiniteLimit}\b)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command does not bind its exact table, descending order, and finite page.");
 
+        ValidateSqlOrdering(normalized, specification);
+
         if (normalized.Contains(" OR ", StringComparison.OrdinalIgnoreCase) ||
             !Regex.IsMatch(normalized, @"\bWHERE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) && specification.StorageScopeRequired)
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command contains an unbound boolean predicate.");
@@ -220,7 +258,28 @@ public static class DiagnosticsNativePlanContract
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command must contain only its exact equality predicates and no extra conditions.");
     }
 
-    private static void ValidateSqlitePlan(string plan, DiagnosticsNativeRouteSpec specification)
+    private static void ValidateSqlOrdering(string command, DiagnosticsNativeRouteSpec specification)
+    {
+        var match = Regex.Match(command, @"\bORDER\s+BY\s+(?<order>.*?)(?:\bLIMIT\b|\bOFFSET\b|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        var actual = string.IsNullOrWhiteSpace(match.Groups["order"].Value)
+            ? []
+            : match.Groups["order"].Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Select(term => Regex.Match(term.Trim(), @"(?:[\w]+\.)?(?<column>[\w]+)\s+(?<direction>ASC|DESC)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                .Select(term => term.Success
+                    ? new RuntimeNativeOrderTerm(term.Groups["column"].Value, string.Equals(term.Groups["direction"].Value, "DESC", StringComparison.OrdinalIgnoreCase)
+                        ? RuntimeNativeOrderDirection.Descending
+                        : RuntimeNativeOrderDirection.Ascending)
+                    : null)
+                .ToArray();
+        if (actual.Length != specification.EffectiveOrdering.Count ||
+            actual.Any(term => term is null) ||
+            !actual.Zip(specification.EffectiveOrdering).All(pair =>
+                string.Equals(pair.First!.Column, pair.Second.Column, StringComparison.OrdinalIgnoreCase) &&
+                pair.First.Direction == pair.Second.Direction))
+            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command does not bind its complete ordered term list.");
+    }
+
+    private static void ValidateSqlitePlan(string plan, DiagnosticsNativeRouteSpec specification, string physicalIndexName)
     {
         var lines = plan.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (lines.Any(line => Regex.IsMatch(
@@ -229,19 +288,19 @@ public static class DiagnosticsNativePlanContract
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)))
             throw BlockedPlan(specification, "SQLite sort or materialization spill");
         if (lines.Any(line => System.Text.RegularExpressions.Regex.IsMatch(line, $@"\bSCAN\s+(?:{System.Text.RegularExpressions.Regex.Escape(specification.TableName)}|{System.Text.RegularExpressions.Regex.Escape(specification.TableName.Trim('"'))})\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant) &&
-                             !line.Contains("USING INDEX " + specification.IndexName, StringComparison.OrdinalIgnoreCase)))
+                             !line.Contains("USING INDEX " + physicalIndexName, StringComparison.OrdinalIgnoreCase)))
             throw BlockedPlan(specification, "SQLite table scan");
         if (string.IsNullOrWhiteSpace(specification.IndexName))
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' has no declared provider-native index and is blocked pending a storage redesign.");
         var search = lines.Where(line => line.Contains(specification.TableName, StringComparison.OrdinalIgnoreCase) &&
                                         line.Contains("USING", StringComparison.OrdinalIgnoreCase) &&
-                                        line.Contains("INDEX " + specification.IndexName, StringComparison.OrdinalIgnoreCase) &&
+                                        line.Contains("INDEX " + physicalIndexName, StringComparison.OrdinalIgnoreCase) &&
                                         (line.Contains("SEARCH", StringComparison.OrdinalIgnoreCase) || line.Contains("SCAN", StringComparison.OrdinalIgnoreCase))).ToArray();
-        if (search.Length != 1 || !search[0].Contains(specification.IndexName, StringComparison.OrdinalIgnoreCase))
-            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' retained plan is not the exact '{specification.IndexName}' index search.");
+        if (search.Length != 1 || !search[0].Contains(physicalIndexName, StringComparison.OrdinalIgnoreCase))
+            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' retained plan is not the exact provider-owned index search.");
     }
 
-    private static void ValidatePostgreSqlPlan(string plan, DiagnosticsNativeRouteSpec specification)
+    private static void ValidatePostgreSqlPlan(string plan, DiagnosticsNativeRouteSpec specification, string physicalIndexName)
     {
         using var document = ParseJson(plan, "PostgreSQL");
         var nodes = FindObjects(document.RootElement, "Node Type").ToArray();
@@ -264,12 +323,12 @@ public static class DiagnosticsNativePlanContract
                                           relation.GetString() == specification.TableName &&
                                           node.TryGetProperty("Index Name", out var index) &&
                                           index.ValueKind == JsonValueKind.String &&
-                                          index.GetString() == specification.IndexName).ToArray();
+                                          index.GetString() == physicalIndexName).ToArray();
         if (matches.Length != 1)
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' retained plan is not the exact PostgreSQL index scan.");
     }
 
-    private static void ValidateSqlServerPlan(string plan, DiagnosticsNativeRouteSpec specification)
+    private static void ValidateSqlServerPlan(string plan, DiagnosticsNativeRouteSpec specification, string physicalIndexName)
     {
         try
         {
@@ -288,7 +347,7 @@ public static class DiagnosticsNativePlanContract
             var matches = relops.Where(element => element.Attribute("PhysicalOp")?.Value == "Index Seek" &&
                 element.Descendants().Any(objectElement => objectElement.Name.LocalName == "Object" &&
                     objectElement.Attribute("Table")?.Value.Trim('[', ']') == specification.TableName &&
-                    objectElement.Attribute("Index")?.Value.Trim('[', ']') == specification.IndexName)).ToArray();
+                    objectElement.Attribute("Index")?.Value.Trim('[', ']') == physicalIndexName)).ToArray();
             if (matches.Length != 1)
                 throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' retained plan is not the exact SQL Server index seek.");
         }
@@ -311,10 +370,9 @@ public static class DiagnosticsNativePlanContract
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' MongoDB command does not bind its exact collection.");
         if (!root.TryGetProperty("limit", out var limit) || !limit.TryGetInt32(out var finiteLimit) || finiteLimit != specification.FiniteLimit)
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' MongoDB command does not bind its finite page.");
-        if (specification.OrderColumn is not null &&
-            (!root.TryGetProperty("sort", out var sort) || sort.ValueKind != JsonValueKind.Object ||
-             !sort.TryGetProperty(specification.OrderColumn, out var direction) || !direction.TryGetInt32(out var sortDirection) || sortDirection != (specification.Descending ? -1 : 1)))
-            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' MongoDB command does not bind descending order.");
+        if (!root.TryGetProperty("sort", out var sort) || sort.ValueKind != JsonValueKind.Object ||
+            !ValidateMongoOrdering(sort, specification))
+            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' MongoDB command does not bind its complete ordered term list.");
         if (!root.TryGetProperty("filter", out var filter) || filter.ValueKind != JsonValueKind.Object)
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' MongoDB command does not retain a structured filter.");
         var filterNames = filter.EnumerateObject().Select(property => property.Name).ToArray();
@@ -330,7 +388,20 @@ public static class DiagnosticsNativePlanContract
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' MongoDB command must retain only exact equality predicates.");
     }
 
-    private static void ValidateMongoPlan(string plan, DiagnosticsNativeRouteSpec specification)
+    private static bool ValidateMongoOrdering(JsonElement sort, DiagnosticsNativeRouteSpec specification)
+    {
+        var actual = sort.EnumerateObject()
+            .Select(property => property.Value.TryGetInt32(out var direction)
+                ? new RuntimeNativeOrderTerm(property.Name, direction == -1 ? RuntimeNativeOrderDirection.Descending : RuntimeNativeOrderDirection.Ascending)
+                : null)
+            .ToArray();
+        return actual.Length == specification.EffectiveOrdering.Count &&
+               actual.Zip(specification.EffectiveOrdering).All(pair =>
+                   string.Equals(pair.First?.Column, pair.Second.Column, StringComparison.Ordinal) &&
+                   pair.First?.Direction == pair.Second.Direction);
+    }
+
+    private static void ValidateMongoPlan(string plan, DiagnosticsNativeRouteSpec specification, string physicalIndexName)
     {
         using var document = ParseJson(plan, "MongoDB");
         var stages = FindObjects(document.RootElement, "stage").ToArray();
@@ -343,7 +414,7 @@ public static class DiagnosticsNativePlanContract
                                 string.Equals(value.GetString(), "COLLSCAN", StringComparison.OrdinalIgnoreCase)))
             throw BlockedPlan(specification, "MongoDB collection scan");
         var matches = FindObjects(document.RootElement, "indexName")
-            .Where(value => value.TryGetProperty("indexName", out var index) && index.ValueKind == JsonValueKind.String && index.GetString() == specification.IndexName)
+            .Where(value => value.TryGetProperty("indexName", out var index) && index.ValueKind == JsonValueKind.String && index.GetString() == physicalIndexName)
             .ToArray();
         if (matches.Length != 1 || !stages.Any(stage => stage.TryGetProperty("stage", out var value) && value.GetString() == "IXSCAN"))
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' retained plan is not the exact MongoDB index scan.");
