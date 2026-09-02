@@ -17,8 +17,8 @@ The thirteenth workload, `diagnostics-durable-history`, is the program-owner-rat
 extension. It keeps Structured Logs and OpenTelemetry as separate suboperations under one reproducible
 input/result vector. SQLite uses the retained same-provider EF diagnostics oracle. SQL Server,
 PostgreSQL, and MongoDB require workload-specific numeric absolute budgets plus correctness,
-native-plan, physical-form, and provider-work evidence. The policy shape is still a proposal pending independent review, and the numeric
-budgets are not yet ratified; `gate.diagnostics.absolute-budget-required` prevents the default ratio
+native-plan, physical-form, and provider-work evidence. The policy shape is independently reviewed in
+PR #1514, but the numeric budgets are not yet ratified; `gate.diagnostics.absolute-budget-required` prevents the default ratio
 gate from being silently applied to those three providers. The generic no-comparand evaluator exists,
 but it accepts only an explicit independently reviewed policy and has no diagnostics defaults.
 
