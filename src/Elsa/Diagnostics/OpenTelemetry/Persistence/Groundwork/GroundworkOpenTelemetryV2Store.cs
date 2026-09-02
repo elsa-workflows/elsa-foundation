@@ -26,11 +26,11 @@ public sealed class GroundworkOpenTelemetryStore :
     IAsyncDisposable
 {
     private const int DrainBatchSize = 64;
-    private const int MaxAppendAttempts = 3;
+    private const int MaxCaptureAttempts = 3;
     private const int TraceAggregationMaxGroups = 1_000;
     private readonly IOpenTelemetrySourceRegistry? sourceRegistry;
     private readonly V2OpenTelemetryBinding binding;
-    private readonly IStorageProviderConnection? connection;
+    private readonly IStorageProviderConnection connection;
     private readonly V2Sessions sessions;
     private readonly V2OpenTelemetryStorageSchemaSet schema;
     private readonly DiagnosticsDrain<OpenTelemetryBatch, bool> drain;
@@ -283,19 +283,102 @@ public sealed class GroundworkOpenTelemetryStore :
         var resources = batch.Resources.Select(V2OpenTelemetryCodec.Resource).ToArray();
         var instruments = batch.Instruments.Select(instrument => V2OpenTelemetryCodec.Instrument(instrument, batchId.IssuedAt)).ToArray();
         var fingerprint = Fingerprint(resources, instruments, traces, spans, points, logs);
+        var resourceUnit = schema.Unit(V2OpenTelemetryStorageSchema.ResourceUnitId);
+        var instrumentUnit = schema.Unit(V2OpenTelemetryStorageSchema.InstrumentUnitId);
+        var ledgerUnit = schema.Unit(V2OpenTelemetryStorageSchema.CaptureLedgerUnitId);
+        var summaryUnit = schema.Unit(V2OpenTelemetryStorageSchema.TraceSummaryUnitId);
 
-        EnsureLedger(batchId, fingerprint);
-        foreach (var resource in resources)
-            EnsureCatalog(sessions.Resources, resource);
-        foreach (var instrument in instruments)
-            EnsureCatalog(sessions.Instruments, instrument);
-        await AppendAsync(sessions.Traces, traces, batchId, "traces", cancellationToken);
-        await AppendAsync(sessions.Spans, spans, batchId, "spans", cancellationToken);
-        await AppendAsync(sessions.MetricPoints, points, batchId, "metric-points", cancellationToken);
-        await AppendAsync(sessions.Logs, logs, batchId, "logs", cancellationToken);
+        if (!connection.Capabilities.Any(capability => capability.Id == WellKnownCapabilities.AtomicCommit))
+        {
+            throw new NotSupportedException(
+                "The OpenTelemetry v3 capture contract requires Groundwork atomic multi-unit commit support.");
+        }
+
+        Exception? failure = null;
+        for (var attempt = 1; attempt <= MaxCaptureAttempts; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                using var work = connection.BeginUnitOfWork(
+                    StorageAccess.Scoped(binding.StorageScope),
+                    BatchWriteOptions.Exact,
+                    schema.Units.ToArray());
+                var transaction = V2Sessions.Open(work, schema.Units);
+                var ledgerKey = new StorageKey(new Dictionary<string, object?>
+                {
+                    [V2OpenTelemetryStorageSchema.BatchId] = batchId.ToString()
+                });
+                var existingLedger = transaction.Ledger.Read(ledgerKey);
+                if (existingLedger is not null)
+                {
+                    EnsureLedgerMatches(existingLedger, fingerprint);
+                    work.Rollback();
+                    return;
+                }
+
+                foreach (var resource in resources)
+                    work.Stage(RowWrite.Upsert(resourceUnit, resource));
+                foreach (var instrument in instruments)
+                    work.Stage(RowWrite.Upsert(instrumentUnit, instrument));
+
+                await AppendExactAsync(transaction.Traces, traces, batchId, "traces", cancellationToken);
+                await AppendExactAsync(transaction.Spans, spans, batchId, "spans", cancellationToken);
+                await AppendExactAsync(transaction.MetricPoints, points, batchId, "metric-points", cancellationToken);
+                await AppendExactAsync(transaction.Logs, logs, batchId, "logs", cancellationToken);
+
+                foreach (var group in batch.Traces.GroupBy(trace => V2OpenTelemetryCodec.TraceKey(trace.TraceId), StringComparer.Ordinal))
+                {
+                    var key = new StorageKey(new Dictionary<string, object?>
+                    {
+                        [V2OpenTelemetryStorageSchema.TraceKey] = group.Key
+                    });
+                    var existing = transaction.TraceSummaries.Read(key);
+                    var records = existing is null
+                        ? group.ToArray()
+                        : new[] { V2OpenTelemetryCodec.DeserializeTraceSummary(existing.Values.Values) }.Concat(group).ToArray();
+                    var summary = V2OpenTelemetryCodec.TraceSummary(TelemetryTraceMerger.Merge(records));
+                    var options = existing is null
+                        ? WriteOptions.CreateOnly
+                        : WriteOptions.IfVersion(existing.Version ?? throw new InvalidDataException(
+                            "The OpenTelemetry trace summary omitted its optimistic-concurrency version."));
+                    work.Stage(RowWrite.ConditionalUpsert(summaryUnit, summary, options));
+                }
+
+                work.Stage(RowWrite.Insert(ledgerUnit, V2OpenTelemetryCodec.Ledger(batchId, fingerprint)));
+                var report = await work.CommitWithOutcomesAsync(cancellationToken);
+                if (!report.IsSuccessful)
+                    throw new IOException("The OpenTelemetry v3 atomic capture commit returned failed row outcomes.");
+                return;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (NotSupportedException)
+            {
+                throw;
+            }
+            catch (InvalidOperationException exception)
+                when (exception.Message.Contains("batch identity was reused", StringComparison.Ordinal))
+            {
+                throw;
+            }
+            catch (Exception exception) when (attempt < MaxCaptureAttempts)
+            {
+                failure = exception;
+                await Task.Delay(TimeSpan.FromMilliseconds(25 * attempt), cancellationToken);
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        }
+
+        throw new IOException("The OpenTelemetry v3 atomic capture failed after retries.", failure);
     }
 
-    private async ValueTask AppendAsync(
+    private static async ValueTask AppendExactAsync(
         IStorageSession session,
         IReadOnlyList<StorageValues> values,
         DiagnosticsDrainBatchId batchId,
@@ -306,29 +389,10 @@ public sealed class GroundworkOpenTelemetryStore :
             return;
         var exact = session as IExactAppendStorageSession ??
             throw new NotSupportedException("The selected Groundwork provider does not advertise exact append outcomes.");
-        var operation = new OperationId(batchId.IssuedAt, $"otel-v2:{batchId}:{kind}");
-        Exception? failure = null;
-        for (var attempt = 1; attempt <= MaxAppendAttempts; attempt++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
-            {
-                var report = exact.AppendWithOutcomes(operation, values);
-                if (report.Outcomes.Count != values.Count)
-                    throw new InvalidDataException("Groundwork returned an incomplete exact append outcome report.");
-                return;
-            }
-            catch (Exception exception) when (attempt < MaxAppendAttempts)
-            {
-                failure = exception;
-                await Task.Delay(TimeSpan.FromMilliseconds(25 * attempt), cancellationToken);
-            }
-            catch (Exception exception)
-            {
-                failure = exception;
-            }
-        }
-        throw new IOException($"The OpenTelemetry v2 {kind} append failed after retries.", failure);
+        var operation = new OperationId(batchId.IssuedAt, $"otel-v3:{batchId}:{kind}");
+        var report = await exact.AppendWithOutcomesAsync(operation, values, cancellationToken);
+        if (report.Outcomes.Count != values.Count)
+            throw new InvalidDataException("Groundwork returned an incomplete exact append outcome report.");
     }
 
     private DiagnosticsDrain<OpenTelemetryBatch, bool> CreateDrain(
@@ -358,35 +422,6 @@ public sealed class GroundworkOpenTelemetryStore :
         deleted += sessions.Resources.ApplyRetention(new RetentionExecutionOptions { KeepNewestOverride = resourceCapacity, CancellationToken = cancellationToken }).DeletedRows;
         deleted += sessions.Instruments.ApplyRetention(new RetentionExecutionOptions { KeepNewestOverride = instrumentCapacity, CancellationToken = cancellationToken }).DeletedRows;
         return deleted;
-    }
-
-    private void EnsureCatalog(IStorageSession session, StorageValues values)
-    {
-        var result = session.Upsert(values);
-        if (!result.Succeeded && result.Status != WriteOutcomeStatus.Replayed)
-            throw new IOException($"The OpenTelemetry catalog upsert returned {result.Status}.");
-    }
-
-    private void EnsureLedger(DiagnosticsDrainBatchId batchId, string fingerprint)
-    {
-        var key = new StorageKey(new Dictionary<string, object?> { [V2OpenTelemetryStorageSchema.BatchId] = batchId.ToString() });
-        var existing = sessions.Ledger.Read(key);
-        if (existing is not null)
-        {
-            EnsureLedgerMatches(existing, fingerprint);
-            return;
-        }
-        var result = sessions.Ledger.Insert(V2OpenTelemetryCodec.Ledger(batchId, fingerprint));
-        if (result.Succeeded || result.Status == WriteOutcomeStatus.Replayed)
-            return;
-
-        existing = sessions.Ledger.Read(key);
-        if (existing is not null)
-        {
-            EnsureLedgerMatches(existing, fingerprint);
-            return;
-        }
-        throw new IOException($"The OpenTelemetry capture ledger write returned {result.Status}.");
     }
 
     private static void EnsureLedgerMatches(StoredEntry existing, string fingerprint)
@@ -697,12 +732,25 @@ public sealed class GroundworkOpenTelemetryStore :
 
         internal V2Sessions() { }
 
+        internal static V2Sessions Open(IUnitOfWork work, IReadOnlyList<StorageUnit> units)
+        {
+            ArgumentNullException.ThrowIfNull(work);
+            ArgumentNullException.ThrowIfNull(units);
+            var sessions = new V2Sessions();
+            sessions.Bind(units.Select(work.OpenSession).ToArray());
+            return sessions;
+        }
+
         internal void Publish(IStorageProviderConnection connection, V2OpenTelemetryBinding binding)
         {
             var access = StorageAccess.Scoped(binding.StorageScope);
             var units = new V2OpenTelemetryStorageSchemaSet().Units;
-            var opened = units.Select(unit => connection.OpenSession(unit, access)).ToArray();
-            if (opened.Length != 8)
+            Bind(units.Select(unit => connection.OpenSession(unit, access)).ToArray());
+        }
+
+        private void Bind(IReadOnlyList<IStorageSession> opened)
+        {
+            if (opened.Count != 8)
                 throw new InvalidOperationException("OpenTelemetry v2 did not open all storage units.");
             Traces = opened[0];
             Spans = opened[1];
@@ -730,6 +778,9 @@ public sealed class GroundworkOpenTelemetryStore :
     private sealed class V2OpenTelemetryStorageSchemaSet
     {
         internal IReadOnlyList<StorageUnit> Units { get; } = V2OpenTelemetryStorageSchema.CreateUnits();
+
+        internal StorageUnit Unit(string id) =>
+            Units.Single(unit => StringComparer.Ordinal.Equals(unit.Id.Value, id));
     }
 
     private static class TraceColumns
