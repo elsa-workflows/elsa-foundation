@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 141
 - Test projects: 107
-- Direct project references: 1227
+- Direct project references: 1228
 
 ## Projects
 
@@ -208,7 +208,7 @@ Records direct project references only.
 | [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | Elsa.Foundation | - | default | Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork<br>Elsa.Foundation.Identity.Oidc<br>Elsa.Foundation.Identity.OpenIddict<br>Elsa.Foundation.Identity.Persistence.Groundwork<br>Elsa.Groundwork.StorePerformance.Benchmarks<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Groundwork.ProviderEvidenceImporter.Tests](../../tests/Elsa/Groundwork/ProviderEvidenceImporter/Tests/Elsa.Groundwork.ProviderEvidenceImporter.Tests.csproj) | test | Elsa.Groundwork | - | default | Elsa.Groundwork.ProviderEvidenceImporter |
 | [Elsa.Groundwork.StorePerformance.AdapterHost.Tests](../../tests/Elsa/Groundwork/StorePerformance/AdapterHost/Tests/Elsa.Groundwork.StorePerformance.AdapterHost.Tests.csproj) | test | Elsa.Groundwork | - | default | Elsa.Groundwork.StorePerformance.AdapterHost |
-| [Elsa.Groundwork.StorePerformance.Benchmarks.Tests](../../tests/Elsa/Groundwork/StorePerformance/Benchmarks/Tests/Elsa.Groundwork.StorePerformance.Benchmarks.Tests.csproj) | test | Elsa.Groundwork | - | default | Elsa.Groundwork.StorePerformance.Benchmarks |
+| [Elsa.Groundwork.StorePerformance.Benchmarks.Tests](../../tests/Elsa/Groundwork/StorePerformance/Benchmarks/Tests/Elsa.Groundwork.StorePerformance.Benchmarks.Tests.csproj) | test | Elsa.Groundwork | - | default | Elsa.Groundwork.StorePerformance.Benchmarks<br>Elsa.Secrets.Core |
 | [Elsa.Http.Tests](../../tests/Elsa/Http/Tests/Elsa.Http.Tests.csproj) | test | Elsa.Http | - | default | Elsa.Api.AspNetCore<br>Elsa.Http |
 | [Elsa.Mediator.Tests](../../tests/Elsa/Mediator/Tests/Elsa.Mediator.Tests.csproj) | test | Elsa.Mediator | - | default | Elsa.Mediator |
 | [Elsa.Modularity.Attention.Tests](../../tests/Elsa/Modularity/Attention/Tests/Elsa.Modularity.Attention.Tests.csproj) | test | Elsa.Modularity | - | default | Elsa.Modularity.Attention |

@@ -9,7 +9,7 @@
     <ImportDirectoryBuildTargets>false</ImportDirectoryBuildTargets>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <GroundworkVersion Condition="'$(GroundworkVersion)' == ''">0.4.0-preview.5</GroundworkVersion>
+    <GroundworkVersion Condition="'$(GroundworkVersion)' == ''">0.4.0-preview.6</GroundworkVersion>
   </PropertyGroup>
 
   <ItemGroup>

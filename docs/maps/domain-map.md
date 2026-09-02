@@ -9,7 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 141
 - Test projects: 107
 - Domains: 27
-- Direct cross-domain references: 722
+- Direct cross-domain references: 723
 
 ## Domains
 
@@ -241,7 +241,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | Elsa.Foundation | Identity.Tests | test | Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork<br>Elsa.Foundation.Identity.Oidc<br>Elsa.Foundation.Identity.OpenIddict<br>Elsa.Foundation.Identity.Persistence.Groundwork<br>Elsa.Groundwork.StorePerformance.Benchmarks<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Groundwork.ProviderEvidenceImporter.Tests](../../tests/Elsa/Groundwork/ProviderEvidenceImporter/Tests/Elsa.Groundwork.ProviderEvidenceImporter.Tests.csproj) | test | Elsa.Groundwork | ProviderEvidenceImporter.Tests | test | Elsa.Groundwork.ProviderEvidenceImporter |
 | [Elsa.Groundwork.StorePerformance.AdapterHost.Tests](../../tests/Elsa/Groundwork/StorePerformance/AdapterHost/Tests/Elsa.Groundwork.StorePerformance.AdapterHost.Tests.csproj) | test | Elsa.Groundwork | StorePerformance.AdapterHost.Tests | test | Elsa.Groundwork.StorePerformance.AdapterHost |
-| [Elsa.Groundwork.StorePerformance.Benchmarks.Tests](../../tests/Elsa/Groundwork/StorePerformance/Benchmarks/Tests/Elsa.Groundwork.StorePerformance.Benchmarks.Tests.csproj) | test | Elsa.Groundwork | StorePerformance.Benchmarks.Tests | test | Elsa.Groundwork.StorePerformance.Benchmarks |
+| [Elsa.Groundwork.StorePerformance.Benchmarks.Tests](../../tests/Elsa/Groundwork/StorePerformance/Benchmarks/Tests/Elsa.Groundwork.StorePerformance.Benchmarks.Tests.csproj) | test | Elsa.Groundwork | StorePerformance.Benchmarks.Tests | test | Elsa.Groundwork.StorePerformance.Benchmarks<br>Elsa.Secrets.Core |
 | [Elsa.Http.Tests](../../tests/Elsa/Http/Tests/Elsa.Http.Tests.csproj) | test | Elsa.Http | Tests | test | Elsa.Api.AspNetCore<br>Elsa.Http |
 | [Elsa.Mediator.Tests](../../tests/Elsa/Mediator/Tests/Elsa.Mediator.Tests.csproj) | test | Elsa.Mediator | Tests | test | Elsa.Mediator |
 | [Elsa.Modularity.Attention.Tests](../../tests/Elsa/Modularity/Attention/Tests/Elsa.Modularity.Attention.Tests.csproj) | test | Elsa.Modularity | Attention.Tests | test | Elsa.Modularity.Attention |
@@ -587,6 +587,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | Elsa.Foundation | [Elsa.Api.Compatibility.Testing](../../tests/Elsa/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj) | Elsa.Api |
 | [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | Elsa.Foundation | [Elsa.Persistence.Groundwork.Testing](../../tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj) | Elsa.Persistence |
 | [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | Elsa.Foundation | [Elsa.Workflows.Runtime.Core](../../src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj) | Elsa.Workflows |
+| [Elsa.Groundwork.StorePerformance.Benchmarks.Tests](../../tests/Elsa/Groundwork/StorePerformance/Benchmarks/Tests/Elsa.Groundwork.StorePerformance.Benchmarks.Tests.csproj) | Elsa.Groundwork | [Elsa.Secrets.Core](../../src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj) | Elsa.Secrets |
 | [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | Elsa.Http | [Elsa.Api.AspNetCore](../../src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | Elsa.Api |
 | [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | Elsa.Http | [Elsa.Caching.Core](../../src/Elsa/Caching/Core/Elsa.Caching.Core.csproj) | Elsa.Caching |
 | [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | Elsa.Http | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |

@@ -232,7 +232,7 @@ public sealed class CapturePlanAdmissionTests
         HostFingerprintSha256: new string('d', 64),
         PackageVersions: new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["Groundwork.Store"] = "0.4.0-preview.5"
+            ["Groundwork.Store"] = "0.4.0-preview.6"
         },
         Seed: SecretCreateReadListWorkload.Seed,
         InputFingerprintSha256: SecretCreateReadListWorkload.ExpectedInputFingerprint,
@@ -264,7 +264,7 @@ public sealed class CapturePlanAdmissionTests
         HarnessAssemblySha256: new string('b', 64),
         PackageVersions: new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["Groundwork.Store"] = "0.4.0-preview.5"
+            ["Groundwork.Store"] = "0.4.0-preview.6"
         },
         CompositionFingerprint: new string('c', 64),
         HostFingerprintSha256: new string('d', 64),

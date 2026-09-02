@@ -8,7 +8,7 @@
 ## Active v3 closeout checkpoint — 2026-09-02
 
 The historical inventory below remains the deletion ledger, but its preview.3 header is no longer the
-active implementation boundary. Diagnostics #642 now consumes Groundwork `0.4.0-preview.5` and the
+active implementation boundary. Diagnostics #642 now consumes Groundwork `0.4.0-preview.6` and the
 OpenTelemetry adapter has a v3 capture/summary contract with the following executable local evidence:
 
 - one exact multi-unit transaction commits all four signal streams, resource/instrument catalogs, the

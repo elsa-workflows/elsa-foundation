@@ -1,6 +1,6 @@
 <Project>
   <Import Project="$(MSBuildThisFileDirectory)../../../Directory.Packages.props" />
   <ItemGroup>
-    <PackageVersion Update="Groundwork.Sqlite" Version="0.4.0-preview.5" />
+    <PackageVersion Update="Groundwork.Sqlite" Version="0.4.0-preview.6" />
   </ItemGroup>
 </Project>
