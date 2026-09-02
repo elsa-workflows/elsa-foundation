@@ -31,8 +31,8 @@ v1 envelope, schema stamp, upcaster, or compatibility path.
 | Storage unit | Scope | Payload | Primary key | Declared indexes |
 |---|---|---|---|---|
 | `elsa-distributed-execution-placement` (`elsa_distributed_execution_placement`) | Scoped | `ExecutionPlacementLease` | workflow execution id | owner / expiry / workflow execution id |
-| `elsa-distributed-command-stream-head` (`elsa_distributed_command_stream_head`) | Scoped | stream-head state | workflow execution id | exact primary-ID read |
-| `elsa-distributed-command-transport` (`elsa_distributed_command_transport`) | Scoped | `ExecutionCommandTransportItem` | `transport:{escaped-execution-id}:{sequence}` | workflow execution / sequence ascending; workflow execution ascending / sequence descending |
+| `elsa-distributed-command-stream-head` (`elsa_distributed_command_stream_head`) | Scoped | stream sequence and pending-command head summary | workflow execution id | exact primary-ID read; pending execution by workflow execution / pending visibility |
+| `elsa-distributed-command-transport` (`elsa_distributed_command_transport`) | Scoped | `ExecutionCommandTransportItem` | `transport:{escaped-execution-id}:{sequence}` | workflow execution / sequence ascending; workflow execution / visible-at / sequence ascending; workflow execution ascending / sequence descending |
 
 The public query model expresses owner/expiry, visibility/sequence, latest-per-execution, total-count, and page
 bounds directly against those declarations.
