@@ -60,7 +60,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             ["operationalState"] = ["by_collection", "by_collection_workflow_execution_and_operational_state_id", "by_recovery_detected", "by_recovery_detected_heartbeat_owner", "by_recovery_detected_lease_owner", "by_recovery_detected_ownerless", "by_recovery_heartbeat", "by_recovery_heartbeat_owner", "by_recovery_lease_acquisition", "by_recovery_lease_acquisition_owner", "by_recovery_lease_expiry", "by_recovery_lease_expiry_owner", "by_workflow_execution", "by_workflow_execution_and_operational_state_id"],
             ["postCommitOutbox"] = ["by_claimable_by_intent_kind_time_recorded_id", "by_claimable_by_workflow_and_intent_kind_time_recorded_id", "by_claimable_by_workflow_time_recorded_id", "by_claimable_time_recorded_id", "by_collection", "by_deliverable_by_intent_kind_time_recorded_id", "by_deliverable_by_workflow_and_intent_kind_time_recorded_id", "by_deliverable_by_workflow_time_recorded_id", "by_deliverable_time_recorded_id", "by_outbox_claimable_at", "by_outbox_deliverable_at", "by_outbox_intent_kind", "by_outbox_item_id", "by_outbox_recorded_at", "by_outbox_status", "by_workflow_execution"],
             ["publicationProjectionState"] = ["by_projection_kind_and_artifact_id"],
-            ["recurringTriggerSchedule"] = ["by_activation", "by_activation_and_schedule_id", "by_active_next_occurrence_and_schedule_id", "by_artifact", "by_artifact_and_schedule_id", "by_collection", "by_next_occurrence", "by_recurring_schedule_active", "by_recurring_schedule_id"],
+            ["recurringTriggerSchedule"] = ["by_activation_and_schedule_id", "by_active_next_occurrence_and_schedule_id", "by_artifact_and_schedule_id", "by_collection", "by_next_occurrence", "by_recurring_schedule_active", "by_recurring_schedule_id"],
             ["schedulerPoison"] = ["by_workflow_execution", "by_workflow_execution_and_failure_window"],
             ["schedulerState"] = ["by_collection"],
             ["schedulerWorkItem"] = ["by_scheduler_work_order", "by_workflow_execution", "by_workflow_execution_and_scheduler_recorded_at_and_order", "by_workflow_execution_and_scheduler_work_order"],
@@ -90,6 +90,16 @@ public sealed class ElsaRuntimeV2StorageManifestTests
         AssertIndex(timers, "by_claim_order", ["claimOrderKey"], included: true);
         AssertIndex(timers, "by_due_time_and_timer_id", [ElsaRuntimeV2StorageManifest.DurableTimerDueTimeField, ElsaRuntimeV2StorageManifest.DurableTimerIdField, ElsaRuntimeV2StorageManifest.IdField], included: true);
         AssertIndex(timers, "by_workflow_execution_and_timer_id", [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, ElsaRuntimeV2StorageManifest.DurableTimerIdField], included: true);
+
+        var schedules = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleDocumentKind);
+        AssertColumn(schedules, ElsaRuntimeV2StorageManifest.ArtifactIdField, PortableType.String, 128, nullable: false);
+        AssertColumn(schedules, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleActivationIdField, PortableType.String, 128, nullable: false);
+        AssertColumn(schedules, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIdField, PortableType.String, 128, nullable: false);
+        AssertColumn(schedules, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIsActiveField, PortableType.Boolean, null, nullable: false);
+        AssertColumn(schedules, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleNextOccurrenceField, PortableType.DateTimeOffset, null, nullable: false);
+        AssertIndex(schedules, ElsaRuntimeV2StorageManifest.RecurringScheduleByActiveNextOccurrenceAndScheduleIdIndex, [ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIsActiveField, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleNextOccurrenceField, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIdField, ElsaRuntimeV2StorageManifest.IdField], included: true);
+        AssertIndex(schedules, ElsaRuntimeV2StorageManifest.RecurringScheduleByActivationAndScheduleIdIndex, [ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleActivationIdField, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIdField, ElsaRuntimeV2StorageManifest.IdField], included: true);
+        AssertIndex(schedules, ElsaRuntimeV2StorageManifest.RecurringScheduleByArtifactAndScheduleIdIndex, [ElsaRuntimeV2StorageManifest.ArtifactIdField, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIdField, ElsaRuntimeV2StorageManifest.IdField], included: true);
 
         var incidents = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.IncidentStateDocumentKind);
         AssertIndex(incidents, "by_workflow_execution_and_incident_id", [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, ElsaRuntimeV2StorageManifest.IncidentIdField], included: true);
