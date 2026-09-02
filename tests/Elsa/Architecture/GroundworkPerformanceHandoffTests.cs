@@ -270,11 +270,12 @@ public sealed class GroundworkPerformanceHandoffTests
         const string assertions = """
 import runpy
 import sys
+from types import SimpleNamespace
 
 module = runpy.run_path(sys.argv[1])
 process_pid = module["process_pid"]
-own_pid = 1234
-blocked_tokens = ("dotnet", "msbuild", "vstest", "testhost", "xunit")
+require_idle_host = module["require_idle_host"]
+runner_globals = require_idle_host.__globals__
 
 cases = [
     (" 1234 dotnet test", False, 1234),
@@ -289,19 +290,38 @@ for line, windows, expected in cases:
     actual = process_pid(line, windows=windows)
     assert actual == expected, (line, windows, expected, actual)
 
-processes = [
-    " 1234 dotnet test",
-    "91234 dotnet test",
-    "malformed dotnet row",
-    "5678 harmless-process",
-]
-blocked = [
-    line
-    for line in processes
-    if process_pid(line, windows=False) != own_pid
-    and any(token in line.lower() for token in blocked_tokens)
-]
-assert blocked == ["91234 dotnet test", "malformed dotnet row"], blocked
+def run_guard(name, process_table):
+    commands = []
+    runner_globals["os"] = SimpleNamespace(name=name, getpid=lambda: 1234)
+    runner_globals["repository_root"] = lambda: "."
+    runner_globals["run_text"] = lambda command, cwd: commands.append(command) or process_table
+    try:
+        require_idle_host()
+        result = None
+    except ValueError as exception:
+        result = str(exception)
+    return result, commands
+
+result, commands = run_guard("posix", " 1234 dotnet test\n5678 harmless-process")
+assert result is None, result
+assert commands == [["ps", "-Ao", "pid=,command="]], commands
+
+result, _ = run_guard("posix", "91234 dotnet test")
+assert "91234 dotnet test" in result, result
+result, _ = run_guard("posix", "malformed dotnet row")
+assert "malformed dotnet row" in result, result
+
+own_windows = '"dotnet.exe","1234","Console","1","12,345 K"'
+result, commands = run_guard("nt", own_windows)
+assert result is None, result
+assert commands == [["tasklist", "/fo", "csv", "/nh"]], commands
+
+collision_windows = '"dotnet.exe","91234","Console","1","12,345 K"'
+result, _ = run_guard("nt", collision_windows)
+assert collision_windows in result, result
+malformed_windows = '"dotnet.exe","not-a-pid","Console","1","12,345 K"'
+result, _ = run_guard("nt", malformed_windows)
+assert malformed_windows in result, result
 """;
 
         var result = RunPython(assertions, runnerPath);
