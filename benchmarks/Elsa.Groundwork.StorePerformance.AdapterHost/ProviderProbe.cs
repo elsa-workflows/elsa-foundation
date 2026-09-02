@@ -225,7 +225,7 @@ internal static class ProviderProbe
         {
             ["retry_reads"] = settings.RetryReads.ToString(),
             ["retry_writes"] = settings.RetryWrites.ToString(),
-            ["direct_connection"] = settings.DirectConnection.ToString(),
+            ["direct_mode"] = settings.DirectConnection.ToString(),
             ["load_balanced"] = settings.LoadBalanced.ToString(),
             ["max_pool_size"] = settings.MaxConnectionPoolSize.ToString(),
             ["min_pool_size"] = settings.MinConnectionPoolSize.ToString(),

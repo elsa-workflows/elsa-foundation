@@ -70,6 +70,9 @@ public sealed class ProviderProbeTests
         Assert.Equal("default", configuration["read_concern"]);
         Assert.Equal("default", configuration["write_concern"]);
         Assert.Equal("default", configuration["write_concern_timeout"]);
+        Assert.Equal("True", configuration["direct_mode"]);
+        Assert.DoesNotContain(configuration.Keys, key =>
+            key.Contains("connection", StringComparison.OrdinalIgnoreCase));
     }
 
     [Theory]
