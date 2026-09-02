@@ -7,7 +7,11 @@ return await BenchmarkCli.RunAsync(args);
 
 internal static class BenchmarkCli
 {
-    public static async Task<int> RunAsync(string[] args)
+    public static Task<int> RunAsync(string[] args) => RunAsync(args, requireCleanCurrentBuild: true);
+
+    internal static Task<int> RunForTestAsync(string[] args) => RunAsync(args, requireCleanCurrentBuild: false);
+
+    private static async Task<int> RunAsync(string[] args, bool requireCleanCurrentBuild)
     {
         try
         {
@@ -15,8 +19,8 @@ internal static class BenchmarkCli
             return command switch
             {
                 "matrix" => await MatrixAsync(args[1..]),
-                "compare" => Compare(args[1..]),
-                "gate" => Gate(args[1..]),
+                "compare" => Compare(args[1..], requireCleanCurrentBuild),
+                "gate" => Gate(args[1..], requireCleanCurrentBuild),
                 "host-fingerprint" => HostFingerprintCommand(),
                 "workload-vectors" => WorkloadVectorsCommand(),
                 "help" or "--help" or "-h" => Help(),
@@ -35,12 +39,15 @@ internal static class BenchmarkCli
         var form = Option(args, "--form") ?? throw new PerformanceContractException("matrix requires --form.");
         var output = Option(args, "--out") ?? throw new PerformanceContractException("matrix requires --out.");
         var repositoryRoot = SourceProvenance.FindRepositoryRoot();
+        output = ArtifactOutputAdmission.RequireExternal(output, repositoryRoot);
         var catalog = WorkloadCatalog.Load(repositoryRoot);
         if (!catalog.Workloads.TryGetValue(workload, out var definition)) throw new PerformanceContractException($"Unknown frozen workload '{workload}'.");
         var packages = Options(args, "--package").Select(ParsePackage).ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
         var providerConfiguration = Options(args, "--provider-setting").Select(ParseSetting).ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
         var commitSha = Require(args, "--commit");
         SourceProvenance.RequireCleanHead(repositoryRoot, commitSha);
+        SourceProvenance.RequireAssemblyRevision(typeof(BenchmarkCli).Assembly, commitSha, "benchmark harness");
+        ProviderPackageProvenance.RequireExactCurrent(repositoryRoot, adapter, provider, packages);
         if (!definition.RequiredProviderEvidence.TryGetValue(provider, out var providerTopology))
             throw new PerformanceContractException("The provider is not admitted by the frozen workload topology contract.");
         var request = new MatrixRequest(Require(args, "--cohort"), Require(args, "--measurement-set"), definition.Id, definition.Version, provider, adapter, form, scale, commitSha, SourceProvenance.HarnessAssemblySha256(), packages, Require(args, "--composition"), HostFingerprint.CaptureSha256(), Require(args, "--provider-version"), providerTopology, providerConfiguration, definition.Input.Seed, definition.Input.FingerprintSha256, Require(args, "--native-plan"), Require(args, "--native-plan-evidence"), Require(args, "--native-plan-sha256"));
@@ -50,19 +57,35 @@ internal static class BenchmarkCli
         return 0;
     }
 
-    private static int Compare(string[] args)
+    private static int Compare(string[] args, bool requireCleanCurrentBuild)
     {
         var output = Require(args, "--out");
-        var comparison = Comparison.Compare(output, Require(args, "--oracle"), Require(args, "--target"), WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()));
-        var result = ResultStore.Write(Option(args, "--result") ?? Path.Combine(output, "comparison.v1.json"), comparison);
+        var repositoryRoot = SourceProvenance.FindRepositoryRoot();
+        output = ArtifactOutputAdmission.RequireExternal(output, repositoryRoot);
+        if (requireCleanCurrentBuild)
+            SourceProvenance.RequireCleanCurrentBuild(repositoryRoot, (typeof(BenchmarkCli).Assembly, "benchmark harness"));
+        var comparison = Comparison.Compare(output, Require(args, "--oracle"), Require(args, "--target"), WorkloadCatalog.Load(repositoryRoot));
+        var resultPath = ArtifactOutputAdmission.RequireWithin(
+            Option(args, "--result") ?? Path.Combine(output, "comparison.v1.json"),
+            output,
+            repositoryRoot);
+        var result = ResultStore.Write(resultPath, comparison);
         Console.WriteLine($"Comparison result: {result}");
         return comparison.Complete && comparison.CorrectnessEqual ? 0 : 2;
     }
-    private static int Gate(string[] args)
+    private static int Gate(string[] args, bool requireCleanCurrentBuild)
     {
         var output = Require(args, "--out");
-        var comparison = Comparison.Compare(output, Require(args, "--oracle"), Require(args, "--target"), WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()));
-        ResultStore.Write(Option(args, "--comparison-result") ?? Path.Combine(output, "comparison.from-gate.v1.json"), comparison);
+        var repositoryRoot = SourceProvenance.FindRepositoryRoot();
+        output = ArtifactOutputAdmission.RequireExternal(output, repositoryRoot);
+        if (requireCleanCurrentBuild)
+            SourceProvenance.RequireCleanCurrentBuild(repositoryRoot, (typeof(BenchmarkCli).Assembly, "benchmark harness"));
+        var comparison = Comparison.Compare(output, Require(args, "--oracle"), Require(args, "--target"), WorkloadCatalog.Load(repositoryRoot));
+        var comparisonResultPath = ArtifactOutputAdmission.RequireWithin(
+            Option(args, "--comparison-result") ?? Path.Combine(output, "comparison.from-gate.v1.json"),
+            output,
+            repositoryRoot);
+        ResultStore.Write(comparisonResultPath, comparison);
         var requestedClassOption = Option(args, "--class");
         var defaultPolicy = string.IsNullOrWhiteSpace(comparison.WorkloadId)
             ? GatePolicy.ForBlockedComparison()
@@ -80,7 +103,11 @@ internal static class BenchmarkCli
         var policy = !comparison.Complete || !comparison.CorrectnessEqual || replacement is null ? defaultPolicy : GatePolicyFile.Load(replacement, comparison.WorkloadId, comparison.WorkloadVersion);
         if (replacement is not null && policy.GateClass != requestedClass && Option(args, "--class") is not null) throw new PerformanceContractException("The reviewed replacement gate class does not match --class.");
         var verdict = GateEvaluator.Evaluate(policy, comparison);
-        var result = ResultStore.Write(Option(args, "--result") ?? Path.Combine(output, "gate.v1.json"), new GateReport(verdict, replacement is null || !comparison.Complete || !comparison.CorrectnessEqual ? null : GatePolicyFile.Hash(replacement)));
+        var resultPath = ArtifactOutputAdmission.RequireWithin(
+            Option(args, "--result") ?? Path.Combine(output, "gate.v1.json"),
+            output,
+            repositoryRoot);
+        var result = ResultStore.Write(resultPath, new GateReport(verdict, replacement is null || !comparison.Complete || !comparison.CorrectnessEqual ? null : GatePolicyFile.Hash(replacement)));
         Console.WriteLine($"Gate result: {result}");
         return verdict.Verdict == PerformanceVerdict.Pass ? 0 : 2;
     }
@@ -111,7 +138,13 @@ internal static class BenchmarkCli
     {
         try
         {
-            ResultStore.Write(Path.Combine(output, "gate.v1.json"), new GateReport(GateEvaluator.BlockedForContractFailure(reason), null));
+            var repositoryRoot = SourceProvenance.FindRepositoryRoot();
+            var admittedOutput = ArtifactOutputAdmission.RequireExternal(output, repositoryRoot);
+            var result = ArtifactOutputAdmission.RequireWithin(
+                Path.Combine(admittedOutput, "gate.v1.json"),
+                admittedOutput,
+                repositoryRoot);
+            ResultStore.Write(result, new GateReport(GateEvaluator.BlockedForContractFailure(reason), null));
         }
         catch
         {

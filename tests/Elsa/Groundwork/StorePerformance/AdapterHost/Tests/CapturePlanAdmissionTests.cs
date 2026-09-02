@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Elsa.Groundwork.StorePerformance.AdapterHost;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
@@ -26,7 +27,7 @@ public sealed class CapturePlanAdmissionTests
 
         try
         {
-            Assert.Throws<PerformanceContractException>(() => CapturePlanAdmission.Ensure(request));
+            Assert.Throws<PerformanceContractException>(() => CapturePlanAdmission.Ensure(request, output));
             Assert.False(Directory.Exists(output));
         }
         finally
@@ -41,7 +42,7 @@ public sealed class CapturePlanAdmissionTests
     {
         var request = Request() with { NativePlanEvidenceReference = "../escape.json" };
 
-        var exception = Assert.Throws<PerformanceContractException>(() => CapturePlanAdmission.Ensure(request));
+        var exception = Assert.Throws<PerformanceContractException>(() => CapturePlanAdmission.Ensure(request, ExternalOutput()));
 
         Assert.Contains("actual frozen input", exception.Message, StringComparison.Ordinal);
     }
@@ -54,9 +55,49 @@ public sealed class CapturePlanAdmissionTests
             NativePlanEvidenceReference = "checkpoint-commit.sqlite.other-set.native-plan.json"
         };
 
-        var exception = Assert.Throws<PerformanceContractException>(() => CapturePlanAdmission.Ensure(request));
+        var exception = Assert.Throws<PerformanceContractException>(() => CapturePlanAdmission.Ensure(request, ExternalOutput()));
 
         Assert.Contains("checkpoint-commit.sqlite.set.native-plan.json", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Groundwork.Store", "0.4.0-preview.6")]
+    [InlineData("Groundwork.Sqlite", "0.4.0-preview.5")]
+    public void Capture_plan_rejects_non_current_provider_package_provenance(string package, string version)
+    {
+        var request = Request() with
+        {
+            PackageVersions = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [package] = version
+            }
+        };
+
+        var exception = Assert.Throws<PerformanceContractException>(() =>
+            CapturePlanAdmission.Ensure(request, ExternalOutput()));
+
+        Assert.Contains("must exactly match", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Capture_plan_refuses_a_registered_workload_without_a_real_capture_implementation()
+    {
+        var workload = WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()).Workloads[RuntimeBookmarkLookupWorkload.WorkloadId];
+        var request = Request() with
+        {
+            WorkloadId = workload.Id,
+            WorkloadVersion = workload.Version,
+            Adapter = BenchmarkAdapterRegistry.GroundworkV2Adapter,
+            PhysicalForm = BookmarkLookupAdapter.PhysicalForm,
+            Seed = workload.Input.Seed,
+            InputFingerprintSha256 = workload.Input.FingerprintSha256,
+            NativePlanEvidenceReference = NativePlanEvidenceStaging.ReferenceFor(workload.Id, "sqlite", "set")
+        };
+
+        var exception = Assert.Throws<PerformanceContractException>(() => CapturePlanAdmission.Ensure(request, ExternalOutput()));
+
+        Assert.Contains("not implemented", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("no zero-route evidence will be synthesized", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -64,7 +105,7 @@ public sealed class CapturePlanAdmissionTests
     {
         var request = DiagnosticsRequest();
 
-        CapturePlanAdmission.Ensure(request);
+        CapturePlanAdmission.Ensure(request, ExternalOutput());
     }
 
     [Fact]
@@ -130,7 +171,7 @@ public sealed class CapturePlanAdmissionTests
         try
         {
             var exception = Assert.Throws<PerformanceContractException>(() =>
-                CapturePlanAdmission.Ensure(SecretRequest(provider, topology)));
+                CapturePlanAdmission.Ensure(SecretRequest(provider, topology), output));
 
             Assert.Contains(BenchmarkAdapterAdmission.SecretEfProviderRequiredReason, exception.Message, StringComparison.Ordinal);
             Assert.False(Directory.Exists(output));
@@ -180,6 +221,171 @@ public sealed class CapturePlanAdmissionTests
         Assert.False(Directory.Exists(args[^1]));
     }
 
+    [Fact]
+    public void Direct_commands_reject_repository_output_before_connection_resolution()
+    {
+        var repositoryRoot = SourceProvenance.FindRepositoryRoot();
+        var args = new[]
+        {
+            "run",
+            "--request",
+            RunRequestWire.Serialize(Request()),
+            "--out",
+            Path.Combine(repositoryRoot, "artifacts")
+        };
+        var connectionEnvironmentRead = false;
+
+        var exception = Assert.Throws<PerformanceContractException>(() =>
+            SecretRunAdmission.ParseAndResolve(args, "run", _ =>
+            {
+                connectionEnvironmentRead = true;
+                return "provider-connection";
+            }));
+
+        Assert.Contains("outside", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.False(connectionEnvironmentRead);
+    }
+
+    [Fact]
+    public void Direct_commands_reject_non_current_packages_before_connection_resolution()
+    {
+        var request = Request() with
+        {
+            PackageVersions = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Groundwork.Sqlite"] = "0.4.0-preview.5"
+            }
+        };
+        var args = new[]
+        {
+            "run",
+            "--request",
+            RunRequestWire.Serialize(request),
+            "--out",
+            ExternalOutput()
+        };
+        var connectionEnvironmentRead = false;
+
+        var exception = Assert.Throws<PerformanceContractException>(() =>
+            SecretRunAdmission.ParseAndResolve(args, "run", _ =>
+            {
+                connectionEnvironmentRead = true;
+                return "provider-connection";
+            }));
+
+        Assert.Contains("must exactly match", exception.Message, StringComparison.Ordinal);
+        Assert.False(connectionEnvironmentRead);
+    }
+
+    [Fact]
+    public async Task Adapter_host_cli_rejects_repository_output_before_source_or_provider_access()
+    {
+        var (exitCode, standardError) = await RunHostAsync(
+            "run",
+            Request(),
+            Path.Combine(SourceProvenance.FindRepositoryRoot(), "artifacts"));
+
+        Assert.Equal(2, exitCode);
+        Assert.Contains("outside", standardError, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("clean repository", standardError, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Adapter_host_capture_rejects_a_symlink_into_the_repository_before_source_or_provider_access()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        var externalRoot = Path.Combine(Path.GetTempPath(), $"elsa646-capture-link-{Guid.NewGuid():N}");
+        var link = Path.Combine(externalRoot, "repository-link");
+        Directory.CreateDirectory(externalRoot);
+        Directory.CreateSymbolicLink(link, SourceProvenance.FindRepositoryRoot());
+        try
+        {
+            var (exitCode, standardError) = await RunHostAsync(
+                "capture-plan",
+                Request(),
+                Path.Combine(link, "artifacts"));
+
+            Assert.Equal(2, exitCode);
+            Assert.Contains("outside", standardError, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("clean repository", standardError, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(link);
+            Directory.Delete(externalRoot);
+        }
+    }
+
+    [Fact]
+    public void Output_admission_requires_a_tree_disjoint_from_the_repository()
+    {
+        var repositoryRoot = SourceProvenance.FindRepositoryRoot();
+        var externalOutput = ExternalOutput();
+
+        Assert.Throws<PerformanceContractException>(() =>
+            ArtifactOutputAdmission.RequireExternal(repositoryRoot, repositoryRoot));
+        Assert.Throws<PerformanceContractException>(() =>
+            ArtifactOutputAdmission.RequireExternal(Path.Combine(repositoryRoot, "artifacts", "..", "artifacts"), repositoryRoot));
+        Assert.Throws<PerformanceContractException>(() =>
+            ArtifactOutputAdmission.RequireExternal(Path.GetDirectoryName(repositoryRoot)!, repositoryRoot));
+        Assert.EndsWith(
+            Path.GetFileName(externalOutput),
+            ArtifactOutputAdmission.RequireExternal(externalOutput, repositoryRoot),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Output_admission_resolves_a_symlink_into_the_repository()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+
+        var externalRoot = Path.Combine(Path.GetTempPath(), $"elsa646-output-link-{Guid.NewGuid():N}");
+        var link = Path.Combine(externalRoot, "repository-link");
+        Directory.CreateDirectory(externalRoot);
+        Directory.CreateSymbolicLink(link, SourceProvenance.FindRepositoryRoot());
+        try
+        {
+            Assert.Throws<PerformanceContractException>(() =>
+                ArtifactOutputAdmission.RequireExternal(Path.Combine(link, "artifacts"), SourceProvenance.FindRepositoryRoot()));
+        }
+        finally
+        {
+            Directory.Delete(link);
+            Directory.Delete(externalRoot);
+        }
+    }
+
+    private static string ExternalOutput() =>
+        Path.Combine(Path.GetTempPath(), $"elsa646-output-{Guid.NewGuid():N}");
+
+    private static async Task<(int ExitCode, string StandardError)> RunHostAsync(
+        string command,
+        RunRequest request,
+        string outputDirectory)
+    {
+        var start = new ProcessStartInfo("dotnet")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            WorkingDirectory = SourceProvenance.FindRepositoryRoot()
+        };
+        start.ArgumentList.Add(typeof(MatrixCatalog).Assembly.Location);
+        start.ArgumentList.Add(command);
+        start.ArgumentList.Add("--request");
+        start.ArgumentList.Add(RunRequestWire.Serialize(request));
+        start.ArgumentList.Add("--out");
+        start.ArgumentList.Add(outputDirectory);
+
+        using var process = Process.Start(start)!;
+        var standardError = await process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        return (process.ExitCode, standardError);
+    }
+
     private static RunRequest Request() => new(
         ComparisonCohortId: "cohort",
         MeasurementSetId: "set",
@@ -201,7 +407,7 @@ public sealed class CapturePlanAdmissionTests
         HostFingerprintSha256: new string('d', 64),
         PackageVersions: new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["Groundwork.Store"] = "0.4.0-preview.1"
+            ["Groundwork.Sqlite"] = "0.4.0-preview.6"
         },
         Seed: "spec094-checkpoint-commit-v1.1",
         InputFingerprintSha256: "ee4cef346ca64739bbe7cfc84ee3f74e6acefec582f537c685991ca73c62ce13",
@@ -232,7 +438,8 @@ public sealed class CapturePlanAdmissionTests
         HostFingerprintSha256: new string('d', 64),
         PackageVersions: new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["Groundwork.Store"] = "0.4.0-preview.6"
+            ["Microsoft.EntityFrameworkCore"] = "10.0.10",
+            ["Microsoft.EntityFrameworkCore.Sqlite"] = "10.0.10"
         },
         Seed: SecretCreateReadListWorkload.Seed,
         InputFingerprintSha256: SecretCreateReadListWorkload.ExpectedInputFingerprint,
@@ -264,7 +471,7 @@ public sealed class CapturePlanAdmissionTests
         HarnessAssemblySha256: new string('b', 64),
         PackageVersions: new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["Groundwork.Store"] = "0.4.0-preview.6"
+            ["Groundwork.Sqlite"] = "0.4.0-preview.6"
         },
         CompositionFingerprint: new string('c', 64),
         HostFingerprintSha256: new string('d', 64),

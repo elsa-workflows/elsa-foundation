@@ -13,14 +13,15 @@ substrate.
 | `WritePathRoundTripObserver` — the exact provider-native round-trip counter | **done**, compiles |
 | `ProviderConnections` — opens a real v2 connection for all four providers | **done**, compiles |
 | `probe-provider` | **done** — reads native server identity, topology, and sanitized driver settings |
-| `capture-plan` | **done for checkpoint-commit** — emits its explicitly routeless provenance document; native-route capture remains a separate provider-specific task |
+| `describe-matrix` | **done** — emits the schema-v2 exact 13-workload/15-registration catalog plus the AdapterHost and harness source revisions consumed by the operator runner |
+| `capture-plan` | **complete** for checkpoint, IAM, recovery, and both Secret targets; **partial/blocked** for diagnostics; the other eight routed workloads fail closed as not implemented |
 | optional-observer `src/` seam on `GroundworkV2RuntimeCheckpointWriter` | **done**, compiles |
 | `RuntimeStoreComposition` — DI composition, unit admission, distinct clients | **done**, compiles |
 | `CheckpointCommitAdapter` — correctness half, over the production commit path | **done**, compiles |
 | `RecoveryScanAdapter` — bounded public recovery paging and four native routes | **implemented**, focused workload tests pass; live provider capture remains operator-driven |
-| `verify-correctness` command | **done**, compiles, **not yet run against a provider** |
+| `verify-correctness` command | **done** — separate from plan capture and timed execution |
 | the five measured operations | **implemented** in the workload-owned phase adapter; no timed cohort claimed |
-| a measured cohort | **not run**, and not runnable on a loaded machine by construction |
+| current-version measured cohorts | **not yet retained**; the runner admits timing only for registrations with complete or explicitly routeless evidence and checks for an idle host immediately before execution |
 
 Nothing here has produced a measurement yet. No number in this project has been measured on v2.
 
@@ -207,10 +208,29 @@ Every operating constraint in the v1 host's README still applies and none of it 
 and staging directories outside the worktree, identical build configuration for harness and host, build once
 then stage then run, run detached, and prefer a checkout you are not editing. They are not repeated here.
 
-Before a checkpoint run, invoke `probe-provider` with the provider connection in its environment. It prints
-the native server version, the admitted topology, and the sanitized `--provider-setting` values to use when
-constructing the matrix request. Then invoke `capture-plan --request <request-json> --out <staging-directory>`
-for each provider. This command performs the live probe again and emits
+Start by reading the machine-owned status rather than copying a workload list from this README:
+
+```bash
+python3 tools/groundwork/run-e3-medium-baseline.py status
+```
+
+The runner exposes separate `capture`, `correctness`, `measure`, `compare`, and `gate` commands. Every one
+is a dry run until `--execute` is supplied. It obtains workload version, adapter/form admission, provider
+support, topology, seed, input fingerprint, capture status, and timing status from `describe-matrix`.
+Consequently, adding an adapter without updating the registry cannot silently make the Python runner claim
+support, and a routed workload without capture cannot fall through to checkpoint's zero-route document.
+The runner also requires both Release binaries to carry the clean current HEAD in their generated assembly
+metadata. A stale host or harness therefore fails before status, capture, correctness, measurement,
+comparison, or gate execution. Direct host and harness commands canonicalize `--out` and refuse the
+repository, its descendants, parent trees that contain it, and symlink aliases into it before any provider
+access or artifact write. The direct commands also require a clean current build, the exact provider-package
+names and central versions, and the canonical Release AdapterHost handshake; an alternate `--child-command`
+cannot stand in for the registered host. Optional comparison and gate result files must remain under the
+admitted output tree, including on blocked-report fallback paths.
+
+The runner invokes `probe-provider` from the provider connection in its environment and binds the native
+server version, admitted topology, and sanitized provider settings into the generated request. Its
+`capture` phase then invokes `capture-plan` and emits
 `checkpoint-commit.<provider>.<measurement-set>.native-plan.json`; its digest is the value for `--native-plan-sha256`. The
 document's `RouteContract=no-native-routes-declared` is a provenance statement derived from the frozen
 checkpoint workload, not a provider-plan capture or a performance result.
