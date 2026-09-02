@@ -510,15 +510,17 @@ only. It does not import a #646 performance verdict, delete either diagnostics
 EF oracle, complete T047/T050-T055/T057, promote a final evidence generation,
 or authorize #642 closure.
 
-## Current exact Groundwork 0.4.0-preview.5 pin-alignment checkpoint
+## Current exact Groundwork 0.4.0-preview.6 pin-alignment checkpoint
 
-The active Groundwork package family now resolves exactly to `0.4.0-preview.5` across the
+The active Groundwork package family now resolves exactly to `0.4.0-preview.6` across the
 repository's central package pins, explicit project overrides, diagnostics consumers, and
-release-lifecycle checks. The focused diagnostics restores completed successfully against the
-published preview.5 packages. The shared diagnostics project built successfully; its architecture
+release-lifecycle checks. The immutable upstream provenance is tag `v0.4.0-preview.6`, production
+commit `2f4d483c969e058ece3331584e5a5504edd47264`, and successful Feedz publication run
+`33591586325`. The focused diagnostics restores completed successfully against the published
+preview.6 packages. The shared diagnostics project built successfully; its architecture
 guard is covered by the targeted current-family assertion. The v2 Structured Logs suite passed
-28/32 with four unavailable-provider skips, and the v2 OpenTelemetry suite passed 12/16 with four
-unavailable-provider skips. These runs found no preview.5 compile or API break. Existing NU1903
+28/32 with four unavailable-provider skips, and the v2 OpenTelemetry suite passed 28/33 with five
+unavailable-provider skips. These runs found no preview.6 compile or API break. Existing NU1903
 SSH.NET vulnerability warnings remain unchanged.
 
 This is package pin-alignment and focused API-compatibility evidence only. It does not import a
