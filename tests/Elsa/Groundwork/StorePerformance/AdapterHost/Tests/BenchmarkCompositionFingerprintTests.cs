@@ -135,6 +135,20 @@ public sealed class BenchmarkCompositionFingerprintTests
     }
 
     [Fact]
+    public void Feature_units_cannot_be_missing_from_the_registry()
+    {
+        var request = Request();
+        var descriptor = BenchmarkCompositionFingerprint.Describe(request);
+        var declaredUnit = descriptor.Features.SelectMany(feature => feature.StorageUnitIds).First();
+
+        Assert.Throws<PerformanceContractException>(() =>
+            BenchmarkCompositionFingerprint.ValidateRegistryCoverage(
+                BenchmarkCompositionFingerprint.CompositionSelection.For(request),
+                descriptor.StorageUnits.Where(unit => unit.UnitId != declaredUnit).ToArray(),
+                descriptor.Features));
+    }
+
+    [Fact]
     public void Registry_path_composes_the_same_optional_families_as_a_live_groundwork_host()
     {
         var runtimeSelection = new BenchmarkCompositionFingerprint.CompositionSelection(
