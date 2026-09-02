@@ -1,12 +1,17 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
+using Groundwork.Kernel;
 using Groundwork.Store;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 
 internal static class V2OpenTelemetryCodec
 {
+    internal const int MaximumSummaryElementCodeUnits = 512;
+
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter() },
@@ -17,6 +22,7 @@ internal static class V2OpenTelemetryCodec
     {
         [V2OpenTelemetryStorageSchema.Id] = value.TraceId,
         [V2OpenTelemetryStorageSchema.TraceId] = Required(value.TraceId, nameof(value.TraceId)),
+        [V2OpenTelemetryStorageSchema.TraceKey] = TraceKey(value.TraceId),
         [V2OpenTelemetryStorageSchema.RootSpanId] = value.RootSpanId,
         [V2OpenTelemetryStorageSchema.ResourceId] = Required(value.ResourceIds.FirstOrDefault(), nameof(value.ResourceIds)),
         [V2OpenTelemetryStorageSchema.ServiceName] = serviceName,
@@ -28,6 +34,45 @@ internal static class V2OpenTelemetryCodec
         [V2OpenTelemetryStorageSchema.SpanCount] = (long)value.SpanCount,
         [V2OpenTelemetryStorageSchema.Payload] = Serialize(value)
     });
+
+    internal static StorageValues TraceSummary(TelemetryTrace value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var resourceIds = SummaryElements(value.ResourceIds, nameof(value.ResourceIds));
+        var workflowInstanceIds = SummaryElements(value.WorkflowInstanceIds, nameof(value.WorkflowInstanceIds));
+        var resourceKeys = resourceIds.Select(CanonicalSearchKey).ToArray();
+
+        return new(new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            [V2OpenTelemetryStorageSchema.TraceKey] = TraceKey(value.TraceId),
+            [V2OpenTelemetryStorageSchema.TraceId] = Required(value.TraceId, nameof(value.TraceId)),
+            [V2OpenTelemetryStorageSchema.RootSpanId] = value.RootSpanId,
+            [V2OpenTelemetryStorageSchema.Name] = value.Name,
+            [V2OpenTelemetryStorageSchema.Status] = (long)value.Status,
+            [V2OpenTelemetryStorageSchema.StartTime] = value.StartTime,
+            [V2OpenTelemetryStorageSchema.EndTime] = value.EndTime,
+            [V2OpenTelemetryStorageSchema.SpanCount] = (long)value.SpanCount,
+            [V2OpenTelemetryStorageSchema.ResourceIds] = Serialize(resourceIds),
+            [V2OpenTelemetryStorageSchema.ResourceKeys] = Serialize(resourceKeys),
+            [V2OpenTelemetryStorageSchema.WorkflowInstanceIds] = Serialize(workflowInstanceIds),
+            [V2OpenTelemetryStorageSchema.Payload] = Serialize(value)
+        });
+    }
+
+    internal static TelemetryTrace DeserializeTraceSummary(IReadOnlyDictionary<string, object?> row) =>
+        Deserialize<TelemetryTrace>(row);
+
+    internal static string CanonicalSearchKey(string value) =>
+        PortableStringComparison.CreateSearchKey(
+            Required(value, nameof(value)),
+            PortableStringComparisonPolicy.UnicodeOrdinalIgnoreCase);
+
+    internal static string TraceKey(string traceId)
+    {
+        var comparisonKey = CanonicalSearchKey(traceId);
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(comparisonKey)))
+            .ToLowerInvariant();
+    }
 
     internal static StorageValues Span(TelemetrySpan value) => new(new Dictionary<string, object?>(StringComparer.Ordinal)
     {
@@ -110,6 +155,21 @@ internal static class V2OpenTelemetryCodec
     }
 
     internal static string Serialize<T>(T value) => JsonSerializer.Serialize(value, Json);
+
+    private static string[] SummaryElements(IEnumerable<string> values, string field)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        return values.Select((value, index) =>
+        {
+            var required = Required(value, $"{field}[{index}]");
+            if (required.Length > MaximumSummaryElementCodeUnits)
+                throw new ArgumentOutOfRangeException(
+                    field,
+                    required.Length,
+                    $"OpenTelemetry field '{field}[{index}]' exceeds the declared {MaximumSummaryElementCodeUnits}-code-unit bound.");
+            return required;
+        }).ToArray();
+    }
 
     private static string Required(string? value, string field) =>
         !string.IsNullOrWhiteSpace(value)

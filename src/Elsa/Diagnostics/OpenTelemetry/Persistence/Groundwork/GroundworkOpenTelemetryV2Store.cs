@@ -693,6 +693,7 @@ public sealed class GroundworkOpenTelemetryStore :
         internal IStorageSession Resources { get; private set; } = null!;
         internal IStorageSession Instruments { get; private set; } = null!;
         internal IStorageSession Ledger { get; private set; } = null!;
+        internal IStorageSession TraceSummaries { get; private set; } = null!;
 
         internal V2Sessions() { }
 
@@ -701,7 +702,7 @@ public sealed class GroundworkOpenTelemetryStore :
             var access = StorageAccess.Scoped(binding.StorageScope);
             var units = new V2OpenTelemetryStorageSchemaSet().Units;
             var opened = units.Select(unit => connection.OpenSession(unit, access)).ToArray();
-            if (opened.Length != 7)
+            if (opened.Length != 8)
                 throw new InvalidOperationException("OpenTelemetry v2 did not open all storage units.");
             Traces = opened[0];
             Spans = opened[1];
@@ -710,17 +711,18 @@ public sealed class GroundworkOpenTelemetryStore :
             Resources = opened[4];
             Instruments = opened[5];
             Ledger = opened[6];
+            TraceSummaries = opened[7];
             Validate();
         }
 
         internal void Release()
         {
-            Traces = Spans = MetricPoints = Logs = Resources = Instruments = Ledger = null!;
+            Traces = Spans = MetricPoints = Logs = Resources = Instruments = Ledger = TraceSummaries = null!;
         }
 
         private void Validate()
         {
-            if (new[] { Traces.Unit.Id.Value, Spans.Unit.Id.Value, MetricPoints.Unit.Id.Value, Logs.Unit.Id.Value, Resources.Unit.Id.Value, Instruments.Unit.Id.Value, Ledger.Unit.Id.Value }.Distinct(StringComparer.Ordinal).Count() != 7)
+            if (new[] { Traces.Unit.Id.Value, Spans.Unit.Id.Value, MetricPoints.Unit.Id.Value, Logs.Unit.Id.Value, Resources.Unit.Id.Value, Instruments.Unit.Id.Value, Ledger.Unit.Id.Value, TraceSummaries.Unit.Id.Value }.Distinct(StringComparer.Ordinal).Count() != 8)
                 throw new ArgumentException("OpenTelemetry v2 sessions must each be bound to a distinct storage unit.");
         }
     }

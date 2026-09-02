@@ -18,11 +18,34 @@ public sealed class GroundworkV2OpenTelemetryTests
     {
         var units = V2OpenTelemetryStorageSchema.CreateUnits();
 
-        Assert.Equal(7, units.Count);
+        Assert.Equal(8, units.Count);
         Assert.All(units, unit => Assert.Equal(ScopePolicy.Scoped, unit.Scope));
         var traces = Assert.Single(units, unit => unit.Id.Value == V2OpenTelemetryStorageSchema.TraceUnitId);
         Assert.Equal(ColumnGeneration.ProviderSequence, Assert.Single(traces.Columns, column => column.Name == V2OpenTelemetryStorageSchema.Sequence).Generation);
         Assert.Contains(traces.AggregationProfiles, profile => profile.Name == V2OpenTelemetryStorageSchema.TraceProfile);
+        Assert.Contains(traces.Columns, column =>
+            column.Name == V2OpenTelemetryStorageSchema.TraceKey && column.MaxLength == 64);
+        Assert.Contains(traces.Indexes, index =>
+            index.Name == "elsa_otel_traces_trace_key" &&
+            index.Columns.SequenceEqual([new IndexColumn(V2OpenTelemetryStorageSchema.TraceKey)]));
+        Assert.NotNull(traces.RetentionIdempotency);
+
+        var summaries = Assert.Single(units, unit => unit.Id.Value == V2OpenTelemetryStorageSchema.TraceSummaryUnitId);
+        Assert.Equal("elsa_otel_trace_summaries_v3", summaries.Name);
+        Assert.True(summaries.Concurrency.IsOptimistic);
+        Assert.Equal([V2OpenTelemetryStorageSchema.TraceKey], summaries.Key.Columns);
+        var workflowIds = Assert.Single(summaries.Columns,
+            column => column.Name == V2OpenTelemetryStorageSchema.WorkflowInstanceIds);
+        Assert.Equal(PortableCollation.UnicodeOrdinalIgnoreCase, workflowIds.ElementSearchKey!.Collation);
+        Assert.Equal(512, workflowIds.ElementSearchKey.MaximumElementCodeUnits);
+        var order = Assert.Single(summaries.Indexes,
+            index => index.Name == "elsa_otel_trace_summaries_start");
+        Assert.Equal(
+            [
+                new IndexColumn(V2OpenTelemetryStorageSchema.StartTime, SortDirection.Descending),
+                new IndexColumn(V2OpenTelemetryStorageSchema.TraceKey)
+            ],
+            order.Columns);
     }
 
     [Fact]
