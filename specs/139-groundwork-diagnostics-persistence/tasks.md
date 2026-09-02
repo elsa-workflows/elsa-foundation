@@ -206,7 +206,17 @@
     diagnostic streams while runtime session opening stays read-only. Focused diagnostics,
     adapter, composition, and unified-host gates passed as summarized in `quickstart.md`.
 
-### Current exact 0.4.0-preview.3 recertification checkpoint
+### Current exact 0.4.0-preview.5 pin-alignment checkpoint
+
+- The active Groundwork family is pinned exactly to `0.4.0-preview.5` in central props and explicit
+  project/script overrides. Focused diagnostics restores completed, the shared project built, the
+  v2 Structured Logs suite passed 28/32 with four unavailable-provider skips, and the v2
+  OpenTelemetry suite passed 12/16 with four unavailable-provider skips. No preview.5 compile or
+  API break was found; existing NU1903 SSH.NET warnings remain. This is focused package/API
+  compatibility evidence only, not four-provider promotion, #646 performance evidence, EF
+  deletion, or #642 completion.
+
+### Historical exact 0.4.0-preview.3 recertification checkpoint (immutable)
 
 - Evidence: [`evidence/preview0403-recertification-results.json`](evidence/preview0403-recertification-results.json)
   records current package currency, 97/97 shared diagnostics correctness and architecture tests,

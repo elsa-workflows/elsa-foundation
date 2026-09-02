@@ -13,7 +13,8 @@ namespace Elsa.Diagnostics.Persistence.Tests;
 
 public sealed partial class DiagnosticsPersistenceArchitectureTests
 {
-    private const string CurrentGroundworkVersion = "0.4.0-preview.3";
+    private const string CurrentGroundworkVersion = "0.4.0-preview.5";
+    private const string EfLedgerGroundworkVersion = "0.4.0-preview.3";
     private static string RepoRoot { get; } = FindRepoRoot();
     private static readonly string DiagnosticsSourceRoot = Path.Combine(RepoRoot, "src", "Elsa", "Diagnostics");
     private static readonly string DiagnosticsTestRoot = Path.Combine(RepoRoot, "tests", "Elsa", "Diagnostics");
@@ -127,7 +128,7 @@ public sealed partial class DiagnosticsPersistenceArchitectureTests
                 Regex.IsMatch(source, $@"\b{Regex.Escape(reference.Method)}\s*\(", RegexOptions.CultureInvariant)));
         }
         var ledgerText = string.Join(Environment.NewLine, ledger);
-        Assert.Contains($"**Groundwork baseline:** exact `{CurrentGroundworkVersion}`", ledgerText, StringComparison.Ordinal);
+        Assert.Contains($"**Groundwork baseline:** exact `{EfLedgerGroundworkVersion}`", ledgerText, StringComparison.Ordinal);
         Assert.Contains("Disposition: 43 covered; 3 EF-mechanism-only facts retired at the Groundwork boundary", ledgerText, StringComparison.Ordinal);
         Assert.DoesNotContain("one remaining OpenTelemetry test", ledgerText, StringComparison.OrdinalIgnoreCase);
     }

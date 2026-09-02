@@ -5,6 +5,32 @@
 **Captured:** 2026-09-01 on `codex/642-diagnostics-03-recertification`, against Elsa `main` `8b92d34b7`.
 **Groundwork baseline:** exact `0.4.0-preview.3` (tag `v0.4.0-preview.3`, release SHA `9de7aa0e6271c311536d2a78a1e6c1f0260e1fda`).
 
+## Active v3 closeout checkpoint — 2026-09-02
+
+The historical inventory below remains the deletion ledger, but its preview.3 header is no longer the
+active implementation boundary. Diagnostics #642 now consumes Groundwork `0.4.0-preview.5` and the
+OpenTelemetry adapter has a v3 capture/summary contract with the following executable local evidence:
+
+- one exact multi-unit transaction commits all four signal streams, resource/instrument catalogs, the
+  trace summary, and the versioned v3 capture ledger;
+- the ledger fingerprints caller-supplied values with type/length framing and remains stable when a
+  referenced catalog entry changes between acknowledgement and replay;
+- summaries provide bounded canonical trace/name search keys, exact resource/service element filters,
+  locale-independent workflow substring matching, deterministic merge/order, and case-equivalent
+  span/log detail lookup;
+- trace retention and summary recomputation/deletion commit in the same exact unit of work; a post-commit
+  lost acknowledgement replays the identical retention `OperationId`, including multi-resource service
+  preservation and the zero-retention case;
+- readiness rejects providers lacking atomic commit, exact append outcomes, exact retention, or exact
+  retention affected keys before schema application or drain startup. Transaction-capable MongoDB replica
+  sets remain in the supported matrix; standalone MongoDB is an explicit refusal case.
+
+`GroundworkV2OpenTelemetryTests` passes 25/25 on SQLite and the strengthened native SQLite matrix row
+passes locally. PostgreSQL, SQL Server, transaction-capable MongoDB, and standalone-Mongo refusal are
+compiled but await the dedicated CI provider run on the exact PR head. This checkpoint advances no
+performance verdict: #646 continues to own performance evidence as a separate gate, and #647 continues
+to own EF-source deletion after correctness and provider evidence are green.
+
 This follows Spec 093's source-method ledger and its shared-host addendum. It inventories every
 `[Fact]` in the two EF test projects, including the SQLite feature/host tests that a token-only
 EF scan can miss. A row is not deletion approval: framework §2.21.1 requires explicit recorded
