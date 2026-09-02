@@ -1086,7 +1086,8 @@ public sealed class GroundworkOpenTelemetryStore :
     private static class TraceColumns
     {
         internal static ColumnRef Sequence => Column(V2OpenTelemetryStorageSchema.Sequence, QueryType.Int64, false);
-        internal static ColumnRef TraceId => Column(V2OpenTelemetryStorageSchema.TraceId, QueryType.String, false, 256);
+        internal static ColumnRef TraceId => Column(
+            V2OpenTelemetryStorageSchema.TraceId, QueryType.String, false, V2OpenTelemetryCodec.MaximumTraceIdCodeUnits);
         internal static ColumnRef TraceKey => Column(V2OpenTelemetryStorageSchema.TraceKey, QueryType.String, false, 64);
         internal static ColumnRef ResourceId => Column(V2OpenTelemetryStorageSchema.ResourceId, QueryType.String, false, 512);
         internal static ColumnRef ServiceName => Column(V2OpenTelemetryStorageSchema.ServiceName, QueryType.String, true, 512);
@@ -1100,8 +1101,13 @@ public sealed class GroundworkOpenTelemetryStore :
     private static class TraceSummaryColumns
     {
         internal static ColumnRef TraceKey => Column(V2OpenTelemetryStorageSchema.TraceKey, QueryType.String, false, 64);
-        internal static ColumnRef TraceId => Column(V2OpenTelemetryStorageSchema.TraceId, QueryType.String, false, 256);
-        internal static ColumnRef TraceIdSearchKey => Column(V2OpenTelemetryStorageSchema.TraceIdSearchKey, QueryType.String, false, 1536);
+        internal static ColumnRef TraceId => Column(
+            V2OpenTelemetryStorageSchema.TraceId, QueryType.String, false, V2OpenTelemetryCodec.MaximumTraceIdCodeUnits);
+        internal static ColumnRef TraceIdSearchKey => Column(
+            V2OpenTelemetryStorageSchema.TraceIdSearchKey,
+            QueryType.String,
+            false,
+            V2OpenTelemetryCodec.MaximumTraceIdSearchKeyCodeUnits);
         internal static ColumnRef NameSearchKey => Column(
             V2OpenTelemetryStorageSchema.NameSearchKey,
             QueryType.String,
@@ -1117,7 +1123,8 @@ public sealed class GroundworkOpenTelemetryStore :
     private static class SpanColumns
     {
         internal static ColumnRef Sequence => Column(V2OpenTelemetryStorageSchema.Sequence, QueryType.Int64, false);
-        internal static ColumnRef TraceId => Column(V2OpenTelemetryStorageSchema.TraceId, QueryType.String, false, 256);
+        internal static ColumnRef TraceId => Column(
+            V2OpenTelemetryStorageSchema.TraceId, QueryType.String, false, V2OpenTelemetryCodec.MaximumTraceIdCodeUnits);
         internal static ColumnRef TraceKey => Column(V2OpenTelemetryStorageSchema.TraceKey, QueryType.String, false, 64);
         internal static ColumnRef SpanId => Column(V2OpenTelemetryStorageSchema.SpanId, QueryType.String, false, 256);
         internal static ColumnRef StartTime => Column(V2OpenTelemetryStorageSchema.StartTime, QueryType.DateTimeOffset, false);
@@ -1141,7 +1148,8 @@ public sealed class GroundworkOpenTelemetryStore :
         internal static ColumnRef Id => Column(V2OpenTelemetryStorageSchema.Id, QueryType.String, false, 512);
         internal static ColumnRef ResourceId => Column(V2OpenTelemetryStorageSchema.ResourceId, QueryType.String, false, 512);
         internal static ColumnRef ServiceName => Column(V2OpenTelemetryStorageSchema.ServiceName, QueryType.String, true, 512);
-        internal static ColumnRef TraceId => Column(V2OpenTelemetryStorageSchema.TraceId, QueryType.String, true, 256);
+        internal static ColumnRef TraceId => Column(
+            V2OpenTelemetryStorageSchema.TraceId, QueryType.String, true, V2OpenTelemetryCodec.MaximumTraceIdCodeUnits);
         internal static ColumnRef TraceKey => Column(V2OpenTelemetryStorageSchema.TraceKey, QueryType.String, true, 64);
         internal static ColumnRef SpanId => Column(V2OpenTelemetryStorageSchema.SpanId, QueryType.String, true, 256);
         internal static ColumnRef SeverityText => Column(V2OpenTelemetryStorageSchema.SeverityText, QueryType.String, false);

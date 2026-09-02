@@ -78,14 +78,10 @@ public sealed class GroundworkV2OpenTelemetryProviderMatrixTests
             {
                 container = new MongoDbBuilder("mongo:7.0.37").Build();
                 await container.StartAsync();
-                configured = new MongoUrlBuilder(container.GetConnectionString())
-                {
-                    DatabaseName = "elsa_v2_diagnostics_standalone",
-                    AuthenticationSource = "admin"
-                }.ToString();
+                configured = container.GetConnectionString();
             }
 
-            using var connection = new MongoProviderFactory().Create(configured!);
+            using var connection = new MongoProviderFactory().Create(WithMongoDatabase(configured!));
             await using var store = new GroundworkOpenTelemetryStore(
                 connection,
                 Options.Create(new OpenTelemetryDiagnosticsOptions()),
@@ -113,6 +109,18 @@ public sealed class GroundworkV2OpenTelemetryProviderMatrixTests
     };
 
     private static bool IsCi() => Environment.GetEnvironmentVariable("CI") is "1" or "true";
+
+    private static string WithMongoDatabase(string connectionString)
+    {
+        var builder = new MongoUrlBuilder(connectionString);
+        if (!string.IsNullOrWhiteSpace(builder.DatabaseName))
+            return builder.ToString();
+
+        builder.DatabaseName = "elsa_v2_diagnostics_standalone";
+        if (!string.IsNullOrWhiteSpace(builder.Username) && string.IsNullOrWhiteSpace(builder.AuthenticationSource))
+            builder.AuthenticationSource = "admin";
+        return builder.ToString();
+    }
 
     private sealed class ProviderRuntime(string provider, string connectionString, IAsyncDisposable? container, string? sqlitePath) : IAsyncDisposable
     {

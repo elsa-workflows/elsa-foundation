@@ -67,7 +67,7 @@ public static class V2OpenTelemetryStorageSchema
         StorageUnit.Declare(TraceUnitId, "elsa_otel_traces_v2")
             .Int64(Sequence, c => c.Required().ProviderSequence())
             .String(Id, 256, c => c.Required())
-            .String(TraceId, 256, c => c.Required())
+            .String(TraceId, V2OpenTelemetryCodec.MaximumTraceIdCodeUnits, c => c.Required())
             .String(TraceKey, 64, c => c.Required())
             .String(RootSpanId, 256)
             .String(ResourceId, 512, c => c.Required())
@@ -104,8 +104,8 @@ public static class V2OpenTelemetryStorageSchema
     public static StorageUnit CreateTraceSummaries() =>
         StorageUnit.Declare(TraceSummaryUnitId, "elsa_otel_trace_summaries_v3")
             .String(TraceKey, 64, c => c.Required())
-            .String(TraceId, 256, c => c.Required())
-            .String(TraceIdSearchKey, 1536, c => c.Required())
+            .String(TraceId, V2OpenTelemetryCodec.MaximumTraceIdCodeUnits, c => c.Required())
+            .String(TraceIdSearchKey, V2OpenTelemetryCodec.MaximumTraceIdSearchKeyCodeUnits, c => c.Required())
             .String(RootSpanId, 256)
             .String(Name, V2OpenTelemetryCodec.MaximumSummaryNameCodeUnits)
             .String(NameSearchKey, V2OpenTelemetryCodec.MaximumSummaryNameSearchKeyCodeUnits)
@@ -130,7 +130,7 @@ public static class V2OpenTelemetryStorageSchema
         SpanUnitId,
         "elsa_otel_spans_v2",
         (builder) => builder
-            .String(TraceId, 256, c => c.Required())
+            .String(TraceId, V2OpenTelemetryCodec.MaximumTraceIdCodeUnits, c => c.Required())
             .String(TraceKey, 64, c => c.Required())
             .String(SpanId, 256, c => c.Required())
             .String(ResourceId, 512, c => c.Required())
@@ -155,7 +155,7 @@ public static class V2OpenTelemetryStorageSchema
         (builder) => builder
             .String(ResourceId, 512, c => c.Required())
             .String(ServiceName, 512)
-            .String(TraceId, 256)
+            .String(TraceId, V2OpenTelemetryCodec.MaximumTraceIdCodeUnits)
             .String(TraceKey, 64)
             .String(SpanId, 256)
             .String(SeverityText, c => c.Required())

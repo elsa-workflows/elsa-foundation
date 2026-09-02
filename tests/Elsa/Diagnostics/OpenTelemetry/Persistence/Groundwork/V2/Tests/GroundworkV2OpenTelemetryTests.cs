@@ -46,14 +46,15 @@ public sealed class GroundworkV2OpenTelemetryTests
             column => column.Name == V2OpenTelemetryStorageSchema.WorkflowInstanceIds);
         Assert.Equal(PortableCollation.UnicodeOrdinalIgnoreCase, workflowIds.ElementSearchKey!.Collation);
         Assert.Equal(512, workflowIds.ElementSearchKey.MaximumElementCodeUnits);
+        Assert.Equal(7, SearchKeyProjection.ExpansionFactor(PortableCollation.UnicodeOrdinalIgnoreCase));
         Assert.Contains(summaries.Columns, column =>
-            column.Name == V2OpenTelemetryStorageSchema.TraceIdSearchKey && column.MaxLength == 1536 && !column.IsNullable);
+            column.Name == V2OpenTelemetryStorageSchema.TraceIdSearchKey && column.MaxLength == 1792 && !column.IsNullable);
         Assert.Contains(summaries.Columns, column =>
             column.Name == V2OpenTelemetryStorageSchema.Name &&
-            column.MaxLength == 666 && column.IsNullable);
+            column.MaxLength == 571 && column.IsNullable);
         Assert.Contains(summaries.Columns, column =>
             column.Name == V2OpenTelemetryStorageSchema.NameSearchKey &&
-            column.MaxLength == 3996 && column.IsNullable);
+            column.MaxLength == 3997 && column.IsNullable);
         Assert.Contains(summaries.Columns, column =>
             column.Name == V2OpenTelemetryStorageSchema.ServiceNames && column.Type == PortableType.Json && !column.IsNullable);
         var order = Assert.Single(summaries.Indexes,
@@ -70,6 +71,45 @@ public sealed class GroundworkV2OpenTelemetryTests
     }
 
     [Fact]
+    public async Task Trace_summary_accepts_every_declared_cross_provider_search_key_bound()
+    {
+        using var database = new TemporarySqliteDatabase();
+        await using var fixture = await OpenStoreAsync(database, start: true);
+        var now = DateTimeOffset.UtcNow;
+        var resourceId = new string('r', 512);
+        var serviceName = new string('s', 512);
+        var traceId = new string('t', 256);
+        var traceName = new string('n', 571);
+        var resource = Resource(resourceId, serviceName, now);
+        var trace = new TelemetryTrace(
+            traceId,
+            null,
+            traceName,
+            now,
+            now,
+            TimeSpan.Zero,
+            SpanStatus.Ok,
+            [resourceId],
+            [],
+            1);
+
+        await fixture.Store.WriteAsync(
+            DiagnosticsDrainBatchId.New(),
+            new OpenTelemetryBatch([resource], [trace], [], [], [], []));
+
+        var result = await fixture.Store.QueryTracesAsync(new()
+        {
+            TraceId = traceId,
+            ResourceId = resourceId,
+            ServiceName = serviceName,
+            Search = traceName,
+            Take = 10
+        });
+
+        Assert.Equal(traceId, Assert.Single(result.Items).TraceId);
+    }
+
+    [Fact]
     public async Task Trace_summary_refuses_names_beyond_the_cross_provider_search_key_bound()
     {
         using var database = new TemporarySqliteDatabase();
@@ -78,7 +118,7 @@ public sealed class GroundworkV2OpenTelemetryTests
         var trace = new TelemetryTrace(
             "trace-name-bound",
             null,
-            new string('n', 667),
+            new string('n', 572),
             now,
             now,
             TimeSpan.Zero,
@@ -92,7 +132,7 @@ public sealed class GroundworkV2OpenTelemetryTests
                 DiagnosticsDrainBatchId.New(),
                 new OpenTelemetryBatch([], [trace], [], [], [], [])));
 
-        Assert.Contains("666-code-unit bound", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("571-code-unit bound", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -10,14 +10,17 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 
 internal static class V2OpenTelemetryCodec
 {
+    internal const int MaximumTraceIdCodeUnits = 256;
     internal const int MaximumSummaryElementCodeUnits = 512;
     internal const int MaximumSummaryElementCount = 5_000;
-    // UnicodeOrdinalIgnoreCase search keys expand to at most six ASCII code units per
-    // source code unit. SQL Server's portable ordinary-string ceiling is nvarchar(4000),
-    // so 666 is the largest whole source bound that remains valid on every provider.
-    internal const int MaximumSummaryNameCodeUnits = 666;
-    internal const int MaximumSummaryNameSearchKeyCodeUnits = MaximumSummaryNameCodeUnits * 6;
-    internal const int MaximumCanonicalSearchKeyCodeUnits = MaximumSummaryElementCodeUnits * 6;
+    internal const int UnicodeSearchKeyExpansionFactor = 7;
+    // Each UnicodeOrdinalIgnoreCase comparison scalar is persisted as a '|' delimiter
+    // plus six hexadecimal code units. SQL Server's ordinary-string ceiling is 4,000,
+    // so 571 source units (3,997 encoded units) is the largest portable trace-name bound.
+    internal const int MaximumSummaryNameCodeUnits = 4000 / UnicodeSearchKeyExpansionFactor;
+    internal const int MaximumSummaryNameSearchKeyCodeUnits = MaximumSummaryNameCodeUnits * UnicodeSearchKeyExpansionFactor;
+    internal const int MaximumTraceIdSearchKeyCodeUnits = MaximumTraceIdCodeUnits * UnicodeSearchKeyExpansionFactor;
+    internal const int MaximumCanonicalSearchKeyCodeUnits = MaximumSummaryElementCodeUnits * UnicodeSearchKeyExpansionFactor;
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -51,7 +54,7 @@ internal static class V2OpenTelemetryCodec
         var services = CanonicalElements(
             serviceKeys,
             V2OpenTelemetryStorageSchema.ServiceNames);
-        var traceIdSearchKey = BoundedSearchKey(value.TraceId, 256, nameof(value.TraceId));
+        var traceIdSearchKey = BoundedSearchKey(value.TraceId, MaximumTraceIdCodeUnits, nameof(value.TraceId));
         var name = string.IsNullOrWhiteSpace(value.Name)
             ? null
             : RequiredBounded(value.Name, MaximumSummaryNameCodeUnits, nameof(value.Name));
@@ -273,7 +276,7 @@ internal static class V2OpenTelemetryCodec
         var bounded = RequiredBounded(value, maximumSourceCodeUnits, field);
         return RequiredBounded(
             CanonicalSearchKey(bounded),
-            checked(maximumSourceCodeUnits * 6),
+            checked(maximumSourceCodeUnits * UnicodeSearchKeyExpansionFactor),
             $"{field} search key");
     }
 
