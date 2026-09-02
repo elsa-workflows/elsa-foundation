@@ -209,7 +209,7 @@ def validate_target_arguments(args: argparse.Namespace) -> None:
         value = getattr(args, name)
         if not SAFE_IDENTIFIER.fullmatch(value):
             raise ValueError(f"--{name.replace('_', '-')} must be a safe identifier")
-    if not LOWER_SHA256.fullmatch(args.composition):
+    if args.composition is not None and not LOWER_SHA256.fullmatch(args.composition):
         raise ValueError("--composition must be a lowercase SHA-256 fingerprint")
     if args.native_plan_identity and not SAFE_IDENTIFIER.fullmatch(args.native_plan_identity):
         raise ValueError("--native-plan-identity must be a safe identifier")
@@ -245,7 +245,7 @@ def request_document(
         "Scale": args.scale,
         "CommitSha": provenance["commit"],
         "HarnessAssemblySha256": provenance["harness"],
-        "CompositionFingerprint": args.composition,
+        "CompositionFingerprint": provenance["composition"],
         "HostFingerprintSha256": provenance["host"],
         "PackageVersions": provenance["packages"],
         "Seed": registration["Seed"],
@@ -364,18 +364,42 @@ def command_text(command: list[str]) -> None:
     print(shlex.join(command), flush=True)
 
 
-def target_context(args: argparse.Namespace) -> tuple[Path, Path, Path, dict[str, Any], dict[str, Any]]:
+def target_context(
+    args: argparse.Namespace,
+    phase: str | None = None,
+    root: Path | None = None,
+) -> tuple[Path, Path, Path, dict[str, Any], dict[str, Any], dict[str, Any]]:
     validate_target_arguments(args)
-    root = repository_root()
+    root = root or repository_root()
     child, harness = release_binaries(root)
     registration = select_registration(matrix_catalog(root, child), args)
+    if phase is not None:
+        require_phase(registration, phase)
+    probe = probe_provider(root, child, args.provider)
     provenance = {
         "commit": source_provenance(root),
         "harness": sha256(harness),
         "host": host_fingerprint(root, harness),
         "packages": provider_packages(root, registration, args.provider),
+        # The first request is only the identity envelope used by the side-effect-free
+        # describe-composition command. The resulting digest replaces this placeholder below.
+        "composition": "0" * 64,
     }
-    return root, child, harness, registration, provenance
+    request = request_document(registration, probe, args, provenance, "0" * 64)
+    output = run_text(
+        [str(child), "describe-composition", "--request", json.dumps(request, separators=(",", ":"))],
+        cwd=root,
+    )
+    document = strict_json(output, "AdapterHost describe-composition")
+    composition = document.get("Fingerprint")
+    if not isinstance(composition, str) or not LOWER_SHA256.fullmatch(composition):
+        raise ValueError("AdapterHost describe-composition did not emit a lowercase SHA-256 fingerprint")
+    if args.composition is not None and args.composition != composition:
+        raise ValueError(
+            f"--composition '{args.composition}' does not match the current adapter composition '{composition}'"
+        )
+    provenance["composition"] = composition
+    return root, child, harness, registration, provenance, probe
 
 
 def status(args: argparse.Namespace) -> int:
@@ -396,10 +420,9 @@ def status(args: argparse.Namespace) -> int:
 
 
 def capture(args: argparse.Namespace) -> int:
-    root, child, _, registration, provenance = target_context(args)
-    require_phase(registration, "capture")
+    root = repository_root()
     evidence = ensure_external(args.evidence_dir, root, "--evidence-dir")
-    probe = probe_provider(root, child, args.provider)
+    root, child, _, registration, provenance, probe = target_context(args, "capture", root)
     request = request_document(registration, probe, args, provenance, "0" * 64)
     command = [str(child), "capture-plan", "--request", json.dumps(request, separators=(",", ":")), "--out", str(evidence)]
     command_text(command)
@@ -411,11 +434,10 @@ def capture(args: argparse.Namespace) -> int:
 
 
 def correctness(args: argparse.Namespace) -> int:
-    root, child, _, registration, provenance = target_context(args)
-    require_phase(registration, "correctness")
+    root = repository_root()
     evidence = ensure_external(args.evidence_dir, root, "--evidence-dir")
     output = ensure_external(args.out, root, "--out")
-    probe = probe_provider(root, child, args.provider)
+    root, child, _, registration, provenance, probe = target_context(args, "correctness", root)
     path = evidence / evidence_reference(args)
     request = request_document(registration, probe, args, provenance, sha256(path))
     validate_evidence(path, request, registration, timing=False)
@@ -431,11 +453,10 @@ def correctness(args: argparse.Namespace) -> int:
 
 
 def measure(args: argparse.Namespace) -> int:
-    root, child, harness, registration, provenance = target_context(args)
-    require_phase(registration, "measure")
+    root = repository_root()
     evidence = ensure_external(args.evidence_dir, root, "--evidence-dir")
     output = ensure_external(args.out, root, "--out")
-    probe = probe_provider(root, child, args.provider)
+    root, child, harness, registration, provenance, probe = target_context(args, "measure", root)
     path = evidence / evidence_reference(args)
     request = request_document(registration, probe, args, provenance, sha256(path))
     document = validate_evidence(path, request, registration, timing=True)
@@ -449,7 +470,7 @@ def measure(args: argparse.Namespace) -> int:
         "--adapter", registration["Adapter"],
         "--form", registration["PhysicalForm"],
         "--commit", request["CommitSha"],
-        "--composition", args.composition,
+        "--composition", request["CompositionFingerprint"],
         "--native-plan", document["Identity"],
         "--native-plan-evidence", path.name,
         "--native-plan-sha256", sha256(path),
@@ -494,7 +515,7 @@ def add_target_arguments(parser: argparse.ArgumentParser, *, output: bool) -> No
     parser.add_argument("--form", required=True)
     parser.add_argument("--cohort", required=True)
     parser.add_argument("--measurement-set", required=True)
-    parser.add_argument("--composition", required=True)
+    parser.add_argument("--composition")
     parser.add_argument("--native-plan-identity")
     parser.add_argument("--scale", default="medium")
     parser.add_argument("--evidence-dir", required=True, type=Path)

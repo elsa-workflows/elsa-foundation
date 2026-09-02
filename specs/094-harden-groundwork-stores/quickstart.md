@@ -630,6 +630,11 @@ Also run invalid compositions: missing source, duplicate unit, unsupported route
 
 ## 6. Exercise schema tooling
 
+> **Historical example (pre-#1488):** The commands in this section reference the deleted
+> `ReferenceComposition` assembly and are retained as immutable migration evidence. They are not a
+> current executable path. Current #646 benchmark composition identity is emitted by the AdapterHost
+> `describe-composition` command and is unrelated to a physical schema-target fingerprint.
+
 Build the concrete host schema-source assembly, then set the connection value only through an environment variable. The shipped unified leaves register
 `GroundworkAllFeaturesDeploymentSchema` as their six-family runtime authority; hosts that explicitly select
 Groundwork Identity now contributes direct public-v2 units and keeps `GroundworkAllFeaturesDeploymentSchema`. The type lives in
