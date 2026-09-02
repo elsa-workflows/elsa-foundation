@@ -30,6 +30,8 @@ public static class V2OpenTelemetryStorageSchema
     public const string ResourceKeys = "resourceKeys";
     public const string ServiceNames = "serviceNames";
     public const string ServiceName = "serviceName";
+    public const string ServiceNameKey = "serviceNameKey";
+    public const string IdOrderKey = "idOrderKey";
     public const string WorkflowInstanceId = "workflowInstanceId";
     public const string WorkflowInstanceIds = "workflowInstanceIds";
     public const string RootSpanId = "rootSpanId";
@@ -186,19 +188,25 @@ public static class V2OpenTelemetryStorageSchema
         StorageUnit.Declare(ResourceUnitId, "elsa_otel_resources_v2")
             .String(Id, 512, c => c.Required())
             .String(ServiceName, 512, c => c.Required())
+            .String(ServiceNameKey, 64, c => c.Required())
+            .String(IdOrderKey, 64, c => c.Required())
             .Int64(Status, c => c.Required())
             .Timestamp(LastSeen, c => c.Required())
             .Json(Payload, c => c.Required())
             .Key(Id)
             .Index("elsa_otel_resources_last_seen", index => index
                 .Descending(LastSeen)
-                .Ascending(Id))
+                .Ascending(IdOrderKey))
             .Index("elsa_otel_resources_service", ServiceName)
             .Index("elsa_otel_resources_status", Status)
             .Index("elsa_otel_resources_status_last_seen", index => index
                 .Ascending(Status)
                 .Descending(LastSeen)
-                .Ascending(Id))
+                .Ascending(IdOrderKey))
+            .Index("elsa_otel_resources_service_last_seen", index => index
+                .Ascending(ServiceNameKey)
+                .Descending(LastSeen)
+                .Ascending(IdOrderKey))
             .Scoped()
             .Retention(0, LastSeen)
             .Build();

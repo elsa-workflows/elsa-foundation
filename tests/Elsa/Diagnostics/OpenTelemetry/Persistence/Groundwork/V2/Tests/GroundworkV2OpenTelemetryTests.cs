@@ -55,19 +55,32 @@ public sealed class GroundworkV2OpenTelemetryTests
             Assert.Single(logs.Indexes, index => index.Name == "elsa_otel_logs_trace_detail").Columns);
 
         var resources = Assert.Single(units, unit => unit.Id.Value == V2OpenTelemetryStorageSchema.ResourceUnitId);
+        Assert.Contains(resources.Columns, column =>
+            column.Name == V2OpenTelemetryStorageSchema.ServiceNameKey && column.MaxLength == 64 && !column.IsNullable);
+        Assert.Contains(resources.Columns, column =>
+            column.Name == V2OpenTelemetryStorageSchema.IdOrderKey && column.MaxLength == 64 && !column.IsNullable);
         Assert.Equal(
             [
                 new IndexColumn(V2OpenTelemetryStorageSchema.LastSeen, SortDirection.Descending),
-                new IndexColumn(V2OpenTelemetryStorageSchema.Id)
+                new IndexColumn(V2OpenTelemetryStorageSchema.IdOrderKey)
             ],
             Assert.Single(resources.Indexes, index => index.Name == "elsa_otel_resources_last_seen").Columns);
         Assert.Equal(
             [
                 new IndexColumn(V2OpenTelemetryStorageSchema.Status),
                 new IndexColumn(V2OpenTelemetryStorageSchema.LastSeen, SortDirection.Descending),
-                new IndexColumn(V2OpenTelemetryStorageSchema.Id)
+                new IndexColumn(V2OpenTelemetryStorageSchema.IdOrderKey)
             ],
             Assert.Single(resources.Indexes, index => index.Name == "elsa_otel_resources_status_last_seen").Columns);
+        Assert.Equal(
+            [
+                new IndexColumn(V2OpenTelemetryStorageSchema.ServiceNameKey),
+                new IndexColumn(V2OpenTelemetryStorageSchema.LastSeen, SortDirection.Descending),
+                new IndexColumn(V2OpenTelemetryStorageSchema.IdOrderKey)
+            ],
+            Assert.Single(resources.Indexes, index => index.Name == "elsa_otel_resources_service_last_seen").Columns);
+        var portability = PortabilityValidator.Validate(resources);
+        Assert.True(portability.IsPortable, string.Join("; ", portability.Refusals.Select(refusal => refusal.Message)));
         var metrics = Assert.Single(units, unit => unit.Id.Value == V2OpenTelemetryStorageSchema.MetricPointUnitId);
         Assert.Equal(
             [
@@ -221,6 +234,33 @@ public sealed class GroundworkV2OpenTelemetryTests
         Assert.Single((await fixture.Store.GetTraceAsync(trace.TraceId))!.Spans);
         Assert.Single((await fixture.Store.QueryMetricsAsync(new() { Take = 10 })).Points);
         Assert.Single((await fixture.Store.QueryLogsAsync(new() { Take = 10 })).Items);
+    }
+
+    [Fact]
+    public async Task Resource_service_filter_is_case_insensitive_and_page_tie_break_is_deterministic()
+    {
+        using var database = new TemporarySqliteDatabase();
+        await using var fixture = await OpenStoreAsync(database, start: true);
+        var now = new DateTimeOffset(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+        var resources = new[]
+        {
+            Resource("resource-z", "Orders", now),
+            Resource("resource-a", "orders", now),
+            Resource("resource-other", "billing", now)
+        };
+        await fixture.Store.WriteAsync(DiagnosticsDrainBatchId.New(), new OpenTelemetryBatch(resources, [], [], [], [], []));
+        await fixture.Store.CompleteDrainingAsync();
+
+        var first = (await fixture.Store.QueryResourcesAsync(new() { ServiceName = "ORDERS", Take = 2 })).Items;
+        var second = (await fixture.Store.QueryResourcesAsync(new() { ServiceName = "orders", Take = 2 })).Items;
+        var expected = resources
+            .Where(resource => string.Equals(resource.ServiceName, "orders", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(resource => ResourceIdentity(resource.Id), StringComparer.Ordinal)
+            .Select(resource => resource.Id);
+
+        Assert.Equal(expected, first.Select(resource => resource.Id));
+        Assert.Equal(first.Select(resource => resource.Id), second.Select(resource => resource.Id));
+        Assert.DoesNotContain(first, resource => resource.ServiceName == "billing");
     }
 
     [Fact]
@@ -835,6 +875,10 @@ public sealed class GroundworkV2OpenTelemetryTests
 
     private static TelemetryResource Resource(string id, string service, DateTimeOffset time) =>
         new(id, service, null, "dotnet", new Dictionary<string, string?>(), time, TelemetryResourceStatus.Active);
+
+    private static string ResourceIdentity(string value) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
+            PortableStringComparison.CreateSearchKey(value, PortableStringComparisonPolicy.UnicodeOrdinalIgnoreCase)))).ToLowerInvariant();
 
     private static MetricInstrument Instrument(string id, string resourceId, string name) =>
         new(id, resourceId, name, null, null, MetricKind.Gauge, new Dictionary<string, string?>());

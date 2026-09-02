@@ -117,7 +117,8 @@ public sealed class GroundworkOpenTelemetryStore :
             return new([], sourceRegistry?.DroppedCount ?? 0);
 
         var predicates = new List<Predicate>();
-        AddEqual(predicates, ResourceColumns.ServiceName, filter.ServiceName);
+        AddEqual(predicates, ResourceColumns.ServiceNameKey,
+            string.IsNullOrWhiteSpace(filter.ServiceName) ? null : V2OpenTelemetryCodec.Identity(filter.ServiceName, nameof(filter.ServiceName)));
         if (filter.Status is { } status)
             predicates.Add(new Predicate.Equal(ResourceColumns.Status, QueryConstant.Of(ResourceColumns.Status, (long)status)));
         if (!string.IsNullOrWhiteSpace(filter.Search))
@@ -130,7 +131,7 @@ public sealed class GroundworkOpenTelemetryStore :
             ResourceColumns.LastSeen,
             take,
             descending: true,
-            ResourceColumns.Id).Rows;
+            ResourceColumns.IdOrderKey).Rows;
         return new(rows.Select(V2OpenTelemetryCodec.Deserialize<TelemetryResource>).ToArray(), sourceRegistry?.DroppedCount ?? 0);
     }
 
@@ -1162,6 +1163,8 @@ public sealed class GroundworkOpenTelemetryStore :
     {
         internal static ColumnRef Id => Column(V2OpenTelemetryStorageSchema.Id, QueryType.String, false, 512);
         internal static ColumnRef ServiceName => Column(V2OpenTelemetryStorageSchema.ServiceName, QueryType.String, false, 512);
+        internal static ColumnRef ServiceNameKey => Column(V2OpenTelemetryStorageSchema.ServiceNameKey, QueryType.String, false, 64);
+        internal static ColumnRef IdOrderKey => Column(V2OpenTelemetryStorageSchema.IdOrderKey, QueryType.String, false, 64);
         internal static ColumnRef Status => Column(V2OpenTelemetryStorageSchema.Status, QueryType.Int64, false);
         internal static ColumnRef LastSeen => Column(V2OpenTelemetryStorageSchema.LastSeen, QueryType.DateTimeOffset, false);
         private static ColumnRef Column(string name, QueryType type, bool nullable, int? max = null) => new(new TableId("elsa_otel_resources_v2"), name, type, nullable, max);
