@@ -142,14 +142,9 @@ static async Task<int> CapturePlan(string[] args)
             CancellationToken.None);
         Console.WriteLine($"native-plan-evidence={request.NativePlanEvidenceReference}");
         Console.WriteLine($"native-plan-sha256={diagnosticsDigest}");
-        if (request.Adapter == EfDiagnosticsDurableHistoryAdapter.AdapterId)
-            Console.WriteLine("native-plan-routes=0 (EF correctness-only; bounded diagnostics routes are blocked by the public EF query shape)");
-        else
-        {
-            var capturedRoutes = DiagnosticsDurableHistoryWorkload.NativeRouteLimits.Keys.Count(route =>
-                !string.IsNullOrWhiteSpace(DiagnosticsNativePlanContract.For(request.Adapter, route).IndexName));
-            Console.WriteLine($"native-plan-routes={capturedRoutes}; blocked-routes={DiagnosticsDurableHistoryWorkload.NativeRouteLimits.Count - capturedRoutes}");
-        }
+        var diagnosticsEvidence = NativePlanEvidenceStaging.Read(
+            ArtifactStore.EvidencePath(outputDirectory, request.NativePlanEvidenceReference));
+        Console.WriteLine($"native-plan-routes={diagnosticsEvidence.Routes.Count}; blocked-routes={(diagnosticsEvidence.BlockedRoutes ?? []).Count}");
         return 0;
     }
 

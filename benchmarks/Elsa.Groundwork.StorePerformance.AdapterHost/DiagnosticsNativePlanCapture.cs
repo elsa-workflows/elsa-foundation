@@ -60,33 +60,73 @@ internal static class DiagnosticsNativePlanCapture
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     var specification = DiagnosticsNativePlanContract.For(request.Adapter, route);
-                    adapter.CommandObserver.ClearCommands();
-                    var before = Directory.EnumerateFiles(explainDirectory).ToHashSet(StringComparer.Ordinal);
-                    var result = await InvokeRouteAsync(scopes.Primary, route, limit, cancellationToken);
-                    if (result != limit)
-                        throw new PerformanceContractException($"Diagnostics native route '{route}' returned {result} rows; expected {limit}.");
+
+                    // An empty index is an explicit storage/route limitation, not an invitation to
+                    // capture the public query and label its scan as native evidence. In particular,
+                    // trace detail is a summary-plus-signal fanout and the remaining routes either
+                    // have no matching order index or require a materializing sort. Keep those route
+                    // identities in blocked evidence without executing their unbounded query shape.
                     if (string.IsNullOrWhiteSpace(specification.IndexName))
                     {
                         blockedRoutes.Add(route);
                         continue;
                     }
+
+                    adapter.CommandObserver.ClearCommands();
+                    var before = Directory.EnumerateFiles(explainDirectory).ToHashSet(StringComparer.Ordinal);
+                    var result = await InvokeRouteAsync(scopes.Primary, route, limit, cancellationToken);
+                    if (result != limit)
+                        throw new PerformanceContractException($"Diagnostics native route '{route}' returned {result} rows; expected {limit}.");
                     var command = RequireGroundworkCommand(adapter.CommandObserver.Commands, specification);
                     var nativePath = RequireNativeArtifact(explainDirectory, before, request.Provider, specification);
                     var rawPlan = IamNativePlanParser.NormalizeForArtifact(request.Provider, File.ReadAllText(nativePath));
                     var rawReference = ArtifactStore.RawPlanName($"diagnostics.{request.Provider}.{request.MeasurementSetId}.{route}.raw.json");
                     var rawPath = Path.Combine(outputDirectory, rawReference);
-                    WriteEnvelope(rawPath, new DiagnosticsNativePlanArtifact(1, request.Provider, request.Adapter, route, specification.TableName, specification.IndexName, command, rawPlan));
-                    routes.Add(new NativeRouteEvidence(
+                    var artifact = new DiagnosticsNativePlanArtifact(1, request.Provider, request.Adapter, route, specification.TableName, specification.IndexName, command, rawPlan);
+                    var routeEvidence = new NativeRouteEvidence(
                         route,
                         rawReference,
-                        ArtifactStore.HashFile(rawPath),
+                        string.Empty,
                         "index-search",
                         specification.IndexName,
                         specification.PhysicalCardinality,
                         specification.StorageScopeRequired,
                         specification.PredicateColumn is not null,
                         limit,
-                        limit));
+                        limit);
+
+                    // Validate the provider-owned plan before publishing the retained envelope. A
+                    // provider may still choose a sort/spill/scan for a route whose declaration has an
+                    // index; that is blocked evidence, never a synthetic index-search claim.
+                    var validationPath = Path.Combine(Path.GetTempPath(), $"diagnostics-native-plan-{Guid.NewGuid():N}.json");
+                    try
+                    {
+                        WriteEnvelope(validationPath, artifact);
+                        try
+                        {
+                            DiagnosticsNativePlanContract.ValidateEnvelope(request.Provider, request.Adapter, routeEvidence, validationPath);
+                        }
+                        catch (PerformanceContractException exception) when (DiagnosticsNativePlanContract.IsExpectedBlockedPlanFailure(exception))
+                        {
+                            blockedRoutes.Add(route);
+                            continue;
+                        }
+
+                        WriteEnvelope(rawPath, artifact);
+                        routes.Add(routeEvidence with { RawPlanSha256 = ArtifactStore.HashFile(rawPath) });
+                    }
+                    finally
+                    {
+                        try
+                        {
+                            if (File.Exists(validationPath))
+                                File.Delete(validationPath);
+                        }
+                        catch
+                        {
+                            // The temporary validation copy is not part of the retained artifact set.
+                        }
+                    }
                 }
                 var routeContract = blockedRoutes.Count == 0
                     ? "provider-native-routes"

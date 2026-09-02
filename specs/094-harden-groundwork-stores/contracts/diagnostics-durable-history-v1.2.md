@@ -12,8 +12,9 @@ and its declared `elsa_otel_trace_summaries_start` index. Each route uses a fini
 against a larger candidate population. Resource status/service queries remain blocked because their
 single-column predicate indexes cannot also satisfy the required last-seen order. Trace detail, metric
 and log listing, and the two Structured Logs routes remain blocked because their current ordinary units
-expose no matching provider-neutral secondary index. The harness does not synthesize evidence for any of
-those routes.
+expose no matching provider-neutral secondary index. The harness does not synthesize evidence for, or
+execute the unbounded/materializing query shape of, any blocked route; each remains an explicit blocked
+identity in the native-plan evidence.
 
 Groundwork capture dispatches provider-native retained plans for SQLite, SQL Server, PostgreSQL, and
 MongoDB through the existing provider composition. Admission reparses each raw-plan envelope and binds

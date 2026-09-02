@@ -21,6 +21,37 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             !string.IsNullOrWhiteSpace(DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, route).IndexName)));
     }
 
+    [Fact]
+    public void Fanout_unindexed_and_order_materializing_routes_are_explicitly_blocked()
+    {
+        var blocked = new[]
+        {
+            "resources-by-status",
+            "resources-by-service",
+            "trace-detail",
+            "metrics-by-last-seen",
+            "logs-by-last-seen",
+            "structured-log-recent",
+            "structured-log-replay"
+        };
+
+        Assert.All(blocked, route =>
+            Assert.Empty(DiagnosticsNativePlanContract.For(
+                DiagnosticsNativePlanContract.GroundworkAdapter,
+                route).IndexName));
+    }
+
+    [Fact]
+    public void Unfiltered_route_has_no_route_predicate_but_still_requires_scope_binding()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+
+        Assert.True(specification.StorageScopeRequired);
+        Assert.Null(specification.PredicateColumn);
+    }
+
     [Theory]
     [InlineData("sqlite")]
     [InlineData("postgresql")]
@@ -55,6 +86,25 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     }
 
     [Theory]
+    [InlineData("sqlite", "2 0 SCAN elsa_otel_resources_v2")]
+    [InlineData("postgresql", "[{\"Plan\":{\"Node Type\":\"Seq Scan\",\"Relation Name\":\"elsa_otel_resources_v2\"}}]")]
+    [InlineData("sqlserver", "<ShowPlanXML><RelOp PhysicalOp=\"Table Scan\"><TableScan><Object Table=\"[elsa_otel_resources_v2]\" /></TableScan></RelOp></ShowPlanXML>")]
+    [InlineData("mongodb", "{\"winningPlan\":{\"stage\":\"COLLSCAN\"}}")]
+    public void Physical_scan_plans_are_classified_as_explicitly_blocked(string provider, string nativePlan)
+    {
+        using var fixture = Fixture.Create(provider, "resources-by-last-seen", nativePlan: nativePlan);
+
+        var exception = Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateEnvelope(
+                provider,
+                fixture.Adapter,
+                fixture.Route,
+                fixture.Path));
+
+        Assert.True(DiagnosticsNativePlanContract.IsExpectedBlockedPlanFailure(exception));
+    }
+
+    [Theory]
     [InlineData("postgresql", "[{\"Plan\":{\"Node Type\":\"Index Scan\",\"Relation Name\":\"elsa_otel_resources_v2\",\"Index Name\":\"elsa_otel_resources_last_seen\",\"Sort Method\":\"external merge\",\"Sort Space Type\":\"Disk\"}}]")]
     [InlineData("sqlserver", "<ShowPlanXML><RelOp PhysicalOp=\"Index Seek\"><Warnings><SpillOccurred /></Warnings><IndexScan><Object Table=\"[elsa_otel_resources_v2]\" Index=\"[elsa_otel_resources_last_seen]\" /></IndexScan></RelOp></ShowPlanXML>")]
     [InlineData("mongodb", "{\"winningPlan\":{\"stage\":\"IXSCAN\",\"indexName\":\"elsa_otel_resources_last_seen\"},\"executionStats\":{\"usedDisk\":true}}")]
@@ -74,8 +124,9 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             "resources-by-last-seen",
             nativePlan: "2 0 SEARCH elsa_otel_resources_v2 USING INDEX unrelated_index (__groundwork_scope=?)");
 
-        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+        var exception = Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
             "sqlite", fixture.Adapter, fixture.Route, fixture.Path));
+        Assert.False(DiagnosticsNativePlanContract.IsExpectedBlockedPlanFailure(exception));
     }
 
     [Fact]
