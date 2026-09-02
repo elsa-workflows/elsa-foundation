@@ -14,7 +14,8 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 internal sealed class DistributedPlacementTakeoverAdapter(
     RunRequest request,
     string connectionString,
-    string outputDirectory)
+    string outputDirectory,
+    bool captureCommands = false)
     : IBenchmarkAdapter, IDistributedPlacementTakeoverWorkloadAdapter
 {
     internal const string PhysicalForm = "dedicated-placement-lease-documents";
@@ -25,6 +26,10 @@ internal sealed class DistributedPlacementTakeoverAdapter(
     private readonly string persistenceScope = PersistenceScopeFor(request);
 
     public IProviderRoundTripObserver? RoundTripObserver => composition?.Observer;
+
+    internal WritePathRoundTripObserver CommandObserver =>
+        composition?.Observer ?? throw new PerformanceContractException(
+            "The placement-takeover adapter has no command observer; PrepareAsync must run first.");
 
     public IReadOnlyList<IBenchmarkOperation> Operations =>
         operations ?? throw new PerformanceContractException(
@@ -38,11 +43,13 @@ internal sealed class DistributedPlacementTakeoverAdapter(
         // Probe before composing the long-lived runtime connection so provenance records the provider
         // handshake used to admit the actual Groundwork distributed placement store.
         var observed = await ProviderProbe.ReadAsync(request.Provider, connectionString, cancellationToken);
+        var observer = new WritePathRoundTripObserver(request.Provider, captureCommands);
         var created = await RuntimeStoreComposition.CreateAsync(
             request.Provider,
             connectionString,
             persistenceScope,
             cancellationToken,
+            observer: observer,
             includeDistributedRuntimeStores: true);
         observedProvider = observed;
         composition = created;

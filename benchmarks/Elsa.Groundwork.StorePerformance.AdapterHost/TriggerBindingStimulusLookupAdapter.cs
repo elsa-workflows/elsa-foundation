@@ -12,7 +12,8 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 internal sealed class TriggerBindingStimulusLookupAdapter(
     RunRequest request,
     string connectionString,
-    string outputDirectory)
+    string outputDirectory,
+    bool captureCommands = false)
     : IBenchmarkAdapter, IRuntimeTriggerBindingStimulusLookupWorkloadAdapter
 {
     internal const string PhysicalForm = "linked-executable-source-reference-index";
@@ -27,6 +28,10 @@ internal sealed class TriggerBindingStimulusLookupAdapter(
 
     public IProviderRoundTripObserver? RoundTripObserver => primaryComposition?.Observer;
 
+    internal WritePathRoundTripObserver CommandObserver =>
+        primaryComposition?.Observer ?? throw new PerformanceContractException(
+            "The trigger-binding-stimulus-lookup adapter has no command observer; PrepareAsync must run first.");
+
     public IReadOnlyList<IBenchmarkOperation> Operations =>
         operations ?? throw new PerformanceContractException(
             "The trigger-binding-stimulus-lookup operations were requested before correctness preparation completed.");
@@ -40,7 +45,7 @@ internal sealed class TriggerBindingStimulusLookupAdapter(
         // before composing either long-lived runtime connection, then retain that live handshake for
         // correctness provenance.
         var observed = await ProviderProbe.ReadAsync(request.Provider, connectionString, cancellationToken);
-        var sharedObserver = primaryComposition?.Observer ?? new WritePathRoundTripObserver(request.Provider);
+        var sharedObserver = primaryComposition?.Observer ?? new WritePathRoundTripObserver(request.Provider, captureCommands);
         var openedConnection = ProviderConnections.Open(request.Provider, connectionString);
         RuntimeStoreComposition? primary = null;
         RuntimeStoreComposition? secondary = null;
