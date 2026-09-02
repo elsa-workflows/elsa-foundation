@@ -1,6 +1,9 @@
+using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
+using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace Elsa.Groundwork.StorePerformance.AdapterHost.Tests;
@@ -87,6 +90,17 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
         {
             root.Delete(true);
         }
+    }
+
+    [Fact]
+    public async Task SQLite_durability_poll_retries_a_transient_schema_lock()
+    {
+        var store = new TransientLockedOpenTelemetryStore();
+        var tracking = new DiagnosticsDurableHistoryAdapter.TrackingOpenTelemetryStore(store);
+
+        await tracking.WaitForDurabilityAsync(CancellationToken.None);
+
+        Assert.Equal(2, store.DiagnosticsReadCount);
     }
 
     [Fact]
@@ -204,4 +218,26 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
         NativePlanContentSha256: new string('e', 64),
         ProcessKind: ProcessKind.Measured,
         ProcessIndex: processIndex);
+
+    private sealed class TransientLockedOpenTelemetryStore : IOpenTelemetryStore
+    {
+        public int DiagnosticsReadCount { get; private set; }
+
+        public ValueTask WriteAsync(OpenTelemetryBatch batch, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask<OpenTelemetryResourceResult> QueryResourcesAsync(OpenTelemetryResourceFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<OpenTelemetryTraceResult> QueryTracesAsync(OpenTelemetryTraceFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<OpenTelemetryTraceDetail?> GetTraceAsync(string traceId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<OpenTelemetryMetricResult> QueryMetricsAsync(OpenTelemetryMetricFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<OpenTelemetryLogResult> QueryLogsAsync(OpenTelemetryLogFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public ValueTask<OpenTelemetryStorageDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            DiagnosticsReadCount++;
+            if (DiagnosticsReadCount == 1)
+                throw new SqliteException("database schema is locked: main", 6, 6);
+
+            return ValueTask.FromResult(new OpenTelemetryStorageDiagnostics(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+        }
+    }
 }
