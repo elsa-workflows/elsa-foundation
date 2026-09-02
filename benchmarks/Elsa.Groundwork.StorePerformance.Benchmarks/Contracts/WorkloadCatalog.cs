@@ -14,7 +14,7 @@ public sealed class WorkloadCatalog
     private static readonly string[] RequiredFiles =
         ["runtime.json", "iam-secrets.json", "distributed-runtime.json", "diagnostics.json"];
     private static readonly string[] SuccessorFiles =
-        ["recovery-scan-v1.2.json", "secret-create-read-list-v1.1.json"];
+        ["diagnostics-durable-history-v1.2.json", "recovery-scan-v1.2.json", "secret-create-read-list-v1.1.json"];
     private static readonly string[] Providers = ["sqlite", "sqlserver", "postgresql", "mongodb"];
     private static readonly Regex Slug = new("^[a-z0-9]+(?:-[a-z0-9]+)*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex Sha256 = new("^[0-9a-f]{64}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -39,7 +39,7 @@ public sealed class WorkloadCatalog
         var expectedFiles = RequiredFiles.Concat(SuccessorFiles).Order(StringComparer.Ordinal).ToArray();
         if (!discovered.SequenceEqual(expectedFiles, StringComparer.Ordinal))
             throw new WorkloadContractException(
-                "The workload directory must contain exactly the four historical workload files and the reviewed Secret v1.1 and recovery-scan v1.2 successor files.");
+                "The workload directory must contain exactly the four historical workload files and the reviewed Secret v1.1, recovery-scan v1.2, and diagnostics v1.2 successor files.");
 
         var workloads = new Dictionary<string, PerformanceWorkload>(StringComparer.Ordinal);
         foreach (var file in RequiredFiles)
@@ -56,20 +56,18 @@ public sealed class WorkloadCatalog
             throw new WorkloadContractException("The immutable runtime.json source does not contain the historical recovery-scan workload.");
         ValidateHistoricalRecoveryContract(historicalRecovery);
 
-        var successors = SuccessorFiles.SelectMany(file => ReadFile(workloadDirectory, file, expectedSourceDigests)).ToArray();
-        if (successors.Count(workload => workload.Id == ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId) != 1 ||
-            successors.Count(workload => workload.Id == RuntimeRecoveryScanWorkload.WorkloadId) != 1 ||
-            successors.Length != 2)
-            throw new WorkloadContractException("The Secret v1.1 and recovery-scan v1.2 successor files must each contain exactly one workload.");
-        foreach (var workload in successors)
+        if (!workloads.TryGetValue(ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId, out var historicalDiagnostics))
+            throw new WorkloadContractException("The immutable diagnostics.json source does not contain the historical diagnostics workload.");
+        ValidateHistoricalDiagnosticsContract(historicalDiagnostics);
+
+        foreach (var successorFile in SuccessorFiles)
         {
-            if (!string.Equals(workload.Id, ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId, StringComparison.Ordinal) ||
-                workloads.ContainsKey(workload.Id) is false)
-            {
-                if (!string.Equals(workload.Id, RuntimeRecoveryScanWorkload.WorkloadId, StringComparison.Ordinal) ||
-                    workloads.ContainsKey(workload.Id) is false)
-                    throw new WorkloadContractException("Each successor file must replace its historical workload by its exact identifier.");
-            }
+            var successors = ReadFile(workloadDirectory, successorFile, expectedSourceDigests);
+            if (successors.Count != 1)
+                throw new WorkloadContractException($"The {successorFile} successor file must contain exactly one workload.");
+            var workload = successors[0];
+            if (!workloads.ContainsKey(workload.Id))
+                throw new WorkloadContractException($"The {successorFile} successor must replace a historical workload by its exact identifier.");
             workloads[workload.Id] = workload;
         }
 
@@ -191,6 +189,62 @@ public sealed class WorkloadCatalog
             !actual.OperationSequence.SequenceEqual(["seed-live-and-recoverable-state", "scan-recovery-candidates", "reopen-and-rescan", "verify-bounded-order-and-non-candidates"], StringComparer.Ordinal) ||
             actual.Lineage is not null)
             throw new WorkloadContractException("The historical recovery-scan v1.1 contract has been modified.");
+    }
+
+    private static void ValidateHistoricalDiagnosticsContract(PerformanceWorkload actual)
+    {
+        var expected = Expected[ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId];
+        var historicalParameters = new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            ["concurrentWriters"] = 4,
+            ["fixedNowUtc"] = "2026-07-25T00:00:00Z",
+            ["instrumentCount"] = 64,
+            ["normalizedRecordsPerOtlpBatch"] = 64,
+            ["payloadBytes"] = 512,
+            ["queryLimit"] = 200,
+            ["resourceCount"] = 128,
+            ["retainedRecordsPerStream"] = 100_000,
+            ["retentionOverflowRecords"] = 1_000,
+            ["structuredLogBatchSize"] = 200,
+            ["tenantCount"] = 2,
+            ["timedSetup"] = "excluded"
+        };
+        var historicalOperations = new[]
+        {
+            "seed-cross-scope-diagnostic-history", "append-structured-log-batches", "read-structured-log-recent",
+            "resume-structured-log-history", "reopen-and-read-structured-log-high-water", "append-open-telemetry-batches",
+            "query-open-telemetry-resources", "query-open-telemetry-traces", "read-open-telemetry-trace-detail",
+            "query-open-telemetry-metrics", "query-open-telemetry-logs", "inspect-exact-stream-counts",
+            "trim-diagnostic-streams", "reopen-and-verify-durable-history", "verify-cross-scope-isolation"
+        };
+        var historicalInvariants = new[]
+        {
+            "Structured Logs and OpenTelemetry suboperations execute through their public Elsa stores",
+            "durable acknowledgements contain no unexplained loss or duplication",
+            "recent, replay, catalog, trace, metric, log, count, and inspection results match the deterministic digest",
+            "retention preserves exact newest counts and trim-independent high-water state",
+            "reopen preserves committed history and cross-scope queries remain empty",
+            "all scale-bearing queries expose provider-native bounded plans"
+        };
+        if (actual.Id != ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId ||
+            actual.Version != "1.1.0" || actual.ScenarioId != "diagnostics-durable-history" ||
+            actual.Owner != "#642" || actual.Input.Seed != "spec094-diagnostics-durable-history-v1.1" ||
+            actual.Input.FingerprintSha256 != "448b4f1251861cc5629a6aed316a5ed2112ed14309da5b500838ad43f9513667" ||
+            actual.Correctness.ResultDigestSha256 != "d27a2436f75cf5bb44054e5e284631d4a00656223b5f2ba5ff0573e1fde4e7f7" ||
+            !SemanticInputMatches(actual.Input.Values, historicalParameters) ||
+            !actual.CoverageRows.SequenceEqual(expected.CoverageRows, StringComparer.Ordinal) ||
+            !actual.OperationSequence.SequenceEqual(historicalOperations, StringComparer.Ordinal) ||
+            !actual.RequiredProviders.SequenceEqual(Providers, StringComparer.Ordinal) ||
+            !actual.RequiredNativeRoutes.SequenceEqual(["resources-by-last-seen", "resources-by-status", "resources-by-service", "instruments-by-last-seen"], StringComparer.Ordinal) ||
+            !actual.Correctness.Invariants.SequenceEqual(historicalInvariants, StringComparer.Ordinal) ||
+            actual.Correctness.TimingGate != "SQLite compares the retained same-provider EF oracle. SQL Server, PostgreSQL, and MongoDB require independently reviewed numeric absolute budgets plus an executable absolute-budget gate; neither exists yet." ||
+            actual.EfContractBaseline != new EfContractBaseline("retained-sqlite-diagnostics-ef-oracle", "not-executed", "#646", "The retained diagnostics EF implementation is the SQLite oracle only; #646 owns live execution and deletion follows the accepted verdict.") ||
+            !actual.PhysicalFormsFor646.SequenceEqual([
+                "specialized-diagnostic-record-streams-with-shared-document-catalogs",
+                "specialized-diagnostic-record-streams-with-dedicated-document-catalogs"
+            ], StringComparer.Ordinal) ||
+            actual.BenchmarkAdmission != new BenchmarkAdmission("blocked", ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode))
+            throw new WorkloadContractException("The historical diagnostics v1.1 contract has been modified.");
     }
 
     private static PerformanceWorkload ParseWorkload(JsonElement value, string source)
@@ -334,7 +388,11 @@ public sealed class WorkloadCatalog
                 !actual.OperationSequence.SequenceEqual(successor.OperationSequence, StringComparer.Ordinal) ||
                 (actual.Id == RuntimeRecoveryScanWorkload.WorkloadId &&
                     actual.Lineage != new WorkloadLineage(RuntimeRecoveryScanWorkload.WorkloadId, "1.1.0", "production scanner paging is bounded to four native route candidates per page and the fixture preserves explicit terminal/live execution partitions")))
-                throw new WorkloadContractException($"The workload '{actual.Id}' does not match its reproducible successor contract vector, including every semantic input field and lineage.");
+                throw new WorkloadContractException(
+                    $"The workload '{actual.Id}' does not match its reproducible successor contract vector, including every semantic input field and lineage. " +
+                    $"Expected result digest '{golden.ResultDigest}', computed '{successor.ComputeResultDigest()}'.");
+            if (actual.Id == ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId)
+                ValidateDiagnosticsSuccessor(actual, expected);
             if (ReproducibleWorkloadScenarioCatalog.TryGetBlockedReason(actual.Id, out var blockedReason))
                 RequireAdmission(actual, "blocked", blockedReason);
             else
@@ -363,6 +421,60 @@ public sealed class WorkloadCatalog
             ReproducibleWorkloadScenarioCatalog.BlockedResultDigest != golden.ResultDigest)
             throw new WorkloadContractException($"The workload '{actual.Id}' is not the explicitly blocked Secret comparator contract.");
         RequireAdmission(actual, "blocked", ReproducibleWorkloadScenarioCatalog.BlockedReasonCode);
+    }
+
+    private static void ValidateDiagnosticsSuccessor(PerformanceWorkload actual, ExpectedWorkload expected)
+    {
+        var providerEvidence = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["sqlite"] = "file-backed-distinct-connections",
+            ["sqlserver"] = "real-sqlserver-container",
+            ["postgresql"] = "real-postgresql-container",
+            ["mongodb"] = "transaction-capable-replica-set"
+        };
+        var invariants = new[]
+        {
+            "Structured Logs and OpenTelemetry suboperations execute through their public Elsa stores",
+            "durable acknowledgements contain no unexplained loss or duplication",
+            "recent, replay, catalog, trace, metric, log, count, and inspection results match the deterministic digest",
+            "retention preserves exact newest counts and trim-independent high-water state",
+            "reopen preserves committed history and cross-scope queries remain empty",
+            "every scale-bearing native route is captured, and unindexed routes remain explicitly blocked",
+            "the SQLite EF comparator and Groundwork stores produce equal public observations"
+        };
+        var artifactRetention = new[]
+        {
+            "workload id and version",
+            "commit and Groundwork source SHAs",
+            "input fingerprint and correctness digest",
+            "Structured Logs and OpenTelemetry suboperation results",
+            "provider topology and sanitized configuration",
+            "raw per-operation samples and statistical summaries",
+            "native diagnostic-record and catalog plans",
+            "physical form, storage, write amplification, and provider work signals",
+            "queue depth, shed rate, drain, retry, and restart outcomes"
+        };
+        var expectedTimingGate = "Diagnostics remains blocked until an independently ratified absolute-budget authority exists; SQLite correctness may compare the temporary same-provider EF oracle, but no timing is claimed. SQL Server, PostgreSQL, and MongoDB require independently reviewed numeric absolute budgets plus an executable absolute-budget gate.";
+
+        if (actual.Version != "1.2.0" || actual.Owner != "#646" ||
+            actual.PublicOperation != "Append, query, inspect, trim, reopen, and isolate durable Structured Logs and OpenTelemetry history through IStructuredLogStore and IOpenTelemetryStore." ||
+            !actual.RequiredNativeRoutes.SequenceEqual([
+                "resources-by-last-seen", "resources-by-status", "resources-by-service",
+                "traces-by-last-seen", "trace-detail", "metrics-by-last-seen", "logs-by-last-seen",
+                "structured-log-recent", "structured-log-replay"
+            ], StringComparer.Ordinal) ||
+            !actual.RequiredProviderEvidence.OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                .SequenceEqual(providerEvidence.OrderBy(pair => pair.Key, StringComparer.Ordinal)) ||
+            !actual.Correctness.Invariants.SequenceEqual(invariants, StringComparer.Ordinal) ||
+            actual.Correctness.TimingGate != expectedTimingGate ||
+            actual.EfContractBaseline != new EfContractBaseline(
+                "retained-sqlite-diagnostics-ef-oracle",
+                "not-executed",
+                "#646",
+                "The retained diagnostics EF implementation is the SQLite correctness oracle only; #646 owns live execution and deletion follows the accepted verdict.") ||
+            !actual.PhysicalFormsFor646.SequenceEqual(expected.PhysicalForms, StringComparer.Ordinal) ||
+            !actual.ArtifactRetention.SequenceEqual(artifactRetention, StringComparer.Ordinal))
+            throw new WorkloadContractException("The diagnostics v1.2 successor does not match its explicitly ratified replacement contract.");
     }
 
     private static IReadOnlyDictionary<string, object> IamSemanticInputParameters()
@@ -466,6 +578,7 @@ public sealed class WorkloadCatalog
     {
         ["runtime.json"] = "1b81a63d8a2acfe5ceea9e9a7e458de21c0fae8069506be5e94258198eff7d41",
         ["iam-secrets.json"] = "b5681de1cb1cf5fa9e671770df0cc78f026103293889d86d0c9ea63fcc4ee364",
+        ["diagnostics-durable-history-v1.2.json"] = "386f92762e7f81f6c804a95df91833726695a32f711f9dedc3a19d9c880ffd42",
         ["secret-create-read-list-v1.1.json"] = "d9359af187da4f8a1568896a7ecae8e97215eb58f68d0e185d677a94833cc240",
         ["recovery-scan-v1.2.json"] = "7f6e808855a36fffcc2ebfca3a05c3f0ddcd4e301e03fb935216c61999271419",
         ["distributed-runtime.json"] = "e03a5db9ddbdbfe4c854632fadc00b2674546d0925e65b0af198ada75910d837",
@@ -487,7 +600,7 @@ public sealed class WorkloadCatalog
         ["command-send-lease-ack"] = new(["distributed-command-transport"], ["dedicated-command-transport-documents", "stream-head-documents", "shared-documents-with-linked-index-tables", "visibility-order-index"]),
         ["diagnostics-durable-history"] = new(
             ["diagnostics-open-telemetry-store", "diagnostics-structured-log-store"],
-            ["specialized-diagnostic-record-streams-with-shared-document-catalogs", "specialized-diagnostic-record-streams-with-dedicated-document-catalogs"])
+            ["ordinary-groundwork-diagnostics-units", "efcore-diagnostics-relational-tables"])
     };
 }
 

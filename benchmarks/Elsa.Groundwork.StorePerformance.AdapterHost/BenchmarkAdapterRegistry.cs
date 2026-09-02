@@ -12,6 +12,7 @@ internal static class BenchmarkAdapterRegistry
     internal const string GroundworkV2Adapter = "groundwork-v2";
     internal const string GroundworkAspNetCoreIdentityAdapter = "groundwork-aspnetcore-identity";
     internal const string EfSecretRepositoryAdapterId = "ef-secret-repository";
+    internal const string EfDiagnosticsAdapterId = "ef-diagnostics-oracle";
     internal const string GroundworkSecretRepositoryAdapterId = "groundwork-secret-repository";
     internal const string WorkloadVersion = "1.1.0";
     internal const string RecoveryWorkloadVersion = "1.2.0";
@@ -52,6 +53,10 @@ internal static class BenchmarkAdapterRegistry
                 new EfSecretRepositoryAdapter(request, connectionString, outputDirectory),
             { WorkloadId: SecretCreateReadListWorkload.WorkloadId, WorkloadVersion: WorkloadVersion, Adapter: GroundworkSecretRepositoryAdapterId, PhysicalForm: GroundworkSecretRepositoryAdapter.PhysicalForm } =>
                 new GroundworkSecretRepositoryAdapter(request, connectionString, outputDirectory),
+            { WorkloadId: DiagnosticsDurableHistoryWorkload.WorkloadId, WorkloadVersion: "1.2.0", Adapter: DiagnosticsDurableHistoryAdapter.AdapterId, PhysicalForm: DiagnosticsDurableHistoryAdapter.PhysicalForm } =>
+                new DiagnosticsDurableHistoryAdapter(request, connectionString, outputDirectory),
+            { WorkloadId: DiagnosticsDurableHistoryWorkload.WorkloadId, WorkloadVersion: "1.2.0", Adapter: EfDiagnosticsAdapterId, PhysicalForm: EfDiagnosticsDurableHistoryAdapter.PhysicalForm } =>
+                new EfDiagnosticsDurableHistoryAdapter(request, connectionString, outputDirectory),
             _ => throw new PerformanceContractException(
                 $"No Groundwork adapter is registered for exact workload/adapter/physical form '{request.WorkloadId}/{request.Adapter}/{request.PhysicalForm}'.")
         };

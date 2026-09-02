@@ -1,5 +1,6 @@
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 
 namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 
@@ -31,7 +32,11 @@ internal static class SecretRunAdmission
         var workload = catalog.Workloads.TryGetValue(request.WorkloadId, out var candidate)
             ? candidate
             : throw new PerformanceContractException($"Workload '{request.WorkloadId}' is not in the frozen catalog.");
-        ArtifactAdmission.ValidateRequest(workload, request);
+        if (string.Equals(command, "verify-correctness", StringComparison.Ordinal) &&
+            string.Equals(request.WorkloadId, DiagnosticsDurableHistoryWorkload.WorkloadId, StringComparison.Ordinal))
+            ArtifactAdmission.ValidateEvidenceRequest(workload, request);
+        else
+            ArtifactAdmission.ValidateRequest(workload, request);
         return new AdmittedAdapterRun(
             request,
             outputDirectory,

@@ -95,6 +95,29 @@ static async Task<int> CapturePlan(string[] args)
         return 0;
     }
 
+    if (string.Equals(request.WorkloadId, DiagnosticsDurableHistoryWorkload.WorkloadId, StringComparison.Ordinal))
+    {
+        // Diagnostics has declared provider-native routes. It must never fall through to the
+        // checkpoint provenance document, whose empty route list would make a capture look complete.
+        var diagnosticsDigest = await DiagnosticsNativePlanCapture.CaptureAsync(
+            request,
+            connectionString,
+            outputDirectory,
+            observed,
+            CancellationToken.None);
+        Console.WriteLine($"native-plan-evidence={request.NativePlanEvidenceReference}");
+        Console.WriteLine($"native-plan-sha256={diagnosticsDigest}");
+        if (request.Adapter == EfDiagnosticsDurableHistoryAdapter.AdapterId)
+            Console.WriteLine("native-plan-routes=0 (EF correctness-only; bounded diagnostics routes are blocked by the public EF query shape)");
+        else
+        {
+            var capturedRoutes = DiagnosticsDurableHistoryWorkload.NativeRouteLimits.Keys.Count(route =>
+                !string.IsNullOrWhiteSpace(DiagnosticsNativePlanContract.For(request.Adapter, route).IndexName));
+            Console.WriteLine($"native-plan-routes={capturedRoutes}; blocked-routes={DiagnosticsDurableHistoryWorkload.NativeRouteLimits.Count - capturedRoutes}");
+        }
+        return 0;
+    }
+
     var reference = NativePlanEvidenceStaging.ReferenceFor(request.WorkloadId, request.Provider, request.MeasurementSetId);
     if (!string.Equals(reference, request.NativePlanEvidenceReference, StringComparison.Ordinal))
         throw new PerformanceContractException(

@@ -1,4 +1,5 @@
 using Elsa.Groundwork.StorePerformance.AdapterHost;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using Xunit;
@@ -56,6 +57,64 @@ public sealed class CapturePlanAdmissionTests
         var exception = Assert.Throws<PerformanceContractException>(() => CapturePlanAdmission.Ensure(request));
 
         Assert.Contains("checkpoint-commit.sqlite.set.native-plan.json", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Diagnostics_capture_plan_is_allowed_to_reach_provider_resolution_while_timing_stays_blocked()
+    {
+        var request = DiagnosticsRequest();
+
+        CapturePlanAdmission.Ensure(request);
+    }
+
+    [Fact]
+    public void Diagnostics_correctness_admission_resolves_the_provider_but_run_remains_blocked()
+    {
+        var request = DiagnosticsRequest();
+        var args = new[]
+        {
+            "verify-correctness",
+            "--request",
+            RunRequestWire.Serialize(request),
+            "--out",
+            Path.Combine(Path.GetTempPath(), $"diagnostics-correctness-{Guid.NewGuid():N}")
+        };
+        var resolved = false;
+
+        SecretRunAdmission.ParseAndResolve(args, "verify-correctness", _ =>
+        {
+            resolved = true;
+            return "provider-connection";
+        });
+
+        Assert.True(resolved);
+        var runArgs = (string[])args.Clone();
+        runArgs[0] = "run";
+        Assert.Throws<PerformanceContractException>(() =>
+            SecretRunAdmission.ParseAndResolve(runArgs, "run", _ =>
+            {
+                throw new InvalidOperationException("The blocked run must not resolve a provider.");
+            }));
+    }
+
+    [Fact]
+    public void Evidence_bypass_does_not_admit_the_temporary_ef_comparator_on_non_sqlite()
+    {
+        var request = DiagnosticsRequest() with
+        {
+            Provider = "postgresql",
+            ProviderVersion = "16.0",
+            ProviderTopology = "real-postgresql-container",
+            Adapter = BenchmarkAdapterRegistry.EfDiagnosticsAdapterId,
+            PhysicalForm = EfDiagnosticsDurableHistoryAdapter.PhysicalForm
+        };
+
+        var exception = Assert.Throws<PerformanceContractException>(() =>
+            ArtifactAdmission.ValidateEvidenceRequest(
+                WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()).Workloads[DiagnosticsDurableHistoryWorkload.WorkloadId],
+                request));
+
+        Assert.Contains(BenchmarkAdapterAdmission.DiagnosticsEfProviderRequiredReason, exception.Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -173,7 +232,7 @@ public sealed class CapturePlanAdmissionTests
         HostFingerprintSha256: new string('d', 64),
         PackageVersions: new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["Groundwork.Store"] = "0.4.0-preview.3"
+            ["Groundwork.Store"] = "0.4.0-preview.5"
         },
         Seed: SecretCreateReadListWorkload.Seed,
         InputFingerprintSha256: SecretCreateReadListWorkload.ExpectedInputFingerprint,
@@ -182,6 +241,40 @@ public sealed class CapturePlanAdmissionTests
             SecretCreateReadListWorkload.WorkloadId,
             provider,
             "secret-set"),
+        NativePlanContentSha256: new string('e', 64),
+        ProcessKind: ProcessKind.Measured,
+        ProcessIndex: 1);
+
+    private static RunRequest DiagnosticsRequest() => new(
+        ComparisonCohortId: "diagnostics-cohort",
+        MeasurementSetId: "diagnostics-set",
+        WorkloadId: DiagnosticsDurableHistoryWorkload.WorkloadId,
+        WorkloadVersion: DiagnosticsDurableHistoryWorkload.Version,
+        Provider: "sqlite",
+        ProviderVersion: "3.46.0",
+        ProviderTopology: "file-backed-distinct-connections",
+        ProviderConfiguration: new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["mode"] = "ReadWriteCreate"
+        },
+        Adapter: DiagnosticsDurableHistoryAdapter.AdapterId,
+        PhysicalForm: DiagnosticsDurableHistoryAdapter.PhysicalForm,
+        Scale: "small",
+        CommitSha: new string('a', 40),
+        HarnessAssemblySha256: new string('b', 64),
+        PackageVersions: new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Groundwork.Store"] = "0.4.0-preview.5"
+        },
+        CompositionFingerprint: new string('c', 64),
+        HostFingerprintSha256: new string('d', 64),
+        Seed: DiagnosticsDurableHistoryWorkload.Seed,
+        InputFingerprintSha256: DiagnosticsDurableHistoryWorkload.ExpectedInputFingerprint,
+        NativePlanIdentity: "diagnostics-plan",
+        NativePlanEvidenceReference: NativePlanEvidenceStaging.ReferenceFor(
+            DiagnosticsDurableHistoryWorkload.WorkloadId,
+            "sqlite",
+            "diagnostics-set"),
         NativePlanContentSha256: new string('e', 64),
         ProcessKind: ProcessKind.Measured,
         ProcessIndex: 1);

@@ -381,15 +381,7 @@ internal sealed class EfRoundTripObserver(SecretProviderConcurrencyProbe concurr
         Interlocked.Increment(ref count);
         lock (commands)
         {
-            commands.Add(new EfCommandSnapshot(
-                command.CommandText,
-                command.Parameters.Cast<DbParameter>()
-                    .Select(parameter => new EfParameterSnapshot(
-                        parameter.ParameterName,
-                        SnapshotValue(parameter.Value),
-                        parameter.DbType,
-                        parameter.Size))
-                    .ToArray()));
+            commands.Add(EfCommandSnapshot.Capture(command));
             if (contender && command.Connection is not null)
                 contenderConnections.Add(command.Connection);
         }
@@ -401,13 +393,6 @@ internal sealed class EfRoundTripObserver(SecretProviderConcurrencyProbe concurr
             Convert.ToString(parameter.Value, System.Globalization.CultureInfo.InvariantCulture) is { } value &&
             (string.Equals(value, SecretCreateReadListWorkload.WinnerSecretId, StringComparison.Ordinal) ||
              value.EndsWith(':' + SecretCreateReadListWorkload.WinnerSecretId, StringComparison.Ordinal)));
-
-    private static object? SnapshotValue(object? value) => value switch
-    {
-        DBNull => null,
-        byte[] bytes => bytes.ToArray(),
-        _ => value
-    };
 
     public override InterceptionResult<DbDataReader> ReaderExecuting(
         DbCommand command,
@@ -469,7 +454,25 @@ internal sealed class EfRoundTripObserver(SecretProviderConcurrencyProbe concurr
 
 internal sealed record EfCommandSnapshot(
     string CommandText,
-    IReadOnlyList<EfParameterSnapshot> Parameters);
+    IReadOnlyList<EfParameterSnapshot> Parameters)
+{
+    internal static EfCommandSnapshot Capture(DbCommand command) => new(
+        command.CommandText,
+        command.Parameters.Cast<DbParameter>()
+            .Select(parameter => new EfParameterSnapshot(
+                parameter.ParameterName,
+                SnapshotValue(parameter.Value),
+                parameter.DbType,
+                parameter.Size))
+            .ToArray());
+
+    private static object? SnapshotValue(object? value) => value switch
+    {
+        DBNull => null,
+        byte[] bytes => bytes.ToArray(),
+        _ => value
+    };
+}
 
 internal sealed record EfParameterSnapshot(
     string Name,

@@ -13,6 +13,9 @@ public static class BenchmarkAdapterAdmission
     public const string SecretWorkloadId = "secret-create-read-list";
     public const string SecretMappingRequiredReason = "secret.adapter-form.ratification-required";
     public const string SecretEfProviderRequiredReason = "secret.ef.provider.sqlite-required";
+    public const string DiagnosticsWorkloadId = "diagnostics-durable-history";
+    public const string DiagnosticsMappingRequiredReason = "diagnostics.adapter-form.ratification-required";
+    public const string DiagnosticsEfProviderRequiredReason = "diagnostics.ef.provider.sqlite-required";
 
     private static readonly IReadOnlySet<AdapterFormMapping> RatifiedIamProductionMappings =
         new HashSet<AdapterFormMapping>
@@ -26,6 +29,13 @@ public static class BenchmarkAdapterAdmission
         {
             new(SecretWorkloadId, "1.1.0", "ef-secret-repository", "entity-type-specific-physical-tables"),
             new(SecretWorkloadId, "1.1.0", "groundwork-secret-repository", "entity-type-specific-physical-tables")
+        };
+
+    private static readonly IReadOnlySet<AdapterFormMapping> RatifiedDiagnosticsProductionMappings =
+        new HashSet<AdapterFormMapping>
+        {
+            new(DiagnosticsWorkloadId, "1.2.0", "groundwork-v2", "ordinary-groundwork-diagnostics-units"),
+            new(DiagnosticsWorkloadId, "1.2.0", "ef-diagnostics-oracle", "efcore-diagnostics-relational-tables")
         };
 
     public static void RequireAdmitted(
@@ -59,6 +69,21 @@ public static class BenchmarkAdapterAdmission
             !RatifiedSecretProductionMappings.Contains(new AdapterFormMapping(workloadId, workloadVersion, adapter, physicalForm)))
         {
             reason = SecretMappingRequiredReason;
+            return true;
+        }
+
+        if (string.Equals(workloadId, DiagnosticsWorkloadId, StringComparison.Ordinal) &&
+            !RatifiedDiagnosticsProductionMappings.Contains(new AdapterFormMapping(workloadId, workloadVersion, adapter, physicalForm)))
+        {
+            reason = DiagnosticsMappingRequiredReason;
+            return true;
+        }
+
+        if (string.Equals(workloadId, DiagnosticsWorkloadId, StringComparison.Ordinal) &&
+            string.Equals(adapter, "ef-diagnostics-oracle", StringComparison.Ordinal) &&
+            !string.Equals(provider, "sqlite", StringComparison.Ordinal))
+        {
+            reason = DiagnosticsEfProviderRequiredReason;
             return true;
         }
 

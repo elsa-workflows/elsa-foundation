@@ -1,6 +1,17 @@
 using System.Security.Cryptography;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
+using Elsa.Diagnostics.OpenTelemetry;
+using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
+using Elsa.Diagnostics.OpenTelemetry.Core.Options;
+using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
+using Elsa.Diagnostics.Persistence.Draining;
+using Elsa.Diagnostics.Persistence.Groundwork;
+using Elsa.Diagnostics.StructuredLogs;
+using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
+using Elsa.Diagnostics.StructuredLogs.Core.Models;
+using Elsa.Diagnostics.StructuredLogs.Core.Options;
+using Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Persistence.Groundwork.Composition;
@@ -44,17 +55,23 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
     private readonly List<AsyncServiceScope> scopes = [];
     private readonly IStorageProviderConnection connection;
     private readonly bool ownsConnection;
+    private readonly IReadOnlyList<IDiagnosticsPersistenceDrain> diagnosticsDrains;
+    private readonly IReadOnlyList<IDiagnosticsPersistenceResourceLease> diagnosticsLeases;
 
     private RuntimeStoreComposition(
         ServiceProvider provider,
         IStorageProviderConnection connection,
         WritePathRoundTripObserver observer,
-        bool ownsConnection)
+        bool ownsConnection,
+        IReadOnlyList<IDiagnosticsPersistenceDrain>? diagnosticsDrains = null,
+        IReadOnlyList<IDiagnosticsPersistenceResourceLease>? diagnosticsLeases = null)
     {
         this.provider = provider;
         this.connection = connection;
         this.ownsConnection = ownsConnection;
         Observer = observer;
+        this.diagnosticsDrains = diagnosticsDrains ?? [];
+        this.diagnosticsLeases = diagnosticsLeases ?? [];
     }
 
     public WritePathRoundTripObserver Observer { get; }
@@ -68,7 +85,12 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
         IStorageProviderConnection? existingConnection = null,
         bool includeDistributedRuntimeStores = false,
         bool includeGroundworkIdentityStores = false,
-        bool includeGroundworkSecretStores = false)
+        bool includeGroundworkSecretStores = false,
+        bool includeGroundworkDiagnostics = false,
+        StructuredLogStoreBinding? structuredLogBinding = null,
+        GroundworkOpenTelemetryBinding? openTelemetryBinding = null,
+        StructuredLogsOptions? structuredLogsOptions = null,
+        OpenTelemetryDiagnosticsOptions? openTelemetryOptions = null)
     {
         observer ??= new WritePathRoundTripObserver(providerName);
         var ownsConnection = existingConnection is null;
@@ -98,6 +120,21 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
                 services.AddFoundationAspNetCoreIdentityGroundwork();
             if (includeGroundworkSecretStores)
                 services.AddGroundworkSecretsStore();
+
+            if (includeGroundworkDiagnostics)
+            {
+                // The domain features contribute their options, source registry and in-memory fallbacks;
+                // the combined Groundwork feature then replaces both contracts atomically.
+                new StructuredLogsFeature().ConfigureServices(services);
+                new OpenTelemetryFeature().ConfigureServices(services);
+                services.AddSingleton(structuredLogBinding ?? StructuredLogStoreBinding.Default);
+                services.AddSingleton(openTelemetryBinding ?? GroundworkOpenTelemetryBinding.Default);
+                if (structuredLogsOptions is not null)
+                    services.Configure<StructuredLogsOptions>(options => Copy(structuredLogsOptions, options));
+                if (openTelemetryOptions is not null)
+                    services.Configure<OpenTelemetryDiagnosticsOptions>(options => Copy(openTelemetryOptions, options));
+                new DiagnosticsGroundworkPersistenceFeature().ConfigureServices(services);
+            }
 
             // The observer GroundworkStorageSessionSource resolves and forwards to every session and unit
             // of work it opens. Singleton because the harness snapshots one cumulative count for the
@@ -132,7 +169,33 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
             // point, not a formality. If it throws, the provider it was resolved from must be disposed
             // here: nothing else holds a reference to it yet, and it owns singletons of its own.
             await built.GetRequiredService<GroundworkStorageSessionSource>().InitializeAsync(cancellationToken);
-            var composition = new RuntimeStoreComposition(built, connection, observer, ownsConnection);
+            var diagnosticsDrains = includeGroundworkDiagnostics
+                ? built.GetServices<IDiagnosticsPersistenceDrain>().Distinct<IDiagnosticsPersistenceDrain>(ReferenceEqualityComparer.Instance).ToArray()
+                : [];
+            var diagnosticsLeases = new List<IDiagnosticsPersistenceResourceLease>();
+            try
+            {
+                if (includeGroundworkDiagnostics)
+                {
+                    foreach (var resource in built.GetServices<IDiagnosticsPersistenceStartupResource>().Distinct<IDiagnosticsPersistenceStartupResource>(ReferenceEqualityComparer.Instance))
+                        diagnosticsLeases.Add(await resource.AcquireAsync(cancellationToken));
+                    foreach (var drain in diagnosticsDrains)
+                        drain.Start();
+                }
+            }
+            catch
+            {
+                foreach (var drain in diagnosticsDrains.Reverse())
+                {
+                    try { await drain.StopAsync(CancellationToken.None); } catch { }
+                }
+                foreach (var lease in diagnosticsLeases.AsEnumerable().Reverse())
+                {
+                    try { await lease.DisposeAsync(); } catch { }
+                }
+                throw;
+            }
+            var composition = new RuntimeStoreComposition(built, connection, observer, ownsConnection, diagnosticsDrains, diagnosticsLeases);
             built = null;
             return composition;
         }
@@ -316,14 +379,50 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
         return scope.ServiceProvider.GetRequiredService<ISecretRepository>();
     }
 
+    /// <summary>Mints both diagnostics contracts from an isolated DI scope.</summary>
+    public DiagnosticsStoreClient CreateDiagnosticsClient()
+    {
+        var scope = provider.CreateAsyncScope();
+        scopes.Add(scope);
+        var services = scope.ServiceProvider;
+        return new(
+            services.GetRequiredService<IStructuredLogStore>(),
+            services.GetRequiredService<IOpenTelemetryStore>());
+    }
+
     public async ValueTask DisposeAsync()
     {
         foreach (var scope in scopes)
             await scope.DisposeAsync();
         scopes.Clear();
+        foreach (var drain in diagnosticsDrains.Reverse())
+            await drain.StopAsync(CancellationToken.None);
+        foreach (var lease in diagnosticsLeases.Reverse())
+            await lease.DisposeAsync();
         await provider.DisposeAsync();
         if (ownsConnection)
             connection.Dispose();
+    }
+
+    private static void Copy(StructuredLogsOptions source, StructuredLogsOptions target)
+    {
+        target.MinimumLevel = source.MinimumLevel;
+        target.BufferCapacity = source.BufferCapacity;
+        target.MaxRecentQuerySize = source.MaxRecentQuerySize;
+        target.ShutdownDrainTimeout = source.ShutdownDrainTimeout;
+    }
+
+    private static void Copy(OpenTelemetryDiagnosticsOptions source, OpenTelemetryDiagnosticsOptions target)
+    {
+        target.TraceCapacity = source.TraceCapacity;
+        target.SpanCapacity = source.SpanCapacity;
+        target.MetricPointCapacity = source.MetricPointCapacity;
+        target.LogRecordCapacity = source.LogRecordCapacity;
+        target.ResourceCapacity = source.ResourceCapacity;
+        target.MetricInstrumentCapacity = source.MetricInstrumentCapacity;
+        target.SubscriberChannelCapacity = source.SubscriberChannelCapacity;
+        target.MaxQuerySize = source.MaxQuerySize;
+        target.ShutdownDrainTimeout = source.ShutdownDrainTimeout;
     }
 
     private sealed class NonDisposingConnection(IStorageProviderConnection inner) : IStorageProviderConnection
@@ -357,6 +456,10 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
         }
     }
 }
+
+internal sealed record DiagnosticsStoreClient(
+    IStructuredLogStore StructuredLogs,
+    IOpenTelemetryStore OpenTelemetry);
 
 /// <summary>Public ASP.NET Core Identity manager contracts composed over the adapter's Groundwork stores.</summary>
 internal sealed record RuntimeIdentityClient(

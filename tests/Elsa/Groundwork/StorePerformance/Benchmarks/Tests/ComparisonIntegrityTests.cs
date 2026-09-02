@@ -223,13 +223,14 @@ public sealed class ComparisonIntegrityTests
     public void Comparison_rejects_blocked_diagnostics_artifacts_even_when_the_measurement_sets_are_complete()
     {
         using var fixture = ArtifactFixture.Create();
-        const string physicalForm = "specialized-diagnostic-record-streams-with-shared-document-catalogs";
+        const string groundworkForm = "ordinary-groundwork-diagnostics-units";
+        const string efForm = "efcore-diagnostics-relational-tables";
         var operations = ReproducibleWorkloadScenarioCatalog.Get(ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId).OperationSequence.ToArray();
-        fixture.WriteTarget("ef", physicalForm, operations: operations, workloadId: ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId);
-        fixture.WriteTarget("groundwork", physicalForm, operations: operations, workloadId: ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId);
+        fixture.WriteTarget("ef-diagnostics-oracle", efForm, operations: operations, workloadId: ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId);
+        fixture.WriteTarget("groundwork-v2", groundworkForm, operations: operations, workloadId: ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId);
         fixture.Bind();
 
-        var comparison = fixture.Compare($"sqlite/ef/{physicalForm}", $"sqlite/groundwork/{physicalForm}");
+        var comparison = fixture.Compare($"sqlite/ef-diagnostics-oracle/{efForm}", $"sqlite/groundwork-v2/{groundworkForm}");
         var gate = GateEvaluator.Evaluate(GatePolicy.DefaultFor(comparison.WorkloadId), comparison);
 
         Assert.False(comparison.Complete);
