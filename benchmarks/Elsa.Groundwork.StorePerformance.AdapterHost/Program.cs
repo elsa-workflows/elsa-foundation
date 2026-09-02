@@ -130,6 +130,62 @@ static async Task<int> CapturePlan(string[] args)
         return 0;
     }
 
+    if (string.Equals(request.WorkloadId, RuntimeTriggerBindingStimulusLookupWorkload.WorkloadId, StringComparison.Ordinal))
+    {
+        var triggerDigest = await TriggerBindingNativePlanCapture.CaptureAsync(
+            request,
+            connectionString,
+            outputDirectory,
+            observed,
+            CancellationToken.None);
+        Console.WriteLine($"native-plan-evidence={request.NativePlanEvidenceReference}");
+        Console.WriteLine($"native-plan-sha256={triggerDigest}");
+        Console.WriteLine("native-plan-routes=3");
+        return 0;
+    }
+
+    if (string.Equals(request.WorkloadId, RuntimeRecurringScheduleSelectionWorkload.WorkloadId, StringComparison.Ordinal))
+    {
+        var recurringDigest = await RecurringScheduleNativePlanCapture.CaptureAsync(
+            request,
+            connectionString,
+            outputDirectory,
+            observed,
+            CancellationToken.None);
+        Console.WriteLine($"native-plan-evidence={request.NativePlanEvidenceReference}");
+        Console.WriteLine($"native-plan-sha256={recurringDigest}");
+        Console.WriteLine("native-plan-routes=2");
+        return 0;
+    }
+
+    if (string.Equals(request.WorkloadId, RuntimeDueTimerSelectionWorkload.WorkloadId, StringComparison.Ordinal))
+    {
+        var dueTimerDigest = await DueTimerNativePlanCapture.CaptureAsync(
+            request,
+            connectionString,
+            outputDirectory,
+            observed,
+            CancellationToken.None);
+        Console.WriteLine($"native-plan-evidence={request.NativePlanEvidenceReference}");
+        Console.WriteLine($"native-plan-sha256={dueTimerDigest}");
+        Console.WriteLine("native-plan-routes=1");
+        return 0;
+    }
+
+    if (string.Equals(request.WorkloadId, DistributedPlacementTakeoverWorkload.WorkloadId, StringComparison.Ordinal))
+    {
+        var placementDigest = await DistributedPlacementNativePlanCapture.CaptureAsync(
+            request,
+            connectionString,
+            outputDirectory,
+            observed,
+            CancellationToken.None);
+        Console.WriteLine($"native-plan-evidence={request.NativePlanEvidenceReference}");
+        Console.WriteLine($"native-plan-sha256={placementDigest}");
+        Console.WriteLine("native-plan-routes=1");
+        return 0;
+    }
+
     if (string.Equals(request.WorkloadId, DiagnosticsDurableHistoryWorkload.WorkloadId, StringComparison.Ordinal))
     {
         // Diagnostics has declared provider-native routes. It must never fall through to the

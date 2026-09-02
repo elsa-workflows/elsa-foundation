@@ -44,6 +44,20 @@ public sealed class MatrixCatalogTests
         Assert.Equal("blocked", bookmark.TimingStatus);
         Assert.Equal("capture.native-plan.not-implemented", bookmark.TimingReason);
 
+        foreach (var workload in new[]
+                 {
+                     "trigger-binding-stimulus-lookup",
+                     "recurring-schedule-selection",
+                     "due-timer-selection",
+                     "placement-takeover"
+                 })
+        {
+            var registration = Single(registrations, workload, "groundwork-v2");
+            Assert.Equal("complete", registration.CapturePlanStatus);
+            Assert.Equal("ready", registration.CorrectnessStatus);
+            Assert.Equal("ready", registration.TimingStatus);
+        }
+
         var diagnostics = Single(registrations, "diagnostics-durable-history", DiagnosticsDurableHistoryAdapter.AdapterId);
         Assert.Equal("partial-blocked", diagnostics.CapturePlanStatus);
         Assert.Equal("ready", diagnostics.CorrectnessStatus);
