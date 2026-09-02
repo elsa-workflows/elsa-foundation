@@ -1,5 +1,7 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using Xunit;
@@ -142,18 +144,57 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     }
 
     [Fact]
-    public void Mongo_trace_detail_primary_key_evidence_requires_the_exact_observed_find_one_seam()
+    public void Trace_detail_primary_key_fanout_accepts_the_actual_positive_subset_within_its_bound()
     {
         var specification = DiagnosticsNativePlanContract.TraceDetailConstituents(
                 DiagnosticsNativePlanContract.GroundworkAdapter)
-            .Single(item => item.RouteIdentity == "trace-detail/summary-by-trace-key");
+            .Single(item => item.RouteIdentity == "trace-detail/resources-by-id");
         var evidence = new DiagnosticsTraceDetailConstituentEvidence(
             specification.RouteIdentity,
             "",
             "",
             "primary-key-read",
             "",
-            "MongoDB.FindOne",
+            "SELECT id, payload FROM elsa_otel_resources_v2 " +
+            "WHERE id = @key_id AND __groundwork_scope = @__groundwork_scope;",
+            specification.PhysicalCardinality,
+            true,
+            true,
+            specification.FiniteLimit,
+            specification.PublicRowBound,
+            1,
+            1,
+            specification.MaxInvocationCount);
+
+        DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
+            "sqlite",
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            evidence,
+            null);
+    }
+
+    [Fact]
+    public void Mongo_trace_detail_primary_key_evidence_requires_the_scoped_collection_and_redacted_identity()
+    {
+        var specification = DiagnosticsNativePlanContract.TraceDetailConstituents(
+                DiagnosticsNativePlanContract.GroundworkAdapter)
+            .Single(item => item.RouteIdentity == "trace-detail/summary-by-trace-key");
+        var command = JsonSerializer.Serialize(new
+        {
+            collection = specification.TableName + "__scope__" + new string('A', 64),
+            filter = new Dictionary<string, object>
+            {
+                ["_id"] = new Dictionary<string, string> { ["$eq"] = "<redacted>" }
+            },
+            limit = 1
+        });
+        var evidence = new DiagnosticsTraceDetailConstituentEvidence(
+            specification.RouteIdentity,
+            "",
+            "",
+            "primary-key-read",
+            "",
+            command,
             specification.PhysicalCardinality,
             false,
             true,
@@ -172,8 +213,59 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
                 "mongodb",
                 DiagnosticsNativePlanContract.GroundworkAdapter,
-                evidence with { CommandText = "MongoDB.Find" },
+                evidence with { CommandText = "MongoDB.FindOne" },
                 null));
+    }
+
+    [Fact]
+    public void Mongo_trace_detail_primary_key_evidence_rejects_unbound_or_value_bearing_shapes()
+    {
+        var specification = DiagnosticsNativePlanContract.TraceDetailConstituents(
+                DiagnosticsNativePlanContract.GroundworkAdapter)
+            .Single(item => item.RouteIdentity == "trace-detail/summary-by-trace-key");
+        var physicalCollection = specification.TableName + "__scope__" + new string('A', 64);
+        var validFilter = new Dictionary<string, object>
+        {
+            ["_id"] = new Dictionary<string, string> { ["$eq"] = "<redacted>" }
+        };
+        var invalidCommands = new[]
+        {
+            JsonSerializer.Serialize(new { collection = specification.TableName, filter = validFilter, limit = 1 }),
+            JsonSerializer.Serialize(new { collection = "wrong_table__scope__" + new string('A', 64), filter = validFilter, limit = 1 }),
+            JsonSerializer.Serialize(new
+            {
+                collection = physicalCollection,
+                filter = new Dictionary<string, object>
+                {
+                    ["_id"] = new Dictionary<string, string> { ["$eq"] = "secret-trace-key" }
+                },
+                limit = 1
+            }),
+            JsonSerializer.Serialize(new { collection = physicalCollection, filter = validFilter, limit = 2 }),
+            JsonSerializer.Serialize(new { collection = physicalCollection, filter = validFilter, limit = 1, sort = new { _id = 1 } })
+        };
+        var evidence = new DiagnosticsTraceDetailConstituentEvidence(
+            specification.RouteIdentity,
+            "",
+            "",
+            "primary-key-read",
+            "",
+            "",
+            specification.PhysicalCardinality,
+            false,
+            true,
+            specification.FiniteLimit,
+            specification.PublicRowBound,
+            1,
+            1,
+            specification.MaxInvocationCount);
+
+        Assert.All(invalidCommands, command => Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
+                "mongodb",
+                DiagnosticsNativePlanContract.GroundworkAdapter,
+                evidence with { CommandText = command },
+                null)));
     }
 
     [Fact]
@@ -408,6 +500,85 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             fixture.Adapter,
             fixture.Route,
             fixture.Path);
+    }
+
+    [Fact]
+    public void Mongo_scoped_collection_evidence_passes_complete_artifact_admission_without_a_synthetic_scope_predicate()
+    {
+        using var fixture = Fixture.Create("mongodb", "resources-by-last-seen");
+        using var output = new TemporaryDirectory();
+        const string rawPlanReference = "resources-by-last-seen.raw.json";
+        var rawPlanPath = Path.Combine(output.FullName, rawPlanReference);
+        File.Copy(fixture.Path, rawPlanPath);
+        var route = fixture.Route with
+        {
+            RawPlanReference = rawPlanReference,
+            RawPlanSha256 = Sha256(File.ReadAllBytes(rawPlanPath))
+        };
+        var workload = WorkloadCatalog.Load(Repository.Root())
+            .Workloads[ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId] with
+        {
+            RequiredNativeRoutes = [route.RouteIdentity]
+        };
+        var configuration = new Dictionary<string, string> { ["topology"] = "replica-set" };
+        var topology = workload.RequiredProviderEvidence["mongodb"];
+        const string identity = "diagnostics-mongo-plan";
+        const string evidenceReference = "diagnostics-mongo-plan.json";
+        var evidenceDocument = new NativePlanEvidenceDocument(
+            2,
+            "diagnostics-cohort",
+            "diagnostics-set",
+            workload.Id,
+            workload.Version,
+            "mongodb",
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "ordinary-groundwork-diagnostics-units",
+            "100k",
+            new string('a', 40),
+            new string('b', 64),
+            new string('c', 64),
+            new string('d', 64),
+            "8.0",
+            topology,
+            configuration,
+            workload.Input.Seed,
+            workload.Input.FingerprintSha256,
+            identity,
+            [route]);
+        var evidenceBytes = JsonSerializer.SerializeToUtf8Bytes(evidenceDocument, ArtifactStore.JsonOptions);
+        File.WriteAllBytes(Path.Combine(output.FullName, evidenceReference), evidenceBytes);
+        var request = new RunRequest(
+            evidenceDocument.ComparisonCohortId,
+            evidenceDocument.MeasurementSetId,
+            workload.Id,
+            workload.Version,
+            evidenceDocument.Provider,
+            evidenceDocument.Adapter,
+            evidenceDocument.PhysicalForm,
+            evidenceDocument.Scale,
+            evidenceDocument.CommitSha,
+            evidenceDocument.HarnessAssemblySha256,
+            new Dictionary<string, string> { ["Groundwork.MongoDb"] = "0.4.0-preview.9" },
+            evidenceDocument.CompositionFingerprint,
+            evidenceDocument.HostFingerprintSha256,
+            evidenceDocument.ProviderVersion,
+            topology,
+            configuration,
+            workload.Input.Seed,
+            workload.Input.FingerprintSha256,
+            identity,
+            evidenceReference,
+            Sha256(evidenceBytes),
+            ProcessKind.Measured,
+            1);
+        var evidence = new CorrectnessEvidence(
+            workload.Correctness.ResultDigestSha256,
+            request.ProviderVersion,
+            topology,
+            configuration,
+            new NativePlanEvidence(identity, evidenceReference, request.NativePlanContentSha256, [route]));
+
+        ArtifactAdmission.ValidateCorrectness(workload, request, evidence, output.FullName);
     }
 
     [Fact]
@@ -896,4 +1067,6 @@ public sealed class DiagnosticsNativePlanAdmissionTests
 
         public void Dispose() => directory.Delete(true);
     }
+
+    private static string Sha256(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 }

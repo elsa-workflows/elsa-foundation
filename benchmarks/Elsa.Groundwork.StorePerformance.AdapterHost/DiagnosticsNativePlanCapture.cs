@@ -314,18 +314,23 @@ internal static class DiagnosticsNativePlanCapture
         if (detail is null)
             throw new PerformanceContractException("Diagnostics trace-detail capture did not find its fixture trace.");
 
-        var commands = commandObserver.Commands
-            .Where(command => !command.IsProbe && command.Kind == ProviderCommandKind.Read && !string.IsNullOrWhiteSpace(command.CommandText))
-            .ToArray();
         var mongo = string.Equals(request.Provider, "mongodb", StringComparison.Ordinal);
+        var observedReads = commandObserver.Commands
+            .Where(command => !command.IsProbe && command.Kind == ProviderCommandKind.Read)
+            .ToArray();
+        if (mongo)
+            RequireKnownMongoReadOperations(observedReads);
+        var commands = observedReads
+            .Where(command => !string.IsNullOrWhiteSpace(command.CommandText))
+            .ToArray();
         var mongoQueryCommands = mongo
             ? commands.Where(command => command.Operation == "mongodb.query").ToArray()
             : [];
         var mongoPointCommands = mongo
             ? commands.Where(command => command.Operation == "mongodb.read").ToArray()
             : [];
+        var mongoPointCommandsByRoute = ClassifyMongoPointReads(mongoPointCommands, specifications);
         var mongoQueryOffset = 0;
-        var mongoPointOffset = 0;
         var evidence = new List<DiagnosticsTraceDetailConstituentEvidence>(specifications.Count);
         foreach (var specification in specifications)
         {
@@ -337,10 +342,9 @@ internal static class DiagnosticsNativePlanCapture
                     ? mongoQueryCommands.Skip(mongoQueryOffset).Take(specification.MaxInvocationCount).ToArray()
                     : [];
                 pointCommands = specification.OperationKind == DiagnosticsTraceDetailOperationKind.PrimaryKeyRead
-                    ? mongoPointCommands.Skip(mongoPointOffset).Take(specification.MaxInvocationCount).ToArray()
+                    ? mongoPointCommandsByRoute.GetValueOrDefault(specification.RouteIdentity)?.ToArray() ?? []
                     : [];
                 mongoQueryOffset += queryCommands.Length;
-                mongoPointOffset += pointCommands.Length;
             }
             else
             {
@@ -502,12 +506,61 @@ internal static class DiagnosticsNativePlanCapture
             before = Directory.EnumerateFiles(explainDirectory).ToHashSet(StringComparer.Ordinal);
         }
 
-        if (mongo && (mongoQueryOffset != mongoQueryCommands.Length || mongoPointOffset != mongoPointCommands.Length))
+        if (mongo && mongoQueryOffset != mongoQueryCommands.Length)
             throw new PerformanceContractException(
                 $"Diagnostics trace-detail capture observed unclassified MongoDB provider commands: " +
-                $"query={mongoQueryCommands.Length - mongoQueryOffset}, point={mongoPointCommands.Length - mongoPointOffset}.");
+                $"query={mongoQueryCommands.Length - mongoQueryOffset}.");
 
         return evidence;
+    }
+
+    internal static void RequireKnownMongoReadOperations(IEnumerable<ProviderCommandEvent> commands)
+    {
+        ArgumentNullException.ThrowIfNull(commands);
+        var reads = commands
+            .Where(command => !command.IsProbe && command.Kind == ProviderCommandKind.Read)
+            .ToArray();
+        var unknown = reads
+            .Where(command => command.Operation is not ("mongodb.query" or "mongodb.read"))
+            .Select(command => command.Operation)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if (unknown.Length != 0)
+            throw new PerformanceContractException(
+                $"Diagnostics trace-detail capture observed unsupported MongoDB read operations: {string.Join(", ", unknown)}.");
+        if (reads.Any(command => string.IsNullOrWhiteSpace(command.CommandText)))
+            throw new PerformanceContractException(
+                "Diagnostics trace-detail capture observed a MongoDB read without command identity evidence.");
+    }
+
+    internal static IReadOnlyDictionary<string, IReadOnlyList<ProviderCommandEvent>> ClassifyMongoPointReads(
+        IEnumerable<ProviderCommandEvent> commands,
+        IReadOnlyList<DiagnosticsTraceDetailConstituentSpec> specifications)
+    {
+        ArgumentNullException.ThrowIfNull(commands);
+        ArgumentNullException.ThrowIfNull(specifications);
+        var result = new Dictionary<string, List<ProviderCommandEvent>>(StringComparer.Ordinal);
+        foreach (var command in commands)
+        {
+            var collection = DiagnosticsNativePlanContract.RequireMongoPointCollection(command.CommandText!);
+            var matches = specifications.Where(specification =>
+                specification.OperationKind == DiagnosticsTraceDetailOperationKind.PrimaryKeyRead &&
+                collection.StartsWith(specification.TableName + "__scope__", StringComparison.Ordinal)).ToArray();
+            if (matches.Length != 1)
+                throw new PerformanceContractException(
+                    $"Diagnostics trace-detail capture could not bind MongoDB point read collection '{collection}' to exactly one constituent.");
+            if (!result.TryGetValue(matches[0].RouteIdentity, out var routeCommands))
+            {
+                routeCommands = [];
+                result.Add(matches[0].RouteIdentity, routeCommands);
+            }
+            routeCommands.Add(command);
+        }
+        return result.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyList<ProviderCommandEvent>)pair.Value.ToArray(),
+            StringComparer.Ordinal);
     }
 
     private static string ConstituentSlug(string identity) => identity.Replace('/', '-');

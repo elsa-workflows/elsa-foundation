@@ -1,10 +1,12 @@
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
-using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
+using Groundwork.Kernel;
 using Microsoft.Data.Sqlite;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Groundwork.StorePerformance.AdapterHost.Tests;
@@ -183,6 +185,76 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
     }
 
     [Fact]
+    public void Mongo_trace_detail_rejects_an_unrecognized_non_probe_read_operation()
+    {
+        var commands = new[]
+        {
+            new ProviderCommandEvent("mongodb.query", "{}", ProviderCommandKind.Read, false),
+            new ProviderCommandEvent("mongodb.lookup", "{}", ProviderCommandKind.Read, false)
+        };
+
+        var exception = Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanCapture.RequireKnownMongoReadOperations(commands));
+
+        Assert.Contains("mongodb.lookup", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Mongo_trace_detail_rejects_a_read_without_command_identity()
+    {
+        var commands = new[]
+        {
+            new ProviderCommandEvent("mongodb.read", " ", ProviderCommandKind.Read, false)
+        };
+
+        var exception = Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanCapture.RequireKnownMongoReadOperations(commands));
+
+        Assert.Contains("without command identity evidence", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Mongo_trace_detail_binds_point_reads_by_physical_collection_instead_of_observer_order()
+    {
+        var specifications = DiagnosticsNativePlanContract.TraceDetailConstituents(
+            DiagnosticsNativePlanContract.GroundworkAdapter);
+        var summary = specifications.Single(item => item.RouteIdentity == "trace-detail/summary-by-trace-key");
+        var resource = specifications.Single(item => item.RouteIdentity == "trace-detail/resources-by-id");
+        var summaryCommand = MongoPointCommand(summary.TableName);
+        var resourceCommand = MongoPointCommand(resource.TableName);
+        var commands = new[]
+        {
+            new ProviderCommandEvent("mongodb.read", resourceCommand, ProviderCommandKind.Read, false),
+            new ProviderCommandEvent("mongodb.read", summaryCommand, ProviderCommandKind.Read, false)
+        };
+
+        var classified = DiagnosticsNativePlanCapture.ClassifyMongoPointReads(commands, specifications);
+
+        Assert.Equal(summaryCommand, Assert.Single(classified[summary.RouteIdentity]).CommandText);
+        Assert.Equal(resourceCommand, Assert.Single(classified[resource.RouteIdentity]).CommandText);
+    }
+
+    [Fact]
+    public void Mongo_trace_detail_rejects_a_point_read_for_an_undeclared_collection()
+    {
+        var specifications = DiagnosticsNativePlanContract.TraceDetailConstituents(
+            DiagnosticsNativePlanContract.GroundworkAdapter);
+        var commands = new[]
+        {
+            new ProviderCommandEvent(
+                "mongodb.read",
+                MongoPointCommand("elsa_unknown"),
+                ProviderCommandKind.Read,
+                false)
+        };
+
+        var exception = Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanCapture.ClassifyMongoPointReads(commands, specifications));
+
+        Assert.Contains("exactly one constituent", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Process_identity_is_bound_into_storage_and_diagnostic_scopes()
     {
         var first = Request(processIndex: 1);
@@ -232,6 +304,16 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
         NativePlanContentSha256: new string('e', 64),
         ProcessKind: ProcessKind.Measured,
         ProcessIndex: processIndex);
+
+    private static string MongoPointCommand(string tableName) => JsonSerializer.Serialize(new
+    {
+        collection = tableName + "__scope__" + new string('A', 64),
+        filter = new Dictionary<string, object>
+        {
+            ["_id"] = new Dictionary<string, string> { ["$eq"] = "<redacted>" }
+        },
+        limit = 1
+    });
 
     private sealed class TransientLockedOpenTelemetryStore : IOpenTelemetryStore
     {

@@ -525,7 +525,7 @@ public static class ArtifactAdmission
                 string.IsNullOrWhiteSpace(route.PlanClassification) ||
                 string.IsNullOrWhiteSpace(route.IndexName) ||
                 route.PhysicalCardinality <= 0 ||
-                !route.HasStorageScopePredicate ||
+                route.HasStorageScopePredicate != ExpectedNativeRouteStorageScopePredicate(request.Provider, diagnosticsWorkload) ||
                 (RoutePredicateRequired(workload, route, diagnosticsWorkload) && !route.HasRoutePredicate) ||
                 route.ResultShape switch
                 {
@@ -663,6 +663,9 @@ public static class ArtifactAdmission
         !diagnosticsWorkload &&
         !(workload.Id == RuntimeQueueDrainWorkload.WorkloadId &&
           route.RouteIdentity == "list-pending-scheduler-workflow-executions");
+
+    private static bool ExpectedNativeRouteStorageScopePredicate(string provider, bool diagnosticsWorkload) =>
+        !diagnosticsWorkload || DiagnosticsNativePlanContract.ExpectedStorageScopePredicate(provider, storageScopeRequired: true);
 
     private static void ValidateSecretNativeRoutes(
         PerformanceWorkload workload,

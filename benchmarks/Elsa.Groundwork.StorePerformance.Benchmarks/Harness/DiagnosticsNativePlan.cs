@@ -338,13 +338,24 @@ public static class DiagnosticsNativePlanContract
         var specification = TraceDetailConstituents(adapter).SingleOrDefault(item =>
             string.Equals(item.RouteIdentity, evidence.RouteIdentity, StringComparison.Ordinal)) ??
             throw new PerformanceContractException($"Diagnostics trace-detail evidence names unknown constituent '{evidence.RouteIdentity}'.");
+        var hasBoundedCounts = specification.OperationKind switch
+        {
+            DiagnosticsTraceDetailOperationKind.PrimaryKeyRead =>
+                evidence.ObservedCommandCount > 0 &&
+                evidence.ObservedCommandCount <= specification.MaxInvocationCount &&
+                evidence.MaterializedCandidateCount == evidence.ObservedCommandCount &&
+                evidence.MaterializedCandidateCount <= evidence.PublicRowBound,
+            DiagnosticsTraceDetailOperationKind.BoundedOrderedQuery =>
+                evidence.ObservedCommandCount == specification.MaxInvocationCount &&
+                evidence.MaterializedCandidateCount == evidence.PublicRowBound,
+            _ => false
+        };
 
         if (evidence.PhysicalCardinality != specification.PhysicalCardinality ||
             evidence.FiniteLimit != specification.FiniteLimit ||
             evidence.PublicRowBound != specification.PublicRowBound ||
-            evidence.ObservedCommandCount != specification.MaxInvocationCount ||
             evidence.MaxInvocationCount != specification.MaxInvocationCount ||
-            evidence.MaterializedCandidateCount != evidence.PublicRowBound ||
+            !hasBoundedCounts ||
             evidence.MaterializedCandidateCount > checked(evidence.FiniteLimit * evidence.ObservedCommandCount) ||
             evidence.HasStorageScopePredicate !=
                 (specification.StorageScopeRequired && !string.Equals(provider, "mongodb", StringComparison.Ordinal)) ||
@@ -451,12 +462,7 @@ public static class DiagnosticsNativePlanContract
     {
         if (string.Equals(provider, "mongodb", StringComparison.Ordinal))
         {
-            // Groundwork preview.8 deliberately keeps MongoDB point-read values out of observer
-            // artifacts. The exact provider operation still proves the Read/FindOne seam; the
-            // package version and source-bound storage unit establish its _id and scoped collection.
-            if (!string.Equals(command, "MongoDB.FindOne", StringComparison.Ordinal))
-                throw new PerformanceContractException(
-                    $"Diagnostics point read '{specification.RouteIdentity}' is not the exact MongoDB FindOne operation.");
+            ValidateMongoPointCommand(command, specification);
             return;
         }
 
@@ -474,6 +480,56 @@ public static class DiagnosticsNativePlanContract
         var required = new[] { "__groundwork_scope", specification.PredicateColumn };
         if (!ContainsOnlyExactEqualityPredicates(where, required, allowNullGuards: false))
             throw new PerformanceContractException($"Diagnostics point read '{specification.RouteIdentity}' must contain only scope and its exact key predicate.");
+    }
+
+    private static void ValidateMongoPointCommand(
+        string command,
+        DiagnosticsTraceDetailConstituentSpec specification)
+    {
+        var collection = RequireMongoPointCollection(command);
+        ValidateMongoPhysicalCollection(collection, specification);
+    }
+
+    internal static string RequireMongoPointCollection(string command)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(command);
+        try
+        {
+            using var document = JsonDocument.Parse(command);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object ||
+                root.EnumerateObject().Count() != 3 ||
+                !root.TryGetProperty("collection", out var collection) ||
+                collection.ValueKind != JsonValueKind.String ||
+                !root.TryGetProperty("filter", out var filter) ||
+                filter.ValueKind != JsonValueKind.Object ||
+                !root.TryGetProperty("limit", out var limit) ||
+                limit.ValueKind != JsonValueKind.Number ||
+                !limit.TryGetInt32(out var limitValue) ||
+                limitValue != 1)
+                throw new PerformanceContractException(
+                    "Diagnostics MongoDB point read must retain only its physical collection, redacted _id equality, and limit one.");
+
+            var filterProperties = filter.EnumerateObject().ToArray();
+            if (filterProperties.Length != 1 ||
+                !string.Equals(filterProperties[0].Name, "_id", StringComparison.Ordinal) ||
+                filterProperties[0].Value.ValueKind != JsonValueKind.Object)
+                throw new PerformanceContractException(
+                    "Diagnostics MongoDB point read must retain only its redacted _id equality.");
+            var equalityProperties = filterProperties[0].Value.EnumerateObject().ToArray();
+            if (equalityProperties.Length != 1 ||
+                !string.Equals(equalityProperties[0].Name, "$eq", StringComparison.Ordinal) ||
+                equalityProperties[0].Value.ValueKind != JsonValueKind.String ||
+                !string.Equals(equalityProperties[0].Value.GetString(), "<redacted>", StringComparison.Ordinal))
+                throw new PerformanceContractException(
+                    "Diagnostics MongoDB point read must redact its exact _id value.");
+            return collection.GetString()!;
+        }
+        catch (JsonException exception)
+        {
+            throw new PerformanceContractException(
+                $"Diagnostics MongoDB point read has invalid command JSON: {exception.Message}");
+        }
     }
 
     private static void ValidateSqlContinuationPredicate(string where, DiagnosticsNativeRouteSpec specification)
@@ -753,19 +809,25 @@ public static class DiagnosticsNativePlanContract
     }
 
     private static void ValidateMongoPhysicalCollection(string? collection, DiagnosticsNativeRouteSpec specification)
+        => ValidateMongoPhysicalCollection(collection, specification.RouteIdentity, specification.TableName);
+
+    private static void ValidateMongoPhysicalCollection(string? collection, DiagnosticsTraceDetailConstituentSpec specification)
+        => ValidateMongoPhysicalCollection(collection, specification.RouteIdentity, specification.TableName);
+
+    private static void ValidateMongoPhysicalCollection(string? collection, string routeIdentity, string tableName)
     {
-        var prefix = specification.TableName + "__scope__";
+        var prefix = tableName + "__scope__";
         if (string.IsNullOrWhiteSpace(collection) ||
-            string.Equals(collection, specification.TableName, StringComparison.Ordinal) ||
+            string.Equals(collection, tableName, StringComparison.Ordinal) ||
             !collection.StartsWith(prefix, StringComparison.Ordinal))
             throw new PerformanceContractException(
-                $"Diagnostics route '{specification.RouteIdentity}' MongoDB command must bind its scoped physical collection, not logical collection '{specification.TableName}'.");
+                $"Diagnostics route '{routeIdentity}' MongoDB command must bind its scoped physical collection, not logical collection '{tableName}'.");
 
         var suffix = collection[prefix.Length..];
         if (suffix.Length != 64 || suffix.Any(character =>
                 !((character is >= '0' and <= '9') || (character is >= 'A' and <= 'F'))))
             throw new PerformanceContractException(
-                $"Diagnostics route '{specification.RouteIdentity}' MongoDB command does not bind the exact scoped physical collection name.");
+                $"Diagnostics route '{routeIdentity}' MongoDB command does not bind the exact scoped physical collection name.");
     }
 
     private static void ValidateMongoAggregateCommand(JsonElement command, DiagnosticsNativeRouteSpec specification)
