@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -7,8 +9,8 @@ using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 
 /// <summary>
-/// The exact provider-neutral contract for the bounded trigger and placement routes captured by the
-/// adapter host. The strings here are the current v2 storage declarations, not historical v1 names.
+/// The exact provider-neutral contract for bounded runtime routes captured by the adapter host. The
+/// strings here are the current v2 storage declarations, not historical v1 names.
 /// </summary>
 public sealed record RuntimeNativeRouteSpec(
     string RouteIdentity,
@@ -48,6 +50,8 @@ public static class RuntimeNativePlanContract
     private const string TriggerTable = "runtime_workflow_trigger_binding";
     private const string SourceReferenceTable = "runtime_workflow_executable_source_reference";
     private const string PlacementTable = "elsa_distributed_execution_placement";
+    private const string DurableTimerTable = "runtime_durable_timer";
+    private const string RecurringScheduleTable = "runtime_recurring_trigger_schedule";
 
     public static RuntimeNativeRouteSpec For(string workloadId, string routeIdentity) => workloadId switch
     {
@@ -95,6 +99,41 @@ public static class RuntimeNativePlanContract
                 DistributedPlacementTakeoverWorkload.TakeoverCandidates),
             _ => throw UnknownRoute(routeIdentity)
         },
+        RuntimeDueTimerSelectionWorkload.WorkloadId => routeIdentity switch
+        {
+            "list-due" => new(
+                routeIdentity,
+                DurableTimerTable,
+                "by_due_time_and_timer_id",
+                ["timerDueTime", "timerId"],
+                [new("timerDueTime", "<=")],
+                "timerDueTime",
+                RuntimeDueTimerSelectionWorkload.TimerCount,
+                RuntimeDueTimerSelectionWorkload.PageSize),
+            _ => throw UnknownRoute(routeIdentity)
+        },
+        RuntimeRecurringScheduleSelectionWorkload.WorkloadId => routeIdentity switch
+        {
+            "list-due" => new(
+                routeIdentity,
+                RecurringScheduleTable,
+                "by_active_next_occurrence_and_schedule_id",
+                ["scheduleNextOccurrence", "scheduleId"],
+                [new("scheduleIsActive", "="), new("scheduleNextOccurrence", "<=")],
+                "scheduleNextOccurrence",
+                RuntimeRecurringScheduleSelectionWorkload.ScheduleCount,
+                RuntimeRecurringScheduleSelectionWorkload.PageSize),
+            "page-by-publication" => new(
+                routeIdentity,
+                RecurringScheduleTable,
+                "by_activation_and_schedule_id",
+                ["scheduleId"],
+                [new("activationId", "=")],
+                "activationId",
+                RuntimeRecurringScheduleSelectionWorkload.ScheduleCount,
+                RuntimeRecurringScheduleSelectionWorkload.PageSize),
+            _ => throw UnknownRoute(routeIdentity)
+        },
         _ => throw new PerformanceContractException(
             $"Runtime native-plan admission does not support workload '{workloadId}'.")
     };
@@ -104,8 +143,27 @@ public static class RuntimeNativePlanContract
         RuntimeTriggerBindingStimulusLookupWorkload.WorkloadId =>
         [For(workloadId, "list-by-stimulus-and-type"), For(workloadId, "list-by-stimulus-type"), For(workloadId, "page-live-by-scope")],
         DistributedPlacementTakeoverWorkload.WorkloadId => [For(workloadId, "list-owned-live-placements")],
+        RuntimeDueTimerSelectionWorkload.WorkloadId => [For(workloadId, "list-due")],
+        RuntimeRecurringScheduleSelectionWorkload.WorkloadId => [For(workloadId, "list-due"), For(workloadId, "page-by-publication")],
         _ => throw new PerformanceContractException($"Runtime native-plan admission does not support workload '{workloadId}'.")
     };
+
+    /// <summary>Maps the declared logical index to the provider-owned physical index name.</summary>
+    public static string ExpectedPhysicalIndexName(string provider, RuntimeNativeRouteSpec specification)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(provider);
+        ArgumentNullException.ThrowIfNull(specification);
+        var composed = $"__groundwork_ix_{specification.TableName.Length}_{specification.TableName}_{specification.IndexName.Length}_{specification.IndexName}";
+        return provider switch
+        {
+            "mongodb" => specification.IndexName,
+            "sqlite" => composed,
+            "postgresql" => TruncatePhysicalIndex(composed, 63, 10),
+            "sqlserver" => TruncatePhysicalIndex(composed, 128, 12),
+            _ => throw new PerformanceContractException(
+                $"Runtime native-plan admission does not support provider '{provider}'.")
+        };
+    }
 
     /// <summary>
     /// Revalidates a retained envelope at correctness admission. Summary booleans are deliberately not
@@ -135,14 +193,15 @@ public static class RuntimeNativePlanContract
         }
 
         var specification = For(workloadId, route.RouteIdentity);
+        var physicalIndex = ExpectedPhysicalIndexName(provider, specification);
         if (artifact.SchemaVersion != 1 ||
             !string.Equals(artifact.Provider, provider, StringComparison.Ordinal) ||
             !string.Equals(artifact.Adapter, adapter, StringComparison.Ordinal) ||
             !string.Equals(artifact.RouteIdentity, route.RouteIdentity, StringComparison.Ordinal) ||
             !string.Equals(artifact.TableName, specification.TableName, StringComparison.Ordinal) ||
             !string.Equals(artifact.IndexName, specification.IndexName, StringComparison.Ordinal) ||
-            !string.Equals(route.IndexName, specification.IndexName, StringComparison.Ordinal) ||
-            !string.Equals(artifact.PhysicalIndexName, specification.IndexName, StringComparison.Ordinal) ||
+            !string.Equals(artifact.PhysicalIndexName, physicalIndex, StringComparison.Ordinal) ||
+            !string.Equals(route.IndexName, physicalIndex, StringComparison.Ordinal) ||
             string.IsNullOrWhiteSpace(artifact.CommandText) ||
             string.IsNullOrWhiteSpace(artifact.NativePlan))
         {
@@ -194,36 +253,115 @@ public static class RuntimeNativePlanContract
             .Replace("]", "", StringComparison.Ordinal)
             .Replace("\"", "", StringComparison.Ordinal)
             .Replace("`", "", StringComparison.Ordinal);
-        if (Regex.IsMatch(normalized, @"\b(?:CASE|LOWER|UPPER|COALESCE|CAST|SUBSTR|DATE|DATETIME)\s*\(", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
-            normalized.Contains(" OR 1=1", StringComparison.OrdinalIgnoreCase) ||
-            normalized.Contains(" OR 1 = 1", StringComparison.OrdinalIgnoreCase))
-            throw InvalidCommand(specification, "computed or tautological predicate");
+        normalized = Regex.Replace(
+            normalized,
+            @"\s+COLLATE\s+[A-Za-z_][A-Za-z0-9_.]*",
+            string.Empty,
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+        if (Regex.IsMatch(normalized, @"\b(?:DISTINCT|GROUP\s+BY|OVER|ROW_NUMBER|UNION|OFFSET)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            throw InvalidCommand(specification, "a bounded, non-materializing page shape");
 
+        const string parameter = @"(?:[@$][A-Za-z_0-9]+|\?)";
+        var limit = $@"(?:{specification.FiniteLimit}|{parameter})";
         if (!Regex.IsMatch(normalized, $@"\bFROM\s+{Regex.Escape(specification.TableName)}\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
-            !Regex.IsMatch(normalized, $@"\b(?:LIMIT\s+{specification.FiniteLimit}\b|FETCH\s+(?:FIRST|NEXT)\s+{specification.FiniteLimit}\b|TOP\s*\(?\s*{specification.FiniteLimit}\b)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
-            throw InvalidCommand(specification, "exact table or finite limit");
-
-        var order = Regex.Match(normalized, @"\bORDER\s+BY\s+(?<order>.*?)(?:\bLIMIT\b|\bFETCH\b|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Groups["order"].Value;
-        var orderColumns = Regex.Matches(order, @"[A-Za-z_][A-Za-z0-9_]*\s+(?:ASC|DESC)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
-            .Select(match => Regex.Match(match.Value, @"^[A-Za-z_][A-Za-z0-9_]*").Value)
-            .ToArray();
-        if (!specification.OrderColumns.SequenceEqual(orderColumns, StringComparer.OrdinalIgnoreCase))
-            throw InvalidCommand(specification, "exact deterministic ordering");
-
-        if (specification.StorageScopeRequired &&
             !Regex.IsMatch(
                 normalized,
-                @"\b__groundwork_scope\b\s*=\s*(?:[@?$]\w+|\?|\d+|'[^']*'|\x22[^\x22]*\x22)",
+                $@"\b(?:LIMIT\s+{limit}|FETCH\s+(?:FIRST|NEXT)\s+{limit}\s+ROWS?|TOP\s*\(?\s*{limit}\s*\)?)",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            throw InvalidCommand(specification, "exact table or finite limit");
+
+        var order = Regex.Match(
+            normalized,
+            @"\bORDER\s+BY\s+(?<order>.*?)(?:\bLIMIT\b|\bFETCH\b|$)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline).Groups["order"].Value;
+        var allowedOrderColumns = specification.OrderColumns.Append("id").ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var orderTerms = order.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var orderColumns = new List<string>(orderTerms.Length);
+        string? pendingNullOrdering = null;
+        foreach (var term in orderTerms)
+        {
+            var trimmed = term.Trim().TrimEnd(';');
+            var nullOrdering = Regex.Match(
+                trimmed,
+                @"^CASE\s+WHEN\s+(?<column>[A-Za-z_][A-Za-z0-9_]*)\s+IS\s+NULL\s+THEN\s+(?:0\s+ELSE\s+1|1\s+ELSE\s+0)\s+END\s+ASC$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (nullOrdering.Success)
+            {
+                var column = nullOrdering.Groups["column"].Value;
+                if (pendingNullOrdering is not null || !allowedOrderColumns.Contains(column))
+                    throw InvalidCommand(specification, "exact deterministic ordering");
+                pendingNullOrdering = column;
+                continue;
+            }
+
+            var match = Regex.Match(
+                trimmed,
+                @"^(?:[A-Za-z_][A-Za-z0-9_]*\.)?(?<column>[A-Za-z_][A-Za-z0-9_]*)\s+ASC$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (!match.Success)
+                throw InvalidCommand(specification, $"exact deterministic ordering; unexpected term '{term.Trim()}'");
+            var orderedColumn = match.Groups["column"].Value;
+            if (pendingNullOrdering is not null &&
+                !string.Equals(pendingNullOrdering, orderedColumn, StringComparison.OrdinalIgnoreCase))
+                throw InvalidCommand(specification, "null ordering immediately paired with its declared column");
+            pendingNullOrdering = null;
+            orderColumns.Add(orderedColumn);
+        }
+        if (pendingNullOrdering is not null)
+            throw InvalidCommand(specification, "complete deterministic ordering");
+        var expectedOrder = specification.OrderColumns;
+        if (!expectedOrder.SequenceEqual(orderColumns, StringComparer.OrdinalIgnoreCase) &&
+            !(orderColumns.Count == expectedOrder.Count + 1 &&
+              expectedOrder.SequenceEqual(orderColumns.Take(expectedOrder.Count), StringComparer.OrdinalIgnoreCase) &&
+              string.Equals(orderColumns[^1], "id", StringComparison.OrdinalIgnoreCase)))
+            throw InvalidCommand(specification, "exact deterministic ordering");
+
+        var whereMatch = Regex.Match(
+            normalized,
+            @"\bWHERE\s+(?<where>.*?)(?:\bORDER\s+BY\b|$)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+        if (!whereMatch.Success)
+            throw InvalidCommand(specification, "the exact route predicates");
+        var where = whereMatch.Groups["where"].Value;
+        if (Regex.IsMatch(where, @"\b(?:OR|SELECT|CASE|LOWER|UPPER|COALESCE|CAST|SUBSTR|DATE|DATETIME)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            throw InvalidCommand(specification, "only direct conjunctive predicates");
+
+        const string value = @"(?:[@$][A-Za-z_0-9]+|\?|[-+]?\d+(?:\.\d+)?|'[^']*'|TRUE|FALSE)";
+        var requiredPredicates = specification.Predicates.ToList();
+        if (specification.StorageScopeRequired &&
+            !Regex.IsMatch(
+                where,
+                $@"\b__groundwork_scope\b\s*=\s*{value}",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             throw InvalidCommand(specification, "the provider storage-scope predicate");
+        if (specification.StorageScopeRequired)
+            requiredPredicates.Insert(0, new RuntimeNativePredicateSpec("__groundwork_scope", "="));
         foreach (var predicate in specification.Predicates)
         {
             if (!Regex.IsMatch(
-                    normalized,
-                    $@"\b{Regex.Escape(predicate.Column)}\b\s*{Regex.Escape(predicate.Operator)}\s*(?:[@?$]\w+|\?|\d+|'[^']*'|\x22[^\x22]*\x22)",
+                    where,
+                    $@"\b{Regex.Escape(predicate.Column)}\b\s*{Regex.Escape(predicate.Operator)}\s*{value}",
                     RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
                 throw InvalidCommand(specification, $"predicate '{predicate.Column} {predicate.Operator}'");
         }
+
+        var remainder = where;
+        foreach (var predicate in requiredPredicates)
+        {
+            remainder = Regex.Replace(
+                remainder,
+                $@"\b{Regex.Escape(predicate.Column)}\b\s+IS\s+NOT\s+NULL",
+                string.Empty,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            remainder = Regex.Replace(
+                remainder,
+                $@"\b{Regex.Escape(predicate.Column)}\b\s*{Regex.Escape(predicate.Operator)}\s*{value}",
+                string.Empty,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+        remainder = Regex.Replace(remainder, @"\bAND\b|[();\s]", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (remainder.Length != 0)
+            throw InvalidCommand(specification, "only the declared route predicates and their null guards");
     }
 
     private static void ValidateMongoCommand(string command, RuntimeNativeRouteSpec specification)
@@ -265,8 +403,9 @@ public static class RuntimeNativePlanContract
     private static void ValidateSqlitePlan(string plan, RuntimeNativeRouteSpec specification, string physicalIndex)
     {
         var lines = plan.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (lines.Any(line => Regex.IsMatch(line, @"\b(?:USE\s+)?TEMP(?:ORARY)?\s+B[- ]TREE\b|\b(?:MATERIAL|MATERIALIZE|MATERIALIZED)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)))
-            throw InvalidPlan(specification, "SQLite sort or materialization spill");
+        var unsafeLine = lines.FirstOrDefault(line => Regex.IsMatch(line, @"\b(?:USE\s+)?TEMP(?:ORARY)?\s+B[- ]TREE\b|\b(?:MATERIAL|MATERIALIZE|MATERIALIZED)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant));
+        if (unsafeLine is not null)
+            throw InvalidPlan(specification, $"SQLite sort or materialization spill ('{unsafeLine}')");
         if (lines.Any(line => Regex.IsMatch(line, @"\bSCAN\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) &&
                              !Regex.IsMatch(line, @"\bSCAN\s+__(?:groundwork_total|groundwork_page)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)))
             throw InvalidPlan(specification, "SQLite physical scan");
@@ -351,9 +490,22 @@ public static class RuntimeNativePlanContract
     {
         if (value.ValueKind != JsonValueKind.Object)
             return operation == "=" && value.ValueKind is JsonValueKind.String or JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False;
-        var expected = operation == ">" ? "$gt" : "$eq";
+        var expected = operation switch
+        {
+            ">" => "$gt",
+            ">=" => "$gte",
+            "<" => "$lt",
+            "<=" => "$lte",
+            _ => "$eq"
+        };
         return value.EnumerateObject().Count() == 1 && value.TryGetProperty(expected, out _);
     }
+
+    private static string TruncatePhysicalIndex(string composed, int maximumLength, int digestLength) =>
+        composed.Length <= maximumLength
+            ? composed
+            : composed[..(maximumLength - digestLength - 1)] + "_" +
+              Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(composed)))[..digestLength].ToLowerInvariant();
 
     private static bool TryFiniteLimit(JsonElement value, int expected) =>
         value.TryGetInt32(out var actual) && actual == expected;

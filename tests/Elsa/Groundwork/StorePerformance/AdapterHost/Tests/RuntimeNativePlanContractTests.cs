@@ -34,6 +34,21 @@ public sealed class RuntimeNativePlanContractTests
         Assert.Equal(["expiresAt", "workflowExecutionId"], placement.OrderColumns);
         Assert.Equal(256, placement.PhysicalCardinality);
         Assert.Equal(64, placement.FiniteLimit);
+
+        var dueTimer = Assert.Single(RuntimeNativePlanContract.ForWorkload(RuntimeDueTimerSelectionWorkload.WorkloadId));
+        Assert.Equal("list-due", dueTimer.RouteIdentity);
+        Assert.Equal("runtime_durable_timer", dueTimer.TableName);
+        Assert.Equal("by_due_time_and_timer_id", dueTimer.IndexName);
+        Assert.Equal(["timerDueTime", "timerId"], dueTimer.OrderColumns);
+        Assert.Equal(2048, dueTimer.PhysicalCardinality);
+        Assert.Equal(50, dueTimer.FiniteLimit);
+
+        var recurring = RuntimeNativePlanContract.ForWorkload(RuntimeRecurringScheduleSelectionWorkload.WorkloadId);
+        Assert.Equal(["list-due", "page-by-publication"], recurring.Select(route => route.RouteIdentity));
+        Assert.Equal("by_active_next_occurrence_and_schedule_id", recurring[0].IndexName);
+        Assert.Equal(["scheduleNextOccurrence", "scheduleId"], recurring[0].OrderColumns);
+        Assert.Equal("by_activation_and_schedule_id", recurring[1].IndexName);
+        Assert.Equal(["scheduleId"], recurring[1].OrderColumns);
     }
 
     [Fact]
@@ -42,7 +57,8 @@ public sealed class RuntimeNativePlanContractTests
         var specification = RuntimeNativePlanContract.For(
             RuntimeTriggerBindingStimulusLookupWorkload.WorkloadId,
             "list-by-stimulus-and-type");
-        var route = Route(specification, specification.IndexName);
+        var physicalIndex = RuntimeNativePlanContract.ExpectedPhysicalIndexName("sqlite", specification);
+        var route = Route(specification, physicalIndex);
         var path = WriteArtifact(new RuntimeNativePlanArtifact(
             1,
             "sqlite",
@@ -50,9 +66,9 @@ public sealed class RuntimeNativePlanContractTests
             specification.RouteIdentity,
             specification.TableName,
             specification.IndexName,
-            specification.IndexName,
+            physicalIndex,
             "SELECT * FROM runtime_workflow_trigger_binding WHERE __groundwork_scope = @scope AND stimulusLookupKey = @stimulus AND isActive = 1 ORDER BY triggerBindingId ASC LIMIT 20",
-            "2\t0\tSEARCH runtime_workflow_trigger_binding USING INDEX by_stimulus_and_type (stimulusLookupKey=? AND isActive=?)"));
+            $"2\t0\tSEARCH runtime_workflow_trigger_binding USING INDEX {physicalIndex} (stimulusLookupKey=? AND isActive=?)"));
 
         try
         {
@@ -95,9 +111,9 @@ public sealed class RuntimeNativePlanContractTests
                 specification.RouteIdentity,
                 specification.TableName,
                 specification.IndexName,
-                specification.IndexName,
+                physicalIndex,
                 "SELECT * FROM runtime_workflow_trigger_binding WHERE __groundwork_scope IS NOT NULL AND stimulusLookupKey = @stimulus AND isActive = 1 ORDER BY triggerBindingId ASC LIMIT 20",
-                "2\t0\tSEARCH runtime_workflow_trigger_binding USING INDEX by_stimulus_and_type (stimulusLookupKey=? AND isActive=?)"));
+                $"2\t0\tSEARCH runtime_workflow_trigger_binding USING INDEX {physicalIndex} (stimulusLookupKey=? AND isActive=?)"));
             try
             {
                 Assert.Throws<PerformanceContractException>(() =>
@@ -125,7 +141,8 @@ public sealed class RuntimeNativePlanContractTests
         var specification = RuntimeNativePlanContract.For(
             RuntimeTriggerBindingStimulusLookupWorkload.WorkloadId,
             "list-by-stimulus-and-type");
-        var route = Route(specification, specification.IndexName);
+        var physicalIndex = RuntimeNativePlanContract.ExpectedPhysicalIndexName("postgresql", specification);
+        var route = Route(specification, physicalIndex);
         var command = "SELECT * FROM runtime_workflow_trigger_binding WHERE __groundwork_scope = $1 AND stimulusLookupKey = $2 AND isActive = $3 ORDER BY triggerBindingId ASC LIMIT 20";
         var accepted = WriteArtifact(new RuntimeNativePlanArtifact(
             1,
@@ -134,9 +151,9 @@ public sealed class RuntimeNativePlanContractTests
             specification.RouteIdentity,
             specification.TableName,
             specification.IndexName,
-            specification.IndexName,
+            physicalIndex,
             command,
-            "[{\"Plan\":{\"Node Type\":\"Index Scan\",\"Relation Name\":\"runtime_workflow_trigger_binding\",\"Index Name\":\"by_stimulus_and_type\",\"spillCount\":0}}]"));
+            $"[{{\"Plan\":{{\"Node Type\":\"Index Scan\",\"Relation Name\":\"runtime_workflow_trigger_binding\",\"Index Name\":\"{physicalIndex}\",\"spillCount\":0}}}}]"));
         try
         {
             RuntimeNativePlanContract.ValidateEnvelope(
@@ -153,9 +170,9 @@ public sealed class RuntimeNativePlanContractTests
                 specification.RouteIdentity,
                 specification.TableName,
                 specification.IndexName,
-                specification.IndexName,
+                physicalIndex,
                 command,
-                "[{\"Plan\":{\"Node Type\":\"Index Scan\",\"Relation Name\":\"runtime_workflow_trigger_binding\",\"Index Name\":\"by_stimulus_and_type\",\"spillCount\":1}}]"));
+                $"[{{\"Plan\":{{\"Node Type\":\"Index Scan\",\"Relation Name\":\"runtime_workflow_trigger_binding\",\"Index Name\":\"{physicalIndex}\",\"spillCount\":1}}}}]"));
             try
             {
                 Assert.Throws<PerformanceContractException>(() =>
@@ -169,6 +186,156 @@ public sealed class RuntimeNativePlanContractTests
             finally
             {
                 File.Delete(rejected);
+            }
+        }
+        finally
+        {
+            File.Delete(accepted);
+        }
+    }
+
+    [Fact]
+    public void Groundwork_sql_null_guards_collations_and_hidden_identity_order_remain_exactly_bounded()
+    {
+        var specification = RuntimeNativePlanContract.For(
+            RuntimeRecurringScheduleSelectionWorkload.WorkloadId,
+            "list-due");
+        var physicalIndex = RuntimeNativePlanContract.ExpectedPhysicalIndexName("sqlite", specification);
+        var route = Route(specification, physicalIndex);
+        var command = """
+            SELECT * FROM runtime_recurring_trigger_schedule
+            WHERE ((__groundwork_scope COLLATE GROUNDWORK_UTF16_ORDINAL IS NOT NULL
+            AND __groundwork_scope COLLATE GROUNDWORK_UTF16_ORDINAL = @p0)
+            AND (scheduleIsActive IS NOT NULL AND scheduleIsActive = @p1)
+            AND (scheduleNextOccurrence IS NOT NULL AND scheduleNextOccurrence <= @p2))
+            ORDER BY CASE WHEN scheduleNextOccurrence IS NULL THEN 0 ELSE 1 END ASC,
+            scheduleNextOccurrence COLLATE GROUNDWORK_UTF16_ORDINAL ASC,
+            CASE WHEN scheduleId IS NULL THEN 0 ELSE 1 END ASC,
+            scheduleId COLLATE GROUNDWORK_UTF16_ORDINAL ASC,
+            id COLLATE GROUNDWORK_UTF16_ORDINAL ASC LIMIT @p3;
+            """;
+        var plan = $"2\t0\tSEARCH runtime_recurring_trigger_schedule USING INDEX {physicalIndex} (scheduleIsActive=? AND scheduleNextOccurrence<?)";
+        var accepted = WriteArtifact(new RuntimeNativePlanArtifact(
+            1,
+            "sqlite",
+            RuntimeNativePlanContract.GroundworkAdapter,
+            specification.RouteIdentity,
+            specification.TableName,
+            specification.IndexName,
+            physicalIndex,
+            command,
+            plan));
+
+        try
+        {
+            RuntimeNativePlanContract.ValidateEnvelope(
+                RuntimeRecurringScheduleSelectionWorkload.WorkloadId,
+                "sqlite",
+                RuntimeNativePlanContract.GroundworkAdapter,
+                route,
+                accepted);
+
+            foreach (var invalidCommand in new[]
+                     {
+                         command.Replace("AND (scheduleIsActive", "AND unexpected = @p9 AND (scheduleIsActive", StringComparison.Ordinal),
+                         command.Replace("id COLLATE GROUNDWORK_UTF16_ORDINAL ASC", "unexpected COLLATE GROUNDWORK_UTF16_ORDINAL ASC", StringComparison.Ordinal),
+                         command.Replace("scheduleId COLLATE GROUNDWORK_UTF16_ORDINAL ASC", "scheduleId COLLATE GROUNDWORK_UTF16_ORDINAL DESC", StringComparison.Ordinal),
+                         command.Replace("CASE WHEN scheduleNextOccurrence IS NULL", "CASE WHEN scheduleId IS NULL", StringComparison.Ordinal),
+                         command.Replace("LIMIT @p3", "OFFSET @p3", StringComparison.Ordinal)
+                     })
+            {
+                var rejected = WriteArtifact(new RuntimeNativePlanArtifact(
+                    1,
+                    "sqlite",
+                    RuntimeNativePlanContract.GroundworkAdapter,
+                    specification.RouteIdentity,
+                    specification.TableName,
+                    specification.IndexName,
+                    physicalIndex,
+                    invalidCommand,
+                    plan));
+                try
+                {
+                    Assert.Throws<PerformanceContractException>(() =>
+                        RuntimeNativePlanContract.ValidateEnvelope(
+                            RuntimeRecurringScheduleSelectionWorkload.WorkloadId,
+                            "sqlite",
+                            RuntimeNativePlanContract.GroundworkAdapter,
+                            route,
+                            rejected));
+                }
+                finally
+                {
+                    File.Delete(rejected);
+                }
+            }
+        }
+        finally
+        {
+            File.Delete(accepted);
+        }
+    }
+
+    [Fact]
+    public void Mongo_schedule_due_route_requires_lte_and_the_exact_filter_shape()
+    {
+        var specification = RuntimeNativePlanContract.For(
+            RuntimeDueTimerSelectionWorkload.WorkloadId,
+            "list-due");
+        var route = Route(specification, specification.IndexName);
+        var command = "{\"find\":\"runtime_durable_timer\",\"filter\":{\"__groundwork_scope\":{\"$eq\":\"scope\"},\"timerDueTime\":{\"$lte\":\"asOf\"}},\"sort\":{\"timerDueTime\":1,\"timerId\":1},\"limit\":50}";
+        var plan = "{\"queryPlanner\":{\"winningPlan\":{\"stage\":\"IXSCAN\",\"indexName\":\"by_due_time_and_timer_id\"}}}";
+        var accepted = WriteArtifact(new RuntimeNativePlanArtifact(
+            1,
+            "mongodb",
+            RuntimeNativePlanContract.GroundworkAdapter,
+            specification.RouteIdentity,
+            specification.TableName,
+            specification.IndexName,
+            specification.IndexName,
+            command,
+            plan));
+
+        try
+        {
+            RuntimeNativePlanContract.ValidateEnvelope(
+                RuntimeDueTimerSelectionWorkload.WorkloadId,
+                "mongodb",
+                RuntimeNativePlanContract.GroundworkAdapter,
+                route,
+                accepted);
+
+            foreach (var invalidCommand in new[]
+                     {
+                         command.Replace("$lte", "$eq", StringComparison.Ordinal),
+                         command.Replace("\"filter\":{", "\"filter\":{\"unexpected\":1,", StringComparison.Ordinal),
+                         command.Replace("$lte", "$gte", StringComparison.Ordinal)
+                     })
+            {
+                var rejected = WriteArtifact(new RuntimeNativePlanArtifact(
+                    1,
+                    "mongodb",
+                    RuntimeNativePlanContract.GroundworkAdapter,
+                    specification.RouteIdentity,
+                    specification.TableName,
+                    specification.IndexName,
+                    specification.IndexName,
+                    invalidCommand,
+                    plan));
+                try
+                {
+                    Assert.Throws<PerformanceContractException>(() =>
+                        RuntimeNativePlanContract.ValidateEnvelope(
+                            RuntimeDueTimerSelectionWorkload.WorkloadId,
+                            "mongodb",
+                            RuntimeNativePlanContract.GroundworkAdapter,
+                            route,
+                            rejected));
+                }
+                finally
+                {
+                    File.Delete(rejected);
+                }
             }
         }
         finally

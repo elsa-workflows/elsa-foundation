@@ -8,7 +8,7 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost.Tests;
 public sealed class RuntimeScheduleNativePlanCaptureTests
 {
     [Fact]
-    public async Task Refuses_due_timer_capture_when_public_store_does_not_expose_native_plan()
+    public async Task Due_timer_capture_fails_closed_when_the_native_winning_plan_misses_the_declared_index()
     {
         var root = Path.Combine(Path.GetTempPath(), $"groundwork-due-capture-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
@@ -29,14 +29,17 @@ public sealed class RuntimeScheduleNativePlanCaptureTests
                 ProviderConfiguration = observed.Configuration
             };
 
-            var exception = await Assert.ThrowsAsync<PerformanceContractException>(() =>
+            var exception = await Record.ExceptionAsync(() =>
                 DueTimerNativePlanCapture.CaptureAsync(
                     request,
                     connectionString,
                     root,
                     observed));
 
-            Assert.Contains("exactly one provider-native explain artifact", exception.Message);
+            Assert.NotNull(exception);
+            Assert.Equal("Groundwork.Diagnostics.ExplainAssertionException", exception.GetType().FullName);
+            Assert.Contains("winning plan did not use the required index", exception.Message, StringComparison.Ordinal);
+            Assert.Contains("logical-index=by_due_time_and_timer_id", exception.Message, StringComparison.Ordinal);
             Assert.False(File.Exists(Path.Combine(root, NativePlanEvidenceStaging.ReferenceFor(
                 request.WorkloadId,
                 request.Provider,
@@ -50,7 +53,7 @@ public sealed class RuntimeScheduleNativePlanCaptureTests
     }
 
     [Fact]
-    public async Task Refuses_recurring_capture_when_public_store_does_not_expose_native_plan()
+    public async Task Recurring_capture_fails_closed_when_the_native_plan_sorts_outside_the_index()
     {
         var root = Path.Combine(Path.GetTempPath(), $"groundwork-recurring-capture-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
@@ -78,11 +81,9 @@ public sealed class RuntimeScheduleNativePlanCaptureTests
                     root,
                     observed));
 
-            Assert.Contains("exactly one provider-native explain artifact", exception.Message);
-            Assert.False(File.Exists(Path.Combine(root, NativePlanEvidenceStaging.ReferenceFor(
-                request.WorkloadId,
-                request.Provider,
-                request.MeasurementSetId))));
+            Assert.Contains("SQLite sort or materialization spill", exception.Message, StringComparison.Ordinal);
+            Assert.Contains("USE TEMP B-TREE FOR ORDER BY", exception.Message, StringComparison.Ordinal);
+            Assert.False(File.Exists(Path.Combine(root, request.NativePlanEvidenceReference)));
         }
         finally
         {

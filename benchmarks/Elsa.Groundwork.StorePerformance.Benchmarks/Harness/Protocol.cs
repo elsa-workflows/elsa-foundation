@@ -485,7 +485,10 @@ public static class ArtifactAdmission
             ArtifactStore.ValidateRawPlanFile(rawPlanPath);
             if (diagnosticsWorkload)
                 DiagnosticsNativePlanContract.ValidateEnvelope(request.Provider, request.Adapter, route, rawPlanPath);
-            if (workload.Id is RuntimeTriggerBindingStimulusLookupWorkload.WorkloadId or DistributedPlacementTakeoverWorkload.WorkloadId)
+            if (workload.Id is RuntimeTriggerBindingStimulusLookupWorkload.WorkloadId or
+                DistributedPlacementTakeoverWorkload.WorkloadId or
+                RuntimeDueTimerSelectionWorkload.WorkloadId or
+                RuntimeRecurringScheduleSelectionWorkload.WorkloadId)
                 RuntimeNativePlanContract.ValidateEnvelope(request.WorkloadId, request.Provider, request.Adapter, route, rawPlanPath);
             if (string.Equals(workload.Id, SecretCreateReadListWorkload.WorkloadId, StringComparison.Ordinal))
                 SecretRetainedNativePlan.Validate(
@@ -495,11 +498,6 @@ public static class ArtifactAdmission
                     File.ReadAllText(rawPlanPath));
             if (string.Equals(workload.Id, RuntimeRecoveryScanWorkload.WorkloadId, StringComparison.Ordinal))
                 RecoveryRetainedNativePlan.Validate(
-                    request.Provider,
-                    route,
-                    File.ReadAllText(rawPlanPath));
-            if (workload.Id is "due-timer-selection" or "recurring-schedule-selection")
-                RuntimeScheduleNativePlan.Validate(
                     request.Provider,
                     route,
                     File.ReadAllText(rawPlanPath));
@@ -645,10 +643,10 @@ public static class ArtifactAdmission
 
         foreach (var route in routes)
         {
-            var definition = RuntimeScheduleNativePlan.Definition(workload.Id, route.RouteIdentity);
+            var definition = RuntimeNativePlanContract.For(workload.Id, route.RouteIdentity);
             if (route.PhysicalCardinality != definition.PhysicalCardinality ||
                 route.FiniteLimit != definition.FiniteLimit ||
-                route.MaterializedCandidateCount != definition.MaterializedCandidateCount)
+                route.MaterializedCandidateCount != definition.FiniteLimit)
                 throw new PerformanceContractException(
                     $"{workload.Id} route '{route.RouteIdentity}' does not bind its frozen physical cardinality, finite limit, and materialized count.");
 

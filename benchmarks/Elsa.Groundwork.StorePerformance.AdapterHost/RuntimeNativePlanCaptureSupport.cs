@@ -7,6 +7,11 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 
 internal static class RuntimeNativePlanCaptureSupport
 {
+    public static WritePathRoundTripObserver RequireCommandObserver(IProviderRoundTripObserver? observer) =>
+        observer as WritePathRoundTripObserver
+        ?? throw new PerformanceContractException(
+            "Runtime native-plan capture requires the exact Groundwork provider-command observer.");
+
     public static void EnsureRequest(
         RunRequest request,
         ProviderProbe.Result observed,
