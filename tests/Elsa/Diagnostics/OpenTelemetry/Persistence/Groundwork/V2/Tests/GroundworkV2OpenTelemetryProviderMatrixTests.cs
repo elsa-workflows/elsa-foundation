@@ -80,7 +80,8 @@ public sealed class GroundworkV2OpenTelemetryProviderMatrixTests
                 await container.StartAsync();
                 configured = new MongoUrlBuilder(container.GetConnectionString())
                 {
-                    DatabaseName = "elsa_v2_diagnostics_standalone"
+                    DatabaseName = "elsa_v2_diagnostics_standalone",
+                    AuthenticationSource = "admin"
                 }.ToString();
             }
 
