@@ -13,7 +13,8 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 internal sealed class OutboxDrainAdapter(
     RunRequest request,
     string connectionString,
-    string outputDirectory)
+    string outputDirectory,
+    bool captureCommands = false)
     : IBenchmarkAdapter, IRuntimeOutboxDrainWorkloadAdapter
 {
     internal const string PhysicalForm = "dedicated-post-commit-outbox-documents";
@@ -24,6 +25,10 @@ internal sealed class OutboxDrainAdapter(
     private readonly string persistenceScope = PersistenceScopeFor(request);
 
     public IProviderRoundTripObserver? RoundTripObserver => composition?.Observer;
+
+    internal WritePathRoundTripObserver CommandObserver =>
+        composition?.Observer ?? throw new PerformanceContractException(
+            "The outbox-drain adapter has no command observer; PrepareAsync must run first.");
 
     public string PersistenceScope => persistenceScope;
 
@@ -39,8 +44,9 @@ internal sealed class OutboxDrainAdapter(
         // SQLite admits one Groundwork connection per database file. Probe before composing the
         // long-lived runtime connection, then retain that live handshake for correctness provenance.
         var observed = await ProviderProbe.ReadAsync(request.Provider, connectionString, cancellationToken);
+        var observer = new WritePathRoundTripObserver(request.Provider, captureCommands);
         var created = await RuntimeStoreComposition.CreateAsync(
-            request.Provider, connectionString, persistenceScope, cancellationToken);
+            request.Provider, connectionString, persistenceScope, cancellationToken, observer);
         observedProvider = observed;
         composition = created;
     }

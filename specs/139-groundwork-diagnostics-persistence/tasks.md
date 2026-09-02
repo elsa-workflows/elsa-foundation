@@ -206,17 +206,15 @@
     diagnostic streams while runtime session opening stays read-only. Focused diagnostics,
     adapter, composition, and unified-host gates passed as summarized in `quickstart.md`.
 
-### Current exact 0.4.0-preview.6 pin-alignment checkpoint
+### Groundwork 0.4.0-preview.8 consumption checkpoint
 
-- The active Groundwork family is pinned exactly to `0.4.0-preview.6` in central props and explicit
-  project/script overrides, backed by upstream tag `v0.4.0-preview.6`, production commit
-  `2f4d483c969e058ece3331584e5a5504edd47264`, and Feedz publication run `33591586325`.
-  Focused diagnostics restores completed, the shared project built, the
-  v2 Structured Logs suite passed 28/32 with four unavailable-provider skips, and the v2
-  OpenTelemetry suite passed 28/33 with five unavailable-provider skips. No preview.6 compile or
-  API break was found; existing NU1903 SSH.NET warnings remain. This is focused package/API
-  compatibility evidence only, not four-provider promotion, #646 performance evidence, EF
-  deletion, or #642 completion.
+- Central props and explicit project/script overrides consume the published
+  [`v0.4.0-preview.8`](https://github.com/valence-works/groundwork-v2/releases/tag/v0.4.0-preview.8)
+  family at Groundwork commit `372ea1445485e0a08aa412436d0f3f9253bf0270`. Its Feedz publication
+  and verification workflow passed, and Elsa restored and tested the family from a fresh NuGet cache.
+  The earlier ordinal-identity query and index-shape findings were fixed before publication. Existing
+  NU1903 SSH.NET warnings remain. This is published-package compatibility evidence only, not
+  four-provider promotion, #646 performance evidence, EF deletion, or #642 completion.
 
 ### Historical exact 0.4.0-preview.3 recertification checkpoint (immutable)
 

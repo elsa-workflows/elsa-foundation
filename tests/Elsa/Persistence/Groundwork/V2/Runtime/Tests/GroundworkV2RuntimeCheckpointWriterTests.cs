@@ -409,6 +409,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
                 [ElsaRuntimeV2StorageManifest.CollectionField] = ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind,
                 [ElsaRuntimeV2StorageManifest.PostCommitOutboxStatusField] = (int)item.Status,
                 [ElsaRuntimeV2StorageManifest.PostCommitOutboxDeliverableAtField] = DateTimeOffset.MinValue,
+                [ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableIsEligibleField] = true,
                 [ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField] = DateTimeOffset.MinValue,
                 [ElsaRuntimeV2StorageManifest.PostCommitOutboxRecordedAtField] = item.RecordedAt,
                 [ElsaRuntimeV2StorageManifest.PostCommitOutboxItemIdField] = item.OutboxItemId,

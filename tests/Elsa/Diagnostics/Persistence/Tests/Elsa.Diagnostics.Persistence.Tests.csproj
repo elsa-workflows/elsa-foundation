@@ -5,10 +5,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Groundwork.MongoDb" VersionOverride="0.4.0-preview.6" />
-    <PackageReference Include="Groundwork.PostgreSql" VersionOverride="0.4.0-preview.6" />
-    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.4.0-preview.6" />
-    <PackageReference Include="Groundwork.SqlServer" VersionOverride="0.4.0-preview.6" />
+    <PackageReference Include="Groundwork.MongoDb" VersionOverride="0.4.0-preview.8" />
+    <PackageReference Include="Groundwork.PostgreSql" VersionOverride="0.4.0-preview.8" />
+    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.4.0-preview.8" />
+    <PackageReference Include="Groundwork.SqlServer" VersionOverride="0.4.0-preview.8" />
     <PackageReference Include="Microsoft.Data.SqlClient" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />

@@ -225,14 +225,12 @@ public sealed class RuntimeOutboxDrainWorkload
                 {
                     if (!claimBatches.TryGetValue(invocation, out var items))
                         throw new InvalidOperationException("The claim-due-batch operation was invoked without its prepared fixture.");
-                    var expectedWorkflowExecutionId = items.First().Intent.WorkflowExecutionId;
                     var claims = await primary.Claims.ClaimAsync(
                         new RuntimePostCommitOutboxClaimRequest(
                             $"measured-claim-{OperationIdentity(invocation)}",
                             FixedNowUtc,
                             PrimaryVisibility,
-                            BatchSize,
-                            expectedWorkflowExecutionId),
+                            BatchSize),
                         token);
                     if (claims.Count != BatchSize || !claims.Select(claim => claim.OutboxItemId)
                             .SequenceEqual(items.Select(item => item.OutboxItemId), StringComparer.Ordinal))

@@ -17,8 +17,12 @@ internal static class BenchmarkAdapterRegistry
     internal const string WorkloadVersion = "1.1.0";
     internal const string RecoveryWorkloadVersion = "1.2.0";
     internal const string CheckpointPhysicalForm = "checkpoint-unit-of-work-with-linked-outbox";
+    internal const string MongoRuntimeNativePlanBlockedReason =
+        "capture.native-plan.mongodb-descriptive-command-distinct-requires-sort-group";
 
     private static readonly string[] GroundworkProviders = ["sqlite", "sqlserver", "postgresql", "mongodb"];
+    private static readonly string[] GroundworkRelationalProviders = ["sqlite", "sqlserver", "postgresql"];
+    private static readonly string[] MongoOnly = ["mongodb"];
     private static readonly string[] SqliteOnly = ["sqlite"];
 
     private static readonly IReadOnlyList<AdapterRegistration> Registrations =
@@ -27,34 +31,40 @@ internal static class BenchmarkAdapterRegistry
             GroundworkProviders, NativePlanCaptureKind.Routeless,
             static (request, connection, output) => new CheckpointCommitAdapter(request, connection, output)),
         Registration(RuntimeBookmarkLookupWorkload.WorkloadId, WorkloadVersion, GroundworkV2Adapter, BookmarkLookupAdapter.PhysicalForm,
-            GroundworkProviders, NativePlanCaptureKind.Unsupported,
+            GroundworkProviders, NativePlanCaptureKind.Complete,
             static (request, connection, output) => new BookmarkLookupAdapter(request, connection, output)),
         Registration(RuntimeRecoveryScanWorkload.WorkloadId, RecoveryWorkloadVersion, GroundworkV2Adapter, RecoveryScanAdapter.PhysicalForm,
             GroundworkProviders, NativePlanCaptureKind.Complete,
             static (request, connection, output) => new RecoveryScanAdapter(request, connection, output)),
         Registration(RuntimeQueueDrainWorkload.WorkloadId, WorkloadVersion, GroundworkV2Adapter, QueueDrainAdapter.PhysicalForm,
-            GroundworkProviders, NativePlanCaptureKind.Unsupported,
+            GroundworkRelationalProviders, NativePlanCaptureKind.Complete,
+            static (request, connection, output) => new QueueDrainAdapter(request, connection, output)),
+        Registration(RuntimeQueueDrainWorkload.WorkloadId, WorkloadVersion, GroundworkV2Adapter, QueueDrainAdapter.PhysicalForm,
+            MongoOnly, NativePlanCaptureKind.CorrectnessReadyNativePlanBlocked,
             static (request, connection, output) => new QueueDrainAdapter(request, connection, output)),
         Registration(RuntimeOutboxDrainWorkload.WorkloadId, WorkloadVersion, GroundworkV2Adapter, OutboxDrainAdapter.PhysicalForm,
-            GroundworkProviders, NativePlanCaptureKind.Unsupported,
+            GroundworkProviders, NativePlanCaptureKind.Complete,
             static (request, connection, output) => new OutboxDrainAdapter(request, connection, output)),
         Registration(RuntimeTriggerBindingStimulusLookupWorkload.WorkloadId, WorkloadVersion, GroundworkV2Adapter, TriggerBindingStimulusLookupAdapter.PhysicalForm,
-            GroundworkProviders, NativePlanCaptureKind.Unsupported,
+            GroundworkProviders, NativePlanCaptureKind.Complete,
             static (request, connection, output) => new TriggerBindingStimulusLookupAdapter(request, connection, output)),
         Registration(RuntimeRecurringScheduleSelectionWorkload.WorkloadId, WorkloadVersion, GroundworkV2Adapter, RecurringScheduleSelectionAdapter.PhysicalForm,
-            GroundworkProviders, NativePlanCaptureKind.Unsupported,
+            GroundworkProviders, NativePlanCaptureKind.Complete,
             static (request, connection, output) => new RecurringScheduleSelectionAdapter(request, connection, output)),
         Registration(IamNormalizedLookupWorkload.WorkloadId, WorkloadVersion, GroundworkAspNetCoreIdentityAdapter, IamNormalizedLookupAdapter.PhysicalForm,
             GroundworkProviders, NativePlanCaptureKind.Complete,
             static (request, connection, output) => new IamNormalizedLookupAdapter(request, connection, output)),
         Registration(DistributedPlacementTakeoverWorkload.WorkloadId, WorkloadVersion, GroundworkV2Adapter, DistributedPlacementTakeoverAdapter.PhysicalForm,
-            GroundworkProviders, NativePlanCaptureKind.Unsupported,
+            GroundworkProviders, NativePlanCaptureKind.Complete,
             static (request, connection, output) => new DistributedPlacementTakeoverAdapter(request, connection, output)),
         Registration(DistributedCommandSendLeaseAckWorkload.WorkloadId, WorkloadVersion, GroundworkV2Adapter, DistributedCommandSendLeaseAckAdapter.PhysicalForm,
-            GroundworkProviders, NativePlanCaptureKind.Unsupported,
+            GroundworkRelationalProviders, NativePlanCaptureKind.Complete,
+            static (request, connection, output) => new DistributedCommandSendLeaseAckAdapter(request, connection, output)),
+        Registration(DistributedCommandSendLeaseAckWorkload.WorkloadId, WorkloadVersion, GroundworkV2Adapter, DistributedCommandSendLeaseAckAdapter.PhysicalForm,
+            MongoOnly, NativePlanCaptureKind.CorrectnessReadyNativePlanBlocked,
             static (request, connection, output) => new DistributedCommandSendLeaseAckAdapter(request, connection, output)),
         Registration(RuntimeDueTimerSelectionWorkload.WorkloadId, WorkloadVersion, GroundworkV2Adapter, DueTimerSelectionAdapter.PhysicalForm,
-            GroundworkProviders, NativePlanCaptureKind.Unsupported,
+            GroundworkProviders, NativePlanCaptureKind.Complete,
             static (request, connection, output) => new DueTimerSelectionAdapter(request, connection, output)),
         Registration(SecretCreateReadListWorkload.WorkloadId, WorkloadVersion, EfSecretRepositoryAdapterId, EfSecretRepositoryAdapter.PhysicalForm,
             SqliteOnly, NativePlanCaptureKind.Complete,
@@ -108,7 +118,8 @@ internal enum NativePlanCaptureKind
     Routeless,
     Complete,
     PartialBlocked,
-    CorrectnessOnly
+    CorrectnessOnly,
+    CorrectnessReadyNativePlanBlocked
 }
 
 internal sealed record AdapterRegistrationDescriptor(

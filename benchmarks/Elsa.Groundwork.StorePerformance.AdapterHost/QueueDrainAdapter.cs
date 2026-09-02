@@ -13,7 +13,8 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 internal sealed class QueueDrainAdapter(
     RunRequest request,
     string connectionString,
-    string outputDirectory)
+    string outputDirectory,
+    WritePathRoundTripObserver? commandObserver = null)
     : IBenchmarkAdapter, IRuntimeQueueDrainWorkloadAdapter
 {
     internal const string PhysicalForm = "dedicated-scheduler-work-documents";
@@ -40,7 +41,11 @@ internal sealed class QueueDrainAdapter(
         // long-lived runtime connection, then retain that live handshake for correctness provenance.
         var observed = await ProviderProbe.ReadAsync(request.Provider, connectionString, cancellationToken);
         var created = await RuntimeStoreComposition.CreateAsync(
-            request.Provider, connectionString, persistenceScope, cancellationToken);
+            request.Provider,
+            connectionString,
+            persistenceScope,
+            cancellationToken,
+            commandObserver);
         observedProvider = observed;
         composition = created;
     }

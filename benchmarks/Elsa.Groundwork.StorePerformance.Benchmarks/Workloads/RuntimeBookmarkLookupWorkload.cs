@@ -12,9 +12,9 @@ namespace Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 /// </summary>
 public sealed class RuntimeBookmarkLookupWorkload
 {
-    private const string PrimaryStimulusType = "runtime-bookmark-lookup";
-    private const string PrimaryStimulusHash = "bookmark-lookup-v1.1";
-    private const string SecondaryStimulusHash = "bookmark-lookup-other-scope";
+    internal const string PrimaryStimulusType = "runtime-bookmark-lookup";
+    internal const string PrimaryStimulusHash = "bookmark-lookup-v1.1";
+    internal const string SecondaryStimulusHash = "bookmark-lookup-other-scope";
     private const string NoiseStimulusHash = "bookmark-lookup-noise";
     private static readonly DateTimeOffset SeededAt = new(2026, 7, 20, 10, 0, 0, TimeSpan.Zero);
     private static readonly ReproducibleWorkloadScenario Scenario = ReproducibleWorkloadScenarioCatalog.Get(WorkloadId);

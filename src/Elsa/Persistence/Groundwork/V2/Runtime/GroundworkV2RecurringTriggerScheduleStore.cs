@@ -219,7 +219,9 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
             Equal(activation, query.ActivationId),
             [new OrderTerm(scheduleId, OrderDirection.Ascending, NullOrder.Last)],
             Projection.All,
-            PagingFor(query.Limit, query.ContinuationToken)), query.ContinuationToken);
+            PagingFor(query.Limit, query.ContinuationToken)),
+            scheduleUnit.CreateQueryRenderOptions(ElsaRuntimeV2StorageManifest.RecurringScheduleByActivationAndScheduleIdIndex),
+            query.ContinuationToken);
         return ValueTask.FromResult(Page(query, result));
     }
 
@@ -237,7 +239,9 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
             Equal(artifact, query.ArtifactId),
             [new OrderTerm(scheduleId, OrderDirection.Ascending, NullOrder.Last)],
             Projection.All,
-            PagingFor(query.Limit, query.ContinuationToken)), query.ContinuationToken);
+            PagingFor(query.Limit, query.ContinuationToken)),
+            scheduleUnit.CreateQueryRenderOptions(ElsaRuntimeV2StorageManifest.RecurringScheduleByArtifactAndScheduleIdIndex),
+            query.ContinuationToken);
         return ValueTask.FromResult(Page(query, result));
     }
 
@@ -396,7 +400,8 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
                 new OrderTerm(scheduleId, OrderDirection.Ascending, NullOrder.Last)
             ],
             Projection.All,
-            Paging.Keyset(limit)));
+            Paging.Keyset(limit)),
+            scheduleUnit.CreateQueryRenderOptions(ElsaRuntimeV2StorageManifest.RecurringScheduleByActiveNextOccurrenceAndScheduleIdIndex));
 
         if (result.Rows.Count == 0 && result.NextContinuationToken is not null)
         {
@@ -592,11 +597,14 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
             result.NextContinuationToken);
     }
 
-    private QueryMaterializedResult QueryWithBoundCursor(QueryRequest request, string? cursor)
+    private QueryMaterializedResult QueryWithBoundCursor(
+        QueryRequest request,
+        QueryRenderOptions? options,
+        string? cursor)
     {
         try
         {
-            return OpenScheduleSession().Query(request);
+            return OpenScheduleSession().Query(request, options);
         }
         catch (Exception exception) when (
             cursor is not null &&

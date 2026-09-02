@@ -158,6 +158,7 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
         return ValueTask.FromResult(QueryPage(
             query,
             Equal(ElsaRuntimeV2StorageManifest.ActivationIdField, query.ActivationId),
+            ElsaRuntimeV2StorageManifest.TriggerBindingByActivationAndIdIndex,
             cancellationToken));
     }
 
@@ -321,6 +322,7 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
                     ElsaRuntimeV2StorageManifest.StimulusLookupKeyField,
                     GroundworkV2BookmarkStorageConventions.StimulusLookupKey(query.StimulusType, query.StimulusHash)),
                 Equal(ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingIsActiveField, true)),
+            ElsaRuntimeV2StorageManifest.TriggerBindingByStimulusAndTypeIndex,
             cancellationToken));
     }
 
@@ -332,6 +334,7 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
         return ValueTask.FromResult(QueryPage(
             query,
             Equal(ElsaRuntimeV2StorageManifest.ArtifactIdField, query.ArtifactId),
+            ElsaRuntimeV2StorageManifest.TriggerBindingByArtifactAndIdIndex,
             cancellationToken));
     }
 
@@ -347,12 +350,14 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
                     ElsaRuntimeV2StorageManifest.StimulusTypeLookupKeyField,
                     GroundworkV2BookmarkStorageConventions.StimulusTypeLookupKey(query.StimulusType)),
                 Equal(ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingIsActiveField, true)),
+            ElsaRuntimeV2StorageManifest.TriggerBindingByStimulusTypeAndActiveIndex,
             cancellationToken));
     }
 
     private WorkflowTriggerBindingPage QueryPage(
         WorkflowTriggerBindingPageRequest query,
         Predicate predicate,
+        string selectedIndex,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -362,7 +367,8 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
             [new OrderTerm(Column(ElsaRuntimeV2StorageManifest.TriggerBindingIdField), OrderDirection.Ascending, NullOrder.Last)],
             Projection.All,
             PagingFor(query.Limit, query.ContinuationToken),
-            ResultShape.TotalCount.Instance));
+            ResultShape.TotalCount.Instance),
+            bindingUnit.CreateQueryRenderOptions(selectedIndex));
         var totalCount = result.TotalCount ?? throw new InvalidDataException(
             "Groundwork trigger-binding query did not return its requested filtered total count.");
         return new WorkflowTriggerBindingPage(

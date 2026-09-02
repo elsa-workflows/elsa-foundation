@@ -420,17 +420,25 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
                 null,
                 Bound.Inclusive(QueryConstant.Of(candidateAt, query.Now)))
         };
+        if (selection == CandidateSelection.Claimable)
+            predicates.Insert(0, Equal(Column(table, ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableIsEligibleField), true));
         if (query.WorkflowExecutionId is { } workflow)
             predicates.Add(Equal(Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField), workflow));
         if (query.IntentKind is { } intentKind)
             predicates.Add(Equal(Column(table, ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindField), intentKind));
 
-        var result = session.Query(new QueryRequest(
+        var request = new QueryRequest(
             table,
             predicates.Count == 1 ? predicates[0] : new Predicate.And(predicates),
             [.. route.OrderFields.Select(field => new OrderTerm(Column(table, field), OrderDirection.Ascending, NullOrder.Last))],
             Projection.All,
-            Paging.Keyset(Math.Min(maximumResults, RuntimeStorePageRequest.MaximumLimit))));
+            Paging.Keyset(Math.Min(maximumResults, RuntimeStorePageRequest.MaximumLimit)));
+        var options = selection == CandidateSelection.Claimable &&
+                      query.WorkflowExecutionId is null &&
+                      query.IntentKind is null
+            ? outboxUnit.CreateQueryRenderOptions(route.IndexName)
+            : null;
+        var result = session.Query(request, options);
 
         var candidates = new List<RuntimePostCommitOutboxItem>(Math.Min(maximumResults, result.Rows.Count));
         foreach (var values in result.Rows)
@@ -459,29 +467,35 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
         return candidates.Take(maximumResults).ToArray();
     }
 
-    private (string CandidateAtField, IReadOnlyList<string> OrderFields) SelectRoute(
+    private (string CandidateAtField, IReadOnlyList<string> OrderFields, string IndexName) SelectRoute(
         RuntimePostCommitOutboxQuery query,
         CandidateSelection selection) =>
         (selection, query.WorkflowExecutionId is not null, query.IntentKind is not null) switch
         {
-            (CandidateSelection.Deliverable, false, false) => Route(ElsaRuntimeV2StorageManifest.PostCommitOutboxDeliverableAtField),
-            (CandidateSelection.Deliverable, true, false) => Route(ElsaRuntimeV2StorageManifest.PostCommitOutboxDeliverableAtField, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField),
-            (CandidateSelection.Deliverable, false, true) => Route(ElsaRuntimeV2StorageManifest.PostCommitOutboxDeliverableAtField, ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindField),
-            (CandidateSelection.Deliverable, true, true) => Route(ElsaRuntimeV2StorageManifest.PostCommitOutboxDeliverableAtField, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindField),
-            (CandidateSelection.Claimable, false, false) => Route(ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField),
-            (CandidateSelection.Claimable, true, false) => Route(ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField),
-            (CandidateSelection.Claimable, false, true) => Route(ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField, ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindField),
-            (CandidateSelection.Claimable, true, true) => Route(ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindField),
+            (CandidateSelection.Deliverable, false, false) => Route(ElsaRuntimeV2StorageManifest.PostCommitOutboxDeliverableAtField, "by_deliverable_time_recorded_id"),
+            (CandidateSelection.Deliverable, true, false) => Route(ElsaRuntimeV2StorageManifest.PostCommitOutboxDeliverableAtField, "by_deliverable_by_workflow_time_recorded_id", ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField),
+            (CandidateSelection.Deliverable, false, true) => Route(ElsaRuntimeV2StorageManifest.PostCommitOutboxDeliverableAtField, "by_deliverable_by_intent_kind_time_recorded_id", ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindField),
+            (CandidateSelection.Deliverable, true, true) => Route(ElsaRuntimeV2StorageManifest.PostCommitOutboxDeliverableAtField, "by_deliverable_by_workflow_and_intent_kind_time_recorded_id", ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindField),
+            (CandidateSelection.Claimable, false, false) => ClaimableRoute(ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableIndex),
+            (CandidateSelection.Claimable, true, false) => ClaimableRoute(ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableByWorkflowIndex, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField),
+            (CandidateSelection.Claimable, false, true) => ClaimableRoute(ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableByIntentKindIndex, ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindField),
+            (CandidateSelection.Claimable, true, true) => ClaimableRoute(ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableByWorkflowAndIntentKindIndex, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindField),
             _ => throw new ArgumentOutOfRangeException(nameof(selection), selection, null)
         };
 
-    private static (string CandidateAtField, IReadOnlyList<string> OrderFields) Route(
+    private static (string CandidateAtField, IReadOnlyList<string> OrderFields, string IndexName) ClaimableRoute(
+        string indexName,
+        params string[] prefix) =>
+        Route(ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField, indexName, prefix);
+
+    private static (string CandidateAtField, IReadOnlyList<string> OrderFields, string IndexName) Route(
         string candidateAt,
+        string indexName,
         params string[] prefix) =>
         (candidateAt, prefix.Concat([
             candidateAt,
             ElsaRuntimeV2StorageManifest.PostCommitOutboxRecordedAtField,
-            ElsaRuntimeV2StorageManifest.PostCommitOutboxItemIdField]).ToArray());
+            ElsaRuntimeV2StorageManifest.PostCommitOutboxItemIdField]).ToArray(), indexName);
 
     private void StagePendingIfAbsent(
         IUnitOfWork unitOfWork,
@@ -652,6 +666,9 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
         status is WriteOutcomeStatus.Inserted or WriteOutcomeStatus.Updated or WriteOutcomeStatus.Upserted or WriteOutcomeStatus.Replayed;
 
     private static Predicate Equal(ColumnRef column, string value) =>
+        new Predicate.Equal(column, QueryConstant.Of(column, value));
+
+    private static Predicate Equal(ColumnRef column, bool value) =>
         new Predicate.Equal(column, QueryConstant.Of(column, value));
 
     private ColumnRef Column(TableId table, string name)

@@ -31,7 +31,7 @@ public sealed class GroundworkExecutionCommandTransport(
         for (var attempt = 0; attempt < MaxCreateAttempts; attempt++)
         {
             var headSession = Session(DistributedGroundworkStorageManifest.CommandStreamHeadUnitId);
-            var headKey = Key(DistributedGroundworkStorageManifest.WorkflowExecutionIdField, workflowExecutionId);
+            var headKey = Key(DistributedGroundworkStorageManifest.CommandStreamHeadIdField, workflowExecutionId);
             var currentHead = headSession.Read(headKey);
             var head = currentHead is null ? null : Deserialize<StreamHead>(currentHead.Values.Values);
             if (head is not null && !StringComparer.Ordinal.Equals(head.WorkflowExecutionId, workflowExecutionId))
@@ -116,18 +116,20 @@ public sealed class GroundworkExecutionCommandTransport(
             cancellationToken.ThrowIfCancellationRequested();
             var result = session.Query(new QueryRequest(
                 new TableId(DistributedGroundworkStorageManifest.CommandTransportUnitName),
-                new Predicate.And([
-                    Equal(Columns.WorkflowExecutionId, workflowExecutionId),
-                    new Predicate.Range(Columns.VisibleAt, null, Bound.Inclusive(QueryConstant.Of(Columns.VisibleAt, now)))
-                ]),
+                Equal(Columns.WorkflowExecutionId, workflowExecutionId),
                 [new OrderTerm(Columns.Sequence, OrderDirection.Ascending, NullOrder.Last)],
                 Projection.All,
-                continuation is null ? Paging.Keyset(maxItems) : Paging.Continuation(continuation, maxItems)));
+                continuation is null ? Paging.Keyset(maxItems) : Paging.Continuation(continuation, maxItems)),
+                sessions.Unit(DistributedGroundworkStorageManifest.CommandTransportUnitId, targetName)
+                    .CreateQueryRenderOptions(DistributedGroundworkStorageManifest.CommandByExecutionSequenceIndex));
             foreach (var row in result.Rows)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var itemId = StringValue(row, DistributedGroundworkStorageManifest.TransportItemIdField);
                 if (!seenItemIds.Add(itemId))
+                    continue;
+                var candidate = Deserialize<ExecutionCommandTransportItem>(row);
+                if (!candidate.IsVisible(now))
                     continue;
                 var next = await LeaseItemAsync(workflowExecutionId, itemId, ownerId, now, leaseDuration, cancellationToken);
                 if (next is not null)
@@ -174,7 +176,7 @@ public sealed class GroundworkExecutionCommandTransport(
                 return false;
 
             var headSession = Session(DistributedGroundworkStorageManifest.CommandStreamHeadUnitId);
-            var headKey = Key(DistributedGroundworkStorageManifest.WorkflowExecutionIdField, workflowExecutionId);
+            var headKey = Key(DistributedGroundworkStorageManifest.CommandStreamHeadIdField, workflowExecutionId);
             var headEntry = headSession.Read(headKey) ?? throw MissingHead(workflowExecutionId);
             var head = ReadHead(headEntry, workflowExecutionId);
             if (head.PendingCount <= 0)
@@ -205,7 +207,10 @@ public sealed class GroundworkExecutionCommandTransport(
         var result = Session(DistributedGroundworkStorageManifest.CommandStreamHeadUnitId).Query(new QueryRequest(
             new TableId(DistributedGroundworkStorageManifest.CommandStreamHeadUnitName),
             new Predicate.Range(HeadColumns.PendingVisibleAt, null, Bound.Inclusive(QueryConstant.Of(HeadColumns.PendingVisibleAt, now))),
-            [new OrderTerm(HeadColumns.WorkflowExecutionId, OrderDirection.Ascending, NullOrder.Last)],
+            [
+                new OrderTerm(HeadColumns.PendingVisibleAt, OrderDirection.Ascending, NullOrder.Last),
+                new OrderTerm(HeadColumns.WorkflowExecutionId, OrderDirection.Ascending, NullOrder.Last)
+            ],
             Projection.ColumnsOnly(HeadColumns.WorkflowExecutionId),
             Paging.Keyset(maxItems)),
             unit.CreateQueryRenderOptions(DistributedGroundworkStorageManifest.PendingCommandHeadByExecutionIndex));
@@ -217,14 +222,20 @@ public sealed class GroundworkExecutionCommandTransport(
     {
         DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
         cancellationToken.ThrowIfCancellationRequested();
-        var result = Session(DistributedGroundworkStorageManifest.CommandTransportUnitId).Query(new QueryRequest(
-            new TableId(DistributedGroundworkStorageManifest.CommandTransportUnitName),
-            Equal(Columns.WorkflowExecutionId, workflowExecutionId),
-            [],
-            Projection.All,
+        var session = Session(DistributedGroundworkStorageManifest.CommandStreamHeadUnitId);
+        var unit = sessions.Unit(DistributedGroundworkStorageManifest.CommandStreamHeadUnitId, targetName);
+        var result = session.Query(new QueryRequest(
+            new TableId(DistributedGroundworkStorageManifest.CommandStreamHeadUnitName),
+            Equal(HeadColumns.WorkflowExecutionId, workflowExecutionId),
+            [new OrderTerm(HeadColumns.WorkflowExecutionId, OrderDirection.Ascending, NullOrder.Last)],
+            Projection.ColumnsOnly(HeadColumns.PendingCount),
             Paging.None,
-            ResultShape.TotalCount.Instance));
-        return ValueTask.FromResult(checked((int)(result.TotalCount ?? result.Rows.Count)));
+            ResultShape.FirstOrDefault.Instance),
+            unit.CreateQueryRenderOptions(DistributedGroundworkStorageManifest.CommandHeadCountByExecutionIndex));
+        var count = result.Rows.Count == 0
+            ? 0L
+            : Int64Value(result.Rows[0], DistributedGroundworkStorageManifest.PendingCountField);
+        return ValueTask.FromResult(checked((int)count));
     }
 
     private async ValueTask<ExecutionCommandTransportItem?> LeaseItemAsync(
@@ -248,7 +259,7 @@ public sealed class GroundworkExecutionCommandTransport(
 
             var next = item.Lease(ownerId, now + leaseDuration);
             var headSession = Session(DistributedGroundworkStorageManifest.CommandStreamHeadUnitId);
-            var headKey = Key(DistributedGroundworkStorageManifest.WorkflowExecutionIdField, workflowExecutionId);
+            var headKey = Key(DistributedGroundworkStorageManifest.CommandStreamHeadIdField, workflowExecutionId);
             var headEntry = headSession.Read(headKey) ?? throw MissingHead(workflowExecutionId);
             var head = ReadHead(headEntry, workflowExecutionId);
             var pending = PendingSummary.Load(session, workflowExecutionId, transportItemId, next, head.PendingCount);
@@ -310,6 +321,7 @@ public sealed class GroundworkExecutionCommandTransport(
 
     private static StorageValues Values(StreamHead head) => new(new Dictionary<string, object?>
     {
+        [DistributedGroundworkStorageManifest.CommandStreamHeadIdField] = head.WorkflowExecutionId,
         [DistributedGroundworkStorageManifest.WorkflowExecutionIdField] = head.WorkflowExecutionId,
         [DistributedGroundworkStorageManifest.LastSequenceField] = head.LastSequence,
         [DistributedGroundworkStorageManifest.PendingCountField] = head.PendingCount,
@@ -337,6 +349,13 @@ public sealed class GroundworkExecutionCommandTransport(
     {
         string value => value,
         _ => throw new InvalidOperationException($"The Groundwork row field '{field}' is not a string.")
+    };
+
+    private static long Int64Value(IReadOnlyDictionary<string, object?> row, string field) => row[field] switch
+    {
+        long value => value,
+        int value => value,
+        _ => throw new InvalidOperationException($"The Groundwork row field '{field}' is not an Int64.")
     };
 
     private static Predicate Equal(ColumnRef column, object value) => new Predicate.Equal(column, QueryConstant.Of(column, value));
@@ -447,6 +466,7 @@ public sealed class GroundworkExecutionCommandTransport(
     {
         private static readonly TableId Table = new(DistributedGroundworkStorageManifest.CommandStreamHeadUnitName);
         internal static ColumnRef WorkflowExecutionId { get; } = String(DistributedGroundworkStorageManifest.WorkflowExecutionIdField, false);
+        internal static ColumnRef PendingCount { get; } = new(Table, DistributedGroundworkStorageManifest.PendingCountField, QueryType.Int64, false);
         internal static ColumnRef PendingVisibleAt { get; } = new(Table, DistributedGroundworkStorageManifest.PendingVisibleAtField, QueryType.DateTimeOffset, false);
         private static ColumnRef String(string name, bool nullable) => new(Table, name, QueryType.String, nullable, DistributedRuntimeIdentityConstraints.MaximumLength);
     }

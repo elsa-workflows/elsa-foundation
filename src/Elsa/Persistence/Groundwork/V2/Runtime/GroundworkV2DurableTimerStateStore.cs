@@ -83,7 +83,8 @@ public sealed class GroundworkV2DurableTimerStateStore : IDurableTimerStore
                 new OrderTerm(timerId, OrderDirection.Ascending, NullOrder.Last)
             ],
             Projection.All,
-            Paging.Keyset(limit)));
+            Paging.Keyset(limit)),
+            unit.CreateQueryRenderOptions(ElsaRuntimeV2StorageManifest.DurableTimerByDueTimeAndTimerIdIndex));
         return ValueTask.FromResult<IReadOnlyCollection<DurableTimer>>(
             result.Rows.Select(Deserialize).Select(envelope => envelope.Timer).ToArray());
     }

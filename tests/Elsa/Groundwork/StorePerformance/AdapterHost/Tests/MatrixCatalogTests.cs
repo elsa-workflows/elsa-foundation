@@ -16,7 +16,7 @@ public sealed class MatrixCatalogTests
         var currentRevision = SourceProvenance.AssemblyRevision(typeof(SourceProvenance).Assembly);
         Assert.Equal(currentRevision, document.Build.AdapterHostRevision);
         Assert.Equal(currentRevision, document.Build.HarnessRevision);
-        Assert.Equal(15, document.Registrations.Count);
+        Assert.Equal(17, document.Registrations.Count);
         Assert.Equal(13, document.Registrations.Select(item => item.WorkloadId).Distinct(StringComparer.Ordinal).Count());
         Assert.DoesNotContain(document.Registrations, item => item.WorkloadVersion == "1.0.0");
         Assert.All(document.Registrations, item => Assert.NotEmpty(item.Providers));
@@ -38,11 +38,42 @@ public sealed class MatrixCatalogTests
         Assert.Equal(["Groundwork.PostgreSql"], checkpoint.ProviderPackages["postgresql"]);
 
         var bookmark = Single(registrations, "bookmark-lookup", "groundwork-v2");
-        Assert.Equal("unsupported", bookmark.CapturePlanStatus);
-        Assert.Equal("blocked", bookmark.CorrectnessStatus);
-        Assert.Equal("capture.native-plan.not-implemented", bookmark.CorrectnessReason);
-        Assert.Equal("blocked", bookmark.TimingStatus);
-        Assert.Equal("capture.native-plan.not-implemented", bookmark.TimingReason);
+        Assert.Equal("complete", bookmark.CapturePlanStatus);
+        Assert.Equal("ready", bookmark.CorrectnessStatus);
+        Assert.Equal("ready", bookmark.TimingStatus);
+
+        foreach (var workload in new[]
+                 {
+                     "trigger-binding-stimulus-lookup",
+                     "recurring-schedule-selection",
+                     "due-timer-selection",
+                     "placement-takeover",
+                     "outbox-drain"
+                 })
+        {
+            var registration = Single(registrations, workload, "groundwork-v2");
+            Assert.Equal("complete", registration.CapturePlanStatus);
+            Assert.Equal("ready", registration.CorrectnessStatus);
+            Assert.Equal("ready", registration.TimingStatus);
+        }
+
+        foreach (var workload in new[] { "queue-drain", "command-send-lease-ack" })
+        {
+            var relational = Single(registrations, workload, "groundwork-v2", "sqlite");
+            Assert.Equal(["sqlite", "sqlserver", "postgresql"], relational.Providers);
+            Assert.Equal("complete", relational.CapturePlanStatus);
+            Assert.Equal("ready", relational.CorrectnessStatus);
+            Assert.Equal("ready", relational.TimingStatus);
+
+            var mongo = Single(registrations, workload, "groundwork-v2", "mongodb");
+            Assert.Equal(["mongodb"], mongo.Providers);
+            Assert.Equal("correctness-ready-native-plan-blocked", mongo.CapturePlanStatus);
+            Assert.Equal(BenchmarkAdapterRegistry.MongoRuntimeNativePlanBlockedReason, mongo.CapturePlanReason);
+            Assert.Equal("ready", mongo.CorrectnessStatus);
+            Assert.Equal("correctness.ready", mongo.CorrectnessReason);
+            Assert.Equal("blocked", mongo.TimingStatus);
+            Assert.Equal(BenchmarkAdapterRegistry.MongoRuntimeNativePlanBlockedReason, mongo.TimingReason);
+        }
 
         var diagnostics = Single(registrations, "diagnostics-durable-history", DiagnosticsDurableHistoryAdapter.AdapterId);
         Assert.Equal("partial-blocked", diagnostics.CapturePlanStatus);
@@ -70,14 +101,16 @@ public sealed class MatrixCatalogTests
         Assert.Equal(
             SourceProvenance.AssemblyRevision(typeof(SourceProvenance).Assembly),
             parsed.RootElement.GetProperty("Build").GetProperty("AdapterHostRevision").GetString());
-        Assert.Equal(15, parsed.RootElement.GetProperty("Registrations").GetArrayLength());
+        Assert.Equal(17, parsed.RootElement.GetProperty("Registrations").GetArrayLength());
     }
 
     private static MatrixRegistrationDocument Single(
         IReadOnlyList<MatrixRegistrationDocument> registrations,
         string workload,
-        string adapter) =>
+        string adapter,
+        string? provider = null) =>
         Assert.Single(registrations, item =>
             string.Equals(item.WorkloadId, workload, StringComparison.Ordinal) &&
-            string.Equals(item.Adapter, adapter, StringComparison.Ordinal));
+            string.Equals(item.Adapter, adapter, StringComparison.Ordinal) &&
+            (provider is null || item.Providers.Contains(provider, StringComparer.Ordinal)));
 }

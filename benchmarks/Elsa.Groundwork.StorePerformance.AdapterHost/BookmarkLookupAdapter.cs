@@ -1,5 +1,6 @@
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
+using Groundwork.Store;
 
 namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 
@@ -10,7 +11,8 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 internal sealed class BookmarkLookupAdapter(
     RunRequest request,
     string connectionString,
-    string outputDirectory)
+    string outputDirectory,
+    WritePathRoundTripObserver? commandObserver = null)
     : IBenchmarkAdapter, IRuntimeBookmarkLookupWorkloadAdapter
 {
     internal const string PhysicalForm = "document-type-specific-tables";
@@ -19,7 +21,9 @@ internal sealed class BookmarkLookupAdapter(
 
     private RuntimeStoreComposition? primaryComposition;
     private RuntimeStoreComposition? secondaryComposition;
+    private IStorageProviderConnection? connection;
     private WritePathRoundTripObserver? observer;
+    private ProviderProbe.Result? observedProvider;
     private IReadOnlyList<IBenchmarkOperation>? operations;
 
     public IProviderRoundTripObserver? RoundTripObserver => observer;
@@ -33,18 +37,39 @@ internal sealed class BookmarkLookupAdapter(
         if (primaryComposition is not null && secondaryComposition is not null)
             return;
 
-        observer ??= new WritePathRoundTripObserver(request.Provider);
-        primaryComposition ??= await RuntimeStoreComposition.CreateAsync(
-            request.Provider, connectionString, PrimaryPersistenceScope, cancellationToken, observer);
+        var observed = await ProviderProbe.ReadAsync(request.Provider, connectionString, cancellationToken);
+        observer ??= commandObserver ?? new WritePathRoundTripObserver(request.Provider);
+        var openedConnection = ProviderConnections.Open(request.Provider, connectionString);
+        RuntimeStoreComposition? primary = null;
+        RuntimeStoreComposition? secondary = null;
         try
         {
-            secondaryComposition ??= await RuntimeStoreComposition.CreateAsync(
-                request.Provider, connectionString, SecondaryPersistenceScope, cancellationToken, observer);
+            primary = await RuntimeStoreComposition.CreateAsync(
+                request.Provider,
+                connectionString,
+                PrimaryPersistenceScope,
+                cancellationToken,
+                observer,
+                openedConnection);
+            secondary = await RuntimeStoreComposition.CreateAsync(
+                request.Provider,
+                connectionString,
+                SecondaryPersistenceScope,
+                cancellationToken,
+                observer,
+                openedConnection);
+            primaryComposition = primary;
+            secondaryComposition = secondary;
+            connection = openedConnection;
+            observedProvider = observed;
         }
         catch
         {
-            await primaryComposition.DisposeAsync();
-            primaryComposition = null;
+            if (secondary is not null)
+                await secondary.DisposeAsync();
+            if (primary is not null)
+                await primary.DisposeAsync();
+            openedConnection.Dispose();
             throw;
         }
     }
@@ -53,7 +78,8 @@ internal sealed class BookmarkLookupAdapter(
     {
         RequirePrepared();
         var document = NativePlanEvidenceStaging.PublishInto(outputDirectory, request);
-        var observed = await ProviderProbe.ReadAsync(request.Provider, connectionString, cancellationToken);
+        var observed = observedProvider ?? throw new PerformanceContractException(
+            "The bookmark adapter has no provider handshake; PrepareAsync must run first.");
         var workload = new RuntimeBookmarkLookupWorkload();
         var result = await workload.ExecuteAsync(this, cancellationToken);
         operations = (await workload.PrepareMeasuredOperationsAsync(this, cancellationToken))
@@ -91,7 +117,10 @@ internal sealed class BookmarkLookupAdapter(
             await primaryComposition.DisposeAsync();
         secondaryComposition = null;
         primaryComposition = null;
+        connection?.Dispose();
+        connection = null;
         observer = null;
+        observedProvider = null;
         operations = null;
     }
 

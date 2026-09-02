@@ -33,6 +33,12 @@ internal static class CapturePlanAdmission
         if (registration is null)
             throw new PerformanceContractException(
                 $"No adapter is registered for capture-plan target '{request.WorkloadId}/{request.WorkloadVersion}/{request.Adapter}/{request.PhysicalForm}/{request.Provider}'.");
+        if (registration.NativePlanCapture == NativePlanCaptureKind.CorrectnessReadyNativePlanBlocked)
+            throw new PerformanceContractException(
+                $"Native-plan capture is blocked for '{request.WorkloadId}/{request.Adapter}/{request.PhysicalForm}/{request.Provider}': " +
+                $"{BenchmarkAdapterRegistry.MongoRuntimeNativePlanBlockedReason}; the correctness path remains admitted, " +
+                "but MongoDB's descriptive observer command cannot be admitted as a bounded distinct plan, " +
+                "so no provider will be opened and no native-plan evidence will be written.");
         if (registration.NativePlanCapture == NativePlanCaptureKind.Unsupported)
             throw new PerformanceContractException(
                 $"Native-plan capture is not implemented for '{request.WorkloadId}/{request.Adapter}/{request.PhysicalForm}'; " +

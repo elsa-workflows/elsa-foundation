@@ -510,20 +510,17 @@ only. It does not import a #646 performance verdict, delete either diagnostics
 EF oracle, complete T047/T050-T055/T057, promote a final evidence generation,
 or authorize #642 closure.
 
-## Current exact Groundwork 0.4.0-preview.6 pin-alignment checkpoint
+## Groundwork 0.4.0-preview.8 consumption checkpoint
 
-The active Groundwork package family now resolves exactly to `0.4.0-preview.6` across the
-repository's central package pins, explicit project overrides, diagnostics consumers, and
-release-lifecycle checks. The immutable upstream provenance is tag `v0.4.0-preview.6`, production
-commit `2f4d483c969e058ece3331584e5a5504edd47264`, and successful Feedz publication run
-`33591586325`. The focused diagnostics restores completed successfully against the published
-preview.6 packages. The shared diagnostics project built successfully; its architecture
-guard is covered by the targeted current-family assertion. The v2 Structured Logs suite passed
-28/32 with four unavailable-provider skips, and the v2 OpenTelemetry suite passed 28/33 with five
-unavailable-provider skips. These runs found no preview.6 compile or API break. Existing NU1903
-SSH.NET vulnerability warnings remain unchanged.
+The repository's central package pins, explicit project overrides, diagnostics consumers, and
+release-lifecycle checks consume the published `0.4.0-preview.8` family. The immutable
+[`v0.4.0-preview.8`](https://github.com/valence-works/groundwork-v2/releases/tag/v0.4.0-preview.8)
+release targets Groundwork commit `372ea1445485e0a08aa412436d0f3f9253bf0270`; its Feedz publication
+and feed verification workflow completed successfully. Elsa then restored and tested from a fresh
+NuGet cache using that Feedz source. The earlier ordinal-identity query and index-shape findings were
+fixed before publication. Existing NU1903 SSH.NET vulnerability warnings remain unchanged.
 
-This is package pin-alignment and focused API-compatibility evidence only. It does not import a
+This is published-package consumption and focused compatibility evidence only. It does not import a
 #646 performance verdict, promote a new four-provider evidence receipt, delete either diagnostics
 EF oracle, complete T050/T051/T052/T053/T054/T055/T057, or authorize #642 closure. The preview.3
 recertification below remains historical and immutable.

@@ -90,7 +90,8 @@ public sealed class GroundworkExecutionPlacementStore(
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
-        var result = Session().Query(new QueryRequest(
+        var session = Session();
+        var result = session.Query(new QueryRequest(
             new TableId(DistributedGroundworkStorageManifest.PlacementUnitName),
             new Predicate.And([
                 Equal(Columns.OwnerId, request.OwnerId),
@@ -98,7 +99,8 @@ public sealed class GroundworkExecutionPlacementStore(
             ]),
             [new OrderTerm(Columns.ExpiresAt, OrderDirection.Ascending, NullOrder.Last), new OrderTerm(Columns.WorkflowExecutionId, OrderDirection.Ascending, NullOrder.Last)],
             Projection.All,
-            Paging.Keyset(request.Take)));
+            Paging.Keyset(request.Take)),
+            session.Unit.CreateQueryRenderOptions(DistributedGroundworkStorageManifest.PlacementByOwnerExpiryIndex));
         IReadOnlyList<ExecutionPlacementLease> leases = result.Rows.Select(Deserialize).ToArray();
         return ValueTask.FromResult(leases);
     }

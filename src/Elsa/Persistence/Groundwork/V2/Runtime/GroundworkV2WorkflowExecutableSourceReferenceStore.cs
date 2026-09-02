@@ -164,12 +164,20 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
                 new OrderTerm(expiresAt, OrderDirection.Ascending, NullOrder.Last),
                 new OrderTerm(sourceReference, OrderDirection.Ascending, NullOrder.Last))
             : ImmutableArray.Create(new OrderTerm(sourceReference, OrderDirection.Ascending, NullOrder.Last));
+        var selectedIndex = (query.Scope is not null, query.LiveOnly) switch
+        {
+            (true, true) => ElsaRuntimeV2StorageManifest.SourceReferenceByScopeLiveAndIdIndex,
+            (true, false) => ElsaRuntimeV2StorageManifest.SourceReferenceByScopeAndIdIndex,
+            (false, true) => ElsaRuntimeV2StorageManifest.SourceReferenceByCollectionLiveAndIdIndex,
+            (false, false) => ElsaRuntimeV2StorageManifest.SourceReferenceByCollectionAndIdIndex
+        };
         var result = Open().Query(new QueryRequest(
             table,
             And(predicates),
             order,
             Projection.All,
-            PagingFor(query.Limit, query.ContinuationToken)));
+            PagingFor(query.Limit, query.ContinuationToken)),
+            unit.CreateQueryRenderOptions(selectedIndex));
         return ValueTask.FromResult(Page(query, result));
     }
 
