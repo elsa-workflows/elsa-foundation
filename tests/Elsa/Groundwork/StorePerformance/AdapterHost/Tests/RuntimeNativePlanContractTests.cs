@@ -437,7 +437,79 @@ public sealed class RuntimeNativePlanContractTests
         }
     }
 
-    private static NativeRouteEvidence Route(RuntimeNativeRouteSpec specification, string indexName) =>
+    [Fact]
+    public void Latest_per_key_command_must_bind_declared_partition_and_order_shape()
+    {
+        var specification = RuntimeNativePlanContract.For(
+            DistributedCommandSendLeaseAckWorkload.WorkloadId,
+            "list-visible-command-executions");
+        var physicalIndex = RuntimeNativePlanContract.ExpectedPhysicalIndexName("sqlite", specification);
+        var route = Route(specification, physicalIndex, latestPerKey: true);
+        var plan = $"2\t0\tSEARCH {specification.TableName} USING INDEX {physicalIndex} (__groundwork_scope=?)";
+        var command = "WITH __groundwork_base AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY workflowExecutionId ORDER BY enqueuedAt DESC, transportItemId ASC) AS __groundwork_latest_rank FROM elsa_distributed_command_transport WHERE __groundwork_scope = @p0 AND visibleAt <= @p1) SELECT * FROM __groundwork_base WHERE __groundwork_latest_rank = 1 ORDER BY workflowExecutionId ASC, sequence DESC, transportItemId ASC LIMIT @p2";
+        var accepted = WriteArtifact(new RuntimeNativePlanArtifact(
+            1,
+            "sqlite",
+            RuntimeNativePlanContract.GroundworkAdapter,
+            specification.RouteIdentity,
+            specification.TableName,
+            specification.IndexName,
+            physicalIndex,
+            command,
+            plan));
+
+        try
+        {
+            RuntimeNativePlanContract.ValidateEnvelope(
+                DistributedCommandSendLeaseAckWorkload.WorkloadId,
+                "sqlite",
+                RuntimeNativePlanContract.GroundworkAdapter,
+                route,
+                accepted);
+
+            foreach (var invalidCommand in new[]
+                     {
+                         command.Replace("PARTITION BY workflowExecutionId", "PARTITION BY sequence", StringComparison.Ordinal),
+                         command.Replace("ORDER BY enqueuedAt DESC", "ORDER BY sequence DESC", StringComparison.Ordinal),
+                         command.Replace("transportItemId ASC) AS __groundwork_latest_rank", "sequence ASC) AS __groundwork_latest_rank", StringComparison.Ordinal)
+                     })
+            {
+                var rejected = WriteArtifact(new RuntimeNativePlanArtifact(
+                    1,
+                    "sqlite",
+                    RuntimeNativePlanContract.GroundworkAdapter,
+                    specification.RouteIdentity,
+                    specification.TableName,
+                    specification.IndexName,
+                    physicalIndex,
+                    invalidCommand,
+                    plan));
+                try
+                {
+                    Assert.Throws<PerformanceContractException>(() =>
+                        RuntimeNativePlanContract.ValidateEnvelope(
+                            DistributedCommandSendLeaseAckWorkload.WorkloadId,
+                            "sqlite",
+                            RuntimeNativePlanContract.GroundworkAdapter,
+                            route,
+                            rejected));
+                }
+                finally
+                {
+                    File.Delete(rejected);
+                }
+            }
+        }
+        finally
+        {
+            File.Delete(accepted);
+        }
+    }
+
+    private static NativeRouteEvidence Route(
+        RuntimeNativeRouteSpec specification,
+        string indexName,
+        bool latestPerKey = false) =>
         new(
             specification.RouteIdentity,
             "runtime.sqlite.route.raw.json",
@@ -448,7 +520,10 @@ public sealed class RuntimeNativePlanContractTests
             specification.StorageScopeRequired,
             specification.PredicateColumn is not null,
             specification.FiniteLimit,
-            specification.FiniteLimit)
+            specification.FiniteLimit,
+            specification.ResultShape,
+            specification.ScalarResultCount,
+            latestPerKey)
         {
             NativeFetchLimit = specification.NativeFetchLimit
         };

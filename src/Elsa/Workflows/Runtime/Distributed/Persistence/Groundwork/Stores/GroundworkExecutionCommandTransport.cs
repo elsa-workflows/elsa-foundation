@@ -213,7 +213,7 @@ public sealed class GroundworkExecutionCommandTransport(
             Projection.All,
             Paging.None,
             ResultShape.TotalCount.Instance),
-            unit.CreateQueryRenderOptions(DistributedGroundworkStorageManifest.CommandByExecutionSequenceIndex));
+            unit.CreateQueryRenderOptions(DistributedGroundworkStorageManifest.PendingCommandByExecutionSequenceIndex));
         return ValueTask.FromResult(checked((int)(result.TotalCount ?? result.Rows.Count)));
     }
 

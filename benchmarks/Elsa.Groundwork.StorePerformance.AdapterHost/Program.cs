@@ -214,6 +214,34 @@ static async Task<int> CapturePlan(string[] args)
         return 0;
     }
 
+    if (string.Equals(request.WorkloadId, RuntimeQueueDrainWorkload.WorkloadId, StringComparison.Ordinal))
+    {
+        var queueDigest = await QueueDrainNativePlanCapture.CaptureAsync(
+            request,
+            connectionString,
+            outputDirectory,
+            observed,
+            CancellationToken.None);
+        Console.WriteLine($"native-plan-evidence={request.NativePlanEvidenceReference}");
+        Console.WriteLine($"native-plan-sha256={queueDigest}");
+        Console.WriteLine("native-plan-routes=2");
+        return 0;
+    }
+
+    if (string.Equals(request.WorkloadId, DistributedCommandSendLeaseAckWorkload.WorkloadId, StringComparison.Ordinal))
+    {
+        var commandDigest = await DistributedCommandNativePlanCapture.CaptureAsync(
+            request,
+            connectionString,
+            outputDirectory,
+            observed,
+            CancellationToken.None);
+        Console.WriteLine($"native-plan-evidence={request.NativePlanEvidenceReference}");
+        Console.WriteLine($"native-plan-sha256={commandDigest}");
+        Console.WriteLine("native-plan-routes=3");
+        return 0;
+    }
+
     if (string.Equals(request.WorkloadId, DiagnosticsDurableHistoryWorkload.WorkloadId, StringComparison.Ordinal))
     {
         // Diagnostics has declared provider-native routes. It must never fall through to the

@@ -52,7 +52,10 @@ public sealed record NativeRouteEvidence(
     bool HasStorageScopePredicate,
     bool HasRoutePredicate,
     int FiniteLimit,
-    int MaterializedCandidateCount)
+    int MaterializedCandidateCount,
+    RuntimeNativeResultShape ResultShape = RuntimeNativeResultShape.Page,
+    int? ScalarResultCount = null,
+    bool UsesLatestPerKey = false)
 {
     /// <summary>The actual provider row bound, including any continuation lookahead.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
@@ -475,11 +478,19 @@ public static class ArtifactAdmission
                 string.IsNullOrWhiteSpace(route.IndexName) ||
                 route.PhysicalCardinality <= 0 ||
                 !route.HasStorageScopePredicate ||
-                (!diagnosticsWorkload && !route.HasRoutePredicate) ||
-                route.FiniteLimit <= 0 ||
-                route.MaterializedCandidateCount <= 0 ||
-                route.MaterializedCandidateCount > route.FiniteLimit)))
-            throw new PerformanceContractException("Native-plan evidence must admit every required route with a retained raw-plan digest, bounded cardinality, predicates, finite limit, and materialized-count facts.");
+                (RoutePredicateRequired(workload, route, diagnosticsWorkload) && !route.HasRoutePredicate) ||
+                route.ResultShape switch
+                {
+                    RuntimeNativeResultShape.Page => route.FiniteLimit <= 0 ||
+                                                     route.MaterializedCandidateCount <= 0 ||
+                                                     route.MaterializedCandidateCount > route.FiniteLimit ||
+                                                     route.ScalarResultCount is not null,
+                    RuntimeNativeResultShape.ScalarCount => route.FiniteLimit != 0 ||
+                                                            route.MaterializedCandidateCount != 0 ||
+                                                            route.ScalarResultCount is not > 0,
+                    _ => true
+                })))
+            throw new PerformanceContractException("Native-plan evidence must admit every required route with a retained raw-plan digest, bounded cardinality, predicates, finite page or scalar-count, and materialized-result facts.");
         if (routes.Select(route => route.RawPlanReference).Distinct(StringComparer.Ordinal).Count() != routes.Count)
             throw new PerformanceContractException("Every native route must bind a distinct retained raw provider-plan artifact.");
         ValidateDiagnosticsNativeRoutes(workload, routes);
@@ -496,7 +507,9 @@ public static class ArtifactAdmission
                     RuntimeTriggerBindingStimulusLookupWorkload.WorkloadId or
                     DistributedPlacementTakeoverWorkload.WorkloadId or
                     RuntimeDueTimerSelectionWorkload.WorkloadId or
-                    RuntimeRecurringScheduleSelectionWorkload.WorkloadId))
+                    RuntimeRecurringScheduleSelectionWorkload.WorkloadId or
+                    RuntimeQueueDrainWorkload.WorkloadId or
+                    DistributedCommandSendLeaseAckWorkload.WorkloadId))
                 RuntimeNativePlanContract.ValidateEnvelope(request.WorkloadId, request.Provider, request.Adapter, route, rawPlanPath);
             if (string.Equals(workload.Id, SecretCreateReadListWorkload.WorkloadId, StringComparison.Ordinal))
                 SecretRetainedNativePlan.Validate(
@@ -588,6 +601,14 @@ public static class ArtifactAdmission
             throw new PerformanceContractException(
                 "IAM native-plan evidence must contain exactly the five frozen route names and bind physical cardinality 100000, one materialized candidate, and the exact route-specific finite limits.");
     }
+
+    private static bool RoutePredicateRequired(
+        PerformanceWorkload workload,
+        NativeRouteEvidence route,
+        bool diagnosticsWorkload) =>
+        !diagnosticsWorkload &&
+        !(workload.Id == RuntimeQueueDrainWorkload.WorkloadId &&
+          route.RouteIdentity == "list-pending-scheduler-workflow-executions");
 
     private static void ValidateSecretNativeRoutes(
         PerformanceWorkload workload,

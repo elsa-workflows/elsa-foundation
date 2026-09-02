@@ -18,7 +18,8 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 internal sealed class DistributedCommandSendLeaseAckAdapter(
     RunRequest request,
     string connectionString,
-    string outputDirectory)
+    string outputDirectory,
+    WritePathRoundTripObserver? commandObserver = null)
     : IBenchmarkAdapter, ICommandTransportWorkloadAdapter
 {
     internal const string PhysicalForm = "dedicated-command-transport-documents";
@@ -47,6 +48,7 @@ internal sealed class DistributedCommandSendLeaseAckAdapter(
             connectionString,
             persistenceScope,
             cancellationToken,
+            commandObserver,
             includeDistributedRuntimeStores: true);
         observedProvider = observed;
         composition = created;

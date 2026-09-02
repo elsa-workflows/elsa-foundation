@@ -49,8 +49,9 @@ internal static class IamNativePlanParser
     /// but its provider plan can contain several branches (for example, one bounded page branch and
     /// one count branch) plus an include lookup for versions. The route table must expose one physical
     /// index across its branches; requiring one textual SEARCH would incorrectly reject that real shape.
-    /// Every physical SCAN is rejected even when SQLite reports only an alias. Iteration over the two
-    /// named, materialized Groundwork result CTEs is not a physical-table scan and is the sole exception.
+    /// Every physical-table SCAN is rejected. SQLite may report iteration over a derived subquery or
+    /// Groundwork's materialized base result as SCAN nodes around a windowed LatestPerKey route; those
+    /// are not source-table access paths and are therefore not rejected here.
     /// </summary>
     public static ParsedPlan ParseSecret(string provider, string rawPlan)
     {
@@ -61,12 +62,12 @@ internal static class IamNativePlanParser
 
         var scanLines = rawPlan
             .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(line => SqliteScan.IsMatch(line) && !IsGroundworkMaterializedResultScan(line))
+            .Where(line => SqliteScan.IsMatch(line) && !IsDerivedResultScan(line))
             .Take(3)
             .ToArray();
         if (scanLines.Length != 0)
             throw new PerformanceContractException(
-                $"Secret SQLite native plan contains a SCAN operation; aliases and include branches are not exempt: {string.Join(" | ", scanLines)}");
+                $"SQLite native plan contains a physical SCAN operation: {string.Join(" | ", scanLines)}");
 
         var matches = SqliteIndexSearch.Matches(rawPlan)
             // The public Secret route materializes versions through EF's split include. That
@@ -88,10 +89,10 @@ internal static class IamNativePlanParser
         return new ParsedPlan("sqlite-explain-query-plan", indexes[0], "index-search", rawPlan);
     }
 
-    private static bool IsGroundworkMaterializedResultScan(string line) =>
+    private static bool IsDerivedResultScan(string line) =>
         Regex.IsMatch(
             line,
-            @"\bSCAN\s+__(?:groundwork_total|groundwork_page)\b",
+            @"\bSCAN\s+(?:\(subquery-\d+\)|__groundwork_base|__(?:groundwork_total|groundwork_page))(?:\s|$)",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     /// <summary>

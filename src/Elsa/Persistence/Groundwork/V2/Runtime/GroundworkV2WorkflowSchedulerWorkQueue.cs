@@ -178,9 +178,14 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
         var workflow = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField);
         var recordedAt = Column(table, ElsaRuntimeV2StorageManifest.SchedulerWorkRecordedAtField);
         var order = Column(table, ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField);
+        var requiredIndexFields = new Predicate.And([
+            NotNull(Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, nullableOverride: true)),
+            NotNull(Column(table, ElsaRuntimeV2StorageManifest.SchedulerWorkRecordedAtField, nullableOverride: true)),
+            NotNull(Column(table, ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField, nullableOverride: true)),
+            NotNull(Column(table, ElsaRuntimeV2StorageManifest.IdField, nullableOverride: true))]);
         var result = Open().Query(new QueryRequest(
             table,
-            Predicate.AlwaysTrue.Instance,
+            requiredIndexFields,
             [
                 new OrderTerm(workflow, OrderDirection.Ascending, NullOrder.Last),
                 new OrderTerm(recordedAt, OrderDirection.Descending, NullOrder.First),
@@ -588,7 +593,7 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
             (workItemId is null ? string.Empty : $" and work item '{workItemId}'") +
             $" did not settle after {MaxTransitionAttempts} compare-and-swap attempts.");
 
-    private ColumnRef Column(TableId table, string name)
+    private ColumnRef Column(TableId table, string name, bool nullableOverride = false)
     {
         var definition = unit.Columns.SingleOrDefault(column =>
             StringComparer.Ordinal.Equals(column.Name, name))
@@ -604,11 +609,14 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
             _ => throw new InvalidOperationException(
                 $"Groundwork scheduler-work query column '{name}' has unsupported type '{definition.Type}'.")
         };
-        return new ColumnRef(table, name, type, definition.IsNullable, definition.MaxLength);
+        return new ColumnRef(table, name, type, nullableOverride || definition.IsNullable, definition.MaxLength);
     }
 
     private static Predicate Equal(ColumnRef column, string value) =>
         new Predicate.Equal(column, QueryConstant.Of(column, value));
+
+    private static Predicate NotNull(ColumnRef column) =>
+        new Predicate.ColumnCompare(column, CompareOp.GreaterThanOrEqual, column);
 
     private static Paging PagingFor(int limit, string? continuationToken) =>
         continuationToken is null
