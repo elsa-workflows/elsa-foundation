@@ -64,7 +64,11 @@ public sealed class GroundworkPerformanceHandoffTests
             ["command-send-lease-ack"] =
             ["lease-visible-commands-by-execution", "list-visible-command-executions", "count-pending-commands-by-execution"],
             ["diagnostics-durable-history"] =
-            ["resources-by-last-seen", "resources-by-status", "resources-by-service", "instruments-by-last-seen"],
+            [
+                "resources-by-last-seen", "resources-by-status", "resources-by-service",
+                "traces-by-last-seen", "trace-detail", "metrics-by-last-seen", "logs-by-last-seen",
+                "structured-log-recent", "structured-log-replay"
+            ],
             ["due-timer-selection"] = ["list-due"],
             ["iam-normalized-lookup-update"] =
             ["find-user-by-normalized-name", "find-user-by-normalized-email", "find-role-by-normalized-name", "list-user-roles", "list-role-users"],
@@ -136,6 +140,8 @@ public sealed class GroundworkPerformanceHandoffTests
         var workloads = documents
             .SelectMany(document => document["workloads"]!.AsArray())
             .Select(workload => workload!.AsObject())
+            .GroupBy(workload => workload["id"]!.GetValue<string>(), StringComparer.Ordinal)
+            .Select(group => group.OrderByDescending(workload => workload["version"]!.GetValue<string>(), StringComparer.Ordinal).First())
             .ToDictionary(workload => workload["id"]!.GetValue<string>(), StringComparer.Ordinal);
 
         Assert.Equal(ExpectedNativeRoutes.Keys.Order(StringComparer.Ordinal), workloads.Keys.Order(StringComparer.Ordinal));
@@ -159,7 +165,6 @@ public sealed class GroundworkPerformanceHandoffTests
             var expectedBlockedReason = id switch
             {
                 "diagnostics-durable-history" => "gate.diagnostics.absolute-budget-required",
-                "secret-create-read-list" => "comparator.secret.real-ef-required",
                 _ => null
             };
             Assert.Equal(
@@ -278,7 +283,10 @@ public sealed class GroundworkPerformanceHandoffTests
         Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "runtime.json"),
         Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "distributed-runtime.json"),
         Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "diagnostics.json"),
-        IdentityWorkloadPath
+        Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "diagnostics-durable-history-v1.2.json"),
+        Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "recovery-scan-v1.2.json"),
+        IdentityWorkloadPath,
+        Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "secret-create-read-list-v1.1.json")
     ];
 
     private static string RepoRoot

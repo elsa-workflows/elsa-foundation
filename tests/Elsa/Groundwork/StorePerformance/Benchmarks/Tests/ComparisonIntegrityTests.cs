@@ -220,24 +220,27 @@ public sealed class ComparisonIntegrityTests
     }
 
     [Fact]
-    public void Comparison_rejects_forged_secret_artifacts_even_when_the_measurement_sets_are_complete()
+    public void Comparison_rejects_blocked_diagnostics_artifacts_even_when_the_measurement_sets_are_complete()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations, workloadId: ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId);
-        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations, workloadId: ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId);
+        const string groundworkForm = "ordinary-groundwork-diagnostics-units";
+        const string efForm = "efcore-diagnostics-relational-tables";
+        var operations = ReproducibleWorkloadScenarioCatalog.Get(ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId).OperationSequence.ToArray();
+        fixture.WriteTarget("ef-diagnostics-oracle", efForm, operations: operations, workloadId: ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId);
+        fixture.WriteTarget("groundwork-v2", groundworkForm, operations: operations, workloadId: ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId);
         fixture.Bind();
 
-        var comparison = fixture.Compare();
-        var gate = GateEvaluator.Evaluate(GatePolicy.DefaultFor(GateClass.OrdinaryStore, comparison.WorkloadId), comparison);
+        var comparison = fixture.Compare($"sqlite/ef-diagnostics-oracle/{efForm}", $"sqlite/groundwork-v2/{groundworkForm}");
+        var gate = GateEvaluator.Evaluate(GatePolicy.DefaultFor(comparison.WorkloadId), comparison);
 
         Assert.False(comparison.Complete);
-        Assert.Contains(ReproducibleWorkloadScenarioCatalog.BlockedReasonCode, comparison.BlockReason);
+        Assert.Contains(ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode, comparison.BlockReason);
         Assert.Equal(PerformanceVerdict.Blocked, gate.Verdict);
-        Assert.Contains(ReproducibleWorkloadScenarioCatalog.BlockedReasonCode, gate.Reason);
+        Assert.Contains(ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode, gate.Reason);
     }
 
     [Fact]
-    public void Comparison_rejects_forged_complete_iam_artifacts_without_a_ratified_adapter_form_mapping()
+    public void Comparison_rejects_post_hoc_forged_iam_artifacts_before_adapter_form_admission()
     {
         using var fixture = ArtifactFixture.Create();
         fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
@@ -255,7 +258,7 @@ public sealed class ComparisonIntegrityTests
             "sqlite/groundwork-aspnetcore-identity/entity-type-specific-physical-tables-current-identity-shape");
 
         Assert.False(result.Complete);
-        Assert.Contains("iam.adapter-form.ratification-required", result.BlockReason, StringComparison.Ordinal);
+        Assert.Contains("frozen", result.BlockReason, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

@@ -20,11 +20,27 @@
     <AssemblyName>Elsa.Groundwork.StorePerformance.AdapterHost</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Retain the #646 temporary EF Secret comparator alongside the Groundwork v2 adapters. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Groundwork.MongoDb" />
     <PackageReference Include="Groundwork.PostgreSql" />
     <PackageReference Include="Groundwork.Sqlite" />
     <PackageReference Include="Groundwork.SqlServer" />
     <ProjectReference Include="../Elsa.Groundwork.StorePerformance.Benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks.csproj" />
+    <ProjectReference Include="../../src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj" />
+    <ProjectReference Include="../../src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="../../src/Elsa/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
+    <ProjectReference Include="../../src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj" />
+    <ProjectReference Include="../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite.csproj" />
+    <ProjectReference Include="../../src/Elsa/Diagnostics/StructuredLogs/Core/Elsa.Diagnostics.StructuredLogs.Core.csproj" />
+    <ProjectReference Include="../../src/Elsa/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs.csproj" />
+    <ProjectReference Include="../../src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Sqlite/Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite.csproj" />
+    <ProjectReference Include="../../src/Elsa/Diagnostics/Persistence/Groundwork/Elsa.Diagnostics.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj" />
     <ProjectReference Include="../../src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj" />
+    <ProjectReference Include="../../src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj" />
   </ItemGroup>
 </Project>

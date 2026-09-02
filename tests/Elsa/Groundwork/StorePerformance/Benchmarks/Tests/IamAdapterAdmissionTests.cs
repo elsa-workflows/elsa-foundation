@@ -9,19 +9,27 @@ public sealed class IamAdapterAdmissionTests
     [Theory]
     [InlineData("ef-aspnetcore-identity", "ef-identity-relational-schema")]
     [InlineData("groundwork-aspnetcore-identity", "entity-type-specific-physical-tables-current-identity-shape")]
-    [InlineData("unratified-adapter", "unratified-form")]
-    public void Candidate_iam_adapter_form_pair_is_rejected_without_a_ratified_mapping(
+    public void Ratified_iam_adapter_form_pair_is_admitted(
         string adapter,
         string physicalForm)
     {
+        BenchmarkAdapterAdmission.RequireAdmitted(IamWorkload(), "sqlite", adapter, physicalForm);
+    }
+
+    [Fact]
+    public void Unratified_iam_adapter_form_pair_is_rejected()
+    {
         var error = Assert.Throws<PerformanceContractException>(() =>
-            BenchmarkAdapterAdmission.RequireAdmitted(IamWorkload(), adapter, physicalForm));
+            BenchmarkAdapterAdmission.RequireAdmitted(IamWorkload(), "sqlite", "unratified-adapter", "unratified-form"));
 
         Assert.Contains("iam.adapter-form.ratification-required", error.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void Matrix_plan_rejects_the_proposed_ef_profile_before_the_frozen_form_allowlist()
+    [Theory]
+    [InlineData("groundwork-aspnetcore-identity", "entity-type-specific-physical-tables-current-identity-shape")]
+    public void Ratified_iam_pair_survives_matrix_plan_admission(
+        string adapter,
+        string physicalForm)
     {
         var workload = IamWorkload();
         var request = new MatrixRequest(
@@ -30,12 +38,12 @@ public sealed class IamAdapterAdmissionTests
             workload.Id,
             workload.Version,
             "sqlite",
-            "ef-aspnetcore-identity",
-            "ef-identity-relational-schema",
+            adapter,
+            physicalForm,
             "100k",
             new string('a', 40),
             new string('b', 64),
-            new Dictionary<string, string> { ["Microsoft.EntityFrameworkCore"] = "candidate" },
+            new Dictionary<string, string> { [adapter] = "candidate" },
             new string('c', 64),
             new string('d', 64),
             "3.46.0",
@@ -47,15 +55,16 @@ public sealed class IamAdapterAdmissionTests
             "iam-admission.native-plan.json",
             new string('e', 64));
 
-        var error = Assert.Throws<PerformanceContractException>(() => MatrixPlan.Create(workload, request));
+        Assert.Contains(request.Provider, workload.RequiredProviders);
+        Assert.Contains(request.PhysicalForm, workload.PhysicalFormsFor646);
+        Assert.Equal(workload.RequiredProviderEvidence[request.Provider], request.ProviderTopology);
 
-        Assert.Contains("iam.adapter-form.ratification-required", error.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("frozen workload/provider/form contract", error.Message, StringComparison.Ordinal);
+        var plan = MatrixPlan.Create(workload, request);
+
+        Assert.Equal(4, plan.Runs.Count);
     }
 
     [Theory]
-    [InlineData("ef-aspnetcore-identity", "ef-identity-relational-schema")]
-    [InlineData("groundwork-aspnetcore-identity", "entity-type-specific-physical-tables-current-identity-shape")]
     [InlineData("unratified-adapter", "unratified-form")]
     public async Task Candidate_iam_pair_is_rejected_before_adapter_preparation_or_provider_access(
         string adapterName,
@@ -78,8 +87,6 @@ public sealed class IamAdapterAdmissionTests
     }
 
     [Theory]
-    [InlineData("ef-aspnetcore-identity", "ef-identity-relational-schema")]
-    [InlineData("groundwork-aspnetcore-identity", "entity-type-specific-physical-tables-current-identity-shape")]
     [InlineData("unratified-adapter", "unratified-form")]
     public async Task Candidate_iam_pair_is_rejected_before_child_launch_or_artifact_creation(
         string adapter,
@@ -116,8 +123,6 @@ public sealed class IamAdapterAdmissionTests
     }
 
     [Theory]
-    [InlineData("ef-aspnetcore-identity", "ef-identity-relational-schema")]
-    [InlineData("groundwork-aspnetcore-identity", "entity-type-specific-physical-tables-current-identity-shape")]
     [InlineData("unratified-adapter", "unratified-form")]
     public void Candidate_iam_pair_is_rejected_before_direct_artifact_creation(
         string adapter,
@@ -147,8 +152,6 @@ public sealed class IamAdapterAdmissionTests
     }
 
     [Theory]
-    [InlineData("ef-aspnetcore-identity", "ef-identity-relational-schema")]
-    [InlineData("groundwork-aspnetcore-identity", "entity-type-specific-physical-tables-current-identity-shape")]
     [InlineData("unratified-adapter", "unratified-form")]
     public void Forged_complete_iam_comparison_cannot_bypass_the_gate(
         string adapter,

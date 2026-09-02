@@ -124,6 +124,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
         services.AddOptions<ActivityExecutionHierarchyCursorOptions>();
         services.TryAddSingleton<IActivityExecutionHierarchyCursorCodec, HmacActivityExecutionHierarchyCursorCodec>();
+        services.AddOptions<RuntimeRecoveryContinuationOptions>();
+        services.TryAddSingleton<IRuntimeRecoveryContinuationCodec, HmacRuntimeRecoveryContinuationCodec>();
+        services.TryAddSingleton<IRuntimeRecoverySweepCursorStore, InMemoryRuntimeRecoverySweepCursorStore>();
         services.TryAddSingleton<IActivityExecutionHierarchyStore, RuntimeInMemoryActivityExecutionHierarchyStore>();
         services.TryAddSingleton<IActivityExecutionHierarchyReader>(serviceProvider => serviceProvider.GetRequiredService<IActivityExecutionHierarchyStore>());
         services.TryAddSingleton<IActivityExecutionHierarchyWriter>(serviceProvider => serviceProvider.GetRequiredService<IActivityExecutionHierarchyStore>());

@@ -164,9 +164,6 @@ public sealed class ProtocolAndGateTests
 
     [Theory]
     [InlineData(
-        ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId,
-        ReproducibleWorkloadScenarioCatalog.BlockedReasonCode)]
-    [InlineData(
         ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId,
         ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode)]
     public void Matrix_and_direct_gate_reject_blocked_contracts_before_execution(

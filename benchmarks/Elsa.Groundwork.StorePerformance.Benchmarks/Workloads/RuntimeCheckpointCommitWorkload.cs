@@ -16,7 +16,10 @@ public sealed class RuntimeCheckpointCommitWorkload
 {
     private static readonly ReproducibleWorkloadScenario Scenario = ReproducibleWorkloadScenarioCatalog.Get(WorkloadId);
     private static readonly JsonSerializerOptions CanonicalJsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-    private static DateTimeOffset Now => DateTimeOffset.UtcNow;
+    // Every matrix child replays the same logical fixture. Wall-clock values would change the durable
+    // marker fingerprint and turn that equivalent replay into a conflict.
+    private static readonly DateTimeOffset FixedNowUtc = new(2026, 7, 20, 10, 0, 0, TimeSpan.Zero);
+    private static DateTimeOffset Now => FixedNowUtc;
 
     public const string WorkloadId = "checkpoint-commit";
     public const string ExpectedInputFingerprint = "ee4cef346ca64739bbe7cfc84ee3f74e6acefec582f537c685991ca73c62ce13";
@@ -39,6 +42,7 @@ public sealed class RuntimeCheckpointCommitWorkload
     {
         ArgumentNullException.ThrowIfNull(adapter);
         var scenario = ValidateScenario();
+        var persistenceScope = RequirePersistenceScope(adapter.PersistenceScope);
         var clients = await adapter.OpenIndependentClientsAsync(cancellationToken);
         RequireIndependentClients(clients);
 
@@ -67,7 +71,7 @@ public sealed class RuntimeCheckpointCommitWorkload
         for (var index = 0; index < CheckpointCount; index++)
         {
             var executionId = ExecutionIdFor(index);
-            var bundle = CreateBundle(index, leases[executionId].ToFence(), executable.Identity);
+            var bundle = CreateBundle(index, leases[executionId].ToFence(), executable.Identity, persistenceScope);
             await RequireHeartbeatAsync(clients.Primary.Ownership, leases[executionId], cancellationToken);
             var acknowledgement = await clients.Primary.Checkpoints.CommitAsync(bundle.Commit, Immediate, cancellationToken);
             acknowledgedCommitIds.Add(RequireAcknowledgement(acknowledgement, bundle, "accepted checkpoint"));
@@ -102,8 +106,8 @@ public sealed class RuntimeCheckpointCommitWorkload
             throw new InvalidOperationException("Ownership supersession did not issue a newer fencing token.");
         var staleBundles = new[]
         {
-            CreateBundle(CheckpointCount, staleFence, executable.Identity, "stale-a"),
-            CreateBundle(CheckpointCount + 1, staleFence, executable.Identity, "stale-b")
+            CreateBundle(CheckpointCount, staleFence, executable.Identity, persistenceScope, "stale-a"),
+            CreateBundle(CheckpointCount + 1, staleFence, executable.Identity, persistenceScope, "stale-b")
         };
         var staleFenceRejected = await RequireConcurrentStaleRejectionAsync(clients, staleBundles, cancellationToken);
         foreach (var staleBundle in staleBundles)
@@ -155,6 +159,159 @@ public sealed class RuntimeCheckpointCommitWorkload
 
         return new RuntimeCheckpointCommitWorkloadResult(scenario.ComputeInputFingerprint(), resultDigest, operations, actualObservations);
     }
+
+    /// <summary>
+    /// Prepares the five catalog-owned public operations for a timed adapter process. Fixture writes happen
+    /// here or in <see cref="IRuntimeCheckpointCommitWorkloadOperation.PrepareInvocationAsync"/>, outside the
+    /// measurement callback; the timed calls themselves remain the public runtime-store operations named by
+    /// the frozen scenario.
+    /// </summary>
+    public async ValueTask<IReadOnlyList<IRuntimeCheckpointCommitWorkloadOperation>> PrepareMeasuredOperationsAsync(
+        IRuntimeCheckpointCommitWorkloadAdapter adapter,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(adapter);
+        var scenario = ValidateScenario();
+        var persistenceScope = RequirePersistenceScope(adapter.PersistenceScope);
+        if (scenario.OperationSequence.Count != 5)
+            throw new InvalidOperationException("The checkpoint scenario must expose exactly five timed operation phases.");
+
+        var clients = await adapter.OpenIndependentClientsAsync(cancellationToken);
+        RequireIndependentClients(clients);
+        var primary = clients.Primary;
+        var secondary = clients.Secondary;
+        var executable = CreateExecutable();
+        await primary.Executables.SaveAsync(executable, cancellationToken);
+
+        const string commitExecutionId = "benchmark-commit-execution";
+        const string replayExecutionId = "benchmark-replay-execution";
+        const string readExecutionId = "benchmark-read-execution";
+        const string staleExecutionId = "benchmark-stale-execution";
+
+        var commitLease = await primary.Ownership.AcquireAsync(commitExecutionId, cancellationToken);
+        RequireCurrentLease(commitLease, commitExecutionId);
+        var replayLease = await primary.Ownership.AcquireAsync(replayExecutionId, cancellationToken);
+        RequireCurrentLease(replayLease, replayExecutionId);
+        var readLease = await primary.Ownership.AcquireAsync(readExecutionId, cancellationToken);
+        RequireCurrentLease(readLease, readExecutionId);
+        await RequireHeartbeatAsync(primary.Ownership, readLease, cancellationToken);
+        var readBundle = CreateOperationBundle("read", 0, readExecutionId, readLease.ToFence(), executable.Identity, persistenceScope);
+        RequireAcknowledgement(
+            await primary.Checkpoints.CommitAsync(readBundle.Commit, Immediate, cancellationToken),
+            readBundle,
+            "measured read fixture");
+
+        var staleLease = await primary.Ownership.AcquireAsync(staleExecutionId, cancellationToken);
+        RequireCurrentLease(staleLease, staleExecutionId);
+        var successor = await secondary.Ownership.AcquireAsync(staleExecutionId, cancellationToken);
+        RequireCurrentLease(successor, staleExecutionId);
+        if (successor.FencingToken <= staleLease.FencingToken)
+            throw new InvalidOperationException("Ownership supersession did not issue a newer fencing token for the measured stale-fence fixture.");
+
+        var commitBundles = new Dictionary<long, ExpectedBundle>();
+        var replayBundles = new Dictionary<long, ExpectedBundle>();
+        var staleBundles = new Dictionary<long, ExpectedBundle>();
+        var seededExecutionIds = new Dictionary<long, string>();
+        return
+        [
+            new RuntimeCheckpointCommitWorkloadOperation(
+                scenario.OperationSequence[0],
+                (invocation, _) =>
+                {
+                    seededExecutionIds[invocation] = $"benchmark-seeded-{IdentityKey(invocation)}";
+                    return ValueTask.CompletedTask;
+                },
+                async (invocation, token) =>
+                {
+                    if (!seededExecutionIds.TryGetValue(invocation, out var executionId))
+                        throw new InvalidOperationException("The seed-fenced-executions operation was invoked without its prepared execution identity.");
+                    await AcquireAndRequireAsync(primary.Ownership, executionId, token);
+                }),
+            new RuntimeCheckpointCommitWorkloadOperation(
+                scenario.OperationSequence[1],
+                async (invocation, token) =>
+                {
+                    await RequireHeartbeatAsync(primary.Ownership, commitLease, token);
+                    commitBundles[invocation] = CreateOperationBundle(
+                        "commit", invocation, commitExecutionId, commitLease.ToFence(), executable.Identity, persistenceScope);
+                },
+                async (invocation, token) =>
+                {
+                    if (!commitBundles.TryGetValue(invocation, out var bundle))
+                        throw new InvalidOperationException("The checkpoint commit operation was invoked without its prepared bundle.");
+                    RequireAcknowledgement(
+                        await primary.Checkpoints.CommitAsync(bundle.Commit, Immediate, token),
+                        bundle,
+                        "measured checkpoint commit");
+                }),
+            new RuntimeCheckpointCommitWorkloadOperation(
+                scenario.OperationSequence[2],
+                async (invocation, token) =>
+                {
+                    await RequireHeartbeatAsync(primary.Ownership, replayLease, token);
+                    var bundle = CreateOperationBundle(
+                        "replay", invocation, replayExecutionId, replayLease.ToFence(), executable.Identity, persistenceScope);
+                    RequireAcknowledgement(
+                        await primary.Checkpoints.CommitAsync(bundle.Commit, Immediate, token),
+                        bundle,
+                        "measured replay fixture");
+                    replayBundles[invocation] = bundle;
+                },
+                async (invocation, token) =>
+                {
+                    if (!replayBundles.TryGetValue(invocation, out var bundle))
+                        throw new InvalidOperationException("The replay operation was invoked without its prepared bundle.");
+                    RequireAcknowledgement(
+                        await secondary.Checkpoints.CommitAsync(bundle.Commit, Immediate, token),
+                        bundle,
+                        "measured equivalent replay");
+                }),
+            new RuntimeCheckpointCommitWorkloadOperation(
+                scenario.OperationSequence[3],
+                (invocation, _) =>
+                {
+                    staleBundles[invocation] = CreateOperationBundle(
+                        "stale", invocation, staleExecutionId, staleLease.ToFence(), executable.Identity, persistenceScope);
+                    return ValueTask.CompletedTask;
+                },
+                async (invocation, token) =>
+                {
+                    if (!staleBundles.TryGetValue(invocation, out var bundle))
+                        throw new InvalidOperationException("The stale-fence operation was invoked without its prepared bundle.");
+                    try
+                    {
+                        await primary.Checkpoints.CommitAsync(bundle.Commit, Immediate, token);
+                    }
+                    catch (RuntimeStaleFencingTokenException)
+                    {
+                        return;
+                    }
+                    throw new InvalidOperationException("The checkpoint store accepted a stale fencing token during measurement.");
+                }),
+            new RuntimeCheckpointCommitWorkloadOperation(
+                scenario.OperationSequence[4],
+                static (_, _) => ValueTask.CompletedTask,
+                async (_, token) =>
+                {
+                    var reopened = await adapter.ReopenClientAsync(token);
+                    var actual = await reopened.WorkflowExecutions.FindAsync(readExecutionId, token);
+                    if (actual is null || actual.WorkflowExecutionId != readExecutionId)
+                        throw new InvalidOperationException("The reopened checkpoint client did not expose the measured committed bundle.");
+                })
+        ];
+    }
+
+    private static async ValueTask AcquireAndRequireAsync(
+        IRuntimeExecutionOwnershipService ownership,
+        string executionId,
+        CancellationToken cancellationToken)
+    {
+        var lease = await ownership.AcquireAsync(executionId, cancellationToken);
+        RequireCurrentLease(lease, executionId);
+    }
+
+    private static string IdentityKey(long invocation) =>
+        invocation < 0 ? $"w{-invocation}" : $"m{invocation}";
 
     private static readonly RuntimeCheckpointPersistenceDecision Immediate = new(RuntimeCheckpointPersistenceMode.Immediate);
     private static int CheckpointsPerExecution => CheckpointCount / ExecutionCount;
@@ -350,13 +507,38 @@ public sealed class RuntimeCheckpointCommitWorkload
         }
     }
 
-    private static ExpectedBundle CreateBundle(int index, RuntimeExecutionFence fence, WorkflowExecutableIdentity executable, string? suffix = null)
+    private static ExpectedBundle CreateBundle(
+        int index,
+        RuntimeExecutionFence fence,
+        WorkflowExecutableIdentity executable,
+        string persistenceScope,
+        string? suffix = null)
     {
         var executionId = ExecutionIdFor(index % CheckpointCount);
         var checkpointId = suffix is null ? CheckpointId(index) : $"checkpoint-stale-{suffix}";
+        return CreateBundle(executionId, checkpointId, index, fence, executable, persistenceScope);
+    }
+
+    private static ExpectedBundle CreateOperationBundle(
+        string operation,
+        long invocation,
+        string executionId,
+        RuntimeExecutionFence fence,
+        WorkflowExecutableIdentity executable,
+        string persistenceScope) =>
+        CreateBundle(executionId, $"checkpoint-{operation}-{IdentityKey(invocation)}", 0, fence, executable, persistenceScope);
+
+    private static ExpectedBundle CreateBundle(
+        string executionId,
+        string checkpointId,
+        int index,
+        RuntimeExecutionFence fence,
+        WorkflowExecutableIdentity executable,
+        string persistenceScope)
+    {
         var payload = Payload(checkpointId);
         var occurredAt = Now.AddSeconds(index);
-        var workflow = new WorkflowExecutionState(executionId, executable, WorkflowExecutionStatus.Running, null, Now, Now, occurredAt, null, null, null, "tenant-checkpoint", new Dictionary<string, string>(StringComparer.Ordinal)
+        var workflow = new WorkflowExecutionState(executionId, executable, WorkflowExecutionStatus.Running, null, Now, Now, occurredAt, null, null, null, persistenceScope, new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["checkpoint"] = checkpointId,
             ["payload"] = payload.GetRawText()
@@ -450,6 +632,14 @@ public sealed class RuntimeCheckpointCommitWorkload
             throw new InvalidOperationException("The checkpoint workload ownership service did not return a current fence for the requested execution.");
     }
 
+    private static string RequirePersistenceScope(string? persistenceScope)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(persistenceScope);
+        if (!StringComparer.Ordinal.Equals(persistenceScope, persistenceScope.Trim()))
+            throw new ArgumentException("The checkpoint workload persistence scope cannot have leading or trailing whitespace.", nameof(persistenceScope));
+        return persistenceScope;
+    }
+
     private static IEnumerable<string> ExecutionIds() => Enumerable.Range(0, ExecutionCount).Select(index => ExecutionIdFor(index));
     private static string ExecutionIdFor(int checkpointIndex) => $"execution-{checkpointIndex % ExecutionCount:D4}";
     private static string CheckpointId(int index) => $"checkpoint-{index:D4}";
@@ -467,8 +657,29 @@ public sealed class RuntimeCheckpointCommitWorkload
 /// <summary>Creates distinct public runtime-store clients over one adapter-owned backing.</summary>
 public interface IRuntimeCheckpointCommitWorkloadAdapter
 {
+    /// <summary>Persistence partition used by the checkpoint fixture; matrix adapters derive one per child.</summary>
+    string PersistenceScope => "tenant-checkpoint";
+
     ValueTask<RuntimeCheckpointCommitClients> OpenIndependentClientsAsync(CancellationToken cancellationToken = default);
     ValueTask<RuntimeCheckpointCommitClient> ReopenClientAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>A benchmark-owned public-operation phase from the checkpoint workload.</summary>
+public interface IRuntimeCheckpointCommitWorkloadOperation
+{
+    string Id { get; }
+    ValueTask PrepareInvocationAsync(long invocation, CancellationToken cancellationToken = default);
+    ValueTask InvokeAsync(long invocation, CancellationToken cancellationToken = default);
+}
+
+internal sealed class RuntimeCheckpointCommitWorkloadOperation(
+    string id,
+    Func<long, CancellationToken, ValueTask> prepare,
+    Func<long, CancellationToken, ValueTask> invoke) : IRuntimeCheckpointCommitWorkloadOperation
+{
+    public string Id { get; } = id;
+    public ValueTask PrepareInvocationAsync(long invocation, CancellationToken cancellationToken = default) => prepare(invocation, cancellationToken);
+    public ValueTask InvokeAsync(long invocation, CancellationToken cancellationToken = default) => invoke(invocation, cancellationToken);
 }
 
 /// <summary>Two independently created public clients sharing the adapter-selected backing.</summary>

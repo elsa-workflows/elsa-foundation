@@ -45,8 +45,9 @@ public sealed class NativePlanEvidenceStagingTests : IDisposable
             NativePlanEvidenceStaging.PublishInto(output, Request(reference)));
 
         // The refusal has to precede the effect: a rejection that happens after the copy is not a rejection.
-        Assert.Empty(Directory.EnumerateFiles(output, "*", SearchOption.AllDirectories)
-            .Where(path => !path.EndsWith(".native-plan.json", StringComparison.Ordinal)));
+        Assert.DoesNotContain(
+            Directory.EnumerateFiles(output, "*", SearchOption.AllDirectories),
+            path => !path.EndsWith(".native-plan.json", StringComparison.Ordinal));
         Assert.False(File.Exists(Path.Combine(output, "outside.txt")));
         Assert.True(File.Exists(escapee), "the source outside the roots must be untouched");
     }
@@ -59,7 +60,7 @@ public sealed class NativePlanEvidenceStagingTests : IDisposable
         // ReferenceFor composes the file name from the document's own fields, so those are an input path
         // too — not only the route references it carries.
         Assert.Throws<PerformanceContractException>(() =>
-            NativePlanEvidenceStaging.ReferenceFor(workloadId, "sqlite"));
+            NativePlanEvidenceStaging.ReferenceFor(workloadId, "sqlite", "set"));
     }
 
     [Fact]
@@ -73,10 +74,57 @@ public sealed class NativePlanEvidenceStagingTests : IDisposable
         Assert.True(File.Exists(Path.Combine(output, reference)));
     }
 
+    [Fact]
+    public void Checkpoint_document_records_that_zero_routes_are_the_frozen_contract()
+    {
+        var reference = Stage(Document());
+        var request = Request(reference) with
+        {
+            ProviderVersion = "3.46.0",
+            ProviderTopology = "file-backed-distinct-connections",
+            ProviderConfiguration = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["mode"] = "ReadWriteCreate",
+                ["cache"] = "Shared",
+                ["pooling"] = "True",
+                ["journal_mode"] = "wal",
+                ["synchronous"] = "1"
+            }
+        };
+        var observed = new ProviderProbe.Result(
+            "sqlite",
+            "SqliteProviderConnection",
+            request.ProviderVersion,
+            request.ProviderTopology,
+            request.ProviderConfiguration);
+
+        var document = NativePlanEvidenceStaging.CreateCheckpointDocument(request, observed);
+
+        Assert.Equal(2, document.SchemaVersion);
+        Assert.Equal(NativePlanEvidenceStaging.NoNativeRoutesContract, document.RouteContract);
+        Assert.Empty(document.Routes);
+    }
+
+    [Fact]
+    public void Measurement_set_is_part_of_the_evidence_reference_and_cannot_overwrite_another_set()
+    {
+        var first = Document();
+        var second = first with { MeasurementSetId = "set-2" };
+
+        NativePlanEvidenceStaging.Write(staging, first);
+        NativePlanEvidenceStaging.Write(staging, second);
+
+        var firstReference = NativePlanEvidenceStaging.ReferenceFor(first.WorkloadId, first.Provider, first.MeasurementSetId);
+        var secondReference = NativePlanEvidenceStaging.ReferenceFor(second.WorkloadId, second.Provider, second.MeasurementSetId);
+        Assert.NotEqual(firstReference, secondReference);
+        Assert.Equal(first.MeasurementSetId, NativePlanEvidenceStaging.Read(Path.Combine(staging, firstReference)).MeasurementSetId);
+        Assert.Equal(second.MeasurementSetId, NativePlanEvidenceStaging.Read(Path.Combine(staging, secondReference)).MeasurementSetId);
+    }
+
     private string Stage(NativePlanEvidenceDocument document)
     {
         NativePlanEvidenceStaging.Write(staging, document);
-        return NativePlanEvidenceStaging.ReferenceFor(document.WorkloadId, document.Provider);
+        return NativePlanEvidenceStaging.ReferenceFor(document.WorkloadId, document.Provider, document.MeasurementSetId);
     }
 
     private RunRequest Request(string reference)

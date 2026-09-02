@@ -77,6 +77,33 @@ public sealed class RuntimeRecurringScheduleSelectionWorkloadTests
             result.ObservableOperations);
     }
 
+    [Fact]
+    public async Task Exposes_bounded_public_operations_with_setup_outside_timing()
+    {
+        var adapter = new AtomicRecurringScheduleAdapter();
+        var operations = await new RuntimeRecurringScheduleSelectionWorkload().PrepareMeasuredOperationsAsync(adapter);
+
+        Assert.Equal(
+            [
+                "list-bounded-due-schedules",
+                "load-publication-projections",
+                "advance-current-schedule",
+                "attempt-stale-advance",
+                "reopen-and-read-projection-state"
+            ],
+            operations.Select(operation => operation.Id));
+        Assert.Equal(RuntimeRecurringScheduleSelectionWorkload.ScheduleCount, adapter.Shared.Schedules.Count);
+
+        foreach (var operation in operations)
+        {
+            await operation.PrepareInvocationAsync(0);
+            await operation.InvokeAsync(0);
+        }
+
+        Assert.All(adapter.Shared.ActivationPageRequests, request =>
+            Assert.Equal(RuntimeRecurringScheduleSelectionWorkload.PageSize, request.Limit));
+    }
+
     [Theory]
     [InlineData(RecurringScheduleAdapterFault.AliasInitialClients)]
     [InlineData(RecurringScheduleAdapterFault.SeparateInitialBacking)]

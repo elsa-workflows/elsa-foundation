@@ -10,26 +10,88 @@ public static class BenchmarkAdapterAdmission
 {
     public const string IamWorkloadId = "iam-normalized-lookup-update";
     public const string IamMappingRequiredReason = "iam.adapter-form.ratification-required";
+    public const string SecretWorkloadId = "secret-create-read-list";
+    public const string SecretMappingRequiredReason = "secret.adapter-form.ratification-required";
+    public const string SecretEfProviderRequiredReason = "secret.ef.provider.sqlite-required";
+    public const string DiagnosticsWorkloadId = "diagnostics-durable-history";
+    public const string DiagnosticsMappingRequiredReason = "diagnostics.adapter-form.ratification-required";
+    public const string DiagnosticsEfProviderRequiredReason = "diagnostics.ef.provider.sqlite-required";
 
-    // Deliberately empty: Spec 094 names candidate forms, not EF/Groundwork adapter bindings. A mapping
-    // may only be added with the separate IAM admission decision; no adapter identity is inferred here.
     private static readonly IReadOnlySet<AdapterFormMapping> RatifiedIamProductionMappings =
-        new HashSet<AdapterFormMapping>();
+        new HashSet<AdapterFormMapping>
+        {
+            new(IamWorkloadId, "1.1.0", "ef-aspnetcore-identity", "ef-identity-relational-schema"),
+            new(IamWorkloadId, "1.1.0", "groundwork-aspnetcore-identity", "entity-type-specific-physical-tables-current-identity-shape")
+        };
 
-    public static void RequireAdmitted(PerformanceWorkload workload, string adapter, string physicalForm)
+    private static readonly IReadOnlySet<AdapterFormMapping> RatifiedSecretProductionMappings =
+        new HashSet<AdapterFormMapping>
+        {
+            new(SecretWorkloadId, "1.1.0", "ef-secret-repository", "entity-type-specific-physical-tables"),
+            new(SecretWorkloadId, "1.1.0", "groundwork-secret-repository", "entity-type-specific-physical-tables")
+        };
+
+    private static readonly IReadOnlySet<AdapterFormMapping> RatifiedDiagnosticsProductionMappings =
+        new HashSet<AdapterFormMapping>
+        {
+            new(DiagnosticsWorkloadId, "1.2.0", "groundwork-v2", "ordinary-groundwork-diagnostics-units"),
+            new(DiagnosticsWorkloadId, "1.2.0", "ef-diagnostics-oracle", "efcore-diagnostics-relational-tables")
+        };
+
+    public static void RequireAdmitted(
+        PerformanceWorkload workload,
+        string provider,
+        string adapter,
+        string physicalForm)
     {
         ArgumentNullException.ThrowIfNull(workload);
-        if (TryGetBlockedReason(workload.Id, workload.Version, adapter, physicalForm, out var reason))
+        if (TryGetBlockedReason(workload.Id, workload.Version, provider, adapter, physicalForm, out var reason))
             throw new PerformanceContractException(
-                $"Workload '{workload.Id}/{workload.Version}' adapter/form '{adapter}/{physicalForm}' is blocked from benchmark execution: {reason}.");
+                $"Workload '{workload.Id}/{workload.Version}' provider/adapter/form '{provider}/{adapter}/{physicalForm}' is blocked from benchmark execution: {reason}.");
     }
 
-    public static bool TryGetBlockedReason(string workloadId, string workloadVersion, string adapter, string physicalForm, out string reason)
+    public static bool TryGetBlockedReason(
+        string workloadId,
+        string workloadVersion,
+        string provider,
+        string adapter,
+        string physicalForm,
+        out string reason)
     {
         if (string.Equals(workloadId, IamWorkloadId, StringComparison.Ordinal) &&
             !RatifiedIamProductionMappings.Contains(new AdapterFormMapping(workloadId, workloadVersion, adapter, physicalForm)))
         {
             reason = IamMappingRequiredReason;
+            return true;
+        }
+
+        if (string.Equals(workloadId, SecretWorkloadId, StringComparison.Ordinal) &&
+            !RatifiedSecretProductionMappings.Contains(new AdapterFormMapping(workloadId, workloadVersion, adapter, physicalForm)))
+        {
+            reason = SecretMappingRequiredReason;
+            return true;
+        }
+
+        if (string.Equals(workloadId, DiagnosticsWorkloadId, StringComparison.Ordinal) &&
+            !RatifiedDiagnosticsProductionMappings.Contains(new AdapterFormMapping(workloadId, workloadVersion, adapter, physicalForm)))
+        {
+            reason = DiagnosticsMappingRequiredReason;
+            return true;
+        }
+
+        if (string.Equals(workloadId, DiagnosticsWorkloadId, StringComparison.Ordinal) &&
+            string.Equals(adapter, "ef-diagnostics-oracle", StringComparison.Ordinal) &&
+            !string.Equals(provider, "sqlite", StringComparison.Ordinal))
+        {
+            reason = DiagnosticsEfProviderRequiredReason;
+            return true;
+        }
+
+        if (string.Equals(workloadId, SecretWorkloadId, StringComparison.Ordinal) &&
+            string.Equals(adapter, "ef-secret-repository", StringComparison.Ordinal) &&
+            !string.Equals(provider, "sqlite", StringComparison.Ordinal))
+        {
+            reason = SecretEfProviderRequiredReason;
             return true;
         }
 
@@ -46,7 +108,8 @@ public static class BenchmarkAdapterAdmission
 
     private static bool TryGetTargetBlockedReason(string workloadId, string workloadVersion, string target, out string reason)
     {
-        if (!string.Equals(workloadId, IamWorkloadId, StringComparison.Ordinal))
+        if (!string.Equals(workloadId, IamWorkloadId, StringComparison.Ordinal) &&
+            !string.Equals(workloadId, SecretWorkloadId, StringComparison.Ordinal))
         {
             reason = "";
             return false;
@@ -59,7 +122,7 @@ public static class BenchmarkAdapterAdmission
             return true;
         }
 
-        return TryGetBlockedReason(workloadId, workloadVersion, segments[1], segments[2], out reason);
+        return TryGetBlockedReason(workloadId, workloadVersion, segments[0], segments[1], segments[2], out reason);
     }
 
     private sealed record AdapterFormMapping(string WorkloadId, string WorkloadVersion, string Adapter, string PhysicalForm);

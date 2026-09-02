@@ -45,6 +45,49 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkloadTests
             result.ObservableOperations);
     }
 
+    [Fact]
+    public async Task Exposes_two_bounded_public_lookup_operations_with_setup_outside_timing()
+    {
+        var adapter = new TriggerBindingLookupAdapter();
+        var operations = await new RuntimeTriggerBindingStimulusLookupWorkload().PrepareMeasuredOperationsAsync(adapter);
+
+        Assert.Equal(
+            [
+                "lookup-active-bindings-by-stimulus-type",
+                "load-executable-source-references"
+            ],
+            operations.Select(operation => operation.Id));
+        Assert.True(adapter.Primary.SourcePageQueries.Count > 0);
+
+        var exactQueriesBefore = adapter.Primary.Bindings.StimulusQueries.Count;
+        var typeQueriesBefore = adapter.Primary.Bindings.StimulusTypeQueries.Count;
+        await operations[0].PrepareInvocationAsync(0);
+        await operations[0].InvokeAsync(0);
+        Assert.Equal(exactQueriesBefore + 1, adapter.Primary.Bindings.StimulusQueries.Count);
+        Assert.Equal(typeQueriesBefore + 1, adapter.Primary.Bindings.StimulusTypeQueries.Count);
+
+        var sourceQueriesBefore = adapter.Primary.SourcePageQueries.Count;
+        await operations[1].PrepareInvocationAsync(0);
+        await operations[1].InvokeAsync(0);
+        Assert.Equal(sourceQueriesBefore + 1, adapter.Primary.SourcePageQueries.Count);
+        Assert.All(adapter.Primary.Bindings.StimulusQueries, query =>
+        {
+            Assert.Equal(RuntimeTriggerBindingStimulusLookupWorkload.PageSize, query.Limit);
+            Assert.Null(query.ContinuationToken);
+        });
+        Assert.All(adapter.Primary.Bindings.StimulusTypeQueries, query =>
+        {
+            Assert.Equal(RuntimeTriggerBindingStimulusLookupWorkload.PageSize, query.Limit);
+            Assert.Null(query.ContinuationToken);
+        });
+        Assert.All(adapter.Primary.SourcePageQueries, query =>
+        {
+            Assert.Equal(RuntimeTriggerBindingStimulusLookupWorkload.PageSize, query.Limit);
+            Assert.Equal(WorkflowExecutableReferenceScope.Published, query.Scope);
+            Assert.True(query.LiveOnly);
+        });
+    }
+
     [Theory]
     [InlineData(TriggerBindingLookupFault.AliasScopes)]
     [InlineData(TriggerBindingLookupFault.LeakBindingsIntoSecondary)]
@@ -140,6 +183,8 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkloadTests
         public MemoryBindingStore? Foreign { get; set; }
         public IReadOnlyCollection<WorkflowTriggerBinding> Bindings => _bindings.Values;
         public List<WorkflowTriggerBindingActivationPageQuery> ActivationQueries { get; } = [];
+        public List<WorkflowTriggerBindingPageQuery> StimulusQueries { get; } = [];
+        public List<WorkflowTriggerBindingTypePageQuery> StimulusTypeQueries { get; } = [];
 
         public ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default)
         {
@@ -172,11 +217,17 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkloadTests
             return ValueTask.CompletedTask;
         }
 
-        public ValueTask<WorkflowTriggerBindingPage> ListByStimulusAsync(WorkflowTriggerBindingPageQuery query, CancellationToken cancellationToken = default) =>
-            new(Page(query, SelectForExact(query)));
+        public ValueTask<WorkflowTriggerBindingPage> ListByStimulusAsync(WorkflowTriggerBindingPageQuery query, CancellationToken cancellationToken = default)
+        {
+            StimulusQueries.Add(query);
+            return new(Page(query, SelectForExact(query)));
+        }
 
-        public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(WorkflowTriggerBindingTypePageQuery query, CancellationToken cancellationToken = default) =>
-            new(Page(query, SelectForType(query)));
+        public ValueTask<WorkflowTriggerBindingPage> ListByStimulusTypeAsync(WorkflowTriggerBindingTypePageQuery query, CancellationToken cancellationToken = default)
+        {
+            StimulusTypeQueries.Add(query);
+            return new(Page(query, SelectForType(query)));
+        }
 
         public ValueTask<WorkflowTriggerBindingPage> ListByActivationAsync(WorkflowTriggerBindingActivationPageQuery query, CancellationToken cancellationToken = default)
         {

@@ -60,7 +60,10 @@ exact-head pass. The 36-record preview.88 checkpoint/fence slice is mechanically
 is now immutable prior-generation provenance. Preview.102 had no imported generation. Preview.103 has no imported generation until its exact clean-source
 four-provider publication and mechanical import complete; all declared provider obligations still require current evidence.
 The committed EF artifact is a non-executed contract baseline only. #646 owns real same-provider EF execution,
-equality, and all timing.
+equality, and all timing. The executable Secret v1.1 successor now supplies a temporary SQLite EF oracle and a
+Groundwork adapter that drives the public `ISecretRepository`; its required native route is the status-filtered
+`list-filtered` page. EF capture is intentionally SQLite-only, while Groundwork capture remains provider-selected.
+The historical Secret v1.0 input/result hashes remain immutable history and are not silently rewritten by v1.1.
 
 The eleven non-Identity, non-Secret workloads now have v1.1.0 contract-vector successors owned by the benchmark
 harness. `workload-vectors` reproduces their version, seed, input fingerprint, and expected result digest from
@@ -70,11 +73,35 @@ workload documents must match every semantic input field and independent literal
 harness admits a matrix request. The v1.0 hashes remain historical supplier evidence and are not silently
 reinterpreted.
 
-`secret-create-read-list` intentionally remains at v1.0.0 and is Blocked with stable reason
-`comparator.secret.real-ef-required`: #646 has no real EF Secret repository comparator. A synthetic target,
-waiver, or Groundwork-vs-Groundwork comparison cannot advance that workload or its ledger row.
-Every workload document carries an explicit `benchmarkAdmission` status/reason. Matrix, comparison, and gate
-admission reject the blocked Secret contract even when supplied artifacts claim a complete measurement.
+The historical `secret-create-read-list` v1.0.0 contract remains retained with stable reason
+`comparator.secret.real-ef-required`; it is not used as the executable benchmark input. The v1.1.0 successor
+is admitted only for the exact `ef-secret-repository` and `groundwork-secret-repository` adapters, both using
+`entity-type-specific-physical-tables`; the executable source is the separate
+`workloads/secret-create-read-list-v1.1.json` successor file, while `workloads/iam-secrets.json`
+remains the byte-for-byte v1.0 historical source. Every workload document carries an explicit
+`benchmarkAdmission` status/reason, and the current Secret pair must still provide identical correctness and
+provider-native evidence before timing or a coverage-ledger verdict can advance.
+
+### Program-owner authorization record — Secret comparator successor
+
+On 2026-09-01 the program owner authorized delivery of the complete #629/#646 closeout, including the
+reviewed process correction needed to make the Secret comparison executable. That authorization admits
+one real, temporary **SQLite EF** `ISecretRepository` comparator and the reproducible v1.1 successor as
+the executable comparison pair. It does not mutate, reinterpret, or replace the historical v1.0 source or
+hashes. EF Secret requests for SQL Server, PostgreSQL, or MongoDB remain unratified and must be refused at
+matrix and native-plan-capture admission before provider, child-process, or artifact access. Groundwork
+continues to carry the four-provider obligation; this authorization is not an EF provider-parity claim.
+
+The Secret concurrency evidence is provider-command evidence, not task-start evidence. The temporary EF
+SQLite comparator holds both distinct `DbConnection` contenders inside `DbCommandInterceptor` command
+execution until both native INSERT commands have arrived. Groundwork uses the provider's
+`IProviderCommandObserver`, which the provider invokes immediately before the native command call. For
+PostgreSQL, SQL Server, and MongoDB the two clients own independent provider connections and must overlap
+at that command seam. SQLite is the explicit exception: `GW-SQLITE-LIFETIME-001` requires exactly one
+`IStorageProviderConnection` per database file and its native commands are serialized by design. SQLite
+evidence must therefore record `serialized-by-design`, prove that both independent clients reached two
+real conditional-upsert commands, and must not claim command overlap. This is the accepted provider
+lifetime invariant, not a synthetic overlap waiver.
 
 `diagnostics-durable-history` is the program-owner-ratified 2026-07-25 extension. Its
 `diagnostics.json` contract maps to the additive `diagnostics-structured-log-store` and

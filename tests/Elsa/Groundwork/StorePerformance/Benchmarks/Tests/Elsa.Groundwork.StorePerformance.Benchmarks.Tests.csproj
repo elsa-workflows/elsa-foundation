@@ -10,5 +10,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../../../../../benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks.csproj" />
+    <ProjectReference Include="../../../../../../src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj" />
   </ItemGroup>
 </Project>

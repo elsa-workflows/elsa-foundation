@@ -23,6 +23,7 @@ public static class ArtifactStore
         if (BenchmarkAdapterAdmission.TryGetBlockedReason(
                 artifact.Request.WorkloadId,
                 artifact.Request.WorkloadVersion,
+                artifact.Request.Provider,
                 artifact.Request.Adapter,
                 artifact.Request.PhysicalForm,
                 out var adapterBlockedReason))
@@ -188,11 +189,13 @@ public static class ArtifactStore
         var content = File.ReadAllText(path);
         if (ArtifactSafety.ContainsSensitiveContent(content))
             throw new PerformanceContractException("Raw provider-plan evidence may not retain connection values or credentials.");
+        var structuredContent = SecretRetainedNativePlan.ProviderPlanForStructuredSafetyValidation(content);
+        structuredContent = RecoveryRetainedNativePlan.ProviderPlanForStructuredSafetyValidation(structuredContent);
         if (path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
         {
             try
             {
-                using var document = JsonDocument.Parse(content);
+                using var document = JsonDocument.Parse(structuredContent);
                 RejectDuplicateProperties(document.RootElement);
                 ArtifactSafety.ValidateRawStructured(document.RootElement);
             }
@@ -205,7 +208,7 @@ public static class ArtifactStore
         {
             try
             {
-                var document = System.Xml.Linq.XDocument.Parse(content, System.Xml.Linq.LoadOptions.PreserveWhitespace);
+                var document = System.Xml.Linq.XDocument.Parse(structuredContent, System.Xml.Linq.LoadOptions.PreserveWhitespace);
                 ArtifactSafety.ValidateRawXml(document);
             }
             catch (System.Xml.XmlException exception)
@@ -241,6 +244,9 @@ public static class ArtifactSafety
     private static readonly Regex SensitiveContent = new("(?i)(password|pwd|connection\\s*string|account[_-]?key|access[_-]?key|server|host|endpoint|data[ _-]?source|database|initial[ _-]?catalog|port|user[ _-]?id|uid)\\s*[:=](?!\\s*[@$:?])\\s*|authorization\\s*:\\s*bearer\\s+\\S+", RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private static readonly Regex Sha1 = new("^[0-9a-f]{40}$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private static readonly Regex Sha256 = new("^[0-9a-f]{64}$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    // Provider projections use stable snake_case field names (for example, min_pool_size). Keep this
+    // distinct from connection-name rejection below: underscores are safe metadata syntax, while keys
+    // naming hosts, databases, or credentials remain forbidden.
     private static readonly Regex Identifier = new("^[A-Za-z0-9._-]+$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private static readonly Regex PackageVersion = new("^[0-9A-Za-z][0-9A-Za-z.+-]*$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private static readonly Regex SafeSeed = new("^[A-Za-z0-9._:-]+$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
@@ -312,7 +318,10 @@ public static class ArtifactSafety
             case JsonValueKind.Object:
                 foreach (var property in value.EnumerateObject())
                 {
-                    if (SensitiveName.IsMatch(property.Name)) throw new PerformanceContractException($"Artifacts may not retain sensitive field '{property.Name}'.");
+                    if (SensitiveName.IsMatch(property.Name) &&
+                        !(property.Name == nameof(SecretProviderConcurrencyEvidence.DistinctPhysicalConnectionCount) &&
+                          property.Value.ValueKind == JsonValueKind.Number))
+                        throw new PerformanceContractException($"Artifacts may not retain sensitive field '{property.Name}'.");
                     ValidateElement(property.Value);
                 }
                 break;
@@ -333,7 +342,7 @@ public sealed record MatrixPlan(PerformanceWorkload Workload, BenchmarkProtocol 
     public static MatrixPlan Create(PerformanceWorkload workload, MatrixRequest request)
     {
         BenchmarkAdmissionGuard.RequireReady(workload);
-        BenchmarkAdapterAdmission.RequireAdmitted(workload, request.Adapter, request.PhysicalForm);
+        BenchmarkAdapterAdmission.RequireAdmitted(workload, request.Provider, request.Adapter, request.PhysicalForm);
         if (workload.Id != request.WorkloadId ||
             workload.Version != request.WorkloadVersion ||
             workload.Input.Seed != request.Seed ||
@@ -489,6 +498,9 @@ public static class ProcessMatrixRunner
 
 public sealed record ComparisonResult(int SchemaVersion, string ArtifactManifestSha256, string WorkloadId, string WorkloadVersion, string Provider, string Scale, string OracleTarget, string Target, bool Complete, bool CorrectnessEqual, IReadOnlyList<ProcessAggregate> OracleOperations, IReadOnlyList<ProcessAggregate> TargetOperations, string? BlockReason)
 {
+    public SecretProviderConcurrencyEvidence? OracleProviderConcurrency { get; init; }
+    public SecretProviderConcurrencyEvidence? TargetProviderConcurrency { get; init; }
+
     // A public record constructor is retained for report/serialization compatibility, but only a result
     // created by Comparison.Compare receives this internal, content-bound admission marker. GateEvaluator
     // requires it before producing any pass/redesign verdict.
@@ -509,6 +521,8 @@ internal sealed class ComparisonAdmission
     private readonly bool complete;
     private readonly bool correctnessEqual;
     private readonly string? blockReason;
+    private readonly SecretProviderConcurrencyEvidence? oracleProviderConcurrency;
+    private readonly SecretProviderConcurrencyEvidence? targetProviderConcurrency;
     private readonly AggregateSnapshot[] oracleOperations;
     private readonly AggregateSnapshot[] targetOperations;
 
@@ -525,6 +539,8 @@ internal sealed class ComparisonAdmission
         complete = comparison.Complete;
         correctnessEqual = comparison.CorrectnessEqual;
         blockReason = comparison.BlockReason;
+        oracleProviderConcurrency = comparison.OracleProviderConcurrency;
+        targetProviderConcurrency = comparison.TargetProviderConcurrency;
         oracleOperations = Snapshot(comparison.OracleOperations);
         targetOperations = Snapshot(comparison.TargetOperations);
     }
@@ -573,6 +589,8 @@ internal sealed class ComparisonAdmission
         complete == comparison.Complete &&
         correctnessEqual == comparison.CorrectnessEqual &&
         string.Equals(blockReason, comparison.BlockReason, StringComparison.Ordinal) &&
+        Equals(oracleProviderConcurrency, comparison.OracleProviderConcurrency) &&
+        Equals(targetProviderConcurrency, comparison.TargetProviderConcurrency) &&
         Matches(oracleOperations, comparison.OracleOperations) &&
         Matches(targetOperations, comparison.TargetOperations);
 
@@ -655,7 +673,11 @@ public static class Comparison
             return Blocked(artifactSet.ManifestSha256, oracleTarget, target, source, "Oracle and target operation sets differ.");
         if (oracleValidation.Correctness!.ObservedResultDigestSha256 != targetValidation.Correctness!.ObservedResultDigestSha256)
             return Blocked(artifactSet.ManifestSha256, oracleTarget, target, source, "Oracle and target correctness digests differ.");
-        return Admitted(new ComparisonResult(1, artifactSet.ManifestSha256, source.WorkloadId, source.WorkloadVersion, source.Provider, source.Scale, oracleTarget, target, true, true, Aggregate(oracle), Aggregate(targetArtifacts), null));
+        return Admitted(new ComparisonResult(1, artifactSet.ManifestSha256, source.WorkloadId, source.WorkloadVersion, source.Provider, source.Scale, oracleTarget, target, true, true, Aggregate(oracle), Aggregate(targetArtifacts), null)
+        {
+            OracleProviderConcurrency = oracleValidation.Correctness.NativePlan.ProviderConcurrency,
+            TargetProviderConcurrency = targetValidation.Correctness.NativePlan.ProviderConcurrency
+        });
     }
 
     public static string Target(ProcessArtifact artifact) => $"{artifact.Request.Provider}/{artifact.Request.Adapter}/{artifact.Request.PhysicalForm}";
@@ -673,10 +695,13 @@ public static class Comparison
             workload.Version != anchor.WorkloadVersion ||
             workload.Input.Seed != anchor.Seed ||
             workload.Input.FingerprintSha256 != anchor.InputFingerprintSha256)
+        {
             return TargetValidation.Invalid(anchor, "A comparison target does not match a frozen workload/version/input contract.");
+        }
         if (BenchmarkAdapterAdmission.TryGetBlockedReason(
                 workload.Id,
                 workload.Version,
+                anchor.Provider,
                 anchor.Adapter,
                 anchor.PhysicalForm,
                 out var adapterBlockedReason))
@@ -722,6 +747,7 @@ public static class Comparison
         first.NativePlan.Identity == second.NativePlan.Identity &&
         first.NativePlan.Reference == second.NativePlan.Reference &&
         first.NativePlan.ContentSha256 == second.NativePlan.ContentSha256 &&
+        first.NativePlan.ProviderConcurrency == second.NativePlan.ProviderConcurrency &&
         first.NativePlan.Routes.SequenceEqual(second.NativePlan.Routes);
     private static IReadOnlyList<ProcessAggregate> Aggregate(IEnumerable<ProcessArtifact> artifacts) => artifacts
         .Where(item => item.Request.ProcessKind == ProcessKind.Measured)

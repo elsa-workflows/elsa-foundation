@@ -5,9 +5,9 @@ using System.Text.Json;
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 
 /// <summary>
-/// Benchmark-owned deterministic contract vectors for eleven Spec 094 workloads. These definitions
-/// describe the inputs, operation names, and expected observations that future real EF and Groundwork
-/// adapter runners must execute; they are not public-operation runners themselves.
+/// Benchmark-owned deterministic contract vectors for twelve Spec 094 workloads. These definitions
+/// describe the inputs, operation names, and expected observations consumed by the adapter runners;
+/// they are not public-operation runners themselves.
 /// </summary>
 public static class ReproducibleWorkloadScenarioCatalog
 {
@@ -22,6 +22,8 @@ public static class ReproducibleWorkloadScenarioCatalog
     public const string BlockedResultDigest = "615f7bbd8e160dd34d38180d5def0e99d0b4225822e6ebee5ea31ed21bbabcdb";
     public const string BlockedReasonCode = "comparator.secret.real-ef-required";
     public const string BlockedReason = "A real EF Secret repository comparator is required; synthetic or waived comparison is not admissible.";
+    public const string HistoricalRecoveryInputFingerprint = "36277c9b9c525d4cbb611c1a7e83c96a02eb3434fb85b6657ce2ede9b8a7a5e3";
+    public const string HistoricalRecoveryResultDigest = "3c7cae42737a2a995968852a862f769070a016b4e4a0289c7a9a5e7205e9eabf";
 
     private static readonly JsonSerializerOptions CanonicalJson = new()
     {
@@ -41,15 +43,15 @@ public static class ReproducibleWorkloadScenarioCatalog
             ["bookmark-lookup"] = new("d006e25e22dc8d9374d8931f03e27c6dc45c27314bfe2f819a4dd61b588062e8", "e723ae42c3fd4e970cff04d4a6e867fa40b8d6ea23b0305ab82bf80d3916d6a9"),
             ["checkpoint-commit"] = new("ee4cef346ca64739bbe7cfc84ee3f74e6acefec582f537c685991ca73c62ce13", "ebb92b59a7a331e863c813f7110272093be6a78794a9cc7a0d914103ab4c9c62"),
             ["command-send-lease-ack"] = new("a108e41c890af94ee37d610817e2c4d6339451cbfbbd0e33e0bd794d0d1af5b1", "86439fbc13d29102d02615ee98a5beb53e008e673f6523681e3ee2d926d3389f"),
-            ["diagnostics-durable-history"] = new("448b4f1251861cc5629a6aed316a5ed2112ed14309da5b500838ad43f9513667", "d27a2436f75cf5bb44054e5e284631d4a00656223b5f2ba5ff0573e1fde4e7f7"),
+            ["diagnostics-durable-history"] = new("33e58245aee02636756fc5e6b8cd5ac73a73e44b3b098129ad55e44eb7acbaa2", "dba49158bd952e065d2bef53a54d80d8b1f1392d52226b93710cd428f827ddc4"),
             ["due-timer-selection"] = new("02cfb91f4f415fcfe8fe6cd64e7c056b88b908e068735d2ec91eb81e0ec8d5bd", "8f380d449eb3a8e88f1edbea73cf9a7ddfa7a7502cab3ac5a8fcfe3e175ffed3"),
             ["iam-normalized-lookup-update"] = new("5713ce9b09b68d368d7448041cf513907a648e53df61ccfc307a91381199a8e9", "32b62d5597e8b03715d606be9de81af9a363fe05aa2c7bf6d3f3e4cd185ddbbc"),
             ["outbox-drain"] = new("bc5c6ca1113e78fe948a61de35c66a644129c79028a198d9143dc316cea7bede", "7228f024095bc2fadc0649e0841d56259f3408b55368911ea402b7d96c8b2e71"),
             ["placement-takeover"] = new("17f22a7e7896b3842ebd771e604b13e859d1b480bc5b6093ce576f14a673e985", "3ad65cc7ff9287f9c20a68ec6cd267bc78fa083fb775dda36062c185706fb4b4"),
             ["queue-drain"] = new("15f2d5f9dc8d5814a1613156b7c686e59a150a35bd7e51787a145b6d7230d5e2", "7db639fdbfddc02973a7275d7c0e8835872b62449ca160e97e8086c0ca46eba4"),
-            ["recovery-scan"] = new("36277c9b9c525d4cbb611c1a7e83c96a02eb3434fb85b6657ce2ede9b8a7a5e3", "3c7cae42737a2a995968852a862f769070a016b4e4a0289c7a9a5e7205e9eabf"),
+            ["recovery-scan"] = new("eb4df814e208fedf12c3f8a995430b1084fac5cf7b7e67bd0464be07d0043eef", "af331fc39ac89be97b601ba9e472fd7872b45ec5e50ccc9bba6b55de53e3aba0"),
             ["recurring-schedule-selection"] = new("384bcbf0fd72f306b63d78b71a8130c4e2e02de146cbd45d066ef581f4d78d17", "9728bad4f576c7e50c3f6210994524ffb1d77761c5258a71f27fe1cf1793cec4"),
-            ["secret-create-read-list"] = new("339a6adc9ba6c34e85ce43eafd3e0b8b7b74f7ccbb7d52bd34efe1fbe394014c", "615f7bbd8e160dd34d38180d5def0e99d0b4225822e6ebee5ea31ed21bbabcdb"),
+            ["secret-create-read-list"] = new("7f64dd6942e976e2cea5ad84db1704f4b6239380136a93d99a6480f5909021ce", "394ff58bd146744fe30f4abd3a8529ab1287129787d40e188ffc0c58038e8783"),
             ["trigger-binding-stimulus-lookup"] = new("4f2515dfa9549935712019f178283f79e6ac1cc9428e810524e733cfdea4cabc", "00b6651345cdb8b6724a205b094c712d383c7a19ef87dcce6fdf026bc7dd7c8a")
         };
 
@@ -63,7 +65,6 @@ public static class ReproducibleWorkloadScenarioCatalog
         reason = workloadId switch
         {
             DiagnosticsWorkloadId => DiagnosticsBlockedReasonCode,
-            BlockedWorkloadId => BlockedReasonCode,
             _ => ""
         };
         return reason.Length > 0;
@@ -166,14 +167,15 @@ public static class ReproducibleWorkloadScenarioCatalog
         yield return Scenario(
             "recovery-scan",
             "runtime-recovery-scan",
-            "spec094-recovery-scan-v1.1",
+            "spec094-recovery-scan-v1.2",
             [
                 ("executionCount", 2048),
                 ("fixedNowUtc", "2026-07-20T10:00:00Z"),
-                ("liveExecutions", 1875),
-                ("pageSize", 64),
+                ("liveExecutions", 1867),
+                ("pageSize", 4),
                 ("recoverableCandidates", 173),
                 ("tenantCount", 2),
+                ("terminalExecutions", 8),
                 ("timedSetup", "excluded")
             ],
             ["seed-live-and-recoverable-state", "scan-recovery-candidates", "reopen-and-rescan", "verify-bounded-order-and-non-candidates"],
@@ -182,7 +184,8 @@ public static class ReproducibleWorkloadScenarioCatalog
                 ("firstPageCount", Int(parameters, "pageSize")),
                 ("liveExecutionResultCount", 0),
                 ("reopenedCandidateIdentityDigest", SequenceDigest("recovery-candidate", Int(parameters, "recoverableCandidates"))),
-                ("scanNowUtc", String(parameters, "fixedNowUtc"))));
+                ("scanNowUtc", String(parameters, "fixedNowUtc"))),
+            version: "1.2.0");
 
         yield return Scenario(
             "queue-drain",
@@ -321,14 +324,14 @@ public static class ReproducibleWorkloadScenarioCatalog
         yield return Scenario(
             "diagnostics-durable-history",
             "diagnostics-durable-history",
-            "spec094-diagnostics-durable-history-v1.1",
+            "spec094-diagnostics-durable-history-v1.2",
             [
                 ("concurrentWriters", 4),
                 ("fixedNowUtc", "2026-07-25T00:00:00Z"),
                 ("instrumentCount", 64),
                 ("normalizedRecordsPerOtlpBatch", 64),
                 ("payloadBytes", 512),
-                ("queryLimit", 200),
+                ("queryLimit", 127),
                 ("resourceCount", 128),
                 ("retainedRecordsPerStream", 100_000),
                 ("retentionOverflowRecords", 1_000),
@@ -353,25 +356,68 @@ public static class ReproducibleWorkloadScenarioCatalog
                 "reopen-and-verify-durable-history",
                 "verify-cross-scope-isolation"
             ],
-            parameters => Observations(
-                ("crossScopeResultCount", 0),
-                ("diagnosticDropCount", 0),
-                ("instrumentCount", Int(parameters, "instrumentCount")),
-                ("openTelemetryRetainedCounts", new[]
-                {
-                    Int(parameters, "retainedRecordsPerStream"),
-                    Int(parameters, "retainedRecordsPerStream"),
-                    Int(parameters, "retainedRecordsPerStream"),
-                    Int(parameters, "retainedRecordsPerStream")
-                }),
-                ("resourceCount", Int(parameters, "resourceCount")),
-                ("restartStateMatched", true),
-                ("structuredLogHighWater",
-                    Int(parameters, "retainedRecordsPerStream") + Int(parameters, "retentionOverflowRecords")),
-                ("structuredLogRecentCount", Int(parameters, "queryLimit")),
-                ("structuredLogReplayCount", Int(parameters, "queryLimit")),
-                ("structuredLogRetainedCount", Int(parameters, "retainedRecordsPerStream")),
-                ("trimmedRecordsPerStream", Int(parameters, "retentionOverflowRecords"))));
+            parameters =>
+            {
+                var last = Int(parameters, "retainedRecordsPerStream") + Int(parameters, "retentionOverflowRecords") - 1;
+                var first = last - Int(parameters, "queryLimit") + 1;
+                return Observations(
+                    ("crossScopeResultCount", 0),
+                    ("diagnosticDropCount", 0),
+                    ("instrumentCount", Int(parameters, "instrumentCount")),
+                    ("logWindow", new[] { $"otlp-log-{first:D8}", $"otlp-log-{last:D8}" }),
+                    ("metricWindow", new[] { $"point-{first:D8}", $"point-{last:D8}" }),
+                    ("openTelemetryRetainedCounts", new[]
+                    {
+                        Int(parameters, "retainedRecordsPerStream"),
+                        Int(parameters, "retainedRecordsPerStream"),
+                        Int(parameters, "retainedRecordsPerStream"),
+                        Int(parameters, "retainedRecordsPerStream")
+                    }),
+                    ("resourceCount", Int(parameters, "resourceCount")),
+                    ("restartStateMatched", true),
+                    ("structuredLogHighWater",
+                        Int(parameters, "retainedRecordsPerStream") + Int(parameters, "retentionOverflowRecords")),
+                    ("structuredLogRecentCount", Int(parameters, "queryLimit")),
+                    ("structuredLogReplayCount", Int(parameters, "queryLimit")),
+                    ("structuredLogRetainedCount", Int(parameters, "retainedRecordsPerStream")),
+                    ("traceWindow", new[] { $"{first:x32}", $"{last:x32}" }),
+                    ("trimmedRecordsPerStream", Int(parameters, "retentionOverflowRecords")));
+            },
+            version: "1.2.0");
+
+        yield return Scenario(
+            "secret-create-read-list",
+            "secret-create-read-list-baseline",
+            "spec094-secret-create-read-list-v1.1",
+            [
+                ("canonicalSecretCount", 3),
+                ("concurrentContenders", 2),
+                ("noiseSecretCount", 64),
+                ("pageSize", 16),
+                ("tenantCount", 2),
+                ("timedSetup", "excluded")
+            ],
+            [
+                "create-canonical-secrets",
+                "create-noise-secrets",
+                "concurrent-create-same-secret",
+                "read-create-winner-by-identity",
+                "list-secrets-bounded-first-page",
+                "list-secrets-bounded-next-offset-page"
+            ],
+            _ => Observations(
+                ("concurrent-create-success-count", "1"),
+                ("create-winner-id", "secret-contender-winner"),
+                ("cross-tenant-result-count", "0"),
+                ("first-page-count", "16"),
+                ("first-page-identity-digest", "0963a3404a015354592a95e12ba7bd0e33fcb9f646d70cc49d9056fc1dc9a742"),
+                ("next-page-count", "16"),
+                ("next-page-identity-digest", "33105b0ab94be8628133c142f813d01bab7b0392cd4ca35f22b651f38529acce"),
+                ("read-winner-id", "secret-contender-winner"),
+                ("read-winner-value", "secret-winner-value"),
+                ("read-winner-version", "1"),
+                ("secondary-tenant-result-count", "1"),
+                ("total-count", "68")));
     }
 
     private static ReproducibleWorkloadScenario Scenario(
@@ -380,8 +426,9 @@ public static class ReproducibleWorkloadScenarioCatalog
         string seed,
         IEnumerable<(string Name, object Value)> parameters,
         IReadOnlyList<string> operations,
-        Func<IReadOnlyDictionary<string, object>, IReadOnlyDictionary<string, object>> observe) =>
-        new(workloadId, "1.1.0", scenarioId, seed, Parameters(parameters), operations, observe);
+        Func<IReadOnlyDictionary<string, object>, IReadOnlyDictionary<string, object>> observe,
+        string version = "1.1.0") =>
+        new(workloadId, version, scenarioId, seed, Parameters(parameters), operations, observe);
 
     private static IReadOnlyDictionary<string, object> Parameters(IEnumerable<(string Name, object Value)> values) =>
         new SortedDictionary<string, object>(values.ToDictionary(pair => pair.Name, pair => pair.Value, StringComparer.Ordinal), StringComparer.Ordinal);

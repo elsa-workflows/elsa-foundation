@@ -122,6 +122,118 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
             actualObservations);
     }
 
+    /// <summary>
+    /// Prepares the two bounded public read operations used by process measurement. Seeding remains
+    /// outside the measurement callback when a fresh adapter is supplied, while an adapter that has
+    /// already passed correctness reuses its existing rows. Each operation executes only its bounded
+    /// representative route through the public runtime stores.
+    /// </summary>
+    public async ValueTask<IReadOnlyList<IRuntimeTriggerBindingStimulusLookupWorkloadOperation>> PrepareMeasuredOperationsAsync(
+        IRuntimeTriggerBindingStimulusLookupWorkloadAdapter adapter,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(adapter);
+        var scenario = ValidateScenario();
+        if (!scenario.OperationSequence.SequenceEqual(
+                [
+                    "seed-publications-and-bindings",
+                    "lookup-active-bindings-by-stimulus-type",
+                    "load-executable-source-references",
+                    "verify-publication-and-scope-isolation"
+                ],
+                StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException("The trigger-binding scenario operation sequence no longer matches the measured lookup contract.");
+        }
+
+        var scopes = await adapter.OpenIsolatedScopesAsync(cancellationToken);
+        RequireIsolatedScopes(scopes);
+        var expected = CreateExpectedScope("primary");
+        var exactProbe = await scopes.Primary.TriggerBindings.ListByStimulusAsync(
+            new WorkflowTriggerBindingPageQuery(PrimaryStimulusType, PrimaryStimulusHash, PageSize),
+            cancellationToken);
+        if (exactProbe.Items.Count == 0)
+        {
+            await SeedScopeAsync(scopes.Primary, "primary", cancellationToken);
+            await SeedScopeAsync(scopes.Secondary, "secondary", cancellationToken);
+            exactProbe = await scopes.Primary.TriggerBindings.ListByStimulusAsync(
+                new WorkflowTriggerBindingPageQuery(PrimaryStimulusType, PrimaryStimulusHash, PageSize),
+                cancellationToken);
+        }
+
+        RequireBindingPage(
+            exactProbe,
+            new WorkflowTriggerBindingPageQuery(PrimaryStimulusType, PrimaryStimulusHash, PageSize),
+            expected.ActiveExactBindings,
+            0,
+            "measured exact stimulus lookup setup",
+            new HashSet<string>(StringComparer.Ordinal));
+        var typeProbe = await scopes.Primary.TriggerBindings.ListByStimulusTypeAsync(
+            new WorkflowTriggerBindingTypePageQuery(PrimaryStimulusType, PageSize),
+            cancellationToken);
+        RequireBindingPage(
+            typeProbe,
+            new WorkflowTriggerBindingTypePageQuery(PrimaryStimulusType, PageSize),
+            expected.ActiveTypeBindings,
+            0,
+            "measured stimulus-type lookup setup",
+            new HashSet<string>(StringComparer.Ordinal));
+        var sourceProbe = await scopes.Primary.SourceReferences.ListPageAsync(
+            new WorkflowExecutableSourceReferencePageQuery(
+                WorkflowExecutableReferenceScope.Published,
+                liveOnly: true,
+                now: FixedNowUtc,
+                limit: PageSize,
+                continuationToken: null),
+            cancellationToken);
+        RequireLivePublishedPage(sourceProbe, expected.LivePublishedReferences, "measured live source-reference setup");
+
+        return
+        [
+            new RuntimeTriggerBindingStimulusLookupWorkloadOperation(
+                "lookup-active-bindings-by-stimulus-type",
+                (_, _) => ValueTask.CompletedTask,
+                async (_, token) =>
+                {
+                    var exactPage = await scopes.Primary.TriggerBindings.ListByStimulusAsync(
+                        new WorkflowTriggerBindingPageQuery(PrimaryStimulusType, PrimaryStimulusHash, PageSize),
+                        token);
+                    RequireBindingPage(
+                        exactPage,
+                        new WorkflowTriggerBindingPageQuery(PrimaryStimulusType, PrimaryStimulusHash, PageSize),
+                        expected.ActiveExactBindings,
+                        0,
+                        "measured exact stimulus lookup",
+                        new HashSet<string>(StringComparer.Ordinal));
+                    var typePage = await scopes.Primary.TriggerBindings.ListByStimulusTypeAsync(
+                        new WorkflowTriggerBindingTypePageQuery(PrimaryStimulusType, PageSize),
+                        token);
+                    RequireBindingPage(
+                        typePage,
+                        new WorkflowTriggerBindingTypePageQuery(PrimaryStimulusType, PageSize),
+                        expected.ActiveTypeBindings,
+                        0,
+                        "measured stimulus-type lookup",
+                        new HashSet<string>(StringComparer.Ordinal));
+                }),
+            new RuntimeTriggerBindingStimulusLookupWorkloadOperation(
+                "load-executable-source-references",
+                (_, _) => ValueTask.CompletedTask,
+                async (_, token) =>
+                {
+                    var page = await scopes.Primary.SourceReferences.ListPageAsync(
+                        new WorkflowExecutableSourceReferencePageQuery(
+                            WorkflowExecutableReferenceScope.Published,
+                            liveOnly: true,
+                            now: FixedNowUtc,
+                            limit: PageSize,
+                            continuationToken: null),
+                        token);
+                    RequireLivePublishedPage(page, expected.LivePublishedReferences, "measured live source-reference lookup");
+                })
+        ];
+    }
+
     private static ReproducibleWorkloadScenario ValidateScenario()
     {
         if (Scenario.Version != "1.1.0" ||
@@ -192,6 +304,35 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
         }
 
         return new SeededScope(tenantId, bindingsByPublication, activeExact, activeType, references.OrderBy(reference => reference.SourceReferenceId, StringComparer.Ordinal).ToArray());
+    }
+
+    private static SeededScope CreateExpectedScope(string logicalScope)
+    {
+        var tenantId = $"tenant-{logicalScope}";
+        var bindingsByPublication = Enumerable.Range(0, PublicationCount)
+            .ToDictionary(
+                publication => ActivationId(logicalScope, publication),
+                publication => (IReadOnlyList<WorkflowTriggerBinding>)CreateBindings(logicalScope, publication, ActivationId(logicalScope, publication))
+                    .Select(binding => binding with { IsActive = publication != PublicationCount - 1 })
+                    .OrderBy(binding => binding.TriggerBindingId, StringComparer.Ordinal)
+                    .ToArray(),
+                StringComparer.Ordinal);
+        var allBindings = bindingsByPublication.Values
+            .SelectMany(bindings => bindings)
+            .OrderBy(binding => binding.TriggerBindingId, StringComparer.Ordinal)
+            .ToArray();
+        var activeExact = allBindings
+            .Where(binding => binding.IsActive && binding.StimulusType == StimulusType(logicalScope) && binding.StimulusHash == StimulusHash(logicalScope))
+            .ToArray();
+        var activeType = allBindings
+            .Where(binding => binding.IsActive && binding.StimulusType == StimulusType(logicalScope))
+            .ToArray();
+        var references = Enumerable.Range(0, PublicationCount)
+            .Select(publication => CreateLiveReference(logicalScope, publication, tenantId))
+            .OrderBy(reference => reference.SourceReferenceId, StringComparer.Ordinal)
+            .ToArray();
+
+        return new SeededScope(tenantId, bindingsByPublication, activeExact, activeType, references);
     }
 
     private static IEnumerable<WorkflowTriggerBinding> CreateBindings(string logicalScope, int publication, string activationId)
@@ -398,6 +539,21 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
         return results;
     }
 
+    private static void RequireLivePublishedPage(
+        RuntimeStorePage<WorkflowExecutableSourceReference>? page,
+        IReadOnlyList<WorkflowExecutableSourceReference> expected,
+        string operation)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        if (page.Items.Count > PageSize ||
+            !page.Items.SequenceEqual(expected.Take(PageSize), SourceReferenceComparer.Instance) ||
+            (expected.Count > PageSize && page.NextContinuationToken is null) ||
+            (expected.Count <= PageSize && page.NextContinuationToken is not null))
+        {
+            throw new InvalidOperationException($"The {operation} does not match the exact bounded source-reference contract.");
+        }
+    }
+
     private static int CorrelateLiveSources(
         IReadOnlyList<WorkflowTriggerBinding> bindings,
         IReadOnlyList<WorkflowExecutableSourceReference> references,
@@ -516,6 +672,28 @@ public sealed class RuntimeTriggerBindingStimulusLookupWorkload
 public interface IRuntimeTriggerBindingStimulusLookupWorkloadAdapter
 {
     ValueTask<RuntimeTriggerBindingStimulusLookupScopes> OpenIsolatedScopesAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>One workload-owned bounded public lookup phase for process measurement.</summary>
+public interface IRuntimeTriggerBindingStimulusLookupWorkloadOperation
+{
+    string Id { get; }
+    ValueTask PrepareInvocationAsync(long invocation, CancellationToken cancellationToken = default);
+    ValueTask InvokeAsync(long invocation, CancellationToken cancellationToken = default);
+}
+
+internal sealed class RuntimeTriggerBindingStimulusLookupWorkloadOperation(
+    string id,
+    Func<long, CancellationToken, ValueTask> prepare,
+    Func<long, CancellationToken, ValueTask> invoke) : IRuntimeTriggerBindingStimulusLookupWorkloadOperation
+{
+    public string Id { get; } = id;
+
+    public ValueTask PrepareInvocationAsync(long invocation, CancellationToken cancellationToken = default) =>
+        prepare(invocation, cancellationToken);
+
+    public ValueTask InvokeAsync(long invocation, CancellationToken cancellationToken = default) =>
+        invoke(invocation, cancellationToken);
 }
 
 /// <summary>Two logical public-store scopes used to prove binding and source-reference isolation in both directions.</summary>

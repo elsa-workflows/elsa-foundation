@@ -227,8 +227,8 @@ public sealed class GroundworkOpenTelemetryStore :
         AddEqual(predicates, MetricColumns.ServiceName, filter.ServiceName);
         AddSubstring(predicates, MetricColumns.InstrumentName, filter.InstrumentName);
         AddRange(predicates, MetricColumns.Timestamp, filter.From, filter.To);
-        var points = Query(sessions.MetricPoints, predicates, MetricColumns.Timestamp, take, descending: false, MetricColumns.Id)
-            .Rows.Select(V2OpenTelemetryCodec.Deserialize<MetricPoint>).ToArray();
+        var points = Query(sessions.MetricPoints, predicates, MetricColumns.Timestamp, take, descending: true, MetricColumns.Id)
+            .Rows.Select(V2OpenTelemetryCodec.Deserialize<MetricPoint>).Reverse().ToArray();
         var instruments = points.Select(point => point.InstrumentId)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(id => sessions.Instruments.Read(new StorageKey(new Dictionary<string, object?> { [V2OpenTelemetryStorageSchema.Id] = id })))
@@ -256,8 +256,8 @@ public sealed class GroundworkOpenTelemetryStore :
         AddSubstring(predicates, LogColumns.SeverityText, filter.Severity);
         AddSubstring(predicates, LogColumns.Body, filter.Search);
         AddRange(predicates, LogColumns.Timestamp, filter.From, filter.To);
-        var logs = Query(sessions.Logs, predicates, LogColumns.Timestamp, take, descending: false, LogColumns.Id)
-            .Rows.Select(V2OpenTelemetryCodec.Deserialize<OtlpLogRecord>).ToArray();
+        var logs = Query(sessions.Logs, predicates, LogColumns.Timestamp, take, descending: true, LogColumns.Id)
+            .Rows.Select(V2OpenTelemetryCodec.Deserialize<OtlpLogRecord>).Reverse().ToArray();
         return ValueTask.FromResult(new OpenTelemetryLogResult(logs, Interlocked.Read(ref droppedLogs)));
     }
 

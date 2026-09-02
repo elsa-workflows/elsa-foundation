@@ -167,6 +167,223 @@ public sealed class RuntimeOutboxDrainWorkload
         return new RuntimeOutboxDrainWorkloadResult(scenario.ComputeInputFingerprint(), resultDigest, operations, actualObservations);
     }
 
+    /// <summary>
+    /// Prepares the five catalog-owned public outbox phases for process measurement. Claim setup happens
+    /// before the timing callback; the seed phase measures its public checkpoint commit and each remaining
+    /// operation invokes only the bounded public runtime-store route named by its frozen phase.
+    /// </summary>
+    public async ValueTask<IReadOnlyList<IRuntimeOutboxDrainWorkloadOperation>> PrepareMeasuredOperationsAsync(
+        IRuntimeOutboxDrainWorkloadAdapter adapter,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(adapter);
+        var scenario = ValidateScenario();
+        if (scenario.OperationSequence.Count != 5)
+            throw new InvalidOperationException("The outbox scenario must expose exactly five timed operation phases.");
+
+        var clients = await adapter.OpenIndependentClientsAsync(cancellationToken);
+        RequireIndependentClients(clients);
+        var primary = clients.Primary;
+        var secondary = clients.Secondary;
+        var seedItems = new Dictionary<long, RuntimePostCommitOutboxItem>();
+        var claimBatches = new Dictionary<long, IReadOnlyList<RuntimePostCommitOutboxItem>>();
+        var retryClaims = new Dictionary<long, IReadOnlyCollection<RuntimePostCommitOutboxClaim>>();
+        var reclaimInitialClaims = new Dictionary<long, RuntimePostCommitOutboxClaim>();
+        var staleClaims = new Dictionary<long, (RuntimePostCommitOutboxClaim Initial, RuntimePostCommitOutboxClaim Successor)>();
+
+        return
+        [
+            new RuntimeOutboxDrainWorkloadOperation(
+                scenario.OperationSequence[0],
+                (invocation, _) =>
+                {
+                    var identity = OperationIdentity(invocation);
+                    var item = CreateOperationItem("seed", identity, 0);
+                    seedItems[invocation] = item;
+                    return ValueTask.CompletedTask;
+                },
+                async (invocation, token) =>
+                {
+                    if (!seedItems.TryGetValue(invocation, out var item))
+                        throw new InvalidOperationException("The seed-due-and-not-due-outbox-entries operation was invoked without its prepared item.");
+                    await SeedAsync(primary.Checkpoints, item, token);
+                }),
+            new RuntimeOutboxDrainWorkloadOperation(
+                scenario.OperationSequence[1],
+                async (invocation, token) =>
+                {
+                    var identity = OperationIdentity(invocation);
+                    var workflowExecutionId = $"benchmark-outbox-claim-{identity}";
+                    var items = Enumerable.Range(0, BatchSize)
+                        .Select(index => CreateOperationItem("claim", identity, index, workflowExecutionId))
+                        .ToArray();
+                    foreach (var item in items)
+                        await SeedAsync(primary.Checkpoints, item, token);
+                    claimBatches[invocation] = items;
+                },
+                async (invocation, token) =>
+                {
+                    if (!claimBatches.TryGetValue(invocation, out var items))
+                        throw new InvalidOperationException("The claim-due-batch operation was invoked without its prepared fixture.");
+                    var expectedWorkflowExecutionId = items.First().Intent.WorkflowExecutionId;
+                    var claims = await primary.Claims.ClaimAsync(
+                        new RuntimePostCommitOutboxClaimRequest(
+                            $"measured-claim-{OperationIdentity(invocation)}",
+                            FixedNowUtc,
+                            PrimaryVisibility,
+                            BatchSize,
+                            expectedWorkflowExecutionId),
+                        token);
+                    if (claims.Count != BatchSize || !claims.Select(claim => claim.OutboxItemId)
+                            .SequenceEqual(items.Select(item => item.OutboxItemId), StringComparer.Ordinal))
+                    {
+                        throw new InvalidOperationException("The measured claim-due-batch operation did not return its exact bounded ordered fixture.");
+                    }
+                }),
+            new RuntimeOutboxDrainWorkloadOperation(
+                scenario.OperationSequence[2],
+                async (invocation, token) =>
+                {
+                    var identity = OperationIdentity(invocation);
+                    var workflowExecutionId = $"benchmark-outbox-complete-{identity}";
+                    var items = Enumerable.Range(0, BatchSize)
+                        .Select(index => CreateOperationItem("complete", identity, index, workflowExecutionId, index < RetryableEntries))
+                        .ToArray();
+                    foreach (var item in items)
+                        await SeedAsync(primary.Checkpoints, item, token);
+                    var claims = await primary.Claims.ClaimAsync(
+                        new RuntimePostCommitOutboxClaimRequest(
+                            $"measured-complete-setup-{OperationIdentity(invocation)}",
+                            FixedNowUtc,
+                            PrimaryVisibility,
+                            BatchSize,
+                            workflowExecutionId),
+                        token);
+                    if (claims.Count != BatchSize || !claims.Select(claim => claim.OutboxItemId)
+                            .SequenceEqual(items.Select(item => item.OutboxItemId), StringComparer.Ordinal))
+                    {
+                        throw new InvalidOperationException("The measured completion fixture did not produce its exact bounded claims.");
+                    }
+                    retryClaims[invocation] = claims;
+                },
+                async (invocation, token) =>
+                {
+                    if (!retryClaims.TryGetValue(invocation, out var claims))
+                        throw new InvalidOperationException("The record-delivered-and-retryable-results operation was invoked without its prepared claims.");
+                    foreach (var claim in claims)
+                    {
+                        var retryable = claim.Item.RetryPolicy.MaxAttempts > 0 || claim.Item.RetryPolicy.RetryUntilAcknowledged;
+                        await primary.Completions.CompleteClaimAsync(
+                            new RuntimePostCommitOutboxClaimCompletion(
+                                claim,
+                                new RuntimePostCommitOutboxDeliveryResult(
+                                    claim.OutboxItemId,
+                                    retryable ? RuntimePostCommitOutboxStatus.FailedRetryable : RuntimePostCommitOutboxStatus.Delivered,
+                                    FixedNowUtc.AddSeconds(1),
+                                    retryable ? "measured-retryable-result" : null)),
+                            token);
+                    }
+                }),
+            new RuntimeOutboxDrainWorkloadOperation(
+                scenario.OperationSequence[3],
+                async (invocation, token) =>
+                {
+                    var identity = OperationIdentity(invocation);
+                    var workflowExecutionId = $"benchmark-outbox-reclaim-{identity}";
+                    var item = CreateOperationItem("reclaim", identity, 0, workflowExecutionId);
+                    await SeedAsync(primary.Checkpoints, item, token);
+                    var initial = await primary.Claims.ClaimAsync(
+                        new RuntimePostCommitOutboxClaimRequest(
+                            $"measured-reclaim-setup-{identity}",
+                            FixedNowUtc,
+                            PrimaryVisibility,
+                            1,
+                            workflowExecutionId),
+                        token);
+                    if (initial.Count != 1)
+                        throw new InvalidOperationException("The measured reclaim fixture could not claim its seeded item.");
+                    reclaimInitialClaims[invocation] = initial.Single();
+                },
+                async (invocation, token) =>
+                {
+                    if (!reclaimInitialClaims.TryGetValue(invocation, out var initial))
+                        throw new InvalidOperationException("The reclaim-after-visibility-expiry operation was invoked without its prepared claim.");
+                    var successor = await secondary.Claims.ClaimAsync(
+                        new RuntimePostCommitOutboxClaimRequest(
+                            $"measured-reclaim-{OperationIdentity(invocation)}",
+                            FixedNowUtc.Add(PrimaryVisibility).AddSeconds(1),
+                            SuccessorVisibility,
+                            1,
+                            initial.Item.Intent.WorkflowExecutionId),
+                        token);
+                    if (successor.Count != 1 || successor.Single().FencingToken <= initial.FencingToken)
+                        throw new InvalidOperationException("The measured reclaim did not advance the public outbox claim fence.");
+                    var claimed = successor.Single();
+                    RequireCurrentClaim(
+                        await secondary.Lookup.FindAsync(claimed.OutboxItemId, token),
+                        claimed,
+                        "measured reclaim");
+                }),
+            new RuntimeOutboxDrainWorkloadOperation(
+                scenario.OperationSequence[4],
+                async (invocation, token) =>
+                {
+                    var identity = OperationIdentity(invocation);
+                    var workflowExecutionId = $"benchmark-outbox-stale-{identity}";
+                    var item = CreateOperationItem("stale", identity, 0, workflowExecutionId);
+                    await SeedAsync(primary.Checkpoints, item, token);
+                    var initial = await primary.Claims.ClaimAsync(
+                        new RuntimePostCommitOutboxClaimRequest(
+                            $"measured-stale-setup-{identity}",
+                            FixedNowUtc,
+                            PrimaryVisibility,
+                            1,
+                            workflowExecutionId),
+                        token);
+                    if (initial.Count != 1)
+                        throw new InvalidOperationException("The measured stale-completion fixture could not claim its seeded item.");
+                    var successor = await secondary.Claims.ClaimAsync(
+                        new RuntimePostCommitOutboxClaimRequest(
+                            $"measured-stale-successor-{identity}",
+                            FixedNowUtc.Add(PrimaryVisibility).AddSeconds(1),
+                            SuccessorVisibility,
+                            1,
+                            workflowExecutionId),
+                        token);
+                    if (successor.Count != 1 || successor.Single().FencingToken <= initial.Single().FencingToken)
+                        throw new InvalidOperationException("The measured stale-completion fixture did not produce a successor claim.");
+                    staleClaims[invocation] = (initial.Single(), successor.Single());
+                },
+                async (invocation, token) =>
+                {
+                    if (!staleClaims.TryGetValue(invocation, out var state))
+                        throw new InvalidOperationException("The attempt-stale-completion operation was invoked without its prepared claims.");
+                    var rejected = false;
+                    try
+                    {
+                        await primary.Completions.CompleteClaimAsync(
+                            new RuntimePostCommitOutboxClaimCompletion(
+                                state.Initial,
+                                new RuntimePostCommitOutboxDeliveryResult(
+                                    state.Initial.OutboxItemId,
+                                    RuntimePostCommitOutboxStatus.Delivered,
+                                    FixedNowUtc.Add(PrimaryVisibility).AddSeconds(1))),
+                            token);
+                    }
+                    catch (RuntimePostCommitOutboxStaleClaimException)
+                    {
+                        rejected = true;
+                    }
+                    if (!rejected)
+                        throw new InvalidOperationException("The measured outbox accepted a stale completion.");
+                    RequireCurrentClaim(
+                        await secondary.Lookup.FindAsync(state.Successor.OutboxItemId, token),
+                        state.Successor,
+                        "measured stale completion");
+                })
+        ];
+    }
+
     private static ReproducibleWorkloadScenario ValidateScenario()
     {
         if (Scenario.Version != "1.1.0" || Scenario.ScenarioId != "runtime-post-commit-outbox-drain" ||
@@ -362,10 +579,58 @@ public sealed class RuntimeOutboxDrainWorkload
     private static bool IsRetryable(string outboxItemId) => ExpectedDueIds(RetryableEntries).Contains(outboxItemId, StringComparer.Ordinal);
     private static IReadOnlyList<string> ExpectedDueIds(int count) => Enumerable.Range(0, count).Select(DueId).ToArray();
     private static string DueId(int index) => $"outbox-due-{index:D4}";
+    private static RuntimePostCommitOutboxItem CreateOperationItem(
+        string phase,
+        string identity,
+        int index,
+        string? workflowExecutionId = null,
+        bool retryable = false)
+    {
+        workflowExecutionId ??= $"benchmark-outbox-{phase}-{identity}";
+        var itemId = $"benchmark-outbox-{phase}-{identity}-{index:D2}";
+        var intent = new RuntimePostCommitIntent(
+            $"intent-{itemId}",
+            workflowExecutionId,
+            IntentKind,
+            FixedNowUtc,
+            $"activity-{itemId}",
+            $"key-{itemId}",
+            null);
+        return new RuntimePostCommitOutboxItem(
+            itemId,
+            intent,
+            RuntimePostCommitOutboxStatus.Pending,
+            FixedNowUtc,
+            FixedNowUtc,
+            retryable ? new RuntimePostCommitRetryPolicy(2, RetryDelay) : RuntimePostCommitRetryPolicy.None);
+    }
+    private static string OperationIdentity(long invocation) => invocation < 0 ? $"w{-invocation}" : $"m{invocation}";
     private static int Int(string name) => (int)Scenario.Parameters[name];
     private static bool ObservationsMatch(IReadOnlyDictionary<string, object> actual, IReadOnlyDictionary<string, object> expected) =>
         actual.Count == expected.Count && actual.All(pair => expected.TryGetValue(pair.Key, out var value) && JsonSerializer.Serialize(pair.Value, CanonicalJson) == JsonSerializer.Serialize(value, CanonicalJson));
     private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+}
+
+/// <summary>A benchmark-owned bounded public outbox phase.</summary>
+public interface IRuntimeOutboxDrainWorkloadOperation
+{
+    string Id { get; }
+    ValueTask PrepareInvocationAsync(long invocation, CancellationToken cancellationToken = default);
+    ValueTask InvokeAsync(long invocation, CancellationToken cancellationToken = default);
+}
+
+internal sealed class RuntimeOutboxDrainWorkloadOperation(
+    string id,
+    Func<long, CancellationToken, ValueTask> prepare,
+    Func<long, CancellationToken, ValueTask> invoke) : IRuntimeOutboxDrainWorkloadOperation
+{
+    public string Id { get; } = id;
+
+    public ValueTask PrepareInvocationAsync(long invocation, CancellationToken cancellationToken = default) =>
+        prepare(invocation, cancellationToken);
+
+    public ValueTask InvokeAsync(long invocation, CancellationToken cancellationToken = default) =>
+        invoke(invocation, cancellationToken);
 }
 
 /// <summary>Creates distinct public runtime-store clients over one adapter-owned backing.</summary>

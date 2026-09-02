@@ -27,6 +27,30 @@ public sealed class RuntimeOutboxDrainWorkloadTests
         Assert.True(adapter.Shared.Events.IndexOf("reclaim-sentinel") < adapter.Shared.Events.IndexOf("attempt-stale-sentinel-completion"));
     }
 
+    [Fact]
+    public async Task Prepares_exactly_the_frozen_bounded_public_operations()
+    {
+        var adapter = new OutboxAdapter();
+
+        var operations = await new RuntimeOutboxDrainWorkload().PrepareMeasuredOperationsAsync(adapter);
+
+        Assert.Equal(
+            ReproducibleWorkloadScenarioCatalog.Get(RuntimeOutboxDrainWorkload.WorkloadId).OperationSequence,
+            operations.Select(operation => operation.Id));
+        Assert.Equal(5, operations.Count);
+        foreach (var operation in operations)
+        {
+            await operation.PrepareInvocationAsync(-1);
+            await operation.InvokeAsync(-1);
+        }
+        Assert.Equal(
+            RuntimeOutboxDrainWorkload.BatchSize - RuntimeOutboxDrainWorkload.RetryableEntries,
+            adapter.Shared.Items.Values.Count(item => item.Status == RuntimePostCommitOutboxStatus.Delivered));
+        Assert.Equal(
+            RuntimeOutboxDrainWorkload.RetryableEntries,
+            adapter.Shared.Items.Values.Count(item => item.Status == RuntimePostCommitOutboxStatus.FailedRetryable));
+    }
+
     [Theory]
     [InlineData(OutboxFault.AliasInitialClients)]
     [InlineData(OutboxFault.SeparateInitialBacking)]

@@ -112,6 +112,21 @@ public sealed class GroundworkV2RuntimeRegistrationTests
     }
 
     [Fact]
+    public void Groundwork_registration_resolves_recovery_protector_from_a_stable_configured_key()
+    {
+        var services = new ServiceCollection();
+        services.Configure<RuntimeRecoveryContinuationOptions>(options =>
+            options.SigningKey = "stable-groundwork-recovery-signing-key-32-bytes");
+        services.AddGroundworkV2RuntimeStores();
+
+        using var provider = services.BuildServiceProvider();
+        var codec = provider.GetRequiredService<IRuntimeRecoveryContinuationCodec>();
+        var token = codec.Encode("recovery-page", [1, 2, 3]);
+
+        Assert.Equal([1, 2, 3], codec.Decode("recovery-page", token));
+    }
+
+    [Fact]
     public void Repeated_default_registration_is_idempotent_and_retains_the_bounded_cache_boundary()
     {
         var services = new ServiceCollection();
