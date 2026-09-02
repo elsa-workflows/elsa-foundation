@@ -43,6 +43,9 @@ public static class StructuredLogsGroundworkStorageSchema
             .Index("elsa_structured_logs_category", CategoryKeyField)
             .Index("elsa_structured_logs_source", SourceKeyField)
             .Index("elsa_structured_logs_replay", ReplayTokenField)
+            // A single-column B-tree can be scanned in either direction by all supported
+            // providers, so this descending declaration serves both recent and replay routes.
+            .Index("elsa_structured_logs_sequence_order", index => index.Descending(SequenceField))
             .Scoped()
             .AppendIdempotency(TimeSpan.FromHours(1), "elsa_structured_logs_append")
             .Retention(keepNewest, SequenceField)

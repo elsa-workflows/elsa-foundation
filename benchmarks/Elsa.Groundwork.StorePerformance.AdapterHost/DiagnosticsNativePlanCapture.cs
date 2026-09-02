@@ -78,17 +78,18 @@ internal static class DiagnosticsNativePlanCapture
                     if (result != limit)
                         throw new PerformanceContractException($"Diagnostics native route '{route}' returned {result} rows; expected {limit}.");
                     var command = RequireGroundworkCommand(adapter.CommandObserver.Commands, specification);
-                    var nativePath = RequireNativeArtifact(explainDirectory, before, request.Provider, specification);
+                    var physicalIndexName = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(request.Provider, specification);
+                    var nativePath = RequireNativeArtifact(explainDirectory, before, request.Provider, physicalIndexName);
                     var rawPlan = IamNativePlanParser.NormalizeForArtifact(request.Provider, File.ReadAllText(nativePath));
                     var rawReference = ArtifactStore.RawPlanName($"diagnostics.{request.Provider}.{request.MeasurementSetId}.{route}.raw.json");
                     var rawPath = Path.Combine(outputDirectory, rawReference);
-                    var artifact = new DiagnosticsNativePlanArtifact(1, request.Provider, request.Adapter, route, specification.TableName, specification.IndexName, command, rawPlan);
+                    var artifact = new DiagnosticsNativePlanArtifact(1, request.Provider, request.Adapter, route, specification.TableName, specification.IndexName, physicalIndexName, command, rawPlan);
                     var routeEvidence = new NativeRouteEvidence(
                         route,
                         rawReference,
                         string.Empty,
                         "index-search",
-                        specification.IndexName,
+                        physicalIndexName,
                         specification.PhysicalCardinality,
                         specification.StorageScopeRequired,
                         specification.PredicateColumn is not null,
@@ -259,15 +260,15 @@ internal static class DiagnosticsNativePlanCapture
         return matches[0].CommandText!;
     }
 
-    private static string RequireNativeArtifact(string directory, IReadOnlySet<string> before, string provider, DiagnosticsNativeRouteSpec specification)
+    private static string RequireNativeArtifact(string directory, IReadOnlySet<string> before, string provider, string physicalIndexName)
     {
         var extension = IamNativePlanParser.RawPlanExtension(provider);
-        var suffix = $"-{specification.IndexName}{extension}";
+        var suffix = $"-{physicalIndexName}{extension}";
         var matches = Directory.EnumerateFiles(directory)
             .Where(path => !before.Contains(path) && Path.GetFileName(path).EndsWith(suffix, StringComparison.Ordinal))
             .ToArray();
         if (matches.Length != 1)
-            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' must emit exactly one provider-native explain artifact for '{specification.IndexName}'; observed {matches.Length}.");
+            throw new PerformanceContractException($"Diagnostics route must emit exactly one provider-native explain artifact for '{physicalIndexName}'; observed {matches.Length}.");
         return matches[0];
     }
 
