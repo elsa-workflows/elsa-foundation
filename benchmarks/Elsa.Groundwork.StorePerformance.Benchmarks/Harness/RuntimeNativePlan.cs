@@ -128,8 +128,8 @@ public static class RuntimeNativePlanContract
                 RecurringScheduleTable,
                 "by_activation_and_schedule_id",
                 ["scheduleId"],
-                [new("activationId", "=")],
-                "activationId",
+                [new("scheduleActivationId", "=")],
+                "scheduleActivationId",
                 RuntimeRecurringScheduleSelectionWorkload.ScheduleCount,
                 RuntimeRecurringScheduleSelectionWorkload.PageSize),
             _ => throw UnknownRoute(routeIdentity)
