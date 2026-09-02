@@ -3,6 +3,7 @@ using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
+using Groundwork.Diagnostics;
 using Groundwork.Kernel;
 using Microsoft.Data.Sqlite;
 
@@ -55,17 +56,44 @@ internal static class DiagnosticsNativePlanCapture
             try
             {
                 var routes = new List<NativeRouteEvidence>(DiagnosticsDurableHistoryWorkload.NativeRouteLimits.Count);
+                var traceDetailConstituents = new List<DiagnosticsTraceDetailConstituentEvidence>();
                 var blockedRoutes = new List<string>();
                 foreach (var (route, limit) in DiagnosticsDurableHistoryWorkload.NativeRouteLimits)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     var specification = DiagnosticsNativePlanContract.For(request.Adapter, route);
 
+                    if (route == "trace-detail")
+                    {
+                        adapter.CommandObserver.ClearCommands();
+                        try
+                        {
+                            traceDetailConstituents.AddRange(await CaptureTraceDetailConstituentsAsync(
+                                scopes.Primary,
+                                request,
+                                outputDirectory,
+                                explainDirectory,
+                                adapter.CommandObserver,
+                                cancellationToken));
+                        }
+                        catch (PerformanceContractException exception) when (DiagnosticsNativePlanContract.IsExpectedBlockedPlanFailure(exception))
+                        {
+                            blockedRoutes.Add(route);
+                        }
+                        catch (ExplainAssertionException)
+                        {
+                            // Groundwork's assertion mode has already retained the provider artifact;
+                            // an unchosen index/scan is an honest blocked composite, never evidence that
+                            // the public call used a bounded native plan.
+                            blockedRoutes.Add(route);
+                        }
+                        continue;
+                    }
+
                     // An empty index is an explicit storage/route limitation, not an invitation to
-                    // capture the public query and label its scan as native evidence. In particular,
-                    // trace detail is a summary-plus-signal fanout and the remaining routes either
-                    // have no matching order index or require a materializing sort. Keep those route
-                    // identities in blocked evidence without executing their unbounded query shape.
+                    // capture the public query and label its scan as native evidence. Composite
+                    // trace-detail evidence is handled above; any other empty-index route remains
+                    // explicitly blocked without executing its unsupported query shape.
                     if (string.IsNullOrWhiteSpace(specification.IndexName))
                     {
                         blockedRoutes.Add(route);
@@ -134,7 +162,7 @@ internal static class DiagnosticsNativePlanCapture
                     : DiagnosticsNativePlanContract.BlockedRouteContract;
                 return NativePlanEvidenceStaging.Write(
                     outputDirectory,
-                    CreateDocument(request, observed, routes, routeContract, blockedRoutes));
+                    CreateDocument(request, observed, routes, routeContract, blockedRoutes, traceDetailConstituents: traceDetailConstituents));
             }
             finally
             {
@@ -249,6 +277,180 @@ internal static class DiagnosticsNativePlanCapture
             }, cancellationToken);
     }
 
+    private static async Task<IReadOnlyList<DiagnosticsTraceDetailConstituentEvidence>> CaptureTraceDetailConstituentsAsync(
+        DiagnosticsDurableHistoryClient client,
+        RunRequest request,
+        string outputDirectory,
+        string explainDirectory,
+        WritePathRoundTripObserver commandObserver,
+        CancellationToken cancellationToken)
+    {
+        var specifications = DiagnosticsNativePlanContract.TraceDetailConstituents(request.Adapter);
+        var before = Directory.EnumerateFiles(explainDirectory).ToHashSet(StringComparer.Ordinal);
+        var detail = await client.OpenTelemetry.GetTraceAsync(
+            DiagnosticsDurableHistoryWorkload.TraceIdForTesting(DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream - 1),
+            cancellationToken);
+        if (detail is null)
+            throw new PerformanceContractException("Diagnostics trace-detail capture did not find its fixture trace.");
+
+        var commands = commandObserver.Commands
+            .Where(command => !command.IsProbe && command.Kind == ProviderCommandKind.Read && !string.IsNullOrWhiteSpace(command.CommandText))
+            .ToArray();
+        var evidence = new List<DiagnosticsTraceDetailConstituentEvidence>(specifications.Count);
+        foreach (var specification in specifications)
+        {
+            var matching = commands.Where(command => command.CommandText!.Contains(specification.TableName, StringComparison.OrdinalIgnoreCase)).ToArray();
+            var queryCommands = matching.Where(command => command.Operation.EndsWith(".query", StringComparison.Ordinal)).ToArray();
+            var pointCommands = matching.Where(command => !command.Operation.EndsWith(".query", StringComparison.Ordinal)).ToArray();
+            var observedCount = specification.OperationKind == DiagnosticsTraceDetailOperationKind.BoundedOrderedQuery
+                ? queryCommands.Length
+                : pointCommands.Length;
+            if (observedCount == 0 || observedCount > specification.MaxInvocationCount)
+                throw new PerformanceContractException(
+                    $"Diagnostics trace-detail constituent '{specification.RouteIdentity}' observed {observedCount} provider commands; expected a finite positive count no greater than {specification.MaxInvocationCount}.");
+
+            var materialized = specification.RouteIdentity switch
+            {
+                "trace-detail/spans-by-trace-key-start-id" => detail.Spans.Count,
+                "trace-detail/logs-by-trace-key-timestamp-id" => detail.Logs.Count,
+                "trace-detail/resources-by-id" => detail.Resources.Count,
+                _ => 1
+            };
+            var command = (specification.OperationKind == DiagnosticsTraceDetailOperationKind.BoundedOrderedQuery ? queryCommands : pointCommands)[0].CommandText!;
+            if (specification.OperationKind == DiagnosticsTraceDetailOperationKind.PrimaryKeyRead)
+            {
+                var pointEvidence = new DiagnosticsTraceDetailConstituentEvidence(
+                    specification.RouteIdentity,
+                    "",
+                    "",
+                    "primary-key-read",
+                    "",
+                    command,
+                    specification.PhysicalCardinality,
+                    specification.StorageScopeRequired,
+                    true,
+                    specification.FiniteLimit,
+                    specification.PublicRowBound,
+                    materialized,
+                    observedCount,
+                    specification.MaxInvocationCount);
+                foreach (var pointCommand in pointCommands)
+                    DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
+                        request.Provider,
+                        request.Adapter,
+                        pointEvidence with { CommandText = pointCommand.CommandText! },
+                        null);
+                evidence.Add(pointEvidence);
+                continue;
+            }
+
+            var expectedPageCount = checked((specification.PublicRowBound + specification.FiniteLimit - 1) / specification.FiniteLimit);
+            if (queryCommands.Length != expectedPageCount)
+                throw new PerformanceContractException(
+                    $"Diagnostics trace-detail constituent '{specification.RouteIdentity}' must emit exactly {expectedPageCount} bounded page queries in the frozen fixture; observed {queryCommands.Length}.");
+            var physicalIndexName = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(request.Provider, new DiagnosticsNativeRouteSpec(
+                specification.RouteIdentity,
+                specification.TableName,
+                specification.IndexName,
+                specification.Ordering[0].Column,
+                specification.PredicateColumn,
+                specification.PhysicalCardinality,
+                specification.FiniteLimit,
+                specification.StorageScopeRequired,
+                false,
+                specification.Ordering));
+            // ExplainAssertionMode numbers and retains one artifact per provider command. Keep every
+            // page, including the keyset continuation pages, so admission can reparse every command
+            // and every provider-owned plan instead of treating a multi-page QueryAll as one route.
+            var nativePaths = RequireNativeArtifacts(
+                explainDirectory,
+                before,
+                request.Provider,
+                specification.IndexName,
+                queryCommands.Length);
+            var pages = new List<DiagnosticsTraceDetailPageEvidence>(queryCommands.Length);
+            for (var pageIndex = 0; pageIndex < queryCommands.Length; pageIndex++)
+            {
+                var pageCommand = queryCommands[pageIndex].CommandText!;
+                var rawPlan = IamNativePlanParser.NormalizeForArtifact(request.Provider, File.ReadAllText(nativePaths[pageIndex]));
+                var pageReference = ArtifactStore.RawPlanName(
+                    $"diagnostics.{request.Provider}.{request.MeasurementSetId}.{ConstituentSlug(specification.RouteIdentity)}.page-{pageIndex:D4}.raw.json");
+                var pagePath = Path.Combine(outputDirectory, pageReference);
+                var pageArtifact = new DiagnosticsNativePlanArtifact(
+                    1,
+                    request.Provider,
+                    request.Adapter,
+                    specification.RouteIdentity,
+                    specification.TableName,
+                    specification.IndexName,
+                    physicalIndexName,
+                    pageCommand,
+                    rawPlan);
+                var pageEvidence = new DiagnosticsTraceDetailConstituentEvidence(
+                    specification.RouteIdentity,
+                    pageReference,
+                    string.Empty,
+                    "index-search",
+                    physicalIndexName,
+                    pageCommand,
+                    specification.PhysicalCardinality,
+                    specification.StorageScopeRequired,
+                    true,
+                    specification.FiniteLimit,
+                    specification.PublicRowBound,
+                    materialized,
+                    observedCount,
+                    specification.MaxInvocationCount);
+                var validationPath = Path.Combine(Path.GetTempPath(), $"diagnostics-trace-detail-{Guid.NewGuid():N}.json");
+                try
+                {
+                    WriteEnvelope(validationPath, pageArtifact);
+                    DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
+                        request.Provider,
+                        request.Adapter,
+                        pageEvidence,
+                        validationPath);
+                    WriteEnvelope(pagePath, pageArtifact);
+                }
+                finally
+                {
+                    if (File.Exists(validationPath))
+                        File.Delete(validationPath);
+                }
+
+                pages.Add(new DiagnosticsTraceDetailPageEvidence(
+                    pageIndex,
+                    pageReference,
+                    ArtifactStore.HashFile(pagePath),
+                    pageCommand));
+            }
+
+            var firstPage = pages[0];
+            var constituentEvidence = new DiagnosticsTraceDetailConstituentEvidence(
+                specification.RouteIdentity,
+                firstPage.RawPlanReference,
+                firstPage.RawPlanSha256,
+                "index-search",
+                physicalIndexName,
+                firstPage.CommandText,
+                specification.PhysicalCardinality,
+                specification.StorageScopeRequired,
+                true,
+                specification.FiniteLimit,
+                specification.PublicRowBound,
+                materialized,
+                observedCount,
+                specification.MaxInvocationCount,
+                pages.Skip(1).ToArray());
+            evidence.Add(constituentEvidence);
+            before = Directory.EnumerateFiles(explainDirectory).ToHashSet(StringComparer.Ordinal);
+        }
+
+        return evidence;
+    }
+
+    private static string ConstituentSlug(string identity) => identity.Replace('/', '-');
+
     private static string RequireGroundworkCommand(IReadOnlyList<ProviderCommandEvent> commands, DiagnosticsNativeRouteSpec specification)
     {
         var matches = commands.Where(command => !command.IsProbe &&
@@ -272,6 +474,26 @@ internal static class DiagnosticsNativePlanCapture
         return matches[0];
     }
 
+    internal static IReadOnlyList<string> RequireNativeArtifacts(
+        string directory,
+        IReadOnlySet<string> before,
+        string provider,
+        string logicalIndexName,
+        int expectedCount)
+    {
+        var extension = IamNativePlanParser.RawPlanExtension(provider);
+        var suffix = $"-{logicalIndexName}{extension}";
+        var matches = Directory.EnumerateFiles(directory)
+            .Where(path => !before.Contains(path) &&
+                           Path.GetFileName(path).EndsWith(suffix, StringComparison.Ordinal))
+            .OrderBy(path => Path.GetFileName(path), StringComparer.Ordinal)
+            .ToArray();
+        if (matches.Length != expectedCount)
+            throw new PerformanceContractException(
+                $"Diagnostics trace-detail query for logical index '{logicalIndexName}' must emit exactly {expectedCount} provider-native explain artifacts; observed {matches.Length}.");
+        return matches;
+    }
+
     private static void WriteEnvelope(string path, DiagnosticsNativePlanArtifact artifact)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -285,8 +507,9 @@ internal static class DiagnosticsNativePlanCapture
         IReadOnlyList<NativeRouteEvidence> routes,
         string routeContract = "provider-native-routes",
         IReadOnlyList<string>? blockedRoutes = null,
-        IReadOnlyList<DiagnosticsOracleRouteObservation>? oracleObservations = null) =>
-        new(2, request.ComparisonCohortId, request.MeasurementSetId, request.WorkloadId, request.WorkloadVersion, request.Provider, request.Adapter, request.PhysicalForm, request.Scale, request.CommitSha, request.HarnessAssemblySha256, request.CompositionFingerprint, request.HostFingerprintSha256, observed.Version, observed.Topology, observed.Configuration, request.Seed, request.InputFingerprintSha256, request.NativePlanIdentity, routes, routeContract, blockedRoutes, oracleObservations);
+        IReadOnlyList<DiagnosticsOracleRouteObservation>? oracleObservations = null,
+        IReadOnlyList<DiagnosticsTraceDetailConstituentEvidence>? traceDetailConstituents = null) =>
+        new(2, request.ComparisonCohortId, request.MeasurementSetId, request.WorkloadId, request.WorkloadVersion, request.Provider, request.Adapter, request.PhysicalForm, request.Scale, request.CommitSha, request.HarnessAssemblySha256, request.CompositionFingerprint, request.HostFingerprintSha256, observed.Version, observed.Topology, observed.Configuration, request.Seed, request.InputFingerprintSha256, request.NativePlanIdentity, routes, routeContract, blockedRoutes, oracleObservations, traceDetailConstituents);
 
     internal static EfCommandSnapshot RequireEfRouteCommand(
         IReadOnlyList<EfCommandSnapshot> commands,

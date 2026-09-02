@@ -93,7 +93,8 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
             {
                 RouteContract = evidence.RouteContract,
                 BlockedRoutes = evidence.BlockedRoutes ?? [],
-                OracleObservations = evidence.OracleObservations ?? []
+                OracleObservations = evidence.OracleObservations ?? [],
+                TraceDetailConstituents = evidence.TraceDetailConstituents ?? []
             });
     }
 

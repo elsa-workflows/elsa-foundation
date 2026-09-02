@@ -38,11 +38,33 @@ public sealed record DiagnosticsNativeRouteSpec(
             : [new RuntimeNativeOrderTerm(OrderColumn, Descending ? RuntimeNativeOrderDirection.Descending : RuntimeNativeOrderDirection.Ascending)]);
 }
 
+public enum DiagnosticsTraceDetailOperationKind
+{
+    PrimaryKeyRead,
+    BoundedOrderedQuery
+}
+
+/// <summary>One independently observed provider operation contributing to GetTraceAsync.</summary>
+/// <remarks><see cref="PhysicalCardinality"/> is the total frozen physical table cardinality, not
+/// the number of rows matching the selected trace. <see cref="PublicRowBound"/> is the caller-visible
+/// capacity bound; <see cref="MaxInvocationCount"/> is the resulting finite page/fanout bound.</remarks>
+public sealed record DiagnosticsTraceDetailConstituentSpec(
+    string RouteIdentity,
+    string TableName,
+    string IndexName,
+    string PredicateColumn,
+    IReadOnlyList<RuntimeNativeOrderTerm> Ordering,
+    DiagnosticsTraceDetailOperationKind OperationKind,
+    int PhysicalCardinality,
+    int FiniteLimit,
+    int PublicRowBound,
+    int MaxInvocationCount,
+    bool StorageScopeRequired = false);
+
 /// <summary>
 /// Single source of truth for every scale-bearing diagnostics read executed by the frozen workload.
-/// Fanout Groundwork routes are intentionally represented with an empty index and are emitted as
-/// blocked evidence without invoking their unbounded query shape; they must never be converted into
-/// synthetic index-search claims. No instrument route is listed because the public
+/// Trace detail is represented as an honest composite of bounded signal queries and primary-key reads;
+/// primary-key constituents intentionally have no secondary index claim. No instrument route is listed because the public
 /// <c>IOpenTelemetryStore</c> contract has no instrument-catalog query.
 /// </summary>
 public static class DiagnosticsNativePlanContract
@@ -54,6 +76,75 @@ public static class DiagnosticsNativePlanContract
     public const string BlockedRouteContract = "provider-native-routes-blocked";
     public const string GroundworkTable = "elsa_otel_resources_v2";
     public const string EfTable = "TelemetryResources";
+
+    public static IReadOnlyList<DiagnosticsTraceDetailConstituentSpec> TraceDetailConstituents(string adapter)
+    {
+        if (!string.Equals(adapter, GroundworkAdapter, StringComparison.Ordinal))
+            throw new PerformanceContractException($"Diagnostics native-plan admission does not support adapter '{adapter}'.");
+
+        var pageCount = checked((DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream +
+                                 DiagnosticsDurableHistoryWorkload.QueryLimit - 1) /
+                                DiagnosticsDurableHistoryWorkload.QueryLimit);
+        var resourceFanout = Math.Min(5_000, DiagnosticsDurableHistoryWorkload.ResourceCount);
+        return [
+                new(
+                    "trace-detail/summary-by-trace-key",
+                    "elsa_otel_trace_summaries_v3",
+                    "",
+                    "traceKey",
+                    [],
+                    DiagnosticsTraceDetailOperationKind.PrimaryKeyRead,
+                    DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream,
+                    1,
+                    1,
+                    1,
+                    true),
+                new(
+                    "trace-detail/spans-by-trace-key-start-id",
+                    "elsa_otel_spans_v2",
+                    "elsa_otel_spans_trace_detail",
+                    "traceKey",
+                    [
+                        new("startTime", RuntimeNativeOrderDirection.Ascending),
+                        new("spanId", RuntimeNativeOrderDirection.Ascending),
+                        new("sequence", RuntimeNativeOrderDirection.Ascending)
+                    ],
+                    DiagnosticsTraceDetailOperationKind.BoundedOrderedQuery,
+                    DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream,
+                    DiagnosticsDurableHistoryWorkload.QueryLimit,
+                    DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream,
+                    pageCount,
+                    true),
+                new(
+                    "trace-detail/logs-by-trace-key-timestamp-id",
+                    "elsa_otel_logs_v2",
+                    "elsa_otel_logs_trace_detail",
+                    "traceKey",
+                    [
+                        new("timestamp", RuntimeNativeOrderDirection.Ascending),
+                        new("id", RuntimeNativeOrderDirection.Ascending),
+                        new("sequence", RuntimeNativeOrderDirection.Ascending)
+                    ],
+                    DiagnosticsTraceDetailOperationKind.BoundedOrderedQuery,
+                    DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream,
+                    DiagnosticsDurableHistoryWorkload.QueryLimit,
+                    DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream,
+                    pageCount,
+                    true),
+                new(
+                    "trace-detail/resources-by-id",
+                    "elsa_otel_resources_v2",
+                    "",
+                    "id",
+                    [],
+                    DiagnosticsTraceDetailOperationKind.PrimaryKeyRead,
+                    DiagnosticsDurableHistoryWorkload.ResourceCount,
+                    1,
+                    DiagnosticsDurableHistoryWorkload.ResourceCount,
+                    resourceFanout,
+                    true)
+            ];
+    }
 
     /// <summary>
     /// Identifies provider-plan failures that are a valid blocked-route outcome. Contract and
@@ -119,8 +210,8 @@ public static class DiagnosticsNativePlanContract
             "traces-by-last-seen" => adapter == EfAdapter
                 ? Specification("TelemetryTraces", "IX_PersistedTelemetryTrace_StartTime", "StartTime", null, DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream)
                 : Specification("elsa_otel_trace_summaries_v3", "elsa_otel_trace_summaries_start", "startTime", null, DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream, true),
-            // GetTraceAsync is a fanout. Its summary/resource key reads have no named secondary plan
-            // artifact and the public API has no resource-fanout cap, so keep the top-level route blocked.
+            // GetTraceAsync is admitted through TraceDetailConstituents below; this top-level
+            // specification remains empty so it cannot accidentally become a synthetic index claim.
             "trace-detail" => adapter == EfAdapter
                 ? Specification("TelemetryTraces", "", null, "TraceId", DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream)
                 : Specification("elsa_otel_trace_summaries_v3", "", null, "traceKey", DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream, true),
@@ -215,6 +306,205 @@ public static class DiagnosticsNativePlanContract
         }
     }
 
+    public static void ValidateTraceDetailConstituent(
+        string provider,
+        string adapter,
+        DiagnosticsTraceDetailConstituentEvidence evidence,
+        string? path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(provider);
+        ArgumentException.ThrowIfNullOrWhiteSpace(adapter);
+        ArgumentNullException.ThrowIfNull(evidence);
+        var specification = TraceDetailConstituents(adapter).SingleOrDefault(item =>
+            string.Equals(item.RouteIdentity, evidence.RouteIdentity, StringComparison.Ordinal)) ??
+            throw new PerformanceContractException($"Diagnostics trace-detail evidence names unknown constituent '{evidence.RouteIdentity}'.");
+
+        if (evidence.PhysicalCardinality != specification.PhysicalCardinality ||
+            evidence.FiniteLimit != specification.FiniteLimit ||
+            evidence.PublicRowBound != specification.PublicRowBound ||
+            evidence.ObservedCommandCount != specification.MaxInvocationCount ||
+            evidence.MaxInvocationCount != specification.MaxInvocationCount ||
+            evidence.MaterializedCandidateCount != evidence.PublicRowBound ||
+            evidence.MaterializedCandidateCount > checked(evidence.FiniteLimit * evidence.ObservedCommandCount) ||
+            evidence.HasStorageScopePredicate != specification.StorageScopeRequired ||
+            evidence.HasRoutePredicate != true ||
+            string.IsNullOrWhiteSpace(evidence.CommandText))
+            throw new PerformanceContractException(
+                $"Diagnostics trace-detail constituent '{evidence.RouteIdentity}' has unbound cardinality, limit, fanout, scope, or predicate facts.");
+
+        if (specification.OperationKind == DiagnosticsTraceDetailOperationKind.PrimaryKeyRead)
+        {
+            if (!string.IsNullOrEmpty(evidence.RawPlanReference) ||
+                !string.IsNullOrEmpty(evidence.RawPlanSha256) ||
+                !string.IsNullOrEmpty(evidence.PhysicalIndexName) ||
+                !string.Equals(evidence.PlanClassification, "primary-key-read", StringComparison.Ordinal) ||
+                evidence.Pages is { Count: > 0 })
+                throw new PerformanceContractException(
+                    $"Diagnostics trace-detail point read '{evidence.RouteIdentity}' must not claim a secondary index or explain artifact.");
+            ValidatePointCommand(provider, evidence.CommandText, specification);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(path) ||
+            string.IsNullOrWhiteSpace(evidence.RawPlanReference) ||
+            string.IsNullOrWhiteSpace(evidence.RawPlanSha256) ||
+            string.IsNullOrWhiteSpace(evidence.PhysicalIndexName) ||
+            !string.Equals(evidence.PlanClassification, "index-search", StringComparison.Ordinal))
+            throw new PerformanceContractException(
+                $"Diagnostics trace-detail query '{evidence.RouteIdentity}' must retain its provider-native plan artifact.");
+
+        var artifact = ReadArtifact(path);
+        var expectedPhysicalIndex = ExpectedPhysicalIndexName(provider, new DiagnosticsNativeRouteSpec(
+            specification.RouteIdentity,
+            specification.TableName,
+            specification.IndexName,
+            specification.Ordering.First().Column,
+            specification.PredicateColumn,
+            specification.PhysicalCardinality,
+            specification.FiniteLimit,
+            specification.StorageScopeRequired,
+            false,
+            specification.Ordering));
+        if (artifact.SchemaVersion != 1 || artifact.Provider != provider || artifact.Adapter != adapter ||
+            artifact.RouteIdentity != evidence.RouteIdentity || artifact.TableName != specification.TableName ||
+            artifact.IndexName != specification.IndexName || artifact.PhysicalIndexName != expectedPhysicalIndex ||
+            evidence.PhysicalIndexName != expectedPhysicalIndex || string.IsNullOrWhiteSpace(artifact.CommandText) ||
+            string.IsNullOrWhiteSpace(artifact.NativePlan) || !string.Equals(evidence.CommandText, artifact.CommandText, StringComparison.Ordinal))
+            throw new PerformanceContractException(
+                $"Diagnostics trace-detail constituent '{evidence.RouteIdentity}' does not bind its exact provider, table, or physical index.");
+
+        var routeSpecification = new DiagnosticsNativeRouteSpec(
+            specification.RouteIdentity,
+            specification.TableName,
+            specification.IndexName,
+            specification.Ordering.First().Column,
+            specification.PredicateColumn,
+            specification.PhysicalCardinality,
+            specification.FiniteLimit,
+            specification.StorageScopeRequired,
+            false,
+            specification.Ordering);
+        if (string.Equals(provider, "mongodb", StringComparison.Ordinal))
+            ValidateMongoCommand(artifact.CommandText, routeSpecification);
+        else
+            ValidateSqlCommand(artifact.CommandText, routeSpecification);
+
+        switch (provider)
+        {
+            case "sqlite":
+                ValidateSqlitePlan(artifact.NativePlan, routeSpecification, expectedPhysicalIndex);
+                break;
+            case "postgresql":
+                ValidatePostgreSqlPlan(artifact.NativePlan, routeSpecification, expectedPhysicalIndex);
+                break;
+            case "sqlserver":
+                ValidateSqlServerPlan(artifact.NativePlan, routeSpecification, expectedPhysicalIndex);
+                break;
+            case "mongodb":
+                ValidateMongoPlan(artifact.NativePlan, routeSpecification, expectedPhysicalIndex);
+                break;
+            default:
+                throw new PerformanceContractException($"Diagnostics native-plan admission does not support provider '{provider}'.");
+        }
+    }
+
+    private static DiagnosticsNativePlanArtifact ReadArtifact(string path)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllBytes(path));
+            ArtifactStore.RejectDuplicateProperties(document.RootElement);
+            return JsonSerializer.Deserialize<DiagnosticsNativePlanArtifact>(document.RootElement.GetRawText()) ??
+                throw new PerformanceContractException("Diagnostics native-plan envelope is empty.");
+        }
+        catch (JsonException exception)
+        {
+            throw new PerformanceContractException($"Diagnostics native-plan envelope is invalid: {exception.Message}");
+        }
+    }
+
+    private static void ValidatePointCommand(
+        string provider,
+        string command,
+        DiagnosticsTraceDetailConstituentSpec specification)
+    {
+        if (string.Equals(provider, "mongodb", StringComparison.Ordinal))
+        {
+            using var document = ParseJson(command, "MongoDB command");
+            var root = document.RootElement;
+            var collection = root.TryGetProperty("collection", out var collectionValue) && collectionValue.ValueKind == JsonValueKind.String
+                ? collectionValue.GetString()
+                : root.TryGetProperty("find", out var findValue) && findValue.ValueKind == JsonValueKind.String
+                    ? findValue.GetString()
+                    : null;
+            var hasValidLimit = !root.TryGetProperty("limit", out var limit) ||
+                                (limit.ValueKind == JsonValueKind.Number && limit.TryGetInt32(out var finiteLimit) && finiteLimit == 1);
+            if (!string.Equals(collection, specification.TableName, StringComparison.Ordinal) ||
+                root.TryGetProperty("sort", out _) || !hasValidLimit)
+                throw new PerformanceContractException($"Diagnostics point read '{specification.RouteIdentity}' is not an unsorted primary-key lookup.");
+            if (!root.TryGetProperty("filter", out var filter) || filter.ValueKind != JsonValueKind.Object)
+                throw new PerformanceContractException($"Diagnostics point read '{specification.RouteIdentity}' does not bind scope and its exact key predicate.");
+            var mongoRequired = new[] { "__groundwork_scope", specification.PredicateColumn };
+            var names = filter.EnumerateObject().Select(property => property.Name).ToArray();
+            if (!names.Order(StringComparer.Ordinal).SequenceEqual(mongoRequired.Order(StringComparer.Ordinal), StringComparer.Ordinal) ||
+                filter.EnumerateObject().Any(property =>
+                    property.Value.ValueKind != JsonValueKind.Object ||
+                    property.Value.EnumerateObject().Count() != 1 ||
+                    !property.Value.TryGetProperty("$eq", out _)))
+                throw new PerformanceContractException($"Diagnostics point read '{specification.RouteIdentity}' must contain only exact scope and key equalities.");
+            return;
+        }
+
+        var normalized = command.Replace("[", "", StringComparison.Ordinal)
+            .Replace("]", "", StringComparison.Ordinal)
+            .Replace("\"", "", StringComparison.Ordinal)
+            .Replace("`", "", StringComparison.Ordinal);
+        if (normalized.Contains(" OR ", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Contains(" ORDER BY ", StringComparison.OrdinalIgnoreCase) ||
+            Regex.IsMatch(normalized, @"\bOFFSET\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
+            Regex.IsMatch(normalized, @"\b(?:LIMIT|TOP)\s*\(?\s*(?!1\b)\d+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
+            !Regex.IsMatch(normalized, $@"\bFROM\s+{Regex.Escape(specification.TableName)}\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            throw new PerformanceContractException($"Diagnostics point read '{specification.RouteIdentity}' is not an unsorted primary-key lookup.");
+        var where = Regex.Match(normalized, @"\bWHERE\s+(?<where>.*)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Groups["where"].Value.Trim();
+        var atoms = string.IsNullOrWhiteSpace(where)
+            ? []
+            : Regex.Split(where, @"\s+AND\s+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+                .Select(atom => atom.Trim().Trim('(', ')'))
+                .ToArray();
+        var required = new[] { "__groundwork_scope", specification.PredicateColumn };
+        if (atoms.Length != required.Length || required.Any(column =>
+                atoms.Count(atom => Regex.IsMatch(atom, $@"^{Regex.Escape(column)}\s*=\s*(?:@\w+|\?|\$\d+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)) != 1))
+            throw new PerformanceContractException($"Diagnostics point read '{specification.RouteIdentity}' must contain only scope and its exact key predicate.");
+    }
+
+    private static void ValidateSqlContinuationPredicate(string where, DiagnosticsNativeRouteSpec specification)
+    {
+        var parameter = @"(?:@\w+|\?|\$\d+)";
+        var basePredicate = new[] { "__groundwork_scope", specification.PredicateColumn! }
+            .Select(column => Regex.Escape(column))
+            .Select(column => $@"\b{column}\s*=\s*{parameter}")
+            .ToArray();
+        var keyset = where;
+        foreach (var predicate in basePredicate)
+        {
+            if (Regex.Matches(keyset, predicate, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count != 1)
+                throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' continuation does not retain its exact scope and route predicates.");
+            keyset = Regex.Replace(keyset, predicate, string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
+        if (!keyset.Contains(" OR ", StringComparison.OrdinalIgnoreCase) ||
+            keyset.Contains("<", StringComparison.Ordinal) ||
+            specification.EffectiveOrdering.Any(term => !Regex.IsMatch(keyset, $@"\b{Regex.Escape(term.Column)}\b\s*(?:=|>)\s*{parameter}", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)))
+            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' continuation does not retain its complete ascending keyset predicate.");
+
+        var allowed = string.Join("|", specification.EffectiveOrdering.Select(term => Regex.Escape(term.Column)).Concat(["AND", "OR"]));
+        var remainder = Regex.Replace(keyset, $@"(?:\b(?:{allowed})\b|{parameter}|[()=><]|\s+)", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (!string.IsNullOrWhiteSpace(remainder) ||
+            keyset.Contains(" OR 1", StringComparison.OrdinalIgnoreCase) ||
+            keyset.Contains("CASE", StringComparison.OrdinalIgnoreCase))
+            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' continuation contains an unrecognized keyset expression.");
+    }
+
     private static void ValidateSqlCommand(string command, DiagnosticsNativeRouteSpec specification)
     {
         var normalized = command.Replace("[", "", StringComparison.Ordinal)
@@ -235,11 +525,19 @@ public static class DiagnosticsNativePlanContract
 
         ValidateSqlOrdering(normalized, specification);
 
-        if (normalized.Contains(" OR ", StringComparison.OrdinalIgnoreCase) ||
+        var continuation = specification.RouteIdentity.StartsWith("trace-detail/", StringComparison.Ordinal) &&
+                           normalized.Contains(" OR ", StringComparison.OrdinalIgnoreCase);
+        if ((!continuation && normalized.Contains(" OR ", StringComparison.OrdinalIgnoreCase)) ||
             !Regex.IsMatch(normalized, @"\bWHERE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) && specification.StorageScopeRequired)
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command contains an unbound boolean predicate.");
 
         var where = Regex.Match(normalized, @"\bWHERE\s+(?<where>.*?)(?:\bORDER\s+BY\b|\bLIMIT\b|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Groups["where"].Value.Trim();
+        if (continuation)
+        {
+            ValidateSqlContinuationPredicate(where, specification);
+            return;
+        }
+
         var atoms = string.IsNullOrWhiteSpace(where)
             ? []
             : Regex.Split(where, @"\s+AND\s+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
@@ -373,16 +671,60 @@ public static class DiagnosticsNativePlanContract
         if (!root.TryGetProperty("filter", out var filter) || filter.ValueKind != JsonValueKind.Object)
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' MongoDB command does not retain a structured filter.");
         var filterNames = filter.EnumerateObject().Select(property => property.Name).ToArray();
+        var keyset = default(JsonElement);
+        var continuation = specification.RouteIdentity.StartsWith("trace-detail/", StringComparison.Ordinal) &&
+                           filter.TryGetProperty("$or", out keyset);
         var expectedNames = (specification.StorageScopeRequired ? new[] { "__groundwork_scope" } : Array.Empty<string>())
             .Concat(specification.PredicateColumn is null ? Array.Empty<string>() : [specification.PredicateColumn])
+            .Concat(continuation ? ["$or"] : [])
             .ToArray();
         if (!filterNames.Order(StringComparer.Ordinal).SequenceEqual(expectedNames.Order(StringComparer.Ordinal), StringComparer.Ordinal) ||
-            filter.EnumerateObject().Any(property =>
+            filter.EnumerateObject().Where(property => property.Name != "$or").Any(property =>
                 property.Value.ValueKind != JsonValueKind.Object ||
                 !property.Value.TryGetProperty("$eq", out var equality) ||
                 property.Value.EnumerateObject().Count() != 1 ||
-                equality.ValueKind == JsonValueKind.Undefined))
+                equality.ValueKind == JsonValueKind.Undefined) ||
+            continuation && !ValidateMongoContinuationFilter(keyset, specification))
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' MongoDB command must retain only exact equality predicates.");
+    }
+
+    private static bool ValidateMongoContinuationFilter(JsonElement keyset, DiagnosticsNativeRouteSpec specification)
+    {
+        if (keyset.ValueKind != JsonValueKind.Array)
+            return false;
+        var branches = keyset.EnumerateArray().ToArray();
+        if (branches.Length != specification.EffectiveOrdering.Count)
+            return false;
+        for (var index = 0; index < branches.Length; index++)
+        {
+            if (branches[index].ValueKind != JsonValueKind.Object)
+                return false;
+            if (index > 0 && (branches[index].EnumerateObject().Count() != 1 ||
+                              !branches[index].TryGetProperty("$and", out var conjunctionValue) ||
+                              conjunctionValue.ValueKind != JsonValueKind.Array))
+                return false;
+            var fields = index == 0
+                ? branches[index].EnumerateObject().ToArray()
+                : branches[index].TryGetProperty("$and", out var conjunction) && conjunction.ValueKind == JsonValueKind.Array
+                    ? conjunction.EnumerateArray().SelectMany(item => item.ValueKind == JsonValueKind.Object
+                        ? item.EnumerateObject()
+                        : []).ToArray()
+                    : [];
+            if (fields.Length != index + 1)
+                return false;
+            for (var fieldIndex = 0; fieldIndex < fields.Length; fieldIndex++)
+            {
+                if (!string.Equals(fields[fieldIndex].Name, specification.EffectiveOrdering[fieldIndex].Column, StringComparison.Ordinal) ||
+                    fields[fieldIndex].Value.ValueKind != JsonValueKind.Object ||
+                    fields[fieldIndex].Value.EnumerateObject().Count() != 1)
+                    return false;
+                var operatorName = fields[fieldIndex].Value.EnumerateObject().First().Name;
+                var expected = fieldIndex == index ? "$gt" : "$eq";
+                if (!string.Equals(operatorName, expected, StringComparison.Ordinal))
+                    return false;
+            }
+        }
+        return true;
     }
 
     private static bool ValidateMongoOrdering(JsonElement sort, DiagnosticsNativeRouteSpec specification)

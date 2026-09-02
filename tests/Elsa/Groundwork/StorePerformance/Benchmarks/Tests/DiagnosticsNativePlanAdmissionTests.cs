@@ -55,6 +55,258 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 route).IndexName));
     }
 
+    [Fact]
+    public void Trace_detail_has_independent_bounded_constituents_including_primary_key_fanout()
+    {
+        var constituents = DiagnosticsNativePlanContract.TraceDetailConstituents(
+            DiagnosticsNativePlanContract.GroundworkAdapter);
+
+        Assert.Equal(
+            [
+                "trace-detail/summary-by-trace-key",
+                "trace-detail/spans-by-trace-key-start-id",
+                "trace-detail/logs-by-trace-key-timestamp-id",
+                "trace-detail/resources-by-id"
+            ],
+            constituents.Select(constituent => constituent.RouteIdentity));
+
+        Assert.Equal(DiagnosticsTraceDetailOperationKind.PrimaryKeyRead, constituents[0].OperationKind);
+        Assert.Equal("elsa_otel_trace_summaries_v3", constituents[0].TableName);
+        Assert.Empty(constituents[0].IndexName);
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream, constituents[0].PhysicalCardinality);
+        Assert.Equal(1, constituents[0].FiniteLimit);
+        Assert.Equal(1, constituents[0].PublicRowBound);
+
+        Assert.Equal(DiagnosticsTraceDetailOperationKind.BoundedOrderedQuery, constituents[1].OperationKind);
+        Assert.Equal("elsa_otel_spans_trace_detail", constituents[1].IndexName);
+        Assert.Equal(
+            [
+                new RuntimeNativeOrderTerm("startTime", RuntimeNativeOrderDirection.Ascending),
+                new RuntimeNativeOrderTerm("spanId", RuntimeNativeOrderDirection.Ascending),
+                new RuntimeNativeOrderTerm("sequence", RuntimeNativeOrderDirection.Ascending)
+            ],
+            constituents[1].Ordering);
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream, constituents[1].PublicRowBound);
+        Assert.Equal((DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream + DiagnosticsDurableHistoryWorkload.QueryLimit - 1) / DiagnosticsDurableHistoryWorkload.QueryLimit, constituents[1].MaxInvocationCount);
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream, constituents[1].PhysicalCardinality);
+
+        Assert.Equal(DiagnosticsTraceDetailOperationKind.BoundedOrderedQuery, constituents[2].OperationKind);
+        Assert.Equal("elsa_otel_logs_trace_detail", constituents[2].IndexName);
+        Assert.Equal(
+            [
+                new RuntimeNativeOrderTerm("timestamp", RuntimeNativeOrderDirection.Ascending),
+                new RuntimeNativeOrderTerm("id", RuntimeNativeOrderDirection.Ascending),
+                new RuntimeNativeOrderTerm("sequence", RuntimeNativeOrderDirection.Ascending)
+            ],
+            constituents[2].Ordering);
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream, constituents[2].PublicRowBound);
+        Assert.Equal((DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream + DiagnosticsDurableHistoryWorkload.QueryLimit - 1) / DiagnosticsDurableHistoryWorkload.QueryLimit, constituents[2].MaxInvocationCount);
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream, constituents[2].PhysicalCardinality);
+
+        Assert.Equal(DiagnosticsTraceDetailOperationKind.PrimaryKeyRead, constituents[3].OperationKind);
+        Assert.Empty(constituents[3].IndexName);
+        Assert.Equal(1, constituents[3].FiniteLimit);
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.ResourceCount, constituents[3].PhysicalCardinality);
+        Assert.Equal(Math.Min(5_000, DiagnosticsDurableHistoryWorkload.ResourceCount), constituents[3].MaxInvocationCount);
+    }
+
+    [Fact]
+    public void Trace_detail_primary_key_evidence_does_not_claim_a_secondary_index()
+    {
+        var specification = DiagnosticsNativePlanContract.TraceDetailConstituents(
+                DiagnosticsNativePlanContract.GroundworkAdapter)
+            .Single(item => item.RouteIdentity == "trace-detail/summary-by-trace-key");
+        var evidence = new DiagnosticsTraceDetailConstituentEvidence(
+            specification.RouteIdentity,
+            "",
+            "",
+            "primary-key-read",
+            "",
+            "SELECT * FROM elsa_otel_trace_summaries_v3 WHERE __groundwork_scope = @scope AND traceKey = @traceKey",
+            specification.PhysicalCardinality,
+            true,
+            true,
+            specification.FiniteLimit,
+            1,
+            1,
+            1,
+            1);
+
+        DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
+            "sqlite",
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            evidence,
+            null);
+    }
+
+    [Fact]
+    public void Trace_detail_signal_evidence_requires_the_complete_bounded_ordered_index_plan()
+    {
+        var specification = DiagnosticsNativePlanContract.TraceDetailConstituents(
+                DiagnosticsNativePlanContract.GroundworkAdapter)
+            .Single(item => item.RouteIdentity == "trace-detail/spans-by-trace-key-start-id");
+        var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(
+            "sqlite",
+            new DiagnosticsNativeRouteSpec(
+                specification.RouteIdentity,
+                specification.TableName,
+                specification.IndexName,
+                "startTime",
+                specification.PredicateColumn,
+                specification.PhysicalCardinality,
+                specification.FiniteLimit,
+                specification.StorageScopeRequired,
+                false,
+                specification.Ordering));
+        using var directory = new TemporaryDirectory();
+        var path = Path.Combine(directory.FullName, "spans.raw.json");
+        var artifact = new DiagnosticsNativePlanArtifact(
+            1,
+            "sqlite",
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            specification.RouteIdentity,
+            specification.TableName,
+            specification.IndexName,
+            physicalIndex,
+            "SELECT * FROM elsa_otel_spans_v2 WHERE __groundwork_scope = @scope AND traceKey = @traceKey ORDER BY startTime ASC, spanId ASC, sequence ASC LIMIT 127",
+            $"2 0 SEARCH elsa_otel_spans_v2 USING INDEX {physicalIndex} (__groundwork_scope=? AND traceKey=?)");
+        File.WriteAllText(path, JsonSerializer.Serialize(artifact));
+        var evidence = new DiagnosticsTraceDetailConstituentEvidence(
+            specification.RouteIdentity,
+            "spans.raw.json",
+            new string('a', 64),
+            "index-search",
+            physicalIndex,
+            artifact.CommandText,
+            specification.PhysicalCardinality,
+            true,
+            true,
+            specification.FiniteLimit,
+            specification.PublicRowBound,
+            specification.PublicRowBound,
+            specification.MaxInvocationCount,
+            specification.MaxInvocationCount);
+
+        DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
+            "sqlite",
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            evidence,
+            path);
+    }
+
+    [Fact]
+    public void Trace_detail_signal_evidence_rejects_a_scan_or_sort_plan()
+    {
+        var specification = DiagnosticsNativePlanContract.TraceDetailConstituents(
+                DiagnosticsNativePlanContract.GroundworkAdapter)
+            .Single(item => item.RouteIdentity == "trace-detail/logs-by-trace-key-timestamp-id");
+        var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(
+            "sqlite",
+            new DiagnosticsNativeRouteSpec(
+                specification.RouteIdentity,
+                specification.TableName,
+                specification.IndexName,
+                "timestamp",
+                specification.PredicateColumn,
+                specification.PhysicalCardinality,
+                specification.FiniteLimit,
+                specification.StorageScopeRequired,
+                false,
+                specification.Ordering));
+        using var directory = new TemporaryDirectory();
+        var path = Path.Combine(directory.FullName, "logs.raw.json");
+        var artifact = new DiagnosticsNativePlanArtifact(
+            1,
+            "sqlite",
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            specification.RouteIdentity,
+            specification.TableName,
+            specification.IndexName,
+            physicalIndex,
+            "SELECT * FROM elsa_otel_logs_v2 WHERE __groundwork_scope = @scope AND traceKey = @traceKey ORDER BY timestamp ASC, id ASC, sequence ASC LIMIT 127",
+            $"2 0 SCAN elsa_otel_logs_v2\n3 0 USE TEMP B-TREE FOR ORDER BY");
+        File.WriteAllText(path, JsonSerializer.Serialize(artifact));
+        var evidence = new DiagnosticsTraceDetailConstituentEvidence(
+            specification.RouteIdentity,
+            "logs.raw.json",
+            new string('a', 64),
+            "index-search",
+            physicalIndex,
+            artifact.CommandText,
+            specification.PhysicalCardinality,
+            true,
+            true,
+            specification.FiniteLimit,
+            specification.PublicRowBound,
+            specification.PublicRowBound,
+            specification.MaxInvocationCount,
+            specification.MaxInvocationCount);
+
+        var exception = Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
+                "sqlite",
+                DiagnosticsNativePlanContract.GroundworkAdapter,
+                evidence,
+                path));
+        Assert.True(DiagnosticsNativePlanContract.IsExpectedBlockedPlanFailure(exception));
+    }
+
+    [Fact]
+    public void Trace_detail_signal_evidence_accepts_the_keyset_continuation_shape()
+    {
+        var specification = DiagnosticsNativePlanContract.TraceDetailConstituents(
+                DiagnosticsNativePlanContract.GroundworkAdapter)
+            .Single(item => item.RouteIdentity == "trace-detail/spans-by-trace-key-start-id");
+        var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(
+            "sqlite",
+            new DiagnosticsNativeRouteSpec(
+                specification.RouteIdentity,
+                specification.TableName,
+                specification.IndexName,
+                "startTime",
+                specification.PredicateColumn,
+                specification.PhysicalCardinality,
+                specification.FiniteLimit,
+                specification.StorageScopeRequired,
+                false,
+                specification.Ordering));
+        using var directory = new TemporaryDirectory();
+        var path = Path.Combine(directory.FullName, "continuation.raw.json");
+        var command = "SELECT * FROM elsa_otel_spans_v2 WHERE __groundwork_scope = @scope AND traceKey = @traceKey AND ((startTime > @start) OR (startTime = @startEqual AND spanId > @span) OR (startTime = @startEqual2 AND spanId = @spanEqual AND sequence > @sequence)) ORDER BY startTime ASC, spanId ASC, sequence ASC LIMIT 127";
+        var artifact = new DiagnosticsNativePlanArtifact(
+            1,
+            "sqlite",
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            specification.RouteIdentity,
+            specification.TableName,
+            specification.IndexName,
+            physicalIndex,
+            command,
+            $"2 0 SEARCH elsa_otel_spans_v2 USING INDEX {physicalIndex} (__groundwork_scope=? AND traceKey=?)");
+        File.WriteAllText(path, JsonSerializer.Serialize(artifact));
+        var evidence = new DiagnosticsTraceDetailConstituentEvidence(
+            specification.RouteIdentity,
+            "continuation.raw.json",
+            new string('a', 64),
+            "index-search",
+            physicalIndex,
+            command,
+            specification.PhysicalCardinality,
+            true,
+            true,
+            specification.FiniteLimit,
+            specification.PublicRowBound,
+            specification.PublicRowBound,
+            specification.MaxInvocationCount,
+            specification.MaxInvocationCount);
+
+        DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
+            "sqlite",
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            evidence,
+            path);
+    }
+
     [Theory]
     [InlineData("resources-by-status", "status", true)]
     [InlineData("resources-by-service", "serviceNameKey", true)]
@@ -292,5 +544,14 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 spec.FiniteLimit,
                 spec.FiniteLimit);
         }
+    }
+
+    private sealed class TemporaryDirectory : IDisposable
+    {
+        private readonly DirectoryInfo directory = Directory.CreateTempSubdirectory("diagnostics-trace-detail-");
+
+        public string FullName => directory.FullName;
+
+        public void Dispose() => directory.Delete(true);
     }
 }

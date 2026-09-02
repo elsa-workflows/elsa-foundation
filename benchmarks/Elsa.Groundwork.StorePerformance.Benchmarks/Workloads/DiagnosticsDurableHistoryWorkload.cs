@@ -531,10 +531,12 @@ public sealed class DiagnosticsDurableHistoryWorkload
     internal static OpenTelemetryBatch NativePlanFixtureBatch() => new(
         Enumerable.Range(0, ResourceCount).Select(ordinal => ResourceFor(ordinal, ServiceNameFor(ordinal))).ToArray(),
         Enumerable.Range(0, RetainedRecordsPerStream).Select(index => TraceFor(index, ServiceNameFor(index))).ToArray(),
-        Enumerable.Range(0, RetainedRecordsPerStream).Select(index => SpanFor(index, ServiceNameFor(index))).ToArray(),
+        Enumerable.Range(0, RetainedRecordsPerStream)
+            .Select(index => SpanFor(index, ServiceNameFor(index), TraceIdFor(RetainedRecordsPerStream - 1))).ToArray(),
         Enumerable.Range(0, InstrumentCount).Select(ordinal => InstrumentFor(ordinal, ServiceNameFor(ordinal))).ToArray(),
         Enumerable.Range(0, RetainedRecordsPerStream).Select(index => MetricPointFor(index, ServiceNameFor(index))).ToArray(),
-        Enumerable.Range(0, RetainedRecordsPerStream).Select(index => LogRecordFor(index, ServiceNameFor(index))).ToArray());
+        Enumerable.Range(0, RetainedRecordsPerStream)
+            .Select(index => LogRecordFor(index, ServiceNameFor(index), TraceIdFor(RetainedRecordsPerStream - 1))).ToArray());
 
     private static StructuredLogEntry StructuredLogEntryFor(int index, string category, string sourceId) => new()
     {
@@ -587,9 +589,9 @@ public sealed class DiagnosticsDurableHistoryWorkload
         [$"workflow-{index % ResourceCount:D4}"],
         1);
 
-    private static TelemetrySpan SpanFor(int index, string serviceName) => new(
+    private static TelemetrySpan SpanFor(int index, string serviceName, string? traceId = null) => new(
         $"span-row-{index:D8}",
-        TraceIdFor(index),
+        traceId ?? TraceIdFor(index),
         SpanIdFor(index),
         null,
         $"resource-{index % ResourceCount:D4}",
@@ -625,14 +627,14 @@ public sealed class DiagnosticsDurableHistoryWorkload
         TraceIdFor(index),
         SpanIdFor(index));
 
-    private static OtlpLogRecord LogRecordFor(int index, string serviceName) => new(
+    private static OtlpLogRecord LogRecordFor(int index, string serviceName, string? traceId = null) => new(
         $"otlp-log-{index:D8}",
         $"resource-{index % ResourceCount:D4}",
         FixedNowUtc.AddMilliseconds(index),
         "Information",
         9,
         PayloadFor(index),
-        TraceIdFor(index),
+        traceId ?? TraceIdFor(index),
         SpanIdFor(index),
         new Dictionary<string, string?>(StringComparer.Ordinal) { ["spec094.service"] = serviceName });
 

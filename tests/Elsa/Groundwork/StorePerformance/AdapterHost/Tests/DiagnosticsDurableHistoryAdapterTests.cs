@@ -96,6 +96,36 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
     }
 
     [Fact]
+    public void Trace_detail_artifacts_are_partitioned_by_their_exact_logical_index()
+    {
+        var directory = Directory.CreateTempSubdirectory("diagnostics-native-pages-");
+        try
+        {
+            var before = Path.Combine(directory.FullName, "000001-sqlite-optimizer-selected-before.txt");
+            var spanFirst = Path.Combine(directory.FullName, "000002-sqlite-optimizer-selected-elsa_otel_spans_trace_detail.txt");
+            var log = Path.Combine(directory.FullName, "000003-sqlite-optimizer-selected-elsa_otel_logs_trace_detail.txt");
+            var spanSecond = Path.Combine(directory.FullName, "000004-sqlite-optimizer-selected-elsa_otel_spans_trace_detail.txt");
+            File.WriteAllText(before, "before");
+            File.WriteAllText(spanFirst, "span one");
+            File.WriteAllText(log, "log");
+            File.WriteAllText(spanSecond, "span two");
+
+            var actual = DiagnosticsNativePlanCapture.RequireNativeArtifacts(
+                directory.FullName,
+                new HashSet<string>(StringComparer.Ordinal) { before },
+                "sqlite",
+                "elsa_otel_spans_trace_detail",
+                2);
+
+            Assert.Equal([spanFirst, spanSecond], actual);
+        }
+        finally
+        {
+            directory.Delete(true);
+        }
+    }
+
+    [Fact]
     public void Process_identity_is_bound_into_storage_and_diagnostic_scopes()
     {
         var first = Request(processIndex: 1);
