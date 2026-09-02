@@ -1,9 +1,10 @@
 # Proposal: an absolute-budget basis and executable gate for the three oracle-less diagnostics providers
 
-Status: **PROPOSAL — needs an independent reviewer and one first measurement.**
+Status: **EXECUTABLE SHAPE REVIEWED IN PR #1514 — numeric policies still need first measurements and ratification.**
 Proposed by the EF-Core-oracle scoping analysis
 ([`docs/reports/ef-core-oracle-scoping-2026-08.md`](../../../docs/reports/ef-core-oracle-scoping-2026-08.md), PR #1279).
-Reviewer: **unassigned.** Numeric values: **deliberately absent** — see
+Independent reviewer: **#646 control-room review, recorded in PR #1514.** Numeric values:
+**deliberately absent** — see
 [The numbers are not in this document](#the-numbers-are-not-in-this-document).
 
 This document is the **proposal half**, in the same sense as
@@ -21,10 +22,11 @@ four explicit `NotHotPath` operations (the two restart observations and the two 
 operations) are the adopted policy shape. This reverses the earlier 093 omission because diagnostics
 has three providers without an oracle to compare against; it does not authorize numeric values.
 
-Numeric budgets and the first provider measurements remain unratified. The policy review and final
-numeric ratification must be recorded on the #646 pull request or issue before merge, and the overall
-diagnostics gate remains blocked until that evidence exists. In particular, p99 and throughput belong
-only to `AbsoluteBudgetPolicy`; they are not added to the existing ratio `GatePolicy`.
+Numeric budgets and the first provider measurements remain unratified. Each concrete provider policy
+and its numeric ratification must be recorded on a later #646 pull request or issue before that policy
+or any verdict is merged, and the overall diagnostics gate remains blocked until that evidence exists.
+In particular, p99 and throughput belong only to `AbsoluteBudgetPolicy`; they are not added to the
+existing ratio `GatePolicy`.
 
 **Companion:** [`diagnostics-sqlite-split-basis.md`](diagnostics-sqlite-split-basis.md) covers the SQLite
 half (Route 1) and is a **hard prerequisite** for this one — see
