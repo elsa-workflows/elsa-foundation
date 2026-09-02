@@ -118,7 +118,9 @@ public sealed class GroundworkExecutionCommandTransport(
                 ]),
                 [new OrderTerm(Columns.Sequence, OrderDirection.Ascending, NullOrder.Last)],
                 Projection.All,
-                continuation is null ? Paging.Keyset(maxItems) : Paging.Continuation(continuation, maxItems)));
+                continuation is null ? Paging.Keyset(maxItems) : Paging.Continuation(continuation, maxItems)),
+                sessions.Unit(DistributedGroundworkStorageManifest.CommandTransportUnitId, targetName)
+                    .CreateQueryRenderOptions(DistributedGroundworkStorageManifest.CommandByExecutionSequenceIndex));
             foreach (var row in result.Rows)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -184,13 +186,16 @@ public sealed class GroundworkExecutionCommandTransport(
     {
         DistributedRuntimeQueryLimits.ValidateTake(maxItems, nameof(maxItems));
         cancellationToken.ThrowIfCancellationRequested();
-        var result = Session(DistributedGroundworkStorageManifest.CommandTransportUnitId).Query(new QueryRequest(
+        var session = Session(DistributedGroundworkStorageManifest.CommandTransportUnitId);
+        var unit = sessions.Unit(DistributedGroundworkStorageManifest.CommandTransportUnitId, targetName);
+        var result = session.Query(new QueryRequest(
             new TableId(DistributedGroundworkStorageManifest.CommandTransportUnitName),
             new Predicate.Range(Columns.VisibleAt, null, Bound.Inclusive(QueryConstant.Of(Columns.VisibleAt, now))),
             [new OrderTerm(Columns.WorkflowExecutionId, OrderDirection.Ascending, NullOrder.Last), new OrderTerm(Columns.Sequence, OrderDirection.Descending, NullOrder.Last)],
             Projection.All,
             Paging.Keyset(maxItems),
-            new LatestPerKey(Columns.WorkflowExecutionId, Columns.EnqueuedAt)));
+            new LatestPerKey(Columns.WorkflowExecutionId, Columns.EnqueuedAt)),
+            unit.CreateQueryRenderOptions(DistributedGroundworkStorageManifest.PendingCommandByExecutionSequenceIndex));
         IReadOnlyCollection<string> ids = result.Rows.Select(row => StringValue(row, DistributedGroundworkStorageManifest.WorkflowExecutionIdField)).Distinct(StringComparer.Ordinal).ToArray();
         return ValueTask.FromResult(ids);
     }
@@ -199,13 +204,16 @@ public sealed class GroundworkExecutionCommandTransport(
     {
         DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
         cancellationToken.ThrowIfCancellationRequested();
-        var result = Session(DistributedGroundworkStorageManifest.CommandTransportUnitId).Query(new QueryRequest(
+        var session = Session(DistributedGroundworkStorageManifest.CommandTransportUnitId);
+        var unit = sessions.Unit(DistributedGroundworkStorageManifest.CommandTransportUnitId, targetName);
+        var result = session.Query(new QueryRequest(
             new TableId(DistributedGroundworkStorageManifest.CommandTransportUnitName),
             Equal(Columns.WorkflowExecutionId, workflowExecutionId),
             [],
             Projection.All,
             Paging.None,
-            ResultShape.TotalCount.Instance));
+            ResultShape.TotalCount.Instance),
+            unit.CreateQueryRenderOptions(DistributedGroundworkStorageManifest.CommandByExecutionSequenceIndex));
         return ValueTask.FromResult(checked((int)(result.TotalCount ?? result.Rows.Count)));
     }
 

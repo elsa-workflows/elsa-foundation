@@ -87,10 +87,11 @@ public static class DistributedGroundworkStorageManifest
             .Int64(LeaseTokenField, column => column.Required())
             .Json(PayloadField, column => column.Required())
             .Key(TransportItemIdField)
-            .Index(CommandByExecutionSequenceIndex, WorkflowExecutionIdField, SequenceField)
+            .Index(CommandByExecutionSequenceIndex, WorkflowExecutionIdField, SequenceField, TransportItemIdField)
             .Index(PendingCommandByExecutionSequenceIndex, index => index
                 .Ascending(WorkflowExecutionIdField)
-                .Descending(SequenceField))
+                .Descending(SequenceField)
+                .Ascending(TransportItemIdField))
             .OptimisticConcurrency()
             .Scoped()
             .Build();

@@ -165,9 +165,18 @@ public sealed class GroundworkV2DistributedStoreTests
         Assert.Equal(
             [
                 new IndexColumn(DistributedGroundworkStorageManifest.WorkflowExecutionIdField, SortDirection.Ascending),
-                new IndexColumn(DistributedGroundworkStorageManifest.SequenceField, SortDirection.Descending)
+                new IndexColumn(DistributedGroundworkStorageManifest.SequenceField, SortDirection.Descending),
+                new IndexColumn(DistributedGroundworkStorageManifest.TransportItemIdField, SortDirection.Ascending)
             ],
             pendingIndex.Columns);
+        var executionIndex = Assert.Single(transport.Indexes, index => index.Name == DistributedGroundworkStorageManifest.CommandByExecutionSequenceIndex);
+        Assert.Equal(
+            [
+                new IndexColumn(DistributedGroundworkStorageManifest.WorkflowExecutionIdField, SortDirection.Ascending),
+                new IndexColumn(DistributedGroundworkStorageManifest.SequenceField, SortDirection.Ascending),
+                new IndexColumn(DistributedGroundworkStorageManifest.TransportItemIdField, SortDirection.Ascending)
+            ],
+            executionIndex.Columns);
         var references = typeof(GroundworkExecutionCommandTransport).Assembly.GetReferencedAssemblies();
         Assert.DoesNotContain(references, reference => reference.Name is "Groundwork.Core" or "Groundwork.Documents");
     }

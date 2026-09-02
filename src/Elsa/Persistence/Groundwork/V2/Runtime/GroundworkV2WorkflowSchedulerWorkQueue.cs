@@ -92,7 +92,8 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
             Equal(workflow, query.WorkflowExecutionId),
             [new OrderTerm(order, OrderDirection.Ascending, NullOrder.Last)],
             Projection.All,
-            PagingFor(query.Limit, query.ContinuationToken)));
+            PagingFor(query.Limit, query.ContinuationToken)),
+            unit.CreateQueryRenderOptions(ElsaRuntimeV2StorageManifest.BySchedulerWorkOrderIndex));
 
         return ValueTask.FromResult(new RuntimeStorePage<RuntimeSchedulerWorkItem>(
             query,
@@ -187,7 +188,8 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
             ],
             Projection.All,
             Paging.Keyset(limit),
-            new LatestPerKey(workflow, recordedAt)));
+            new LatestPerKey(workflow, recordedAt)),
+            unit.CreateQueryRenderOptions(ElsaRuntimeV2StorageManifest.SchedulerWorkByExecutionRecordedAtAndOrderIndex));
 
         return ValueTask.FromResult<IReadOnlyCollection<string>>(
             result.Rows.Select(row => Deserialize(row).Item.WorkflowExecutionId).ToArray());

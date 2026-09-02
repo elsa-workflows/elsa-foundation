@@ -207,13 +207,35 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind),
             ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField,
             PortableType.String,
-            ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyProjectionLength);
+            ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyProjectionLength,
+            nullable: false);
         AssertColumn(
             ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind),
             ElsaRuntimeV2StorageManifest.SchedulerWorkRecordedAtField,
             PortableType.DateTimeOffset,
             null,
             nullable: false);
+        AssertColumn(
+            ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind),
+            ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField,
+            PortableType.String,
+            ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength,
+            nullable: false);
+        var schedulerWork = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind);
+        AssertIndex(schedulerWork, ElsaRuntimeV2StorageManifest.BySchedulerWorkOrderIndex, [
+            ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField,
+            ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField,
+            ElsaRuntimeV2StorageManifest.IdField], included: true);
+        var pendingExecutions = Assert.Single(schedulerWork.Indexes, index =>
+            index.Name == ElsaRuntimeV2StorageManifest.SchedulerWorkByExecutionRecordedAtAndOrderIndex);
+        Assert.Equal(
+            [
+                new IndexColumn(ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, SortDirection.Ascending),
+                new IndexColumn(ElsaRuntimeV2StorageManifest.SchedulerWorkRecordedAtField, SortDirection.Descending),
+                new IndexColumn(ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField, SortDirection.Ascending),
+                new IndexColumn(ElsaRuntimeV2StorageManifest.IdField, SortDirection.Ascending)
+            ],
+            pendingExecutions.Columns);
         var schedulerPoison = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.SchedulerPoisonDocumentKind);
         AssertColumn(schedulerPoison, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, PortableType.String, ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength);
         AssertColumn(schedulerPoison, ElsaRuntimeV2StorageManifest.SchedulerPoisonWorkItemIdField, PortableType.String, ElsaRuntimeV2StorageManifest.SchedulerPoisonWorkItemProjectionLength);
