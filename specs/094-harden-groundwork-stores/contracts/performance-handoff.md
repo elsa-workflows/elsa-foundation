@@ -25,6 +25,16 @@ when its public operation is composed solely of writes, point reads, or other pa
 
 Timing is invalid until the correctness digest and provider conformance scenario pass.
 
+For current #646 execution, `CompositionFingerprint` is produced by the AdapterHost's side-effect-free
+`describe-composition` command. The canonical descriptor is built from the same `RuntimeStoreComposition`
+registry path used by Groundwork adapters and records selected feature/schema identities plus each declared
+target, unit identity, schema version, and `SchemaSubject.Fingerprint`; EF comparators provide explicit model
+descriptors instead. Workload/version, adapter/form, provider/version/topology, sorted safe provider settings,
+and package versions are also included. This composition digest is distinct from Groundwork's physical target
+fingerprint. It never hashes binaries/incidental files or retains connection material. The runner generates it
+for each request, while an optional operator `--composition` is checked against the generated value; child
+admission recomputes it before provider access.
+
 ## Required workloads
 
 | Workload ID | Public operation | Required correctness baseline | Primary rows |

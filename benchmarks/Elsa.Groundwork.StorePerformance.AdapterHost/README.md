@@ -14,6 +14,7 @@ substrate.
 | `ProviderConnections` — opens a real v2 connection for all four providers | **done**, compiles |
 | `probe-provider` | **done** — reads native server identity, topology, and sanitized driver settings |
 | `describe-matrix` | **done** — emits the schema-v2 exact 13-workload/17-registration catalog plus the AdapterHost and harness source revisions consumed by the operator runner |
+| `describe-composition` | **done** — validates a request and emits the deterministic selected-composition descriptor and lowercase SHA-256 without provider I/O or schema mutation |
 | `capture-plan` | **complete** for checkpoint, bookmark, recovery, outbox, trigger, recurring, due-timer, placement, and both Secret targets; relational queue/command are implemented and awaiting final Groundwork package plus live-plan validation; MongoDB queue/command are correctness-ready but native-plan blocked; **partial/blocked** for diagnostics |
 | optional-observer `src/` seam on `GroundworkV2RuntimeCheckpointWriter` | **done**, compiles |
 | `RuntimeStoreComposition` — DI composition, unit admission, distinct clients | **done**, compiles |
@@ -227,6 +228,14 @@ access or artifact write. The direct commands also require a clean current build
 names and central versions, and the canonical Release AdapterHost handshake; an alternate `--child-command`
 cannot stand in for the registered host. Optional comparison and gate result files must remain under the
 admitted output tree, including on blocked-report fallback paths.
+
+Before provider access, `capture-plan`, `verify-correctness`, and `run` recompute the same composition descriptor used by
+`describe-composition`. The Python runner calls that command during `target_context`; it supplies the resulting
+digest in every request and treats a supplied `--composition` as an expected-value assertion. The descriptor
+contains the selected Groundwork registry's target, unit ID/name, schema version, and `SchemaSubject.Fingerprint`,
+plus explicit feature/schema identities, workload/version, adapter/form, provider/version/topology, sorted safe
+provider settings, and package versions. EF comparators use explicit model identities and intentionally have no
+Groundwork registry units. Connection strings, credentials, binaries, and incidental files are excluded.
 
 The runner invokes `probe-provider` from the provider connection in its environment and binds the native
 server version, admitted topology, and sanitized provider settings into the generated request. Its

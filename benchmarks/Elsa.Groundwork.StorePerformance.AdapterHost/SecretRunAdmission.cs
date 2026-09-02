@@ -27,6 +27,20 @@ internal static class SecretRunAdmission
         ArgumentNullException.ThrowIfNull(connectionResolver);
 
         var request = RunRequestWire.Parse(HostArguments.Require(args, command, "--request"));
+        return ParseAndResolve(request, args, command, connectionResolver);
+    }
+
+    internal static AdmittedAdapterRun ParseAndResolve(
+        RunRequest request,
+        string[] args,
+        string command,
+        Func<string, string> connectionResolver)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(args);
+        ArgumentException.ThrowIfNullOrWhiteSpace(command);
+        ArgumentNullException.ThrowIfNull(connectionResolver);
+
         var outputDirectory = HostArguments.Require(args, command, "--out");
         var repositoryRoot = SourceProvenance.FindRepositoryRoot();
         outputDirectory = ArtifactOutputAdmission.RequireExternal(outputDirectory, repositoryRoot);

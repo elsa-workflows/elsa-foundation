@@ -76,6 +76,23 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
 
     public WritePathRoundTripObserver Observer { get; }
 
+    /// <summary>Builds the same provider-neutral registration snapshot used by a live composition.</summary>
+    internal static GroundworkStorageUnitRegistry CreateRegistry(
+        BenchmarkCompositionFingerprint.CompositionSelection selection)
+    {
+        ArgumentNullException.ThrowIfNull(selection);
+        if (!selection.IsGroundwork)
+            throw new PerformanceContractException("Only Groundwork compositions have a storage-unit registry.");
+        var services = new ServiceCollection();
+        services.AddPersistenceCore("benchmark-composition");
+        ConfigureOptionalStorageFamilies(services, selection);
+        ConfigureGroundworkStorageFamilies(services, selection);
+        return services
+            .Single(descriptor => descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry))
+            .ImplementationInstance as GroundworkStorageUnitRegistry
+            ?? throw new PerformanceContractException("The benchmark composition registered no storage-unit registry.");
+    }
+
     public static async Task<RuntimeStoreComposition> CreateAsync(
         string providerName,
         string connectionString,
@@ -116,25 +133,19 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
             // live provider, not inferred: the first correctness run failed exactly there.
             services.AddPersistenceCore(persistenceScope);
 
-            if (includeGroundworkIdentityStores)
-                services.AddFoundationAspNetCoreIdentityGroundwork();
-            if (includeGroundworkSecretStores)
-                services.AddGroundworkSecretsStore();
-
-            if (includeGroundworkDiagnostics)
-            {
-                // The domain features contribute their options, source registry and in-memory fallbacks;
-                // the combined Groundwork feature then replaces both contracts atomically.
-                new StructuredLogsFeature().ConfigureServices(services);
-                new OpenTelemetryFeature().ConfigureServices(services);
-                services.AddSingleton(structuredLogBinding ?? StructuredLogStoreBinding.Default);
-                services.AddSingleton(openTelemetryBinding ?? GroundworkOpenTelemetryBinding.Default);
-                if (structuredLogsOptions is not null)
-                    services.Configure<StructuredLogsOptions>(options => Copy(structuredLogsOptions, options));
-                if (openTelemetryOptions is not null)
-                    services.Configure<OpenTelemetryDiagnosticsOptions>(options => Copy(openTelemetryOptions, options));
-                new DiagnosticsGroundworkPersistenceFeature().ConfigureServices(services);
-            }
+            ConfigureOptionalStorageFamilies(
+                services,
+                new BenchmarkCompositionFingerprint.CompositionSelection(
+                    true,
+                    includeDistributedRuntimeStores,
+                    includeGroundworkIdentityStores,
+                    includeGroundworkSecretStores,
+                    includeGroundworkDiagnostics,
+                    []),
+                structuredLogBinding,
+                openTelemetryBinding,
+                structuredLogsOptions,
+                openTelemetryOptions);
 
             // The observer GroundworkStorageSessionSource resolves and forwards to every session and unit
             // of work it opens. Singleton because the harness snapshots one cumulative count for the
@@ -152,9 +163,15 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
                 options.AllowEphemeralDevelopmentKey = false;
             });
 
-            services.AddGroundworkV2RuntimeStores();
-            if (includeDistributedRuntimeStores)
-                services.AddGroundworkDistributedRuntimeStores();
+            ConfigureGroundworkStorageFamilies(
+                services,
+                new BenchmarkCompositionFingerprint.CompositionSelection(
+                    true,
+                    includeDistributedRuntimeStores,
+                    includeGroundworkIdentityStores,
+                    includeGroundworkSecretStores,
+                    includeGroundworkDiagnostics,
+                    []));
 
             // IRuntimeExecutionOwnershipService has no Groundwork replacement; it comes from the runtime core.
             services.AddWorkflowRuntime();
@@ -211,6 +228,47 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
                 SafelyDispose(connection);
             throw;
         }
+    }
+
+    private static void ConfigureOptionalStorageFamilies(
+        IServiceCollection services,
+        BenchmarkCompositionFingerprint.CompositionSelection selection,
+        StructuredLogStoreBinding? structuredLogBinding = null,
+        GroundworkOpenTelemetryBinding? openTelemetryBinding = null,
+        StructuredLogsOptions? structuredLogsOptions = null,
+        OpenTelemetryDiagnosticsOptions? openTelemetryOptions = null)
+    {
+        if (selection.IncludeIdentity)
+            services.AddFoundationAspNetCoreIdentityGroundwork();
+        if (selection.IncludeSecrets)
+            services.AddGroundworkSecretsStore();
+
+        if (!selection.IncludeDiagnostics)
+            return;
+
+        // The domain features contribute their options, source registry and in-memory fallbacks; the
+        // combined Groundwork feature then replaces both contracts atomically.
+        new StructuredLogsFeature().ConfigureServices(services);
+        new OpenTelemetryFeature().ConfigureServices(services);
+        services.AddSingleton(structuredLogBinding ?? StructuredLogStoreBinding.Default);
+        services.AddSingleton(openTelemetryBinding ?? GroundworkOpenTelemetryBinding.Default);
+        if (structuredLogsOptions is not null)
+            services.Configure<StructuredLogsOptions>(options => Copy(structuredLogsOptions, options));
+        if (openTelemetryOptions is not null)
+            services.Configure<OpenTelemetryDiagnosticsOptions>(options => Copy(openTelemetryOptions, options));
+        new DiagnosticsGroundworkPersistenceFeature().ConfigureServices(services);
+        foreach (var unit in V2OpenTelemetryStorageSchema.CreateUnits())
+            services.AddGroundworkStorageUnit(unit);
+        services.AddGroundworkStorageUnit(StructuredLogsGroundworkStorageSchema.CreateUnit());
+    }
+
+    private static void ConfigureGroundworkStorageFamilies(
+        IServiceCollection services,
+        BenchmarkCompositionFingerprint.CompositionSelection selection)
+    {
+        services.AddGroundworkV2RuntimeStores();
+        if (selection.IncludeDistributed)
+            services.AddGroundworkDistributedRuntimeStores();
     }
 
     private static async ValueTask SafelyDisposeAsync(ServiceProvider? provider)

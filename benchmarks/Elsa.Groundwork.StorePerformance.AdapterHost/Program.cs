@@ -14,11 +14,12 @@ try
     {
         "probe-provider" => await ProbeProvider(args),
         "describe-matrix" => DescribeMatrix(),
+        "describe-composition" => DescribeComposition(args),
         "capture-plan" => await CapturePlan(args),
         "verify-correctness" => await VerifyCorrectness(args),
         "run" => await Run(args),
         _ => throw new PerformanceContractException(
-            $"Unknown adapter-host command '{command}'. Supported: describe-matrix, probe-provider, capture-plan, verify-correctness, run.")
+            $"Unknown adapter-host command '{command}'. Supported: describe-matrix, describe-composition, probe-provider, capture-plan, verify-correctness, run.")
     };
 }
 catch (PerformanceContractException exception)
@@ -39,9 +40,21 @@ static int DescribeMatrix()
     return 0;
 }
 
+static int DescribeComposition(string[] args)
+{
+    var request = AdmitCurrentInvocation(args, "describe-composition");
+    Console.WriteLine(JsonSerializer.Serialize(BenchmarkCompositionFingerprint.DescribeDocument(request), ArtifactStore.JsonOptions));
+    return 0;
+}
+
 static RunRequest AdmitCurrentInvocation(string[] args, string command)
 {
     var request = RunRequestWire.Parse(HostArguments.Require(args, command, "--request"));
+    return AdmitCurrentRequest(request, command);
+}
+
+static RunRequest AdmitCurrentRequest(RunRequest request, string command)
+{
     var repositoryRoot = SourceProvenance.FindRepositoryRoot();
     SourceProvenance.RequireCleanHead(repositoryRoot, request.CommitSha);
     SourceProvenance.RequireAssemblyRevision(typeof(MatrixCatalog).Assembly, request.CommitSha, "adapter host");
@@ -84,7 +97,8 @@ static async Task<int> CapturePlan(string[] args)
     // Requests are untrusted JSON: ArtifactAdmission also runs ArtifactSafety.ValidateRequest, which
     // rejects malformed metadata, connection material, and unsafe evidence references at this boundary.
     outputDirectory = CapturePlanAdmission.Ensure(request, outputDirectory);
-    AdmitCurrentInvocation(args, "capture-plan");
+    request = AdmitCurrentRequest(request, "capture-plan");
+    BenchmarkCompositionFingerprint.Validate(request);
     var connectionString = ProviderConnections.RequireConnectionString(request.Provider);
     var observed = await ProviderProbe.ReadAsync(request.Provider, connectionString);
 
@@ -283,15 +297,17 @@ static async Task<int> CapturePlan(string[] args)
 static async Task<int> Run(string[] args)
 {
     AdmitOutput(args, "run");
-    AdmitCurrentInvocation(args, "run");
+    var request = AdmitCurrentInvocation(args, "run");
+    BenchmarkCompositionFingerprint.Validate(request);
     var admitted = SecretRunAdmission.ParseAndResolve(
+        request,
         args,
         "run",
         ProviderConnections.RequireConnectionString);
-    var (request, outputDirectory, connectionString, workload) = admitted;
-    await using var adapter = BenchmarkAdapterRegistry.Create(request, connectionString, outputDirectory);
+    var (admittedRequest, outputDirectory, connectionString, workload) = admitted;
+    await using var adapter = BenchmarkAdapterRegistry.Create(admittedRequest, connectionString, outputDirectory);
     var artifact = await ProcessMeasurement.ExecuteAsync(
-        workload, request, BenchmarkProtocol.Acceptance, adapter, outputDirectory, CancellationToken.None);
+        workload, admittedRequest, BenchmarkProtocol.Acceptance, adapter, outputDirectory, CancellationToken.None);
     ArtifactStore.Write(outputDirectory, artifact);
     return 0;
 }
@@ -302,19 +318,21 @@ static async Task<int> Run(string[] args)
 static async Task<int> VerifyCorrectness(string[] args)
 {
     AdmitOutput(args, "verify-correctness");
-    AdmitCurrentInvocation(args, "verify-correctness");
+    var request = AdmitCurrentInvocation(args, "verify-correctness");
+    BenchmarkCompositionFingerprint.Validate(request);
     var admitted = SecretRunAdmission.ParseAndResolve(
+        request,
         args,
         "verify-correctness",
         ProviderConnections.RequireConnectionString);
-    var (request, outputDirectory, connectionString, workload) = admitted;
+    var (admittedRequest, outputDirectory, connectionString, workload) = admitted;
 
-    await using var adapter = BenchmarkAdapterRegistry.Create(request, connectionString, outputDirectory);
+    await using var adapter = BenchmarkAdapterRegistry.Create(admittedRequest, connectionString, outputDirectory);
     await adapter.PrepareAsync(CancellationToken.None);
     var correctness = await adapter.VerifyCorrectnessAsync(CancellationToken.None);
-    ArtifactAdmission.ValidateCorrectness(workload, request, correctness, outputDirectory);
+    ArtifactAdmission.ValidateCorrectness(workload, admittedRequest, correctness, outputDirectory);
 
-    Console.WriteLine($"provider={request.Provider}");
+    Console.WriteLine($"provider={admittedRequest.Provider}");
     Console.WriteLine($"result-digest={correctness.ObservedResultDigestSha256}");
     Console.WriteLine($"round-trips={adapter.RoundTripObserver?.Snapshot()}");
     Console.WriteLine($"instrumentation={adapter.RoundTripObserver?.Instrumentation}");

@@ -228,6 +228,20 @@ public sealed class GroundworkPerformanceHandoffTests
         Assert.Contains("Dry run only", runner, StringComparison.Ordinal);
         Assert.Contains("require_idle_host()", runner, StringComparison.Ordinal);
 
+        var targetContext = runner.IndexOf("def target_context(", StringComparison.Ordinal);
+        Assert.True(targetContext >= 0);
+        Assert.True(
+            runner.IndexOf("require_phase(registration, phase)", targetContext, StringComparison.Ordinal) <
+            runner.IndexOf("probe_provider(root", targetContext, StringComparison.Ordinal));
+        foreach (var phase in new[] { "capture", "correctness", "measure" })
+        {
+            var method = runner.IndexOf($"def {phase}(", StringComparison.Ordinal);
+            var pathAdmission = runner.IndexOf("ensure_external(", method, StringComparison.Ordinal);
+            var contextAdmission = runner.IndexOf($"target_context(args, \"{phase}\"", method, StringComparison.Ordinal);
+            Assert.True(method >= 0 && pathAdmission >= 0 && contextAdmission >= 0);
+            Assert.True(pathAdmission < contextAdmission);
+        }
+
         var adapterHost = File.ReadAllText(Path.Combine(
             RepoRoot,
             "benchmarks",
