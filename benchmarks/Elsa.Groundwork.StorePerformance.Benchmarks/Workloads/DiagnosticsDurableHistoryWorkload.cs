@@ -28,6 +28,9 @@ namespace Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 /// </remarks>
 public sealed class DiagnosticsDurableHistoryWorkload
 {
+    // Native-plan capture is untimed setup: use larger batches to preserve the exact final cardinality
+    // without paying the measured workload's deliberately small transaction shape.
+    internal const int NativePlanFixtureBatchSize = 1_000;
     private static readonly ReproducibleWorkloadScenario Scenario = ReproducibleWorkloadScenarioCatalog.Get(WorkloadId);
     private static readonly JsonSerializerOptions CanonicalJsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
@@ -830,7 +833,8 @@ public sealed class DiagnosticsDurableHistoryWorkload
     internal static IEnumerable<OpenTelemetryBatch> NativePlanFixtureBatches() =>
         OpenTelemetryBatches(
             RetainedRecordsPerStream,
-            bindSignalsToLatestTrace: true);
+            bindSignalsToLatestTrace: true,
+            batchSize: NativePlanFixtureBatchSize);
 
     private static StructuredLogEntry StructuredLogEntryFor(int index, string category, string sourceId) => new()
     {

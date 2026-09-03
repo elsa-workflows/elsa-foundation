@@ -62,11 +62,28 @@ public sealed class DiagnosticsDurableHistoryWorkloadTests
         Assert.All(batches.SelectMany(batch => batch.Spans), span => Assert.Equal(selectedTrace, span.TraceId));
         Assert.All(batches.SelectMany(batch => batch.Logs), record => Assert.Equal(selectedTrace, record.TraceId));
 
-        var nativeFirst = DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatches().First();
-        Assert.Equal(DiagnosticsDurableHistoryWorkload.NormalizedRecordsPerOtlpBatch, nativeFirst.Traces.Count);
-        Assert.Equal(DiagnosticsDurableHistoryWorkload.NormalizedRecordsPerOtlpBatch, nativeFirst.Spans.Count);
-        Assert.Equal(DiagnosticsDurableHistoryWorkload.NormalizedRecordsPerOtlpBatch, nativeFirst.MetricPoints.Count);
-        Assert.Equal(DiagnosticsDurableHistoryWorkload.NormalizedRecordsPerOtlpBatch, nativeFirst.Logs.Count);
+        var measuredFirst = DiagnosticsDurableHistoryWorkload
+            .OpenTelemetryBatches(
+                DiagnosticsDurableHistoryWorkload.NormalizedRecordsPerOtlpBatch + 1,
+                bindSignalsToLatestTrace: false)
+            .First();
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.NormalizedRecordsPerOtlpBatch, measuredFirst.Traces.Count);
+
+        var native = DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatches().ToArray();
+        Assert.Equal(
+            (DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream +
+             DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatchSize - 1) /
+            DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatchSize,
+            native.Length);
+        Assert.Equal(
+            DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream,
+            native.Sum(batch => batch.Traces.Count));
+
+        var nativeFirst = native[0];
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatchSize, nativeFirst.Traces.Count);
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatchSize, nativeFirst.Spans.Count);
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatchSize, nativeFirst.MetricPoints.Count);
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatchSize, nativeFirst.Logs.Count);
     }
 
     [Fact]
