@@ -911,6 +911,80 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     }
 
     [Fact]
+    public void Groundwork_sqlite_replay_admits_only_the_bounded_snapshot_window()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "structured-log-replay");
+        var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("sqlite", specification);
+        using var fixture = Fixture.Create(
+            "sqlite",
+            "structured-log-replay",
+            command:
+                "SELECT * FROM elsa_structured_logs WHERE " +
+                "(__groundwork_scope IS NOT NULL AND __groundwork_scope = @p0) AND " +
+                "(sequence IS NOT NULL AND sequence > @p1 AND sequence <= @p2) " +
+                "ORDER BY sequence ASC LIMIT @p3",
+            nativePlan: $"2 0 SEARCH elsa_structured_logs USING INDEX {physicalIndex} (__groundwork_scope=? AND sequence>? AND sequence<?)");
+
+        DiagnosticsNativePlanContract.ValidateEnvelope("sqlite", fixture.Adapter, fixture.Route, fixture.Path);
+    }
+
+    [Theory]
+    [InlineData("sequence > @p1")]
+    [InlineData("sequence > @p1 AND sequence <= @p2 AND category = @p3")]
+    public void Groundwork_sqlite_replay_rejects_an_unbounded_or_extra_predicate(string sequencePredicate)
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "structured-log-replay");
+        var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("sqlite", specification);
+        using var fixture = Fixture.Create(
+            "sqlite",
+            "structured-log-replay",
+            command:
+                $"SELECT * FROM elsa_structured_logs WHERE __groundwork_scope = @p0 AND {sequencePredicate} " +
+                "ORDER BY sequence ASC LIMIT @p4",
+            nativePlan: $"2 0 SEARCH elsa_structured_logs USING INDEX {physicalIndex} (__groundwork_scope=? AND sequence>?)");
+
+        Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateEnvelope("sqlite", fixture.Adapter, fixture.Route, fixture.Path));
+    }
+
+    [Fact]
+    public void Groundwork_mongodb_replay_admits_the_exact_bounded_snapshot_window()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "structured-log-replay");
+        using var fixture = Fixture.Create(
+            "mongodb",
+            "structured-log-replay",
+            command: Fixture.MongoAggregateCommand(
+                specification,
+                match: "{\"$and\":[{\"sequence\":{\"$gt\":0,\"$lte\":100000}}]}"));
+
+        DiagnosticsNativePlanContract.ValidateEnvelope("mongodb", fixture.Adapter, fixture.Route, fixture.Path);
+    }
+
+    [Fact]
+    public void Groundwork_mongodb_replay_rejects_an_unbounded_snapshot_window()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "structured-log-replay");
+        using var fixture = Fixture.Create(
+            "mongodb",
+            "structured-log-replay",
+            command: Fixture.MongoAggregateCommand(
+                specification,
+                match: "{\"$and\":[{\"sequence\":{\"$gt\":0}}]}"));
+
+        Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateEnvelope("mongodb", fixture.Adapter, fixture.Route, fixture.Path));
+    }
+
+    [Fact]
     public void Groundwork_route_requires_the_storage_scope_equality_even_when_route_flags_claim_it()
     {
         using var fixture = Fixture.Create(

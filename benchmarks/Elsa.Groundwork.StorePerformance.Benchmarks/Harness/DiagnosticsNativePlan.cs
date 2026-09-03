@@ -606,6 +606,14 @@ public static class DiagnosticsNativePlanContract
             return;
         }
 
+        if (string.Equals(specification.RouteIdentity, "structured-log-replay", StringComparison.Ordinal))
+        {
+            if (!ContainsOnlyExactReplayRangePredicates(where, specification.StorageScopeRequired))
+                throw new PerformanceContractException(
+                    "Diagnostics route 'structured-log-replay' command must retain only its exact scope and bounded sequence window.");
+            return;
+        }
+
         var requiredAtoms = new List<string>();
         if (specification.StorageScopeRequired)
             requiredAtoms.Add("__groundwork_scope");
@@ -655,6 +663,31 @@ public static class DiagnosticsNativePlanContract
                 string.Empty,
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         }
+        remainder = Regex.Replace(remainder, @"\bAND\b|[();\s]", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return remainder.Length == 0;
+    }
+
+    private static bool ContainsOnlyExactReplayRangePredicates(string where, bool requireStorageScope)
+    {
+        const string parameter = @"(?:@\w+|\?|\$\d+)";
+        var required = new List<string>
+        {
+            $@"\bsequence\b\s*>\s*{parameter}",
+            $@"\bsequence\b\s*<=\s*{parameter}"
+        };
+        if (requireStorageScope)
+            required.Add($@"\b__groundwork_scope\b\s*=\s*{parameter}");
+        if (required.Any(pattern =>
+                Regex.Matches(where, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count != 1))
+            return false;
+
+        var remainder = Regex.Replace(
+            where,
+            @"\b(?:sequence|__groundwork_scope)\b\s+IS\s+NOT\s+NULL",
+            string.Empty,
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        foreach (var pattern in required)
+            remainder = Regex.Replace(remainder, pattern, string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         remainder = Regex.Replace(remainder, @"\bAND\b|[();\s]", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         return remainder.Length == 0;
     }
@@ -895,12 +928,33 @@ public static class DiagnosticsNativePlanContract
     {
         if (filter.ValueKind != JsonValueKind.Object)
             return false;
+        if (string.Equals(specification.RouteIdentity, "structured-log-replay", StringComparison.Ordinal))
+            return ValidateMongoReplayRangePredicate(filter);
         var properties = filter.EnumerateObject().Where(property => property.Name != "$or").ToArray();
         var expected = specification.PredicateColumn is null ? Array.Empty<string>() : [specification.PredicateColumn];
         return properties.Length == expected.Length &&
                properties.Select(property => property.Name).Order(StringComparer.Ordinal)
                    .SequenceEqual(expected.Order(StringComparer.Ordinal), StringComparer.Ordinal) &&
                properties.All(property => IsMongoEqualityValue(property.Value));
+    }
+
+    private static bool ValidateMongoReplayRangePredicate(JsonElement filter)
+    {
+        var properties = filter.EnumerateObject().ToArray();
+        if (properties.Length != 1 || !string.Equals(properties[0].Name, "$and", StringComparison.Ordinal) ||
+            properties[0].Value.ValueKind != JsonValueKind.Array)
+            return false;
+        var terms = properties[0].Value.EnumerateArray().ToArray();
+        if (terms.Length != 1 || terms[0].ValueKind != JsonValueKind.Object)
+            return false;
+        var rangeProperties = terms[0].EnumerateObject().ToArray();
+        if (rangeProperties.Length != 1 || !string.Equals(rangeProperties[0].Name, "sequence", StringComparison.Ordinal) ||
+            rangeProperties[0].Value.ValueKind != JsonValueKind.Object)
+            return false;
+        var operators = rangeProperties[0].Value.EnumerateObject().ToArray();
+        return operators.Length == 2 &&
+               operators.Any(item => item.Name == "$gt" && IsMongoScalar(item.Value)) &&
+               operators.Any(item => item.Name == "$lte" && IsMongoScalar(item.Value));
     }
 
     private static bool IsMongoEqualityValue(JsonElement value) =>
