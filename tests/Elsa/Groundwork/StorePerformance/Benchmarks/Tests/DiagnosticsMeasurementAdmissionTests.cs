@@ -85,6 +85,9 @@ public sealed class DiagnosticsMeasurementAdmissionTests
         Assert.False(DiagnosticsAdmission.HasCompleteProviderNativePlan(
             workload,
             plan with { TraceDetailConstituents = [] }));
+        Assert.False(DiagnosticsAdmission.HasCompleteProviderNativePlan(
+            workload,
+            plan with { TraceDetailConstituents = null! }));
     }
 
     [Fact]

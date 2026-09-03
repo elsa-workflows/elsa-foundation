@@ -60,8 +60,9 @@ public static class DiagnosticsAdmission
             nativePlan.BlockedRoutes.Count != 0)
             return false;
 
+        var traceDetailConstituents = nativePlan.TraceDetailConstituents ?? [];
         var admittedIdentities = nativePlan.Routes.Select(route => route.RouteIdentity)
-            .Concat(nativePlan.TraceDetailConstituents.Count == 0 ? [] : ["trace-detail"])
+            .Concat(traceDetailConstituents.Count == 0 ? [] : ["trace-detail"])
             .ToArray();
         return admittedIdentities.Length == workload.RequiredNativeRoutes.Count &&
                admittedIdentities.Distinct(StringComparer.Ordinal).Count() == admittedIdentities.Length &&

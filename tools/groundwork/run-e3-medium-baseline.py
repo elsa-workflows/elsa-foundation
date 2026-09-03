@@ -26,7 +26,21 @@ from typing import Any
 PROVIDERS = ("sqlite", "postgresql", "sqlserver", "mongodb")
 SAFE_IDENTIFIER = re.compile(r"^[A-Za-z0-9._-]+$")
 LOWER_SHA256 = re.compile(r"^[0-9a-f]{64}$")
+SAFE_RAW_PLAN_REFERENCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.(json|txt|xml)$", re.IGNORECASE)
 TASKLIST_CSV_ROW = re.compile(r'^"(?:[^"]|"")*"(?:,"(?:[^"]|"")*"){4}$')
+TRACE_DETAIL_CONSTITUENT_ROUTES = (
+    "trace-detail/summary-by-trace-key",
+    "trace-detail/spans-by-trace-key-start-id",
+    "trace-detail/logs-by-trace-key-timestamp-id",
+    "trace-detail/resources-by-id",
+)
+ALLOWED_RESULT_FILES = {
+    "comparison.v1.json",
+    "comparison.from-gate.v1.json",
+    "gate.v1.json",
+    "measurement.v1.json",
+    "budget-gate.v1.json",
+}
 
 
 def repository_root() -> Path:
@@ -40,6 +54,18 @@ def fail(message: str) -> int:
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def safe_raw_plan_reference(value: Any) -> bool:
+    if not isinstance(value, str) or not value or "/" in value or "\\" in value:
+        return False
+    lowered = value.lower()
+    return (
+        SAFE_RAW_PLAN_REFERENCE.fullmatch(value) is not None
+        and not lowered.endswith((".process.json", ".native-plan.json"))
+        and not lowered.startswith("artifact-manifest.")
+        and value not in ALLOWED_RESULT_FILES
+    )
 
 
 def ensure_external(path: Path, root: Path, name: str) -> Path:
@@ -320,14 +346,104 @@ def validate_evidence(
         raise ValueError(f"{path.name} does not account for every required route as captured or blocked")
     if len(admitted_route_names + blocked) != len(set(admitted_route_names + blocked)):
         raise ValueError(f"{path.name} contains duplicate captured/blocked route identities")
+    raw_references = []
     for route in routes:
         reference = route.get("RawPlanReference")
         expected_digest = route.get("RawPlanSha256")
-        if not isinstance(reference, str) or Path(reference).name != reference:
+        if not safe_raw_plan_reference(reference) or not isinstance(expected_digest, str) or not LOWER_SHA256.fullmatch(expected_digest):
             raise ValueError(f"{path.name} contains an unsafe raw-plan reference")
         raw = path.parent / reference
         if not raw.is_file() or sha256(raw) != expected_digest:
             raise ValueError(f"raw native plan {reference} is missing or does not match its digest")
+        raw_references.append(reference)
+
+    constituent_names = []
+    for constituent in trace_detail:
+        if (
+            not isinstance(constituent, dict)
+            or not isinstance(constituent.get("RouteIdentity"), str)
+            or not constituent["RouteIdentity"]
+            or not isinstance(constituent.get("RawPlanReference"), str)
+            or not isinstance(constituent.get("RawPlanSha256"), str)
+            or not isinstance(constituent.get("PlanClassification"), str)
+            or not constituent["PlanClassification"]
+            or not isinstance(constituent.get("PhysicalIndexName"), str)
+            or not isinstance(constituent.get("CommandText"), str)
+            or not constituent["CommandText"].strip()
+        ):
+            raise ValueError(f"{path.name} contains an invalid trace-detail constituent entry")
+
+        constituent_names.append(constituent["RouteIdentity"])
+        reference = constituent["RawPlanReference"]
+        digest = constituent["RawPlanSha256"]
+        pages = constituent.get("Pages")
+        integer_fields = (
+            "PhysicalCardinality",
+            "FiniteLimit",
+            "PublicRowBound",
+            "MaterializedCandidateCount",
+            "ObservedCommandCount",
+            "MaxInvocationCount",
+        )
+        if any(
+            isinstance(constituent.get(name), bool)
+            or not isinstance(constituent.get(name), int)
+            or constituent[name] <= 0
+            for name in integer_fields
+        ) or any(not isinstance(constituent.get(name), bool) for name in ("HasStorageScopePredicate", "HasRoutePredicate")):
+            raise ValueError(f"{path.name} contains invalid trace-detail constituent bounds or predicates")
+        if pages is not None and not isinstance(pages, list):
+            raise ValueError(f"{path.name} contains invalid trace-detail continuation pages")
+        if not reference:
+            if digest or pages:
+                raise ValueError(
+                    f"{path.name} contains a trace-detail point read with an explain artifact or continuation page"
+                )
+        else:
+            if not safe_raw_plan_reference(reference) or not LOWER_SHA256.fullmatch(digest):
+                raise ValueError(f"{path.name} contains an unsafe or undigested trace-detail raw-plan reference")
+            raw = path.parent / reference
+            if not raw.is_file() or sha256(raw) != digest:
+                raise ValueError(f"trace-detail raw native plan {reference} is missing or does not match its digest")
+            raw_references.append(reference)
+
+        page_entries = [] if pages is None else pages
+        page_indices = []
+        for page in page_entries:
+            if not isinstance(page, dict):
+                raise ValueError(f"{path.name} contains an invalid trace-detail continuation page entry")
+            page_index = page.get("PageIndex")
+            page_reference = page.get("RawPlanReference")
+            page_digest = page.get("RawPlanSha256")
+            command_text = page.get("CommandText")
+            if (
+                isinstance(page_index, bool)
+                or not isinstance(page_index, int)
+                or page_index <= 0
+                or not safe_raw_plan_reference(page_reference)
+                or not isinstance(page_digest, str)
+                or not LOWER_SHA256.fullmatch(page_digest)
+                or not isinstance(command_text, str)
+                or not command_text.strip()
+            ):
+                raise ValueError(f"{path.name} contains an invalid trace-detail continuation page entry")
+            page_indices.append(page_index)
+            raw = path.parent / page_reference
+            if not raw.is_file() or sha256(raw) != page_digest:
+                raise ValueError(
+                    f"trace-detail page {page_index} raw native plan {page_reference} is missing or does not match its digest"
+                )
+            raw_references.append(page_reference)
+        expected_page_count = 1 if not reference else (
+            constituent["PublicRowBound"] + constituent["FiniteLimit"] - 1
+        ) // constituent["FiniteLimit"]
+        if page_indices != list(range(1, expected_page_count)):
+            raise ValueError(f"{path.name} contains non-sequential trace-detail continuation page indexes")
+
+    if trace_detail and sorted(constituent_names) != sorted(TRACE_DETAIL_CONSTITUENT_ROUTES):
+        raise ValueError(f"{path.name} does not account for every trace-detail constituent exactly once")
+    if len(raw_references) != len(set(raw_references)):
+        raise ValueError(f"{path.name} contains duplicate raw provider-plan references")
     return document
 
 
