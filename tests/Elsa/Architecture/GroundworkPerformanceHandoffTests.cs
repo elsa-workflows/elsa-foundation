@@ -229,7 +229,7 @@ public sealed class GroundworkPerformanceHandoffTests
         Assert.Contains("Dry run only", runner, StringComparison.Ordinal);
         Assert.Contains("require_idle_host()", runner, StringComparison.Ordinal);
         Assert.Contains("def process_pid(", runner, StringComparison.Ordinal);
-        Assert.Contains("next(csv.reader([stripped]))", runner, StringComparison.Ordinal);
+        Assert.Contains("next(csv.reader([stripped], strict=True))", runner, StringComparison.Ordinal);
         Assert.Contains("stripped.split(maxsplit=1)[0]", runner, StringComparison.Ordinal);
         Assert.Contains("process_pid(line, windows=windows) != own_pid", runner, StringComparison.Ordinal);
         Assert.DoesNotContain("own_pid not in line", runner, StringComparison.Ordinal);
@@ -322,6 +322,10 @@ assert collision_windows in result, result
 malformed_windows = '"dotnet.exe","not-a-pid","Console","1","12,345 K"'
 result, _ = run_guard("nt", malformed_windows)
 assert malformed_windows in result, result
+malformed_self_windows = '"dotnet.exe","1234","Console","1","12,345 K"junk'
+result, _ = run_guard("nt", malformed_self_windows)
+assert result is not None, "malformed Windows process row was treated as the current process"
+assert malformed_self_windows in result, result
 """;
 
         var result = RunPython(assertions, runnerPath);

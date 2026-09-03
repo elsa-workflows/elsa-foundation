@@ -348,7 +348,7 @@ def process_pid(line: str, *, windows: bool) -> int | None:
         return None
     if windows:
         try:
-            fields = next(csv.reader([stripped]))
+            fields = next(csv.reader([stripped], strict=True))
         except csv.Error:
             return None
         if len(fields) < 2:
