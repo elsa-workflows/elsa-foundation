@@ -64,7 +64,7 @@ def safe_raw_plan_reference(value: Any) -> bool:
         SAFE_RAW_PLAN_REFERENCE.fullmatch(value) is not None
         and not lowered.endswith((".process.json", ".native-plan.json"))
         and not lowered.startswith("artifact-manifest.")
-        and value not in ALLOWED_RESULT_FILES
+        and lowered not in ALLOWED_RESULT_FILES
     )
 
 

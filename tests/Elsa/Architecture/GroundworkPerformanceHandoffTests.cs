@@ -466,6 +466,13 @@ with tempfile.TemporaryDirectory() as directory:
     path.write_text(json.dumps(document), encoding="utf-8")
     validate_evidence(path, request, registration, timing=True)
 
+    reserved_plan = Path(directory) / "Gate.v1.json"
+    reserved_plan.write_text('{"plan":"reserved"}', encoding="utf-8")
+    reserved = json.loads(json.dumps(document))
+    reserved["TraceDetailConstituents"][1]["RawPlanReference"] = reserved_plan.name
+    reserved["TraceDetailConstituents"][1]["RawPlanSha256"] = hashlib.sha256(reserved_plan.read_bytes()).hexdigest()
+    expect_invalid(reserved, "mixed-case reserved result filename was accepted as raw-plan evidence")
+
     raw_plan.write_text("tampered", encoding="utf-8")
     expect_invalid(document, "tampered trace-detail raw plan was accepted")
     raw_plan.write_text('{"plan":"initial"}', encoding="utf-8")
