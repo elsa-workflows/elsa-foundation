@@ -169,14 +169,22 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
             File.WriteAllText(log, "log");
             File.WriteAllText(spanSecond, "span two");
 
-            var actual = DiagnosticsNativePlanCapture.RequireNativeArtifacts(
+            var beforeTraceDetail = new HashSet<string>(StringComparer.Ordinal) { before };
+            var spans = DiagnosticsNativePlanCapture.RequireNativeArtifacts(
                 directory.FullName,
-                new HashSet<string>(StringComparer.Ordinal) { before },
+                beforeTraceDetail,
                 "sqlite",
                 "elsa_otel_spans_trace_detail",
                 2);
+            var logs = DiagnosticsNativePlanCapture.RequireNativeArtifacts(
+                directory.FullName,
+                beforeTraceDetail,
+                "sqlite",
+                "elsa_otel_logs_trace_detail",
+                1);
 
-            Assert.Equal([spanFirst, spanSecond], actual);
+            Assert.Equal([spanFirst, spanSecond], spans);
+            Assert.Equal([log], logs);
         }
         finally
         {

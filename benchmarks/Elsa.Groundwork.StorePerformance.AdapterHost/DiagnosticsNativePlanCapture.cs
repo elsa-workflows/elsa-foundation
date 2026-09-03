@@ -307,7 +307,7 @@ internal static class DiagnosticsNativePlanCapture
         CancellationToken cancellationToken)
     {
         var specifications = DiagnosticsNativePlanContract.TraceDetailConstituents(request.Adapter);
-        var before = Directory.EnumerateFiles(explainDirectory).ToHashSet(StringComparer.Ordinal);
+        var beforeTraceDetail = Directory.EnumerateFiles(explainDirectory).ToHashSet(StringComparer.Ordinal);
         var detail = await client.OpenTelemetry.GetTraceAsync(
             DiagnosticsDurableHistoryWorkload.TraceIdForTesting(DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream - 1),
             cancellationToken);
@@ -417,7 +417,7 @@ internal static class DiagnosticsNativePlanCapture
             // and every provider-owned plan instead of treating a multi-page QueryAll as one route.
             var nativePaths = RequireNativeArtifacts(
                 explainDirectory,
-                before,
+                beforeTraceDetail,
                 request.Provider,
                 specification.IndexName,
                 queryCommands.Length);
@@ -493,7 +493,6 @@ internal static class DiagnosticsNativePlanCapture
                 specification.MaxInvocationCount,
                 pages.Skip(1).ToArray());
             evidence.Add(constituentEvidence);
-            before = Directory.EnumerateFiles(explainDirectory).ToHashSet(StringComparer.Ordinal);
         }
 
         if (mongo && mongoQueryOffset != mongoQueryCommands.Length)
