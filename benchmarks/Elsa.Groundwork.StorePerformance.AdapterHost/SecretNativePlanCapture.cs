@@ -439,14 +439,7 @@ internal static class SecretRoutePredicateInspector
         ArgumentNullException.ThrowIfNull(rawPlan);
         try
         {
-            using var document = JsonDocument.Parse(rawPlan);
-            var commands = new List<JsonElement>();
-            CollectAggregateCommands(document.RootElement, commands);
-            if (commands.Count != 1)
-                throw new PerformanceContractException(
-                    $"Secret MongoDB native plan must retain exactly one actual aggregate command and pipeline; observed {commands.Count}.");
-
-            var command = commands[0];
+            var command = MongoExplainCommandInspector.ExtractAggregateCommand(rawPlan);
             var collection = command.GetProperty("aggregate").GetString();
             if (string.IsNullOrWhiteSpace(collection))
                 throw new PerformanceContractException(
@@ -532,27 +525,6 @@ internal static class SecretRoutePredicateInspector
     private static bool IsLeftParameterOperand(IReadOnlyList<SqlToken> tokens, int index) =>
         tokens[index].Kind == SqlTokenKind.Parameter &&
         (index == 0 || IsExpressionBoundary(tokens[index - 1]));
-
-    private static void CollectAggregateCommands(JsonElement value, List<JsonElement> commands)
-    {
-        if (value.ValueKind == JsonValueKind.Object)
-        {
-            if (value.TryGetProperty("command", out var command) &&
-                command.ValueKind == JsonValueKind.Object &&
-                command.TryGetProperty("aggregate", out var aggregate) &&
-                aggregate.ValueKind == JsonValueKind.String &&
-                command.TryGetProperty("pipeline", out var pipeline) &&
-                pipeline.ValueKind == JsonValueKind.Array)
-                commands.Add(command.Clone());
-            foreach (var property in value.EnumerateObject())
-                CollectAggregateCommands(property.Value, commands);
-        }
-        else if (value.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var item in value.EnumerateArray())
-                CollectAggregateCommands(item, commands);
-        }
-    }
 
     private static bool MongoRequiresEquality(JsonElement value, string field)
     {

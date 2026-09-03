@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -297,16 +295,7 @@ public static class RuntimeNativePlanContract
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(provider);
         ArgumentNullException.ThrowIfNull(specification);
-        var composed = $"__groundwork_ix_{specification.TableName.Length}_{specification.TableName}_{specification.IndexName.Length}_{specification.IndexName}";
-        return provider switch
-        {
-            "mongodb" => specification.IndexName,
-            "sqlite" => composed,
-            "postgresql" => TruncatePhysicalIndex(composed, 63, 10),
-            "sqlserver" => TruncatePhysicalIndex(composed, 128, 12),
-            _ => throw new PerformanceContractException(
-                $"Runtime native-plan admission does not support provider '{provider}'.")
-        };
+        return GroundworkPhysicalIndexNames.For(provider, specification.TableName, specification.IndexName);
     }
 
     /// <summary>
@@ -832,12 +821,6 @@ public static class RuntimeNativePlanContract
         };
         return value.EnumerateObject().Count() == 1 && value.TryGetProperty(expected, out _);
     }
-
-    private static string TruncatePhysicalIndex(string composed, int maximumLength, int digestLength) =>
-        composed.Length <= maximumLength
-            ? composed
-            : composed[..(maximumLength - digestLength - 1)] + "_" +
-              Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(composed)))[..digestLength].ToLowerInvariant();
 
     private static bool TryFiniteLimit(JsonElement value, int expected) =>
         value.TryGetInt32(out var actual) && actual == expected;

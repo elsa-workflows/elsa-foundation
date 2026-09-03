@@ -74,8 +74,10 @@ public sealed class GroundworkV2StructuredLogStoreTests
         Assert.Equal("elsa_structured_logs_retention", unit.RetentionIdempotency!.LedgerName);
         Assert.NotEqual(unit.AppendIdempotency.LedgerName, unit.RetentionIdempotency.LedgerName);
         Assert.Equal(
-            ["elsa_structured_logs_category", "elsa_structured_logs_level", "elsa_structured_logs_replay", "elsa_structured_logs_source"],
+            ["elsa_structured_logs_category", "elsa_structured_logs_level", "elsa_structured_logs_replay", "elsa_structured_logs_sequence_order", "elsa_structured_logs_source"],
             unit.Indexes.Select(index => index.Name).Order(StringComparer.Ordinal));
+        var order = Assert.Single(unit.Indexes, index => index.Name == "elsa_structured_logs_sequence_order");
+        Assert.Equal([new IndexColumn(StructuredLogsGroundworkStorageSchema.SequenceField, SortDirection.Descending)], order.Columns);
     }
 
     [Fact]

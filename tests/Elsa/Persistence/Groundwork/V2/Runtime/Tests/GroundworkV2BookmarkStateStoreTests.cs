@@ -8,11 +8,14 @@ using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Sqlite;
+using Groundwork.SqlServer;
 using Groundwork.Store;
 using Xunit;
+using Xunit.Sdk;
 
 namespace Elsa.Persistence.Groundwork.V2.Runtime.Tests;
 
+[Collection(GroundworkV2NativeProviderMatrixCollection.Name)]
 public sealed class GroundworkV2BookmarkStateStoreTests
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -132,9 +135,37 @@ public sealed class GroundworkV2BookmarkStateStoreTests
         await store.SaveAsync(Bookmark(workflowExecutionId, bookmarkId, "HttpEndpoint", "h1"));
 
         var physicalId = PhysicalId(workflowExecutionId, bookmarkId);
-        Assert.Equal(264, physicalId.Length);
-        Assert.True(physicalId.Length <= ElsaRuntimeV2StorageManifest.IdMaximumLength);
+        Assert.Equal(ElsaRuntimeV2StorageManifest.RuntimeCompositeIdMaximumLength, physicalId.Length);
+        var idColumn = Assert.Single(unit.Columns, column => column.Name == ElsaRuntimeV2StorageManifest.IdField);
+        Assert.True(physicalId.Length <= idColumn.MaxLength);
         Assert.NotNull(await store.FindAsync(workflowExecutionId, bookmarkId));
+    }
+
+    [SkippableFact]
+    public async Task Sqlserver_round_trips_the_maximum_composite_identity_through_stimulus_lookup()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("GROUNDWORK_V2_SQLSERVER_CONNECTION_STRING");
+        Skip.If(
+            string.IsNullOrWhiteSpace(connectionString),
+            "Set GROUNDWORK_V2_SQLSERVER_CONNECTION_STRING to run the SQL Server bookmark identity gate.");
+        using var connection = new SqlServerProviderFactory().Create(connectionString!);
+        var unit = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind);
+        connection.Schema.Apply(unit);
+        var workflowExecutionId = new string('w', ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength);
+        var bookmarkId = new string('b', ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength);
+        var tenant = $"bookmark-budget-{Guid.NewGuid():N}";
+        var source = new DirectSessionSource(connection, unit);
+        var accessor = new TestAccessContextAccessor(
+            PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
+        IBookmarkStateStore store = new GroundworkV2BookmarkStateStore(source, accessor);
+        var bookmark = Bookmark(workflowExecutionId, bookmarkId, "HttpEndpoint", "h1");
+
+        await store.SaveAsync(bookmark);
+
+        Assert.Equal(bookmarkId, (await store.FindAsync(workflowExecutionId, bookmarkId))!.BookmarkId);
+        var byStimulus = await ((IBookmarkStimulusIndex)store).ListByStimulusPageAsync(
+            new BookmarkStimulusPageQuery("HttpEndpoint", "h1", limit: 1));
+        Assert.Equal(bookmarkId, Assert.Single(byStimulus.Items).BookmarkId);
     }
 
     [Fact]

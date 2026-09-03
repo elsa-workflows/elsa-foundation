@@ -215,29 +215,34 @@ internal static class ProviderProbe
             connectionType,
             version,
             MongoTopology(hello),
-            new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["retry_reads"] = settings.RetryReads.ToString(),
-                ["retry_writes"] = settings.RetryWrites.ToString(),
-                ["direct_connection"] = settings.DirectConnection.ToString(),
-                ["load_balanced"] = settings.LoadBalanced.ToString(),
-                ["max_pool_size"] = settings.MaxConnectionPoolSize.ToString(),
-                ["min_pool_size"] = settings.MinConnectionPoolSize.ToString(),
-                ["wait_queue_timeout"] = settings.WaitQueueTimeout.ToString(),
-                ["connect_timeout"] = settings.ConnectTimeout.ToString(),
-                ["selection_timeout"] = settings.ServerSelectionTimeout.ToString(),
-                ["socket_timeout"] = settings.SocketTimeout.ToString(),
-                ["heartbeat_interval"] = settings.HeartbeatInterval.ToString(),
-                ["heartbeat_timeout"] = settings.HeartbeatTimeout.ToString(),
-                ["use_tls"] = settings.UseTls.ToString(),
-                ["tls_insecure"] = settings.AllowInsecureTls.ToString(),
-                ["read_concern"] = settings.ReadConcern?.Level.ToString() ?? "default",
-                ["read_preference"] = settings.ReadPreference?.ReadPreferenceMode.ToString() ?? "default",
-                ["write_concern"] = settings.WriteConcern?.W.ToString() ?? "default",
-                ["write_concern_timeout"] = settings.WriteConcern?.WTimeout.ToString() ?? "default",
-                ["options_digest"] = ConnectionOptionsDigest(connectionString)
-            });
+            MongoConfiguration(settings, connectionString));
     }
+
+    internal static IReadOnlyDictionary<string, string> MongoConfiguration(
+        MongoClientSettings settings,
+        string connectionString) =>
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["retry_reads"] = settings.RetryReads.ToString(),
+            ["retry_writes"] = settings.RetryWrites.ToString(),
+            ["direct_mode"] = settings.DirectConnection.ToString(),
+            ["load_balanced"] = settings.LoadBalanced.ToString(),
+            ["max_pool_size"] = settings.MaxConnectionPoolSize.ToString(),
+            ["min_pool_size"] = settings.MinConnectionPoolSize.ToString(),
+            ["wait_queue_timeout"] = settings.WaitQueueTimeout.ToString(),
+            ["connect_timeout"] = settings.ConnectTimeout.ToString(),
+            ["selection_timeout"] = settings.ServerSelectionTimeout.ToString(),
+            ["socket_timeout"] = settings.SocketTimeout.ToString(),
+            ["heartbeat_interval"] = settings.HeartbeatInterval.ToString(),
+            ["heartbeat_timeout"] = settings.HeartbeatTimeout.ToString(),
+            ["use_tls"] = settings.UseTls.ToString(),
+            ["tls_insecure"] = settings.AllowInsecureTls.ToString(),
+            ["read_concern"] = settings.ReadConcern?.Level?.ToString() ?? "default",
+            ["read_preference"] = settings.ReadPreference?.ReadPreferenceMode.ToString() ?? "default",
+            ["write_concern"] = settings.WriteConcern?.W?.ToString() ?? "default",
+            ["write_concern_timeout"] = settings.WriteConcern?.WTimeout?.ToString() ?? "default",
+            ["options_digest"] = ConnectionOptionsDigest(connectionString)
+        };
 
     private static bool IsMemory(SqliteConnectionStringBuilder settings) =>
         settings.Mode == SqliteOpenMode.Memory ||

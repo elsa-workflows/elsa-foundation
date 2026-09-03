@@ -44,10 +44,11 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 /// 2. <c>GroundworkStorageSessionSource</c> admits its units from <c>IHostedService.StartAsync</c> /
 ///    <c>IShellInitializer.InitializeAsync</c>. A plain <c>BuildServiceProvider()</c> runs neither, so a
 ///    direct host must drive admission itself or every session resolves against an unadmitted unit.
-/// 3. The observer is registered as a singleton <see cref="IProviderCommandObserver"/>, which
-///    <c>GroundworkStorageSessionSource</c> resolves once for its lifetime and forwards to every session
-///    and unit of work it opens — both forwarding points, because the commit path runs through units of
-///    work. That is what makes the measured path the production commit path rather than a reconstruction.
+/// 3. The observer is registered as a singleton <see cref="IProviderCommandObserver"/>. Runtime stores
+///    receive it through <c>GroundworkStorageSessionSource</c>; diagnostics stores receive it through their
+///    composition features because they own their sessions and units of work directly. Both paths forward
+///    the same observer to every provider command, so the measured path is production code rather than a
+///    reconstruction.
 /// </summary>
 internal sealed class RuntimeStoreComposition : IAsyncDisposable
 {
@@ -147,9 +148,9 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
                 structuredLogsOptions,
                 openTelemetryOptions);
 
-            // The observer GroundworkStorageSessionSource resolves and forwards to every session and unit
-            // of work it opens. Singleton because the harness snapshots one cumulative count for the
-            // process, and both clients must contribute to the same total.
+            // Runtime's session source and diagnostics' direct-session features both resolve and forward
+            // this observer. Singleton because the harness snapshots one cumulative count for the process,
+            // and both clients must contribute to the same total.
             services.AddSingleton<IProviderCommandObserver>(observer);
 
             // Recovery continuations must be authenticated even though the key is only a local composition

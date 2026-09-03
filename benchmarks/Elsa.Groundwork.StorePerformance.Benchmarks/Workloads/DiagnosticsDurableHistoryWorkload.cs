@@ -423,13 +423,24 @@ public sealed class DiagnosticsDurableHistoryWorkload
 
     private static async Task AppendOpenTelemetryAsync(DiagnosticsDurableHistoryClient client, CancellationToken cancellationToken)
     {
-        var remaining = AppendedPerStream;
+        foreach (var batch in OpenTelemetryBatches(AppendedPerStream, bindSignalsToLatestTrace: false))
+            await client.OpenTelemetry.WriteAsync(batch, cancellationToken);
+    }
+
+    internal static IEnumerable<OpenTelemetryBatch> OpenTelemetryBatches(
+        int recordCount,
+        bool bindSignalsToLatestTrace,
+        int batchSize = 0)
+    {
+        batchSize = batchSize <= 0 ? NormalizedRecordsPerOtlpBatch : batchSize;
+        var remaining = recordCount;
         var index = 0;
         var resourcesWritten = 0;
         var instrumentsWritten = 0;
+        var selectedTraceId = TraceIdFor(RetainedRecordsPerStream - 1);
         while (remaining > 0)
         {
-            var size = Math.Min(NormalizedRecordsPerOtlpBatch, remaining);
+            var size = Math.Min(batchSize, remaining);
 
             // The catalogs are mutable keyed upserts, not record streams: emit each resource and instrument
             // exactly once so their inspected counts are the frozen catalog sizes rather than the record
@@ -451,18 +462,16 @@ public sealed class DiagnosticsDurableHistoryWorkload
             {
                 var service = ServiceNameFor(index % ResourceCount);
                 traces.Add(TraceFor(index, service));
-                spans.Add(SpanFor(index, service));
+                spans.Add(SpanFor(index, service, bindSignalsToLatestTrace ? selectedTraceId : null));
                 points.Add(MetricPointFor(index, service));
-                records.Add(LogRecordFor(index, service));
+                records.Add(LogRecordFor(index, service, bindSignalsToLatestTrace ? selectedTraceId : null));
             }
 
-            await client.OpenTelemetry.WriteAsync(
-                new OpenTelemetryBatch(resources, traces, spans, instruments, points, records),
-                cancellationToken);
+            yield return new OpenTelemetryBatch(resources, traces, spans, instruments, points, records);
             remaining -= size;
         }
 
-        if (index != AppendedPerStream || resourcesWritten != ResourceCount || instrumentsWritten != InstrumentCount)
+        if (index != recordCount || resourcesWritten != ResourceCount || instrumentsWritten != InstrumentCount)
             throw new InvalidOperationException("The OpenTelemetry fan-out did not emit the frozen record, resource and instrument totals.");
     }
 
@@ -528,13 +537,10 @@ public sealed class DiagnosticsDurableHistoryWorkload
     /// <summary>Setup-only fixture used by the official native-plan capture command. Its physical
     /// cardinalities match the frozen workload so every retained route fact is grounded in the same
     /// candidate populations; setup remains outside measured operations.</summary>
-    internal static OpenTelemetryBatch NativePlanFixtureBatch() => new(
-        Enumerable.Range(0, ResourceCount).Select(ordinal => ResourceFor(ordinal, ServiceNameFor(ordinal))).ToArray(),
-        Enumerable.Range(0, RetainedRecordsPerStream).Select(index => TraceFor(index, ServiceNameFor(index))).ToArray(),
-        Enumerable.Range(0, RetainedRecordsPerStream).Select(index => SpanFor(index, ServiceNameFor(index))).ToArray(),
-        Enumerable.Range(0, InstrumentCount).Select(ordinal => InstrumentFor(ordinal, ServiceNameFor(ordinal))).ToArray(),
-        Enumerable.Range(0, RetainedRecordsPerStream).Select(index => MetricPointFor(index, ServiceNameFor(index))).ToArray(),
-        Enumerable.Range(0, RetainedRecordsPerStream).Select(index => LogRecordFor(index, ServiceNameFor(index))).ToArray());
+    internal static IEnumerable<OpenTelemetryBatch> NativePlanFixtureBatches() =>
+        OpenTelemetryBatches(
+            RetainedRecordsPerStream,
+            bindSignalsToLatestTrace: true);
 
     private static StructuredLogEntry StructuredLogEntryFor(int index, string category, string sourceId) => new()
     {
@@ -587,9 +593,9 @@ public sealed class DiagnosticsDurableHistoryWorkload
         [$"workflow-{index % ResourceCount:D4}"],
         1);
 
-    private static TelemetrySpan SpanFor(int index, string serviceName) => new(
+    private static TelemetrySpan SpanFor(int index, string serviceName, string? traceId = null) => new(
         $"span-row-{index:D8}",
-        TraceIdFor(index),
+        traceId ?? TraceIdFor(index),
         SpanIdFor(index),
         null,
         $"resource-{index % ResourceCount:D4}",
@@ -625,14 +631,14 @@ public sealed class DiagnosticsDurableHistoryWorkload
         TraceIdFor(index),
         SpanIdFor(index));
 
-    private static OtlpLogRecord LogRecordFor(int index, string serviceName) => new(
+    private static OtlpLogRecord LogRecordFor(int index, string serviceName, string? traceId = null) => new(
         $"otlp-log-{index:D8}",
         $"resource-{index % ResourceCount:D4}",
         FixedNowUtc.AddMilliseconds(index),
         "Information",
         9,
         PayloadFor(index),
-        TraceIdFor(index),
+        traceId ?? TraceIdFor(index),
         SpanIdFor(index),
         new Dictionary<string, string?>(StringComparer.Ordinal) { ["spec094.service"] = serviceName });
 

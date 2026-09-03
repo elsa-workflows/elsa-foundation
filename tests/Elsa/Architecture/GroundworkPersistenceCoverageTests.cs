@@ -39,6 +39,18 @@ public sealed class GroundworkPersistenceCoverageTests
         Assert.Empty(findings);
     }
 
+    [Theory]
+    [InlineData("IRuntimeRecoveryPagedScanner")]
+    [InlineData("IRuntimeRecoverySweepCursorStore")]
+    public void Runtime_recovery_support_contracts_have_an_explicit_non_persistence_classification(string contract)
+    {
+        var findings = Reconcile(
+            ReadLedger(),
+            Inventory(durableContracts: [contract]));
+
+        Assert.Empty(findings);
+    }
+
     [Fact]
     public void Workflow_dispatch_registration_matches_its_manifest_storage_unit()
     {

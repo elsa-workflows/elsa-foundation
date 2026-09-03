@@ -44,6 +44,7 @@ public sealed class GroundworkStructuredLogStore :
     private readonly StorageUnit unit;
     private readonly int maxRecentQuerySize;
     private readonly int maxRetainedEntries;
+    private readonly IProviderCommandObserver? commandObserver;
     private readonly DiagnosticsDrain<PendingAppend, StructuredLogEntry> drain;
     private readonly V2StartupResource? startupResource;
     private int disposed;
@@ -75,6 +76,7 @@ public sealed class GroundworkStructuredLogStore :
         unit = session.Unit;
         maxRecentQuerySize = Math.Clamp(options.Value.MaxRecentQuerySize, 1, DefaultMaxRecentQuerySize);
         this.maxRetainedEntries = maxRetainedEntries;
+        commandObserver = null;
         drain = CreateDrain(options.Value, retentionInterval, observer);
     }
 
@@ -88,7 +90,8 @@ public sealed class GroundworkStructuredLogStore :
         StructuredLogStoreBinding binding,
         int maxRetainedEntries = 100_000,
         int retentionInterval = 5_000,
-        IDiagnosticsPersistenceObserver? observer = null)
+        IDiagnosticsPersistenceObserver? observer = null,
+        IProviderCommandObserver? commandObserver = null)
     {
         ArgumentNullException.ThrowIfNull(connection);
         ArgumentNullException.ThrowIfNull(options);
@@ -103,6 +106,7 @@ public sealed class GroundworkStructuredLogStore :
         unit = StructuredLogsGroundworkStorageSchema.CreateUnit();
         maxRecentQuerySize = Math.Clamp(options.Value.MaxRecentQuerySize, 1, DefaultMaxRecentQuerySize);
         this.maxRetainedEntries = maxRetainedEntries;
+        this.commandObserver = commandObserver;
         startupResource = new(this, connection);
         drain = CreateDrain(options.Value, retentionInterval, observer);
     }
@@ -144,7 +148,13 @@ public sealed class GroundworkStructuredLogStore :
         if (limit == 0)
             return Task.FromResult<IReadOnlyList<StructuredLogEntry>>([]);
 
-        var page = GetSession().Query(Query(StructuredLogGroundworkQuery.All, limit, descending: true, BuildFilter(filter)));
+        var predicate = BuildFilter(filter);
+        var page = Query(
+            StructuredLogGroundworkQuery.All,
+            limit,
+            descending: true,
+            predicate,
+            predicate is null ? StructuredLogsGroundworkStorageSchema.SequenceOrderIndex : null);
         var entries = page.Rows.Select(ToEntry).Where(filter.Matches).ToList();
         entries.Reverse();
         return Task.FromResult<IReadOnlyList<StructuredLogEntry>>(entries);
@@ -153,7 +163,11 @@ public sealed class GroundworkStructuredLogStore :
     public Task<StructuredLogReplayCursor?> GetTailCursorAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var page = GetSession().Query(Query(StructuredLogGroundworkQuery.All, 1, descending: true));
+        var page = Query(
+            StructuredLogGroundworkQuery.All,
+            1,
+            descending: true,
+            selectedIndex: StructuredLogsGroundworkStorageSchema.SequenceOrderIndex);
         return Task.FromResult<StructuredLogReplayCursor?>(page.Rows.Count == 0 ? null : ToEntry(page.Rows[0]).ReplayCursor);
     }
 
@@ -185,7 +199,12 @@ public sealed class GroundworkStructuredLogStore :
                 Bound.Exclusive(QueryConstant.Of(Columns.Sequence, lower)),
                 Bound.Inclusive(QueryConstant.Of(Columns.Sequence, snapshot)))
         };
-        var page = GetSession().Query(Query(StructuredLogGroundworkQuery.All, Math.Min(maxCount, maxRecentQuerySize), false, new Predicate.And(predicates)));
+        var page = Query(
+            StructuredLogGroundworkQuery.All,
+            Math.Min(maxCount, maxRecentQuerySize),
+            false,
+            new Predicate.And(predicates),
+            StructuredLogsGroundworkStorageSchema.SequenceOrderIndex);
         var scanned = page.Rows.Select(ToEntry).ToArray();
         var next = scanned.Length == 0 ? afterCursor : scanned[^1].ReplayCursor;
         return Task.FromResult(new StructuredLogReadPage(scanned.Where(filter.Matches).ToArray(), next, page.NextContinuationToken is not null));
@@ -249,11 +268,12 @@ public sealed class GroundworkStructuredLogStore :
         if (!GroundworkReplayCursorCodec.TryDecode(cursor, binding, out var parts))
             throw new StructuredLogReplayCursorUnavailableException();
         var tokenColumn = Columns.ReplayToken;
-        var page = GetSession().Query(Query(
+        var page = Query(
             StructuredLogGroundworkQuery.Anchor,
             2,
             descending: false,
-            new Predicate.Equal(tokenColumn, QueryConstant.Of(tokenColumn, parts.RecordToken))));
+            new Predicate.Equal(tokenColumn, QueryConstant.Of(tokenColumn, parts.RecordToken)),
+            StructuredLogsGroundworkStorageSchema.ReplayIndex);
         if (page.Rows.Count != 1)
             throw new StructuredLogReplayCursorUnavailableException();
         var row = page.Rows[0];
@@ -264,22 +284,25 @@ public sealed class GroundworkStructuredLogStore :
         return new(Convert.ToInt64(row[StructuredLogsGroundworkStorageSchema.SequenceField], System.Globalization.CultureInfo.InvariantCulture));
     }
 
-    private QueryRequest Query(
+    private QueryMaterializedResult Query(
         StructuredLogGroundworkQuery query,
         int limit,
         bool descending,
-        Predicate? predicate = null)
+        Predicate? predicate = null,
+        string? selectedIndex = null)
     {
         var order = ImmutableArray.Create(new OrderTerm(
             Columns.Sequence,
             descending ? OrderDirection.Descending : OrderDirection.Ascending,
             descending ? NullOrder.First : NullOrder.Last));
-        return new(
-            new TableId(unit.Name),
-            predicate ?? new Predicate.AlwaysTrue(),
-            order,
-            Projection.All,
-            Paging.Keyset(limit));
+        return GetSession().Query(
+            new QueryRequest(
+                new TableId(unit.Name),
+                predicate ?? new Predicate.AlwaysTrue(),
+                order,
+                Projection.All,
+                Paging.Keyset(limit)),
+            unit.CreateQueryRenderOptions(selectedIndex));
     }
 
     private Predicate? BuildFilter(StructuredLogFilter filter)
@@ -550,7 +573,8 @@ public sealed class GroundworkStructuredLogStore :
                 connection.Schema.Apply(owner.unit);
                 var opened = connection.OpenSession(
                     owner.unit,
-                    StorageAccess.Scoped(StructuredLogsGroundworkStorageSchema.ScopeFor(owner.binding)));
+                    StorageAccess.Scoped(StructuredLogsGroundworkStorageSchema.ScopeFor(owner.binding)),
+                    owner.commandObserver);
                 owner.PublishSession(opened);
                 var created = new V2ResourceLease(owner);
                 lock (gate)

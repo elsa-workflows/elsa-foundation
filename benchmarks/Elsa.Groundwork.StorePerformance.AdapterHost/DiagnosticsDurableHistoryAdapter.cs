@@ -7,6 +7,8 @@ using Elsa.Diagnostics.StructuredLogs.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
+using Groundwork.Store;
+using Microsoft.Data.Sqlite;
 
 namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 
@@ -31,6 +33,7 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
     private readonly WritePathRoundTripObserver observer = new(request.Provider, captureCommands: true);
     private readonly List<RuntimeStoreComposition> compositions = [];
     private readonly List<DiagnosticsDurableHistoryClient> clients = [];
+    private IStorageProviderConnection? connection;
     private ProviderProbe.Result? observedProvider;
 
     public IProviderRoundTripObserver? RoundTripObserver => observer;
@@ -60,6 +63,7 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
             throw new PerformanceContractException(
                 $"Provider '{request.Provider}' reports version '{observedProvider.Version}', not the requested '{request.ProviderVersion}'.");
 
+        connection = ProviderConnections.Open(request.Provider, connectionString);
         try
         {
             await OpenCompositionAsync("primary", "primary", cancellationToken);
@@ -93,7 +97,8 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
             {
                 RouteContract = evidence.RouteContract,
                 BlockedRoutes = evidence.BlockedRoutes ?? [],
-                OracleObservations = evidence.OracleObservations ?? []
+                OracleObservations = evidence.OracleObservations ?? [],
+                TraceDetailConstituents = evidence.TraceDetailConstituents ?? []
             });
     }
 
@@ -137,11 +142,19 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
 
     public async ValueTask DisposeAsync()
     {
-        foreach (var composition in compositions.AsEnumerable().Reverse())
-            await composition.DisposeAsync();
-        compositions.Clear();
-        clients.Clear();
-        observedProvider = null;
+        try
+        {
+            foreach (var composition in compositions.AsEnumerable().Reverse())
+                await composition.DisposeAsync();
+        }
+        finally
+        {
+            connection?.Dispose();
+            connection = null;
+            compositions.Clear();
+            clients.Clear();
+            observedProvider = null;
+        }
     }
 
     private async Task OpenCompositionAsync(
@@ -155,6 +168,8 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
             $"{persistenceScope}-{suffix}",
             cancellationToken,
             observer,
+            connection ?? throw new PerformanceContractException(
+                "The diagnostics adapter has no shared provider connection; PrepareAsync must run first."),
             includeGroundworkDiagnostics: true,
             structuredLogBinding: new StructuredLogStoreBinding(
                 TenantFor(bindingScope),
@@ -190,6 +205,27 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
             ReferenceEquals(first.OpenTelemetry, second.OpenTelemetry))
             throw new PerformanceContractException(
                 "Diagnostics correctness requires independently composed public store clients.");
+    }
+
+    private static async ValueTask<T> ReadDurabilityProbeAsync<T>(
+        Func<CancellationToken, ValueTask<T>> read,
+        DateTime deadline,
+        string timeoutMessage,
+        CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            try
+            {
+                return await read(cancellationToken);
+            }
+            catch (SqliteException exception) when (exception.SqliteErrorCode is 5 or 6)
+            {
+                if (DateTime.UtcNow >= deadline)
+                    throw new PerformanceContractException(timeoutMessage);
+                await Task.Delay(50, cancellationToken);
+            }
+        }
     }
 
     private string TenantFor(string scope) => BindingTenantFor(request, scope);
@@ -298,7 +334,11 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
         {
             var target = Interlocked.Read(ref expectedHighWater);
             var deadline = DateTime.UtcNow + TimeSpan.FromMinutes(30);
-            while (await inner.GetHighWaterMarkAsync(cancellationToken) < target)
+            while (await ReadDurabilityProbeAsync(
+                       token => new ValueTask<long>(inner.GetHighWaterMarkAsync(token)),
+                       deadline,
+                       "Structured-log durability did not become visible within the untimed flush budget.",
+                       cancellationToken) < target)
             {
                 if (DateTime.UtcNow >= deadline)
                     throw new PerformanceContractException("Structured-log durability did not become visible within the untimed flush budget.");
@@ -307,7 +347,7 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
         }
     }
 
-    private sealed class TrackingOpenTelemetryStore(IOpenTelemetryStore inner) : IOpenTelemetryStore
+    internal sealed class TrackingOpenTelemetryStore(IOpenTelemetryStore inner) : IOpenTelemetryStore
     {
         private int expectedTraces;
         private int expectedSpans;
@@ -349,14 +389,22 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
             var deadline = DateTime.UtcNow + TimeSpan.FromMinutes(30);
             while (true)
             {
-                var diagnostics = await inner.GetDiagnosticsAsync(cancellationToken);
+                var diagnostics = await ReadDurabilityProbeAsync(
+                    inner.GetDiagnosticsAsync,
+                    deadline,
+                    "OpenTelemetry durability did not become visible within the untimed flush budget.",
+                    cancellationToken);
                 if (diagnostics.TraceCount >= Math.Min(traces, diagnostics.TraceCapacity) &&
                     diagnostics.SpanCount >= Math.Min(spans, diagnostics.SpanCapacity) &&
                     diagnostics.MetricPointCount >= Math.Min(points, diagnostics.MetricPointCapacity) &&
                     diagnostics.LogRecordCount >= Math.Min(logs, diagnostics.LogRecordCapacity) &&
                     diagnostics.ResourceCount >= Math.Min(resources, DiagnosticsDurableHistoryWorkload.ResourceCount) &&
                     diagnostics.MetricInstrumentCount >= Math.Min(instruments, DiagnosticsDurableHistoryWorkload.InstrumentCount) &&
-                    (lastTraceId is null || await inner.GetTraceAsync(lastTraceId, cancellationToken) is not null))
+                    (lastTraceId is null || await ReadDurabilityProbeAsync(
+                        token => inner.GetTraceAsync(lastTraceId, token),
+                        deadline,
+                        "OpenTelemetry durability did not become visible within the untimed flush budget.",
+                        cancellationToken) is not null))
                     return;
                 if (DateTime.UtcNow >= deadline)
                     throw new PerformanceContractException("OpenTelemetry durability did not become visible within the untimed flush budget.");

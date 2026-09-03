@@ -499,6 +499,53 @@ public sealed class GroundworkV2RuntimeCheckpointWriterTests
     }
 
     [Fact]
+    public async Task Activity_scope_cleanup_refuses_a_scheduler_physical_identity_collision()
+    {
+        var source = new MemorySource();
+        var unit = ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind;
+        var requestedWorkItemId = new string('x', 417);
+        var foreignWorkItemId = new string('y', 417);
+        var physicalId = GroundworkV2SchedulerWorkStorageConventions.PhysicalId("workflow-1", requestedWorkItemId);
+        var foreign = SchedulerWorkValues(
+            "workflow-1",
+            foreignWorkItemId,
+            "owner-a",
+            1,
+            DateTimeOffset.UtcNow.AddMinutes(1));
+        var values = foreign.Values.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        values[ElsaRuntimeV2StorageManifest.IdField] = physicalId;
+        source.ReplaceRow("tenant-a", unit, physicalId, new StorageValues(values), version: 1);
+        var changes = new RuntimeCheckpointStateChangeSet(
+            null, null, [], [], [], [], [],
+            workflowDispatches: null,
+            activityExecutionInspections: null,
+            postCommitOutbox: null,
+            activityScopeCleanups:
+            [
+                new ActivityScopeCleanupRequest(
+                    "workflow-1",
+                    "scope-1",
+                    ["scope-1"],
+                    [],
+                    [],
+                    [requestedWorkItemId])
+            ],
+            workflowDispatchCancellations: null);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            NewWriter(source)
+                .CommitAsync(NewCommit("cleanup-collision") with { StateChanges = changes }, Immediate())
+                .AsTask());
+
+        Assert.Contains("physical identity collision", exception.Message, StringComparison.Ordinal);
+        Assert.NotNull(source.Find(unit, physicalId, "tenant-a"));
+        Assert.Null(source.Find(
+            ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind,
+            "cleanup-collision",
+            "tenant-a"));
+    }
+
+    [Fact]
     public async Task Boundary_validation_rejects_cross_workflow_and_reserved_ownership_before_provider_io()
     {
         var source = new MemorySource();

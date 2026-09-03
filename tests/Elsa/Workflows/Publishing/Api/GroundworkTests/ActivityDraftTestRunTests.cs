@@ -748,6 +748,7 @@ public sealed class ActivityDraftTestRunTests
         Func<IWorkflowExecutableSourceReferenceStore, IWorkflowExecutableSourceReferenceStore>? decorateSourceReferences = null)
     {
         var services = new ServiceCollection();
+        ConfigureStableRecoveryContinuations(services);
         services.AddLogging();
         services.AddSingleton(clock);
         services.AddSingleton<TimeProvider>(clock);
@@ -833,6 +834,7 @@ public sealed class ActivityDraftTestRunTests
         IExternalPayloadStore? externalPayloadStore = null)
     {
         var services = new ServiceCollection();
+        ConfigureStableRecoveryContinuations(services);
         services.AddLogging();
         services.AddSingleton(clock);
         services.AddSingleton<TimeProvider>(clock);
@@ -851,7 +853,12 @@ public sealed class ActivityDraftTestRunTests
         return services.BuildServiceProvider();
     }
 
+    private static void ConfigureStableRecoveryContinuations(IServiceCollection services) =>
+        services.Configure<RuntimeRecoveryContinuationOptions>(options =>
+            options.SigningKey = RecoveryContinuationSigningKey);
+
     private const string DefaultScope = "default";
+    private const string RecoveryContinuationSigningKey = "activity-draft-test-run-recovery-key-32-bytes";
 
     /// <summary>
     /// The shipped allow-all adapter reports "all-tenants", which the v2 hierarchy store refuses: it requires

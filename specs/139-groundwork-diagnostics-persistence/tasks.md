@@ -206,15 +206,18 @@
     diagnostic streams while runtime session opening stays read-only. Focused diagnostics,
     adapter, composition, and unified-host gates passed as summarized in `quickstart.md`.
 
-### Groundwork 0.4.0-preview.8 consumption checkpoint
+### Groundwork 0.4.0-preview.9 consumption checkpoint
 
 - Central props and explicit project/script overrides consume the published
-  [`v0.4.0-preview.8`](https://github.com/valence-works/groundwork-v2/releases/tag/v0.4.0-preview.8)
-  family at Groundwork commit `372ea1445485e0a08aa412436d0f3f9253bf0270`. Its Feedz publication
-  and verification workflow passed, and Elsa restored and tested the family from a fresh NuGet cache.
-  The earlier ordinal-identity query and index-shape findings were fixed before publication. Existing
-  NU1903 SSH.NET warnings remain. This is published-package compatibility evidence only, not
-  four-provider promotion, #646 performance evidence, EF deletion, or #642 completion.
+  [`v0.4.0-preview.9`](https://github.com/valence-works/groundwork-v2/releases/tag/v0.4.0-preview.9)
+  family at Groundwork commit `408210729ec054368b0cf959274fdc26e04a8393`. Its Feedz publication
+  and verification workflow passed, and Elsa's isolated package-only consumer passed against the
+  exact release artifact.
+  The preview.9 observer contract supplies the structured, redacted MongoDB point-read identity
+  required by the trace-detail evidence; the earlier ordinal-identity query and index-shape fixes
+  remain part of the published family. Existing NU1903 SSH.NET warnings remain. This is
+  published-package compatibility evidence only, not four-provider promotion, #646 performance
+  evidence, EF deletion, or #642 completion.
 
 ### Historical exact 0.4.0-preview.3 recertification checkpoint (immutable)
 

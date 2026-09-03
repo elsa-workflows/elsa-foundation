@@ -45,6 +45,7 @@ public sealed class GroundworkOpenTelemetryStore :
     private readonly int instrumentCapacity;
     private readonly int maxQuerySize;
     private readonly TimeProvider timeProvider;
+    private readonly IProviderCommandObserver? commandObserver;
     private long droppedTraces;
     private long droppedSpans;
     private long droppedMetricPoints;
@@ -56,7 +57,8 @@ public sealed class GroundworkOpenTelemetryStore :
         V2OpenTelemetryBinding binding,
         TimeProvider? timeProvider = null,
         IOpenTelemetrySourceRegistry? sourceRegistry = null,
-        IDiagnosticsPersistenceObserver? observer = null)
+        IDiagnosticsPersistenceObserver? observer = null,
+        IProviderCommandObserver? commandObserver = null)
     {
         this.connection = connection ?? throw new ArgumentNullException(nameof(connection));
         ArgumentNullException.ThrowIfNull(options);
@@ -64,6 +66,7 @@ public sealed class GroundworkOpenTelemetryStore :
         binding.Validate();
         this.sourceRegistry = sourceRegistry;
         this.timeProvider = timeProvider ?? TimeProvider.System;
+        this.commandObserver = commandObserver;
         schema = new();
         sessions = new();
         (traceCapacity, spanCapacity, metricPointCapacity, logCapacity, resourceCapacity, instrumentCapacity, maxQuerySize) =
@@ -117,20 +120,33 @@ public sealed class GroundworkOpenTelemetryStore :
             return new([], sourceRegistry?.DroppedCount ?? 0);
 
         var predicates = new List<Predicate>();
-        AddEqual(predicates, ResourceColumns.ServiceName, filter.ServiceName);
+        AddEqual(predicates, ResourceColumns.ServiceNameKey,
+            string.IsNullOrWhiteSpace(filter.ServiceName) ? null : V2OpenTelemetryCodec.Identity(filter.ServiceName, nameof(filter.ServiceName)));
         if (filter.Status is { } status)
             predicates.Add(new Predicate.Equal(ResourceColumns.Status, QueryConstant.Of(ResourceColumns.Status, (long)status)));
         if (!string.IsNullOrWhiteSpace(filter.Search))
             predicates.Add(new Predicate.Or([
                 new Predicate.Substring(ResourceColumns.Id, filter.Search, Anchor.Contains),
                 new Predicate.Substring(ResourceColumns.ServiceName, filter.Search, Anchor.Contains)]));
+        var selectedIndex = string.IsNullOrWhiteSpace(filter.Search) switch
+        {
+            false => null,
+            true when !string.IsNullOrWhiteSpace(filter.ServiceName) && filter.Status is null =>
+                V2OpenTelemetryStorageSchema.ResourceServiceLastSeenIndex,
+            true when string.IsNullOrWhiteSpace(filter.ServiceName) && filter.Status is not null =>
+                V2OpenTelemetryStorageSchema.ResourceStatusLastSeenIndex,
+            true when string.IsNullOrWhiteSpace(filter.ServiceName) && filter.Status is null =>
+                V2OpenTelemetryStorageSchema.ResourceLastSeenIndex,
+            _ => null
+        };
         var rows = Query(
             sessions.Resources,
             predicates,
             ResourceColumns.LastSeen,
             take,
             descending: true,
-            ResourceColumns.Id).Rows;
+            selectedIndex,
+            ResourceColumns.IdOrderKey).Rows;
         return new(rows.Select(V2OpenTelemetryCodec.Deserialize<TelemetryResource>).ToArray(), sourceRegistry?.DroppedCount ?? 0);
     }
 
@@ -171,6 +187,7 @@ public sealed class GroundworkOpenTelemetryStore :
                 TraceSummaryColumns.StartTime,
                 take,
                 descending: true,
+                source.Count == 0 ? V2OpenTelemetryStorageSchema.TraceSummaryStartIndex : null,
                 TraceSummaryColumns.TraceKey)
             .Rows.Select(V2OpenTelemetryCodec.DeserializeTraceSummary).Reverse().ToArray();
         return ValueTask.FromResult(new OpenTelemetryTraceResult(traces, Interlocked.Read(ref droppedTraces)));
@@ -194,13 +211,29 @@ public sealed class GroundworkOpenTelemetryStore :
         {
             new Predicate.Equal(SpanColumns.TraceKey, QueryConstant.Of(SpanColumns.TraceKey, traceKey))
         };
-        var spans = QueryAll(sessions.Spans, tracePredicate, SpanColumns.StartTime, maxQuerySize, cancellationToken, SpanColumns.SpanId, SpanColumns.Sequence)
+        var spans = QueryAll(
+                sessions.Spans,
+                tracePredicate,
+                SpanColumns.StartTime,
+                maxQuerySize,
+                V2OpenTelemetryStorageSchema.SpanTraceDetailIndex,
+                cancellationToken,
+                SpanColumns.SpanId,
+                SpanColumns.Sequence)
             .Select(V2OpenTelemetryCodec.Deserialize<TelemetrySpan>).ToArray();
         var logPredicate = new[]
         {
             new Predicate.Equal(LogColumns.TraceKey, QueryConstant.Of(LogColumns.TraceKey, traceKey))
         };
-        var logs = QueryAll(sessions.Logs, logPredicate, LogColumns.Timestamp, maxQuerySize, cancellationToken, LogColumns.Id, LogColumns.Sequence)
+        var logs = QueryAll(
+                sessions.Logs,
+                logPredicate,
+                LogColumns.Timestamp,
+                maxQuerySize,
+                V2OpenTelemetryStorageSchema.LogTraceDetailIndex,
+                cancellationToken,
+                LogColumns.Id,
+                LogColumns.Sequence)
             .Select(V2OpenTelemetryCodec.Deserialize<OtlpLogRecord>).ToArray();
         var resources = trace.ResourceIds
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -227,7 +260,14 @@ public sealed class GroundworkOpenTelemetryStore :
         AddEqual(predicates, MetricColumns.ServiceName, filter.ServiceName);
         AddSubstring(predicates, MetricColumns.InstrumentName, filter.InstrumentName);
         AddRange(predicates, MetricColumns.Timestamp, filter.From, filter.To);
-        var points = Query(sessions.MetricPoints, predicates, MetricColumns.Timestamp, take, descending: true, MetricColumns.Id)
+        var points = Query(
+                sessions.MetricPoints,
+                predicates,
+                MetricColumns.Timestamp,
+                take,
+                descending: true,
+                predicates.Count == 0 ? V2OpenTelemetryStorageSchema.MetricPointTimestampIndex : null,
+                MetricColumns.Id)
             .Rows.Select(V2OpenTelemetryCodec.Deserialize<MetricPoint>).Reverse().ToArray();
         var instruments = points.Select(point => point.InstrumentId)
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -256,7 +296,14 @@ public sealed class GroundworkOpenTelemetryStore :
         AddSubstring(predicates, LogColumns.SeverityText, filter.Severity);
         AddSubstring(predicates, LogColumns.Body, filter.Search);
         AddRange(predicates, LogColumns.Timestamp, filter.From, filter.To);
-        var logs = Query(sessions.Logs, predicates, LogColumns.Timestamp, take, descending: true, LogColumns.Id)
+        var logs = Query(
+                sessions.Logs,
+                predicates,
+                LogColumns.Timestamp,
+                take,
+                descending: true,
+                predicates.Count == 0 ? V2OpenTelemetryStorageSchema.LogTimestampIndex : null,
+                LogColumns.Id)
             .Rows.Select(V2OpenTelemetryCodec.Deserialize<OtlpLogRecord>).Reverse().ToArray();
         return ValueTask.FromResult(new OpenTelemetryLogResult(logs, Interlocked.Read(ref droppedLogs)));
     }
@@ -329,6 +376,7 @@ public sealed class GroundworkOpenTelemetryStore :
                 using var work = connection.BeginUnitOfWork(
                     StorageAccess.Scoped(binding.StorageScope),
                     BatchWriteOptions.Exact,
+                    commandObserver,
                     schema.Units.ToArray());
                 var transaction = V2Sessions.Open(work, schema.Units);
                 var ledgerKey = new StorageKey(new Dictionary<string, object?>
@@ -486,6 +534,7 @@ public sealed class GroundworkOpenTelemetryStore :
     {
         EnsureRequiredCapabilities();
         var summaryUnit = schema.Unit(V2OpenTelemetryStorageSchema.TraceSummaryUnitId);
+        var resourceUnit = schema.Unit(V2OpenTelemetryStorageSchema.ResourceUnitId);
         Exception? failure = null;
         for (var attempt = 1; attempt <= MaxCaptureAttempts; attempt++)
         {
@@ -495,10 +544,13 @@ public sealed class GroundworkOpenTelemetryStore :
                 using var work = connection.BeginUnitOfWork(
                     StorageAccess.Scoped(binding.StorageScope),
                     BatchWriteOptions.Exact,
+                    commandObserver,
                     schema.Unit(V2OpenTelemetryStorageSchema.TraceUnitId),
-                    summaryUnit);
+                    summaryUnit,
+                    resourceUnit);
                 var traceSession = work.OpenSession(schema.Unit(V2OpenTelemetryStorageSchema.TraceUnitId));
                 var summarySession = work.OpenSession(summaryUnit);
+                var resourceSession = work.OpenSession(resourceUnit);
                 var retention = await traceSession.ApplyRetentionAsync(operation, new RetentionExecutionOptions
                 {
                     KeepNewestOverride = traceCapacity,
@@ -525,6 +577,7 @@ public sealed class GroundworkOpenTelemetryStore :
                                 QueryConstant.Of(TraceColumns.TraceKey, traceKey))],
                             TraceColumns.Sequence,
                             maxQuerySize,
+                            null,
                             cancellationToken)
                         .ToArray();
                     if (remaining.Length == 0)
@@ -539,7 +592,8 @@ public sealed class GroundworkOpenTelemetryStore :
                         .ToArray());
                     var serviceKeys = ServicesFor(
                             trace.ResourceIds,
-                            ImmutableDictionary<string, string>.Empty)
+                            ImmutableDictionary<string, string>.Empty,
+                            resourceSession)
                         .Select(V2OpenTelemetryCodec.CanonicalSearchKey);
                     var values = V2OpenTelemetryCodec.TraceSummary(trace, serviceKeys);
                     var options = existing is null
@@ -629,9 +683,11 @@ public sealed class GroundworkOpenTelemetryStore :
 
     private IReadOnlyList<string> ServicesFor(
         IEnumerable<string> resourceIds,
-        IReadOnlyDictionary<string, string> batchServices)
+        IReadOnlyDictionary<string, string> batchServices,
+        IStorageSession? resourceSession = null)
     {
         var services = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        resourceSession ??= sessions.Resources;
         foreach (var resourceId in resourceIds)
         {
             if (batchServices.TryGetValue(resourceId, out var serviceName))
@@ -639,7 +695,7 @@ public sealed class GroundworkOpenTelemetryStore :
                 services.Add(serviceName);
                 continue;
             }
-            var retained = sessions.Resources.Read(new StorageKey(new Dictionary<string, object?>
+            var retained = resourceSession.Read(new StorageKey(new Dictionary<string, object?>
             {
                 [V2OpenTelemetryStorageSchema.Id] = resourceId
             }));
@@ -655,8 +711,9 @@ public sealed class GroundworkOpenTelemetryStore :
         ColumnRef orderColumn,
         int take,
         bool descending,
+        string? selectedIndex,
         params ColumnRef[] tieBreakers) =>
-        QueryPage(session, predicates, orderColumn, take, descending, null, tieBreakers);
+        QueryPage(session, predicates, orderColumn, take, descending, selectedIndex, null, tieBreakers);
 
     private static QueryMaterializedResult QueryPage(
         IStorageSession session,
@@ -664,6 +721,7 @@ public sealed class GroundworkOpenTelemetryStore :
         ColumnRef orderColumn,
         int take,
         bool descending,
+        string? selectedIndex,
         string? continuation,
         IReadOnlyList<ColumnRef> tieBreakers)
     {
@@ -671,12 +729,14 @@ public sealed class GroundworkOpenTelemetryStore :
         order.Add(new(orderColumn, descending ? OrderDirection.Descending : OrderDirection.Ascending, descending ? NullOrder.First : NullOrder.Last));
         foreach (var tieBreaker in tieBreakers)
             order.Add(new(tieBreaker, OrderDirection.Ascending, NullOrder.Last));
-        return session.Query(new QueryRequest(
-            new TableId(session.Unit.Name),
-            All(predicates.ToArray()) ?? Predicate.AlwaysTrue.Instance,
-            order.ToImmutable(),
-            Projection.All,
-            continuation is null ? Paging.Keyset(take) : Paging.Continuation(continuation, take)));
+        return session.Query(
+            new QueryRequest(
+                new TableId(session.Unit.Name),
+                All(predicates.ToArray()) ?? Predicate.AlwaysTrue.Instance,
+                order.ToImmutable(),
+                Projection.All,
+                continuation is null ? Paging.Keyset(take) : Paging.Continuation(continuation, take)),
+            session.Unit.CreateQueryRenderOptions(selectedIndex));
     }
 
     private static IReadOnlyList<IReadOnlyDictionary<string, object?>> QueryAll(
@@ -684,6 +744,7 @@ public sealed class GroundworkOpenTelemetryStore :
         IEnumerable<Predicate> predicates,
         ColumnRef orderColumn,
         int pageSize,
+        string? selectedIndex,
         CancellationToken cancellationToken,
         params ColumnRef[] tieBreakers)
     {
@@ -692,7 +753,7 @@ public sealed class GroundworkOpenTelemetryStore :
         do
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var page = QueryPage(session, predicates, orderColumn, pageSize, false, continuation, tieBreakers);
+            var page = QueryPage(session, predicates, orderColumn, pageSize, false, selectedIndex, continuation, tieBreakers);
             rows.AddRange(page.Rows);
             continuation = page.NextContinuationToken;
         } while (continuation is not null);
@@ -983,7 +1044,7 @@ public sealed class GroundworkOpenTelemetryStore :
                 owner.EnsureRequiredCapabilities();
                 foreach (var unit in owner.schema.Units)
                     connection.Schema.Apply(unit);
-                owner.sessions.Publish(connection, owner.binding);
+                owner.sessions.Publish(connection, owner.binding, owner.commandObserver);
                 var created = new Lease(owner);
                 lock (gate)
                     lease = created;
@@ -1041,11 +1102,14 @@ public sealed class GroundworkOpenTelemetryStore :
             return sessions;
         }
 
-        internal void Publish(IStorageProviderConnection connection, V2OpenTelemetryBinding binding)
+        internal void Publish(
+            IStorageProviderConnection connection,
+            V2OpenTelemetryBinding binding,
+            IProviderCommandObserver? observer)
         {
             var access = StorageAccess.Scoped(binding.StorageScope);
             var units = new V2OpenTelemetryStorageSchemaSet().Units;
-            Bind(units.Select(unit => connection.OpenSession(unit, access)).ToArray());
+            Bind(units.Select(unit => connection.OpenSession(unit, access, observer)).ToArray());
         }
 
         private void Bind(IReadOnlyList<IStorageSession> opened)
@@ -1162,6 +1226,8 @@ public sealed class GroundworkOpenTelemetryStore :
     {
         internal static ColumnRef Id => Column(V2OpenTelemetryStorageSchema.Id, QueryType.String, false, 512);
         internal static ColumnRef ServiceName => Column(V2OpenTelemetryStorageSchema.ServiceName, QueryType.String, false, 512);
+        internal static ColumnRef ServiceNameKey => Column(V2OpenTelemetryStorageSchema.ServiceNameKey, QueryType.String, false, 64);
+        internal static ColumnRef IdOrderKey => Column(V2OpenTelemetryStorageSchema.IdOrderKey, QueryType.String, false, 64);
         internal static ColumnRef Status => Column(V2OpenTelemetryStorageSchema.Status, QueryType.Int64, false);
         internal static ColumnRef LastSeen => Column(V2OpenTelemetryStorageSchema.LastSeen, QueryType.DateTimeOffset, false);
         private static ColumnRef Column(string name, QueryType type, bool nullable, int? max = null) => new(new TableId("elsa_otel_resources_v2"), name, type, nullable, max);

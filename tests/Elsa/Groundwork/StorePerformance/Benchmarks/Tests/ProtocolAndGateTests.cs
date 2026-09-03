@@ -123,14 +123,14 @@ public sealed class ProtocolAndGateTests
         var repositoryRoot = SourceProvenance.FindRepositoryRoot();
         var expected = ProviderPackageProvenance.CurrentVersions(repositoryRoot, "groundwork-v2", "sqlite");
 
-        Assert.Equal("0.4.0-preview.8", expected["Groundwork.Sqlite"]);
+        Assert.Equal("0.4.0-preview.9", expected["Groundwork.Sqlite"]);
         ProviderPackageProvenance.RequireExactCurrent(repositoryRoot, "groundwork-v2", "sqlite", expected);
         Assert.Throws<PerformanceContractException>(() =>
             ProviderPackageProvenance.RequireExactCurrent(
                 repositoryRoot,
                 "groundwork-v2",
                 "sqlite",
-                new Dictionary<string, string> { ["Groundwork.Store"] = "0.4.0-preview.8" }));
+                new Dictionary<string, string> { ["Groundwork.Store"] = "0.4.0-preview.9" }));
         Assert.Throws<PerformanceContractException>(() =>
             ProviderPackageProvenance.RequireExactCurrent(
                 repositoryRoot,

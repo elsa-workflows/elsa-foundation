@@ -27,6 +27,9 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
 {
     private readonly string unit = WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind;
 
+    internal GroundworkWorkflowDefinitionDraftDocumentStore ForStorage(GroundworkDesignStorage boundStorage) =>
+        new(boundStorage, jsonOptions, accessContextAccessor);
+
     public Task<GroundworkWorkflowDefinitionDraftDocument?> FindByIdAsync(
         string draftId,
         CancellationToken cancellationToken = default)

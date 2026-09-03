@@ -143,6 +143,13 @@ internal static class NativePlanEvidenceStaging
         var document = Read(destination);
         foreach (var route in document.Routes)
             EnsureRawPlan(outputDirectory, route.RawPlanReference);
+        foreach (var constituent in document.TraceDetailConstituents ?? [])
+        {
+            if (!string.IsNullOrWhiteSpace(constituent.RawPlanReference))
+                EnsureRawPlan(outputDirectory, constituent.RawPlanReference);
+            foreach (var page in constituent.Pages ?? [])
+                EnsureRawPlan(outputDirectory, page.RawPlanReference);
+        }
         return document;
     }
 

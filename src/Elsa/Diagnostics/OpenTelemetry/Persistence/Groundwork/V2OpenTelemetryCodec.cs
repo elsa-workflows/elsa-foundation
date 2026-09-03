@@ -185,10 +185,14 @@ internal static class V2OpenTelemetryCodec
     {
         [V2OpenTelemetryStorageSchema.Id] = Required(value.Id, nameof(value.Id)),
         [V2OpenTelemetryStorageSchema.ServiceName] = Required(value.ServiceName, nameof(value.ServiceName)),
+        [V2OpenTelemetryStorageSchema.ServiceNameKey] = Identity(value.ServiceName, nameof(value.ServiceName)),
+        [V2OpenTelemetryStorageSchema.IdOrderKey] = Identity(value.Id, nameof(value.Id)),
         [V2OpenTelemetryStorageSchema.Status] = (long)value.Status,
         [V2OpenTelemetryStorageSchema.LastSeen] = value.LastSeen,
         [V2OpenTelemetryStorageSchema.Payload] = Serialize(value)
     });
+
+    internal static string Identity(string value, string field) => TraceKey(Required(value, field));
 
     internal static StorageValues Instrument(MetricInstrument value, DateTimeOffset observedAt) => new(new Dictionary<string, object?>(StringComparer.Ordinal)
     {

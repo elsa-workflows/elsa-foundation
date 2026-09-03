@@ -67,7 +67,8 @@ public sealed class GroundworkUpdateDraftCommand(
                 [WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind],
                 async (context, token) =>
                 {
-                    var document = await documents.FindByIdAsync(request.DraftId, token)
+                    var transactionDocuments = documents.ForStorage(context.Storage);
+                    var document = await transactionDocuments.FindByIdAsync(request.DraftId, token)
                                    ?? throw new InvalidOperationException(
                                        $"Workflow definition draft '{request.DraftId}' not found");
                     var draft = document.Entity;

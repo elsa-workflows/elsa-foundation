@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using MongoDB.Bson;
+using MongoDB.Driver;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Xunit;
 
@@ -55,6 +56,23 @@ public sealed class ProviderProbeTests
         Assert.Equal(
             "transaction-capable-sharded-cluster",
             ProviderProbe.MongoTopology(sharded));
+    }
+
+    [Fact]
+    public void Mongo_default_concerns_are_recorded_without_dereferencing_absent_nested_values()
+    {
+        const string connectionString =
+            "mongodb://127.0.0.1:27017/diagnostics?replicaSet=groundworkv2&directConnection=true";
+        var settings = MongoClientSettings.FromConnectionString(connectionString);
+
+        var configuration = ProviderProbe.MongoConfiguration(settings, connectionString);
+
+        Assert.Equal("default", configuration["read_concern"]);
+        Assert.Equal("default", configuration["write_concern"]);
+        Assert.Equal("default", configuration["write_concern_timeout"]);
+        Assert.Equal("True", configuration["direct_mode"]);
+        Assert.DoesNotContain(configuration.Keys, key =>
+            key.Contains("connection", StringComparison.OrdinalIgnoreCase));
     }
 
     [Theory]

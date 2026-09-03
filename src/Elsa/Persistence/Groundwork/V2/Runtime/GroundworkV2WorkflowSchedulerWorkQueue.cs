@@ -12,7 +12,9 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// Scheduler work is scoped to one persistence scope and uses the public Groundwork row/session APIs.
 /// Create-only enqueue, keyset FIFO reads, and optimistic claim transitions preserve the durable queue
 /// contract without importing the v1 document-store bridge. Long logical work-item identities use the
-/// shared hashed physical alias and are validated against the complete JSON envelope on every access.
+/// shared hashed physical alias and are validated against the complete JSON envelope on every full-row access.
+/// The projection-only pending-workflow discovery route returns candidates; the subsequent queue read performs
+/// the full identity validation before any work item is used.
 /// </remarks>
 public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
     IWorkflowSchedulerWorkQueue,

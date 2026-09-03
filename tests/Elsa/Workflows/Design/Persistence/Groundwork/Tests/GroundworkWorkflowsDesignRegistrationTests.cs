@@ -51,7 +51,8 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
         var sp = scope.ServiceProvider;
 
         Assert.IsType<GroundworkWorkflowDefinitionStore>(sp.GetRequiredService<IWorkflowDefinitionStore>());
-        Assert.IsType<GroundworkWorkflowDefinitionVersionStore>(sp.GetRequiredService<IWorkflowDefinitionVersionStore>());
+        var concreteVersionStore = sp.GetRequiredService<GroundworkWorkflowDefinitionVersionStore>();
+        Assert.Same(concreteVersionStore, sp.GetRequiredService<IWorkflowDefinitionVersionStore>());
         Assert.IsType<GroundworkWorkflowDefinitionDraftStore>(sp.GetRequiredService<IWorkflowDefinitionDraftStore>());
         Assert.IsType<GroundworkWorkflowDefinitionListProjectionStore>(sp.GetRequiredService<IWorkflowDefinitionListProjectionStore>());
         Assert.IsType<GroundworkWorkflowDefinitionVersionLayoutStore>(sp.GetRequiredService<IWorkflowDefinitionVersionLayoutStore>());

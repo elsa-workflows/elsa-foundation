@@ -61,7 +61,7 @@ public sealed class CapturePlanAdmissionTests
     }
 
     [Theory]
-    [InlineData("Groundwork.Store", "0.4.0-preview.8")]
+    [InlineData("Groundwork.Store", "0.4.0-preview.9")]
     [InlineData("Groundwork.Sqlite", "0.4.0-preview.5")]
     public void Capture_plan_rejects_non_current_provider_package_provenance(string package, string version)
     {
@@ -130,7 +130,7 @@ public sealed class CapturePlanAdmissionTests
             PhysicalForm = physicalForm,
             PackageVersions = new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                ["Groundwork.MongoDb"] = "0.4.0-preview.8"
+                ["Groundwork.MongoDb"] = "0.4.0-preview.9"
             },
             Seed = workload.Input.Seed,
             InputFingerprintSha256 = workload.Input.FingerprintSha256,
@@ -461,7 +461,7 @@ public sealed class CapturePlanAdmissionTests
         HostFingerprintSha256: new string('d', 64),
         PackageVersions: new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["Groundwork.Sqlite"] = "0.4.0-preview.8"
+            ["Groundwork.Sqlite"] = "0.4.0-preview.9"
         },
         Seed: "spec094-checkpoint-commit-v1.1",
         InputFingerprintSha256: "ee4cef346ca64739bbe7cfc84ee3f74e6acefec582f537c685991ca73c62ce13",
@@ -525,7 +525,7 @@ public sealed class CapturePlanAdmissionTests
         HarnessAssemblySha256: new string('b', 64),
         PackageVersions: new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["Groundwork.Sqlite"] = "0.4.0-preview.8"
+            ["Groundwork.Sqlite"] = "0.4.0-preview.9"
         },
         CompositionFingerprint: new string('c', 64),
         HostFingerprintSha256: new string('d', 64),

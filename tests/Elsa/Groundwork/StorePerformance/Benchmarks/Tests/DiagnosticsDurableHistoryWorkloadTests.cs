@@ -36,6 +36,36 @@ public sealed class DiagnosticsDurableHistoryWorkloadTests
     }
 
     [Fact]
+    public void Native_plan_fixture_uses_bounded_batches_with_exact_catalog_and_trace_detail_totals()
+    {
+        const int recordCount = 2_500;
+        const int batchSize = 1_000;
+        var batches = DiagnosticsDurableHistoryWorkload
+            .OpenTelemetryBatches(recordCount, bindSignalsToLatestTrace: true, batchSize)
+            .ToArray();
+        var selectedTrace = DiagnosticsDurableHistoryWorkload.TraceIdForTesting(
+            DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream - 1);
+
+        Assert.Equal(
+            (recordCount + batchSize - 1) / batchSize,
+            batches.Length);
+        Assert.Equal(recordCount, batches.Sum(batch => batch.Traces.Count));
+        Assert.Equal(recordCount, batches.Sum(batch => batch.Spans.Count));
+        Assert.Equal(recordCount, batches.Sum(batch => batch.MetricPoints.Count));
+        Assert.Equal(recordCount, batches.Sum(batch => batch.Logs.Count));
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.ResourceCount, batches.Sum(batch => batch.Resources.Count));
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.InstrumentCount, batches.Sum(batch => batch.Instruments.Count));
+        Assert.All(batches.SelectMany(batch => batch.Spans), span => Assert.Equal(selectedTrace, span.TraceId));
+        Assert.All(batches.SelectMany(batch => batch.Logs), record => Assert.Equal(selectedTrace, record.TraceId));
+
+        var nativeFirst = DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatches().First();
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.NormalizedRecordsPerOtlpBatch, nativeFirst.Traces.Count);
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.NormalizedRecordsPerOtlpBatch, nativeFirst.Spans.Count);
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.NormalizedRecordsPerOtlpBatch, nativeFirst.MetricPoints.Count);
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.NormalizedRecordsPerOtlpBatch, nativeFirst.Logs.Count);
+    }
+
+    [Fact]
     public void Diagnostics_remains_blocked_until_the_absolute_budget_is_ratified()
     {
         var workload = WorkloadCatalog.Load(Repository.Root()).Workloads[

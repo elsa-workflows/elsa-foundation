@@ -22,6 +22,7 @@ public sealed class GroundworkDesignStorage(
     string? targetName = null,
     IGroundworkPrivilegedQueryAuditSink? auditSink = null)
 {
+    private readonly Func<string, IStorageSession>? boundSessionOpener;
     public const int ProviderPageSize = 256;
     public const int SearchTermMaximumMatches = 10_000;
     public const int SearchTermProbeLimit = SearchTermMaximumMatches + 1;
@@ -33,6 +34,26 @@ public sealed class GroundworkDesignStorage(
     private const QuerySearchKeyPolicy DefinitionIdSearchPolicy = QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase;
     private readonly GroundworkPrivilegedQueryAuditExecutor? privilegedQueryAuditExecutor =
         auditSink is null ? null : new GroundworkPrivilegedQueryAuditExecutor(sessions, accessContextAccessor, auditSink);
+
+    private GroundworkDesignStorage(
+        IGroundworkStorageSessionSource sessions,
+        IPersistenceAccessContextAccessor accessContextAccessor,
+        string? targetName,
+        IGroundworkPrivilegedQueryAuditSink? auditSink,
+        Func<string, IStorageSession> boundSessionOpener)
+        : this(sessions, accessContextAccessor, targetName, auditSink) =>
+        this.boundSessionOpener = boundSessionOpener;
+
+    internal GroundworkDesignStorage ForUnitOfWork(DesignUnitOfWork unitOfWork)
+    {
+        ArgumentNullException.ThrowIfNull(unitOfWork);
+        return new GroundworkDesignStorage(
+            sessions,
+            accessContextAccessor,
+            targetName,
+            auditSink,
+            unitOfWork.OpenSession);
+    }
 
     public StorageUnit Unit(string unitId) => sessions.Unit(unitId, targetName);
 
@@ -497,6 +518,8 @@ public sealed class GroundworkDesignStorage(
         if (acrossScopes)
             throw new InvalidOperationException(
                 "Privileged workflow-design queries must use the audited public cross-scope executor.");
+        if (boundSessionOpener is not null)
+            return boundSessionOpener(unitId);
         var unit = sessions.Unit(unitId, targetName);
         var current = accessContextAccessor.Current ?? throw new InvalidOperationException(
             "Workflow-design persistence access context is missing.");
@@ -910,6 +933,16 @@ public sealed class GroundworkDesignStorage(
 
     public sealed class DesignUnitOfWork(IUnitOfWork inner, IReadOnlyDictionary<string, StorageUnit> units) : IDisposable
     {
+        private readonly Dictionary<string, IStorageSession> sessions = new(StringComparer.Ordinal);
+
+        internal IStorageSession OpenSession(string unitId)
+        {
+            var unit = Require(unitId);
+            return sessions.TryGetValue(unitId, out var session)
+                ? session
+                : sessions[unitId] = inner.OpenSession(unit);
+        }
+
         public void Stage(string unitId, StorageValues values, WriteOptions options)
         {
             var unit = Require(unitId);

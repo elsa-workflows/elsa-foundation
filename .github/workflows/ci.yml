@@ -215,7 +215,7 @@ jobs:
           dotnet test
           tests/Elsa/Persistence/Groundwork/V2/Runtime/Tests/Elsa.Persistence.Groundwork.V2.Runtime.Tests.csproj
           -c Release --no-restore
-          --filter 'FullyQualifiedName~GroundworkV2RuntimeRegistrationTests|FullyQualifiedName~GroundworkV2WorkflowTestScopeStoreTests|FullyQualifiedName~GroundworkV2WorkflowExecutableStoreTests|FullyQualifiedName~GroundworkV2ExecutableActivityTemplateStoreTests|FullyQualifiedName~GroundworkV2WorkflowExecutableSourceReferenceStoreTests|FullyQualifiedName~GroundworkV2WorkflowRuntimeAttentionQueryTests|FullyQualifiedName~GroundworkV2WorkflowAlterationStoreTests'
+          --filter 'FullyQualifiedName~GroundworkV2RuntimeRegistrationTests|FullyQualifiedName~GroundworkV2WorkflowTestScopeStoreTests|FullyQualifiedName~GroundworkV2WorkflowExecutableStoreTests|FullyQualifiedName~GroundworkV2ExecutableActivityTemplateStoreTests|FullyQualifiedName~GroundworkV2WorkflowExecutableSourceReferenceStoreTests|FullyQualifiedName~GroundworkV2WorkflowRuntimeAttentionQueryTests|FullyQualifiedName~GroundworkV2WorkflowAlterationStoreTests|FullyQualifiedName~GroundworkV2BookmarkStateStoreTests|FullyQualifiedName~GroundworkV2WorkflowSchedulerWorkQueueTests'
           -p:WarningsNotAsErrors=NU1603
 
       - name: Restore diagnostics v2 native proofs

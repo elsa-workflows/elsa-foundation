@@ -30,6 +30,8 @@ public static class V2OpenTelemetryStorageSchema
     public const string ResourceKeys = "resourceKeys";
     public const string ServiceNames = "serviceNames";
     public const string ServiceName = "serviceName";
+    public const string ServiceNameKey = "serviceNameKey";
+    public const string IdOrderKey = "idOrderKey";
     public const string WorkflowInstanceId = "workflowInstanceId";
     public const string WorkflowInstanceIds = "workflowInstanceIds";
     public const string RootSpanId = "rootSpanId";
@@ -50,6 +52,15 @@ public static class V2OpenTelemetryStorageSchema
     public const string Fingerprint = "fingerprint";
     public const string BatchId = "batchId";
     public const string CreatedAt = "createdAt";
+
+    internal const string TraceSummaryStartIndex = "elsa_otel_trace_summaries_start";
+    internal const string SpanTraceDetailIndex = "elsa_otel_spans_trace_detail";
+    internal const string MetricPointTimestampIndex = "elsa_otel_metric_points_timestamp";
+    internal const string LogTimestampIndex = "elsa_otel_logs_timestamp";
+    internal const string LogTraceDetailIndex = "elsa_otel_logs_trace_detail";
+    internal const string ResourceLastSeenIndex = "elsa_otel_resources_last_seen";
+    internal const string ResourceStatusLastSeenIndex = "elsa_otel_resources_status_last_seen";
+    internal const string ResourceServiceLastSeenIndex = "elsa_otel_resources_service_last_seen";
 
     public static IReadOnlyList<StorageUnit> CreateUnits() =>
     [
@@ -120,7 +131,7 @@ public static class V2OpenTelemetryStorageSchema
                 .ElementSearchKey(PortableCollation.UnicodeOrdinalIgnoreCase, 512))
             .Json(Payload, c => c.Required())
             .Key(TraceKey)
-            .Index("elsa_otel_trace_summaries_start", index =>
+            .Index(TraceSummaryStartIndex, index =>
                 index.Descending(StartTime).Ascending(TraceKey))
             .OptimisticConcurrency()
             .Scoped()
@@ -137,7 +148,13 @@ public static class V2OpenTelemetryStorageSchema
             .String(Name, c => c.Required())
             .Int64(Status, c => c.Required())
             .Timestamp(StartTime, c => c.Required())
-            .Timestamp(EndTime, c => c.Required()));
+            .Timestamp(EndTime, c => c.Required()),
+        index => index
+            .Ascending(TraceKey)
+            .Ascending(StartTime)
+            .Ascending(SpanId)
+            .Ascending(Sequence),
+        SpanTraceDetailIndex);
 
     public static StorageUnit CreateMetricPoints() => CreateSignal(
         MetricPointUnitId,
@@ -147,7 +164,12 @@ public static class V2OpenTelemetryStorageSchema
             .String(InstrumentName, c => c.Required())
             .String(ResourceId, 512, c => c.Required())
             .String(ServiceName, 512)
-            .Timestamp(Timestamp, c => c.Required()));
+            .Timestamp(Timestamp, c => c.Required()),
+        index => index
+            .Descending(Timestamp)
+            .Ascending(Id)
+            .Ascending(Sequence),
+        MetricPointTimestampIndex);
 
     public static StorageUnit CreateLogs() => CreateSignal(
         LogUnitId,
@@ -161,19 +183,44 @@ public static class V2OpenTelemetryStorageSchema
             .String(SeverityText, c => c.Required())
             .Int64(SeverityNumber)
             .String(Body, c => c.Required())
-            .Timestamp(Timestamp, c => c.Required()));
+            .Timestamp(Timestamp, c => c.Required()),
+        index => index
+            .Descending(Timestamp)
+            .Ascending(Id)
+            .Ascending(Sequence),
+        LogTimestampIndex,
+        builder => builder.Index(LogTraceDetailIndex, index => index
+            .Ascending(TraceKey)
+            .Ascending(Timestamp)
+            .Ascending(Id)
+            .Ascending(Sequence)));
 
     public static StorageUnit CreateResources() =>
         StorageUnit.Declare(ResourceUnitId, "elsa_otel_resources_v2")
             .String(Id, 512, c => c.Required())
             .String(ServiceName, 512, c => c.Required())
+            .String(ServiceNameKey, 64, c => c.Required())
+            .String(IdOrderKey, 64, c => c.Required())
             .Int64(Status, c => c.Required())
             .Timestamp(LastSeen, c => c.Required())
             .Json(Payload, c => c.Required())
             .Key(Id)
-            .Index("elsa_otel_resources_last_seen", LastSeen)
+            .Index(ResourceLastSeenIndex, index => index
+                .Descending(LastSeen)
+                .Ascending(IdOrderKey)
+                .Ascending(Id))
             .Index("elsa_otel_resources_service", ServiceName)
             .Index("elsa_otel_resources_status", Status)
+            .Index(ResourceStatusLastSeenIndex, index => index
+                .Ascending(Status)
+                .Descending(LastSeen)
+                .Ascending(IdOrderKey)
+                .Ascending(Id))
+            .Index(ResourceServiceLastSeenIndex, index => index
+                .Ascending(ServiceNameKey)
+                .Descending(LastSeen)
+                .Ascending(IdOrderKey)
+                .Ascending(Id))
             .Scoped()
             .Retention(0, LastSeen)
             .Build();
@@ -208,14 +255,25 @@ public static class V2OpenTelemetryStorageSchema
     private static StorageUnit CreateSignal(
         string id,
         string name,
-        Func<StorageDeclarationBuilder, StorageDeclarationBuilder> fields) =>
-        fields(StorageUnit.Declare(id, name)
+        Func<StorageDeclarationBuilder, StorageDeclarationBuilder> fields,
+        Action<IndexBuilder>? orderIndex = null,
+        string? orderIndexName = null,
+        Action<StorageDeclarationBuilder>? additionalIndexes = null)
+    {
+        var builder = fields(StorageUnit.Declare(id, name)
                 .Int64(Sequence, c => c.Required().ProviderSequence())
                 .String(Id, 512, c => c.Required())
                 .Json(Payload, c => c.Required()))
-            .Key(Sequence)
+            .Key(Sequence);
+
+        if (orderIndex is not null)
+            builder.Index(orderIndexName!, orderIndex);
+        additionalIndexes?.Invoke(builder);
+
+        return builder
             .Scoped()
             .AppendIdempotency(TimeSpan.FromHours(1), $"{id.Replace('-', '_')}_append")
             .Retention(0, Sequence)
             .Build();
+    }
 }
