@@ -57,13 +57,13 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
     }
 
     [Fact]
-    public async Task Timed_operations_remain_closed_while_the_absolute_budget_gate_is_blocked()
+    public async Task Timed_operations_remain_closed_before_correctness_preparation()
     {
         await using var adapter = BenchmarkAdapterRegistry.Create(Request(), "unused", "unused");
 
         var exception = Assert.Throws<PerformanceContractException>(() => adapter.Operations);
 
-        Assert.Contains(ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode, exception.Message, StringComparison.Ordinal);
+        Assert.Contains("before correctness preparation", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -89,6 +89,14 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
             Assert.NotSame(scopes.Primary.OpenTelemetry, scopes.Secondary.OpenTelemetry);
             Assert.NotSame(scopes.Primary.StructuredLogs, scopes.Secondary.StructuredLogs);
 
+            await scopes.Secondary.StructuredLogs.AppendAsync(
+                new StructuredLogEntry { Message = "secondary", Category = "scope", SourceId = "secondary" },
+                CancellationToken.None);
+            var primary = await scopes.Primary.StructuredLogs.AppendAsync(
+                new StructuredLogEntry { Message = "primary", Category = "scope", SourceId = "primary" },
+                CancellationToken.None);
+            Assert.Equal(primary.Sequence, await scopes.Primary.StructuredLogs.GetHighWaterMarkAsync());
+
             adapter.CommandObserver.ClearCommands();
             await scopes.Primary.OpenTelemetry.QueryResourcesAsync(
                 new OpenTelemetryResourceFilter { Take = 1 },
@@ -101,6 +109,39 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
                 adapter.CommandObserver.Commands,
                 command => Assert.Contains("elsa_otel_resources_v2", command.CommandText, StringComparison.OrdinalIgnoreCase),
                 command => Assert.Contains("elsa_structured_logs", command.CommandText, StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            root.Delete(true);
+        }
+    }
+
+    [Fact]
+    public async Task SQLite_reopen_samples_release_prior_restart_compositions_outside_timing()
+    {
+        var root = Directory.CreateTempSubdirectory("diagnostics-reopen-reset-sqlite-");
+        var connectionString = $"Data Source={Path.Combine(root.FullName, "diagnostics.db")};Mode=ReadWriteCreate;Cache=Shared";
+        try
+        {
+            var observed = await ProviderProbe.ReadAsync("sqlite", connectionString, CancellationToken.None);
+            var request = Request() with
+            {
+                ProviderVersion = observed.Version,
+                ProviderTopology = observed.Topology,
+                ProviderConfiguration = observed.Configuration
+            };
+            await using var adapter = new DiagnosticsDurableHistoryAdapter(request, connectionString, root.FullName);
+            await adapter.PrepareAsync(CancellationToken.None);
+
+            await adapter.ReopenClientAsync(CancellationToken.None);
+            await adapter.ReopenClientAsync(CancellationToken.None);
+            Assert.Equal(4, adapter.ActiveCompositionCount);
+
+            await adapter.ResetReopenedClientsAsync(CancellationToken.None);
+
+            Assert.Equal(2, adapter.ActiveCompositionCount);
+            var scopes = await adapter.OpenScopedClientsAsync(CancellationToken.None);
+            Assert.NotSame(scopes.Primary, scopes.Secondary);
         }
         finally
         {
@@ -169,14 +210,99 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
             File.WriteAllText(log, "log");
             File.WriteAllText(spanSecond, "span two");
 
-            var actual = DiagnosticsNativePlanCapture.RequireNativeArtifacts(
+            var beforeTraceDetail = new HashSet<string>(StringComparer.Ordinal) { before };
+            var spans = DiagnosticsNativePlanCapture.RequireNativeArtifacts(
                 directory.FullName,
-                new HashSet<string>(StringComparer.Ordinal) { before },
+                beforeTraceDetail,
                 "sqlite",
                 "elsa_otel_spans_trace_detail",
                 2);
+            var logs = DiagnosticsNativePlanCapture.RequireNativeArtifacts(
+                directory.FullName,
+                beforeTraceDetail,
+                "sqlite",
+                "elsa_otel_logs_trace_detail",
+                1);
 
-            Assert.Equal([spanFirst, spanSecond], actual);
+            Assert.Equal([spanFirst, spanSecond], spans);
+            Assert.Equal([log], logs);
+        }
+        finally
+        {
+            directory.Delete(true);
+        }
+    }
+
+    [Fact]
+    public void Trace_detail_page_is_hashed_before_validation_and_published_only_after_admission()
+    {
+        var specification = DiagnosticsNativePlanContract.TraceDetailConstituents(
+                DiagnosticsNativePlanContract.GroundworkAdapter)
+            .Single(item => item.RouteIdentity == "trace-detail/spans-by-trace-key-start-id");
+        var route = new DiagnosticsNativeRouteSpec(
+            specification.RouteIdentity,
+            specification.TableName,
+            specification.IndexName,
+            specification.Ordering[0].Column,
+            specification.PredicateColumn,
+            specification.PhysicalCardinality,
+            specification.FiniteLimit,
+            specification.StorageScopeRequired,
+            false,
+            specification.Ordering);
+        var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("sqlite", route);
+        var command =
+            "SELECT * FROM elsa_otel_spans_v2 WHERE __groundwork_scope = @scope AND traceKey = @traceKey " +
+            "ORDER BY startTime ASC, spanId ASC, sequence ASC LIMIT 127";
+        var artifact = new DiagnosticsNativePlanArtifact(
+            1,
+            "sqlite",
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            specification.RouteIdentity,
+            specification.TableName,
+            specification.IndexName,
+            physicalIndex,
+            command,
+            $"2 0 SEARCH elsa_otel_spans_v2 USING INDEX {physicalIndex} (__groundwork_scope=? AND traceKey=?)");
+        var evidence = new DiagnosticsTraceDetailConstituentEvidence(
+            specification.RouteIdentity,
+            "page.raw.json",
+            "",
+            "index-search",
+            physicalIndex,
+            command,
+            specification.PhysicalCardinality,
+            true,
+            true,
+            specification.FiniteLimit,
+            specification.PublicRowBound,
+            specification.PublicRowBound,
+            specification.MaxInvocationCount,
+            specification.MaxInvocationCount);
+        var directory = Directory.CreateTempSubdirectory("diagnostics-native-page-publish-");
+        var path = Path.Combine(directory.FullName, evidence.RawPlanReference);
+        try
+        {
+            var digest = DiagnosticsNativePlanCapture.ValidateAndPublishTraceDetailPage(
+                "sqlite",
+                DiagnosticsNativePlanContract.GroundworkAdapter,
+                evidence,
+                artifact,
+                path);
+
+            Assert.Equal(64, digest.Length);
+            Assert.True(File.Exists(path));
+            Assert.Equal(digest, ArtifactStore.HashFile(path));
+
+            File.Delete(path);
+            Assert.Throws<PerformanceContractException>(() =>
+                DiagnosticsNativePlanCapture.ValidateAndPublishTraceDetailPage(
+                    "sqlite",
+                    DiagnosticsNativePlanContract.GroundworkAdapter,
+                    evidence,
+                    artifact with { PhysicalIndexName = "wrong-index" },
+                    path));
+            Assert.False(File.Exists(path));
         }
         finally
         {

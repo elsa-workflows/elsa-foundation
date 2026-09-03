@@ -39,6 +39,9 @@ public sealed class WorkloadCatalogTests
             "d9359af187da4f8a1568896a7ecae8e97215eb58f68d0e185d677a94833cc240",
             Hash(Path.Combine(directory, "secret-create-read-list-v1.1.json")));
         Assert.Equal(
+            "386f92762e7f81f6c804a95df91833726695a32f711f9dedc3a19d9c880ffd42",
+            Hash(Path.Combine(directory, "diagnostics-durable-history-v1.2.json")));
+        Assert.Equal(
             "1b81a63d8a2acfe5ceea9e9a7e458de21c0fae8069506be5e94258198eff7d41",
             Hash(Path.Combine(directory, "runtime.json")));
         Assert.Equal("36277c9b9c525d4cbb611c1a7e83c96a02eb3434fb85b6657ce2ede9b8a7a5e3",
@@ -102,6 +105,13 @@ public sealed class WorkloadCatalogTests
         Assert.Contains("real EF Secret repository comparator", ReproducibleWorkloadScenarioCatalog.BlockedReason, StringComparison.Ordinal);
 
         var diagnostics = catalog.Workloads[ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId];
+        Assert.Equal("1.3.0", diagnostics.Version);
+        Assert.Equal(
+            new WorkloadLineage(
+                ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId,
+                "1.2.0",
+                "provider-generated structured-log sequences need not equal a scope-local row count, so the workload must validate high-water against the maximum committed sequence"),
+            diagnostics.Lineage);
         Assert.Equal(
             new BenchmarkAdmission("blocked", ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode),
             diagnostics.BenchmarkAdmission);
@@ -165,6 +175,21 @@ public sealed class WorkloadCatalogTests
         Assert.Contains("lineage", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Rejects_diagnostics_successor_lineage_drift_even_when_its_source_digest_is_reviewed_again()
+    {
+        using var fixture = WorkloadFixture.CopyFromRepository();
+        fixture.Replace(
+            "provider-generated structured-log sequences need not equal a scope-local row count, so the workload must validate high-water against the maximum committed sequence",
+            "diagnostics successor has no predecessor",
+            "diagnostics-durable-history-v1.3.json");
+
+        var error = Assert.Throws<WorkloadContractException>(() =>
+            WorkloadCatalog.Load(fixture.Root, SourceDigests(fixture.Root)));
+
+        Assert.Contains("lineage", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Theory]
     [InlineData("\"noiseUserCount\": 16", "\"noiseUserCount\": 17")]
     [InlineData("\"scenarioId\": \"identity-authority-baseline\"", "\"scenarioId\": \"identity-authority-drift\"")]
@@ -191,7 +216,7 @@ public sealed class WorkloadCatalogTests
         string to)
     {
         using var fixture = WorkloadFixture.CopyFromRepository();
-        fixture.Replace(from, to, "diagnostics-durable-history-v1.2.json");
+        fixture.Replace(from, to, "diagnostics-durable-history-v1.3.json");
 
         var error = Assert.Throws<WorkloadContractException>(() =>
             WorkloadCatalog.Load(fixture.Root, SourceDigests(fixture.Root)));
@@ -241,7 +266,7 @@ public sealed class WorkloadCatalogTests
             ["checkpoint-commit"] = new("ee4cef346ca64739bbe7cfc84ee3f74e6acefec582f537c685991ca73c62ce13", "ebb92b59a7a331e863c813f7110272093be6a78794a9cc7a0d914103ab4c9c62"),
             ["command-send-lease-ack"] = new("a108e41c890af94ee37d610817e2c4d6339451cbfbbd0e33e0bd794d0d1af5b1", "86439fbc13d29102d02615ee98a5beb53e008e673f6523681e3ee2d926d3389f"),
             ["due-timer-selection"] = new("02cfb91f4f415fcfe8fe6cd64e7c056b88b908e068735d2ec91eb81e0ec8d5bd", "8f380d449eb3a8e88f1edbea73cf9a7ddfa7a7502cab3ac5a8fcfe3e175ffed3"),
-            ["diagnostics-durable-history"] = new("33e58245aee02636756fc5e6b8cd5ac73a73e44b3b098129ad55e44eb7acbaa2", "dba49158bd952e065d2bef53a54d80d8b1f1392d52226b93710cd428f827ddc4"),
+            ["diagnostics-durable-history"] = new("696a866f11365bfaca621328987b04d8166bf5c84a255584278669dc3909debd", "f8e8245c588a12aad79796432219c8450f26a2e90d290ceb82e06bf81c2aec77"),
             ["iam-normalized-lookup-update"] = new("5713ce9b09b68d368d7448041cf513907a648e53df61ccfc307a91381199a8e9", "32b62d5597e8b03715d606be9de81af9a363fe05aa2c7bf6d3f3e4cd185ddbbc"),
             ["outbox-drain"] = new("bc5c6ca1113e78fe948a61de35c66a644129c79028a198d9143dc316cea7bede", "7228f024095bc2fadc0649e0841d56259f3408b55368911ea402b7d96c8b2e71"),
             ["placement-takeover"] = new("17f22a7e7896b3842ebd771e604b13e859d1b480bc5b6093ce576f14a673e985", "3ad65cc7ff9287f9c20a68ec6cd267bc78fa083fb775dda36062c185706fb4b4"),

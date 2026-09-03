@@ -72,10 +72,10 @@ internal static class BenchmarkAdapterRegistry
         Registration(SecretCreateReadListWorkload.WorkloadId, WorkloadVersion, GroundworkSecretRepositoryAdapterId, GroundworkSecretRepositoryAdapter.PhysicalForm,
             GroundworkProviders, NativePlanCaptureKind.Complete,
             static (request, connection, output) => new GroundworkSecretRepositoryAdapter(request, connection, output)),
-        Registration(DiagnosticsDurableHistoryWorkload.WorkloadId, "1.2.0", DiagnosticsDurableHistoryAdapter.AdapterId, DiagnosticsDurableHistoryAdapter.PhysicalForm,
+        Registration(DiagnosticsDurableHistoryWorkload.WorkloadId, "1.3.0", DiagnosticsDurableHistoryAdapter.AdapterId, DiagnosticsDurableHistoryAdapter.PhysicalForm,
             GroundworkProviders, NativePlanCaptureKind.PartialBlocked,
             static (request, connection, output) => new DiagnosticsDurableHistoryAdapter(request, connection, output)),
-        Registration(DiagnosticsDurableHistoryWorkload.WorkloadId, "1.2.0", EfDiagnosticsAdapterId, EfDiagnosticsDurableHistoryAdapter.PhysicalForm,
+        Registration(DiagnosticsDurableHistoryWorkload.WorkloadId, "1.3.0", EfDiagnosticsAdapterId, EfDiagnosticsDurableHistoryAdapter.PhysicalForm,
             SqliteOnly, NativePlanCaptureKind.CorrectnessOnly,
             static (request, connection, output) => new EfDiagnosticsDurableHistoryAdapter(request, connection, output))
     ];

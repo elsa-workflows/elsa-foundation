@@ -34,8 +34,8 @@ public static class BenchmarkAdapterAdmission
     private static readonly IReadOnlySet<AdapterFormMapping> RatifiedDiagnosticsProductionMappings =
         new HashSet<AdapterFormMapping>
         {
-            new(DiagnosticsWorkloadId, "1.2.0", "groundwork-v2", "ordinary-groundwork-diagnostics-units"),
-            new(DiagnosticsWorkloadId, "1.2.0", "ef-diagnostics-oracle", "efcore-diagnostics-relational-tables")
+            new(DiagnosticsWorkloadId, "1.3.0", "groundwork-v2", "ordinary-groundwork-diagnostics-units"),
+            new(DiagnosticsWorkloadId, "1.3.0", "ef-diagnostics-oracle", "efcore-diagnostics-relational-tables")
         };
 
     public static void RequireAdmitted(

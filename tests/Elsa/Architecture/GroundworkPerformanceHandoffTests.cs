@@ -352,6 +352,170 @@ for malformed_self_windows in (
         Assert.True(result.ExitCode == 0, result.Error);
     }
 
+    [Fact]
+    public void Operator_runner_accounts_for_trace_detail_composite_evidence()
+    {
+        var runnerPath = Path.Combine(RepoRoot, "tools", "groundwork", "run-e3-medium-baseline.py");
+        const string assertions = """
+import json
+import hashlib
+import runpy
+import sys
+import tempfile
+from pathlib import Path
+
+validate_evidence = runpy.run_path(sys.argv[1])["validate_evidence"]
+request = {
+    "ComparisonCohortId": "cohort",
+    "MeasurementSetId": "measurement",
+    "WorkloadId": "diagnostics-durable-history",
+    "WorkloadVersion": "1.3.0",
+    "Provider": "sqlite",
+    "Adapter": "groundwork-v2",
+    "PhysicalForm": "ordinary-groundwork-diagnostics-units",
+    "Scale": "medium",
+    "CommitSha": "a" * 40,
+    "HarnessAssemblySha256": "b" * 64,
+    "CompositionFingerprint": "c" * 64,
+    "HostFingerprintSha256": "d" * 64,
+    "ProviderVersion": "3.50.4",
+    "ProviderTopology": "file-backed-distinct-connections",
+    "ProviderConfiguration": {},
+    "Seed": "seed",
+    "InputFingerprintSha256": "e" * 64,
+    "NativePlanIdentity": "identity",
+}
+document = {
+    "SchemaVersion": 2,
+    **{name: value for name, value in request.items() if name != "NativePlanIdentity"},
+    "Identity": request["NativePlanIdentity"],
+    "Routes": [],
+    "BlockedRoutes": [],
+    "TraceDetailConstituents": [],
+}
+registration = {"RequiredNativeRoutes": ["trace-detail"]}
+with tempfile.TemporaryDirectory() as directory:
+    raw_plan = Path(directory) / "trace.raw.json"
+    page_plan = Path(directory) / "trace-page.raw.json"
+    log_plan = Path(directory) / "trace-log.raw.json"
+    raw_plan.write_text('{"plan":"initial"}', encoding="utf-8")
+    page_plan.write_text('{"plan":"continuation"}', encoding="utf-8")
+    log_plan.write_text('{"plan":"log"}', encoding="utf-8")
+    constituent = {
+        "RouteIdentity": "trace-detail/spans-by-trace-key-start-id",
+        "RawPlanReference": raw_plan.name,
+        "RawPlanSha256": hashlib.sha256(raw_plan.read_bytes()).hexdigest(),
+        "PlanClassification": "index-search",
+        "PhysicalIndexName": "trace-index",
+        "CommandText": "SELECT page",
+        "PhysicalCardinality": 100_000,
+        "HasStorageScopePredicate": True,
+        "HasRoutePredicate": True,
+        "FiniteLimit": 1,
+        "PublicRowBound": 2,
+        "MaterializedCandidateCount": 2,
+        "ObservedCommandCount": 2,
+        "MaxInvocationCount": 2,
+        "Pages": [{
+            "PageIndex": 1,
+            "RawPlanReference": page_plan.name,
+            "RawPlanSha256": hashlib.sha256(page_plan.read_bytes()).hexdigest(),
+            "CommandText": "SELECT continuation page",
+        }],
+    }
+    point_read = {
+        **constituent,
+        "RawPlanReference": "",
+        "RawPlanSha256": "",
+        "PlanClassification": "primary-key-read",
+        "PhysicalIndexName": "",
+        "FiniteLimit": 1,
+        "PublicRowBound": 1,
+        "MaterializedCandidateCount": 1,
+        "ObservedCommandCount": 1,
+        "MaxInvocationCount": 1,
+        "Pages": None,
+    }
+    log_constituent = {
+        **constituent,
+        "RouteIdentity": "trace-detail/logs-by-trace-key-timestamp-id",
+        "RawPlanReference": log_plan.name,
+        "RawPlanSha256": hashlib.sha256(log_plan.read_bytes()).hexdigest(),
+        "PublicRowBound": 1,
+        "MaterializedCandidateCount": 1,
+        "ObservedCommandCount": 1,
+        "MaxInvocationCount": 1,
+        "Pages": [],
+    }
+    document["TraceDetailConstituents"] = [
+        {**point_read, "RouteIdentity": "trace-detail/summary-by-trace-key"},
+        constituent,
+        log_constituent,
+        {**point_read, "RouteIdentity": "trace-detail/resources-by-id"},
+    ]
+    path = Path(directory) / "native-plan.json"
+
+    def expect_invalid(candidate, message):
+        path.write_text(json.dumps(candidate), encoding="utf-8")
+        try:
+            validate_evidence(path, request, registration, timing=True)
+        except ValueError:
+            return
+        raise AssertionError(message)
+
+    path.write_text(json.dumps(document), encoding="utf-8")
+    validate_evidence(path, request, registration, timing=True)
+
+    reserved_plan = Path(directory) / "Gate.v1.json"
+    reserved_plan.write_text('{"plan":"reserved"}', encoding="utf-8")
+    reserved = json.loads(json.dumps(document))
+    reserved["TraceDetailConstituents"][1]["RawPlanReference"] = reserved_plan.name
+    reserved["TraceDetailConstituents"][1]["RawPlanSha256"] = hashlib.sha256(reserved_plan.read_bytes()).hexdigest()
+    expect_invalid(reserved, "mixed-case reserved result filename was accepted as raw-plan evidence")
+
+    wrong_point_read = json.loads(json.dumps(document))
+    wrong_point_read["TraceDetailConstituents"][0]["PlanClassification"] = "index-search"
+    wrong_point_read["TraceDetailConstituents"][0]["PhysicalIndexName"] = "fake-index"
+    expect_invalid(wrong_point_read, "indexed classification was accepted for a trace-detail point read")
+
+    point_read_with_artifact = json.loads(json.dumps(document))
+    point_read_with_artifact["TraceDetailConstituents"][0]["RawPlanReference"] = raw_plan.name
+    point_read_with_artifact["TraceDetailConstituents"][0]["RawPlanSha256"] = hashlib.sha256(raw_plan.read_bytes()).hexdigest()
+    expect_invalid(point_read_with_artifact, "raw-plan artifact was accepted for a trace-detail point read")
+
+    wrong_indexed_query = json.loads(json.dumps(document))
+    wrong_indexed_query["TraceDetailConstituents"][1]["PlanClassification"] = " "
+    wrong_indexed_query["TraceDetailConstituents"][1]["PhysicalIndexName"] = ""
+    expect_invalid(wrong_indexed_query, "blank indexed-query classification and index were accepted")
+
+    missing_predicate = json.loads(json.dumps(document))
+    missing_predicate["TraceDetailConstituents"][2]["HasRoutePredicate"] = False
+    expect_invalid(missing_predicate, "trace-detail evidence without the route predicate was accepted")
+
+    raw_plan.write_text("tampered", encoding="utf-8")
+    expect_invalid(document, "tampered trace-detail raw plan was accepted")
+    raw_plan.write_text('{"plan":"initial"}', encoding="utf-8")
+    page_plan.write_text("tampered", encoding="utf-8")
+    expect_invalid(document, "tampered trace-detail continuation plan was accepted")
+    page_plan.write_text('{"plan":"continuation"}', encoding="utf-8")
+
+    malformed = dict(document)
+    malformed["TraceDetailConstituents"] = [{"RouteIdentity": "trace-detail/spans-by-trace-key-start-id"}]
+    expect_invalid(malformed, "malformed trace-detail constituent was accepted")
+
+    incomplete = dict(document)
+    incomplete["TraceDetailConstituents"] = document["TraceDetailConstituents"][:-1]
+    expect_invalid(incomplete, "incomplete trace-detail constituent set was accepted")
+
+    document["TraceDetailConstituents"] = []
+    expect_invalid(document, "empty trace-detail constituent evidence was accepted")
+""";
+
+        var result = RunPython(assertions, runnerPath);
+
+        Assert.True(result.ExitCode == 0, result.Error);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("blocked")]
@@ -456,6 +620,7 @@ for malformed_self_windows in (
         Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "distributed-runtime.json"),
         Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "diagnostics.json"),
         Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "diagnostics-durable-history-v1.2.json"),
+        Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "diagnostics-durable-history-v1.3.json"),
         Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "recovery-scan-v1.2.json"),
         IdentityWorkloadPath,
         Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "secret-create-read-list-v1.1.json")

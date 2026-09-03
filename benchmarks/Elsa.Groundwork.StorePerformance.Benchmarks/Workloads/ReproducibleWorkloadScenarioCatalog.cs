@@ -15,7 +15,7 @@ public static class ReproducibleWorkloadScenarioCatalog
     public const string DiagnosticsWorkloadId = "diagnostics-durable-history";
     public const string DiagnosticsBlockedReasonCode = "gate.diagnostics.absolute-budget-required";
     public const string DiagnosticsBlockedReason =
-        "Numeric absolute budgets and an executable absolute-budget gate require independent review before diagnostics measurement.";
+        "A diagnostics timing verdict requires an independently reviewed provider budget; only ungraded first-measurement evidence is admitted before that gate.";
     public const string BlockedWorkloadId = "secret-create-read-list";
     public const string BlockedVersion = "1.0.0";
     public const string BlockedInputFingerprint = "339a6adc9ba6c34e85ce43eafd3e0b8b7b74f7ccbb7d52bd34efe1fbe394014c";
@@ -43,7 +43,7 @@ public static class ReproducibleWorkloadScenarioCatalog
             ["bookmark-lookup"] = new("d006e25e22dc8d9374d8931f03e27c6dc45c27314bfe2f819a4dd61b588062e8", "e723ae42c3fd4e970cff04d4a6e867fa40b8d6ea23b0305ab82bf80d3916d6a9"),
             ["checkpoint-commit"] = new("ee4cef346ca64739bbe7cfc84ee3f74e6acefec582f537c685991ca73c62ce13", "ebb92b59a7a331e863c813f7110272093be6a78794a9cc7a0d914103ab4c9c62"),
             ["command-send-lease-ack"] = new("a108e41c890af94ee37d610817e2c4d6339451cbfbbd0e33e0bd794d0d1af5b1", "86439fbc13d29102d02615ee98a5beb53e008e673f6523681e3ee2d926d3389f"),
-            ["diagnostics-durable-history"] = new("33e58245aee02636756fc5e6b8cd5ac73a73e44b3b098129ad55e44eb7acbaa2", "dba49158bd952e065d2bef53a54d80d8b1f1392d52226b93710cd428f827ddc4"),
+            ["diagnostics-durable-history"] = new("696a866f11365bfaca621328987b04d8166bf5c84a255584278669dc3909debd", "f8e8245c588a12aad79796432219c8450f26a2e90d290ceb82e06bf81c2aec77"),
             ["due-timer-selection"] = new("02cfb91f4f415fcfe8fe6cd64e7c056b88b908e068735d2ec91eb81e0ec8d5bd", "8f380d449eb3a8e88f1edbea73cf9a7ddfa7a7502cab3ac5a8fcfe3e175ffed3"),
             ["iam-normalized-lookup-update"] = new("5713ce9b09b68d368d7448041cf513907a648e53df61ccfc307a91381199a8e9", "32b62d5597e8b03715d606be9de81af9a363fe05aa2c7bf6d3f3e4cd185ddbbc"),
             ["outbox-drain"] = new("bc5c6ca1113e78fe948a61de35c66a644129c79028a198d9143dc316cea7bede", "7228f024095bc2fadc0649e0841d56259f3408b55368911ea402b7d96c8b2e71"),
@@ -324,7 +324,7 @@ public static class ReproducibleWorkloadScenarioCatalog
         yield return Scenario(
             "diagnostics-durable-history",
             "diagnostics-durable-history",
-            "spec094-diagnostics-durable-history-v1.2",
+            "spec094-diagnostics-durable-history-v1.3",
             [
                 ("concurrentWriters", 4),
                 ("fixedNowUtc", "2026-07-25T00:00:00Z"),
@@ -375,15 +375,14 @@ public static class ReproducibleWorkloadScenarioCatalog
                     }),
                     ("resourceCount", Int(parameters, "resourceCount")),
                     ("restartStateMatched", true),
-                    ("structuredLogHighWater",
-                        Int(parameters, "retainedRecordsPerStream") + Int(parameters, "retentionOverflowRecords")),
+                    ("structuredLogHighWaterMatchedMaximumCommittedSequence", true),
                     ("structuredLogRecentCount", Int(parameters, "queryLimit")),
                     ("structuredLogReplayCount", Int(parameters, "queryLimit")),
                     ("structuredLogRetainedCount", Int(parameters, "retainedRecordsPerStream")),
                     ("traceWindow", new[] { $"{first:x32}", $"{last:x32}" }),
                     ("trimmedRecordsPerStream", Int(parameters, "retentionOverflowRecords")));
             },
-            version: "1.2.0");
+            version: "1.3.0");
 
         yield return Scenario(
             "secret-create-read-list",

@@ -2,7 +2,9 @@
 """Drive #646 evidence phases from the AdapterHost's authoritative matrix catalog.
 
 Correctness, native-plan capture, timed measurement, comparison, and gate evaluation are
-separate commands. Every mutating or timed command is a dry run unless --execute is present.
+separate commands. Diagnostics measurement is explicitly ungraded evidence for budget derivation;
+comparison and ratio-gate phases remain blocked until a reviewed policy exists. Every mutating or timed
+command is a dry run unless --execute is present.
 """
 
 from __future__ import annotations
@@ -24,7 +26,25 @@ from typing import Any
 PROVIDERS = ("sqlite", "postgresql", "sqlserver", "mongodb")
 SAFE_IDENTIFIER = re.compile(r"^[A-Za-z0-9._-]+$")
 LOWER_SHA256 = re.compile(r"^[0-9a-f]{64}$")
+SAFE_RAW_PLAN_REFERENCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.(json|txt|xml)$", re.IGNORECASE)
 TASKLIST_CSV_ROW = re.compile(r'^"(?:[^"]|"")*"(?:,"(?:[^"]|"")*"){4}$')
+TRACE_DETAIL_CONSTITUENT_ROUTES = (
+    "trace-detail/summary-by-trace-key",
+    "trace-detail/spans-by-trace-key-start-id",
+    "trace-detail/logs-by-trace-key-timestamp-id",
+    "trace-detail/resources-by-id",
+)
+TRACE_DETAIL_POINT_READ_ROUTES = {
+    "trace-detail/summary-by-trace-key",
+    "trace-detail/resources-by-id",
+}
+ALLOWED_RESULT_FILES = {
+    "comparison.v1.json",
+    "comparison.from-gate.v1.json",
+    "gate.v1.json",
+    "measurement.v1.json",
+    "budget-gate.v1.json",
+}
 
 
 def repository_root() -> Path:
@@ -38,6 +58,18 @@ def fail(message: str) -> int:
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def safe_raw_plan_reference(value: Any) -> bool:
+    if not isinstance(value, str) or not value or "/" in value or "\\" in value:
+        return False
+    lowered = value.lower()
+    return (
+        SAFE_RAW_PLAN_REFERENCE.fullmatch(value) is not None
+        and not lowered.endswith((".process.json", ".native-plan.json"))
+        and not lowered.startswith("artifact-manifest.")
+        and lowered not in ALLOWED_RESULT_FILES
+    )
 
 
 def ensure_external(path: Path, root: Path, name: str) -> Path:
@@ -106,8 +138,8 @@ def matrix_catalog(root: Path, child: Path) -> dict[str, Any]:
             "AdapterHost describe-matrix failed; rebuild the Release AdapterHost and harness from current HEAD"
         ) from error
     document = strict_json(output, "AdapterHost describe-matrix")
-    if document.get("SchemaVersion") != 2 or not isinstance(document.get("Registrations"), list):
-        raise ValueError("AdapterHost describe-matrix did not emit the schema-v2 registration catalog")
+    if document.get("SchemaVersion") != 3 or not isinstance(document.get("Registrations"), list):
+        raise ValueError("AdapterHost describe-matrix did not emit the schema-v3 registration catalog")
     revision = source_provenance(root)
     build = document.get("Build")
     if not isinstance(build, dict) or build.get("AdapterHostRevision") != revision or build.get("HarnessRevision") != revision:
@@ -298,30 +330,134 @@ def validate_evidence(
 
     routes = document.get("Routes")
     blocked = document.get("BlockedRoutes")
+    trace_detail = document.get("TraceDetailConstituents")
     if blocked is None:
         blocked = []
-    if not isinstance(routes, list) or not isinstance(blocked, list):
-        raise ValueError(f"{path.name} must contain Routes and BlockedRoutes arrays")
+    if trace_detail is None:
+        trace_detail = []
+    if not isinstance(routes, list) or not isinstance(blocked, list) or not isinstance(trace_detail, list):
+        raise ValueError(f"{path.name} must contain Routes, BlockedRoutes, and TraceDetailConstituents arrays")
     if any(not isinstance(route, dict) or not isinstance(route.get("RouteIdentity"), str) for route in routes):
         raise ValueError(f"{path.name} contains an invalid native route entry")
     if any(not isinstance(route, str) or not route for route in blocked):
         raise ValueError(f"{path.name} contains an invalid blocked route identity")
     route_names = [route["RouteIdentity"] for route in routes]
+    admitted_route_names = route_names + (["trace-detail"] if trace_detail else [])
     required = registration["RequiredNativeRoutes"]
-    if timing and sorted(route_names) != sorted(required):
+    if timing and sorted(admitted_route_names) != sorted(required):
         raise ValueError(f"{path.name} does not capture every required native route for timing")
-    if sorted(route_names + blocked) != sorted(required):
+    if sorted(admitted_route_names + blocked) != sorted(required):
         raise ValueError(f"{path.name} does not account for every required route as captured or blocked")
-    if len(route_names + blocked) != len(set(route_names + blocked)):
+    if len(admitted_route_names + blocked) != len(set(admitted_route_names + blocked)):
         raise ValueError(f"{path.name} contains duplicate captured/blocked route identities")
+    raw_references = []
     for route in routes:
         reference = route.get("RawPlanReference")
         expected_digest = route.get("RawPlanSha256")
-        if not isinstance(reference, str) or Path(reference).name != reference:
+        if not safe_raw_plan_reference(reference) or not isinstance(expected_digest, str) or not LOWER_SHA256.fullmatch(expected_digest):
             raise ValueError(f"{path.name} contains an unsafe raw-plan reference")
         raw = path.parent / reference
         if not raw.is_file() or sha256(raw) != expected_digest:
             raise ValueError(f"raw native plan {reference} is missing or does not match its digest")
+        raw_references.append(reference)
+
+    constituent_names = []
+    for constituent in trace_detail:
+        if (
+            not isinstance(constituent, dict)
+            or not isinstance(constituent.get("RouteIdentity"), str)
+            or not constituent["RouteIdentity"]
+            or not isinstance(constituent.get("RawPlanReference"), str)
+            or not isinstance(constituent.get("RawPlanSha256"), str)
+            or not isinstance(constituent.get("PlanClassification"), str)
+            or not constituent["PlanClassification"].strip()
+            or not isinstance(constituent.get("PhysicalIndexName"), str)
+            or not isinstance(constituent.get("CommandText"), str)
+            or not constituent["CommandText"].strip()
+        ):
+            raise ValueError(f"{path.name} contains an invalid trace-detail constituent entry")
+
+        constituent_names.append(constituent["RouteIdentity"])
+        reference = constituent["RawPlanReference"]
+        digest = constituent["RawPlanSha256"]
+        pages = constituent.get("Pages")
+        is_point_read = constituent["RouteIdentity"] in TRACE_DETAIL_POINT_READ_ROUTES
+        integer_fields = (
+            "PhysicalCardinality",
+            "FiniteLimit",
+            "PublicRowBound",
+            "MaterializedCandidateCount",
+            "ObservedCommandCount",
+            "MaxInvocationCount",
+        )
+        if any(
+            isinstance(constituent.get(name), bool)
+            or not isinstance(constituent.get(name), int)
+            or constituent[name] <= 0
+            for name in integer_fields
+        ) or any(not isinstance(constituent.get(name), bool) for name in ("HasStorageScopePredicate", "HasRoutePredicate")):
+            raise ValueError(f"{path.name} contains invalid trace-detail constituent bounds or predicates")
+        if not constituent["HasStorageScopePredicate"] or not constituent["HasRoutePredicate"]:
+            raise ValueError(f"{path.name} contains a trace-detail constituent without required predicates")
+        if pages is not None and not isinstance(pages, list):
+            raise ValueError(f"{path.name} contains invalid trace-detail continuation pages")
+        if is_point_read:
+            if constituent["PlanClassification"] != "primary-key-read" or constituent["PhysicalIndexName"]:
+                raise ValueError(f"{path.name} contains an invalid trace-detail point-read classification")
+            if reference or digest or pages:
+                raise ValueError(
+                    f"{path.name} contains a trace-detail point read with an explain artifact or continuation page"
+                )
+        else:
+            if (
+                constituent["PlanClassification"] != "index-search"
+                or not constituent["PhysicalIndexName"].strip()
+                or not safe_raw_plan_reference(reference)
+                or not LOWER_SHA256.fullmatch(digest)
+            ):
+                raise ValueError(f"{path.name} contains an unsafe or undigested trace-detail raw-plan reference")
+            raw = path.parent / reference
+            if not raw.is_file() or sha256(raw) != digest:
+                raise ValueError(f"trace-detail raw native plan {reference} is missing or does not match its digest")
+            raw_references.append(reference)
+
+        page_entries = [] if pages is None else pages
+        page_indices = []
+        for page in page_entries:
+            if not isinstance(page, dict):
+                raise ValueError(f"{path.name} contains an invalid trace-detail continuation page entry")
+            page_index = page.get("PageIndex")
+            page_reference = page.get("RawPlanReference")
+            page_digest = page.get("RawPlanSha256")
+            command_text = page.get("CommandText")
+            if (
+                isinstance(page_index, bool)
+                or not isinstance(page_index, int)
+                or page_index <= 0
+                or not safe_raw_plan_reference(page_reference)
+                or not isinstance(page_digest, str)
+                or not LOWER_SHA256.fullmatch(page_digest)
+                or not isinstance(command_text, str)
+                or not command_text.strip()
+            ):
+                raise ValueError(f"{path.name} contains an invalid trace-detail continuation page entry")
+            page_indices.append(page_index)
+            raw = path.parent / page_reference
+            if not raw.is_file() or sha256(raw) != page_digest:
+                raise ValueError(
+                    f"trace-detail page {page_index} raw native plan {page_reference} is missing or does not match its digest"
+                )
+            raw_references.append(page_reference)
+        expected_page_count = 1 if is_point_read else (
+            constituent["PublicRowBound"] + constituent["FiniteLimit"] - 1
+        ) // constituent["FiniteLimit"]
+        if page_indices != list(range(1, expected_page_count)):
+            raise ValueError(f"{path.name} contains non-sequential trace-detail continuation page indexes")
+
+    if trace_detail and sorted(constituent_names) != sorted(TRACE_DETAIL_CONSTITUENT_ROUTES):
+        raise ValueError(f"{path.name} does not account for every trace-detail constituent exactly once")
+    if len(raw_references) != len(set(raw_references)):
+        raise ValueError(f"{path.name} contains duplicate raw provider-plan references")
     return document
 
 
@@ -336,9 +472,14 @@ def require_phase(registration: dict[str, Any], phase: str) -> None:
             f"correctness is blocked: {registration['CorrectnessReason']} for "
             f"{registration['WorkloadId']}/{registration['Adapter']}"
         )
-    if phase == "measure" and registration["TimingStatus"] != "ready":
+    if phase == "measure" and registration["MeasurementStatus"] not in {"ready", "ungraded"}:
         raise ValueError(
-            f"timing is blocked: {registration['TimingReason']} for "
+            f"measurement is blocked: {registration['MeasurementReason']} for "
+            f"{registration['WorkloadId']}/{registration['Adapter']}"
+        )
+    if phase == "measure" and registration["MeasurementStatus"] == "ungraded" and registration["WorkloadId"] != "diagnostics-durable-history":
+        raise ValueError(
+            f"only the diagnostics workload may use an ungraded measurement phase for "
             f"{registration['WorkloadId']}/{registration['Adapter']}"
         )
 
@@ -434,12 +575,12 @@ def status(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(catalog, indent=2))
         return 0
-    print("workload\tversion\tadapter\tform\tproviders\tcapture\tcorrectness\ttiming\treason")
+    print("workload\tversion\tadapter\tform\tproviders\tcapture\tcorrectness\tmeasurement\tmeasurement-reason\ttiming\ttiming-reason")
     for item in catalog["Registrations"]:
         print("\t".join([
             item["WorkloadId"], item["WorkloadVersion"], item["Adapter"], item["PhysicalForm"],
             ",".join(item["Providers"]), item["CapturePlanStatus"], item["CorrectnessStatus"],
-            item["TimingStatus"], item["TimingReason"],
+            item["MeasurementStatus"], item["MeasurementReason"], item["TimingStatus"], item["TimingReason"],
         ]))
     return 0
 

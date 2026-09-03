@@ -1,36 +1,44 @@
-# Proposal: an absolute-budget basis and executable gate for the three oracle-less diagnostics providers
+# Diagnostics absolute-budget basis and ungraded first-measurement authority
 
-Status: **EXECUTABLE SHAPE REVIEWED IN PR #1514 — numeric policies still need first measurements and ratification.**
+Status: **MEASUREMENT SHAPE RATIFIED 2026-09-03 — numeric policies still need first measurements and ratification.**
 Proposed by the EF-Core-oracle scoping analysis
 ([`docs/reports/ef-core-oracle-scoping-2026-08.md`](../../../docs/reports/ef-core-oracle-scoping-2026-08.md), PR #1279).
 Independent reviewer: **#646 control-room review, recorded in PR #1514.** Numeric values:
 **deliberately absent** — see
 [The numbers are not in this document](#the-numbers-are-not-in-this-document).
 
-This document is the **proposal half**, in the same sense as
-[`runtime-absolute-budget-basis.md`](runtime-absolute-budget-basis.md). It authorizes no edit, sets no
-number, and produces no verdict.
+The program owner authorized the phase split while directing the remaining program to completion:
+provider-native plan and correctness evidence may now precede one provenance-bound, ungraded
+four-process measurement set. That set exists only to derive candidate provider budgets. It cannot enter
+`compare`, the ratio `gate`, a coverage-ledger verdict, or EF deletion. `budget-gate` still requires an
+independently reviewed numeric policy for the exact workload version and provider.
+
+This decision keeps all four Groundwork providers in the v1.3 contract. It supersedes the older
+SQLite-only split proposal: the retained EF diagnostics adapter remains correctness-only, and no
+semantically unequal EF ratio is used as a diagnostics performance verdict. The historical analysis
+below explains how the absolute policy shape was derived; where it discusses narrowing to SQLite or
+waiting for an adapter leaf, this current decision and the delivered v1.3 adapter/native-plan work lead.
 
 ## Executable shape decision
 
 The executable implementation decision for this proposal is now recorded in the #646 delivery slice.
-The no-comparand workflow is deliberately separate from the ratio workflow: `MeasurementResult`,
-`AbsoluteBudgetPolicy`, and `AbsoluteBudgetEvaluator` implement `measure` and `budget-gate`, while
+The no-comparand workflow is deliberately separate from the ratio workflow: schema-v2 `MeasurementResult`
+classifies successful raw evidence as `EvaluationStatus: ungraded`; it does not claim a verdict.
+`AbsoluteBudgetPolicy` and `AbsoluteBudgetEvaluator` implement `measure` and `budget-gate`, while
 `ComparisonResult`, `GatePolicy`, and `GateEvaluator` remain unchanged. The five proposed budget-bearing
 classes — durable append, bounded read, grouped reduction, exact count, and retention write — plus the
 four explicit `NotHotPath` operations (the two restart observations and the two correctness-only
 operations) are the adopted policy shape. This reverses the earlier 093 omission because diagnostics
 has three providers without an oracle to compare against; it does not authorize numeric values.
 
-Numeric budgets and the first provider measurements remain unratified. Each concrete provider policy
+Numeric budgets remain unratified. Each concrete provider policy
 and its numeric ratification must be recorded on a later #646 pull request or issue before that policy
 or any verdict is merged, and the overall diagnostics gate remains blocked until that evidence exists.
 In particular, p99 and throughput belong only to `AbsoluteBudgetPolicy`; they are not added to the
 existing ratio `GatePolicy`.
 
-**Companion:** [`diagnostics-sqlite-split-basis.md`](diagnostics-sqlite-split-basis.md) covers the SQLite
-half (Route 1) and is a **hard prerequisite** for this one — see
-[Why this cannot start first](#why-this-cannot-start-first).
+**Historical companion:** [`diagnostics-sqlite-split-basis.md`](diagnostics-sqlite-split-basis.md)
+records the superseded narrowing proposal. It is not an implementation prerequisite.
 
 ## The problem, in the contract's own words
 

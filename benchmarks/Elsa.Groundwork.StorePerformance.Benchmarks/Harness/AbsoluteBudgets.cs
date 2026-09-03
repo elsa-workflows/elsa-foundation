@@ -1,7 +1,7 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 
@@ -49,7 +49,8 @@ public static class AbsoluteBudgetPolicyFile
     public static AbsoluteBudgetPolicy Load(string path, string workloadId, string workloadVersion, string provider)
     {
         var bytes = File.ReadAllBytes(path);
-        using (var document = JsonDocument.Parse(bytes)) ArtifactStore.RejectDuplicateProperties(document.RootElement);
+        using (var document = JsonDocument.Parse(bytes))
+            ArtifactStore.RejectDuplicateProperties(document.RootElement);
 
         AbsoluteBudgetPolicy policy;
         try
@@ -108,6 +109,7 @@ public sealed record MeasurementResult(
     string Provider,
     string Scale,
     string Target,
+    string EvaluationStatus,
     bool Complete,
     bool CorrectnessValid,
     IReadOnlyList<ProcessAggregate> Operations,
@@ -141,13 +143,26 @@ internal sealed class MeasurementAdmission
             return false;
         }
 
+        if (result.EvaluationStatus is not (MeasurementResultStatus.Ungraded or MeasurementResultStatus.Blocked))
+        {
+            reason = "The admitted measurement has an invalid evaluation status.";
+            return false;
+        }
+
         if (!result.Complete || !result.CorrectnessValid)
         {
+            if (result.EvaluationStatus != MeasurementResultStatus.Blocked)
+            {
+                reason = "An incomplete measurement must be explicitly classified as blocked.";
+                return false;
+            }
+
             reason = "";
             return true;
         }
 
-        if (result.SchemaVersion != 1 ||
+        if (result.SchemaVersion != 2 ||
+            result.EvaluationStatus != MeasurementResultStatus.Ungraded ||
             result.ArtifactManifestSha256 is not { Length: 64 } hash ||
             hash.Any(character => character is not (>= '0' and <= '9' or >= 'a' and <= 'f')) ||
             !OperationIdentity.IsValid(result.WorkloadId) ||
@@ -185,17 +200,17 @@ public static class Measurement
         var anchor = validation.Anchor!;
         var nativePlan = validation.Correctness!.NativePlan;
         if (string.Equals(anchor.WorkloadId, DiagnosticsDurableHistoryWorkload.WorkloadId, StringComparison.Ordinal) &&
-            (nativePlan.RouteContract != "provider-native-routes" || (nativePlan.BlockedRoutes ?? []).Count != 0 ||
-             nativePlan.Routes.Count != catalog.Workloads[anchor.WorkloadId].RequiredNativeRoutes.Count))
-            return Blocked(artifactSet.ManifestSha256, anchor, "Diagnostics absolute measurement requires a complete provider-native plan with every required route admitted; blocked routes remain non-timed evidence.");
+            !DiagnosticsAdmission.HasCompleteProviderNativePlan(catalog.Workloads[anchor.WorkloadId], nativePlan))
+            return Blocked(artifactSet.ManifestSha256, anchor, "Diagnostics measurement requires a complete provider-native plan with every required route admitted; blocked routes remain non-timed evidence.");
         var result = new MeasurementResult(
-            1,
+            2,
             artifactSet.ManifestSha256,
             anchor.WorkloadId,
             anchor.WorkloadVersion,
             anchor.Provider,
             anchor.Scale,
             Comparison.Target(artifactSet.Artifacts[0]),
+            MeasurementResultStatus.Ungraded,
             true,
             true,
             Comparison.Aggregate(artifactSet.Artifacts),
@@ -208,9 +223,15 @@ public static class Measurement
 
     private static MeasurementResult Blocked(string manifestHash, RunRequest? request, string reason)
     {
-        var result = new MeasurementResult(1, manifestHash, request?.WorkloadId ?? "", request?.WorkloadVersion ?? "", request?.Provider ?? "", request?.Scale ?? "", request is null ? "" : $"{request.Provider}/{request.Adapter}/{request.PhysicalForm}", false, false, [], reason);
+        var result = new MeasurementResult(2, manifestHash, request?.WorkloadId ?? "", request?.WorkloadVersion ?? "", request?.Provider ?? "", request?.Scale ?? "", request is null ? "" : $"{request.Provider}/{request.Adapter}/{request.PhysicalForm}", MeasurementResultStatus.Blocked, false, false, [], reason);
         return result with { Admission = MeasurementAdmission.Create(result) };
     }
+}
+
+public static class MeasurementResultStatus
+{
+    public const string Ungraded = "ungraded";
+    public const string Blocked = "blocked";
 }
 
 public sealed record AbsoluteBudgetRow(
@@ -245,12 +266,17 @@ public static class AbsoluteBudgetEvaluator
 {
     public static AbsoluteBudgetResult Evaluate(AbsoluteBudgetPolicy policy, MeasurementResult measurement)
     {
-        if (policy is null) return Blocked("An absolute budget policy is required.");
-        if (measurement is null) return Blocked("A no-comparand measurement is required.");
-        if (!MeasurementAdmission.TryValidate(measurement, out var admissionReason)) return Blocked(admissionReason, measurement);
-        if (!measurement.Complete || !measurement.CorrectnessValid) return Blocked(measurement.BlockReason ?? "Measurement is incomplete.", measurement);
+        if (policy is null)
+            return Blocked("An absolute budget policy is required.");
+        if (measurement is null)
+            return Blocked("A no-comparand measurement is required.");
+        if (!MeasurementAdmission.TryValidate(measurement, out var admissionReason))
+            return Blocked(admissionReason, measurement);
+        if (!measurement.Complete || !measurement.CorrectnessValid)
+            return Blocked(measurement.BlockReason ?? "Measurement is incomplete.", measurement);
 
-        try { AbsoluteBudgetPolicyFile.ValidateIdentity(policy, measurement.WorkloadId, measurement.WorkloadVersion, measurement.Provider); }
+        try
+        { AbsoluteBudgetPolicyFile.ValidateIdentity(policy, measurement.WorkloadId, measurement.WorkloadVersion, measurement.Provider); }
         catch (PerformanceContractException exception) { return Blocked(exception.Message, measurement); }
 
         var operations = measurement.Operations?.OrderBy(operation => operation.Operation, StringComparer.Ordinal).ToArray();
@@ -271,7 +297,8 @@ public static class AbsoluteBudgetEvaluator
                 return Blocked("An absolute budget operation cannot have both a direct budget and a class mapping.", measurement);
             if (string.Equals(mapped, "NotHotPath", StringComparison.Ordinal))
             {
-                if (direct is not null) return Blocked("NotHotPath operations cannot also declare a numeric budget.", measurement);
+                if (direct is not null)
+                    return Blocked("NotHotPath operations cannot also declare a numeric budget.", measurement);
                 resolutions[operation] = (null, mapped, "NotHotPath");
             }
             else if (mapped is not null && policy.Budgets.TryGetValue(mapped, out var classBudget))
@@ -300,7 +327,8 @@ public static class AbsoluteBudgetEvaluator
                 rows.Add(new(operation.Operation, null, null, true, null, null, true, null, null, true, true, resolution.Class, PerformanceVerdict.NotHotPath));
                 continue;
             }
-            if (!Complete(operation)) return Blocked("Every absolute-budget verdict requires exactly three complete measured process runs and raw samples per operation.", measurement);
+            if (!Complete(operation))
+                return Blocked("Every absolute-budget verdict requires exactly three complete measured process runs and raw samples per operation.", measurement);
             var budget = resolution.Budget;
             var p95 = Statistics.Median(operation.P95Milliseconds);
             var p99 = Statistics.Median(operation.P99Milliseconds);

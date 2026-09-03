@@ -412,6 +412,58 @@ public sealed class ComparisonIntegrityTests
     }
 
     [Fact]
+    public void Manifest_binds_trace_detail_constituent_and_continuation_page_plans()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations);
+        const string constituentReference = "trace-detail.spans.page-0000.raw.json";
+        const string continuationReference = "trace-detail.spans.page-0001.raw.json";
+        const string constituentPayload = "{\"plan\":\"constituent\"}";
+        const string continuationPayload = "{\"plan\":\"continuation\"}";
+        File.WriteAllText(Path.Combine(fixture.Directory, constituentReference), constituentPayload);
+        File.WriteAllText(Path.Combine(fixture.Directory, continuationReference), continuationPayload);
+        var constituentSha = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(constituentPayload))).ToLowerInvariant();
+        var continuationSha = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(continuationPayload))).ToLowerInvariant();
+        var constituent = new DiagnosticsTraceDetailConstituentEvidence(
+            "trace-detail/spans-by-trace-key-start-id",
+            constituentReference,
+            constituentSha,
+            "index-search",
+            "ix-trace-detail",
+            "SELECT",
+            100_000,
+            true,
+            true,
+            127,
+            100_000,
+            100_000,
+            2,
+            788,
+            [new DiagnosticsTraceDetailPageEvidence(1, continuationReference, continuationSha, "SELECT CONTINUATION")]);
+        foreach (var path in Directory.EnumerateFiles(fixture.Directory, "*.process.json"))
+        {
+            var artifact = JsonSerializer.Deserialize<ProcessArtifact>(File.ReadAllBytes(path), ArtifactStore.JsonOptions)!;
+            var correctness = artifact.Correctness with
+            {
+                NativePlan = artifact.Correctness.NativePlan with { TraceDetailConstituents = [constituent] }
+            };
+            File.WriteAllText(path, JsonSerializer.Serialize(artifact with { Correctness = correctness }, ArtifactStore.JsonOptions));
+        }
+
+        fixture.Bind();
+
+        using var manifest = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(fixture.Directory, "artifact-manifest.v2.json")));
+        var hashes = manifest.RootElement.GetProperty("ArtifactsSha256");
+        Assert.True(hashes.TryGetProperty(constituentReference, out _));
+        Assert.True(hashes.TryGetProperty(continuationReference, out _));
+        ArtifactStore.ReadAll(fixture.Directory);
+
+        File.WriteAllText(Path.Combine(fixture.Directory, continuationReference), "{\"plan\":\"tampered\"}");
+        var error = Assert.Throws<PerformanceContractException>(() => ArtifactStore.ReadAll(fixture.Directory));
+        Assert.Contains("integrity hash", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Manifest_rejects_raw_provider_plan_reused_across_measurement_sets()
     {
         using var fixture = ArtifactFixture.Create();

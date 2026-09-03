@@ -307,7 +307,7 @@ internal static class DiagnosticsNativePlanCapture
         CancellationToken cancellationToken)
     {
         var specifications = DiagnosticsNativePlanContract.TraceDetailConstituents(request.Adapter);
-        var before = Directory.EnumerateFiles(explainDirectory).ToHashSet(StringComparer.Ordinal);
+        var beforeTraceDetail = Directory.EnumerateFiles(explainDirectory).ToHashSet(StringComparer.Ordinal);
         var detail = await client.OpenTelemetry.GetTraceAsync(
             DiagnosticsDurableHistoryWorkload.TraceIdForTesting(DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream - 1),
             cancellationToken);
@@ -417,7 +417,7 @@ internal static class DiagnosticsNativePlanCapture
             // and every provider-owned plan instead of treating a multi-page QueryAll as one route.
             var nativePaths = RequireNativeArtifacts(
                 explainDirectory,
-                before,
+                beforeTraceDetail,
                 request.Provider,
                 specification.IndexName,
                 queryCommands.Length);
@@ -459,27 +459,17 @@ internal static class DiagnosticsNativePlanCapture
                     materialized,
                     observedCount,
                     specification.MaxInvocationCount);
-                var validationPath = Path.Combine(Path.GetTempPath(), $"diagnostics-trace-detail-{Guid.NewGuid():N}.json");
-                try
-                {
-                    WriteEnvelope(validationPath, pageArtifact);
-                    DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
-                        request.Provider,
-                        request.Adapter,
-                        pageEvidence,
-                        validationPath);
-                    WriteEnvelope(pagePath, pageArtifact);
-                }
-                finally
-                {
-                    if (File.Exists(validationPath))
-                        File.Delete(validationPath);
-                }
+                var pageSha256 = ValidateAndPublishTraceDetailPage(
+                    request.Provider,
+                    request.Adapter,
+                    pageEvidence,
+                    pageArtifact,
+                    pagePath);
 
                 pages.Add(new DiagnosticsTraceDetailPageEvidence(
                     pageIndex,
                     pageReference,
-                    ArtifactStore.HashFile(pagePath),
+                    pageSha256,
                     pageCommand));
             }
 
@@ -503,7 +493,6 @@ internal static class DiagnosticsNativePlanCapture
                 specification.MaxInvocationCount,
                 pages.Skip(1).ToArray());
             evidence.Add(constituentEvidence);
-            before = Directory.EnumerateFiles(explainDirectory).ToHashSet(StringComparer.Ordinal);
         }
 
         if (mongo && mongoQueryOffset != mongoQueryCommands.Length)
@@ -613,6 +602,38 @@ internal static class DiagnosticsNativePlanCapture
             throw new PerformanceContractException(
                 $"Diagnostics trace-detail query for logical index '{logicalIndexName}' must emit exactly {expectedCount} provider-native explain artifacts; observed {matches.Length}.");
         return matches;
+    }
+
+    internal static string ValidateAndPublishTraceDetailPage(
+        string provider,
+        string adapter,
+        DiagnosticsTraceDetailConstituentEvidence evidence,
+        DiagnosticsNativePlanArtifact artifact,
+        string path)
+    {
+        var validationPath = Path.Combine(Path.GetTempPath(), $"diagnostics-trace-detail-{Guid.NewGuid():N}.json");
+        try
+        {
+            WriteEnvelope(validationPath, artifact);
+            var validatedSha256 = ArtifactStore.HashFile(validationPath);
+            DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
+                provider,
+                adapter,
+                evidence with { RawPlanSha256 = validatedSha256 },
+                validationPath);
+
+            WriteEnvelope(path, artifact);
+            var retainedSha256 = ArtifactStore.HashFile(path);
+            if (!string.Equals(validatedSha256, retainedSha256, StringComparison.Ordinal))
+                throw new PerformanceContractException(
+                    $"Diagnostics trace-detail query '{evidence.RouteIdentity}' retained a different provider-native plan than the artifact admitted for publication.");
+            return retainedSha256;
+        }
+        finally
+        {
+            if (File.Exists(validationPath))
+                File.Delete(validationPath);
+        }
     }
 
     private static void WriteEnvelope(string path, DiagnosticsNativePlanArtifact artifact)

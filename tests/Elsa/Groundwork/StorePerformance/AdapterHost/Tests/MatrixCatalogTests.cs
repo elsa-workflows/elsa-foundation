@@ -1,6 +1,7 @@
-using System.Text.Json;
 using Elsa.Groundwork.StorePerformance.AdapterHost;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Groundwork.StorePerformance.AdapterHost.Tests;
@@ -12,7 +13,7 @@ public sealed class MatrixCatalogTests
     {
         var document = MatrixCatalog.Build(SourceProvenance.FindRepositoryRoot());
 
-        Assert.Equal(2, document.SchemaVersion);
+        Assert.Equal(3, document.SchemaVersion);
         var currentRevision = SourceProvenance.AssemblyRevision(typeof(SourceProvenance).Assembly);
         Assert.Equal(currentRevision, document.Build.AdapterHostRevision);
         Assert.Equal(currentRevision, document.Build.HarnessRevision);
@@ -54,6 +55,7 @@ public sealed class MatrixCatalogTests
             var registration = Single(registrations, workload, "groundwork-v2");
             Assert.Equal("complete", registration.CapturePlanStatus);
             Assert.Equal("ready", registration.CorrectnessStatus);
+            Assert.Equal("ready", registration.MeasurementStatus);
             Assert.Equal("ready", registration.TimingStatus);
         }
 
@@ -63,6 +65,7 @@ public sealed class MatrixCatalogTests
             Assert.Equal(["sqlite", "sqlserver", "postgresql"], relational.Providers);
             Assert.Equal("complete", relational.CapturePlanStatus);
             Assert.Equal("ready", relational.CorrectnessStatus);
+            Assert.Equal("ready", relational.MeasurementStatus);
             Assert.Equal("ready", relational.TimingStatus);
 
             var mongo = Single(registrations, workload, "groundwork-v2", "mongodb");
@@ -71,6 +74,7 @@ public sealed class MatrixCatalogTests
             Assert.Equal(BenchmarkAdapterRegistry.MongoRuntimeNativePlanBlockedReason, mongo.CapturePlanReason);
             Assert.Equal("ready", mongo.CorrectnessStatus);
             Assert.Equal("correctness.ready", mongo.CorrectnessReason);
+            Assert.Equal("blocked", mongo.MeasurementStatus);
             Assert.Equal("blocked", mongo.TimingStatus);
             Assert.Equal(BenchmarkAdapterRegistry.MongoRuntimeNativePlanBlockedReason, mongo.TimingReason);
         }
@@ -78,8 +82,10 @@ public sealed class MatrixCatalogTests
         var diagnostics = Single(registrations, "diagnostics-durable-history", DiagnosticsDurableHistoryAdapter.AdapterId);
         Assert.Equal("partial-blocked", diagnostics.CapturePlanStatus);
         Assert.Equal("ready", diagnostics.CorrectnessStatus);
+        Assert.Equal("ungraded", diagnostics.MeasurementStatus);
+        Assert.Equal(DiagnosticsAdmission.UngradedMeasurementReasonCode, diagnostics.MeasurementReason);
         Assert.Equal("blocked", diagnostics.TimingStatus);
-        Assert.Equal("gate.diagnostics.absolute-budget-required", diagnostics.TimingReason);
+        Assert.Equal(ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode, diagnostics.TimingReason);
 
         var diagnosticsEf = Single(registrations, "diagnostics-durable-history", "ef-diagnostics-oracle");
         Assert.Equal(["sqlite"], diagnosticsEf.Providers);
@@ -87,6 +93,8 @@ public sealed class MatrixCatalogTests
             ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Sqlite"],
             diagnosticsEf.ProviderPackages["sqlite"]);
         Assert.Equal("correctness-only", diagnosticsEf.CapturePlanStatus);
+        Assert.Equal("blocked", diagnosticsEf.MeasurementStatus);
+        Assert.Equal(DiagnosticsAdmission.EfCorrectnessOnlyMeasurementReasonCode, diagnosticsEf.MeasurementReason);
         Assert.Equal("blocked", diagnosticsEf.TimingStatus);
     }
 
@@ -97,7 +105,7 @@ public sealed class MatrixCatalogTests
         var json = JsonSerializer.Serialize(document, ArtifactStore.JsonOptions);
         using var parsed = JsonDocument.Parse(json);
 
-        Assert.Equal(2, parsed.RootElement.GetProperty("SchemaVersion").GetInt32());
+        Assert.Equal(3, parsed.RootElement.GetProperty("SchemaVersion").GetInt32());
         Assert.Equal(
             SourceProvenance.AssemblyRevision(typeof(SourceProvenance).Assembly),
             parsed.RootElement.GetProperty("Build").GetProperty("AdapterHostRevision").GetString());
