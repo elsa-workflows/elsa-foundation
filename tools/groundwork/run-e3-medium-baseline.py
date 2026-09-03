@@ -34,6 +34,10 @@ TRACE_DETAIL_CONSTITUENT_ROUTES = (
     "trace-detail/logs-by-trace-key-timestamp-id",
     "trace-detail/resources-by-id",
 )
+TRACE_DETAIL_POINT_READ_ROUTES = {
+    "trace-detail/summary-by-trace-key",
+    "trace-detail/resources-by-id",
+}
 ALLOWED_RESULT_FILES = {
     "comparison.v1.json",
     "comparison.from-gate.v1.json",
@@ -366,7 +370,7 @@ def validate_evidence(
             or not isinstance(constituent.get("RawPlanReference"), str)
             or not isinstance(constituent.get("RawPlanSha256"), str)
             or not isinstance(constituent.get("PlanClassification"), str)
-            or not constituent["PlanClassification"]
+            or not constituent["PlanClassification"].strip()
             or not isinstance(constituent.get("PhysicalIndexName"), str)
             or not isinstance(constituent.get("CommandText"), str)
             or not constituent["CommandText"].strip()
@@ -377,6 +381,7 @@ def validate_evidence(
         reference = constituent["RawPlanReference"]
         digest = constituent["RawPlanSha256"]
         pages = constituent.get("Pages")
+        is_point_read = constituent["RouteIdentity"] in TRACE_DETAIL_POINT_READ_ROUTES
         integer_fields = (
             "PhysicalCardinality",
             "FiniteLimit",
@@ -392,15 +397,24 @@ def validate_evidence(
             for name in integer_fields
         ) or any(not isinstance(constituent.get(name), bool) for name in ("HasStorageScopePredicate", "HasRoutePredicate")):
             raise ValueError(f"{path.name} contains invalid trace-detail constituent bounds or predicates")
+        if not constituent["HasStorageScopePredicate"] or not constituent["HasRoutePredicate"]:
+            raise ValueError(f"{path.name} contains a trace-detail constituent without required predicates")
         if pages is not None and not isinstance(pages, list):
             raise ValueError(f"{path.name} contains invalid trace-detail continuation pages")
-        if not reference:
-            if digest or pages:
+        if is_point_read:
+            if constituent["PlanClassification"] != "primary-key-read" or constituent["PhysicalIndexName"]:
+                raise ValueError(f"{path.name} contains an invalid trace-detail point-read classification")
+            if reference or digest or pages:
                 raise ValueError(
                     f"{path.name} contains a trace-detail point read with an explain artifact or continuation page"
                 )
         else:
-            if not safe_raw_plan_reference(reference) or not LOWER_SHA256.fullmatch(digest):
+            if (
+                constituent["PlanClassification"] != "index-search"
+                or not constituent["PhysicalIndexName"].strip()
+                or not safe_raw_plan_reference(reference)
+                or not LOWER_SHA256.fullmatch(digest)
+            ):
                 raise ValueError(f"{path.name} contains an unsafe or undigested trace-detail raw-plan reference")
             raw = path.parent / reference
             if not raw.is_file() or sha256(raw) != digest:
@@ -434,7 +448,7 @@ def validate_evidence(
                     f"trace-detail page {page_index} raw native plan {page_reference} is missing or does not match its digest"
                 )
             raw_references.append(page_reference)
-        expected_page_count = 1 if not reference else (
+        expected_page_count = 1 if is_point_read else (
             constituent["PublicRowBound"] + constituent["FiniteLimit"] - 1
         ) // constituent["FiniteLimit"]
         if page_indices != list(range(1, expected_page_count)):

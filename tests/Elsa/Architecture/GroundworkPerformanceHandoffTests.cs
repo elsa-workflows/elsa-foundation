@@ -473,6 +473,25 @@ with tempfile.TemporaryDirectory() as directory:
     reserved["TraceDetailConstituents"][1]["RawPlanSha256"] = hashlib.sha256(reserved_plan.read_bytes()).hexdigest()
     expect_invalid(reserved, "mixed-case reserved result filename was accepted as raw-plan evidence")
 
+    wrong_point_read = json.loads(json.dumps(document))
+    wrong_point_read["TraceDetailConstituents"][0]["PlanClassification"] = "index-search"
+    wrong_point_read["TraceDetailConstituents"][0]["PhysicalIndexName"] = "fake-index"
+    expect_invalid(wrong_point_read, "indexed classification was accepted for a trace-detail point read")
+
+    point_read_with_artifact = json.loads(json.dumps(document))
+    point_read_with_artifact["TraceDetailConstituents"][0]["RawPlanReference"] = raw_plan.name
+    point_read_with_artifact["TraceDetailConstituents"][0]["RawPlanSha256"] = hashlib.sha256(raw_plan.read_bytes()).hexdigest()
+    expect_invalid(point_read_with_artifact, "raw-plan artifact was accepted for a trace-detail point read")
+
+    wrong_indexed_query = json.loads(json.dumps(document))
+    wrong_indexed_query["TraceDetailConstituents"][1]["PlanClassification"] = " "
+    wrong_indexed_query["TraceDetailConstituents"][1]["PhysicalIndexName"] = ""
+    expect_invalid(wrong_indexed_query, "blank indexed-query classification and index were accepted")
+
+    missing_predicate = json.loads(json.dumps(document))
+    missing_predicate["TraceDetailConstituents"][2]["HasRoutePredicate"] = False
+    expect_invalid(missing_predicate, "trace-detail evidence without the route predicate was accepted")
+
     raw_plan.write_text("tampered", encoding="utf-8")
     expect_invalid(document, "tampered trace-detail raw plan was accepted")
     raw_plan.write_text('{"plan":"initial"}', encoding="utf-8")

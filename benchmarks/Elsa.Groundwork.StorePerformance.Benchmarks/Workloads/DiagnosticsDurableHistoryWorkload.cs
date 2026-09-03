@@ -452,14 +452,14 @@ public sealed class DiagnosticsDurableHistoryWorkload
                 }),
             new DiagnosticsDurableHistoryWorkloadOperation(
                 scenario.OperationSequence[5],
-                async (_, token) =>
+                async (invocation, token) =>
                 {
                     // The OpenTelemetry drain applies retention every 500 persisted records. Queue seven
                     // 64-record batches outside timing so the eighth (the measured batch) always crosses
                     // that boundary and exercises the same retention path on every sample.
                     for (var batch = 0; batch < 7; batch++)
                         await secondary.OpenTelemetry.WriteAsync(
-                            MeasuredOpenTelemetryBatch(60 + batch, _, ServiceNameFor(0)), token);
+                            MeasuredOpenTelemetryBatch(60 + batch, invocation, ServiceNameFor(0)), token);
                     await adapter.FlushAsync(token);
                 },
                 async (invocation, token) =>
