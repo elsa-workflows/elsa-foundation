@@ -11,16 +11,36 @@ using Groundwork.Store;
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
 /// <summary>Public Groundwork v2 implementation of the workflow-definition-version read port.</summary>
-public sealed class GroundworkWorkflowDefinitionVersionStore(
-    IGroundworkStorageSessionSource sessions,
-    IWorkflowDefinitionStore definitions,
-    IPayloadSerializer payloadSerializer,
-    IPersistenceAccessContextAccessor accessContextAccessor,
-    string? targetName = null) : IWorkflowDefinitionVersionStore
+public sealed class GroundworkWorkflowDefinitionVersionStore : IWorkflowDefinitionVersionStore
 {
-    private readonly GroundworkDesignStorage storage = new(sessions, accessContextAccessor, targetName);
-    private readonly System.Text.Json.JsonSerializerOptions json =
-        GroundworkDesignDocumentSerialization.Create(payloadSerializer);
+    private readonly IWorkflowDefinitionStore definitions;
+    private readonly GroundworkDesignStorage storage;
+    private readonly System.Text.Json.JsonSerializerOptions json;
+
+    public GroundworkWorkflowDefinitionVersionStore(
+        IGroundworkStorageSessionSource sessions,
+        IWorkflowDefinitionStore definitions,
+        IPayloadSerializer payloadSerializer,
+        IPersistenceAccessContextAccessor accessContextAccessor,
+        string? targetName = null)
+    {
+        this.definitions = definitions;
+        storage = new GroundworkDesignStorage(sessions, accessContextAccessor, targetName);
+        json = GroundworkDesignDocumentSerialization.Create(payloadSerializer);
+    }
+
+    private GroundworkWorkflowDefinitionVersionStore(
+        GroundworkDesignStorage storage,
+        IWorkflowDefinitionStore definitions,
+        System.Text.Json.JsonSerializerOptions json)
+    {
+        this.storage = storage;
+        this.definitions = definitions;
+        this.json = json;
+    }
+
+    internal GroundworkWorkflowDefinitionVersionStore ForStorage(GroundworkDesignStorage boundStorage) =>
+        new(boundStorage, definitions, json);
 
     public async Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) =>
         await FindByIdAsync(versionId, cancellationToken) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionVersion), versionId);

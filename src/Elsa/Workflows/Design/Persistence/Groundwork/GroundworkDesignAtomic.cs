@@ -79,10 +79,16 @@ public sealed record GroundworkDesignDeleteRequest(
 public sealed class GroundworkDesignAtomicWriteContext
 {
     private readonly GroundworkDesignStorage.DesignUnitOfWork unitOfWork;
+    internal GroundworkDesignStorage Storage { get; }
     private bool stagedFailure;
 
-    internal GroundworkDesignAtomicWriteContext(GroundworkDesignStorage.DesignUnitOfWork unitOfWork) =>
+    internal GroundworkDesignAtomicWriteContext(
+        GroundworkDesignStorage.DesignUnitOfWork unitOfWork,
+        GroundworkDesignStorage storage)
+    {
         this.unitOfWork = unitOfWork;
+        Storage = storage;
+    }
 
     internal bool HasStagedFailure => stagedFailure;
 
@@ -203,7 +209,9 @@ public sealed class GroundworkDesignAtomicWrite(
     {
         using var unitOfWork = storage.BeginUnitOfWork(
             request.MutatedUnits.Append(WorkflowsDesignStorageManifest.DesignOperationDocumentKind).ToArray());
-        var context = new GroundworkDesignAtomicWriteContext(unitOfWork);
+        var context = new GroundworkDesignAtomicWriteContext(
+            unitOfWork,
+            storage.ForUnitOfWork(unitOfWork));
         try
         {
             var staged = await stage(context, cancellationToken);

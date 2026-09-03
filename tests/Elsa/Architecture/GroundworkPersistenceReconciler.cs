@@ -447,7 +447,11 @@ internal sealed class GroundworkPersistenceReconciler
 
     private static readonly GroundworkDeferredPersistenceContract[] DeferredContracts =
     [
-        new("IExternalPayloadStore", "the host-selected external payload provider")
+        new("IExternalPayloadStore", "the host-selected external payload provider"),
+        // The paging marker is a capability over IRuntimeRecoveryScanner; the sweep cursor is process-local
+        // runtime support state. Neither contract represents an independently persisted Groundwork store.
+        new("IRuntimeRecoveryPagedScanner", "runtime recovery capability, not an independent Groundwork persistence contract"),
+        new("IRuntimeRecoverySweepCursorStore", "runtime process-local support state, not a Groundwork persistence contract")
     ];
 
     // Infrastructure units that deliberately do not implement a public Elsa persistence contract belong to

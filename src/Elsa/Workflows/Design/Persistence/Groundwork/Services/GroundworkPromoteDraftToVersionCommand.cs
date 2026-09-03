@@ -31,6 +31,10 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
     : IPromoteDraftToVersionCommand
 {
     private const string OperationKind = "workflow.draft.promote.v1";
+    private readonly GroundworkWorkflowDefinitionVersionStore transactionVersionStore =
+        versionStore as GroundworkWorkflowDefinitionVersionStore
+        ?? throw new InvalidOperationException(
+            "The Groundwork promotion command requires the Groundwork version store for atomic reads.");
 
     public async Task<string> Execute(
         DesignOperationKey operationKey,
@@ -68,12 +72,15 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
                     normalizedRequestedVersion is null ? "automatic" : "exact",
                     normalizedRequestedVersion),
                 [
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
                     WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
                     WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind
                 ],
                 async (context, token) =>
                 {
-                    var document = await documents.FindByIdAsync(draftId, token)
+                    var transactionDocuments = documents.ForStorage(context.Storage);
+                    var transactionVersions = transactionVersionStore.ForStorage(context.Storage);
+                    var document = await transactionDocuments.FindByIdAsync(draftId, token)
                                    ?? throw EntityNotFoundException.ForEntity(
                                        typeof(WorkflowDefinitionDraft),
                                        draftId);
@@ -85,7 +92,7 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
                         throw new DraftHasValidationErrorsException(draftId, errors);
 
                     var draft = document.Entity;
-                    var lastVersion = await versionStore.FindLatestVersionAsync(
+                    var lastVersion = await transactionVersions.FindLatestVersionAsync(
                         draft.WorkflowDefinitionId,
                         token);
                     var initialAssessment = WorkflowVersionNumbering.AssessPromotion(
@@ -95,7 +102,7 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
                     var candidateIdentitySortKey =
                         WorkflowVersionNumbering.GetCandidateIdentitySortKey(initialAssessment);
                     var versionIdentityExists = candidateIdentitySortKey is not null &&
-                                                await versionStore.ExistsAsync(
+                                                await transactionVersions.ExistsAsync(
                                                     draft.WorkflowDefinitionId,
                                                     candidateIdentitySortKey,
                                                     token);

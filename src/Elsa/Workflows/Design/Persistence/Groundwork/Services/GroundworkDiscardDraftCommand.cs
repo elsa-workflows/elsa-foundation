@@ -46,7 +46,8 @@ public sealed class GroundworkDiscardDraftCommand(
                 [WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind],
                 async (context, token) =>
                 {
-                    var document = await documents.FindByIdAsync(draftId, token);
+                    var transactionDocuments = documents.ForStorage(context.Storage);
+                    var document = await transactionDocuments.FindByIdAsync(draftId, token);
                     if (document is null)
                         return new DiscardDraftResult(draftId, null, false);
                     await context.DeleteAsync(documents.ToDeleteRequest(draftId, document.Version), token);

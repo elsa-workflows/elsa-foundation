@@ -956,6 +956,49 @@ public sealed class EfCoreSurfaceRatchetTests
     }
 
     [Fact]
+    public void Scanner_excludes_the_intentional_benchmark_oracle_but_keeps_production_groundwork_guarded()
+    {
+        using var fixture = new TemporaryRepository();
+        fixture.Write("benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/Elsa.Groundwork.StorePerformance.AdapterHost.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore" /></ItemGroup>
+            </Project>
+            """);
+        fixture.Write("benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/EfSecretRepositoryAdapter.cs", """
+            using Microsoft.EntityFrameworkCore;
+            public sealed class BenchmarkDbContext : DbContext;
+            public static class BenchmarkSetup { public static void Configure() => new DbContextOptionsBuilder().UseSqlite("unused"); }
+            """);
+        fixture.Write("tests/Elsa/Groundwork/StorePerformance/AdapterHost/Tests/Elsa.Groundwork.StorePerformance.AdapterHost.Tests.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup><ProjectReference Include="../../../../../../benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/Elsa.Groundwork.StorePerformance.AdapterHost.csproj" /></ItemGroup>
+            </Project>
+            """);
+        fixture.Write("tests/Elsa/Groundwork/StorePerformance/AdapterHost/Tests/BenchmarkTests.cs", "public sealed class BenchmarkTests { }");
+        fixture.Write("src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore" /></ItemGroup>
+            </Project>
+            """);
+
+        var scanner = new EfCoreSurfaceScanner(fixture.Path);
+        var snapshot = scanner.Scan();
+
+        Assert.Contains(
+            "src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj reaches EF package Microsoft.EntityFrameworkCore",
+            snapshot.EfFreeBoundaryViolations);
+        Assert.DoesNotContain(
+            snapshot.Categories().SelectMany(category => category.Value),
+            entry => entry.Contains("StorePerformance/AdapterHost", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            "Elsa.Groundwork.StorePerformance.AdapterHost",
+            scanner.EfFreeBoundaryProjectNames());
+        Assert.DoesNotContain(
+            "Elsa.Groundwork.StorePerformance.AdapterHost.Tests",
+            scanner.EfFreeBoundaryProjectNames());
+    }
+
+    [Fact]
     public void Scanner_classifies_every_in_scope_provider_neutral_persistence_family_as_ef_free()
     {
         using var fixture = new TemporaryRepository();

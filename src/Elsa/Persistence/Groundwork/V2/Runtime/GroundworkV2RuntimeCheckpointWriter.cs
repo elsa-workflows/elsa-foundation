@@ -815,7 +815,16 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                     StageCleanupDelete(
                         ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind,
                         GroundworkV2SchedulerWorkStorageConventions.PhysicalId(cleanup.WorkflowExecutionId, workItemId),
-                        cleanup.WorkflowExecutionId);
+                        cleanup.WorkflowExecutionId,
+                        values =>
+                        {
+                            var envelope = GroundworkV2SchedulerWorkStorageConventions.Deserialize(values);
+                            GroundworkV2SchedulerWorkStorageConventions.EnsureLogicalIdentity(
+                                envelope,
+                                cleanup.WorkflowExecutionId,
+                                workItemId);
+                            GroundworkV2SchedulerWorkStorageConventions.EnsurePhysicalIdentity(values, envelope);
+                        });
             }
         }
 
@@ -1227,12 +1236,17 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
                 change.Operation);
         }
 
-        private void StageCleanupDelete(string unitId, string id, string workflowExecutionId)
+        private void StageCleanupDelete(
+            string unitId,
+            string id,
+            string workflowExecutionId,
+            Action<IReadOnlyDictionary<string, object?>>? validateIdentity = null)
         {
             var entry = Open(unitId).Read(GroundworkRuntimeRowStore.Key(id));
             if (entry is null)
                 return;
 
+            validateIdentity?.Invoke(entry.Values.Values);
             var projectedWorkflow = ReadOptionalString(entry.Values.Values, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField);
             if (projectedWorkflow is not null && !StringComparer.Ordinal.Equals(projectedWorkflow, workflowExecutionId))
             {

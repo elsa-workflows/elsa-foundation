@@ -42,7 +42,7 @@ public sealed class BenchmarkCompositionFingerprintTests
             descriptor with { ProviderVersion = "different-provider" },
             descriptor with { ProviderTopology = "different-topology" },
             descriptor with { ProviderConfiguration = [new("provider-mode", "remote")] },
-            descriptor with { PackageVersions = [new("Groundwork.Sqlite", "0.4.0-preview.9")] },
+            descriptor with { PackageVersions = [new("Groundwork.Sqlite", "different-package-version")] },
             descriptor with { Features = [descriptor.Features[0] with { Id = "groundwork-runtime-alternate" }] },
             descriptor with { Features = [descriptor.Features[0] with { SchemaIdentity = "changed-schema" }] },
             descriptor with { Features = [descriptor.Features[0] with { StorageUnitIds = ["different-unit"] }] },

@@ -6,12 +6,15 @@ using Elsa.Persistence.Groundwork.Testing;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Sqlite;
+using Groundwork.SqlServer;
 using Groundwork.Store;
 using System.Text.Json;
 using Xunit;
+using Xunit.Sdk;
 
 namespace Elsa.Persistence.Groundwork.V2.Runtime.Tests;
 
+[Collection(GroundworkV2NativeProviderMatrixCollection.Name)]
 public sealed class GroundworkV2WorkflowSchedulerWorkQueueTests
 {
     private static readonly DateTimeOffset Now = new(2026, 8, 17, 12, 0, 0, TimeSpan.Zero);
@@ -106,6 +109,53 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueueTests
 
         var exception = await Assert.ThrowsAnyAsync<Exception>(() => queue.DeleteAsync(item.WorkflowExecutionId, item.WorkItemId).AsTask());
         Assert.Contains("physical identity collision", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Physical_identity_hashes_immediately_above_the_scheduler_key_budget()
+    {
+        var workflowExecutionId = new string('w', ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength);
+        var atBoundary = GroundworkV2SchedulerWorkStorageConventions.PhysicalId(
+            workflowExecutionId,
+            new string('x', 288));
+        var aboveBoundary = GroundworkV2SchedulerWorkStorageConventions.PhysicalId(
+            workflowExecutionId,
+            new string('x', 289));
+
+        Assert.Equal(ElsaRuntimeV2StorageManifest.SchedulerWorkPhysicalIdMaximumLength, atBoundary.Length);
+        const string HashedIdentityPrefix = "elsa-runtime-v2-logical-id:v1:";
+        Assert.False(atBoundary.StartsWith(HashedIdentityPrefix, StringComparison.Ordinal));
+        Assert.StartsWith(HashedIdentityPrefix, aboveBoundary, StringComparison.Ordinal);
+        Assert.True(aboveBoundary.Length <= ElsaRuntimeV2StorageManifest.SchedulerWorkPhysicalIdMaximumLength);
+    }
+
+    [SkippableFact]
+    public async Task Sqlserver_writes_and_reads_scheduler_identities_at_and_above_the_key_budget()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("GROUNDWORK_V2_SQLSERVER_CONNECTION_STRING");
+        Skip.If(
+            string.IsNullOrWhiteSpace(connectionString),
+            "Set GROUNDWORK_V2_SQLSERVER_CONNECTION_STRING to run the SQL Server scheduler identity gate.");
+        using var connection = new SqlServerProviderFactory().Create(connectionString!);
+        var unit = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind);
+        connection.Schema.Apply(unit);
+        var source = new DirectSessionSource(connection);
+        var tenant = $"scheduler-budget-{Guid.NewGuid():N}";
+        var accessor = new TestAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
+        IWorkflowSchedulerWorkQueue queue = new GroundworkV2WorkflowSchedulerWorkQueue(source, accessor);
+        var workflowExecutionId = new string('w', ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength);
+        var atBoundary = new string('x', 288);
+        var aboveBoundary = new string('y', 289);
+
+        await queue.EnqueueAsync(Item(workflowExecutionId, atBoundary, 1));
+        await queue.EnqueueAsync(Item(workflowExecutionId, aboveBoundary, 2));
+
+        Assert.Equal(
+            [atBoundary, aboveBoundary],
+            (await queue.ListAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId))).Items
+            .Select(item => item.WorkItemId));
+        Assert.Equal(atBoundary, (await queue.DequeueAsync(workflowExecutionId))!.WorkItemId);
+        Assert.Equal(aboveBoundary, (await queue.DequeueAsync(workflowExecutionId))!.WorkItemId);
     }
 
     [Fact]

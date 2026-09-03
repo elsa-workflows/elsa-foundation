@@ -156,6 +156,33 @@ internal static class PersistenceProviderNeutralityBoundary
         value.Contains("/MongoDb/", StringComparison.OrdinalIgnoreCase);
 }
 
+/// <summary>
+/// Names the one intentionally EF-backed benchmark oracle that is not part of the shipping provider
+/// boundary. Its project inputs and source are excluded from the EF-free/shrink-only surface scan, while
+/// repository-wide restore receipt discovery still sees every project and dependency input.
+/// </summary>
+internal static class EfCoreSurfaceScope
+{
+    private static readonly IReadOnlySet<string> IntentionalBenchmarkOracleProjects = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/Elsa.Groundwork.StorePerformance.AdapterHost.csproj",
+        "tests/Elsa/Groundwork/StorePerformance/AdapterHost/Tests/Elsa.Groundwork.StorePerformance.AdapterHost.Tests.csproj"
+    };
+
+    private static readonly string[] IntentionalBenchmarkOracleSourceRoots =
+    [
+        "benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/",
+        "tests/Elsa/Groundwork/StorePerformance/AdapterHost/Tests/"
+    ];
+
+    public static bool IsIntentionalBenchmarkOracleProject(string relativePath) =>
+        IntentionalBenchmarkOracleProjects.Contains(relativePath);
+
+    public static bool IsIntentionalBenchmarkOracleSource(string relativePath) =>
+        IntentionalBenchmarkOracleSourceRoots.Any(root =>
+            relativePath.StartsWith(root, StringComparison.Ordinal));
+}
+
 internal static class EfCoreSurfaceBaseline
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -423,7 +450,12 @@ internal sealed class EfCoreSurfaceScanner
     public EfCoreSurfaceSnapshot Scan()
     {
         var projects = LoadProjects();
-        var inventoryProjects = projects;
+        // The benchmark adapter host intentionally composes the temporary EF comparators. Keep its
+        // projects in the repository-wide restore receipt, but do not make an evidence host part of the
+        // shipping Core/Groundwork EF-free or shrink-only product surface.
+        var inventoryProjects = projects
+            .Where(project => !EfCoreSurfaceScope.IsIntentionalBenchmarkOracleProject(project.RelativePath))
+            .ToArray();
         var projectsByPath = projects.ToDictionary(x => x.FullPath, PathComparer);
         var efProjects = inventoryProjects.Where(IsEfProject).ToArray();
         var efProjectPaths = projects.Where(IsEfProject).Select(x => x.FullPath).ToHashSet(PathComparer);
@@ -538,6 +570,7 @@ internal sealed class EfCoreSurfaceScanner
 
     public IReadOnlyList<string> EfFreeBoundaryProjectNames() =>
         LoadProjects()
+            .Where(project => !EfCoreSurfaceScope.IsIntentionalBenchmarkOracleProject(project.RelativePath))
             .Where(IsEfFreeBoundary)
             .Select(project => project.Name)
             .Distinct(StringComparer.Ordinal)
@@ -1379,6 +1412,7 @@ internal sealed class EfCoreSurfaceScanner
     private IEnumerable<string> SourceFiles(string pattern) =>
         Directory.EnumerateFiles(_repoRoot, pattern, SearchOption.AllDirectories)
             .Where(path => !IsIgnored(path))
+            .Where(path => !EfCoreSurfaceScope.IsIntentionalBenchmarkOracleSource(Relative(path)))
             .Where(path => !Relative(path).StartsWith("tests/Elsa/Architecture/EfCoreSurface", StringComparison.Ordinal));
 
     private IEnumerable<string> ConfigurationFiles() =>

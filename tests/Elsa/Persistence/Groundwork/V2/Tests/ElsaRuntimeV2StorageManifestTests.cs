@@ -218,6 +218,12 @@ public sealed class ElsaRuntimeV2StorageManifestTests
         var schedulerWork = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind);
         AssertColumn(
             schedulerWork,
+            ElsaRuntimeV2StorageManifest.IdField,
+            PortableType.String,
+            ElsaRuntimeV2StorageManifest.SchedulerWorkPhysicalIdMaximumLength,
+            nullable: false);
+        AssertColumn(
+            schedulerWork,
             ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField,
             PortableType.String,
             ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength,
@@ -267,6 +273,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             PortableType.String,
             ElsaRuntimeV2StorageManifest.DurableTimerClaimOrderKeyProjectionLength);
         var bookmark = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind);
+        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.IdField, PortableType.String, ElsaRuntimeV2StorageManifest.RuntimeCompositeIdMaximumLength, nullable: false);
         AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, PortableType.String, ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength, nullable: false);
         AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.BookmarkIdField, PortableType.String, ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength, nullable: false);
         AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.StimulusHashField, PortableType.String, ElsaRuntimeV2StorageManifest.StimulusHashProjectionLength, nullable: false);

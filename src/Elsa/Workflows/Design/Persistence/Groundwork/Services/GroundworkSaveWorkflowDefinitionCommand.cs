@@ -25,6 +25,7 @@ public sealed class GroundworkSaveWorkflowDefinitionCommand(
     {
         ArgumentNullException.ThrowIfNull(operationKey);
         ArgumentNullException.ThrowIfNull(definition);
+        ArgumentNullException.ThrowIfNull(storage);
         accessContextAccessor.Current.EnsureTenantScope(definition.TenantId);
         var requestMaterial = new SaveDefinitionRequestMaterial(
             definition.Id,
@@ -34,7 +35,7 @@ public sealed class GroundworkSaveWorkflowDefinitionCommand(
             definition.DeletedReason,
             definition.IsSourceOwned);
 
-        _ = await GroundworkDesignAtomicCommand.ExecuteAsync(
+        await GroundworkDesignAtomicCommand.ExecuteAsync(
             atomicWrite,
             operationKey,
             OperationKind,
@@ -42,8 +43,8 @@ public sealed class GroundworkSaveWorkflowDefinitionCommand(
             [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind],
             async (context, token) =>
             {
-                var existingEntry = storage.Read(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind, definition.Id);
-                var existing = existingEntry is null ? null : storage.MapDefinition(existingEntry);
+                var existingEntry = context.Storage.Read(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind, definition.Id);
+                var existing = existingEntry is null ? null : context.Storage.MapDefinition(existingEntry);
                 if (existing is null)
                     throw new InvalidOperationException($"Workflow definition '{definition.Id}' not found");
                 GroundworkEntityTimestamps.StampSaved(definition, existing, clock.UtcNow);
