@@ -3,6 +3,11 @@ using System.Text.Json;
 
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 
+internal static class MatrixCatalogContract
+{
+    public const int SchemaVersion = 3;
+}
+
 /// <summary>Binds matrix execution to the repository's current AdapterHost control plane.</summary>
 public static class AdapterChildAdmission
 {
@@ -31,24 +36,42 @@ public static class AdapterChildAdmission
             throw new PerformanceContractException(
                 "The canonical AdapterHost did not admit its current matrix catalog; rebuild it from clean current source.");
 
+        ValidateCatalog(output, request);
+        return admittedChild;
+    }
+
+    internal static void ValidateCatalog(string output, RunRequest request)
+    {
         try
         {
             using var document = JsonDocument.Parse(output);
             var root = document.RootElement;
             var build = root.GetProperty("Build");
-            if (root.GetProperty("SchemaVersion").GetInt32() != 2 ||
-                !string.Equals(build.GetProperty("AdapterHostRevision").GetString(), request.CommitSha, StringComparison.Ordinal) ||
-                !string.Equals(build.GetProperty("HarnessRevision").GetString(), request.CommitSha, StringComparison.Ordinal) ||
-                !root.GetProperty("Registrations").EnumerateArray().Any(registration => Matches(registration, request)))
+            var schemaVersion = root.GetProperty("SchemaVersion").GetInt32();
+            if (schemaVersion != MatrixCatalogContract.SchemaVersion)
                 throw new PerformanceContractException(
-                    "The canonical AdapterHost catalog does not admit the exact matrix request or source revision.");
+                    $"The canonical AdapterHost catalog uses schema version {schemaVersion}; expected {MatrixCatalogContract.SchemaVersion}.");
+
+            var adapterHostRevision = build.GetProperty("AdapterHostRevision").GetString();
+            if (!string.Equals(adapterHostRevision, request.CommitSha, StringComparison.Ordinal))
+                throw new PerformanceContractException(
+                    $"The canonical AdapterHost catalog was built from '{adapterHostRevision}', not requested commit '{request.CommitSha}'.");
+
+            var harnessRevision = build.GetProperty("HarnessRevision").GetString();
+            if (!string.Equals(harnessRevision, request.CommitSha, StringComparison.Ordinal))
+                throw new PerformanceContractException(
+                    $"The canonical AdapterHost catalog references harness '{harnessRevision}', not requested commit '{request.CommitSha}'.");
+
+            if (!root.GetProperty("Registrations").EnumerateArray().Any(registration => Matches(registration, request)))
+                throw new PerformanceContractException(
+                    "The canonical AdapterHost catalog does not register exact target " +
+                    $"'{request.WorkloadId}/{request.WorkloadVersion}/{request.Adapter}/{request.PhysicalForm}/{request.Provider}'.");
         }
         catch (Exception exception) when (exception is JsonException or InvalidOperationException or KeyNotFoundException or FormatException)
         {
             throw new PerformanceContractException(
                 $"The canonical AdapterHost emitted an invalid matrix catalog: {exception.Message}");
         }
-        return admittedChild;
     }
 
     internal static string RequireCanonicalPath(string repositoryRoot, string childCommand)

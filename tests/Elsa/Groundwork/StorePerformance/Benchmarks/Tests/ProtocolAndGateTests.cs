@@ -118,6 +118,30 @@ public sealed class ProtocolAndGateTests
     }
 
     [Fact]
+    public void Matrix_child_admission_accepts_the_current_catalog_schema_and_exact_registration()
+    {
+        var request = MatrixPlan.Create(Workload(), Request()).Runs[0];
+
+        AdapterChildAdmission.ValidateCatalog(MatrixCatalog(request), request);
+    }
+
+    [Fact]
+    public void Matrix_child_admission_names_a_stale_catalog_schema()
+    {
+        var request = MatrixPlan.Create(Workload(), Request()).Runs[0];
+        var staleCatalog = MatrixCatalog(request).Replace(
+            $"\"SchemaVersion\":{MatrixCatalogContract.SchemaVersion}",
+            $"\"SchemaVersion\":{MatrixCatalogContract.SchemaVersion - 1}",
+            StringComparison.Ordinal);
+
+        var exception = Assert.Throws<PerformanceContractException>(() =>
+            AdapterChildAdmission.ValidateCatalog(staleCatalog, request));
+
+        Assert.Contains($"schema version {MatrixCatalogContract.SchemaVersion - 1}", exception.Message, StringComparison.Ordinal);
+        Assert.Contains($"expected {MatrixCatalogContract.SchemaVersion}", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Provider_package_provenance_requires_exact_current_names_and_versions()
     {
         var repositoryRoot = SourceProvenance.FindRepositoryRoot();
@@ -913,6 +937,27 @@ public sealed class ProtocolAndGateTests
             new string('a', 40), new string('9', 64), new Dictionary<string, string> { [adapter == "ef" ? "Microsoft.EntityFrameworkCore" : "Groundwork.Sqlite"] = adapter == "ef" ? "10.0.8" : "0.0.1-preview.103" }, compositionFingerprint ?? new string('b', 64), new string('d', 64), "3.46.0", "file-backed-distinct-connections", ProviderConfiguration(adapter), workload.Seed, workload.ComputeInputFingerprint(), "list-by-stimulus-and-type", $"{measurementSet}.native-plan.json", new string('0', 64));
         return request with { NativePlanContentSha256 = Hash(NativePlanPayload(request)) };
     }
+
+    private static string MatrixCatalog(RunRequest request) => JsonSerializer.Serialize(new
+    {
+        SchemaVersion = MatrixCatalogContract.SchemaVersion,
+        Build = new
+        {
+            AdapterHostRevision = request.CommitSha,
+            HarnessRevision = request.CommitSha
+        },
+        Registrations = new[]
+        {
+            new
+            {
+                request.WorkloadId,
+                request.WorkloadVersion,
+                request.Adapter,
+                request.PhysicalForm,
+                Providers = new[] { request.Provider }
+            }
+        }
+    });
 
     private static PerformanceWorkload Workload() =>
         WorkloadCatalog.Load(Repository.Root()).Workloads["bookmark-lookup"];

@@ -40,7 +40,7 @@ internal static class MatrixCatalog
                 $"The adapter registry does not cover current workload(s): {string.Join(", ", missing)}.");
 
         return new MatrixCatalogDocument(
-            3,
+            MatrixCatalogContract.SchemaVersion,
             new MatrixBuildDocument(
                 SourceProvenance.AssemblyRevision(typeof(MatrixCatalog).Assembly),
                 SourceProvenance.AssemblyRevision(typeof(SourceProvenance).Assembly)),
