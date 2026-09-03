@@ -191,7 +191,10 @@ jobs:
           - sqlserver
           - mongodb
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # The frozen 100k-record fixture is rebuilt for capture, the standalone correctness pass, and
+    # each of the four independently isolated protocol processes. This is a failure ceiling, not a
+    # target duration; lowering it would cancel valid server-provider evidence before grading exists.
+    timeout-minutes: 300
     env:
       DIAGNOSTICS_PROVIDER: ${{ matrix.provider }}
       DIAGNOSTICS_WORKLOAD: diagnostics-durable-history

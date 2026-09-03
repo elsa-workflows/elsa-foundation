@@ -295,6 +295,7 @@ public sealed class GroundworkPerformanceHandoffTests
             "if: ${{ github.event_name == 'workflow_dispatch' && inputs.suite == 'groundwork-diagnostics' }}",
             job,
             StringComparison.Ordinal);
+        Assert.Contains("timeout-minutes: 300", job, StringComparison.Ordinal);
         Assert.Contains("matrix:\n        provider:\n          - sqlite\n          - postgresql\n          - sqlserver\n          - mongodb", job, StringComparison.Ordinal);
         Assert.Contains("run-e3-medium-baseline.py capture", job, StringComparison.Ordinal);
         Assert.Contains("run-e3-medium-baseline.py correctness", job, StringComparison.Ordinal);
