@@ -185,6 +185,83 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
     }
 
     [Fact]
+    public void Trace_detail_page_is_hashed_before_validation_and_published_only_after_admission()
+    {
+        var specification = DiagnosticsNativePlanContract.TraceDetailConstituents(
+                DiagnosticsNativePlanContract.GroundworkAdapter)
+            .Single(item => item.RouteIdentity == "trace-detail/spans-by-trace-key-start-id");
+        var route = new DiagnosticsNativeRouteSpec(
+            specification.RouteIdentity,
+            specification.TableName,
+            specification.IndexName,
+            specification.Ordering[0].Column,
+            specification.PredicateColumn,
+            specification.PhysicalCardinality,
+            specification.FiniteLimit,
+            specification.StorageScopeRequired,
+            false,
+            specification.Ordering);
+        var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("sqlite", route);
+        var command =
+            "SELECT * FROM elsa_otel_spans_v2 WHERE __groundwork_scope = @scope AND traceKey = @traceKey " +
+            "ORDER BY startTime ASC, spanId ASC, sequence ASC LIMIT 127";
+        var artifact = new DiagnosticsNativePlanArtifact(
+            1,
+            "sqlite",
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            specification.RouteIdentity,
+            specification.TableName,
+            specification.IndexName,
+            physicalIndex,
+            command,
+            $"2 0 SEARCH elsa_otel_spans_v2 USING INDEX {physicalIndex} (__groundwork_scope=? AND traceKey=?)");
+        var evidence = new DiagnosticsTraceDetailConstituentEvidence(
+            specification.RouteIdentity,
+            "page.raw.json",
+            "",
+            "index-search",
+            physicalIndex,
+            command,
+            specification.PhysicalCardinality,
+            true,
+            true,
+            specification.FiniteLimit,
+            specification.PublicRowBound,
+            specification.PublicRowBound,
+            specification.MaxInvocationCount,
+            specification.MaxInvocationCount);
+        var directory = Directory.CreateTempSubdirectory("diagnostics-native-page-publish-");
+        var path = Path.Combine(directory.FullName, evidence.RawPlanReference);
+        try
+        {
+            var digest = DiagnosticsNativePlanCapture.ValidateAndPublishTraceDetailPage(
+                "sqlite",
+                DiagnosticsNativePlanContract.GroundworkAdapter,
+                evidence,
+                artifact,
+                path);
+
+            Assert.Equal(64, digest.Length);
+            Assert.True(File.Exists(path));
+            Assert.Equal(digest, ArtifactStore.HashFile(path));
+
+            File.Delete(path);
+            Assert.Throws<PerformanceContractException>(() =>
+                DiagnosticsNativePlanCapture.ValidateAndPublishTraceDetailPage(
+                    "sqlite",
+                    DiagnosticsNativePlanContract.GroundworkAdapter,
+                    evidence,
+                    artifact with { PhysicalIndexName = "wrong-index" },
+                    path));
+            Assert.False(File.Exists(path));
+        }
+        finally
+        {
+            directory.Delete(true);
+        }
+    }
+
+    [Fact]
     public void Mongo_trace_detail_rejects_an_unrecognized_non_probe_read_operation()
     {
         var commands = new[]
