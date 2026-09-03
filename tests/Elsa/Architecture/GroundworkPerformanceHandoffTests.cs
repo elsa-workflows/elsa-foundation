@@ -310,6 +310,7 @@ public sealed class GroundworkPerformanceHandoffTests
         var correctnessStep = job[correctnessStart..correctnessEnd];
         Assert.Contains("--out \"$DIAGNOSTICS_CORRECTNESS_DIR\"", correctnessStep, StringComparison.Ordinal);
         Assert.DoesNotContain("--out \"$DIAGNOSTICS_OUTPUT_DIR\"", correctnessStep, StringComparison.Ordinal);
+        Assert.Contains("--execute | tee \"$DIAGNOSTICS_WORK_ROOT/correctness-summary.txt\"", correctnessStep, StringComparison.Ordinal);
         var measurementStart = job.IndexOf("      - name: Measure diagnostics evidence", correctnessEnd, StringComparison.Ordinal);
         var measurementEnd = job.IndexOf("      - name: Record provider diagnostics", measurementStart, StringComparison.Ordinal);
         Assert.True(measurementStart >= 0 && measurementEnd > measurementStart);
@@ -330,6 +331,7 @@ public sealed class GroundworkPerformanceHandoffTests
         Assert.DoesNotContain("budget-gate", job, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("run-e3-medium-baseline.py compare", job, StringComparison.Ordinal);
         Assert.Contains("$DIAGNOSTICS_WORK_ROOT/run-summary.txt", job, StringComparison.Ordinal);
+        Assert.Contains("/${{ matrix.provider }}/correctness-summary.txt", job, StringComparison.Ordinal);
         Assert.DoesNotContain("$DIAGNOSTICS_OUTPUT_DIR/run-summary.txt", job, StringComparison.Ordinal);
     }
 
