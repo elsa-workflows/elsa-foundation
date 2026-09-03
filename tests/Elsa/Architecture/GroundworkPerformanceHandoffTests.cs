@@ -250,6 +250,17 @@ public sealed class GroundworkPerformanceHandoffTests
             Assert.True(pathAdmission < contextAdmission);
         }
 
+        var measureMethod = runner.IndexOf("def measure(", StringComparison.Ordinal);
+        var compareMethod = runner.IndexOf("def compare_or_gate(", measureMethod, StringComparison.Ordinal);
+        var measureBody = runner[measureMethod..compareMethod];
+        Assert.Contains(
+            "measurement_command = [\"dotnet\", str(harness), \"measure\", \"--out\", str(output)]",
+            measureBody,
+            StringComparison.Ordinal);
+        Assert.True(
+            measureBody.IndexOf("subprocess.run(command,", StringComparison.Ordinal) <
+            measureBody.IndexOf("subprocess.run(measurement_command,", StringComparison.Ordinal));
+
         var adapterHost = File.ReadAllText(Path.Combine(
             RepoRoot,
             "benchmarks",
@@ -263,6 +274,99 @@ public sealed class GroundworkPerformanceHandoffTests
         Assert.Contains("RequireCleanCurrentBuild", adapterHost, StringComparison.Ordinal);
         Assert.Contains("RequireCleanCurrentBuild", harness, StringComparison.Ordinal);
         Assert.Contains("RequireWithin", harness, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Diagnostics_performance_workflow_is_manual_ungraded_and_phase_separated()
+    {
+        var workflow = File.ReadAllText(Path.Combine(
+            RepoRoot,
+            ".github",
+            "workflows",
+            "http-workflow-performance.yml"));
+        var jobStart = workflow.IndexOf("  groundwork-diagnostics:", StringComparison.Ordinal);
+        var jobEnd = workflow.IndexOf("\n  alert:", jobStart, StringComparison.Ordinal);
+
+        Assert.True(jobStart >= 0 && jobEnd > jobStart);
+        var job = workflow[jobStart..jobEnd];
+
+        Assert.Contains("suite=groundwork-diagnostics", workflow, StringComparison.Ordinal);
+        Assert.Contains(
+            "if: ${{ github.event_name == 'workflow_dispatch' && inputs.suite == 'groundwork-diagnostics' }}",
+            job,
+            StringComparison.Ordinal);
+        Assert.Contains("timeout-minutes: 300", job, StringComparison.Ordinal);
+        Assert.Contains("matrix:\n        provider:\n          - sqlite\n          - postgresql\n          - sqlserver\n          - mongodb", job, StringComparison.Ordinal);
+        Assert.Contains("run-e3-medium-baseline.py capture", job, StringComparison.Ordinal);
+        Assert.Contains("run-e3-medium-baseline.py correctness", job, StringComparison.Ordinal);
+        Assert.Contains("pg_isready -h 127.0.0.1", job, StringComparison.Ordinal);
+        Assert.Contains("psql -h 127.0.0.1", job, StringComparison.Ordinal);
+        Assert.Contains("mongo_attestation=\"$(image_attestation \"$mongo_container\")\"", job, StringComparison.Ordinal);
+        Assert.Contains("ELSA_BENCH_MONGO_CONTAINER_ATTESTATION", job, StringComparison.Ordinal);
+        Assert.Contains(
+            "User Id=sa;Pass" + "word=%s;TrustServerCertificate=True;Encrypt=False;Initial Catalog=%s",
+            job,
+            StringComparison.Ordinal);
+        Assert.Contains("dotnet build-server shutdown", job, StringComparison.Ordinal);
+        Assert.Contains("run-e3-medium-baseline.py measure", job, StringComparison.Ordinal);
+        Assert.DoesNotContain("continue-on-error", job, StringComparison.Ordinal);
+        Assert.DoesNotContain("budget-gate", job, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("run-e3-medium-baseline.py compare", job, StringComparison.Ordinal);
+        Assert.Contains("$DIAGNOSTICS_WORK_ROOT/run-summary.txt", job, StringComparison.Ordinal);
+        Assert.DoesNotContain("$DIAGNOSTICS_OUTPUT_DIR/run-summary.txt", job, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Operator_runner_invalidates_evidence_when_capture_does_not_complete()
+    {
+        var runnerPath = Path.Combine(RepoRoot, "tools", "groundwork", "run-e3-medium-baseline.py");
+        const string assertions = """
+import runpy
+import sys
+import tempfile
+from pathlib import Path
+
+module = runpy.run_path(sys.argv[1])
+begin_capture = module["begin_capture"]
+complete_capture = module["complete_capture"]
+require_capture_complete = module["require_capture_complete"]
+
+with tempfile.TemporaryDirectory() as directory:
+    evidence = Path(directory) / "evidence"
+    evidence.mkdir()
+    (evidence / "previous.native-plan.json").write_text("previous", encoding="utf-8")
+
+    try:
+        begin_capture(evidence)
+    except ValueError as exception:
+        assert "empty" in str(exception), exception
+    else:
+        raise AssertionError("capture reused a non-empty evidence directory")
+
+    try:
+        require_capture_complete(evidence)
+    except ValueError as exception:
+        assert "incomplete" in str(exception), exception
+    else:
+        raise AssertionError("failed capture left evidence admissible")
+
+    marker = module["capture_marker"](evidence)
+    marker.unlink()
+    fresh = Path(directory) / "fresh-evidence"
+    marker = begin_capture(fresh)
+    try:
+        require_capture_complete(fresh)
+    except ValueError as exception:
+        assert "incomplete" in str(exception), exception
+    else:
+        raise AssertionError("in-progress capture was not blocked")
+    complete_capture(marker)
+    require_capture_complete(fresh)
+""";
+
+        var result = RunPython(assertions, runnerPath);
+
+        Assert.True(result.ExitCode == 0, result.Error);
     }
 
     [Fact]

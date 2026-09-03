@@ -21,7 +21,8 @@ name: HTTP workflow performance
 #     the 20-minute timeout below is a ceiling, not a duration. The p95 budget is set ~6% above
 #     the observed maximum of 55 runs (see the derivation above the measure step), so an
 #     unfiltered push trigger does not buy this at the price of a flaky red on main.
-#   - workflow_dispatch: unchanged.
+#   - workflow_dispatch: runs the HTTP suite by default. Passing
+#     `suite=groundwork-diagnostics` selects the manual-only diagnostics evidence lane below.
 #
 # Blocking is not available on push: the commit has already landed. A red run on main is a
 # request to fix forward or revert, and the alert job below files an issue so it is not missed.
@@ -42,6 +43,15 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      suite:
+        description: Performance suite to run
+        required: false
+        default: http
+        type: choice
+        options:
+          - http
+          - groundwork-diagnostics
 
 permissions:
   contents: read
@@ -49,6 +59,7 @@ permissions:
 jobs:
   sqlite-defaults:
     name: SQLite defaults
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.suite == 'http' || inputs.suite == '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -89,7 +100,7 @@ jobs:
           Logging__LogLevel__Default=Warning \
           dotnet bin/Release/net10.0/Elsa.Workbench.dll > "$RUNNER_TEMP/elsa-workbench.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/elsa-workbench.pid"
-          for attempt in {1..240}; do
+          for _ in {1..240}; do
             curl --silent --fail http://127.0.0.1:5095/health/ready >/dev/null && exit 0
             sleep 0.25
           done
@@ -161,6 +172,302 @@ jobs:
           path: |
             artifacts/http-workflow-performance
             ${{ runner.temp }}/elsa-workbench.log
+
+  # Manual-only, ungraded evidence for diagnostics-durable-history v1.3 (issue #646). This is kept in
+  # the already-registered performance workflow so maintainers can dispatch the branch version before
+  # this change reaches the default branch. It is deliberately a separate matrix from the HTTP job:
+  # the four providers run on dedicated hosts, while each provider's capture -> correctness -> measure
+  # sequence remains serial and fail-closed. Nothing here is a required PR check, a budget policy, or a
+  # verdict claim.
+  groundwork-diagnostics:
+    name: Diagnostics durable-history evidence (${{ matrix.provider }})
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.suite == 'groundwork-diagnostics' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        provider:
+          - sqlite
+          - postgresql
+          - sqlserver
+          - mongodb
+    runs-on: ubuntu-latest
+    # The frozen 100k-record fixture is rebuilt for capture, the standalone correctness pass, and
+    # each of the four independently isolated protocol processes. This is a failure ceiling, not a
+    # target duration; lowering it would cancel valid server-provider evidence before grading exists.
+    timeout-minutes: 300
+    env:
+      DIAGNOSTICS_PROVIDER: ${{ matrix.provider }}
+      DIAGNOSTICS_WORKLOAD: diagnostics-durable-history
+      DIAGNOSTICS_ADAPTER: groundwork-v2
+      DIAGNOSTICS_FORM: ordinary-groundwork-diagnostics-units
+      # A common cohort binds the four provider-specific sets. The provider suffix makes each set
+      # unique, and both values contain only the runner's safe identifier characters.
+      DIAGNOSTICS_COHORT: diagnostics-v1-3-${{ github.run_id }}-${{ github.run_attempt }}
+      DIAGNOSTICS_MEASUREMENT_SET: diagnostics-v1-3-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.provider }}
+      # The runner rejects paths inside, above, or symlinked into the checkout. Keep databases,
+      # native-plan evidence, and process artifacts under a run/attempt/provider-specific /tmp root.
+      DIAGNOSTICS_WORK_ROOT: /tmp/groundwork-diagnostics-performance/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.provider }}
+      DIAGNOSTICS_EVIDENCE_DIR: /tmp/groundwork-diagnostics-performance/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.provider }}/evidence
+      DIAGNOSTICS_OUTPUT_DIR: /tmp/groundwork-diagnostics-performance/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.provider }}/output
+
+    steps:
+      - name: Checkout exact dispatch head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require a clean checked-out head
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain --untracked-files=all)"
+          echo "Evidence source commit: $(git rev-parse HEAD)"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Prepare external evidence and output directories
+        run: |
+          set -euo pipefail
+          case "$DIAGNOSTICS_WORK_ROOT" in
+            /tmp/groundwork-diagnostics-performance/*) ;;
+            *) echo "unexpected external work root" >&2; exit 1 ;;
+          esac
+          rm -rf -- "$DIAGNOSTICS_WORK_ROOT"
+          mkdir -p -- "$DIAGNOSTICS_EVIDENCE_DIR" "$DIAGNOSTICS_OUTPUT_DIR"
+
+      # This is the only build in the lane. The AdapterHost project builds its referenced benchmark
+      # harness, and the runner later verifies both Release binaries carry this exact clean HEAD.
+      - name: Build benchmark harness and AdapterHost once
+        run: >-
+          dotnet build
+          benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/Elsa.Groundwork.StorePerformance.AdapterHost.csproj
+          -c Release --nologo -p:WarningsNotAsErrors=NU1603
+
+      - name: Start selected provider and bind a fresh database
+        run: |
+          set -euo pipefail
+
+          postgres_image='postgres:17.6-alpine3.22'
+          sqlserver_image='mcr.microsoft.com/mssql/server:2022-CU21-ubuntu-22.04'
+          mongo_image='mongo:7.0.24'
+          postgres_container='groundwork-diagnostics-postgresql'
+          sqlserver_container='groundwork-diagnostics-sqlserver'
+          mongo_container='groundwork-diagnostics-mongodb'
+
+          image_attestation() {
+            local container="$1"
+            local digest
+            digest="$(docker container inspect --format '{{.Image}}' "$container")"
+            if [[ ! "$digest" =~ ^sha256:[0-9a-fA-F]{64}$ ]]; then
+              echo "Could not derive a launcher-bound image attestation for $container" >&2
+              return 1
+            fi
+            printf '%s' "${digest,,}"
+          }
+
+          wait_for_postgres() {
+            for attempt in {1..90}; do
+              # The image entrypoint briefly exposes a temporary Unix-socket server while it
+              # initializes the data directory. TCP becomes ready only for the durable server.
+              if docker exec "$postgres_container" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; then
+                return 0
+              fi
+              sleep 1
+            done
+            docker logs "$postgres_container" >&2 || true
+            return 1
+          }
+
+          wait_for_sqlserver() {
+            local password="$1"
+            for attempt in {1..90}; do
+              if docker exec "$sqlserver_container" /opt/mssql-tools18/bin/sqlcmd \
+                -S localhost -U sa -P "$password" -C -Q 'select 1' >/dev/null 2>&1; then
+                return 0
+              fi
+              sleep 1
+            done
+            docker logs "$sqlserver_container" >&2 || true
+            return 1
+          }
+
+          wait_for_mongo_primary() {
+            for attempt in {1..90}; do
+              if docker exec "$mongo_container" mongosh --quiet --eval 'rs.status().myState' 2>/dev/null | grep -q 1; then
+                return 0
+              fi
+              sleep 1
+            done
+            docker logs "$mongo_container" >&2 || true
+            return 1
+          }
+
+          case "$DIAGNOSTICS_PROVIDER" in
+            sqlite)
+              sqlite_file="$DIAGNOSTICS_WORK_ROOT/diagnostics.sqlite"
+              rm -f -- "$sqlite_file" "$sqlite_file-shm" "$sqlite_file-wal"
+              printf 'ELSA_BENCH_SQLITE_CONNECTION=Data Source=%s;Mode=ReadWriteCreate;Cache=Private;Pooling=False\n' "$sqlite_file" >> "$GITHUB_ENV"
+              ;;
+            postgresql)
+              postgres_database="groundwork_diagnostics_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+              docker run --detach --name "$postgres_container" --publish 5432:5432 \
+                --env POSTGRES_HOST_AUTH_METHOD=trust "$postgres_image" >/dev/null
+              wait_for_postgres
+              docker exec "$postgres_container" psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1 \
+                -c "CREATE DATABASE \"$postgres_database\";" >/dev/null
+              postgres_attestation="$(image_attestation "$postgres_container")"
+              printf 'ELSA_BENCH_POSTGRES_CONTAINER_ATTESTATION=%s\n' "$postgres_attestation" >> "$GITHUB_ENV"
+              printf 'ELSA_BENCH_POSTGRES_CONNECTION=Host=127.0.0.1;Port=5432;Username=postgres;Database=%s\n' "$postgres_database" >> "$GITHUB_ENV"
+              ;;
+            sqlserver)
+              sqlserver_database="groundwork_diagnostics_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+              sqlserver_password="$(openssl rand -hex 20)A1!"
+              echo "::add-mask::$sqlserver_password"
+              docker run --detach --name "$sqlserver_container" --publish 1433:1433 \
+                --env ACCEPT_EULA=Y --env "MSSQL_SA_PASSWORD=$sqlserver_password" "$sqlserver_image" >/dev/null
+              wait_for_sqlserver "$sqlserver_password"
+              docker exec "$sqlserver_container" /opt/mssql-tools18/bin/sqlcmd \
+                -S localhost -U sa -P "$sqlserver_password" -C -Q \
+                "IF DB_ID(N'$sqlserver_database') IS NULL CREATE DATABASE [$sqlserver_database];" >/dev/null
+              sqlserver_attestation="$(image_attestation "$sqlserver_container")"
+              printf 'ELSA_BENCH_SQLSERVER_CONTAINER_ATTESTATION=%s\n' "$sqlserver_attestation" >> "$GITHUB_ENV"
+              # The password is written only to the environment file; it is masked before any command can expose it.
+              printf 'ELSA_BENCH_SQLSERVER_CONNECTION=Server=127.0.0.1,1433;User Id=sa;Password=%s;TrustServerCertificate=True;Encrypt=False;Initial Catalog=%s\n' "$sqlserver_password" "$sqlserver_database" >> "$GITHUB_ENV"
+              ;;
+            mongodb)
+              mongo_database="groundwork_diagnostics_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+              docker run --detach --name "$mongo_container" --publish 27017:27017 "$mongo_image" \
+                mongod --replSet groundworkv2 --bind_ip_all >/dev/null
+              for attempt in {1..90}; do
+                if docker exec "$mongo_container" mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' 2>/dev/null | grep -q 1; then
+                  break
+                fi
+                if [[ "$attempt" -eq 90 ]]; then
+                  docker logs "$mongo_container" >&2 || true
+                  exit 1
+                fi
+                sleep 1
+              done
+              docker exec "$mongo_container" mongosh --quiet --eval \
+                "rs.initiate({_id:'groundworkv2',members:[{_id:0,host:'127.0.0.1:27017'}]})" >/dev/null
+              wait_for_mongo_primary
+              mongo_attestation="$(image_attestation "$mongo_container")"
+              printf 'ELSA_BENCH_MONGO_CONTAINER_ATTESTATION=%s\n' "$mongo_attestation" >> "$GITHUB_ENV"
+              # The unique URI below is the fresh database boundary; the adapter creates its own collections.
+              printf 'ELSA_BENCH_MONGO_CONNECTION=mongodb://127.0.0.1:27017/%s?replicaSet=groundworkv2&directConnection=true\n' "$mongo_database" >> "$GITHUB_ENV"
+              ;;
+            *)
+              echo "unsupported provider $DIAGNOSTICS_PROVIDER" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Capture diagnostics native evidence
+        id: capture
+        run: >-
+          python3 tools/groundwork/run-e3-medium-baseline.py capture
+          --provider "$DIAGNOSTICS_PROVIDER"
+          --workload "$DIAGNOSTICS_WORKLOAD"
+          --adapter "$DIAGNOSTICS_ADAPTER"
+          --form "$DIAGNOSTICS_FORM"
+          --cohort "$DIAGNOSTICS_COHORT"
+          --measurement-set "$DIAGNOSTICS_MEASUREMENT_SET"
+          --scale medium
+          --evidence-dir "$DIAGNOSTICS_EVIDENCE_DIR"
+          --execute
+
+      - name: Verify diagnostics correctness
+        id: correctness
+        run: >-
+          python3 tools/groundwork/run-e3-medium-baseline.py correctness
+          --provider "$DIAGNOSTICS_PROVIDER"
+          --workload "$DIAGNOSTICS_WORKLOAD"
+          --adapter "$DIAGNOSTICS_ADAPTER"
+          --form "$DIAGNOSTICS_FORM"
+          --cohort "$DIAGNOSTICS_COHORT"
+          --measurement-set "$DIAGNOSTICS_MEASUREMENT_SET"
+          --scale medium
+          --evidence-dir "$DIAGNOSTICS_EVIDENCE_DIR"
+          --out "$DIAGNOSTICS_OUTPUT_DIR"
+          --execute
+
+      # The runner performs its own fail-closed require_idle_host check immediately before spawning the
+      # timed matrix. It must be the only build/test process on this dedicated provider host.
+      - name: Stop non-target containers before timing
+        run: |
+          set -euo pipefail
+          target="groundwork-diagnostics-$DIAGNOSTICS_PROVIDER"
+          for candidate in groundwork-diagnostics-postgresql groundwork-diagnostics-sqlserver groundwork-diagnostics-mongodb; do
+            if [[ "$candidate" != "$target" ]] && docker container inspect "$candidate" >/dev/null 2>&1; then
+              docker stop "$candidate" >/dev/null 2>&1 || true
+            fi
+          done
+
+      # Roslyn/MSBuild compiler servers may outlive the one allowed build. Shut them down explicitly;
+      # the runner then performs its own process-table admission immediately before timing.
+      - name: Shut down .NET build servers before timing
+        run: dotnet build-server shutdown
+
+      - name: Measure diagnostics evidence
+        id: measure
+        run: >-
+          python3 tools/groundwork/run-e3-medium-baseline.py measure
+          --provider "$DIAGNOSTICS_PROVIDER"
+          --workload "$DIAGNOSTICS_WORKLOAD"
+          --adapter "$DIAGNOSTICS_ADAPTER"
+          --form "$DIAGNOSTICS_FORM"
+          --cohort "$DIAGNOSTICS_COHORT"
+          --measurement-set "$DIAGNOSTICS_MEASUREMENT_SET"
+          --scale medium
+          --evidence-dir "$DIAGNOSTICS_EVIDENCE_DIR"
+          --out "$DIAGNOSTICS_OUTPUT_DIR"
+          --execute
+
+      - name: Record provider diagnostics
+        if: always()
+        run: |
+          set -euo pipefail
+          {
+            echo "provider=$DIAGNOSTICS_PROVIDER"
+            echo "workload=$DIAGNOSTICS_WORKLOAD"
+            echo "adapter=$DIAGNOSTICS_ADAPTER"
+            echo "form=$DIAGNOSTICS_FORM"
+            echo "cohort=$DIAGNOSTICS_COHORT"
+            echo "measurement-set=$DIAGNOSTICS_MEASUREMENT_SET"
+            echo "scale=medium"
+            echo "capture=${{ steps.capture.outcome }}"
+            echo "correctness=${{ steps.correctness.outcome }}"
+            echo "measure=${{ steps.measure.outcome }}"
+          } > "$DIAGNOSTICS_WORK_ROOT/run-summary.txt"
+
+      - name: Stop selected provider
+        if: always()
+        run: |
+          set -euo pipefail
+          for container in groundwork-diagnostics-postgresql groundwork-diagnostics-sqlserver groundwork-diagnostics-mongodb; do
+            docker rm --force "$container" >/dev/null 2>&1 || true
+          done
+
+      - name: Upload diagnostics evidence and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: groundwork-diagnostics-performance-${{ matrix.provider }}-${{ github.run_id }}
+          path: |
+            /tmp/groundwork-diagnostics-performance/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.provider }}/evidence
+            /tmp/groundwork-diagnostics-performance/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.provider }}/output
+            /tmp/groundwork-diagnostics-performance/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.provider }}/run-summary.txt
+          if-no-files-found: warn
+          retention-days: 30
 
   alert:
     name: Alert on a red main

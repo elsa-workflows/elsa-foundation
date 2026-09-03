@@ -65,12 +65,16 @@ public sealed class ProviderProbeTests
             "mongodb://127.0.0.1:27017/diagnostics?replicaSet=groundworkv2&directConnection=true";
         var settings = MongoClientSettings.FromConnectionString(connectionString);
 
-        var configuration = ProviderProbe.MongoConfiguration(settings, connectionString);
+        var configuration = ProviderProbe.MongoConfiguration(
+            settings,
+            connectionString,
+            "SHA256:" + new string('A', 64));
 
         Assert.Equal("default", configuration["read_concern"]);
         Assert.Equal("default", configuration["write_concern"]);
         Assert.Equal("default", configuration["write_concern_timeout"]);
         Assert.Equal("True", configuration["direct_mode"]);
+        Assert.Equal("sha256:" + new string('a', 64), configuration["container_image_digest"]);
         Assert.DoesNotContain(configuration.Keys, key =>
             key.Contains("connection", StringComparison.OrdinalIgnoreCase));
     }
@@ -86,6 +90,9 @@ public sealed class ProviderProbeTests
 
         Assert.Throws<PerformanceContractException>(() =>
             ProviderProbe.ValidateContainerAttestation("sqlserver", value));
+
+        Assert.Throws<PerformanceContractException>(() =>
+            ProviderProbe.ValidateContainerAttestation("mongodb", value));
     }
 
     [Fact]
@@ -93,8 +100,11 @@ public sealed class ProviderProbeTests
     {
         var value = ProviderProbe.ValidateContainerAttestation(
             "postgresql", "SHA256:" + new string('A', 64));
+        var normalizedMongo = ProviderProbe.ValidateContainerAttestation(
+            "mongodb", "SHA256:" + new string('A', 64));
 
         Assert.Equal("sha256:" + new string('a', 64), value);
+        Assert.Equal("sha256:" + new string('a', 64), normalizedMongo);
     }
 
     [Fact]

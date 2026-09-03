@@ -141,15 +141,15 @@ and writes the content digest the matrix request must carry. It does not claim a
 observation during correctness, and `ValidateCorrectness` requires it to equal the request exactly; stale,
 hand-edited, or cross-provider metadata therefore blocks the run.
 
-For PostgreSQL and SQL Server, the native handshake proves the server product/version but cannot prove that
-the endpoint is the intended container. The launcher must therefore independently inspect the container and
-export its image digest as `ELSA_BENCH_POSTGRES_CONTAINER_ATTESTATION` or
-`ELSA_BENCH_SQLSERVER_CONTAINER_ATTESTATION` (`sha256:<64-hex-digest>`) before probing. The probe binds that
-attestation into the sanitized provider configuration as `container_image_digest`; the exact value must be
-copied into the request and evidence. The projection also includes an `options_digest` of the complete
-canonical connection options, so any setting not individually named cannot silently compare equal. An
-arbitrary server handshake is consequently never sufficient to
-claim the frozen `real-*-container` topology.
+For PostgreSQL, SQL Server, and MongoDB, the native handshake proves the server product/version but cannot
+prove that the endpoint is the intended container. The launcher must therefore independently inspect the
+container and export its image digest as `ELSA_BENCH_POSTGRES_CONTAINER_ATTESTATION`,
+`ELSA_BENCH_SQLSERVER_CONTAINER_ATTESTATION`, or `ELSA_BENCH_MONGO_CONTAINER_ATTESTATION`
+(`sha256:<64-hex-digest>`) before probing. The probe binds that attestation into the sanitized provider
+configuration as `container_image_digest`; the exact value must be copied into the request and evidence.
+The projection also includes an `options_digest` of the complete canonical connection options, so any
+setting not individually named cannot silently compare equal. An arbitrary server handshake is
+consequently never sufficient to claim a frozen real-container topology.
 
 ### The composition, for reference
 
@@ -214,6 +214,21 @@ Start by reading the machine-owned status rather than copying a workload list fr
 ```bash
 python3 tools/groundwork/run-e3-medium-baseline.py status
 ```
+
+For the diagnostics v1.3 budget-derivation run, use the manual performance-evidence lane rather than a
+developer desktop. The workflow starts one dedicated host per provider, keeps capture, correctness, and
+timing serial within that host, and uploads the native-plan evidence, four process artifacts, manifest, and
+ungraded `measurement.v1.json` result. It does not compare targets or apply a budget:
+
+```bash
+gh workflow run http-workflow-performance.yml \
+  --ref <branch-containing-this-workflow> \
+  -f suite=groundwork-diagnostics
+```
+
+The workflow file is already registered on the default branch, so a changed branch version can be dispatched
+and reviewed before integration promotion. The four provider jobs run in parallel; each provider's warmup and
+three measured processes remain on one provenance-bound host.
 
 The runner exposes separate `capture`, `correctness`, `measure`, `compare`, and `gate` commands. Every one
 is a dry run until `--execute` is supplied. It obtains workload version, adapter/form admission, provider
