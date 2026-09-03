@@ -647,14 +647,17 @@ def measure(args: argparse.Namespace) -> int:
         command.extend(("--package", f"{name}={version}"))
     for name, value in sorted(probe["settings"].items()):
         command.extend(("--provider-setting", f"{name}={value}"))
+    measurement_command = ["dotnet", str(harness), "measure", "--out", str(output)]
     command_text(command)
+    command_text(measurement_command)
     if args.execute:
         require_idle_host()
         environment = os.environ.copy()
         environment["ELSA_BENCH_NATIVE_PLAN_STAGING"] = str(evidence)
         subprocess.run(command, cwd=root, env=environment, check=True)
+        subprocess.run(measurement_command, cwd=root, check=True)
     else:
-        print("Dry run only. Re-run with --execute on an idle host to launch timed measurement.")
+        print("Dry run only. Re-run with --execute on an idle host to launch timed measurement and emit its ungraded result.")
     return 0
 
 

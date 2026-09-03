@@ -215,6 +215,21 @@ Start by reading the machine-owned status rather than copying a workload list fr
 python3 tools/groundwork/run-e3-medium-baseline.py status
 ```
 
+For the diagnostics v1.3 budget-derivation run, use the manual performance-evidence lane rather than a
+developer desktop. The workflow starts one dedicated host per provider, keeps capture, correctness, and
+timing serial within that host, and uploads the native-plan evidence, four process artifacts, manifest, and
+ungraded `measurement.v1.json` result. It does not compare targets or apply a budget:
+
+```bash
+gh workflow run http-workflow-performance.yml \
+  --ref <exact-branch-or-commit> \
+  -f suite=groundwork-diagnostics
+```
+
+The workflow file is already registered on the default branch, so a changed branch version can be dispatched
+and reviewed before integration promotion. The four provider jobs run in parallel; each provider's warmup and
+three measured processes remain on one provenance-bound host.
+
 The runner exposes separate `capture`, `correctness`, `measure`, `compare`, and `gate` commands. Every one
 is a dry run until `--execute` is supplied. It obtains workload version, adapter/form admission, provider
 support, topology, seed, input fingerprint, capture status, and timing status from `describe-matrix`.
