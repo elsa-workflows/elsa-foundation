@@ -5,7 +5,7 @@ namespace Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 /// <summary>
 /// Extracts the provider's actual MongoDB command from a retained explain response. MongoDB explain
 /// responses carry the command under a nested <c>command</c> property; the command-observer event in
-/// Groundwork preview.8 is intentionally descriptive and cannot replace this evidence.
+/// Groundwork is intentionally descriptive and cannot replace this evidence.
 /// </summary>
 internal static class MongoExplainCommandInspector
 {

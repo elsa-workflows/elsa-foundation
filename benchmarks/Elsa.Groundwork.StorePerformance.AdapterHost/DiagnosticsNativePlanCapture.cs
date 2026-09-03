@@ -588,9 +588,9 @@ internal static class DiagnosticsNativePlanCapture
             throw new PerformanceContractException(
                 $"Diagnostics route '{specification.RouteIdentity}' must emit exactly one MongoDB provider query; observed {matches.Length}.");
 
-        // Groundwork 0.4.0-preview.8 intentionally exposes only a descriptive observer label for
-        // MongoDB reads. The retained explain response is the authoritative source of the physical
-        // collection, filter, ordering, and limit, so persist that actual command verbatim.
+        // MongoDB query observers expose a descriptive label. The retained explain response is the
+        // authoritative source of the physical collection, filter, ordering, and limit, so persist
+        // that actual command verbatim.
         return MongoExplainCommandInspector.SerializeCommand(
             MongoExplainCommandInspector.ExtractCommand(rawPlan));
     }

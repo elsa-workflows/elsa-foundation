@@ -510,15 +510,18 @@ only. It does not import a #646 performance verdict, delete either diagnostics
 EF oracle, complete T047/T050-T055/T057, promote a final evidence generation,
 or authorize #642 closure.
 
-## Groundwork 0.4.0-preview.8 consumption checkpoint
+## Groundwork 0.4.0-preview.9 consumption checkpoint
 
 The repository's central package pins, explicit project overrides, diagnostics consumers, and
-release-lifecycle checks consume the published `0.4.0-preview.8` family. The immutable
-[`v0.4.0-preview.8`](https://github.com/valence-works/groundwork-v2/releases/tag/v0.4.0-preview.8)
-release targets Groundwork commit `372ea1445485e0a08aa412436d0f3f9253bf0270`; its Feedz publication
-and feed verification workflow completed successfully. Elsa then restored and tested from a fresh
-NuGet cache using that Feedz source. The earlier ordinal-identity query and index-shape findings were
-fixed before publication. Existing NU1903 SSH.NET vulnerability warnings remain unchanged.
+release-lifecycle checks consume the published `0.4.0-preview.9` family. The immutable
+[`v0.4.0-preview.9`](https://github.com/valence-works/groundwork-v2/releases/tag/v0.4.0-preview.9)
+release targets Groundwork commit `408210729ec054368b0cf959274fdc26e04a8393`; its Feedz publication
+and feed verification workflow completed successfully. The release workflow restored every public
+package and tool from Feedz, and Elsa's isolated package-only consumer passed against the exact
+release artifact. The preview.9 observer contract supplies the structured,
+redacted MongoDB point-read identity required by the trace-detail evidence; the earlier
+ordinal-identity query and index-shape fixes remain part of the published family. Existing NU1903
+SSH.NET vulnerability warnings remain unchanged.
 
 This is published-package consumption and focused compatibility evidence only. It does not import a
 #646 performance verdict, promote a new four-provider evidence receipt, delete either diagnostics

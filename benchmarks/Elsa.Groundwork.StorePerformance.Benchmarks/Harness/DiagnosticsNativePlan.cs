@@ -786,7 +786,7 @@ public static class DiagnosticsNativePlanContract
         DiagnosticsNativeRouteSpec specification,
         string rawPlan)
     {
-        // The observer's preview.8 text is only "MongoDB.Aggregate(page)". Reparse the retained
+        // The observer's descriptive text is only "MongoDB.Aggregate(page)". Reparse the retained
         // server explain response and require the envelope command to be byte-structurally the same
         // native command, so neither a logical collection nor a synthetic scope field can be claimed.
         MongoExplainCommandInspector.RequireCommandMatchesExplain(command, rawPlan);

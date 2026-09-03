@@ -534,6 +534,7 @@ public sealed class GroundworkOpenTelemetryStore :
     {
         EnsureRequiredCapabilities();
         var summaryUnit = schema.Unit(V2OpenTelemetryStorageSchema.TraceSummaryUnitId);
+        var resourceUnit = schema.Unit(V2OpenTelemetryStorageSchema.ResourceUnitId);
         Exception? failure = null;
         for (var attempt = 1; attempt <= MaxCaptureAttempts; attempt++)
         {
@@ -545,9 +546,11 @@ public sealed class GroundworkOpenTelemetryStore :
                     BatchWriteOptions.Exact,
                     commandObserver,
                     schema.Unit(V2OpenTelemetryStorageSchema.TraceUnitId),
-                    summaryUnit);
+                    summaryUnit,
+                    resourceUnit);
                 var traceSession = work.OpenSession(schema.Unit(V2OpenTelemetryStorageSchema.TraceUnitId));
                 var summarySession = work.OpenSession(summaryUnit);
+                var resourceSession = work.OpenSession(resourceUnit);
                 var retention = await traceSession.ApplyRetentionAsync(operation, new RetentionExecutionOptions
                 {
                     KeepNewestOverride = traceCapacity,
@@ -589,7 +592,8 @@ public sealed class GroundworkOpenTelemetryStore :
                         .ToArray());
                     var serviceKeys = ServicesFor(
                             trace.ResourceIds,
-                            ImmutableDictionary<string, string>.Empty)
+                            ImmutableDictionary<string, string>.Empty,
+                            resourceSession)
                         .Select(V2OpenTelemetryCodec.CanonicalSearchKey);
                     var values = V2OpenTelemetryCodec.TraceSummary(trace, serviceKeys);
                     var options = existing is null
@@ -679,9 +683,11 @@ public sealed class GroundworkOpenTelemetryStore :
 
     private IReadOnlyList<string> ServicesFor(
         IEnumerable<string> resourceIds,
-        IReadOnlyDictionary<string, string> batchServices)
+        IReadOnlyDictionary<string, string> batchServices,
+        IStorageSession? resourceSession = null)
     {
         var services = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        resourceSession ??= sessions.Resources;
         foreach (var resourceId in resourceIds)
         {
             if (batchServices.TryGetValue(resourceId, out var serviceName))
@@ -689,7 +695,7 @@ public sealed class GroundworkOpenTelemetryStore :
                 services.Add(serviceName);
                 continue;
             }
-            var retained = sessions.Resources.Read(new StorageKey(new Dictionary<string, object?>
+            var retained = resourceSession.Read(new StorageKey(new Dictionary<string, object?>
             {
                 [V2OpenTelemetryStorageSchema.Id] = resourceId
             }));
