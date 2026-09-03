@@ -89,6 +89,14 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
             Assert.NotSame(scopes.Primary.OpenTelemetry, scopes.Secondary.OpenTelemetry);
             Assert.NotSame(scopes.Primary.StructuredLogs, scopes.Secondary.StructuredLogs);
 
+            await scopes.Secondary.StructuredLogs.AppendAsync(
+                new StructuredLogEntry { Message = "secondary", Category = "scope", SourceId = "secondary" },
+                CancellationToken.None);
+            var primary = await scopes.Primary.StructuredLogs.AppendAsync(
+                new StructuredLogEntry { Message = "primary", Category = "scope", SourceId = "primary" },
+                CancellationToken.None);
+            Assert.Equal(primary.Sequence, await scopes.Primary.StructuredLogs.GetHighWaterMarkAsync());
+
             adapter.CommandObserver.ClearCommands();
             await scopes.Primary.OpenTelemetry.QueryResourcesAsync(
                 new OpenTelemetryResourceFilter { Take = 1 },

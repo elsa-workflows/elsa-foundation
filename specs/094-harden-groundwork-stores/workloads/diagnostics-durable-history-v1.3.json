@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "workloads": [
+    {
+      "id": "diagnostics-durable-history",
+      "version": "1.3.0",
+      "scenarioId": "diagnostics-durable-history",
+      "owner": "#646",
+      "handoffTarget": "#646",
+      "publicOperation": "Append, query, inspect, trim, reopen, and isolate durable Structured Logs and OpenTelemetry history through IStructuredLogStore and IOpenTelemetryStore.",
+      "coverageRows": [
+        "diagnostics-open-telemetry-store",
+        "diagnostics-structured-log-store"
+      ],
+      "input": {
+        "seed": "spec094-diagnostics-durable-history-v1.3",
+        "fingerprintSha256": "696a866f11365bfaca621328987b04d8166bf5c84a255584278669dc3909debd",
+        "concurrentWriters": 4,
+        "fixedNowUtc": "2026-07-25T00:00:00Z",
+        "instrumentCount": 64,
+        "normalizedRecordsPerOtlpBatch": 64,
+        "payloadBytes": 512,
+        "queryLimit": 127,
+        "resourceCount": 128,
+        "retainedRecordsPerStream": 100000,
+        "retentionOverflowRecords": 1000,
+        "structuredLogBatchSize": 200,
+        "tenantCount": 2,
+        "timedSetup": "excluded"
+      },
+      "operationSequence": [
+        "seed-cross-scope-diagnostic-history",
+        "append-structured-log-batches",
+        "read-structured-log-recent",
+        "resume-structured-log-history",
+        "reopen-and-read-structured-log-high-water",
+        "append-open-telemetry-batches",
+        "query-open-telemetry-resources",
+        "query-open-telemetry-traces",
+        "read-open-telemetry-trace-detail",
+        "query-open-telemetry-metrics",
+        "query-open-telemetry-logs",
+        "inspect-exact-stream-counts",
+        "trim-diagnostic-streams",
+        "reopen-and-verify-durable-history",
+        "verify-cross-scope-isolation"
+      ],
+      "requiredProviders": ["sqlite", "sqlserver", "postgresql", "mongodb"],
+      "requiredNativeRoutes": [
+        "resources-by-last-seen",
+        "resources-by-status",
+        "resources-by-service",
+        "traces-by-last-seen",
+        "trace-detail",
+        "metrics-by-last-seen",
+        "logs-by-last-seen",
+        "structured-log-recent",
+        "structured-log-replay"
+      ],
+      "requiredProviderEvidence": {
+        "sqlite": "file-backed-distinct-connections",
+        "sqlserver": "real-sqlserver-container",
+        "postgresql": "real-postgresql-container",
+        "mongodb": "transaction-capable-replica-set"
+      },
+      "correctness": {
+        "resultDigestSha256": "f8e8245c588a12aad79796432219c8450f26a2e90d290ceb82e06bf81c2aec77",
+        "invariants": [
+          "Structured Logs and OpenTelemetry suboperations execute through their public Elsa stores",
+          "durable acknowledgements contain no unexplained loss or duplication",
+          "recent, replay, catalog, trace, metric, log, count, and inspection results match the deterministic digest",
+          "retention preserves exact newest counts and trim-independent high-water state",
+          "reopen preserves committed history and cross-scope queries remain empty",
+          "every scale-bearing native route is captured, and unindexed routes remain explicitly blocked",
+          "the SQLite EF comparator and Groundwork stores produce equal public observations"
+        ],
+        "timingGate": "Diagnostics remains blocked until an independently ratified absolute-budget authority exists; SQLite correctness may compare the temporary same-provider EF oracle, but no timing is claimed. SQL Server, PostgreSQL, and MongoDB require independently reviewed numeric absolute budgets plus an executable absolute-budget gate."
+      },
+      "efContractBaseline": {
+        "baselineIdentity": "retained-sqlite-diagnostics-ef-oracle",
+        "executionStatus": "not-executed",
+        "executionOwner": "#646",
+        "purpose": "The retained diagnostics EF implementation is the SQLite correctness oracle only; #646 owns live execution and deletion follows the accepted verdict."
+      },
+      "benchmarkAdmission": {
+        "status": "blocked",
+        "reason": "gate.diagnostics.absolute-budget-required"
+      },
+      "physicalFormsFor646": [
+        "ordinary-groundwork-diagnostics-units",
+        "efcore-diagnostics-relational-tables"
+      ],
+      "artifactRetention": [
+        "workload id and version",
+        "commit and Groundwork source SHAs",
+        "input fingerprint and correctness digest",
+        "Structured Logs and OpenTelemetry suboperation results",
+        "provider topology and sanitized configuration",
+        "raw per-operation samples and statistical summaries",
+        "native diagnostic-record and catalog plans",
+        "physical form, storage, write amplification, and provider work signals",
+        "queue depth, shed rate, drain, retry, and restart outcomes"
+      ],
+      "lineage": {
+        "predecessorId": "diagnostics-durable-history",
+        "predecessorVersion": "1.2.0",
+        "reason": "provider-generated structured-log sequences need not equal a scope-local row count, so the workload must validate high-water against the maximum committed sequence"
+      }
+    }
+  ]
+}

@@ -94,7 +94,7 @@ public sealed class BenchmarkCompositionFingerprintTests
     {
         var descriptor = BenchmarkCompositionFingerprint.Describe(Request(
             workload: "diagnostics-durable-history",
-            workloadVersion: "1.2.0",
+            workloadVersion: "1.3.0",
             physicalForm: "ordinary-groundwork-diagnostics-units"));
         var diagnostics = Assert.Single(descriptor.Features, feature => feature.Id == "groundwork-diagnostics");
 

@@ -368,7 +368,7 @@ request = {
     "ComparisonCohortId": "cohort",
     "MeasurementSetId": "measurement",
     "WorkloadId": "diagnostics-durable-history",
-    "WorkloadVersion": "1.2.0",
+    "WorkloadVersion": "1.3.0",
     "Provider": "sqlite",
     "Adapter": "groundwork-v2",
     "PhysicalForm": "ordinary-groundwork-diagnostics-units",
@@ -517,6 +517,7 @@ with tempfile.TemporaryDirectory() as directory:
         Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "distributed-runtime.json"),
         Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "diagnostics.json"),
         Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "diagnostics-durable-history-v1.2.json"),
+        Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "diagnostics-durable-history-v1.3.json"),
         Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "recovery-scan-v1.2.json"),
         IdentityWorkloadPath,
         Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "secret-create-read-list-v1.1.json")

@@ -32,8 +32,8 @@ public sealed class DiagnosticsDurableHistoryWorkload
     private static readonly JsonSerializerOptions CanonicalJsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     public const string WorkloadId = "diagnostics-durable-history";
-    public const string ExpectedInputFingerprint = "33e58245aee02636756fc5e6b8cd5ac73a73e44b3b098129ad55e44eb7acbaa2";
-    public const string ExpectedResultDigest = "dba49158bd952e065d2bef53a54d80d8b1f1392d52226b93710cd428f827ddc4";
+    public const string ExpectedInputFingerprint = "696a866f11365bfaca621328987b04d8166bf5c84a255584278669dc3909debd";
+    public const string ExpectedResultDigest = "f8e8245c588a12aad79796432219c8450f26a2e90d290ceb82e06bf81c2aec77";
 
     public static string ScenarioId => Scenario.ScenarioId;
     public static string Version => Scenario.Version;
@@ -150,12 +150,12 @@ public sealed class DiagnosticsDurableHistoryWorkload
         // 2. Append the retained capacity plus the deliberate overflow, across the frozen writer count.
         //    The overflow is what makes the later explicit trim observable: without it, TrimAsync would be
         //    a no-op and trimmedRecordsPerStream could not be distinguished from zero.
-        await AppendStructuredLogsAsync(scopes.Primary, cancellationToken);
+        var maximumCommittedSequence = await AppendStructuredLogsAsync(scopes.Primary, cancellationToken);
         await adapter.FlushAsync(cancellationToken);
         var highWaterAfterAppend = await scopes.Primary.StructuredLogs.GetHighWaterMarkAsync(cancellationToken);
-        if (highWaterAfterAppend != AppendedPerStream)
+        if (highWaterAfterAppend != maximumCommittedSequence)
             throw new InvalidOperationException(
-                $"The structured-log stream committed {highWaterAfterAppend} entries; the frozen contract requires {AppendedPerStream}.");
+                $"The structured-log high-water {highWaterAfterAppend} did not match the maximum committed sequence {maximumCommittedSequence}.");
         operations.Add(AppendStructuredLogBatches);
 
         // 3. Bounded newest window, clamped by the caller's MaxCount.
@@ -331,7 +331,7 @@ public sealed class DiagnosticsDurableHistoryWorkload
             ["openTelemetryRetainedCounts"] = openTelemetryRetainedCounts,
             ["resourceCount"] = diagnostics.ResourceCount,
             ["restartStateMatched"] = restartStateMatched,
-            ["structuredLogHighWater"] = checked((int)highWaterAfterTrim),
+            ["structuredLogHighWaterMatchedMaximumCommittedSequence"] = highWaterAfterTrim == maximumCommittedSequence,
             ["structuredLogRecentCount"] = structuredLogRecentCount,
             ["structuredLogReplayCount"] = structuredLogReplayCount,
             ["structuredLogRetainedCount"] = retainedAfterTrim,
@@ -362,8 +362,8 @@ public sealed class DiagnosticsDurableHistoryWorkload
     private static ReproducibleWorkloadScenario ValidateScenario()
     {
         var scenarioResultDigest = Scenario.ComputeResultDigest();
-        if (Scenario.Version != "1.2.0" || Scenario.ScenarioId != "diagnostics-durable-history" ||
-            Scenario.Seed != "spec094-diagnostics-durable-history-v1.2" ||
+        if (Scenario.Version != "1.3.0" || Scenario.ScenarioId != "diagnostics-durable-history" ||
+            Scenario.Seed != "spec094-diagnostics-durable-history-v1.3" ||
             Scenario.ComputeInputFingerprint() != ExpectedInputFingerprint ||
             scenarioResultDigest != ExpectedResultDigest ||
             !ReproducibleWorkloadScenarioCatalog.GoldenVectors.TryGetValue(WorkloadId, out var golden) ||
@@ -374,7 +374,7 @@ public sealed class DiagnosticsDurableHistoryWorkload
             StructuredLogBatchSize != 200 || TenantCount != 2 ||
             !StringComparer.Ordinal.Equals((string)Scenario.Parameters["timedSetup"], "excluded"))
             throw new InvalidOperationException(
-                $"The diagnostics scenario no longer matches its frozen v1.2 successor contract. Expected result digest '{ExpectedResultDigest}', actual '{scenarioResultDigest}'.");
+                $"The diagnostics scenario no longer matches its frozen v1.3 successor contract. Expected result digest '{ExpectedResultDigest}', actual '{scenarioResultDigest}'.");
         if (AppendedPerStream % StructuredLogBatchSize != 0)
             throw new InvalidOperationException("The frozen append total is not an exact multiple of the structured-log batch size.");
         return Scenario;
@@ -400,11 +400,12 @@ public sealed class DiagnosticsDurableHistoryWorkload
             cancellationToken);
     }
 
-    private static async Task AppendStructuredLogsAsync(DiagnosticsDurableHistoryClient client, CancellationToken cancellationToken)
+    private static async Task<long> AppendStructuredLogsAsync(DiagnosticsDurableHistoryClient client, CancellationToken cancellationToken)
     {
         var batches = AppendedPerStream / StructuredLogBatchSize;
         var writers = Enumerable.Range(0, ConcurrentWriters).Select(async writer =>
         {
+            var maximumCommittedSequence = 0L;
             for (var batch = writer; batch < batches; batch += ConcurrentWriters)
             {
                 for (var offset = 0; offset < StructuredLogBatchSize; offset++)
@@ -415,10 +416,12 @@ public sealed class DiagnosticsDurableHistoryWorkload
                         cancellationToken);
                     if (committed.ReplayCursor is not { IsValid: true })
                         throw new InvalidOperationException("A committed structured-log entry carried no valid replay cursor.");
+                    maximumCommittedSequence = Math.Max(maximumCommittedSequence, committed.Sequence);
                 }
             }
+            return maximumCommittedSequence;
         }).ToArray();
-        await Task.WhenAll(writers);
+        return (await Task.WhenAll(writers)).Max();
     }
 
     private static async Task AppendOpenTelemetryAsync(DiagnosticsDurableHistoryClient client, CancellationToken cancellationToken)

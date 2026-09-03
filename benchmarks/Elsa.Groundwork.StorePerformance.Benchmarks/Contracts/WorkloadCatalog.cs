@@ -14,7 +14,7 @@ public sealed class WorkloadCatalog
     private static readonly string[] RequiredFiles =
         ["runtime.json", "iam-secrets.json", "distributed-runtime.json", "diagnostics.json"];
     private static readonly string[] SuccessorFiles =
-        ["diagnostics-durable-history-v1.2.json", "recovery-scan-v1.2.json", "secret-create-read-list-v1.1.json"];
+        ["diagnostics-durable-history-v1.2.json", "diagnostics-durable-history-v1.3.json", "recovery-scan-v1.2.json", "secret-create-read-list-v1.1.json"];
     private static readonly string[] Providers = ["sqlite", "sqlserver", "postgresql", "mongodb"];
     private static readonly Regex Slug = new("^[a-z0-9]+(?:-[a-z0-9]+)*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex Sha256 = new("^[0-9a-f]{64}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -39,7 +39,7 @@ public sealed class WorkloadCatalog
         var expectedFiles = RequiredFiles.Concat(SuccessorFiles).Order(StringComparer.Ordinal).ToArray();
         if (!discovered.SequenceEqual(expectedFiles, StringComparer.Ordinal))
             throw new WorkloadContractException(
-                "The workload directory must contain exactly the four historical workload files and the reviewed Secret v1.1, recovery-scan v1.2, and diagnostics v1.2 successor files.");
+                "The workload directory must contain exactly the four historical workload files and the reviewed Secret v1.1, recovery-scan v1.2, and diagnostics v1.2/v1.3 successor files.");
 
         var workloads = new Dictionary<string, PerformanceWorkload>(StringComparer.Ordinal);
         foreach (var file in RequiredFiles)
@@ -251,7 +251,7 @@ public sealed class WorkloadCatalog
     {
         RequireObject(value, source);
         var properties = new[] { "id", "version", "scenarioId", "owner", "handoffTarget", "publicOperation", "coverageRows", "input", "operationSequence", "requiredProviders", "requiredNativeRoutes", "requiredProviderEvidence", "correctness", "efContractBaseline", "benchmarkAdmission", "physicalFormsFor646", "artifactRetention" };
-        if (source == "recovery-scan-v1.2.json")
+        if (source is "recovery-scan-v1.2.json" or "diagnostics-durable-history-v1.3.json")
             properties = [.. properties, "lineage"];
         RequireClosedProperties(value, properties, source);
 
@@ -277,7 +277,7 @@ public sealed class WorkloadCatalog
         var admission = ParseBenchmarkAdmission(RequireProperty(value, "benchmarkAdmission", source), source);
         var physicalForms = RequireStrings(RequireArray(value, "physicalFormsFor646", source), source, "physicalFormsFor646", allowEmpty: false);
         var retention = RequireStrings(RequireArray(value, "artifactRetention", source), source, "artifactRetention", allowEmpty: false);
-        var lineage = source == "recovery-scan-v1.2.json"
+        var lineage = source is "recovery-scan-v1.2.json" or "diagnostics-durable-history-v1.3.json"
             ? ParseLineage(RequireProperty(value, "lineage", source), source)
             : null;
 
@@ -387,7 +387,9 @@ public sealed class WorkloadCatalog
                 !SemanticInputMatches(actual.Input.Values, successor.Parameters) ||
                 !actual.OperationSequence.SequenceEqual(successor.OperationSequence, StringComparer.Ordinal) ||
                 (actual.Id == RuntimeRecoveryScanWorkload.WorkloadId &&
-                    actual.Lineage != new WorkloadLineage(RuntimeRecoveryScanWorkload.WorkloadId, "1.1.0", "production scanner paging is bounded to four native route candidates per page and the fixture preserves explicit terminal/live execution partitions")))
+                    actual.Lineage != new WorkloadLineage(RuntimeRecoveryScanWorkload.WorkloadId, "1.1.0", "production scanner paging is bounded to four native route candidates per page and the fixture preserves explicit terminal/live execution partitions")) ||
+                (actual.Id == ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId &&
+                    actual.Lineage != new WorkloadLineage(ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId, "1.2.0", "provider-generated structured-log sequences need not equal a scope-local row count, so the workload must validate high-water against the maximum committed sequence")))
                 throw new WorkloadContractException(
                     $"The workload '{actual.Id}' does not match its reproducible successor contract vector, including every semantic input field and lineage. " +
                     $"Expected result digest '{golden.ResultDigest}', computed '{successor.ComputeResultDigest()}'.");
@@ -456,7 +458,7 @@ public sealed class WorkloadCatalog
         };
         var expectedTimingGate = "Diagnostics remains blocked until an independently ratified absolute-budget authority exists; SQLite correctness may compare the temporary same-provider EF oracle, but no timing is claimed. SQL Server, PostgreSQL, and MongoDB require independently reviewed numeric absolute budgets plus an executable absolute-budget gate.";
 
-        if (actual.Version != "1.2.0" || actual.Owner != "#646" ||
+        if (actual.Version != "1.3.0" || actual.Owner != "#646" ||
             actual.PublicOperation != "Append, query, inspect, trim, reopen, and isolate durable Structured Logs and OpenTelemetry history through IStructuredLogStore and IOpenTelemetryStore." ||
             !actual.RequiredNativeRoutes.SequenceEqual([
                 "resources-by-last-seen", "resources-by-status", "resources-by-service",
@@ -474,7 +476,7 @@ public sealed class WorkloadCatalog
                 "The retained diagnostics EF implementation is the SQLite correctness oracle only; #646 owns live execution and deletion follows the accepted verdict.") ||
             !actual.PhysicalFormsFor646.SequenceEqual(expected.PhysicalForms, StringComparer.Ordinal) ||
             !actual.ArtifactRetention.SequenceEqual(artifactRetention, StringComparer.Ordinal))
-            throw new WorkloadContractException("The diagnostics v1.2 successor does not match its explicitly ratified replacement contract.");
+            throw new WorkloadContractException("The diagnostics v1.3 successor does not match its explicitly ratified replacement contract.");
     }
 
     private static IReadOnlyDictionary<string, object> IamSemanticInputParameters()
@@ -579,6 +581,7 @@ public sealed class WorkloadCatalog
         ["runtime.json"] = "1b81a63d8a2acfe5ceea9e9a7e458de21c0fae8069506be5e94258198eff7d41",
         ["iam-secrets.json"] = "b5681de1cb1cf5fa9e671770df0cc78f026103293889d86d0c9ea63fcc4ee364",
         ["diagnostics-durable-history-v1.2.json"] = "386f92762e7f81f6c804a95df91833726695a32f711f9dedc3a19d9c880ffd42",
+        ["diagnostics-durable-history-v1.3.json"] = "6b4c495b98c7c1c80b00d36d5fee870d1045504dd369c1548f875770ed50b0ef",
         ["secret-create-read-list-v1.1.json"] = "d9359af187da4f8a1568896a7ecae8e97215eb58f68d0e185d677a94833cc240",
         ["recovery-scan-v1.2.json"] = "7f6e808855a36fffcc2ebfca3a05c3f0ddcd4e301e03fb935216c61999271419",
         ["distributed-runtime.json"] = "e03a5db9ddbdbfe4c854632fadc00b2674546d0925e65b0af198ada75910d837",
