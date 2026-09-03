@@ -3,10 +3,10 @@
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.4.0-preview.9" />
-    <PackageReference Include="Groundwork.PostgreSql" VersionOverride="0.4.0-preview.9" />
-    <PackageReference Include="Groundwork.SqlServer" VersionOverride="0.4.0-preview.9" />
-    <PackageReference Include="Groundwork.MongoDb" VersionOverride="0.4.0-preview.9" />
+    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.4.0-preview.10" />
+    <PackageReference Include="Groundwork.PostgreSql" VersionOverride="0.4.0-preview.10" />
+    <PackageReference Include="Groundwork.SqlServer" VersionOverride="0.4.0-preview.10" />
+    <PackageReference Include="Groundwork.MongoDb" VersionOverride="0.4.0-preview.10" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="Microsoft.Data.SqlClient" VersionOverride="7.0.2" />
     <PackageReference Include="MongoDB.Driver" VersionOverride="3.10.0" />

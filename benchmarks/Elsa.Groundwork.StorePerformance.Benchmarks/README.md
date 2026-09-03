@@ -24,6 +24,13 @@ is correctness-only and is not a timed ratio oracle. The policy shape is indepen
 prevents the default ratio gate from being silently applied. The generic no-comparand evaluator exists,
 but it accepts only an explicit independently reviewed policy and has no diagnostics defaults.
 
+Native-plan admission keeps every scale-bearing diagnostics route index-backed and free of provider
+sort or spill stages. The three MongoDB resource-catalog routes have a narrower workload-specific
+alternative: because their frozen physical cardinality is exactly 128 rows and their finite page is
+exactly 127 rows, an explicit collection scan plus complete in-memory sort may be classified as
+`bounded-scan-sort`. That classification is rejected for any other route or bound, for incomplete
+ordering, or for any spill/materialization evidence; it does not weaken the 100,000-row stream gates.
+
 `matrix <scale>` executes one untimed adapter-host warm-up process followed by three independent measured
 adapter-host processes. A measured artifact carries the frozen seed/input fingerprint, provider-native plan
 identity/evidence reference/content digest, provider server version/topology/material settings, an opaque

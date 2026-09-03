@@ -381,6 +381,65 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
     }
 
     [Fact]
+    public void Mongo_bounded_resource_page_validation_requires_the_canonical_page_and_scope_count()
+    {
+        var page = new OpenTelemetryResourceResult(
+            Enumerable.Range(0, DiagnosticsDurableHistoryWorkload.ResourceCount)
+                .Reverse()
+                .Take(DiagnosticsDurableHistoryWorkload.QueryLimit)
+                .Select(ordinal => DiagnosticsDurableHistoryWorkload.ResourceFor(
+                    ordinal,
+                    DiagnosticsDurableHistoryWorkload.ServiceNameFor(ordinal)))
+                .ToArray(),
+            0);
+        var diagnostics = DiagnosticsWithResourceCount(DiagnosticsDurableHistoryWorkload.ResourceCount);
+
+        DiagnosticsNativePlanCapture.ValidateBoundedMongoResourcePage(
+            "resources-by-last-seen",
+            page,
+            diagnostics,
+            DiagnosticsDurableHistoryWorkload.QueryLimit);
+    }
+
+    [Theory]
+    [InlineData(127, false)]
+    [InlineData(128, true)]
+    public void Mongo_bounded_resource_page_validation_rejects_stale_or_duplicate_pages(
+        int resourceCount,
+        bool duplicatePage)
+    {
+        var page = duplicatePage
+            ? new OpenTelemetryResourceResult(
+                Enumerable.Repeat(
+                    DiagnosticsDurableHistoryWorkload.ResourceFor(
+                        DiagnosticsDurableHistoryWorkload.ResourceCount - 1,
+                        DiagnosticsDurableHistoryWorkload.ServiceNameFor(DiagnosticsDurableHistoryWorkload.ResourceCount - 1)),
+                    DiagnosticsDurableHistoryWorkload.QueryLimit)
+                    .ToArray(),
+                0)
+            : new OpenTelemetryResourceResult(
+                Enumerable.Range(0, DiagnosticsDurableHistoryWorkload.ResourceCount)
+                    .Reverse()
+                    .Take(DiagnosticsDurableHistoryWorkload.QueryLimit)
+                    .Select(ordinal => DiagnosticsDurableHistoryWorkload.ResourceFor(
+                        ordinal,
+                        DiagnosticsDurableHistoryWorkload.ServiceNameFor(ordinal)))
+                    .ToArray(),
+                0);
+        var exception = Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanCapture.ValidateBoundedMongoResourcePage(
+                "resources-by-last-seen",
+                page,
+                DiagnosticsWithResourceCount(resourceCount),
+                DiagnosticsDurableHistoryWorkload.QueryLimit));
+
+        Assert.Contains(
+            duplicatePage ? "identity/order" : "scoped resources",
+            exception.Message,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Process_identity_is_bound_into_storage_and_diagnostic_scopes()
     {
         var first = Request(processIndex: 1);
@@ -401,6 +460,22 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
             1,
             64);
     }
+
+    private static OpenTelemetryStorageDiagnostics DiagnosticsWithResourceCount(int resourceCount) => new(
+        TraceCapacity: 0,
+        SpanCapacity: 0,
+        MetricPointCapacity: 0,
+        LogRecordCapacity: 0,
+        ResourceCount: resourceCount,
+        TraceCount: 0,
+        SpanCount: 0,
+        MetricInstrumentCount: 0,
+        MetricPointCount: 0,
+        LogRecordCount: 0,
+        DroppedTraceCount: 0,
+        DroppedSpanCount: 0,
+        DroppedMetricPointCount: 0,
+        DroppedLogRecordCount: 0);
 
     private static RunRequest Request(
         string provider = "sqlite",

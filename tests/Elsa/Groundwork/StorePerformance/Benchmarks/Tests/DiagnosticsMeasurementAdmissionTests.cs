@@ -134,7 +134,7 @@ public sealed class DiagnosticsMeasurementAdmissionTests
         "100k",
         new string('a', 40),
         new string('b', 64),
-        packageVersions ?? new Dictionary<string, string> { ["Groundwork.Sqlite"] = "0.4.0-preview.9" },
+        packageVersions ?? new Dictionary<string, string> { ["Groundwork.Sqlite"] = "0.4.0-preview.10" },
         new string('c', 64),
         new string('d', 64),
         "3.46.0",

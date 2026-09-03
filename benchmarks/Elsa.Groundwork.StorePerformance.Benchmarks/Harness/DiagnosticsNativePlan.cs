@@ -70,12 +70,54 @@ public sealed record DiagnosticsTraceDetailConstituentSpec(
 public static class DiagnosticsNativePlanContract
 {
     private const string BlockedPlanMarker = "blocked provider plan:";
+    internal const string IndexSearchPlanClassification = "index-search";
+    internal const string BoundedMongoScanSortPlanClassification = "bounded-scan-sort";
+    private const int BoundedMongoResourceCardinality = 128;
+    private const int BoundedMongoResourceLimit = 127;
     public const string GroundworkAdapter = "groundwork-v2";
     public const string EfAdapter = "ef-diagnostics-oracle";
     public const string EfCorrectnessOnlyRouteContract = "ef-correctness-only-unbounded-resource-routes";
     public const string BlockedRouteContract = "provider-native-routes-blocked";
     public const string GroundworkTable = "elsa_otel_resources_v2";
     public const string EfTable = "TelemetryResources";
+
+    /// <summary>
+    /// The one deliberately bounded scan exception in the diagnostics native-plan contract. The
+    /// resource catalog is frozen at 128 physical rows and the public page is frozen at 127 rows;
+    /// every other route remains an index-backed, no-sort claim.
+    /// </summary>
+    internal static bool IsBoundedMongoResourceRoute(
+        string provider,
+        string adapter,
+        DiagnosticsNativeRouteSpec specification) =>
+        string.Equals(provider, "mongodb", StringComparison.Ordinal) &&
+        string.Equals(adapter, GroundworkAdapter, StringComparison.Ordinal) &&
+        specification.RouteIdentity is "resources-by-last-seen" or "resources-by-status" or "resources-by-service" &&
+        string.Equals(specification.TableName, GroundworkTable, StringComparison.Ordinal) &&
+        specification.IndexName == specification.RouteIdentity switch
+        {
+            "resources-by-last-seen" => "elsa_otel_resources_last_seen",
+            "resources-by-status" => "elsa_otel_resources_status_last_seen",
+            "resources-by-service" => "elsa_otel_resources_service_last_seen",
+            _ => ""
+        } &&
+        string.Equals(specification.OrderColumn, "lastSeen", StringComparison.Ordinal) &&
+        specification.StorageScopeRequired &&
+        specification.Descending &&
+        specification.PhysicalCardinality == BoundedMongoResourceCardinality &&
+        specification.FiniteLimit == BoundedMongoResourceLimit;
+
+    /// <summary>Classifies only the exact Mongo resource scan/sort exception; unknown or malformed
+    /// plans fall back to the strict index-search classification and are rejected by validation.</summary>
+    internal static string ClassifyPlan(
+        string provider,
+        string adapter,
+        DiagnosticsNativeRouteSpec specification,
+        string nativePlan) =>
+        IsBoundedMongoResourceRoute(provider, adapter, specification) &&
+        IsBoundedMongoScanSortShape(nativePlan)
+            ? BoundedMongoScanSortPlanClassification
+            : IndexSearchPlanClassification;
 
     public static IReadOnlyList<DiagnosticsTraceDetailConstituentSpec> TraceDetailConstituents(string adapter)
     {
@@ -302,6 +344,16 @@ public static class DiagnosticsNativePlanContract
             throw new PerformanceContractException(
                 $"Diagnostics route '{specification.RouteIdentity}' does not bind its provider-owned physical index name.");
 
+        if (!string.Equals(route.PlanClassification, IndexSearchPlanClassification, StringComparison.Ordinal) &&
+            !string.Equals(route.PlanClassification, BoundedMongoScanSortPlanClassification, StringComparison.Ordinal))
+            throw new PerformanceContractException(
+                $"Diagnostics route '{specification.RouteIdentity}' has an unsupported native-plan classification '{route.PlanClassification}'.");
+
+        if (string.Equals(route.PlanClassification, BoundedMongoScanSortPlanClassification, StringComparison.Ordinal) &&
+            !IsBoundedMongoResourceRoute(provider, adapter, specification))
+            throw new PerformanceContractException(
+                $"Diagnostics route '{specification.RouteIdentity}' may use '{BoundedMongoScanSortPlanClassification}' only for the frozen MongoDB resource catalog routes.");
+
         if (string.Equals(provider, "mongodb", StringComparison.Ordinal))
             ValidateMongoCommand(artifact.CommandText, specification, artifact.NativePlan);
         else
@@ -319,7 +371,10 @@ public static class DiagnosticsNativePlanContract
                 ValidateSqlServerPlan(artifact.NativePlan, specification, physicalIndexName);
                 break;
             case "mongodb":
-                ValidateMongoPlan(artifact.NativePlan, specification, physicalIndexName);
+                if (string.Equals(route.PlanClassification, BoundedMongoScanSortPlanClassification, StringComparison.Ordinal))
+                    ValidateMongoBoundedScanSortPlan(artifact.NativePlan, specification);
+                else
+                    ValidateMongoPlan(artifact.NativePlan, specification, physicalIndexName);
                 break;
             default:
                 throw new PerformanceContractException($"Diagnostics native-plan admission does not support provider '{provider}'.");
@@ -381,7 +436,7 @@ public static class DiagnosticsNativePlanContract
             string.IsNullOrWhiteSpace(evidence.RawPlanReference) ||
             string.IsNullOrWhiteSpace(evidence.RawPlanSha256) ||
             string.IsNullOrWhiteSpace(evidence.PhysicalIndexName) ||
-            !string.Equals(evidence.PlanClassification, "index-search", StringComparison.Ordinal))
+            !string.Equals(evidence.PlanClassification, IndexSearchPlanClassification, StringComparison.Ordinal))
             throw new PerformanceContractException(
                 $"Diagnostics trace-detail query '{evidence.RouteIdentity}' must retain its provider-native plan artifact.");
 
@@ -1122,6 +1177,76 @@ public static class DiagnosticsNativePlanContract
         return value.ValueKind == JsonValueKind.Array && value.EnumerateArray().Any(item => ContainsMongoProperty(item, name));
     }
 
+    private static bool IsBoundedMongoScanSortShape(string plan)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(plan);
+            var winningPlans = FindPropertyValues(document.RootElement, "winningPlan").ToArray();
+            if (winningPlans.Length != 1)
+                return false;
+
+            var stages = FindObjects(winningPlans[0], "stage").ToArray();
+            var names = stages
+                .Select(MongoStageName)
+                .Where(name => name is not null)
+                .ToArray();
+            var limits = FindObjects(winningPlans[0], "limitAmount").ToArray();
+            return names.Count(name => string.Equals(name, "COLLSCAN", StringComparison.OrdinalIgnoreCase)) == 1 &&
+                   names.Count(name => string.Equals(name, "SORT", StringComparison.OrdinalIgnoreCase)) == 1 &&
+                   !names.Any(name => string.Equals(name, "IXSCAN", StringComparison.OrdinalIgnoreCase)) &&
+                   !names.Any(name => name!.Contains("MATERIAL", StringComparison.OrdinalIgnoreCase)) &&
+                   !HasSpillMarker(document.RootElement) &&
+                   limits.Length != 0 &&
+                   limits.All(limit => limit.GetProperty("limitAmount").TryGetInt32(out var value) && value == BoundedMongoResourceLimit);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static void ValidateMongoBoundedScanSortPlan(
+        string plan,
+        DiagnosticsNativeRouteSpec specification)
+    {
+        using var document = ParseJson(plan, "MongoDB");
+        var winningPlans = FindPropertyValues(document.RootElement, "winningPlan").ToArray();
+        var stages = winningPlans.Length == 1
+            ? FindObjects(winningPlans[0], "stage").ToArray()
+            : [];
+        var allStages = FindObjects(document.RootElement, "stage").ToArray();
+        var names = stages
+            .Select(MongoStageName)
+            .Where(name => name is not null)
+            .ToArray();
+        if (winningPlans.Length != 1 ||
+            names.Count(name => string.Equals(name, "COLLSCAN", StringComparison.OrdinalIgnoreCase)) != 1 ||
+            names.Count(name => string.Equals(name, "SORT", StringComparison.OrdinalIgnoreCase)) != 1)
+            throw BlockedPlan(specification, "MongoDB bounded scan/sort plan is missing its explicit collection scan or sort");
+        if (names.Any(name => string.Equals(name, "IXSCAN", StringComparison.OrdinalIgnoreCase)))
+            throw BlockedPlan(specification, "MongoDB bounded scan/sort plan unexpectedly uses an index scan");
+        if (allStages.Select(MongoStageName).Any(name => name?.Contains("MATERIAL", StringComparison.OrdinalIgnoreCase) == true) ||
+            HasSpillMarker(document.RootElement))
+            throw BlockedPlan(specification, "MongoDB bounded scan/sort plan has a sort or materialization spill");
+
+        var sortStages = stages.Where(stage => string.Equals(MongoStageName(stage), "SORT", StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (sortStages.Length != 1 ||
+            !sortStages[0].TryGetProperty("sortPattern", out var sortPattern) ||
+            !ValidateMongoOrdering(sortPattern, specification))
+            throw BlockedPlan(specification, "MongoDB bounded scan/sort plan does not bind its complete effective ordering");
+
+        var limits = FindObjects(winningPlans[0], "limitAmount").ToArray();
+        if (limits.Length == 0 ||
+            limits.Any(limit => !limit.GetProperty("limitAmount").TryGetInt32(out var value) || value != specification.FiniteLimit))
+            throw BlockedPlan(specification, "MongoDB bounded scan/sort plan does not bind the frozen finite page limit");
+    }
+
+    private static string? MongoStageName(JsonElement stage) =>
+        stage.TryGetProperty("stage", out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
     private static void ValidateMongoPlan(string plan, DiagnosticsNativeRouteSpec specification, string physicalIndexName)
     {
         using var document = ParseJson(plan, "MongoDB");
@@ -1218,6 +1343,26 @@ public static class DiagnosticsNativePlanContract
         {
             foreach (var item in value.EnumerateArray())
                 foreach (var found in FindObjects(item, requiredProperty))
+                    yield return found;
+        }
+    }
+
+    private static IEnumerable<JsonElement> FindPropertyValues(JsonElement value, string propertyName)
+    {
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in value.EnumerateObject())
+            {
+                if (string.Equals(property.Name, propertyName, StringComparison.Ordinal))
+                    yield return property.Value;
+                foreach (var found in FindPropertyValues(property.Value, propertyName))
+                    yield return found;
+            }
+        }
+        else if (value.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in value.EnumerateArray())
+                foreach (var found in FindPropertyValues(item, propertyName))
                     yield return found;
         }
     }
