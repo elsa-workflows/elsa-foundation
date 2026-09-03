@@ -298,21 +298,25 @@ def validate_evidence(
 
     routes = document.get("Routes")
     blocked = document.get("BlockedRoutes")
+    trace_detail = document.get("TraceDetailConstituents")
     if blocked is None:
         blocked = []
-    if not isinstance(routes, list) or not isinstance(blocked, list):
-        raise ValueError(f"{path.name} must contain Routes and BlockedRoutes arrays")
+    if trace_detail is None:
+        trace_detail = []
+    if not isinstance(routes, list) or not isinstance(blocked, list) or not isinstance(trace_detail, list):
+        raise ValueError(f"{path.name} must contain Routes, BlockedRoutes, and TraceDetailConstituents arrays")
     if any(not isinstance(route, dict) or not isinstance(route.get("RouteIdentity"), str) for route in routes):
         raise ValueError(f"{path.name} contains an invalid native route entry")
     if any(not isinstance(route, str) or not route for route in blocked):
         raise ValueError(f"{path.name} contains an invalid blocked route identity")
     route_names = [route["RouteIdentity"] for route in routes]
+    admitted_route_names = route_names + (["trace-detail"] if trace_detail else [])
     required = registration["RequiredNativeRoutes"]
-    if timing and sorted(route_names) != sorted(required):
+    if timing and sorted(admitted_route_names) != sorted(required):
         raise ValueError(f"{path.name} does not capture every required native route for timing")
-    if sorted(route_names + blocked) != sorted(required):
+    if sorted(admitted_route_names + blocked) != sorted(required):
         raise ValueError(f"{path.name} does not account for every required route as captured or blocked")
-    if len(route_names + blocked) != len(set(route_names + blocked)):
+    if len(admitted_route_names + blocked) != len(set(admitted_route_names + blocked)):
         raise ValueError(f"{path.name} contains duplicate captured/blocked route identities")
     for route in routes:
         reference = route.get("RawPlanReference")

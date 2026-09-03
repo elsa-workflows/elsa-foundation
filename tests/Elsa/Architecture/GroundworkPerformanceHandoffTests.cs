@@ -352,6 +352,67 @@ for malformed_self_windows in (
         Assert.True(result.ExitCode == 0, result.Error);
     }
 
+    [Fact]
+    public void Operator_runner_accounts_for_trace_detail_composite_evidence()
+    {
+        var runnerPath = Path.Combine(RepoRoot, "tools", "groundwork", "run-e3-medium-baseline.py");
+        const string assertions = """
+import json
+import runpy
+import sys
+import tempfile
+from pathlib import Path
+
+validate_evidence = runpy.run_path(sys.argv[1])["validate_evidence"]
+request = {
+    "ComparisonCohortId": "cohort",
+    "MeasurementSetId": "measurement",
+    "WorkloadId": "diagnostics-durable-history",
+    "WorkloadVersion": "1.2.0",
+    "Provider": "sqlite",
+    "Adapter": "groundwork-v2",
+    "PhysicalForm": "ordinary-groundwork-diagnostics-units",
+    "Scale": "medium",
+    "CommitSha": "a" * 40,
+    "HarnessAssemblySha256": "b" * 64,
+    "CompositionFingerprint": "c" * 64,
+    "HostFingerprintSha256": "d" * 64,
+    "ProviderVersion": "3.50.4",
+    "ProviderTopology": "file-backed-distinct-connections",
+    "ProviderConfiguration": {},
+    "Seed": "seed",
+    "InputFingerprintSha256": "e" * 64,
+    "NativePlanIdentity": "identity",
+}
+document = {
+    "SchemaVersion": 2,
+    **{name: value for name, value in request.items() if name != "NativePlanIdentity"},
+    "Identity": request["NativePlanIdentity"],
+    "Routes": [],
+    "BlockedRoutes": [],
+    "TraceDetailConstituents": [{"RouteIdentity": "trace-detail/summary-by-trace-key"}],
+}
+registration = {"RequiredNativeRoutes": ["trace-detail"]}
+with tempfile.TemporaryDirectory() as directory:
+    path = Path(directory) / "native-plan.json"
+    path.write_text(json.dumps(document), encoding="utf-8")
+    validate_evidence(path, request, registration, timing=True)
+
+    document["TraceDetailConstituents"] = []
+    path.write_text(json.dumps(document), encoding="utf-8")
+    try:
+        validate_evidence(path, request, registration, timing=True)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("empty trace-detail constituent evidence was accepted")
+""";
+
+        var result = RunPython(assertions, runnerPath);
+
+        Assert.True(result.ExitCode == 0, result.Error);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("blocked")]
