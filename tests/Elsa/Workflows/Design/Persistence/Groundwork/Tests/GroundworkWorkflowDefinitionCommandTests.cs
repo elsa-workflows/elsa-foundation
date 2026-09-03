@@ -88,16 +88,19 @@ public class GroundworkWorkflowDefinitionCommandTests
         return new(store ?? _store, new GroundworkWorkflowDefinitionStore(store ?? _store, _accessContext), Payloads, _accessContext);
     }
 
-    private GroundworkPromoteDraftToVersionCommand PromoteCommand(IGroundworkStorageSessionSource? store = null)
+    private GroundworkPromoteDraftToVersionCommand PromoteCommand(
+        IGroundworkStorageSessionSource? store = null,
+        IWorkflowDefinitionVersionStore? versionStore = null,
+        IDesignAtomicWriter? atomicWriter = null)
     {
         var storage = Storage(store);
         return new(
             _locks,
             storage,
-            new GroundworkDesignAtomicWrite(storage),
+            atomicWriter ?? new GroundworkDesignAtomicWrite(storage),
             Payloads,
             _events,
-            VersionStore(store),
+            versionStore ?? VersionStore(store),
             _identities,
             _clock,
             _accessContext);
@@ -629,6 +632,28 @@ public class GroundworkWorkflowDefinitionCommandTests
     }
 
     [Fact]
+    public async Task PromoteDraft_reads_a_replacement_version_store_before_entering_the_atomic_stage()
+    {
+        var draftId = await CreateCommand().Execute(
+            NextKey(),
+            "definition-replacement-store",
+            EmptyState(),
+            cancellationToken: CancellationToken.None);
+        var stageEntered = false;
+        var atomicWriter = new StageObservingAtomicWriter(AtomicWrite(), () => stageEntered = true);
+        var replacement = new ObservingWorkflowDefinitionVersionStore(
+            VersionStore(),
+            () => Assert.False(stageEntered));
+
+        var versionId = await PromoteCommand(versionStore: replacement, atomicWriter: atomicWriter)
+            .Execute(NextKey(), draftId, CancellationToken.None);
+
+        Assert.NotNull(await VersionStore().FindByIdAsync(versionId));
+        Assert.Equal(1, replacement.FindLatestCount);
+        Assert.Equal(1, replacement.ExistsCount);
+    }
+
+    [Fact]
     public async Task PromoteDraft_rejects_an_unknown_draft_as_not_found()
     {
         var exception = await Assert.ThrowsAsync<EntityNotFoundException>(() =>
@@ -1090,6 +1115,76 @@ public class GroundworkWorkflowDefinitionCommandTests
             SeenDefinitionId = definitionId;
             throw new InvalidOperationException("Definition is still published.");
         }
+    }
+
+    private sealed class ObservingWorkflowDefinitionVersionStore(
+        IWorkflowDefinitionVersionStore inner,
+        Action assertBeforeAtomicStage)
+        : IWorkflowDefinitionVersionStore
+    {
+        public int FindLatestCount { get; private set; }
+        public int ExistsCount { get; private set; }
+
+        public Task<WorkflowDefinitionVersion> GetAsync(
+            string versionId,
+            CancellationToken cancellationToken = default) => inner.GetAsync(versionId, cancellationToken);
+
+        public Task<WorkflowDefinitionVersion?> FindByIdAsync(
+            string versionId,
+            CancellationToken cancellationToken = default) => inner.FindByIdAsync(versionId, cancellationToken);
+
+        public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(
+            string versionId,
+            CancellationToken cancellationToken = default) => inner.GetWithDefinitionAsync(versionId, cancellationToken);
+
+        public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(
+            string definitionId,
+            CancellationToken cancellationToken = default)
+        {
+            assertBeforeAtomicStage();
+            FindLatestCount++;
+            return inner.FindLatestVersionAsync(definitionId, cancellationToken);
+        }
+
+        public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(
+            string definitionId,
+            CancellationToken cancellationToken = default) => inner.ListByDefinitionAsync(definitionId, cancellationToken);
+
+        public Task<bool> ExistsAsync(
+            string definitionId,
+            string semVerSortKey,
+            CancellationToken cancellationToken = default)
+        {
+            assertBeforeAtomicStage();
+            ExistsCount++;
+            return inner.ExistsAsync(definitionId, semVerSortKey, cancellationToken);
+        }
+    }
+
+    private sealed class StageObservingAtomicWriter(
+        IDesignAtomicWriter inner,
+        Action onStageEntered) : IDesignAtomicWriter
+    {
+        public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
+            GroundworkDesignAtomicWriteRequest request,
+            Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
+            CancellationToken cancellationToken = default) =>
+            inner.ExecuteAsync(request, Observe(stage), cancellationToken);
+
+        public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
+            GroundworkDesignAtomicWriteRequest request,
+            Func<CancellationToken, Task>? beforeAttempt,
+            Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
+            CancellationToken cancellationToken = default) =>
+            inner.ExecuteAsync(request, beforeAttempt, Observe(stage), cancellationToken);
+
+        private Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> Observe(
+            Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage) =>
+            (context, cancellationToken) =>
+            {
+                onStageEntered();
+                return stage(context, cancellationToken);
+            };
     }
 
     private sealed class SequentialIdentityGenerator : Elsa.Primitives.Contracts.IIdentityGenerator
