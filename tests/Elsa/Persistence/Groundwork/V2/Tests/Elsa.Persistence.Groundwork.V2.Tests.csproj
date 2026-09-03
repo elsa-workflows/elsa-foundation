@@ -6,7 +6,7 @@
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
     <ImportDirectoryBuildTargets>false</ImportDirectoryBuildTargets>
-    <GroundworkVersion>0.4.0-preview.9</GroundworkVersion>
+    <GroundworkVersion>0.4.0-preview.10</GroundworkVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Groundwork.Kernel" Version="$(GroundworkVersion)" />

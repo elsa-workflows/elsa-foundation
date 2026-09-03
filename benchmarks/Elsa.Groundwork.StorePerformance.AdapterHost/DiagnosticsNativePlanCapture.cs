@@ -103,20 +103,59 @@ internal static class DiagnosticsNativePlanCapture
 
                     adapter.CommandObserver.ClearCommands();
                     var before = Directory.EnumerateFiles(explainDirectory).ToHashSet(StringComparer.Ordinal);
-                    var result = await InvokeRouteAsync(scopes.Primary, route, limit, cancellationToken);
+                    string nativePath;
+                    string rawPlan;
+                    string command;
+                    string classification;
+                    int result;
+                    try
+                    {
+                        result = await InvokeRouteAsync(scopes.Primary, route, limit, cancellationToken);
+                        nativePath = RequireNativeArtifacts(
+                            explainDirectory,
+                            before,
+                            request.Provider,
+                            specification.IndexName,
+                            1)[0];
+                        (rawPlan, command, classification) = CaptureRouteEvidence(
+                            request.Provider,
+                            adapter.CommandObserver.Commands,
+                            request.Adapter,
+                            specification,
+                            nativePath);
+                    }
+                    catch (ExplainAssertionException exception) when (
+                        DiagnosticsNativePlanContract.IsBoundedMongoResourceRoute(
+                            request.Provider,
+                            request.Adapter,
+                            specification))
+                    {
+                        // Groundwork retains the provider explain response before asserting the
+                        // declared index. A small Mongo resource catalog may legitimately choose a
+                        // bounded collection scan/sort, so preserve that asserted artifact and then
+                        // repeat only the public call with assertion disabled to prove its exact page.
+                        nativePath = RequireAssertionArtifact(
+                            explainDirectory,
+                            before,
+                            request.Provider,
+                            specification.IndexName,
+                            exception);
+                        (rawPlan, command, classification) = CaptureRouteEvidence(
+                            request.Provider,
+                            adapter.CommandObserver.Commands,
+                            request.Adapter,
+                            specification,
+                            nativePath);
+                        adapter.CommandObserver.ClearCommands();
+                        result = await InvokeRouteWithoutExplainAssertionAsync(
+                            scopes.Primary,
+                            route,
+                            limit,
+                            cancellationToken);
+                    }
                     if (result != limit)
                         throw new PerformanceContractException($"Diagnostics native route '{route}' returned {result} rows; expected {limit}.");
                     var physicalIndexName = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(request.Provider, specification);
-                    var nativePath = RequireNativeArtifacts(
-                        explainDirectory,
-                        before,
-                        request.Provider,
-                        specification.IndexName,
-                        1)[0];
-                    var rawPlan = IamNativePlanParser.NormalizeForArtifact(request.Provider, File.ReadAllText(nativePath));
-                    var command = string.Equals(request.Provider, "mongodb", StringComparison.Ordinal)
-                        ? CaptureMongoCommand(adapter.CommandObserver.Commands, specification, rawPlan)
-                        : RequireGroundworkCommand(adapter.CommandObserver.Commands, specification);
                     var rawReference = ArtifactStore.RawPlanName($"diagnostics.{request.Provider}.{request.MeasurementSetId}.{route}.raw.json");
                     var rawPath = Path.Combine(outputDirectory, rawReference);
                     var artifact = new DiagnosticsNativePlanArtifact(1, request.Provider, request.Adapter, route, specification.TableName, specification.IndexName, physicalIndexName, command, rawPlan);
@@ -124,7 +163,7 @@ internal static class DiagnosticsNativePlanCapture
                         route,
                         rawReference,
                         string.Empty,
-                        "index-search",
+                        classification,
                         physicalIndexName,
                         specification.PhysicalCardinality,
                         DiagnosticsNativePlanContract.ExpectedStorageScopePredicate(request.Provider, specification),
@@ -446,7 +485,7 @@ internal static class DiagnosticsNativePlanCapture
                     specification.RouteIdentity,
                     pageReference,
                     string.Empty,
-                    "index-search",
+                    DiagnosticsNativePlanContract.IndexSearchPlanClassification,
                     physicalIndexName,
                     pageCommand,
                     specification.PhysicalCardinality,
@@ -478,7 +517,7 @@ internal static class DiagnosticsNativePlanCapture
                 specification.RouteIdentity,
                 firstPage.RawPlanReference,
                 firstPage.RawPlanSha256,
-                "index-search",
+                DiagnosticsNativePlanContract.IndexSearchPlanClassification,
                 physicalIndexName,
                 firstPage.CommandText,
                 specification.PhysicalCardinality,
@@ -582,6 +621,64 @@ internal static class DiagnosticsNativePlanCapture
         // that actual command verbatim.
         return MongoExplainCommandInspector.SerializeCommand(
             MongoExplainCommandInspector.ExtractCommand(rawPlan));
+    }
+
+    private static (string RawPlan, string Command, string Classification) CaptureRouteEvidence(
+        string provider,
+        IReadOnlyList<ProviderCommandEvent> commands,
+        string adapter,
+        DiagnosticsNativeRouteSpec specification,
+        string nativePath)
+    {
+        var rawPlan = IamNativePlanParser.NormalizeForArtifact(provider, File.ReadAllText(nativePath));
+        var command = string.Equals(provider, "mongodb", StringComparison.Ordinal)
+            ? CaptureMongoCommand(commands, specification, rawPlan)
+            : RequireGroundworkCommand(commands, specification);
+        var classification = DiagnosticsNativePlanContract.ClassifyPlan(
+            provider,
+            adapter,
+            specification,
+            rawPlan);
+        return (rawPlan, command, classification);
+    }
+
+    private static string RequireAssertionArtifact(
+        string directory,
+        IReadOnlySet<string> before,
+        string provider,
+        string logicalIndexName,
+        ExplainAssertionException exception)
+    {
+        var path = exception.ArtifactPath;
+        if (string.IsNullOrWhiteSpace(path))
+            throw new PerformanceContractException(
+                $"Diagnostics native-plan assertion for logical index '{logicalIndexName}' did not retain an artifact path.");
+
+        var fullPath = Path.GetFullPath(path);
+        var fullDirectory = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var extension = IamNativePlanParser.RawPlanExtension(provider);
+        var suffix = $"-{logicalIndexName}{extension}";
+        var pathComparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        if (!fullPath.StartsWith(fullDirectory, pathComparison) ||
+            before.Any(candidate => string.Equals(candidate, fullPath, pathComparison)) ||
+            !File.Exists(fullPath) ||
+            !Path.GetFileName(fullPath).EndsWith(suffix, StringComparison.Ordinal))
+            throw new PerformanceContractException(
+                $"Diagnostics native-plan assertion for logical index '{logicalIndexName}' did not retain its exact provider artifact.");
+
+        return fullPath;
+    }
+
+    private static async Task<int> InvokeRouteWithoutExplainAssertionAsync(
+        DiagnosticsDurableHistoryClient client,
+        string route,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        using var suppression = ExplainAssertionMode.Suppress();
+        return await InvokeRouteAsync(client, route, limit, cancellationToken);
     }
 
     internal static IReadOnlyList<string> RequireNativeArtifacts(
