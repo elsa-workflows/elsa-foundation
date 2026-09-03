@@ -483,26 +483,33 @@ public sealed class DiagnosticsDurableHistoryWorkload
     /// count operation, and <c>GetRecentAsync</c> clamps to its own maximum, so the gap-free
     /// <c>ReadAfterAsync</c> traversal is the only contract-legal exact count.
     /// </summary>
-    private static async Task<int> CountRetainedAsync(IStructuredLogStore store, CancellationToken cancellationToken)
+    internal static async Task<int> CountRetainedAsync(IStructuredLogStore store, CancellationToken cancellationToken)
     {
         var count = 0;
         StructuredLogReplayCursor? cursor = null;
 
-        // Bounded rather than while(true): a provider that returned HasMore without advancing its cursor
-        // would otherwise hang the correctness phase instead of failing it, and a hang inside a measured
-        // child process surfaces as an opaque timeout rather than as the contract violation it is.
-        var maximumPages = (AppendedPerStream / StructuredLogBatchSize) + 2;
+        // The adapter is frozen to QueryLimit, so its public store may clamp a larger request to that
+        // value. Budget from the effective contract page size rather than from the unrelated append
+        // batch size; those happen to differ specifically to catch accidental coupling.
+        var maximumPages = ((AppendedPerStream + QueryLimit - 1) / QueryLimit) + 2;
         for (var page = 0; page < maximumPages; page++)
         {
-            var read = await store.ReadAfterAsync(cursor, StructuredLogFilter.None, StructuredLogBatchSize, cancellationToken);
+            var previousCursor = cursor;
+            var read = await store.ReadAfterAsync(cursor, StructuredLogFilter.None, QueryLimit, cancellationToken);
             count += read.Entries.Count;
-            cursor = read.NextCursor;
-            if (!read.HasMore || read.NextCursor is null)
+            if (!read.HasMore)
                 return count;
+
+            cursor = read.NextCursor;
+            if (cursor is null || cursor == previousCursor)
+            {
+                throw new InvalidOperationException(
+                    "The durable structured-log tail advertised more pages without advancing its cursor.");
+            }
         }
 
         throw new InvalidOperationException(
-            "The durable structured-log tail did not terminate within the bounded page budget; the provider is advertising more pages without advancing its cursor.");
+            "The durable structured-log tail exceeded the bounded page budget for the frozen append volume.");
     }
 
     private static async Task<int> CountCrossScopeLeakageAsync(DiagnosticsDurableHistoryClient client, CancellationToken cancellationToken)

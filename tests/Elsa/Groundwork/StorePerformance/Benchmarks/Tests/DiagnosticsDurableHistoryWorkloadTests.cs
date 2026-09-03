@@ -1,3 +1,5 @@
+using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
+using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
@@ -73,5 +75,107 @@ public sealed class DiagnosticsDurableHistoryWorkloadTests
 
         Assert.True(BenchmarkAdmissionGuard.TryGetBlockedReason(workload, out var reason));
         Assert.Equal(ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode, reason);
+    }
+
+    [Fact]
+    public async Task Retained_count_terminates_when_the_store_clamps_pages_to_the_frozen_query_limit()
+    {
+        var store = new ClampedTailStore(
+            DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream,
+            DiagnosticsDurableHistoryWorkload.QueryLimit);
+
+        var count = await DiagnosticsDurableHistoryWorkload.CountRetainedAsync(store, CancellationToken.None);
+
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream, count);
+        Assert.Equal(
+            (DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream + DiagnosticsDurableHistoryWorkload.QueryLimit - 1) /
+            DiagnosticsDurableHistoryWorkload.QueryLimit,
+            store.ReadCount);
+    }
+
+    [Fact]
+    public async Task Retained_count_rejects_a_nonadvancing_cursor_immediately()
+    {
+        var store = new NonAdvancingTailStore();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            DiagnosticsDurableHistoryWorkload.CountRetainedAsync(store, CancellationToken.None));
+
+        Assert.Contains("without advancing its cursor", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(2, store.ReadCount);
+    }
+
+    private sealed class ClampedTailStore(int total, int clamp) : StructuredLogStoreStub
+    {
+        private static readonly StructuredLogEntry Entry = new();
+
+        public int ReadCount { get; private set; }
+
+        public override Task<StructuredLogReadPage> ReadAfterAsync(
+            StructuredLogReplayCursor? afterCursor,
+            StructuredLogFilter filter,
+            int maxCount,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ReadCount++;
+            var position = afterCursor is null ? 0 : int.Parse(afterCursor.Value.Value);
+            var take = Math.Min(Math.Min(maxCount, clamp), total - position);
+            var nextPosition = position + take;
+            StructuredLogReplayCursor? next = take == 0
+                ? afterCursor
+                : new(nextPosition.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            return Task.FromResult(new StructuredLogReadPage(
+                Enumerable.Repeat(Entry, take).ToArray(),
+                next,
+                nextPosition < total));
+        }
+    }
+
+    private sealed class NonAdvancingTailStore : StructuredLogStoreStub
+    {
+        private static readonly StructuredLogReplayCursor Cursor = new("unchanged");
+        private static readonly StructuredLogEntry Entry = new();
+
+        public int ReadCount { get; private set; }
+
+        public override Task<StructuredLogReadPage> ReadAfterAsync(
+            StructuredLogReplayCursor? afterCursor,
+            StructuredLogFilter filter,
+            int maxCount,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ReadCount++;
+            return Task.FromResult(new StructuredLogReadPage([Entry], Cursor, true));
+        }
+    }
+
+    private abstract class StructuredLogStoreStub : IStructuredLogStore
+    {
+        public ValueTask<StructuredLogEntry> AppendAsync(
+            StructuredLogEntry entry,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<long> GetHighWaterMarkAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<StructuredLogEntry>> GetRecentAsync(
+            StructuredLogFilter filter,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<StructuredLogReplayCursor?> GetTailCursorAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public abstract Task<StructuredLogReadPage> ReadAfterAsync(
+            StructuredLogReplayCursor? afterCursor,
+            StructuredLogFilter filter,
+            int maxCount,
+            CancellationToken cancellationToken = default);
+
+        public Task TrimAsync(int keepNewest, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }
