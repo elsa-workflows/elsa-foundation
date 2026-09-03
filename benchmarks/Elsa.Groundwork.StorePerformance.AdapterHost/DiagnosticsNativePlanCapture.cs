@@ -147,7 +147,7 @@ internal static class DiagnosticsNativePlanCapture
                             specification,
                             nativePath);
                         adapter.CommandObserver.ClearCommands();
-                        result = await InvokeRouteWithoutExplainAssertionAsync(
+                        result = await InvokeBoundedMongoResourceRouteWithoutExplainAssertionAsync(
                             scopes.Primary,
                             route,
                             limit,
@@ -671,14 +671,85 @@ internal static class DiagnosticsNativePlanCapture
         return fullPath;
     }
 
-    private static async Task<int> InvokeRouteWithoutExplainAssertionAsync(
+    private static async Task<int> InvokeBoundedMongoResourceRouteWithoutExplainAssertionAsync(
         DiagnosticsDurableHistoryClient client,
         string route,
         int limit,
         CancellationToken cancellationToken)
     {
         using var suppression = ExplainAssertionMode.Suppress();
-        return await InvokeRouteAsync(client, route, limit, cancellationToken);
+        var result = await QueryResourceRouteAsync(client, route, limit, cancellationToken);
+        var diagnostics = await client.OpenTelemetry.GetDiagnosticsAsync(cancellationToken);
+        ValidateBoundedMongoResourcePage(route, result, diagnostics, limit);
+        return result.Items.Count;
+    }
+
+    private static async Task<OpenTelemetryResourceResult> QueryResourceRouteAsync(
+        DiagnosticsDurableHistoryClient client,
+        string route,
+        int? limit,
+        CancellationToken cancellationToken)
+    {
+        var filter = route switch
+        {
+            "resources-by-last-seen" => new OpenTelemetryResourceFilter { Take = limit },
+            "resources-by-status" => new OpenTelemetryResourceFilter
+            {
+                Status = TelemetryResourceStatus.Active,
+                Take = limit
+            },
+            "resources-by-service" => new OpenTelemetryResourceFilter
+            {
+                ServiceName = DiagnosticsDurableHistoryWorkload.ServiceNameFor(0),
+                Take = limit
+            },
+            _ => throw new PerformanceContractException($"Unsupported bounded Mongo resource route '{route}'.")
+        };
+        return await client.OpenTelemetry.QueryResourcesAsync(filter, cancellationToken);
+    }
+
+    internal static void ValidateBoundedMongoResourcePage(
+        string route,
+        OpenTelemetryResourceResult result,
+        OpenTelemetryStorageDiagnostics diagnostics,
+        int limit)
+    {
+        if (diagnostics.ResourceCount != DiagnosticsDurableHistoryWorkload.ResourceCount)
+            throw new PerformanceContractException(
+                $"Diagnostics bounded Mongo resource route '{route}' observed {diagnostics.ResourceCount} scoped resources; expected {DiagnosticsDurableHistoryWorkload.ResourceCount}.");
+
+        var expected = Enumerable.Range(0, DiagnosticsDurableHistoryWorkload.ResourceCount)
+            .Select(ordinal => DiagnosticsDurableHistoryWorkload.ResourceFor(
+                ordinal,
+                DiagnosticsDurableHistoryWorkload.ServiceNameFor(ordinal)))
+            .OrderByDescending(resource => resource.LastSeen)
+            .ThenBy(resource => resource.Id, StringComparer.Ordinal)
+            .Take(limit)
+            .ToArray();
+        var actual = result.Items.ToArray();
+        if (actual.Length != expected.Length ||
+            !actual.Select(resource => resource.Id).SequenceEqual(
+                expected.Select(resource => resource.Id),
+                StringComparer.Ordinal))
+            throw new PerformanceContractException(
+                $"Diagnostics bounded Mongo resource route '{route}' did not return the frozen deterministic resource identity/order page.");
+
+        for (var index = 0; index < expected.Length; index++)
+        {
+            var expectedResource = expected[index];
+            var actualResource = actual[index];
+            if (!string.Equals(actualResource.ServiceName, expectedResource.ServiceName, StringComparison.Ordinal) ||
+                !string.Equals(actualResource.ServiceInstanceId, expectedResource.ServiceInstanceId, StringComparison.Ordinal) ||
+                !string.Equals(actualResource.TelemetrySdkLanguage, expectedResource.TelemetrySdkLanguage, StringComparison.Ordinal) ||
+                actualResource.Status != expectedResource.Status ||
+                actualResource.LastSeen != expectedResource.LastSeen ||
+                actualResource.Attributes.Count != expectedResource.Attributes.Count ||
+                expectedResource.Attributes.Any(attribute =>
+                    !actualResource.Attributes.TryGetValue(attribute.Key, out var value) ||
+                    !string.Equals(value, attribute.Value, StringComparison.Ordinal)))
+                throw new PerformanceContractException(
+                    $"Diagnostics bounded Mongo resource route '{route}' returned resource '{actualResource.Id}' with non-canonical fixture fields.");
+        }
     }
 
     internal static IReadOnlyList<string> RequireNativeArtifacts(
