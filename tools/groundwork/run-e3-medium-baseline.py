@@ -99,6 +99,16 @@ def ensure_capture_directory_empty(evidence: Path) -> None:
         )
 
 
+def ensure_measurement_output_admissible(output: Path) -> None:
+    if output.exists() and not output.is_dir():
+        raise ValueError(f"measurement output directory is not a directory: {output}")
+    if output.exists() and any(output.iterdir()) and not (output / "artifact-manifest.v2.json").is_file():
+        raise ValueError(
+            "preexisting measurement output requires artifact-manifest.v2.json; "
+            f"use a fresh directory: {output}"
+        )
+
+
 def begin_capture(evidence: Path) -> Path:
     if evidence.exists() and not evidence.is_dir():
         raise ValueError(f"capture evidence directory is not a directory: {evidence}")
@@ -683,6 +693,7 @@ def measure(args: argparse.Namespace) -> int:
     evidence = ensure_external(args.evidence_dir, root, "--evidence-dir")
     require_capture_complete(evidence)
     output = ensure_external(args.out, root, "--out")
+    ensure_measurement_output_admissible(output)
     root, child, harness, registration, provenance, probe = target_context(args, "measure", root)
     path = evidence / evidence_reference(args)
     request = request_document(registration, probe, args, provenance, sha256(path))

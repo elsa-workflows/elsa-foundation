@@ -253,6 +253,9 @@ public sealed class GroundworkPerformanceHandoffTests
         var measureMethod = runner.IndexOf("def measure(", StringComparison.Ordinal);
         var compareMethod = runner.IndexOf("def compare_or_gate(", measureMethod, StringComparison.Ordinal);
         var measureBody = runner[measureMethod..compareMethod];
+        var outputAdmission = measureBody.IndexOf("ensure_measurement_output_admissible(output)", StringComparison.Ordinal);
+        var measurementContextAdmission = measureBody.IndexOf("target_context(args, \"measure\"", StringComparison.Ordinal);
+        Assert.True(outputAdmission >= 0 && measurementContextAdmission > outputAdmission);
         Assert.Contains(
             "measurement_command = [\"dotnet\", str(harness), \"measure\", \"--out\", str(output)]",
             measureBody,
@@ -299,6 +302,21 @@ public sealed class GroundworkPerformanceHandoffTests
         Assert.Contains("matrix:\n        provider:\n          - sqlite\n          - postgresql\n          - sqlserver\n          - mongodb", job, StringComparison.Ordinal);
         Assert.Contains("run-e3-medium-baseline.py capture", job, StringComparison.Ordinal);
         Assert.Contains("run-e3-medium-baseline.py correctness", job, StringComparison.Ordinal);
+        Assert.Contains("DIAGNOSTICS_CORRECTNESS_DIR:", job, StringComparison.Ordinal);
+        Assert.Contains("/${{ matrix.provider }}/correctness", job, StringComparison.Ordinal);
+        var correctnessStart = job.IndexOf("      - name: Verify diagnostics correctness", StringComparison.Ordinal);
+        var correctnessEnd = job.IndexOf("      - name: Stop non-target containers before timing", correctnessStart, StringComparison.Ordinal);
+        Assert.True(correctnessStart >= 0 && correctnessEnd > correctnessStart);
+        var correctnessStep = job[correctnessStart..correctnessEnd];
+        Assert.Contains("--out \"$DIAGNOSTICS_CORRECTNESS_DIR\"", correctnessStep, StringComparison.Ordinal);
+        Assert.DoesNotContain("--out \"$DIAGNOSTICS_OUTPUT_DIR\"", correctnessStep, StringComparison.Ordinal);
+        Assert.Contains("--execute | tee \"$DIAGNOSTICS_WORK_ROOT/correctness-summary.txt\"", correctnessStep, StringComparison.Ordinal);
+        var measurementStart = job.IndexOf("      - name: Measure diagnostics evidence", correctnessEnd, StringComparison.Ordinal);
+        var measurementEnd = job.IndexOf("      - name: Record provider diagnostics", measurementStart, StringComparison.Ordinal);
+        Assert.True(measurementStart >= 0 && measurementEnd > measurementStart);
+        var measurementStep = job[measurementStart..measurementEnd];
+        Assert.Contains("--out \"$DIAGNOSTICS_OUTPUT_DIR\"", measurementStep, StringComparison.Ordinal);
+        Assert.DoesNotContain("--out \"$DIAGNOSTICS_CORRECTNESS_DIR\"", measurementStep, StringComparison.Ordinal);
         Assert.Contains("pg_isready -h 127.0.0.1", job, StringComparison.Ordinal);
         Assert.Contains("psql -h 127.0.0.1", job, StringComparison.Ordinal);
         Assert.Contains("mongo_attestation=\"$(image_attestation \"$mongo_container\")\"", job, StringComparison.Ordinal);
@@ -313,7 +331,62 @@ public sealed class GroundworkPerformanceHandoffTests
         Assert.DoesNotContain("budget-gate", job, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("run-e3-medium-baseline.py compare", job, StringComparison.Ordinal);
         Assert.Contains("$DIAGNOSTICS_WORK_ROOT/run-summary.txt", job, StringComparison.Ordinal);
+        Assert.Contains("/${{ matrix.provider }}/correctness-summary.txt", job, StringComparison.Ordinal);
         Assert.DoesNotContain("$DIAGNOSTICS_OUTPUT_DIR/run-summary.txt", job, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Operator_runner_rejects_unbound_preexisting_measurement_output_before_resolving_context()
+    {
+        var runnerPath = Path.Combine(RepoRoot, "tools", "groundwork", "run-e3-medium-baseline.py");
+        const string assertions = """
+import runpy
+import sys
+import tempfile
+from pathlib import Path
+
+module = runpy.run_path(sys.argv[1])
+ensure_measurement_output_admissible = module["ensure_measurement_output_admissible"]
+
+with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    missing = root / "missing"
+    ensure_measurement_output_admissible(missing)
+
+    empty = root / "empty"
+    empty.mkdir()
+    ensure_measurement_output_admissible(empty)
+
+    occupied = root / "occupied"
+    occupied.mkdir()
+    (occupied / "correctness.process.json").write_text("{}", encoding="utf-8")
+    try:
+        ensure_measurement_output_admissible(occupied)
+    except ValueError as exception:
+        assert "artifact-manifest.v2.json" in str(exception), exception
+        assert "fresh directory" in str(exception), exception
+    else:
+        raise AssertionError("measurement accepted preexisting output without a manifest")
+
+    resumable = root / "resumable"
+    resumable.mkdir()
+    (resumable / "artifact-manifest.v2.json").write_text("{}", encoding="utf-8")
+    (resumable / "first.process.json").write_text("{}", encoding="utf-8")
+    ensure_measurement_output_admissible(resumable)
+
+    regular_file = root / "regular-file"
+    regular_file.write_text("not a directory", encoding="utf-8")
+    try:
+        ensure_measurement_output_admissible(regular_file)
+    except ValueError as exception:
+        assert "not a directory" in str(exception), exception
+    else:
+        raise AssertionError("measurement accepted a regular file as its output directory")
+""";
+
+        var result = RunPython(assertions, runnerPath);
+
+        Assert.True(result.ExitCode == 0, result.Error);
     }
 
     [Fact]

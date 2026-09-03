@@ -208,6 +208,7 @@ jobs:
       # native-plan evidence, and process artifacts under a run/attempt/provider-specific /tmp root.
       DIAGNOSTICS_WORK_ROOT: /tmp/groundwork-diagnostics-performance/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.provider }}
       DIAGNOSTICS_EVIDENCE_DIR: /tmp/groundwork-diagnostics-performance/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.provider }}/evidence
+      DIAGNOSTICS_CORRECTNESS_DIR: /tmp/groundwork-diagnostics-performance/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.provider }}/correctness
       DIAGNOSTICS_OUTPUT_DIR: /tmp/groundwork-diagnostics-performance/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.provider }}/output
 
     steps:
@@ -242,7 +243,7 @@ jobs:
             *) echo "unexpected external work root" >&2; exit 1 ;;
           esac
           rm -rf -- "$DIAGNOSTICS_WORK_ROOT"
-          mkdir -p -- "$DIAGNOSTICS_EVIDENCE_DIR" "$DIAGNOSTICS_OUTPUT_DIR"
+          mkdir -p -- "$DIAGNOSTICS_EVIDENCE_DIR" "$DIAGNOSTICS_CORRECTNESS_DIR" "$DIAGNOSTICS_OUTPUT_DIR"
 
       # This is the only build in the lane. The AdapterHost project builds its referenced benchmark
       # harness, and the runner later verifies both Release binaries carry this exact clean HEAD.
@@ -387,18 +388,19 @@ jobs:
 
       - name: Verify diagnostics correctness
         id: correctness
-        run: >-
-          python3 tools/groundwork/run-e3-medium-baseline.py correctness
-          --provider "$DIAGNOSTICS_PROVIDER"
-          --workload "$DIAGNOSTICS_WORKLOAD"
-          --adapter "$DIAGNOSTICS_ADAPTER"
-          --form "$DIAGNOSTICS_FORM"
-          --cohort "$DIAGNOSTICS_COHORT"
-          --measurement-set "$DIAGNOSTICS_MEASUREMENT_SET"
-          --scale medium
-          --evidence-dir "$DIAGNOSTICS_EVIDENCE_DIR"
-          --out "$DIAGNOSTICS_OUTPUT_DIR"
-          --execute
+        run: |
+          set -euo pipefail
+          python3 tools/groundwork/run-e3-medium-baseline.py correctness \
+            --provider "$DIAGNOSTICS_PROVIDER" \
+            --workload "$DIAGNOSTICS_WORKLOAD" \
+            --adapter "$DIAGNOSTICS_ADAPTER" \
+            --form "$DIAGNOSTICS_FORM" \
+            --cohort "$DIAGNOSTICS_COHORT" \
+            --measurement-set "$DIAGNOSTICS_MEASUREMENT_SET" \
+            --scale medium \
+            --evidence-dir "$DIAGNOSTICS_EVIDENCE_DIR" \
+            --out "$DIAGNOSTICS_CORRECTNESS_DIR" \
+            --execute | tee "$DIAGNOSTICS_WORK_ROOT/correctness-summary.txt"
 
       # The runner performs its own fail-closed require_idle_host check immediately before spawning the
       # timed matrix. It must be the only build/test process on this dedicated provider host.
@@ -465,6 +467,7 @@ jobs:
           path: |
             /tmp/groundwork-diagnostics-performance/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.provider }}/evidence
             /tmp/groundwork-diagnostics-performance/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.provider }}/output
+            /tmp/groundwork-diagnostics-performance/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.provider }}/correctness-summary.txt
             /tmp/groundwork-diagnostics-performance/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.provider }}/run-summary.txt
           if-no-files-found: warn
           retention-days: 30
