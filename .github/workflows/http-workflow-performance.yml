@@ -273,7 +273,9 @@ jobs:
 
           wait_for_postgres() {
             for attempt in {1..90}; do
-              if docker exec "$postgres_container" pg_isready -U postgres >/dev/null 2>&1; then
+              # The image entrypoint briefly exposes a temporary Unix-socket server while it
+              # initializes the data directory. TCP becomes ready only for the durable server.
+              if docker exec "$postgres_container" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; then
                 return 0
               fi
               sleep 1
@@ -317,7 +319,7 @@ jobs:
               docker run --detach --name "$postgres_container" --publish 5432:5432 \
                 --env POSTGRES_HOST_AUTH_METHOD=trust "$postgres_image" >/dev/null
               wait_for_postgres
-              docker exec "$postgres_container" psql -U postgres -v ON_ERROR_STOP=1 \
+              docker exec "$postgres_container" psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1 \
                 -c "CREATE DATABASE \"$postgres_database\";" >/dev/null
               postgres_attestation="$(image_attestation "$postgres_container")"
               printf 'ELSA_BENCH_POSTGRES_CONTAINER_ATTESTATION=%s\n' "$postgres_attestation" >> "$GITHUB_ENV"

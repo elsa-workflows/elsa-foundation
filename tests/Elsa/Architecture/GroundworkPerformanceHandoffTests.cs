@@ -298,6 +298,8 @@ public sealed class GroundworkPerformanceHandoffTests
         Assert.Contains("matrix:\n        provider:\n          - sqlite\n          - postgresql\n          - sqlserver\n          - mongodb", job, StringComparison.Ordinal);
         Assert.Contains("run-e3-medium-baseline.py capture", job, StringComparison.Ordinal);
         Assert.Contains("run-e3-medium-baseline.py correctness", job, StringComparison.Ordinal);
+        Assert.Contains("pg_isready -h 127.0.0.1", job, StringComparison.Ordinal);
+        Assert.Contains("psql -h 127.0.0.1", job, StringComparison.Ordinal);
         Assert.Contains("dotnet build-server shutdown", job, StringComparison.Ordinal);
         Assert.Contains("run-e3-medium-baseline.py measure", job, StringComparison.Ordinal);
         Assert.DoesNotContain("continue-on-error", job, StringComparison.Ordinal);

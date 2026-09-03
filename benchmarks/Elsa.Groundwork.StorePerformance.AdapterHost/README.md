@@ -222,7 +222,7 @@ ungraded `measurement.v1.json` result. It does not compare targets or apply a bu
 
 ```bash
 gh workflow run http-workflow-performance.yml \
-  --ref <exact-branch-or-commit> \
+  --ref <branch-containing-this-workflow> \
   -f suite=groundwork-diagnostics
 ```
 
