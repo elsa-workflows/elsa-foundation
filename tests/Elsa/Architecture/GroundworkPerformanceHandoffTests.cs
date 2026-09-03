@@ -230,6 +230,8 @@ public sealed class GroundworkPerformanceHandoffTests
         Assert.Contains("require_idle_host()", runner, StringComparison.Ordinal);
         Assert.Contains("def process_pid(", runner, StringComparison.Ordinal);
         Assert.Contains("next(csv.reader([stripped], strict=True))", runner, StringComparison.Ordinal);
+        Assert.Contains("TASKLIST_CSV_ROW.fullmatch(stripped)", runner, StringComparison.Ordinal);
+        Assert.Contains("raw_pid.isascii() and raw_pid.isdecimal()", runner, StringComparison.Ordinal);
         Assert.Contains("stripped.split(maxsplit=1)[0]", runner, StringComparison.Ordinal);
         Assert.Contains("process_pid(line, windows=windows) != own_pid", runner, StringComparison.Ordinal);
         Assert.DoesNotContain("own_pid not in line", runner, StringComparison.Ordinal);
@@ -280,8 +282,14 @@ runner_globals = require_idle_host.__globals__
 cases = [
     (" 1234 dotnet test", False, 1234),
     ("91234 dotnet test", False, 91234),
+    ("+1234 dotnet test", False, None),
+    ("1_234 dotnet test", False, None),
     ('"dotnet.exe","1234","Console","1","12,345 K"', True, 1234),
     ('"dotnet.exe","91234","Console","1","12,345 K"', True, 91234),
+    ('"dotnet.exe","+1234","Console","1","12,345 K"', True, None),
+    ('"dotnet.exe","1_234","Console","1","12,345 K"', True, None),
+    ('"dotnet.exe","1234"', True, None),
+    ('dotnet.exe,1234,Console,1,"12,345 K"', True, None),
     ('"dotnet.exe","not-a-pid","Console","1","12,345 K"', True, None),
     ("malformed dotnet row", False, None),
     ("", False, None),
@@ -310,6 +318,9 @@ result, _ = run_guard("posix", "91234 dotnet test")
 assert "91234 dotnet test" in result, result
 result, _ = run_guard("posix", "malformed dotnet row")
 assert "malformed dotnet row" in result, result
+for malformed_self_posix in ("+1234 dotnet test", "1_234 dotnet test"):
+    result, _ = run_guard("posix", malformed_self_posix)
+    assert malformed_self_posix in result, result
 
 own_windows = '"dotnet.exe","1234","Console","1","12,345 K"'
 result, commands = run_guard("nt", own_windows)
@@ -326,6 +337,14 @@ malformed_self_windows = '"dotnet.exe","1234","Console","1","12,345 K"junk'
 result, _ = run_guard("nt", malformed_self_windows)
 assert result is not None, "malformed Windows process row was treated as the current process"
 assert malformed_self_windows in result, result
+for malformed_self_windows in (
+    '"dotnet.exe","+1234","Console","1","12,345 K"',
+    '"dotnet.exe","1_234","Console","1","12,345 K"',
+    '"dotnet.exe","1234"',
+    'dotnet.exe,1234,Console,1,"12,345 K"',
+):
+    result, _ = run_guard("nt", malformed_self_windows)
+    assert malformed_self_windows in result, result
 """;
 
         var result = RunPython(assertions, runnerPath);

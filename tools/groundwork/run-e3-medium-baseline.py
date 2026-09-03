@@ -24,6 +24,7 @@ from typing import Any
 PROVIDERS = ("sqlite", "postgresql", "sqlserver", "mongodb")
 SAFE_IDENTIFIER = re.compile(r"^[A-Za-z0-9._-]+$")
 LOWER_SHA256 = re.compile(r"^[0-9a-f]{64}$")
+TASKLIST_CSV_ROW = re.compile(r'^"(?:[^"]|"")*"(?:,"(?:[^"]|"")*"){4}$')
 
 
 def repository_root() -> Path:
@@ -347,19 +348,20 @@ def process_pid(line: str, *, windows: bool) -> int | None:
     if not stripped:
         return None
     if windows:
+        if TASKLIST_CSV_ROW.fullmatch(stripped) is None:
+            return None
         try:
             fields = next(csv.reader([stripped], strict=True))
         except csv.Error:
             return None
-        if len(fields) < 2:
+        if len(fields) != 5:
             return None
         raw_pid = fields[1]
     else:
         raw_pid = stripped.split(maxsplit=1)[0]
-    try:
-        return int(raw_pid)
-    except ValueError:
+    if not (raw_pid.isascii() and raw_pid.isdecimal()):
         return None
+    return int(raw_pid)
 
 
 def require_idle_host() -> None:
