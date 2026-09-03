@@ -1,7 +1,7 @@
-using System.Text.Json;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Tests;
@@ -17,6 +17,8 @@ public sealed class AbsoluteBudgetTests
 
         var measurement = Measurement.Measure(fixture.Directory, WorkloadCatalog.Load(Repository.Root()));
 
+        Assert.Equal(2, measurement.SchemaVersion);
+        Assert.Equal(MeasurementResultStatus.Ungraded, measurement.EvaluationStatus);
         Assert.True(measurement.Complete);
         Assert.True(measurement.CorrectnessValid);
         Assert.Equal("sqlite/groundwork/document-type-specific-tables", measurement.Target);
@@ -54,13 +56,14 @@ public sealed class AbsoluteBudgetTests
     }
 
     [Fact]
-    public void Diagnostics_blocked_route_evidence_remains_blocked_for_measurement()
+    public void Diagnostics_blocked_route_evidence_remains_blocked_for_ungraded_measurement()
     {
         using var fixture = DiagnosticsArtifactFixture.Create();
         fixture.Bind();
 
         var measurement = Measurement.Measure(fixture.Directory, WorkloadCatalog.Load(Repository.Root()));
 
+        Assert.Equal(MeasurementResultStatus.Blocked, measurement.EvaluationStatus);
         Assert.False(measurement.Complete);
         Assert.False(measurement.CorrectnessValid);
         Assert.Contains("complete provider-native plan", measurement.BlockReason, StringComparison.OrdinalIgnoreCase);
@@ -75,6 +78,8 @@ public sealed class AbsoluteBudgetTests
 
         var measurement = Measurement.Measure(fixture.Directory, catalog);
 
+        Assert.Equal(2, measurement.SchemaVersion);
+        Assert.Equal(MeasurementResultStatus.Ungraded, measurement.EvaluationStatus);
         Assert.True(measurement.Complete, measurement.BlockReason);
         Assert.True(measurement.CorrectnessValid);
         Assert.Null(measurement.BlockReason);

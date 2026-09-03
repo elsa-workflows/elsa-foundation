@@ -1,10 +1,10 @@
+using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
-using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
-using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 
@@ -45,18 +45,24 @@ public static class ArtifactStore
         var commits = entries.Select(pair => pair.Artifact.Request.CommitSha).Distinct(StringComparer.Ordinal).ToArray();
         var harnessAssemblies = entries.Select(pair => pair.Artifact.Request.HarnessAssemblySha256).Distinct(StringComparer.Ordinal).ToArray();
         var hosts = entries.Select(pair => pair.Artifact.Request.HostFingerprintSha256).Distinct(StringComparer.Ordinal).ToArray();
-        if (cohorts.Length != 1) throw new PerformanceContractException("An artifact manifest may bind exactly one comparison cohort.");
-        if (commits.Length != 1) throw new PerformanceContractException("An artifact manifest may bind exactly one expected commit.");
-        if (harnessAssemblies.Length != 1) throw new PerformanceContractException("An artifact manifest may bind exactly one expected harness assembly.");
-        if (hosts.Length != 1) throw new PerformanceContractException("An artifact manifest may bind exactly one expected host fingerprint.");
+        if (cohorts.Length != 1)
+            throw new PerformanceContractException("An artifact manifest may bind exactly one comparison cohort.");
+        if (commits.Length != 1)
+            throw new PerformanceContractException("An artifact manifest may bind exactly one expected commit.");
+        if (harnessAssemblies.Length != 1)
+            throw new PerformanceContractException("An artifact manifest may bind exactly one expected harness assembly.");
+        if (hosts.Length != 1)
+            throw new PerformanceContractException("An artifact manifest may bind exactly one expected host fingerprint.");
         var evidenceNames = entries.Select(pair => EvidenceName(pair.Artifact.Request.NativePlanEvidenceReference)).Distinct(StringComparer.Ordinal).ToArray();
-        var rawPlanNames = entries.SelectMany(pair => pair.Artifact.Correctness.NativePlan.Routes).Select(route => RawPlanName(route.RawPlanReference)).Distinct(StringComparer.Ordinal).ToArray();
+        var rawPlanNames = entries.SelectMany(pair => ReferencedRawPlanNames(pair.Artifact.Correctness.NativePlan)).Distinct(StringComparer.Ordinal).ToArray();
         var paths = entries.Select(pair => pair.Path)
             .Concat(evidenceNames.Select(name => Path.Combine(outputDirectory, name)))
             .Concat(rawPlanNames.Select(name => Path.Combine(outputDirectory, name)))
             .ToArray();
-        if (paths.Any(path => !File.Exists(path))) throw new PerformanceContractException("Every referenced native-plan evidence file must exist before the manifest is written.");
-        foreach (var name in rawPlanNames) ValidateRawPlanFile(Path.Combine(outputDirectory, name));
+        if (paths.Any(path => !File.Exists(path)))
+            throw new PerformanceContractException("Every referenced native-plan evidence file must exist before the manifest is written.");
+        foreach (var name in rawPlanNames)
+            ValidateRawPlanFile(Path.Combine(outputDirectory, name));
         ValidateRawPlanHashes(outputDirectory, entries);
         var hashes = paths.ToDictionary(path => Path.GetFileName(path), HashFile, StringComparer.Ordinal);
         File.WriteAllText(Path.Combine(outputDirectory, ManifestFile), JsonSerializer.Serialize(new ArtifactManifest(2, cohorts[0], commits[0], harnessAssemblies[0], hosts[0], hashes.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)), JsonOptions));
@@ -65,13 +71,16 @@ public static class ArtifactStore
     public static ArtifactSet ReadAll(string outputDirectory)
     {
         var manifestPath = Path.Combine(outputDirectory, ManifestFile);
-        if (!File.Exists(manifestPath)) throw new PerformanceContractException("Artifact manifest is missing; comparison fails closed.");
+        if (!File.Exists(manifestPath))
+            throw new PerformanceContractException("Artifact manifest is missing; comparison fails closed.");
         var manifestBytes = File.ReadAllBytes(manifestPath);
         RejectDuplicateProperties(JsonDocument.Parse(manifestBytes).RootElement);
         ArtifactManifest manifest;
-        try { manifest = JsonSerializer.Deserialize<ArtifactManifest>(manifestBytes, JsonOptions) ?? throw new PerformanceContractException("Artifact manifest is invalid."); }
+        try
+        { manifest = JsonSerializer.Deserialize<ArtifactManifest>(manifestBytes, JsonOptions) ?? throw new PerformanceContractException("Artifact manifest is invalid."); }
         catch (JsonException exception) { throw new PerformanceContractException($"Artifact manifest JSON is invalid: {exception.Message}"); }
-        if (manifest.SchemaVersion != 2 || !SafeIdentifier(manifest.ComparisonCohortId ?? "") || !Regex.IsMatch(manifest.ExpectedCommitSha ?? "", "^[0-9a-f]{40}$") || !Regex.IsMatch(manifest.ExpectedHarnessAssemblySha256 ?? "", "^[0-9a-f]{64}$") || !Regex.IsMatch(manifest.ExpectedHostFingerprintSha256 ?? "", "^[0-9a-f]{64}$") || manifest.ArtifactsSha256 is null || manifest.ArtifactsSha256.Count == 0) throw new PerformanceContractException("Artifact manifest has an unsupported schema, cohort, expected commit, harness assembly, host fingerprint, or no artifacts.");
+        if (manifest.SchemaVersion != 2 || !SafeIdentifier(manifest.ComparisonCohortId ?? "") || !Regex.IsMatch(manifest.ExpectedCommitSha ?? "", "^[0-9a-f]{40}$") || !Regex.IsMatch(manifest.ExpectedHarnessAssemblySha256 ?? "", "^[0-9a-f]{64}$") || !Regex.IsMatch(manifest.ExpectedHostFingerprintSha256 ?? "", "^[0-9a-f]{64}$") || manifest.ArtifactsSha256 is null || manifest.ArtifactsSha256.Count == 0)
+            throw new PerformanceContractException("Artifact manifest has an unsupported schema, cohort, expected commit, harness assembly, host fingerprint, or no artifacts.");
         var entries = LoadProcessArtifactsWithoutManifest(outputDirectory);
         ValidateRawPlanOwnership(entries);
         if (entries.Any(entry => entry.Artifact.Request.ComparisonCohortId != manifest.ComparisonCohortId))
@@ -82,8 +91,7 @@ public static class ArtifactStore
             throw new PerformanceContractException("Artifact manifest expected harness assembly does not match every process artifact.");
         if (entries.Any(entry => entry.Artifact.Request.HostFingerprintSha256 != manifest.ExpectedHostFingerprintSha256))
             throw new PerformanceContractException("Artifact manifest expected host fingerprint does not match every process artifact.");
-        var rawPlanNames = entries.SelectMany(pair => pair.Artifact.Correctness.NativePlan.Routes)
-            .Select(route => RawPlanName(route.RawPlanReference))
+        var rawPlanNames = entries.SelectMany(pair => ReferencedRawPlanNames(pair.Artifact.Correctness.NativePlan))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         var expectedNames = entries.Select(pair => Path.GetFileName(pair.Path))
@@ -92,26 +100,31 @@ public static class ArtifactStore
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
-        if (!expectedNames.SequenceEqual(manifest.ArtifactsSha256.Keys.Order(StringComparer.Ordinal), StringComparer.Ordinal)) throw new PerformanceContractException("Artifact manifest does not bind exactly the process and native-plan evidence artifacts.");
+        if (!expectedNames.SequenceEqual(manifest.ArtifactsSha256.Keys.Order(StringComparer.Ordinal), StringComparer.Ordinal))
+            throw new PerformanceContractException("Artifact manifest does not bind exactly the process and native-plan evidence artifacts.");
         foreach (var name in expectedNames)
         {
             var path = Path.Combine(outputDirectory, name);
-            if (!File.Exists(path) || !string.Equals(HashFile(path), manifest.ArtifactsSha256[name], StringComparison.Ordinal)) throw new PerformanceContractException($"Artifact integrity hash mismatch for {name}.");
+            if (!File.Exists(path) || !string.Equals(HashFile(path), manifest.ArtifactsSha256[name], StringComparison.Ordinal))
+                throw new PerformanceContractException($"Artifact integrity hash mismatch for {name}.");
         }
-        foreach (var name in rawPlanNames) ValidateRawPlanFile(Path.Combine(outputDirectory, name));
+        foreach (var name in rawPlanNames)
+            ValidateRawPlanFile(Path.Combine(outputDirectory, name));
         ValidateRawPlanHashes(outputDirectory, entries);
         var allowed = expectedNames.Append(ManifestFile).ToHashSet(StringComparer.Ordinal);
         var unexpected = Directory.EnumerateFiles(outputDirectory, "*", SearchOption.TopDirectoryOnly)
             .Select(Path.GetFileName)
             .Where(name => name is not null && !allowed.Contains(name) && !IsAllowedResultFile(name))
             .ToArray();
-        if (unexpected.Length > 0) throw new PerformanceContractException("Artifact directory contains a file that is neither manifest-bound evidence nor an allowed result file.");
+        if (unexpected.Length > 0)
+            throw new PerformanceContractException("Artifact directory contains a file that is neither manifest-bound evidence nor an allowed result file.");
         return new ArtifactSet(entries.Select(pair => pair.Artifact).ToArray(), Convert.ToHexString(SHA256.HashData(manifestBytes)).ToLowerInvariant());
     }
 
     internal static IReadOnlyList<(string Path, ProcessArtifact Artifact)> LoadProcessArtifactsWithoutManifest(string outputDirectory)
     {
-        if (!Directory.Exists(outputDirectory)) throw new PerformanceContractException($"Artifact directory does not exist: {outputDirectory}");
+        if (!Directory.Exists(outputDirectory))
+            throw new PerformanceContractException($"Artifact directory does not exist: {outputDirectory}");
         var entries = new List<(string Path, ProcessArtifact Artifact)>();
         foreach (var path in Directory.EnumerateFiles(outputDirectory, "*.process.json", SearchOption.TopDirectoryOnly))
         {
@@ -119,26 +132,28 @@ public static class ArtifactStore
             using var document = JsonDocument.Parse(bytes);
             RejectDuplicateProperties(document.RootElement);
             ProcessArtifact artifact;
-            try { artifact = JsonSerializer.Deserialize<ProcessArtifact>(bytes, JsonOptions) ?? throw new PerformanceContractException($"Invalid process artifact: {path}"); }
+            try
+            { artifact = JsonSerializer.Deserialize<ProcessArtifact>(bytes, JsonOptions) ?? throw new PerformanceContractException($"Invalid process artifact: {path}"); }
             catch (JsonException exception) { throw new PerformanceContractException($"Process artifact JSON is invalid: {exception.Message}"); }
             ArtifactSafety.ValidateRequest(artifact.Request);
             if (artifact.Correctness?.NativePlan?.Routes is null)
                 throw new PerformanceContractException("Process artifact is missing native-plan route evidence.");
             ArtifactSafety.Validate(artifact);
-            if (!string.Equals(Path.GetFileName(path), Path.GetFileName(PathFor(outputDirectory, artifact.Request)), StringComparison.Ordinal)) throw new PerformanceContractException($"Artifact file name does not bind its contained identity: {path}");
+            if (!string.Equals(Path.GetFileName(path), Path.GetFileName(PathFor(outputDirectory, artifact.Request)), StringComparison.Ordinal))
+                throw new PerformanceContractException($"Artifact file name does not bind its contained identity: {path}");
             entries.Add((path, artifact));
         }
-        if (entries.Count == 0) throw new PerformanceContractException("No process artifacts were found.");
-        if (entries.GroupBy(pair => ArtifactIdentity(pair.Artifact.Request), StringComparer.Ordinal).Any(group => group.Count() != 1)) throw new PerformanceContractException("Duplicate process artifact identity detected.");
+        if (entries.Count == 0)
+            throw new PerformanceContractException("No process artifacts were found.");
+        if (entries.GroupBy(pair => ArtifactIdentity(pair.Artifact.Request), StringComparer.Ordinal).Any(group => group.Count() != 1))
+            throw new PerformanceContractException("Duplicate process artifact identity detected.");
         return entries;
     }
 
     internal static void ValidateRawPlanOwnership(IReadOnlyList<(string Path, ProcessArtifact Artifact)> entries)
     {
         var bindings = entries
-            .SelectMany(entry => entry.Artifact.Correctness.NativePlan.Routes.Select(route => (
-                Owner: $"{entry.Artifact.Request.MeasurementSetId}|{route.RouteIdentity}",
-                Reference: RawPlanName(route.RawPlanReference))))
+            .SelectMany(entry => RawPlanBindings(entry.Artifact))
             .ToArray();
         if (bindings.GroupBy(binding => binding.Owner, StringComparer.Ordinal)
                 .Any(group => group.Select(binding => binding.Reference).Distinct(StringComparer.Ordinal).Count() != 1) ||
@@ -149,11 +164,34 @@ public static class ArtifactStore
 
     private static void ValidateRawPlanHashes(string outputDirectory, IReadOnlyList<(string Path, ProcessArtifact Artifact)> entries)
     {
-        foreach (var route in entries.SelectMany(entry => entry.Artifact.Correctness.NativePlan.Routes))
+        foreach (var binding in entries.SelectMany(entry => RawPlanBindings(entry.Artifact)))
         {
-            var path = RawPlanPath(outputDirectory, route.RawPlanReference);
-            if (!File.Exists(path) || HashFile(path) != route.RawPlanSha256)
-                throw new PerformanceContractException($"Raw provider-plan evidence does not match its route digest for {route.RouteIdentity}.");
+            var path = RawPlanPath(outputDirectory, binding.Reference);
+            if (!File.Exists(path) || HashFile(path) != binding.Sha256)
+                throw new PerformanceContractException($"Raw provider-plan evidence does not match its route digest for {binding.Owner}.");
+        }
+    }
+
+    internal static IEnumerable<string> ReferencedRawPlanNames(NativePlanEvidence nativePlan) =>
+        nativePlan.Routes.Select(route => RawPlanName(route.RawPlanReference))
+            .Concat((nativePlan.TraceDetailConstituents ?? [])
+                .Where(constituent => !string.IsNullOrWhiteSpace(constituent.RawPlanReference))
+                .Select(constituent => RawPlanName(constituent.RawPlanReference)))
+            .Concat((nativePlan.TraceDetailConstituents ?? [])
+                .SelectMany(constituent => constituent.Pages ?? [])
+                .Select(page => RawPlanName(page.RawPlanReference)));
+
+    private static IEnumerable<(string Owner, string Reference, string Sha256)> RawPlanBindings(ProcessArtifact artifact)
+    {
+        var measurementSet = artifact.Request.MeasurementSetId;
+        foreach (var route in artifact.Correctness.NativePlan.Routes)
+            yield return ($"{measurementSet}|{route.RouteIdentity}", RawPlanName(route.RawPlanReference), route.RawPlanSha256);
+        foreach (var constituent in artifact.Correctness.NativePlan.TraceDetailConstituents ?? [])
+        {
+            if (!string.IsNullOrWhiteSpace(constituent.RawPlanReference))
+                yield return ($"{measurementSet}|{constituent.RouteIdentity}", RawPlanName(constituent.RawPlanReference), constituent.RawPlanSha256);
+            foreach (var page in constituent.Pages ?? [])
+                yield return ($"{measurementSet}|{constituent.RouteIdentity}|page-{page.PageIndex}", RawPlanName(page.RawPlanReference), page.RawPlanSha256);
         }
     }
 
@@ -228,12 +266,14 @@ public static class ArtifactStore
             var names = new HashSet<string>(StringComparer.Ordinal);
             foreach (var property in value.EnumerateObject())
             {
-                if (!names.Add(property.Name)) throw new PerformanceContractException("JSON artifact contains a duplicate property.");
+                if (!names.Add(property.Name))
+                    throw new PerformanceContractException("JSON artifact contains a duplicate property.");
                 RejectDuplicateProperties(property.Value);
             }
         }
         else if (value.ValueKind == JsonValueKind.Array)
-            foreach (var item in value.EnumerateArray()) RejectDuplicateProperties(item);
+            foreach (var item in value.EnumerateArray())
+                RejectDuplicateProperties(item);
     }
 }
 
@@ -253,7 +293,8 @@ public static class ArtifactSafety
 
     public static void ValidateRequest(RunRequest request)
     {
-        if (request is null) throw new PerformanceContractException("A durable run request is required.");
+        if (request is null)
+            throw new PerformanceContractException("A durable run request is required.");
         if (!Sha1.IsMatch(request.CommitSha ?? "") || !Sha256.IsMatch(request.HarnessAssemblySha256 ?? "") || !Sha256.IsMatch(request.CompositionFingerprint ?? "") || !Sha256.IsMatch(request.HostFingerprintSha256 ?? "") || !Sha256.IsMatch(request.InputFingerprintSha256 ?? "") || !Sha256.IsMatch(request.NativePlanContentSha256 ?? "") || !SafeSeed.IsMatch(request.Seed ?? "") || !ArtifactStore.SafeEvidenceReference(request.NativePlanEvidenceReference) || request.PackageVersions is null || request.PackageVersions.Count == 0 || request.PackageVersions.Any(pair => !Identifier.IsMatch(pair.Key) || !PackageVersion.IsMatch(pair.Value)) || !PackageVersion.IsMatch(request.ProviderVersion ?? "") || !Identifier.IsMatch(request.ProviderTopology ?? "") || request.ProviderConfiguration is null || request.ProviderConfiguration.Count == 0 || request.ProviderConfiguration.Any(pair => !Identifier.IsMatch(pair.Key) || RawConnectionName.IsMatch(pair.Key) || !SafeSeed.IsMatch(pair.Value)) || !Identifier.IsMatch(request.ComparisonCohortId ?? "") || !Identifier.IsMatch(request.MeasurementSetId ?? "") || !Identifier.IsMatch(request.Provider ?? "") || !Identifier.IsMatch(request.Adapter ?? "") || !Identifier.IsMatch(request.PhysicalForm ?? "") || !Identifier.IsMatch(request.Scale ?? "") || !Identifier.IsMatch(request.NativePlanIdentity ?? ""))
             throw new PerformanceContractException("A durable run request requires actual frozen input, native-plan, commit/package/composition metadata using safe identifiers; placeholders are invalid.");
         Validate(request);
@@ -281,7 +322,8 @@ public static class ArtifactSafety
             }
         }
         else if (value.ValueKind == JsonValueKind.Array)
-            foreach (var item in value.EnumerateArray()) ValidateRawStructured(item);
+            foreach (var item in value.EnumerateArray())
+                ValidateRawStructured(item);
     }
 
     internal static void ValidateRawXml(System.Xml.Linq.XDocument document)
@@ -326,11 +368,13 @@ public static class ArtifactSafety
                 }
                 break;
             case JsonValueKind.Array:
-                foreach (var item in value.EnumerateArray()) ValidateElement(item);
+                foreach (var item in value.EnumerateArray())
+                    ValidateElement(item);
                 break;
             case JsonValueKind.String:
                 var text = value.GetString()!;
-                if (ContainsSensitiveContent(text)) throw new PerformanceContractException("Artifacts may not retain connection values or credentials.");
+                if (ContainsSensitiveContent(text))
+                    throw new PerformanceContractException("Artifacts may not retain connection values or credentials.");
                 break;
         }
     }
@@ -341,7 +385,7 @@ public sealed record MatrixPlan(PerformanceWorkload Workload, BenchmarkProtocol 
 {
     public static MatrixPlan Create(PerformanceWorkload workload, MatrixRequest request)
     {
-        BenchmarkAdmissionGuard.RequireReady(workload);
+        BenchmarkAdmissionGuard.RequireForPhase(workload, BenchmarkPhase.Measurement);
         BenchmarkAdapterAdmission.RequireAdmitted(workload, request.Provider, request.Adapter, request.PhysicalForm);
         if (workload.Id != request.WorkloadId ||
             workload.Version != request.WorkloadVersion ||
@@ -352,10 +396,12 @@ public sealed record MatrixPlan(PerformanceWorkload Workload, BenchmarkProtocol 
             !workload.RequiredProviderEvidence.TryGetValue(request.Provider, out var topology) ||
             topology != request.ProviderTopology)
             throw new PerformanceContractException("The matrix request does not match the frozen workload/provider/form contract.");
-        var protocol = BenchmarkProtocol.Acceptance; protocol.Validate();
+        var protocol = BenchmarkProtocol.Acceptance;
+        protocol.Validate();
         var runs = new List<RunRequest> { ToRun(request, ProcessKind.Warmup, 0) };
         runs.AddRange(Enumerable.Range(1, protocol.MeasuredProcessCount).Select(index => ToRun(request, ProcessKind.Measured, index)));
-        foreach (var run in runs) ArtifactSafety.ValidateRequest(run);
+        foreach (var run in runs)
+            ArtifactAdmission.ValidateForPhase(workload, run, BenchmarkPhase.Measurement);
         return new MatrixPlan(workload, protocol, runs);
     }
     private static RunRequest ToRun(MatrixRequest request, ProcessKind kind, int index) => new(request.ComparisonCohortId, request.MeasurementSetId, request.WorkloadId, request.WorkloadVersion, request.Provider, request.Adapter, request.PhysicalForm, request.Scale, request.CommitSha, request.HarnessAssemblySha256, request.PackageVersions, request.CompositionFingerprint, request.HostFingerprintSha256, request.ProviderVersion, request.ProviderTopology, request.ProviderConfiguration, request.Seed, request.InputFingerprintSha256, request.NativePlanIdentity, request.NativePlanEvidenceReference, request.NativePlanContentSha256, kind, index);
@@ -365,11 +411,12 @@ public static class ProcessMatrixRunner
 {
     public static async Task RunAsync(MatrixPlan plan, string childCommand, string outputDirectory, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(childCommand)) throw new PerformanceContractException("matrix requires a real adapter child command; no simulated adapters are available.");
+        if (string.IsNullOrWhiteSpace(childCommand))
+            throw new PerformanceContractException("matrix requires a real adapter child command; no simulated adapters are available.");
         var anchor = plan.Runs.FirstOrDefault() ?? throw new PerformanceContractException("matrix requires a non-empty acceptance plan.");
         foreach (var run in plan.Runs)
         {
-            ArtifactAdmission.ValidateRequest(plan.Workload, run);
+            ArtifactAdmission.ValidateForPhase(plan.Workload, run, BenchmarkPhase.Measurement);
             if (run.CommitSha != anchor.CommitSha || run.HarnessAssemblySha256 != anchor.HarnessAssemblySha256)
                 throw new PerformanceContractException("Every planned child must use one exact source snapshot and harness assembly.");
         }
@@ -389,7 +436,11 @@ public static class ProcessMatrixRunner
             async (run, directory, token) =>
             {
                 var start = new ProcessStartInfo(childCommand) { UseShellExecute = false };
-                start.ArgumentList.Add("run"); start.ArgumentList.Add("--request"); start.ArgumentList.Add(JsonSerializer.Serialize(run, ArtifactStore.JsonOptions)); start.ArgumentList.Add("--out"); start.ArgumentList.Add(directory);
+                start.ArgumentList.Add("run");
+                start.ArgumentList.Add("--request");
+                start.ArgumentList.Add(JsonSerializer.Serialize(run, ArtifactStore.JsonOptions));
+                start.ArgumentList.Add("--out");
+                start.ArgumentList.Add(directory);
                 using var child = Process.Start(start) ?? throw new PerformanceContractException("Could not start the adapter child process.");
                 await child.WaitForExitAsync(token);
                 return child.ExitCode;
@@ -411,9 +462,9 @@ public static class ProcessMatrixRunner
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(runChild);
-        BenchmarkAdmissionGuard.RequireReady(plan.Workload);
+        BenchmarkAdmissionGuard.RequireForPhase(plan.Workload, BenchmarkPhase.Measurement);
         foreach (var run in plan.Runs)
-            ArtifactAdmission.ValidateRequest(plan.Workload, run);
+            ArtifactAdmission.ValidateForPhase(plan.Workload, run, BenchmarkPhase.Measurement);
         var expected = plan.Runs.Select(run => (Run: run, Path: ArtifactStore.PathFor(outputDirectory, run))).ToArray();
         if (expected.Length != 4 ||
             expected.Select(item => item.Path).Distinct(StringComparer.Ordinal).Count() != 4 ||
@@ -438,7 +489,8 @@ public static class ProcessMatrixRunner
                 existingEntries.Any(entry => entry.Artifact.Request.HostFingerprintSha256 != plan.Runs[0].HostFingerprintSha256) ||
                 existingSets[0].Key == plan.Runs[0].MeasurementSetId)
                 throw new PerformanceContractException("An existing cohort must contain one complete, distinct measurement set at the expected commit before the second set is added.");
-            foreach (var entry in existingEntries) ArtifactAdmission.Validate(plan.Workload, entry.Artifact, outputDirectory);
+            foreach (var entry in existingEntries)
+                ArtifactAdmission.Validate(plan.Workload, entry.Artifact, outputDirectory);
         }
         if (expected.Any(item => File.Exists(item.Path)))
             throw new PerformanceContractException("The matrix output contains a preexisting planned artifact path.");
@@ -450,7 +502,7 @@ public static class ProcessMatrixRunner
         var existingPaths = existingEntries.Select(entry => entry.Path).ToArray();
         var existingBoundPaths = existingPaths
             .Concat(existingEntries.Select(entry => ArtifactStore.EvidencePath(outputDirectory, entry.Artifact.Request.NativePlanEvidenceReference)))
-            .Concat(existingEntries.SelectMany(entry => entry.Artifact.Correctness.NativePlan.Routes).Select(route => ArtifactStore.RawPlanPath(outputDirectory, route.RawPlanReference)))
+            .Concat(existingEntries.SelectMany(entry => ArtifactStore.ReferencedRawPlanNames(entry.Artifact.Correctness.NativePlan)).Select(name => Path.Combine(outputDirectory, name)))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         var existingHashes = existingBoundPaths.ToDictionary(path => path, ArtifactStore.HashFile, StringComparer.Ordinal);
@@ -460,8 +512,10 @@ public static class ProcessMatrixRunner
             if (File.Exists(path))
                 throw new PerformanceContractException($"The matrix output acquired a preexisting planned artifact for {run.ProcessKind}/{run.ProcessIndex}.");
             var exitCode = await runChild(run, outputDirectory, cancellationToken);
-            if (exitCode != 0) throw new PerformanceContractException($"The adapter child process {run.ProcessKind}/{run.ProcessIndex} failed with exit code {exitCode}.");
-            if (!File.Exists(path)) throw new PerformanceContractException($"The adapter child process did not emit its required artifact for {run.ProcessKind}/{run.ProcessIndex}.");
+            if (exitCode != 0)
+                throw new PerformanceContractException($"The adapter child process {run.ProcessKind}/{run.ProcessIndex} failed with exit code {exitCode}.");
+            if (!File.Exists(path))
+                throw new PerformanceContractException($"The adapter child process did not emit its required artifact for {run.ProcessKind}/{run.ProcessIndex}.");
             if (!File.Exists(plannedEvidencePath) || ArtifactStore.HashFile(plannedEvidencePath) != run.NativePlanContentSha256)
                 throw new PerformanceContractException("The adapter child process did not emit native-plan evidence matching the requested content digest.");
             var currentEntries = ArtifactStore.LoadProcessArtifactsWithoutManifest(outputDirectory);
@@ -474,10 +528,11 @@ public static class ProcessMatrixRunner
             var produced = currentEntries.SingleOrDefault(item => string.Equals(item.Path, path, StringComparison.Ordinal));
             if (produced == default || !SameRequest(run, produced.Artifact.Request))
                 throw new PerformanceContractException($"The adapter child process emitted an artifact that does not exactly match its request for {run.ProcessKind}/{run.ProcessIndex}.");
-            foreach (var entry in currentEntries) ArtifactAdmission.Validate(plan.Workload, entry.Artifact, outputDirectory);
+            foreach (var entry in currentEntries)
+                ArtifactAdmission.Validate(plan.Workload, entry.Artifact, outputDirectory);
             var allowedNames = currentEntries.Select(entry => Path.GetFileName(entry.Path))
                 .Concat(currentEntries.Select(entry => ArtifactStore.EvidenceName(entry.Artifact.Request.NativePlanEvidenceReference)))
-                .Concat(currentEntries.SelectMany(entry => entry.Artifact.Correctness.NativePlan.Routes).Select(route => ArtifactStore.RawPlanName(route.RawPlanReference)))
+                .Concat(currentEntries.SelectMany(entry => ArtifactStore.ReferencedRawPlanNames(entry.Artifact.Correctness.NativePlan)))
                 .Append("artifact-manifest.v2.json")
                 .ToHashSet(StringComparer.Ordinal);
             if (Directory.EnumerateFiles(outputDirectory, "*", SearchOption.TopDirectoryOnly)
@@ -703,7 +758,8 @@ public static class Comparison
 
     private static TargetValidation ValidateSetCore(IReadOnlyList<ProcessArtifact> artifacts, WorkloadCatalog catalog, string outputDirectory, bool allowDiagnosticsAbsoluteBudget)
     {
-        if (artifacts.Count != 4) return TargetValidation.Invalid(null, "A comparison target must include exactly four process artifacts.");
+        if (artifacts.Count != 4)
+            return TargetValidation.Invalid(null, "A comparison target must include exactly four process artifacts.");
         var anchor = artifacts[0].Request;
         if (!catalog.Workloads.TryGetValue(anchor.WorkloadId, out var workload) ||
             workload.Version != anchor.WorkloadVersion ||
@@ -732,11 +788,15 @@ public static class Comparison
             return TargetValidation.Invalid(
                 anchor,
                 $"Workload '{workload.Id}' is blocked from benchmark comparison: {blockedReason}.");
-        if (artifacts.Any(item => !ArtifactAdmission.SameTargetTuple(anchor, item.Request))) return TargetValidation.Invalid(anchor, "A target contains more than one immutable run tuple.");
+        if (artifacts.Any(item => !ArtifactAdmission.SameTargetTuple(anchor, item.Request)))
+            return TargetValidation.Invalid(anchor, "A target contains more than one immutable run tuple.");
         var machine = artifacts[0].Machine;
-        if (artifacts.Any(item => !ArtifactAdmission.SameMachineEnvironment(machine, item.Machine))) return TargetValidation.Invalid(anchor, "Machine metadata must be complete and stable within a comparison target.");
-        if (artifacts.Count(item => item.Request.ProcessKind == ProcessKind.Warmup && item.Request.ProcessIndex == 0) != 1 || artifacts.Count(item => item.Request.ProcessKind == ProcessKind.Measured && item.Request.ProcessIndex is 1 or 2 or 3) != 3 || artifacts.Any(item => item.Request.ProcessKind == ProcessKind.Warmup && item.Request.ProcessIndex != 0 || item.Request.ProcessKind == ProcessKind.Measured && item.Request.ProcessIndex is < 1 or > 3)) return TargetValidation.Invalid(anchor, "A target requires warmup index 0 and measured indices 1, 2, and 3 exactly once.");
-        if (artifacts.Any(item => item.Protocol != BenchmarkProtocol.Acceptance || !item.CorrectnessPassed)) return TargetValidation.Invalid(anchor, "A target has incomplete acceptance protocol or correctness evidence.");
+        if (artifacts.Any(item => !ArtifactAdmission.SameMachineEnvironment(machine, item.Machine)))
+            return TargetValidation.Invalid(anchor, "Machine metadata must be complete and stable within a comparison target.");
+        if (artifacts.Count(item => item.Request.ProcessKind == ProcessKind.Warmup && item.Request.ProcessIndex == 0) != 1 || artifacts.Count(item => item.Request.ProcessKind == ProcessKind.Measured && item.Request.ProcessIndex is 1 or 2 or 3) != 3 || artifacts.Any(item => item.Request.ProcessKind == ProcessKind.Warmup && item.Request.ProcessIndex != 0 || item.Request.ProcessKind == ProcessKind.Measured && item.Request.ProcessIndex is < 1 or > 3))
+            return TargetValidation.Invalid(anchor, "A target requires warmup index 0 and measured indices 1, 2, and 3 exactly once.");
+        if (artifacts.Any(item => item.Protocol != BenchmarkProtocol.Acceptance || !item.CorrectnessPassed))
+            return TargetValidation.Invalid(anchor, "A target has incomplete acceptance protocol or correctness evidence.");
         try
         {
             foreach (var artifact in artifacts)
@@ -752,13 +812,16 @@ public static class Comparison
             return TargetValidation.Invalid(anchor, exception.Message);
         }
         var correctness = artifacts[0].Correctness;
-        if (artifacts.Any(item => !SameEvidence(correctness, item.Correctness))) return TargetValidation.Invalid(anchor, "Correctness, provider prerequisite, native routes, or native-plan evidence is not stable within the target.");
+        if (artifacts.Any(item => !SameEvidence(correctness, item.Correctness)))
+            return TargetValidation.Invalid(anchor, "Correctness, provider prerequisite, native routes, or native-plan evidence is not stable within the target.");
         var warmup = artifacts.Single(item => item.Request.ProcessKind == ProcessKind.Warmup);
-        if (warmup.Operations.Count != 0) return TargetValidation.Invalid(anchor, "Warmup artifacts must not contain timed operation samples.");
+        if (warmup.Operations.Count != 0)
+            return TargetValidation.Invalid(anchor, "Warmup artifacts must not contain timed operation samples.");
         var measured = artifacts.Where(item => item.Request.ProcessKind == ProcessKind.Measured).OrderBy(item => item.Request.ProcessIndex).ToArray();
         var expectedNames = workload.OperationSequence.ToArray();
         var observedNames = measured[0].Operations.Select(operation => operation.Operation).ToArray();
-        if (expectedNames.Length == 0 || expectedNames.Any(name => !OperationIdentity.IsValid(name)) || expectedNames.Distinct(StringComparer.Ordinal).Count() != expectedNames.Length || !expectedNames.SequenceEqual(observedNames, StringComparer.Ordinal) || measured.Any(item => !expectedNames.SequenceEqual(item.Operations.Select(operation => operation.Operation), StringComparer.Ordinal) || item.Operations.Any(operation => operation.Count < 100 || operation.SteadyStateSeconds < 30 || !Statistics.HasAuthoritativeRawMetrics(operation)))) return TargetValidation.Invalid(anchor, "Measured runs must contain exactly the frozen workload operation sequence in deterministic order, with finite positive raw latency and provider round-trip samples, with summaries reproduced from them.");
+        if (expectedNames.Length == 0 || expectedNames.Any(name => !OperationIdentity.IsValid(name)) || expectedNames.Distinct(StringComparer.Ordinal).Count() != expectedNames.Length || !expectedNames.SequenceEqual(observedNames, StringComparer.Ordinal) || measured.Any(item => !expectedNames.SequenceEqual(item.Operations.Select(operation => operation.Operation), StringComparer.Ordinal) || item.Operations.Any(operation => operation.Count < 100 || operation.SteadyStateSeconds < 30 || !Statistics.HasAuthoritativeRawMetrics(operation))))
+            return TargetValidation.Invalid(anchor, "Measured runs must contain exactly the frozen workload operation sequence in deterministic order, with finite positive raw latency and provider round-trip samples, with summaries reproduced from them.");
         return TargetValidation.Validated(anchor, correctness, machine, expectedNames);
     }
 
@@ -770,8 +833,8 @@ public static class Comparison
         first.NativePlan.Identity == second.NativePlan.Identity &&
         first.NativePlan.Reference == second.NativePlan.Reference &&
         first.NativePlan.ContentSha256 == second.NativePlan.ContentSha256 &&
-        first.NativePlan.ProviderConcurrency == second.NativePlan.ProviderConcurrency &&
-        first.NativePlan.Routes.SequenceEqual(second.NativePlan.Routes);
+        JsonSerializer.Serialize(first.NativePlan, ArtifactStore.JsonOptions) ==
+        JsonSerializer.Serialize(second.NativePlan, ArtifactStore.JsonOptions);
     internal static IReadOnlyList<ProcessAggregate> Aggregate(IEnumerable<ProcessArtifact> artifacts) => artifacts
         .Where(item => item.Request.ProcessKind == ProcessKind.Measured)
         .SelectMany(item => item.Operations.Select(operation => (item.Request.ProcessIndex, Operation: operation)))
@@ -794,6 +857,15 @@ public static class Comparison
 
 public static class BenchmarkAdmissionGuard
 {
+    public static void RequireForPhase(PerformanceWorkload workload, BenchmarkPhase phase)
+    {
+        ArgumentNullException.ThrowIfNull(workload);
+        if (DiagnosticsAdmission.Allows(phase) && DiagnosticsAdmission.IsUngradedMeasurementAllowed(workload))
+            return;
+
+        RequireReady(workload);
+    }
+
     public static bool TryGetBlockedReason(PerformanceWorkload workload, out string reason)
     {
         ArgumentNullException.ThrowIfNull(workload);

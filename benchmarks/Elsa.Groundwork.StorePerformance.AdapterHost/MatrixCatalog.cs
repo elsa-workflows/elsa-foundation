@@ -40,7 +40,7 @@ internal static class MatrixCatalog
                 $"The adapter registry does not cover current workload(s): {string.Join(", ", missing)}.");
 
         return new MatrixCatalogDocument(
-            2,
+            3,
             new MatrixBuildDocument(
                 SourceProvenance.AssemblyRevision(typeof(MatrixCatalog).Assembly),
                 SourceProvenance.AssemblyRevision(typeof(SourceProvenance).Assembly)),
@@ -68,8 +68,21 @@ internal static class MatrixCatalog
 
         var capture = CaptureStatus(registration.NativePlanCapture);
         var correctnessReady = registration.NativePlanCapture != NativePlanCaptureKind.Unsupported;
-        var timingReady = workload.BenchmarkAdmission.IsReady &&
-                          registration.NativePlanCapture is NativePlanCaptureKind.Routeless or NativePlanCaptureKind.Complete;
+        var diagnosticsMeasurement = DiagnosticsAdmission.IsUngradedMeasurementAllowed(workload);
+        var captureReadyForMeasurement = registration.NativePlanCapture is NativePlanCaptureKind.Routeless or NativePlanCaptureKind.Complete;
+        var measurementReady = (workload.BenchmarkAdmission.IsReady || diagnosticsMeasurement) &&
+                               (captureReadyForMeasurement || diagnosticsMeasurement && registration.NativePlanCapture == NativePlanCaptureKind.PartialBlocked);
+        var measurementStatus = measurementReady
+            ? diagnosticsMeasurement ? DiagnosticsAdmission.UngradedMeasurementStatus : "ready"
+            : "blocked";
+        var measurementReason = measurementReady
+            ? diagnosticsMeasurement ? DiagnosticsAdmission.UngradedMeasurementReasonCode : ReproducibleWorkloadScenarioCatalog.ReadyReasonCode
+            : diagnosticsMeasurement && string.Equals(registration.Adapter, DiagnosticsNativePlanContract.EfAdapter, StringComparison.Ordinal)
+                ? DiagnosticsAdmission.EfCorrectnessOnlyMeasurementReasonCode
+            : workload.BenchmarkAdmission.IsReady
+                ? capture.Reason
+                : workload.BenchmarkAdmission.Reason;
+        var timingReady = workload.BenchmarkAdmission.IsReady && captureReadyForMeasurement;
         var timingReason = timingReady
             ? ReproducibleWorkloadScenarioCatalog.ReadyReasonCode
             : workload.BenchmarkAdmission.IsReady
@@ -98,6 +111,8 @@ internal static class MatrixCatalog
             capture.Reason,
             correctnessReady ? "ready" : "blocked",
             correctnessReady ? "correctness.ready" : capture.Reason,
+            measurementStatus,
+            measurementReason,
             timingReady ? "ready" : "blocked",
             timingReason);
     }
@@ -140,5 +155,7 @@ internal sealed record MatrixRegistrationDocument(
     string CapturePlanReason,
     string CorrectnessStatus,
     string CorrectnessReason,
+    string MeasurementStatus,
+    string MeasurementReason,
     string TimingStatus,
     string TimingReason);

@@ -2,7 +2,9 @@
 """Drive #646 evidence phases from the AdapterHost's authoritative matrix catalog.
 
 Correctness, native-plan capture, timed measurement, comparison, and gate evaluation are
-separate commands. Every mutating or timed command is a dry run unless --execute is present.
+separate commands. Diagnostics measurement is explicitly ungraded evidence for budget derivation;
+comparison and ratio-gate phases remain blocked until a reviewed policy exists. Every mutating or timed
+command is a dry run unless --execute is present.
 """
 
 from __future__ import annotations
@@ -106,8 +108,8 @@ def matrix_catalog(root: Path, child: Path) -> dict[str, Any]:
             "AdapterHost describe-matrix failed; rebuild the Release AdapterHost and harness from current HEAD"
         ) from error
     document = strict_json(output, "AdapterHost describe-matrix")
-    if document.get("SchemaVersion") != 2 or not isinstance(document.get("Registrations"), list):
-        raise ValueError("AdapterHost describe-matrix did not emit the schema-v2 registration catalog")
+    if document.get("SchemaVersion") != 3 or not isinstance(document.get("Registrations"), list):
+        raise ValueError("AdapterHost describe-matrix did not emit the schema-v3 registration catalog")
     revision = source_provenance(root)
     build = document.get("Build")
     if not isinstance(build, dict) or build.get("AdapterHostRevision") != revision or build.get("HarnessRevision") != revision:
@@ -340,9 +342,14 @@ def require_phase(registration: dict[str, Any], phase: str) -> None:
             f"correctness is blocked: {registration['CorrectnessReason']} for "
             f"{registration['WorkloadId']}/{registration['Adapter']}"
         )
-    if phase == "measure" and registration["TimingStatus"] != "ready":
+    if phase == "measure" and registration["MeasurementStatus"] not in {"ready", "ungraded"}:
         raise ValueError(
-            f"timing is blocked: {registration['TimingReason']} for "
+            f"measurement is blocked: {registration['MeasurementReason']} for "
+            f"{registration['WorkloadId']}/{registration['Adapter']}"
+        )
+    if phase == "measure" and registration["MeasurementStatus"] == "ungraded" and registration["WorkloadId"] != "diagnostics-durable-history":
+        raise ValueError(
+            f"only the diagnostics workload may use an ungraded measurement phase for "
             f"{registration['WorkloadId']}/{registration['Adapter']}"
         )
 
@@ -438,12 +445,12 @@ def status(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(catalog, indent=2))
         return 0
-    print("workload\tversion\tadapter\tform\tproviders\tcapture\tcorrectness\ttiming\treason")
+    print("workload\tversion\tadapter\tform\tproviders\tcapture\tcorrectness\tmeasurement\tmeasurement-reason\ttiming\ttiming-reason")
     for item in catalog["Registrations"]:
         print("\t".join([
             item["WorkloadId"], item["WorkloadVersion"], item["Adapter"], item["PhysicalForm"],
             ",".join(item["Providers"]), item["CapturePlanStatus"], item["CorrectnessStatus"],
-            item["TimingStatus"], item["TimingReason"],
+            item["MeasurementStatus"], item["MeasurementReason"], item["TimingStatus"], item["TimingReason"],
         ]))
     return 0
 

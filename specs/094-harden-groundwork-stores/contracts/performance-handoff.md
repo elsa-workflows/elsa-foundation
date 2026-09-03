@@ -113,17 +113,16 @@ evidence must therefore record `serialized-by-design`, prove that both independe
 real conditional-upsert commands, and must not claim command overlap. This is the accepted provider
 lifetime invariant, not a synthetic overlap waiver.
 
-`diagnostics-durable-history` is the program-owner-ratified 2026-07-25 extension. Its
-`diagnostics.json` contract maps to the additive `diagnostics-structured-log-store` and
+`diagnostics-durable-history` is the program-owner-ratified 2026-07-25 extension. Its current v1.3
+contract maps to the additive `diagnostics-structured-log-store` and
 `diagnostics-open-telemetry-store` ledger rows and keeps both public-store suboperations visible in
-the retained artifacts. SQLite compares the retained same-provider EF diagnostics oracle. SQL
-Server, PostgreSQL, and MongoDB have no same-provider EF diagnostics oracle and therefore require
-workload-specific numeric absolute operational budgets plus correctness digest, native diagnostic
-record/catalog plans, Groundwork physical-form evidence, provider-work/round-trip/storage evidence,
-and queue shed/drain/restart outcomes. The policy shape is ratified, but no numeric budgets or
-executable absolute-budget gate are yet approved. `diagnostics-durable-history` remains blocked under
-`gate.diagnostics.absolute-budget-required`; those three provider verdicts cannot be inferred from
-the default ratio policy.
+the retained artifacts. The 2026-09-03 phase decision keeps all four Groundwork providers in scope and
+allows one complete, provenance-bound measurement set per provider after correctness and complete
+provider-native plan admission. Those measurements are explicitly ungraded inputs for deriving
+provider-specific absolute budgets. The retained SQLite EF diagnostics adapter is correctness-only;
+diagnostics does not use a semantically unequal EF ratio verdict. `compare`, the ratio `gate`, coverage
+ledger advancement, and EF deletion remain blocked under `gate.diagnostics.absolute-budget-required`
+until independently reviewed numeric policies pass the executable `budget-gate`.
 
 Groundwork PR #88 supplies the generic version-aware codec contract consumed by the current package family.
 Groundwork PR #95 extends the certified provider-neutral keyset continuation introduced in `preview.62` with

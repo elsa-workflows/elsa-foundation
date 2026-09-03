@@ -57,13 +57,13 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
     }
 
     [Fact]
-    public async Task Timed_operations_remain_closed_while_the_absolute_budget_gate_is_blocked()
+    public async Task Timed_operations_remain_closed_before_correctness_preparation()
     {
         await using var adapter = BenchmarkAdapterRegistry.Create(Request(), "unused", "unused");
 
         var exception = Assert.Throws<PerformanceContractException>(() => adapter.Operations);
 
-        Assert.Contains(ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode, exception.Message, StringComparison.Ordinal);
+        Assert.Contains("before correctness preparation", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -109,6 +109,39 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
                 adapter.CommandObserver.Commands,
                 command => Assert.Contains("elsa_otel_resources_v2", command.CommandText, StringComparison.OrdinalIgnoreCase),
                 command => Assert.Contains("elsa_structured_logs", command.CommandText, StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            root.Delete(true);
+        }
+    }
+
+    [Fact]
+    public async Task SQLite_reopen_samples_release_prior_restart_compositions_outside_timing()
+    {
+        var root = Directory.CreateTempSubdirectory("diagnostics-reopen-reset-sqlite-");
+        var connectionString = $"Data Source={Path.Combine(root.FullName, "diagnostics.db")};Mode=ReadWriteCreate;Cache=Shared";
+        try
+        {
+            var observed = await ProviderProbe.ReadAsync("sqlite", connectionString, CancellationToken.None);
+            var request = Request() with
+            {
+                ProviderVersion = observed.Version,
+                ProviderTopology = observed.Topology,
+                ProviderConfiguration = observed.Configuration
+            };
+            await using var adapter = new DiagnosticsDurableHistoryAdapter(request, connectionString, root.FullName);
+            await adapter.PrepareAsync(CancellationToken.None);
+
+            await adapter.ReopenClientAsync(CancellationToken.None);
+            await adapter.ReopenClientAsync(CancellationToken.None);
+            Assert.Equal(4, adapter.ActiveCompositionCount);
+
+            await adapter.ResetReopenedClientsAsync(CancellationToken.None);
+
+            Assert.Equal(2, adapter.ActiveCompositionCount);
+            var scopes = await adapter.OpenScopedClientsAsync(CancellationToken.None);
+            Assert.NotSame(scopes.Primary, scopes.Secondary);
         }
         finally
         {

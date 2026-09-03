@@ -1,8 +1,8 @@
-using System.Diagnostics;
 using Elsa.Groundwork.StorePerformance.AdapterHost;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
+using System.Diagnostics;
 using Xunit;
 
 namespace Elsa.Groundwork.StorePerformance.AdapterHost.Tests;
@@ -163,7 +163,7 @@ public sealed class CapturePlanAdmissionTests
     }
 
     [Fact]
-    public void Diagnostics_correctness_admission_resolves_the_provider_but_run_remains_blocked()
+    public void Diagnostics_correctness_and_measurement_admission_resolve_the_provider()
     {
         var request = DiagnosticsRequest();
         var args = new[]
@@ -185,11 +185,13 @@ public sealed class CapturePlanAdmissionTests
         Assert.True(resolved);
         var runArgs = (string[])args.Clone();
         runArgs[0] = "run";
-        Assert.Throws<PerformanceContractException>(() =>
-            SecretRunAdmission.ParseAndResolve(runArgs, "run", _ =>
-            {
-                throw new InvalidOperationException("The blocked run must not resolve a provider.");
-            }));
+        var runResolved = false;
+        SecretRunAdmission.ParseAndResolve(runArgs, "run", _ =>
+        {
+            runResolved = true;
+            return "provider-connection";
+        });
+        Assert.True(runResolved);
     }
 
     [Fact]

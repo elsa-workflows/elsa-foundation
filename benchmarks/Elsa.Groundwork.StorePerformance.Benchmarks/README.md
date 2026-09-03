@@ -10,16 +10,18 @@ executable Secret v1.1 successor is driven by the sibling adapter host: SQLite h
 Groundwork public-repository comparator, while the historical v1.0 hashes remain retained as immutable
 blocked history. Its executable source is the separate
 specs/094-harden-groundwork-stores/workloads/secret-create-read-list-v1.1.json successor file;
-iam-secrets.json remains byte-for-byte historical input. Diagnostics remains blocked until numeric
-absolute budgets are independently ratified and supplied to the executable absolute-budget gate.
+iam-secrets.json remains byte-for-byte historical input. Diagnostics keeps comparison and ratio-gate
+admission blocked until numeric absolute budgets are independently ratified, but once its native-plan
+prerequisites are complete it may produce one strict, provenance-bound four-process measurement set.
+That set is ungraded evidence for deriving reviewed budgets; it is not a performance verdict.
 
 The thirteenth workload, `diagnostics-durable-history`, is the program-owner-ratified 2026-07-25
 extension. It keeps Structured Logs and OpenTelemetry as separate suboperations under one reproducible
-input/result vector. SQLite uses the retained same-provider EF diagnostics oracle. SQL Server,
-PostgreSQL, and MongoDB require workload-specific numeric absolute budgets plus correctness,
-native-plan, physical-form, and provider-work evidence. The policy shape is independently reviewed in
-PR #1514, but the numeric budgets are not yet ratified; `gate.diagnostics.absolute-budget-required` prevents the default ratio
-gate from being silently applied to those three providers. The generic no-comparand evaluator exists,
+input/result vector. All four Groundwork providers require workload-specific numeric absolute budgets
+plus correctness, native-plan, physical-form, and provider-work evidence. The retained SQLite EF adapter
+is correctness-only and is not a timed ratio oracle. The policy shape is independently reviewed in PR
+#1514, but the numeric budgets are not yet ratified; `gate.diagnostics.absolute-budget-required`
+prevents the default ratio gate from being silently applied. The generic no-comparand evaluator exists,
 but it accepts only an explicit independently reviewed policy and has no diagnostics defaults.
 
 `matrix <scale>` executes one untimed adapter-host warm-up process followed by three independent measured
@@ -49,7 +51,8 @@ tampering fail closed. The cohort directory may otherwise contain only the defau
 write custom result paths outside it.
 
 `measure` validates one complete four-process target without an oracle and emits a distinct no-comparand
-measurement result. `budget-gate` derives a fresh admitted measurement from that manifest-bound artifact
+measurement result whose schema-v2 `EvaluationStatus` is explicitly `ungraded`. Diagnostics uses this same one-set path for budget-derivation evidence;
+`compare` and the ratio `gate` continue to refuse diagnostics artifacts. `budget-gate` derives a fresh admitted measurement from that manifest-bound artifact
 directory and applies an independently reviewed, provider/workload-scoped
 absolute policy with p95, p99, and throughput bounds for every budget-bearing operation. A reviewed class map
 may share a budget across operations and must explicitly mark non-timing operations `NotHotPath`. It never

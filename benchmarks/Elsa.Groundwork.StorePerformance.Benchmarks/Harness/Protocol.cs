@@ -1,10 +1,10 @@
+using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
-using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
-using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 
@@ -193,9 +193,11 @@ public static class HostFingerprint
         {
             foreach (var path in new[] { "/etc/machine-id", "/var/lib/dbus/machine-id" })
             {
-                if (!File.Exists(path)) continue;
+                if (!File.Exists(path))
+                    continue;
                 var value = File.ReadAllText(path).Trim();
-                if (value.Length > 0) return $"linux:{value}";
+                if (value.Length > 0)
+                    return $"linux:{value}";
             }
         }
         else if (OperatingSystem.IsMacOS())
@@ -215,7 +217,8 @@ public static class HostFingerprint
                 var output = process.StandardOutput.ReadToEnd();
                 process.WaitForExit();
                 var match = Regex.Match(output, "\"IOPlatformUUID\"\\s*=\\s*\"([^\"]+)\"", RegexOptions.CultureInvariant);
-                if (process.ExitCode == 0 && match.Success) return $"macos:{match.Groups[1].Value}";
+                if (process.ExitCode == 0 && match.Success)
+                    return $"macos:{match.Groups[1].Value}";
             }
         }
         else if (OperatingSystem.IsWindows())
@@ -224,7 +227,8 @@ public static class HostFingerprint
                 @"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Cryptography",
                 "MachineGuid",
                 null) as string;
-            if (!string.IsNullOrWhiteSpace(value)) return $"windows:{value}";
+            if (!string.IsNullOrWhiteSpace(value))
+                return $"windows:{value}";
         }
 
         throw new PerformanceContractException("A stable OS machine identity is unavailable; same-host benchmark evidence cannot be produced.");
@@ -261,7 +265,7 @@ public static class ProcessMeasurement
     public static async Task<ProcessArtifact> ExecuteAsync(PerformanceWorkload workload, RunRequest request, BenchmarkProtocol protocol, IBenchmarkAdapter adapter, string outputDirectory, CancellationToken cancellationToken)
     {
         protocol.Validate();
-        ArtifactAdmission.ValidateRequest(workload, request);
+        ArtifactAdmission.ValidateForPhase(workload, request, BenchmarkPhase.Measurement);
         var hostFingerprint = HostFingerprint.CaptureSha256();
         if (hostFingerprint != request.HostFingerprintSha256)
             throw new PerformanceContractException("The adapter child process is not running on the matrix host.");
@@ -375,19 +379,19 @@ public static class ProcessMeasurement
 public static class ArtifactAdmission
 {
     public static void Validate(PerformanceWorkload workload, ProcessArtifact artifact, string outputDirectory) =>
-        ValidateCore(workload, artifact, outputDirectory, allowDiagnosticsAbsoluteBudget: false);
+        ValidateCore(workload, artifact, outputDirectory, BenchmarkPhase.Comparison);
+
+    internal static void ValidateForMeasurement(PerformanceWorkload workload, ProcessArtifact artifact, string outputDirectory) =>
+        ValidateCore(workload, artifact, outputDirectory, BenchmarkPhase.Measurement);
 
     internal static void ValidateForAbsoluteMeasurement(PerformanceWorkload workload, ProcessArtifact artifact, string outputDirectory) =>
-        ValidateCore(workload, artifact, outputDirectory, allowDiagnosticsAbsoluteBudget: true);
+        ValidateForMeasurement(workload, artifact, outputDirectory);
 
-    private static void ValidateCore(PerformanceWorkload workload, ProcessArtifact artifact, string outputDirectory, bool allowDiagnosticsAbsoluteBudget)
+    private static void ValidateCore(PerformanceWorkload workload, ProcessArtifact artifact, string outputDirectory, BenchmarkPhase phase)
     {
         if (artifact.SchemaVersion != 2 || artifact.Protocol != BenchmarkProtocol.Acceptance || !artifact.CorrectnessPassed)
             throw new PerformanceContractException("Process artifacts require schema v2, the acceptance protocol, and passing correctness evidence.");
-        if (allowDiagnosticsAbsoluteBudget)
-            ValidateEvidenceRequest(workload, artifact.Request);
-        else
-            ValidateRequest(workload, artifact.Request);
+        ValidateForPhase(workload, artifact.Request, phase);
         if (artifact.Correctness is null || artifact.Machine is null || artifact.Operations is null)
             throw new PerformanceContractException("Process artifacts require correctness, machine, and operation fields.");
         ValidateCorrectness(workload, artifact.Request, artifact.Correctness, outputDirectory);
@@ -412,36 +416,33 @@ public static class ArtifactAdmission
     }
 
     public static void ValidateRequest(PerformanceWorkload workload, RunRequest request) =>
-        ValidateRequest(workload, request, allowDiagnosticsEvidence: false);
+        ValidateForPhase(workload, request, BenchmarkPhase.Comparison);
 
-    /// <summary>
-    /// Validates an untimed diagnostics evidence request. Capture and correctness are allowed to compose
-    /// a provider while the numeric timing gate remains blocked, but this narrow exception retains every
-    /// request, adapter, provenance, topology, fingerprint, and artifact-safety check. It is not used by
-    /// matrix/run/compare/gate paths, which continue to require normal benchmark readiness.
-    /// </summary>
-    public static void ValidateEvidenceRequest(PerformanceWorkload workload, RunRequest request)
+    public static void ValidateForPhase(PerformanceWorkload workload, RunRequest request, BenchmarkPhase phase)
     {
         ArgumentNullException.ThrowIfNull(workload);
         ArgumentNullException.ThrowIfNull(request);
-        if (!string.Equals(workload.Id, DiagnosticsDurableHistoryWorkload.WorkloadId, StringComparison.Ordinal) ||
-            !string.Equals(request.WorkloadId, DiagnosticsDurableHistoryWorkload.WorkloadId, StringComparison.Ordinal))
-        {
-            ValidateRequest(workload, request, allowDiagnosticsEvidence: false);
-            return;
-        }
-
-        ValidateRequest(workload, request, allowDiagnosticsEvidence: true);
+        BenchmarkAdmissionGuard.RequireForPhase(workload, phase);
+        if (phase == BenchmarkPhase.Measurement &&
+            DiagnosticsAdmission.IsUngradedMeasurementAllowed(workload) &&
+            string.Equals(request.Adapter, DiagnosticsNativePlanContract.EfAdapter, StringComparison.Ordinal))
+            throw new PerformanceContractException(
+                $"Diagnostics measurement is not admitted for the EF correctness-only adapter: {DiagnosticsAdmission.EfCorrectnessOnlyMeasurementReasonCode}.");
+        ValidateRequestCore(workload, request);
     }
 
-    private static void ValidateRequest(PerformanceWorkload workload, RunRequest request, bool allowDiagnosticsEvidence)
+    /// <summary>
+    /// Validates an untimed diagnostics evidence request. Capture and correctness are allowed to compose
+    /// a provider while the numeric timing gate remains blocked. This narrow exception retains every
+    /// request, adapter, provenance, topology, fingerprint, and artifact-safety check.
+    /// </summary>
+    public static void ValidateEvidenceRequest(PerformanceWorkload workload, RunRequest request)
     {
-        if (!allowDiagnosticsEvidence)
-            BenchmarkAdmissionGuard.RequireReady(workload);
-        else if (!ReproducibleWorkloadScenarioCatalog.TryGetBlockedReason(workload.Id, out var blockedReason) ||
-                 !string.Equals(blockedReason, ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode, StringComparison.Ordinal))
-            throw new PerformanceContractException("Diagnostics evidence bypass is only valid for the reviewed diagnostics absolute-budget block.");
+        ValidateForPhase(workload, request, BenchmarkPhase.Correctness);
+    }
 
+    private static void ValidateRequestCore(PerformanceWorkload workload, RunRequest request)
+    {
         BenchmarkAdapterAdmission.RequireAdmitted(workload, request.Provider, request.Adapter, request.PhysicalForm);
         ArtifactSafety.ValidateRequest(request);
         if (workload.Id != request.WorkloadId ||
@@ -620,16 +621,21 @@ public static class ArtifactAdmission
             document.ProviderConcurrency != nativePlan.ProviderConcurrency ||
             document.Routes is null ||
             !document.Routes.SequenceEqual(routes) ||
-            !(document.BlockedRoutes ?? []).SequenceEqual(blockedRoutes))
+            !(document.BlockedRoutes ?? []).SequenceEqual(blockedRoutes) ||
+            !SameStructuredEvidence(document.TraceDetailConstituents ?? [], traceDetailConstituents))
             throw new PerformanceContractException("Native-plan evidence file does not match the admitted target, provenance, or structured route evidence.");
         if (efCorrectnessOnly &&
             (document.OracleObservations is null ||
-             !document.OracleObservations.SequenceEqual(oracleObservations)))
+             !SameStructuredEvidence(document.OracleObservations, oracleObservations)))
             throw new PerformanceContractException("EF diagnostics oracle observations do not match the admitted evidence.");
         if (!efCorrectnessOnly && document.OracleObservations is not null && document.OracleObservations.Count != 0)
             throw new PerformanceContractException("Non-EF diagnostics evidence cannot carry oracle-only route observations.");
         ArtifactSafety.Validate(evidence);
     }
+
+    private static bool SameStructuredEvidence<T>(IReadOnlyList<T> first, IReadOnlyList<T> second) =>
+        System.Text.Json.JsonSerializer.Serialize(first, ArtifactStore.JsonOptions) ==
+        System.Text.Json.JsonSerializer.Serialize(second, ArtifactStore.JsonOptions);
 
     private static void ValidateIamNativeRoutes(
         PerformanceWorkload workload,

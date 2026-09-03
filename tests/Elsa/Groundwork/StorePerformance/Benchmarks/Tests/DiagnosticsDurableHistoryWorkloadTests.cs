@@ -1,7 +1,9 @@
+using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
+using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
-using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using Xunit;
 
@@ -75,6 +77,168 @@ public sealed class DiagnosticsDurableHistoryWorkloadTests
 
         Assert.True(BenchmarkAdmissionGuard.TryGetBlockedReason(workload, out var reason));
         Assert.Equal(ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode, reason);
+    }
+
+    [Fact]
+    public async Task Prepares_all_fifteen_frozen_operations_in_catalog_order()
+    {
+        var adapter = new MeasuredAdapter();
+
+        var operations = await new DiagnosticsDurableHistoryWorkload().PrepareMeasuredOperationsAsync(adapter);
+
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.OperationIds, operations.Select(operation => operation.Id));
+    }
+
+    [Fact]
+    public async Task Mutation_setup_runs_before_the_timed_invocation()
+    {
+        var adapter = new MeasuredAdapter();
+        var operations = await new DiagnosticsDurableHistoryWorkload().PrepareMeasuredOperationsAsync(adapter);
+        var operation = Assert.Single(operations, operation => operation.Id == "append-structured-log-batches");
+        var timed = false;
+
+        await ProcessMeasurement.InvokeOnceForTestAsync(
+            new AdapterOperation(operation),
+            7,
+            () =>
+            {
+                timed = true;
+                Assert.Equal(["trim"], adapter.PrimaryStructuredLog.Calls);
+            },
+            CancellationToken.None);
+
+        Assert.True(timed);
+        Assert.Equal("append", adapter.PrimaryStructuredLog.Calls[^1]);
+    }
+
+    [Fact]
+    public async Task Adjacent_open_telemetry_invocations_use_disjoint_signal_identities()
+    {
+        var adapter = new MeasuredAdapter();
+        var operations = await new DiagnosticsDurableHistoryWorkload().PrepareMeasuredOperationsAsync(adapter);
+        var operation = Assert.Single(operations, operation => operation.Id == "append-open-telemetry-batches");
+
+        await operation.PrepareInvocationAsync(7);
+        await operation.InvokeAsync(7);
+        await operation.PrepareInvocationAsync(8);
+        await operation.InvokeAsync(8);
+
+        Assert.Empty(adapter.PrimaryOpenTelemetry.Batches);
+        Assert.Equal(16, adapter.SecondaryOpenTelemetry.Batches.Count);
+        var firstTimed = adapter.SecondaryOpenTelemetry.Batches[7].Traces.Select(trace => trace.TraceId);
+        var secondTimed = adapter.SecondaryOpenTelemetry.Batches[15].Traces.Select(trace => trace.TraceId);
+        Assert.Empty(firstTimed.Intersect(secondTimed, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task Reopen_operations_open_a_fresh_client_inside_each_invocation()
+    {
+        var adapter = new MeasuredAdapter();
+        var operations = await new DiagnosticsDurableHistoryWorkload().PrepareMeasuredOperationsAsync(adapter);
+        var operation = Assert.Single(operations, operation => operation.Id == "reopen-and-read-structured-log-high-water");
+
+        await ProcessMeasurement.InvokeOnceForTestAsync(
+            new AdapterOperation(operation), 1, static () => { }, CancellationToken.None);
+        await ProcessMeasurement.InvokeOnceForTestAsync(
+            new AdapterOperation(operation), 2, static () => { }, CancellationToken.None);
+
+        Assert.Equal(2, adapter.ReopenCount);
+        Assert.Equal(3, adapter.ResetReopenedCount);
+    }
+
+    private sealed class AdapterOperation(IDiagnosticsDurableHistoryWorkloadOperation operation) : IBenchmarkOperation
+    {
+        public string Id => operation.Id;
+
+        public Task PrepareInvocationAsync(long invocation, CancellationToken cancellationToken) =>
+            operation.PrepareInvocationAsync(invocation, cancellationToken).AsTask();
+
+        public Task InvokeAsync(long invocation, CancellationToken cancellationToken) =>
+            operation.InvokeAsync(invocation, cancellationToken).AsTask();
+    }
+
+    private sealed class MeasuredAdapter : IDiagnosticsDurableHistoryWorkloadAdapter
+    {
+        public RecordingStructuredLogStore PrimaryStructuredLog { get; } = new();
+        private readonly RecordingStructuredLogStore secondaryStructuredLog = new();
+        public RecordingOpenTelemetryStore PrimaryOpenTelemetry { get; } = new();
+        public RecordingOpenTelemetryStore SecondaryOpenTelemetry { get; } = new();
+        private readonly DiagnosticsDurableHistoryClient reopened;
+        private readonly DiagnosticsDurableHistoryClient primary;
+        private readonly DiagnosticsDurableHistoryClient secondary;
+
+        public MeasuredAdapter()
+        {
+            primary = new(PrimaryStructuredLog, PrimaryOpenTelemetry);
+            secondary = new(secondaryStructuredLog, SecondaryOpenTelemetry);
+            reopened = new(new RecordingStructuredLogStore(), new RecordingOpenTelemetryStore());
+        }
+
+        public ValueTask<DiagnosticsDurableHistoryScopes> OpenScopedClientsAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new DiagnosticsDurableHistoryScopes(primary, secondary));
+
+        public ValueTask FlushAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+
+        public int ReopenCount { get; private set; }
+        public int ResetReopenedCount { get; private set; }
+
+        public ValueTask<DiagnosticsDurableHistoryClient> ReopenClientAsync(CancellationToken cancellationToken = default)
+        {
+            ReopenCount++;
+            return ValueTask.FromResult(reopened);
+        }
+
+        public ValueTask ResetReopenedClientsAsync(CancellationToken cancellationToken = default)
+        {
+            ResetReopenedCount++;
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingStructuredLogStore : IStructuredLogStore
+    {
+        public List<string> Calls { get; } = [];
+
+        public ValueTask<StructuredLogEntry> AppendAsync(StructuredLogEntry entry, CancellationToken cancellationToken = default)
+        {
+            Calls.Add("append");
+            return ValueTask.FromResult(entry with { ReplayCursor = new StructuredLogReplayCursor("recording") });
+        }
+
+        public Task<long> GetHighWaterMarkAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(0L);
+
+        public Task<IReadOnlyList<StructuredLogEntry>> GetRecentAsync(StructuredLogFilter filter, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<StructuredLogEntry>>([]);
+
+        public Task<StructuredLogReplayCursor?> GetTailCursorAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<StructuredLogReplayCursor?>(null);
+
+        public Task<StructuredLogReadPage> ReadAfterAsync(StructuredLogReplayCursor? afterCursor, StructuredLogFilter filter, int maxCount, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new StructuredLogReadPage([], afterCursor, false));
+
+        public Task TrimAsync(int keepNewest, CancellationToken cancellationToken = default)
+        {
+            Calls.Add("trim");
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingOpenTelemetryStore : IOpenTelemetryStore
+    {
+        public List<OpenTelemetryBatch> Batches { get; } = [];
+
+        public ValueTask WriteAsync(OpenTelemetryBatch batch, CancellationToken cancellationToken = default)
+        {
+            Batches.Add(batch);
+            return ValueTask.CompletedTask;
+        }
+        public ValueTask<OpenTelemetryResourceResult> QueryResourcesAsync(OpenTelemetryResourceFilter filter, CancellationToken cancellationToken = default) => ValueTask.FromResult(new OpenTelemetryResourceResult([], 0));
+        public ValueTask<OpenTelemetryTraceResult> QueryTracesAsync(OpenTelemetryTraceFilter filter, CancellationToken cancellationToken = default) => ValueTask.FromResult(new OpenTelemetryTraceResult([], 0));
+        public ValueTask<OpenTelemetryTraceDetail?> GetTraceAsync(string traceId, CancellationToken cancellationToken = default) => ValueTask.FromResult<OpenTelemetryTraceDetail?>(null);
+        public ValueTask<OpenTelemetryMetricResult> QueryMetricsAsync(OpenTelemetryMetricFilter filter, CancellationToken cancellationToken = default) => ValueTask.FromResult(new OpenTelemetryMetricResult([], [], 0));
+        public ValueTask<OpenTelemetryLogResult> QueryLogsAsync(OpenTelemetryLogFilter filter, CancellationToken cancellationToken = default) => ValueTask.FromResult(new OpenTelemetryLogResult([], 0));
+        public ValueTask<OpenTelemetryStorageDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(new OpenTelemetryStorageDiagnostics(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
     }
 
     [Fact]

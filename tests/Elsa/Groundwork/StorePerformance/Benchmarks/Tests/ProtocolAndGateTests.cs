@@ -1,9 +1,9 @@
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Tests;
@@ -192,7 +192,8 @@ public sealed class ProtocolAndGateTests
         }
         finally
         {
-            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
         }
     }
 
@@ -213,7 +214,7 @@ public sealed class ProtocolAndGateTests
     [InlineData(
         ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId,
         ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode)]
-    public void Matrix_and_direct_gate_reject_blocked_contracts_before_execution(
+    public void Diagnostics_matrix_admits_ungraded_measurement_but_direct_gate_stays_blocked(
         string workloadId,
         string reasonCode)
     {
@@ -222,13 +223,18 @@ public sealed class ProtocolAndGateTests
         {
             WorkloadId = workload.Id,
             WorkloadVersion = workload.Version,
+            Adapter = DiagnosticsNativePlanContract.GroundworkAdapter,
+            PhysicalForm = "ordinary-groundwork-diagnostics-units",
+            PackageVersions = new Dictionary<string, string> { ["Groundwork.Sqlite"] = "0.4.0-preview.9" },
+            NativePlanIdentity = "diagnostics-plan",
+            NativePlanEvidenceReference = "diagnostics-set.native-plan.json",
             Seed = workload.Input.Seed,
             InputFingerprintSha256 = workload.Input.FingerprintSha256
         };
 
-        var matrixError = Assert.Throws<PerformanceContractException>(() =>
-            MatrixPlan.Create(workload, request));
-        Assert.Contains(reasonCode, matrixError.Message);
+        var plan = MatrixPlan.Create(workload, request);
+        Assert.Equal(4, plan.Runs.Count);
+        Assert.Equal([ProcessKind.Warmup, ProcessKind.Measured, ProcessKind.Measured, ProcessKind.Measured], plan.Runs.Select(run => run.ProcessKind));
 
         var forgedCompleteComparison = new ComparisonResult(
             1,
@@ -383,7 +389,8 @@ public sealed class ProtocolAndGateTests
         }
         finally
         {
-            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
         }
     }
 
@@ -403,7 +410,8 @@ public sealed class ProtocolAndGateTests
         }
         finally
         {
-            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
         }
     }
 
@@ -433,7 +441,8 @@ public sealed class ProtocolAndGateTests
         }
         finally
         {
-            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
         }
     }
 
@@ -460,7 +469,8 @@ public sealed class ProtocolAndGateTests
         }
         finally
         {
-            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
         }
     }
 
@@ -493,7 +503,8 @@ public sealed class ProtocolAndGateTests
         }
         finally
         {
-            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
         }
     }
 
@@ -516,7 +527,8 @@ public sealed class ProtocolAndGateTests
         }
         finally
         {
-            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
         }
     }
 
@@ -538,7 +550,8 @@ public sealed class ProtocolAndGateTests
         }
         finally
         {
-            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
         }
     }
 
@@ -586,8 +599,10 @@ public sealed class ProtocolAndGateTests
         }
         finally
         {
-            if (Directory.Exists(missingDirectory)) Directory.Delete(missingDirectory, recursive: true);
-            if (Directory.Exists(mismatchDirectory)) Directory.Delete(mismatchDirectory, recursive: true);
+            if (Directory.Exists(missingDirectory))
+                Directory.Delete(missingDirectory, recursive: true);
+            if (Directory.Exists(mismatchDirectory))
+                Directory.Delete(mismatchDirectory, recursive: true);
         }
     }
 
@@ -954,10 +969,12 @@ public sealed class ProtocolAndGateTests
         foreach (var route in NativeRoutes(request.MeasurementSetId))
         {
             var rawPlanPath = Path.Combine(outputDirectory, route.RawPlanReference);
-            if (!File.Exists(rawPlanPath)) File.WriteAllText(rawPlanPath, RawPlanPayload(route.RouteIdentity));
+            if (!File.Exists(rawPlanPath))
+                File.WriteAllText(rawPlanPath, RawPlanPayload(route.RouteIdentity));
         }
         var evidencePath = Path.Combine(outputDirectory, request.NativePlanEvidenceReference);
-        if (!File.Exists(evidencePath)) File.WriteAllText(evidencePath, NativePlanPayload(request));
+        if (!File.Exists(evidencePath))
+            File.WriteAllText(evidencePath, NativePlanPayload(request));
         ArtifactStore.Write(outputDirectory, ArtifactFor(request));
     }
 

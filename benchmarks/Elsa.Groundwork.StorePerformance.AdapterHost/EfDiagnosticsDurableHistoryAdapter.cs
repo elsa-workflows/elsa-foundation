@@ -1,4 +1,3 @@
-using System.Data.Common;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
@@ -18,6 +17,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using System.Data.Common;
 
 namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 
@@ -72,8 +72,7 @@ internal sealed class EfDiagnosticsDurableHistoryAdapter : IBenchmarkAdapter, ID
 
     public IReadOnlyList<IBenchmarkOperation> Operations =>
         throw new PerformanceContractException(
-            "The diagnostics-durable-history workload is blocked under 'gate.diagnostics.absolute-budget-required'; " +
-            "no timed operation list may be published until the reviewed absolute-budget gate is authorized.");
+            "The EF diagnostics adapter is retained for correctness only and is not an admitted measurement target.");
 
     public async Task PrepareAsync(CancellationToken cancellationToken)
     {
@@ -142,6 +141,19 @@ internal sealed class EfDiagnosticsDurableHistoryAdapter : IBenchmarkAdapter, ID
         RequirePrepared();
         await OpenCompositionAsync($"reopened-{compositions.Count}", cancellationToken);
         return clients[^1];
+    }
+
+    public async ValueTask ResetReopenedClientsAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        RequirePrepared();
+        while (compositions.Count > 2)
+        {
+            var index = compositions.Count - 1;
+            await compositions[index].DisposeAsync();
+            compositions.RemoveAt(index);
+            clients.RemoveAt(index);
+        }
     }
 
     public async ValueTask FlushAsync(CancellationToken cancellationToken = default)
@@ -270,7 +282,7 @@ internal sealed class EfDiagnosticsDurableHistoryAdapter : IBenchmarkAdapter, ID
         public async ValueTask<StructuredLogEntry> AppendAsync(StructuredLogEntry entry, CancellationToken cancellationToken = default)
         {
             var committed = await inner.AppendAsync(entry, cancellationToken);
-            Interlocked.Increment(ref expectedHighWater);
+            UpdateHighWater(committed.Sequence);
             return committed;
         }
 
@@ -279,6 +291,16 @@ internal sealed class EfDiagnosticsDurableHistoryAdapter : IBenchmarkAdapter, ID
         public Task<StructuredLogReplayCursor?> GetTailCursorAsync(CancellationToken cancellationToken = default) => inner.GetTailCursorAsync(cancellationToken);
         public Task<StructuredLogReadPage> ReadAfterAsync(StructuredLogReplayCursor? afterCursor, StructuredLogFilter filter, int maxCount, CancellationToken cancellationToken = default) => inner.ReadAfterAsync(afterCursor, filter, maxCount, cancellationToken);
         public Task TrimAsync(int keepNewest, CancellationToken cancellationToken = default) => inner.TrimAsync(keepNewest, cancellationToken);
+
+        private void UpdateHighWater(long committedSequence)
+        {
+            while (true)
+            {
+                var current = Volatile.Read(ref expectedHighWater);
+                if (committedSequence <= current || Interlocked.CompareExchange(ref expectedHighWater, committedSequence, current) == current)
+                    return;
+            }
+        }
 
         public async Task WaitForDurabilityAsync(CancellationToken cancellationToken)
         {
@@ -350,6 +372,7 @@ internal sealed class EfDiagnosticsDurableHistoryAdapter : IBenchmarkAdapter, ID
             }
         }
     }
+
 }
 
 /// <summary>One EF diagnostics composition. Every factory-created context uses a fresh SQLite connection.</summary>

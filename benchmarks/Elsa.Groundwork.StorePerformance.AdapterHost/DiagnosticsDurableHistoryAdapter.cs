@@ -1,10 +1,10 @@
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
+using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Core.Options;
-using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using Groundwork.Store;
@@ -33,22 +33,18 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
     private readonly WritePathRoundTripObserver observer = new(request.Provider, captureCommands: true);
     private readonly List<RuntimeStoreComposition> compositions = [];
     private readonly List<DiagnosticsDurableHistoryClient> clients = [];
+    private IReadOnlyList<IBenchmarkOperation>? operations;
     private IStorageProviderConnection? connection;
     private ProviderProbe.Result? observedProvider;
 
     public IProviderRoundTripObserver? RoundTripObserver => observer;
 
     internal WritePathRoundTripObserver CommandObserver => observer;
+    internal int ActiveCompositionCount => compositions.Count;
 
-    /// <summary>
-    /// Diagnostics remains blocked by the frozen absolute-budget admission. Therefore no timed operation
-    /// is exposed until a reviewed budget gate exists. The correctness implementation remains available
-    /// to a future admitted run, while the current harness rejects diagnostics before child execution.
-    /// </summary>
     public IReadOnlyList<IBenchmarkOperation> Operations =>
-        throw new PerformanceContractException(
-            "The diagnostics-durable-history workload is blocked under 'gate.diagnostics.absolute-budget-required'; " +
-            "no timed operation list may be published until the reviewed absolute-budget gate is authorized.");
+        operations ?? throw new PerformanceContractException(
+            "The diagnostics-durable-history operations were requested before correctness preparation completed.");
 
     public async Task PrepareAsync(CancellationToken cancellationToken)
     {
@@ -80,7 +76,11 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
     {
         RequirePrepared();
         var evidence = NativePlanEvidenceStaging.PublishInto(outputDirectory, request);
-        var result = await new DiagnosticsDurableHistoryWorkload().ExecuteAsync(this, cancellationToken);
+        var workload = new DiagnosticsDurableHistoryWorkload();
+        var result = await workload.ExecuteAsync(this, cancellationToken);
+        operations = (await workload.PrepareMeasuredOperationsAsync(this, cancellationToken))
+            .Select(operation => (IBenchmarkOperation)new BenchmarkOperation(operation))
+            .ToArray();
         var provider = observedProvider ?? throw new PerformanceContractException(
             "The diagnostics adapter has no live provider handshake; PrepareAsync must run first.");
 
@@ -123,6 +123,19 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
         return clients[^1];
     }
 
+    public async ValueTask ResetReopenedClientsAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        RequirePrepared();
+        while (compositions.Count > 2)
+        {
+            var index = compositions.Count - 1;
+            await compositions[index].DisposeAsync();
+            compositions.RemoveAt(index);
+            clients.RemoveAt(index);
+        }
+    }
+
     /// <summary>
     /// Waits for every queued OpenTelemetry batch to become visible through the public inspection
     /// contract. This is an untimed synchronization boundary; it never stops a one-way diagnostics drain,
@@ -153,6 +166,7 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
             connection = null;
             compositions.Clear();
             clients.Clear();
+            operations = null;
             observedProvider = null;
         }
     }
@@ -320,7 +334,7 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
         public async ValueTask<StructuredLogEntry> AppendAsync(StructuredLogEntry entry, CancellationToken cancellationToken = default)
         {
             var committed = await inner.AppendAsync(entry, cancellationToken);
-            Interlocked.Increment(ref expectedHighWater);
+            UpdateHighWater(committed.Sequence);
             return committed;
         }
 
@@ -329,6 +343,16 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
         public Task<StructuredLogReplayCursor?> GetTailCursorAsync(CancellationToken cancellationToken = default) => inner.GetTailCursorAsync(cancellationToken);
         public Task<StructuredLogReadPage> ReadAfterAsync(StructuredLogReplayCursor? afterCursor, StructuredLogFilter filter, int maxCount, CancellationToken cancellationToken = default) => inner.ReadAfterAsync(afterCursor, filter, maxCount, cancellationToken);
         public Task TrimAsync(int keepNewest, CancellationToken cancellationToken = default) => inner.TrimAsync(keepNewest, cancellationToken);
+
+        private void UpdateHighWater(long committedSequence)
+        {
+            while (true)
+            {
+                var current = Volatile.Read(ref expectedHighWater);
+                if (committedSequence <= current || Interlocked.CompareExchange(ref expectedHighWater, committedSequence, current) == current)
+                    return;
+            }
+        }
 
         public async Task WaitForDurabilityAsync(CancellationToken cancellationToken)
         {
@@ -411,5 +435,16 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
                 await Task.Delay(50, cancellationToken);
             }
         }
+    }
+
+    private sealed class BenchmarkOperation(IDiagnosticsDurableHistoryWorkloadOperation operation) : IBenchmarkOperation
+    {
+        public string Id => operation.Id;
+
+        public Task PrepareInvocationAsync(long invocation, CancellationToken cancellationToken) =>
+            operation.PrepareInvocationAsync(invocation, cancellationToken).AsTask();
+
+        public Task InvokeAsync(long invocation, CancellationToken cancellationToken) =>
+            operation.InvokeAsync(invocation, cancellationToken).AsTask();
     }
 }

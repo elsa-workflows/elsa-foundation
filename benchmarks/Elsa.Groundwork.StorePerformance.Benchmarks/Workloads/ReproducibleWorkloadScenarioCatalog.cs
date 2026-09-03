@@ -15,7 +15,7 @@ public static class ReproducibleWorkloadScenarioCatalog
     public const string DiagnosticsWorkloadId = "diagnostics-durable-history";
     public const string DiagnosticsBlockedReasonCode = "gate.diagnostics.absolute-budget-required";
     public const string DiagnosticsBlockedReason =
-        "Numeric absolute budgets and an executable absolute-budget gate require independent review before diagnostics measurement.";
+        "A diagnostics timing verdict requires an independently reviewed provider budget; only ungraded first-measurement evidence is admitted before that gate.";
     public const string BlockedWorkloadId = "secret-create-read-list";
     public const string BlockedVersion = "1.0.0";
     public const string BlockedInputFingerprint = "339a6adc9ba6c34e85ce43eafd3e0b8b7b74f7ccbb7d52bd34efe1fbe394014c";

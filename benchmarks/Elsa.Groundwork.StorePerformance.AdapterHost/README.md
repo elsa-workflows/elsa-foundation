@@ -13,7 +13,7 @@ substrate.
 | `WritePathRoundTripObserver` — the exact provider-native round-trip counter | **done**, compiles |
 | `ProviderConnections` — opens a real v2 connection for all four providers | **done**, compiles |
 | `probe-provider` | **done** — reads native server identity, topology, and sanitized driver settings |
-| `describe-matrix` | **done** — emits the schema-v2 exact 13-workload/17-registration catalog plus the AdapterHost and harness source revisions consumed by the operator runner |
+| `describe-matrix` | **done** — emits the schema-v3 exact 13-workload/17-registration catalog with separate correctness, measurement, and timing-verdict states plus the AdapterHost and harness source revisions consumed by the operator runner |
 | `describe-composition` | **done** — validates a request and emits the deterministic selected-composition descriptor and lowercase SHA-256 without provider I/O or schema mutation |
 | `capture-plan` | **complete** for checkpoint, bookmark, recovery, outbox, trigger, recurring, due-timer, placement, and both Secret targets; relational queue/command are implemented and awaiting final Groundwork package plus live-plan validation; MongoDB queue/command are correctness-ready but native-plan blocked; diagnostics Groundwork capture now retains composite trace-detail evidence, while EF remains correctness-only |
 | optional-observer `src/` seam on `GroundworkV2RuntimeCheckpointWriter` | **done**, compiles |
