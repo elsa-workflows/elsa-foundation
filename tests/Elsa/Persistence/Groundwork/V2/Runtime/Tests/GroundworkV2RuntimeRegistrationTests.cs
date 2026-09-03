@@ -127,6 +127,21 @@ public sealed class GroundworkV2RuntimeRegistrationTests
     }
 
     [Fact]
+    public void Groundwork_registration_refuses_recovery_protector_without_a_stable_key()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkV2RuntimeStores();
+
+        using var provider = services.BuildServiceProvider();
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            provider.GetRequiredService<IRuntimeRecoveryContinuationCodec>());
+
+        Assert.Equal(
+            "Runtime recovery continuation signing key must be configured for durable recovery paging.",
+            exception.Message);
+    }
+
+    [Fact]
     public void Repeated_default_registration_is_idempotent_and_retains_the_bounded_cache_boundary()
     {
         var services = new ServiceCollection();
