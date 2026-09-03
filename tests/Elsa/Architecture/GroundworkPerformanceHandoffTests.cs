@@ -253,9 +253,9 @@ public sealed class GroundworkPerformanceHandoffTests
         var measureMethod = runner.IndexOf("def measure(", StringComparison.Ordinal);
         var compareMethod = runner.IndexOf("def compare_or_gate(", measureMethod, StringComparison.Ordinal);
         var measureBody = runner[measureMethod..compareMethod];
-        Assert.True(
-            measureBody.IndexOf("ensure_measurement_output_admissible(output)", StringComparison.Ordinal) <
-            measureBody.IndexOf("target_context(args, \"measure\"", StringComparison.Ordinal));
+        var outputAdmission = measureBody.IndexOf("ensure_measurement_output_admissible(output)", StringComparison.Ordinal);
+        var measurementContextAdmission = measureBody.IndexOf("target_context(args, \"measure\"", StringComparison.Ordinal);
+        Assert.True(outputAdmission >= 0 && measurementContextAdmission > outputAdmission);
         Assert.Contains(
             "measurement_command = [\"dotnet\", str(harness), \"measure\", \"--out\", str(output)]",
             measureBody,
