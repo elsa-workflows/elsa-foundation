@@ -357,6 +357,8 @@ jobs:
               docker exec "$mongo_container" mongosh --quiet --eval \
                 "rs.initiate({_id:'groundworkv2',members:[{_id:0,host:'127.0.0.1:27017'}]})" >/dev/null
               wait_for_mongo_primary
+              mongo_attestation="$(image_attestation "$mongo_container")"
+              printf 'ELSA_BENCH_MONGO_CONTAINER_ATTESTATION=%s\n' "$mongo_attestation" >> "$GITHUB_ENV"
               # The unique URI below is the fresh database boundary; the adapter creates its own collections.
               printf 'ELSA_BENCH_MONGO_CONNECTION=mongodb://127.0.0.1:27017/%s?replicaSet=groundworkv2&directConnection=true\n' "$mongo_database" >> "$GITHUB_ENV"
               ;;

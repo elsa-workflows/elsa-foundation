@@ -300,6 +300,8 @@ public sealed class GroundworkPerformanceHandoffTests
         Assert.Contains("run-e3-medium-baseline.py correctness", job, StringComparison.Ordinal);
         Assert.Contains("pg_isready -h 127.0.0.1", job, StringComparison.Ordinal);
         Assert.Contains("psql -h 127.0.0.1", job, StringComparison.Ordinal);
+        Assert.Contains("mongo_attestation=\"$(image_attestation \"$mongo_container\")\"", job, StringComparison.Ordinal);
+        Assert.Contains("ELSA_BENCH_MONGO_CONTAINER_ATTESTATION", job, StringComparison.Ordinal);
         Assert.Contains(
             "User Id=sa;Pass" + "word=%s;TrustServerCertificate=True;Encrypt=False;Initial Catalog=%s",
             job,
@@ -311,6 +313,59 @@ public sealed class GroundworkPerformanceHandoffTests
         Assert.DoesNotContain("run-e3-medium-baseline.py compare", job, StringComparison.Ordinal);
         Assert.Contains("$DIAGNOSTICS_WORK_ROOT/run-summary.txt", job, StringComparison.Ordinal);
         Assert.DoesNotContain("$DIAGNOSTICS_OUTPUT_DIR/run-summary.txt", job, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Operator_runner_invalidates_evidence_when_capture_does_not_complete()
+    {
+        var runnerPath = Path.Combine(RepoRoot, "tools", "groundwork", "run-e3-medium-baseline.py");
+        const string assertions = """
+import runpy
+import sys
+import tempfile
+from pathlib import Path
+
+module = runpy.run_path(sys.argv[1])
+begin_capture = module["begin_capture"]
+complete_capture = module["complete_capture"]
+require_capture_complete = module["require_capture_complete"]
+
+with tempfile.TemporaryDirectory() as directory:
+    evidence = Path(directory) / "evidence"
+    evidence.mkdir()
+    (evidence / "previous.native-plan.json").write_text("previous", encoding="utf-8")
+
+    try:
+        begin_capture(evidence)
+    except ValueError as exception:
+        assert "empty" in str(exception), exception
+    else:
+        raise AssertionError("capture reused a non-empty evidence directory")
+
+    try:
+        require_capture_complete(evidence)
+    except ValueError as exception:
+        assert "incomplete" in str(exception), exception
+    else:
+        raise AssertionError("failed capture left evidence admissible")
+
+    marker = module["capture_marker"](evidence)
+    marker.unlink()
+    fresh = Path(directory) / "fresh-evidence"
+    marker = begin_capture(fresh)
+    try:
+        require_capture_complete(fresh)
+    except ValueError as exception:
+        assert "incomplete" in str(exception), exception
+    else:
+        raise AssertionError("in-progress capture was not blocked")
+    complete_capture(marker)
+    require_capture_complete(fresh)
+""";
+
+        var result = RunPython(assertions, runnerPath);
+
+        Assert.True(result.ExitCode == 0, result.Error);
     }
 
     [Fact]

@@ -45,6 +45,7 @@ ALLOWED_RESULT_FILES = {
     "measurement.v1.json",
     "budget-gate.v1.json",
 }
+CAPTURE_MARKER_PREFIX = ".groundwork-capture-in-progress-"
 
 
 def repository_root() -> Path:
@@ -77,6 +78,56 @@ def ensure_external(path: Path, root: Path, name: str) -> Path:
     if resolved == root or root in resolved.parents or resolved in root.parents:
         raise ValueError(f"{name} must be disjoint from the repository worktree: {resolved}")
     return resolved
+
+
+def capture_marker(evidence: Path) -> Path:
+    identity = hashlib.sha256(str(evidence).encode("utf-8")).hexdigest()[:32]
+    return evidence.parent / f"{CAPTURE_MARKER_PREFIX}{identity}"
+
+
+def ensure_capture_directory_empty(evidence: Path) -> None:
+    if evidence.exists() and not evidence.is_dir():
+        raise ValueError(f"capture evidence directory is not a directory: {evidence}")
+    marker = capture_marker(evidence)
+    if marker.exists():
+        raise ValueError(
+            f"capture evidence directory has an incomplete prior capture: {evidence}"
+        )
+    if evidence.exists() and any(evidence.iterdir()):
+        raise ValueError(
+            f"capture requires an empty evidence directory; use a fresh directory: {evidence}"
+        )
+
+
+def begin_capture(evidence: Path) -> Path:
+    if evidence.exists() and not evidence.is_dir():
+        raise ValueError(f"capture evidence directory is not a directory: {evidence}")
+    evidence.mkdir(parents=True, exist_ok=True)
+    marker = capture_marker(evidence)
+    try:
+        with marker.open("x", encoding="utf-8"):
+            pass
+    except FileExistsError as error:
+        raise ValueError(
+            f"capture evidence directory has an incomplete prior capture: {evidence}"
+        ) from error
+    if any(evidence.iterdir()):
+        raise ValueError(
+            f"capture requires an empty evidence directory; use a fresh directory: {evidence}"
+        )
+    return marker
+
+
+def complete_capture(marker: Path) -> None:
+    marker.unlink()
+
+
+def require_capture_complete(evidence: Path) -> None:
+    marker = capture_marker(evidence)
+    if marker.exists():
+        raise ValueError(
+            f"capture evidence is invalidated by an incomplete capture: {evidence}"
+        )
 
 
 def executable(path: Path) -> Path:
@@ -588,12 +639,20 @@ def status(args: argparse.Namespace) -> int:
 def capture(args: argparse.Namespace) -> int:
     root = repository_root()
     evidence = ensure_external(args.evidence_dir, root, "--evidence-dir")
+    if args.execute:
+        marker = begin_capture(evidence)
+    else:
+        ensure_capture_directory_empty(evidence)
+        marker = None
     root, child, _, registration, provenance, probe = target_context(args, "capture", root)
     request = request_document(registration, probe, args, provenance, "0" * 64)
     command = [str(child), "capture-plan", "--request", json.dumps(request, separators=(",", ":")), "--out", str(evidence)]
     command_text(command)
     if args.execute:
         subprocess.run(command, cwd=root, check=True)
+        if marker is None:
+            raise ValueError("capture marker is missing")
+        complete_capture(marker)
     else:
         print("Dry run only. Re-run with --execute to capture provider-native evidence.")
     return 0
@@ -602,6 +661,7 @@ def capture(args: argparse.Namespace) -> int:
 def correctness(args: argparse.Namespace) -> int:
     root = repository_root()
     evidence = ensure_external(args.evidence_dir, root, "--evidence-dir")
+    require_capture_complete(evidence)
     output = ensure_external(args.out, root, "--out")
     root, child, _, registration, provenance, probe = target_context(args, "correctness", root)
     path = evidence / evidence_reference(args)
@@ -621,6 +681,7 @@ def correctness(args: argparse.Namespace) -> int:
 def measure(args: argparse.Namespace) -> int:
     root = repository_root()
     evidence = ensure_external(args.evidence_dir, root, "--evidence-dir")
+    require_capture_complete(evidence)
     output = ensure_external(args.out, root, "--out")
     root, child, harness, registration, provenance, probe = target_context(args, "measure", root)
     path = evidence / evidence_reference(args)

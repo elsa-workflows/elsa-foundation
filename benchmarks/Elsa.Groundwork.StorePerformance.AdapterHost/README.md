@@ -141,15 +141,15 @@ and writes the content digest the matrix request must carry. It does not claim a
 observation during correctness, and `ValidateCorrectness` requires it to equal the request exactly; stale,
 hand-edited, or cross-provider metadata therefore blocks the run.
 
-For PostgreSQL and SQL Server, the native handshake proves the server product/version but cannot prove that
-the endpoint is the intended container. The launcher must therefore independently inspect the container and
-export its image digest as `ELSA_BENCH_POSTGRES_CONTAINER_ATTESTATION` or
-`ELSA_BENCH_SQLSERVER_CONTAINER_ATTESTATION` (`sha256:<64-hex-digest>`) before probing. The probe binds that
-attestation into the sanitized provider configuration as `container_image_digest`; the exact value must be
-copied into the request and evidence. The projection also includes an `options_digest` of the complete
-canonical connection options, so any setting not individually named cannot silently compare equal. An
-arbitrary server handshake is consequently never sufficient to
-claim the frozen `real-*-container` topology.
+For PostgreSQL, SQL Server, and MongoDB, the native handshake proves the server product/version but cannot
+prove that the endpoint is the intended container. The launcher must therefore independently inspect the
+container and export its image digest as `ELSA_BENCH_POSTGRES_CONTAINER_ATTESTATION`,
+`ELSA_BENCH_SQLSERVER_CONTAINER_ATTESTATION`, or `ELSA_BENCH_MONGO_CONTAINER_ATTESTATION`
+(`sha256:<64-hex-digest>`) before probing. The probe binds that attestation into the sanitized provider
+configuration as `container_image_digest`; the exact value must be copied into the request and evidence.
+The projection also includes an `options_digest` of the complete canonical connection options, so any
+setting not individually named cannot silently compare equal. An arbitrary server handshake is
+consequently never sufficient to claim a frozen real-container topology.
 
 ### The composition, for reference
 

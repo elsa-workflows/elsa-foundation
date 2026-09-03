@@ -209,20 +209,23 @@ internal static class ProviderProbe
         var version = buildInfo.TryGetValue("version", out var value) && value.BsonType == BsonType.String
             ? value.AsString
             : throw new PerformanceContractException("MongoDB hello succeeded but buildInfo did not expose a server version.");
+        var containerDigest = RequireContainerAttestation("mongodb");
 
         return new Result(
             "mongodb",
             connectionType,
             version,
             MongoTopology(hello),
-            MongoConfiguration(settings, connectionString));
+            MongoConfiguration(settings, connectionString, containerDigest));
     }
 
     internal static IReadOnlyDictionary<string, string> MongoConfiguration(
         MongoClientSettings settings,
-        string connectionString) =>
+        string connectionString,
+        string containerImageDigest) =>
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
+            ["container_image_digest"] = ValidateContainerAttestation("mongodb", containerImageDigest),
             ["retry_reads"] = settings.RetryReads.ToString(),
             ["retry_writes"] = settings.RetryWrites.ToString(),
             ["direct_mode"] = settings.DirectConnection.ToString(),
@@ -291,6 +294,7 @@ internal static class ProviderProbe
     {
         "postgresql" => "ELSA_BENCH_POSTGRES_CONTAINER_ATTESTATION",
         "sqlserver" => "ELSA_BENCH_SQLSERVER_CONTAINER_ATTESTATION",
+        "mongodb" => "ELSA_BENCH_MONGO_CONTAINER_ATTESTATION",
         _ => throw new PerformanceContractException($"Provider '{provider}' does not support container attestation.")
     };
 
