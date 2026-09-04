@@ -214,6 +214,40 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
     }
 
     [Fact]
+    public async Task Durability_poll_counts_repeated_catalog_upserts_once()
+    {
+        var diagnostics = EmptyDiagnostics() with
+        {
+            ResourceCount = 1,
+            MetricInstrumentCount = 1
+        };
+        var tracking = new DiagnosticsDurableHistoryAdapter.TrackingOpenTelemetryStore(
+            new ProbeOpenTelemetryStore(diagnostics),
+            TimeSpan.FromMilliseconds(20));
+        var resource = new TelemetryResource(
+            "resource-1",
+            "service-1",
+            null,
+            null,
+            new Dictionary<string, string?>(),
+            DateTimeOffset.UtcNow,
+            TelemetryResourceStatus.Active);
+        var instrument = new MetricInstrument(
+            "instrument-1",
+            resource.Id,
+            "duration",
+            "ms",
+            null,
+            MetricKind.Gauge,
+            new Dictionary<string, string?>());
+        var batch = new OpenTelemetryBatch([resource], [], [], [instrument], [], []);
+
+        await tracking.WriteAsync(batch);
+        await tracking.WriteAsync(batch);
+        await tracking.WaitForDurabilityAsync(CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Durability_poll_enforces_its_deadline_when_a_provider_probe_never_completes()
     {
         var store = new ProbeOpenTelemetryStore(blockDiagnostics: true);

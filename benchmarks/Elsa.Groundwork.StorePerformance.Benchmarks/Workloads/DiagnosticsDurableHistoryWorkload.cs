@@ -652,8 +652,10 @@ public sealed class DiagnosticsDurableHistoryWorkload
     {
         var normalizedInvocation = invocation < 0 ? checked(-invocation - 1) : invocation;
         // Give every operation a non-overlapping 30M-record band and every invocation a full batch-sized
-        // slice. A one-record stride would make adjacent invocations overwrite 63 of their 64 signals.
+        // slice beyond the correctness fixture. A one-record stride would make adjacent invocations
+        // overwrite 63 of their 64 signals, while starting at zero would overwrite the secondary seed.
         return checked(
+            AppendedRecordsPerStream +
             operation * 30_000_000 +
             (int)(normalizedInvocation % 400_000) * NormalizedRecordsPerOtlpBatch);
     }

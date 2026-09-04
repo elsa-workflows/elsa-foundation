@@ -169,6 +169,21 @@ public sealed class DiagnosticsDurableHistoryWorkloadTests
     }
 
     [Fact]
+    public async Task Measured_open_telemetry_identities_do_not_overwrite_the_correctness_seed()
+    {
+        var adapter = new MeasuredAdapter();
+        var operations = await new DiagnosticsDurableHistoryWorkload().PrepareMeasuredOperationsAsync(adapter);
+        var operation = Assert.Single(operations, operation => operation.Id == "seed-cross-scope-diagnostic-history");
+
+        await operation.InvokeAsync(0);
+
+        var batch = Assert.Single(adapter.SecondaryOpenTelemetry.Batches);
+        Assert.DoesNotContain(
+            DiagnosticsDurableHistoryWorkload.TraceIdForTesting(0),
+            batch.Traces.Select(trace => trace.TraceId));
+    }
+
+    [Fact]
     public async Task Reopen_operations_open_a_fresh_client_inside_each_invocation()
     {
         var adapter = new MeasuredAdapter();

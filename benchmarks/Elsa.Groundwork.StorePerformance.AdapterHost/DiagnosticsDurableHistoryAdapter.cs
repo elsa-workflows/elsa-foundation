@@ -404,24 +404,11 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
         IOpenTelemetryStore inner,
         TimeSpan? durabilityTimeout = null) : IOpenTelemetryStore
     {
-        private int expectedTraces;
-        private int expectedSpans;
-        private int expectedPoints;
-        private int expectedLogs;
-        private int expectedResources;
-        private int expectedInstruments;
-        private string? expectedTraceProbeId;
+        private readonly OpenTelemetryDurabilityExpectations expectations = new();
 
         public ValueTask WriteAsync(OpenTelemetryBatch batch, CancellationToken cancellationToken = default)
         {
-            Interlocked.Add(ref expectedTraces, batch.Traces.Count);
-            Interlocked.Add(ref expectedSpans, batch.Spans.Count);
-            Interlocked.Add(ref expectedPoints, batch.MetricPoints.Count);
-            Interlocked.Add(ref expectedLogs, batch.Logs.Count);
-            Interlocked.Add(ref expectedResources, batch.Resources.Count);
-            Interlocked.Add(ref expectedInstruments, batch.Instruments.Count);
-            if (OpenTelemetryDurabilityProbe.SelectTraceId(batch) is { } traceProbeId)
-                Volatile.Write(ref expectedTraceProbeId, traceProbeId);
+            expectations.Record(batch);
             return inner.WriteAsync(batch, cancellationToken);
         }
 
@@ -434,13 +421,7 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
 
         public async Task WaitForDurabilityAsync(CancellationToken cancellationToken)
         {
-            var traces = Volatile.Read(ref expectedTraces);
-            var spans = Volatile.Read(ref expectedSpans);
-            var points = Volatile.Read(ref expectedPoints);
-            var logs = Volatile.Read(ref expectedLogs);
-            var resources = Volatile.Read(ref expectedResources);
-            var instruments = Volatile.Read(ref expectedInstruments);
-            var traceProbeId = Volatile.Read(ref expectedTraceProbeId);
+            var target = expectations.Read();
             var deadline = DateTime.UtcNow + (durabilityTimeout ?? TimeSpan.FromMinutes(30));
             var timeoutMessage = "OpenTelemetry durability did not become visible within the untimed flush budget.";
             while (true)
@@ -460,12 +441,12 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
                         $"(traces: {diagnostics.DroppedTraceCount}, spans: {diagnostics.DroppedSpanCount}, " +
                         $"metric points: {diagnostics.DroppedMetricPointCount}, logs: {diagnostics.DroppedLogRecordCount}).");
                 }
-                var expectedTraceCount = Math.Min(traces, diagnostics.TraceCapacity);
-                var expectedSpanCount = Math.Min(spans, diagnostics.SpanCapacity);
-                var expectedPointCount = Math.Min(points, diagnostics.MetricPointCapacity);
-                var expectedLogCount = Math.Min(logs, diagnostics.LogRecordCapacity);
-                var expectedResourceCount = Math.Min(resources, DiagnosticsDurableHistoryWorkload.ResourceCount);
-                var expectedInstrumentCount = Math.Min(instruments, DiagnosticsDurableHistoryWorkload.InstrumentCount);
+                var expectedTraceCount = Math.Min(target.Traces, diagnostics.TraceCapacity);
+                var expectedSpanCount = Math.Min(target.Spans, diagnostics.SpanCapacity);
+                var expectedPointCount = Math.Min(target.Points, diagnostics.MetricPointCapacity);
+                var expectedLogCount = Math.Min(target.Logs, diagnostics.LogRecordCapacity);
+                var expectedResourceCount = Math.Min(target.Resources, DiagnosticsDurableHistoryWorkload.ResourceCount);
+                var expectedInstrumentCount = Math.Min(target.Instruments, DiagnosticsDurableHistoryWorkload.InstrumentCount);
                 timeoutMessage =
                     "OpenTelemetry durability did not become visible within the untimed flush budget. " +
                     $"Observed/required counts: traces {diagnostics.TraceCount}/{expectedTraceCount}, " +
@@ -474,15 +455,15 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
                     $"logs {diagnostics.LogRecordCount}/{expectedLogCount}, " +
                     $"resources {diagnostics.ResourceCount}/{expectedResourceCount}, " +
                     $"instruments {diagnostics.MetricInstrumentCount}/{expectedInstrumentCount}; " +
-                    $"trace probe {(traceProbeId is null ? "not required" : "not yet checked or visible")}.";
+                    $"trace probe {(target.TraceProbeId is null ? "not required" : "not yet checked or visible")}.";
                 if (diagnostics.TraceCount >= expectedTraceCount &&
                     diagnostics.SpanCount >= expectedSpanCount &&
                     diagnostics.MetricPointCount >= expectedPointCount &&
                     diagnostics.LogRecordCount >= expectedLogCount &&
                     diagnostics.ResourceCount >= expectedResourceCount &&
                     diagnostics.MetricInstrumentCount >= expectedInstrumentCount &&
-                    (traceProbeId is null || await ReadDurabilityProbeAsync(
-                        token => inner.GetTraceAsync(traceProbeId, token),
+                    (target.TraceProbeId is null || await ReadDurabilityProbeAsync(
+                        token => inner.GetTraceAsync(target.TraceProbeId, token),
                         deadline,
                         timeoutMessage,
                         cancellationToken) is not null))
