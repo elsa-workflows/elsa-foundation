@@ -45,7 +45,7 @@ public static class SolutionFilterGenerator
             };
 
             var outputPath = Normalize(profile.OutputPath);
-            var absoluteOutputPath = Path.Combine(outputRoot, outputPath.Replace('/', Path.DirectorySeparatorChar));
+            var absoluteOutputPath = Path.Join(outputRoot, outputPath.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(absoluteOutputPath)!);
             File.WriteAllText(absoluteOutputPath, JsonSerializer.Serialize(document, FilterJsonOptions) + "\n");
             written.Add(outputPath);
@@ -69,14 +69,14 @@ public static class SolutionFilterGenerator
     /// <summary>Returns zero when committed filters match freshly generated output, one otherwise.</summary>
     public static int Check(RepoContext repo)
     {
-        var scratch = Path.Combine(Path.GetTempPath(), $"elsa-solution-filters-check-{Environment.ProcessId}");
+        var scratch = Path.Join(Path.GetTempPath(), $"elsa-solution-filters-check-{Environment.ProcessId}");
 
         try
         {
             Directory.CreateDirectory(scratch);
             var generated = Generate(repo, scratch);
             var stale = generated
-                .Where(path => !SameBytes(repo.Absolute(path), Path.Combine(scratch, path.Replace('/', Path.DirectorySeparatorChar))))
+                .Where(path => !SameBytes(repo.Absolute(path), Path.Join(scratch, path.Replace('/', Path.DirectorySeparatorChar))))
                 .Concat(Directory.GetFiles(repo.Root, "Elsa.Server.*.slnf", SearchOption.TopDirectoryOnly)
                     .Select(Path.GetFileName)
                     .OfType<string>()
