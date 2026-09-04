@@ -354,8 +354,9 @@ public static class DiagnosticsNativePlanContract
             throw new PerformanceContractException(
                 $"Diagnostics route '{specification.RouteIdentity}' may use '{BoundedMongoScanSortPlanClassification}' only for the frozen MongoDB resource catalog routes.");
 
+        IReadOnlyList<(string Column, RuntimeNativeOrderDirection Direction)>? mongoCommandOrdering = null;
         if (string.Equals(provider, "mongodb", StringComparison.Ordinal))
-            ValidateMongoCommand(artifact.CommandText, specification, artifact.NativePlan);
+            mongoCommandOrdering = ValidateMongoCommand(artifact.CommandText, specification, artifact.NativePlan);
         else
             ValidateSqlCommand(artifact.CommandText, specification);
 
@@ -372,7 +373,11 @@ public static class DiagnosticsNativePlanContract
                 break;
             case "mongodb":
                 if (string.Equals(route.PlanClassification, BoundedMongoScanSortPlanClassification, StringComparison.Ordinal))
-                    ValidateMongoBoundedScanSortPlan(artifact.NativePlan, specification);
+                    ValidateMongoBoundedScanSortPlan(
+                        artifact.NativePlan,
+                        specification,
+                        mongoCommandOrdering ?? throw new PerformanceContractException(
+                            $"Diagnostics route '{specification.RouteIdentity}' MongoDB command ordering was not retained for plan validation."));
                 else
                     ValidateMongoPlan(artifact.NativePlan, specification, physicalIndexName);
                 break;
@@ -869,7 +874,7 @@ public static class DiagnosticsNativePlanContract
         }
     }
 
-    private static void ValidateMongoCommand(
+    private static IReadOnlyList<(string Column, RuntimeNativeOrderDirection Direction)> ValidateMongoCommand(
         string command,
         DiagnosticsNativeRouteSpec specification,
         string rawPlan)
@@ -890,10 +895,9 @@ public static class DiagnosticsNativePlanContract
         var collection = (isAggregate ? aggregate : find).GetString();
         ValidateMongoPhysicalCollection(collection, specification);
 
-        if (isAggregate)
-            ValidateMongoAggregateCommand(actual, specification);
-        else
-            ValidateMongoFindCommand(actual, specification);
+        return isAggregate
+            ? ValidateMongoAggregateCommand(actual, specification)
+            : ValidateMongoFindCommand(actual, specification);
     }
 
     private static void ValidateMongoPhysicalCollection(string? collection, DiagnosticsNativeRouteSpec specification)
@@ -918,7 +922,9 @@ public static class DiagnosticsNativePlanContract
                 $"Diagnostics route '{routeIdentity}' MongoDB command does not bind the exact scoped physical collection name.");
     }
 
-    private static void ValidateMongoAggregateCommand(JsonElement command, DiagnosticsNativeRouteSpec specification)
+    private static IReadOnlyList<(string Column, RuntimeNativeOrderDirection Direction)> ValidateMongoAggregateCommand(
+        JsonElement command,
+        DiagnosticsNativeRouteSpec specification)
     {
         if (!command.TryGetProperty("pipeline", out var pipeline) || pipeline.ValueKind != JsonValueKind.Array ||
             !command.TryGetProperty("cursor", out var cursor) || cursor.ValueKind != JsonValueKind.Object)
@@ -955,9 +961,13 @@ public static class DiagnosticsNativePlanContract
             finiteLimit != specification.FiniteLimit)
             throw new PerformanceContractException(
                 $"Diagnostics route '{specification.RouteIdentity}' MongoDB aggregate command does not bind its finite page limit.");
+
+        return ParseMongoOrdering(sortStages[0]);
     }
 
-    private static void ValidateMongoFindCommand(JsonElement command, DiagnosticsNativeRouteSpec specification)
+    private static IReadOnlyList<(string Column, RuntimeNativeOrderDirection Direction)> ValidateMongoFindCommand(
+        JsonElement command,
+        DiagnosticsNativeRouteSpec specification)
     {
         if (!command.TryGetProperty("filter", out var filter) || filter.ValueKind != JsonValueKind.Object ||
             !ValidateMongoRoutePredicate(filter, specification))
@@ -977,6 +987,8 @@ public static class DiagnosticsNativePlanContract
             finiteLimit != specification.FiniteLimit)
             throw new PerformanceContractException(
                 $"Diagnostics route '{specification.RouteIdentity}' MongoDB find command does not bind its complete ordering and finite page limit.");
+
+        return ParseMongoOrdering(sort);
     }
 
     private static bool ValidateMongoRoutePredicate(JsonElement filter, DiagnosticsNativeRouteSpec specification)
@@ -1108,13 +1120,85 @@ public static class DiagnosticsNativePlanContract
         if (expected is null)
             return false;
 
-        var setFields = pipeline.EnumerateArray()
-            .Where(stage => stage.ValueKind == JsonValueKind.Object && stage.TryGetProperty("$set", out _))
-            .SelectMany(stage => stage.GetProperty("$set").EnumerateObject().Select(property => property.Name))
-            .ToHashSet(StringComparer.Ordinal);
+        var setFields = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        foreach (var stage in pipeline.EnumerateArray())
+        {
+            if (stage.ValueKind != JsonValueKind.Object)
+                continue;
+            if (stage.TryGetProperty("$sort", out _))
+                break;
+            if (!stage.TryGetProperty("$set", out var set) || set.ValueKind != JsonValueKind.Object)
+                continue;
+            foreach (var property in set.EnumerateObject())
+            {
+                if (!setFields.TryAdd(property.Name, property.Value))
+                    return false;
+            }
+        }
         return expected
             .Where(term => term.Column.StartsWith("_groundwork_", StringComparison.Ordinal))
-            .All(term => setFields.Contains(term.Column));
+            .All(term => setFields.TryGetValue(term.Column, out var value) &&
+                         ValidateMongoOrderingHelper(term.Column, value, specification));
+    }
+
+    private const string MongoOrdinalKeyFunctionBody =
+        "function(value) { if (value === null || value === undefined) return null; var key = ''; for (var i = 0; i < value.length; i++) { var unit = value.charCodeAt(i).toString(16); key += ('0000' + unit).slice(-4); } return key; }";
+
+    private static bool ValidateMongoOrderingHelper(
+        string helperName,
+        JsonElement value,
+        DiagnosticsNativeRouteSpec specification)
+    {
+        const string nullRankPrefix = "_groundwork_null_rank_";
+        const string ordinalKeyPrefix = "_groundwork_ordinal_key_";
+        var prefix = helperName.StartsWith(nullRankPrefix, StringComparison.Ordinal)
+            ? nullRankPrefix
+            : helperName.StartsWith(ordinalKeyPrefix, StringComparison.Ordinal)
+                ? ordinalKeyPrefix
+                : null;
+        if (prefix is null ||
+            !int.TryParse(helperName[prefix.Length..], out var index) ||
+            index < 0 || index >= specification.EffectiveOrdering.Count)
+            return false;
+
+        var source = "$" + specification.EffectiveOrdering[index].Column;
+        return prefix == nullRankPrefix
+            ? ValidateMongoNullRankHelper(value, source)
+            : ValidateMongoOrdinalKeyHelper(value, source);
+    }
+
+    private static bool ValidateMongoNullRankHelper(JsonElement value, string source)
+    {
+        if (value.ValueKind != JsonValueKind.Object || value.EnumerateObject().Count() != 1 ||
+            !value.TryGetProperty("$cond", out var condition) || condition.ValueKind != JsonValueKind.Array)
+            return false;
+        var terms = condition.EnumerateArray().ToArray();
+        if (terms.Length != 3 || terms[0].ValueKind != JsonValueKind.Object ||
+            terms[0].EnumerateObject().Count() != 1 ||
+            !terms[0].TryGetProperty("$eq", out var equality) || equality.ValueKind != JsonValueKind.Array)
+            return false;
+        var operands = equality.EnumerateArray().ToArray();
+        return operands.Length == 2 &&
+               operands[0].ValueKind == JsonValueKind.String && operands[0].GetString() == source &&
+               operands[1].ValueKind == JsonValueKind.Null &&
+               terms[1].TryGetInt32(out var firstRank) &&
+               terms[2].TryGetInt32(out var secondRank) &&
+               firstRank is 0 or 1 && secondRank is 0 or 1 && firstRank != secondRank;
+    }
+
+    private static bool ValidateMongoOrdinalKeyHelper(JsonElement value, string source)
+    {
+        if (value.ValueKind != JsonValueKind.Object || value.EnumerateObject().Count() != 1 ||
+            !value.TryGetProperty("$function", out var function) || function.ValueKind != JsonValueKind.Object ||
+            function.EnumerateObject().Count() != 3 ||
+            !function.TryGetProperty("body", out var body) || body.ValueKind != JsonValueKind.String ||
+            body.GetString() != MongoOrdinalKeyFunctionBody ||
+            !function.TryGetProperty("lang", out var language) || language.ValueKind != JsonValueKind.String ||
+            language.GetString() != "js" ||
+            !function.TryGetProperty("args", out var arguments) || arguments.ValueKind != JsonValueKind.Array)
+            return false;
+        var values = arguments.EnumerateArray().ToArray();
+        return values.Length == 1 && values[0].ValueKind == JsonValueKind.String && values[0].GetString() == source;
     }
 
     private static IReadOnlyList<(string Column, RuntimeNativeOrderDirection Direction)> ExpectedMongoRenderedOrdering(
@@ -1226,7 +1310,8 @@ public static class DiagnosticsNativePlanContract
 
     private static void ValidateMongoBoundedScanSortPlan(
         string plan,
-        DiagnosticsNativeRouteSpec specification)
+        DiagnosticsNativeRouteSpec specification,
+        IReadOnlyList<(string Column, RuntimeNativeOrderDirection Direction)> commandOrdering)
     {
         using var document = ParseJson(plan, "MongoDB");
         var winningPlans = FindPropertyValues(document.RootElement, "winningPlan").ToArray();
@@ -1251,10 +1336,7 @@ public static class DiagnosticsNativePlanContract
         var sortStages = stages.Where(stage => string.Equals(MongoStageName(stage), "SORT", StringComparison.OrdinalIgnoreCase)).ToArray();
         if (sortStages.Length != 1 ||
             !sortStages[0].TryGetProperty("sortPattern", out var sortPattern) ||
-            !ValidateMongoOrdering(sortPattern, specification) &&
-            !OrderingMatches(
-                ParseMongoOrdering(sortPattern),
-                ExpectedMongoRenderedOrdering(specification, includeNullRanks: false, usePersistedOrderKeys: true)))
+            !OrderingMatches(ParseMongoOrdering(sortPattern), commandOrdering))
             throw BlockedPlan(specification, "MongoDB bounded scan/sort plan does not bind its complete effective ordering");
 
         var limits = FindObjects(winningPlans[0], "limitAmount").ToArray();
