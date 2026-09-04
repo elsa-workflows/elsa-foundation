@@ -35,6 +35,8 @@ public static class SolutionFilterGenerator
 
             var roots = solution.Projects.Values
                 .Where(project => Matches(project, profile))
+                .Where(project => !manifest.ExcludeRootPathPrefixes.Any(project.Path.StartsWith))
+                .Where(project => !profile.ExcludeRootPathContains.Any(project.Path.Contains))
                 .Where(project => profile.RequireProjectFileContains.Count == 0 ||
                                   profile.RequireProjectFileContains.Any(project.Content.Contains))
                 .Where(project => !profile.ExcludeWhenProjectFileContains.Any(project.Content.Contains))
@@ -246,6 +248,7 @@ public static class SolutionFilterGenerator
 public sealed class SolutionFilterManifest
 {
     public string SolutionPath { get; init; } = string.Empty;
+    public IReadOnlyList<string> ExcludeRootPathPrefixes { get; init; } = [];
     public IReadOnlyList<SolutionFilterProfile> Profiles { get; init; } = [];
 }
 
@@ -255,6 +258,7 @@ public sealed class SolutionFilterProfile
     public IReadOnlyList<string> IncludeProjectNames { get; init; } = [];
     public IReadOnlyList<string> IncludeProjectNamePrefixes { get; init; } = [];
     public IReadOnlyList<string> IncludeProjectNameContains { get; init; } = [];
+    public IReadOnlyList<string> ExcludeRootPathContains { get; init; } = [];
     public IReadOnlyList<string> RequireProjectFileContains { get; init; } = [];
     public IReadOnlyList<string> ExcludeWhenProjectFileContains { get; init; } = [];
 }

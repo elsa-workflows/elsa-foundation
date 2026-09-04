@@ -2,8 +2,6 @@
   "solution": {
     "path": "Elsa.Server.slnx",
     "projects": [
-      "benchmarks/Elsa/Activities/Runtime/Benchmarks/Elsa.Activities.Runtime.Benchmarks.csproj",
-      "benchmarks/Elsa/Workflows/Runtime/Benchmarks/Elsa.Workflows.Runtime.Benchmarks.csproj",
       "src/Elsa/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj",
       "src/Elsa/Activities/Design/Core/Elsa.Activities.Design.Core.csproj",
       "src/Elsa/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj",
@@ -61,7 +59,6 @@
       "tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj",
       "tests/Elsa/Activities/Testing/Elsa.Activities.Testing.csproj",
       "tests/Elsa/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj",
-      "tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj",
       "tests/Elsa/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj",
       "tests/Elsa/Workflows/Runtime/Attention/Tests/Elsa.Workflows.Runtime.Attention.Tests.csproj",
       "tests/Elsa/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj",

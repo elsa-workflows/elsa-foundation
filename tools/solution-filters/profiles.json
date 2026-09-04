@@ -1,5 +1,10 @@
 {
   "solutionPath": "Elsa.Server.slnx",
+  "excludeRootPathPrefixes": [
+    "benchmarks/",
+    "samples/",
+    "tools/"
+  ],
   "profiles": [
     {
       "outputPath": "Elsa.Server.Workflows.Publishing.slnf",
@@ -44,6 +49,9 @@
       "includeProjectNameContains": [
         "Groundwork"
       ],
+      "excludeRootPathContains": [
+        "/StorePerformance/"
+      ],
       "excludeWhenProjectFileContains": [
         "Testcontainers"
       ]
@@ -52,6 +60,9 @@
       "outputPath": "Elsa.Server.Persistence.Groundwork.Integration.slnf",
       "includeProjectNameContains": [
         "Groundwork"
+      ],
+      "excludeRootPathContains": [
+        "/StorePerformance/"
       ],
       "requireProjectFileContains": [
         "Testcontainers"
