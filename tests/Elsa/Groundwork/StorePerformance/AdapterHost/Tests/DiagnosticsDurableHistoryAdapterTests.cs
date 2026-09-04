@@ -184,7 +184,9 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
     public async Task Durability_poll_timeout_reports_the_last_observed_and_required_counts()
     {
         var store = new ProbeOpenTelemetryStore();
-        var tracking = new DiagnosticsDurableHistoryAdapter.TrackingOpenTelemetryStore(store, TimeSpan.Zero);
+        var tracking = new DiagnosticsDurableHistoryAdapter.TrackingOpenTelemetryStore(
+            store,
+            TimeSpan.FromMilliseconds(20));
         await tracking.WriteAsync(new OpenTelemetryBatch(
             Resources:
             [
@@ -206,9 +208,24 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
         var exception = await Assert.ThrowsAsync<PerformanceContractException>(
             () => tracking.WaitForDurabilityAsync(CancellationToken.None));
 
-        Assert.Equal(1, store.DiagnosticsReadCount);
+        Assert.InRange(store.DiagnosticsReadCount, 1, 2);
         Assert.Contains("resources 0/1", exception.Message, StringComparison.Ordinal);
         Assert.Contains("last trace not required", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Durability_poll_enforces_its_deadline_when_a_provider_probe_never_completes()
+    {
+        var store = new ProbeOpenTelemetryStore(blockDiagnostics: true);
+        var tracking = new DiagnosticsDurableHistoryAdapter.TrackingOpenTelemetryStore(
+            store,
+            TimeSpan.FromMilliseconds(20));
+
+        var exception = await Assert.ThrowsAsync<PerformanceContractException>(
+            () => tracking.WaitForDurabilityAsync(CancellationToken.None)).WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Contains("untimed flush budget", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(1, store.DiagnosticsReadCount);
     }
 
     [Fact]
@@ -571,8 +588,12 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
 
     private sealed class ProbeOpenTelemetryStore(
         OpenTelemetryStorageDiagnostics? diagnostics = null,
-        bool throwTransientLock = false) : IOpenTelemetryStore
+        bool throwTransientLock = false,
+        bool blockDiagnostics = false) : IOpenTelemetryStore
     {
+        private readonly TaskCompletionSource<OpenTelemetryStorageDiagnostics> blockedDiagnostics =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public int DiagnosticsReadCount { get; private set; }
 
         public ValueTask WriteAsync(OpenTelemetryBatch batch, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
@@ -586,6 +607,8 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             DiagnosticsReadCount++;
+            if (blockDiagnostics)
+                return new ValueTask<OpenTelemetryStorageDiagnostics>(blockedDiagnostics.Task);
             if (throwTransientLock && DiagnosticsReadCount == 1)
                 throw new SqliteException("database schema is locked: main", 6, 6);
 

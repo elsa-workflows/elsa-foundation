@@ -419,7 +419,7 @@ jobs:
         run: |
           set -euo pipefail
           sqlite_file="$DIAGNOSTICS_WORK_ROOT/diagnostics.sqlite"
-          rm -f -- "$sqlite_file" "$sqlite_file-shm" "$sqlite_file-wal"
+          rm -f -- "$sqlite_file" "$sqlite_file-shm" "$sqlite_file-wal" "$sqlite_file-journal"
 
       # The runner performs its own fail-closed require_idle_host check immediately before spawning the
       # timed matrix. It must be the only build/test process on this dedicated provider host.

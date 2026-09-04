@@ -245,15 +245,28 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
     {
         while (true)
         {
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+                throw new PerformanceContractException(timeoutMessage);
+            using var deadlineTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadlineTokenSource.CancelAfter(remaining);
             try
             {
-                return await read(cancellationToken);
+                return await read(deadlineTokenSource.Token).AsTask().WaitAsync(remaining, cancellationToken);
             }
             catch (SqliteException exception) when (exception.SqliteErrorCode is 5 or 6)
             {
                 if (DateTime.UtcNow >= deadline)
                     throw new PerformanceContractException(timeoutMessage);
                 await Task.Delay(50, cancellationToken);
+            }
+            catch (TimeoutException)
+            {
+                throw new PerformanceContractException(timeoutMessage);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new PerformanceContractException(timeoutMessage);
             }
         }
     }
@@ -429,12 +442,13 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
             var instruments = Volatile.Read(ref expectedInstruments);
             var lastTraceId = expectedLastTraceId;
             var deadline = DateTime.UtcNow + (durabilityTimeout ?? TimeSpan.FromMinutes(30));
+            var timeoutMessage = "OpenTelemetry durability did not become visible within the untimed flush budget.";
             while (true)
             {
                 var diagnostics = await ReadDurabilityProbeAsync(
                     inner.GetDiagnosticsAsync,
                     deadline,
-                    "OpenTelemetry durability did not become visible within the untimed flush budget.",
+                    timeoutMessage,
                     cancellationToken);
                 if (diagnostics.DroppedTraceCount != 0 ||
                     diagnostics.DroppedSpanCount != 0 ||
@@ -452,6 +466,15 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
                 var expectedLogCount = Math.Min(logs, diagnostics.LogRecordCapacity);
                 var expectedResourceCount = Math.Min(resources, DiagnosticsDurableHistoryWorkload.ResourceCount);
                 var expectedInstrumentCount = Math.Min(instruments, DiagnosticsDurableHistoryWorkload.InstrumentCount);
+                timeoutMessage =
+                    "OpenTelemetry durability did not become visible within the untimed flush budget. " +
+                    $"Observed/required counts: traces {diagnostics.TraceCount}/{expectedTraceCount}, " +
+                    $"spans {diagnostics.SpanCount}/{expectedSpanCount}, " +
+                    $"metric points {diagnostics.MetricPointCount}/{expectedPointCount}, " +
+                    $"logs {diagnostics.LogRecordCount}/{expectedLogCount}, " +
+                    $"resources {diagnostics.ResourceCount}/{expectedResourceCount}, " +
+                    $"instruments {diagnostics.MetricInstrumentCount}/{expectedInstrumentCount}; " +
+                    $"last trace {(lastTraceId is null ? "not required" : "not yet checked or visible")}.";
                 if (diagnostics.TraceCount >= expectedTraceCount &&
                     diagnostics.SpanCount >= expectedSpanCount &&
                     diagnostics.MetricPointCount >= expectedPointCount &&
@@ -461,19 +484,11 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
                     (lastTraceId is null || await ReadDurabilityProbeAsync(
                         token => inner.GetTraceAsync(lastTraceId, token),
                         deadline,
-                        "OpenTelemetry durability did not become visible within the untimed flush budget.",
+                        timeoutMessage,
                         cancellationToken) is not null))
                     return;
                 if (DateTime.UtcNow >= deadline)
-                    throw new PerformanceContractException(
-                        "OpenTelemetry durability did not become visible within the untimed flush budget. " +
-                        $"Observed/required counts: traces {diagnostics.TraceCount}/{expectedTraceCount}, " +
-                        $"spans {diagnostics.SpanCount}/{expectedSpanCount}, " +
-                        $"metric points {diagnostics.MetricPointCount}/{expectedPointCount}, " +
-                        $"logs {diagnostics.LogRecordCount}/{expectedLogCount}, " +
-                        $"resources {diagnostics.ResourceCount}/{expectedResourceCount}, " +
-                        $"instruments {diagnostics.MetricInstrumentCount}/{expectedInstrumentCount}; " +
-                        $"last trace {(lastTraceId is null ? "not required" : "not yet checked or visible")}.");
+                    throw new PerformanceContractException(timeoutMessage);
                 await Task.Delay(50, cancellationToken);
             }
         }

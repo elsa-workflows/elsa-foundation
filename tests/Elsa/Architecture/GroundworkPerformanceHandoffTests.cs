@@ -318,7 +318,7 @@ public sealed class GroundworkPerformanceHandoffTests
         var sqliteResetStep = job[correctnessEnd..timingPreparationEnd];
         Assert.Contains("if: ${{ matrix.provider == 'sqlite' }}", sqliteResetStep, StringComparison.Ordinal);
         Assert.Contains(
-            "rm -f -- \"$sqlite_file\" \"$sqlite_file-shm\" \"$sqlite_file-wal\"",
+            "rm -f -- \"$sqlite_file\" \"$sqlite_file-shm\" \"$sqlite_file-wal\" \"$sqlite_file-journal\"",
             sqliteResetStep,
             StringComparison.Ordinal);
         var measurementStart = job.IndexOf("      - name: Measure diagnostics evidence", timingPreparationEnd, StringComparison.Ordinal);
