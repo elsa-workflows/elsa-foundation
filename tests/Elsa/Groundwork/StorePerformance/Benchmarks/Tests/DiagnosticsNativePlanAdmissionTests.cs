@@ -1948,6 +1948,30 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         DiagnosticsNativePlanContract.ValidateEnvelope("sqlite", fixture.Adapter, fixture.Route, fixture.Path);
     }
 
+    [Fact]
+    public void Groundwork_PostgreSql_replay_admits_the_renderer_parenthesized_collated_scope()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "structured-log-replay");
+        var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("postgresql", specification);
+        using var fixture = Fixture.Create(
+            "postgresql",
+            specification.RouteIdentity,
+            command:
+                "SELECT * FROM \"elsa_structured_logs\" WHERE " +
+                "((\"sequence\" IS NOT NULL AND \"sequence\" > @p0 AND \"sequence\" <= @p1) AND " +
+                "((\"__groundwork_scope\" COLLATE \"C\") IS NOT NULL AND " +
+                "(\"__groundwork_scope\" COLLATE \"C\") = @p2)) " +
+                "ORDER BY \"sequence\" ASC NULLS FIRST LIMIT @p3;",
+            nativePlan:
+                $"[{{\"Plan\":{{\"Node Type\":\"Index Scan\",\"Relation Name\":\"elsa_structured_logs\"," +
+                $"\"Index Name\":\"{physicalIndex}\"}}}}]");
+
+        DiagnosticsNativePlanContract.ValidateEnvelope(
+            "postgresql", fixture.Adapter, fixture.Route, fixture.Path);
+    }
+
     [Theory]
     [InlineData("sequence > @p1")]
     [InlineData("sequence > @p1 AND sequence <= @p2 AND category = @p3")]
