@@ -75,17 +75,33 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
     public async Task<CorrectnessEvidence> VerifyCorrectnessAsync(CancellationToken cancellationToken)
     {
         RequirePrepared();
-        var evidence = NativePlanEvidenceStaging.PublishInto(outputDirectory, request);
         var workload = new DiagnosticsDurableHistoryWorkload();
         var result = await workload.ExecuteAsync(this, cancellationToken);
         operations = (await workload.PrepareMeasuredOperationsAsync(this, cancellationToken))
             .Select(operation => (IBenchmarkOperation)new BenchmarkOperation(operation))
             .ToArray();
+        return CreateCorrectnessEvidence(result.ResultDigest);
+    }
+
+    public async Task<CorrectnessEvidence> PrepareMeasurementAsync(CancellationToken cancellationToken)
+    {
+        RequirePrepared();
+        var workload = new DiagnosticsDurableHistoryWorkload();
+        var result = await workload.PrepareMeasurementFixtureAsync(this, cancellationToken);
+        operations = (await workload.PrepareMeasuredOperationsAsync(this, cancellationToken))
+            .Select(operation => (IBenchmarkOperation)new BenchmarkOperation(operation))
+            .ToArray();
+        return CreateCorrectnessEvidence(result.ResultDigest);
+    }
+
+    private CorrectnessEvidence CreateCorrectnessEvidence(string resultDigest)
+    {
+        var evidence = NativePlanEvidenceStaging.PublishInto(outputDirectory, request);
         var provider = observedProvider ?? throw new PerformanceContractException(
             "The diagnostics adapter has no live provider handshake; PrepareAsync must run first.");
 
         return new CorrectnessEvidence(
-            result.ResultDigest,
+            resultDigest,
             provider.Version,
             provider.Topology,
             provider.Configuration,

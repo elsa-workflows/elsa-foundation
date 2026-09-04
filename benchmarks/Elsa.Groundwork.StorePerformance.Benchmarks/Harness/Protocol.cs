@@ -241,6 +241,14 @@ public interface IBenchmarkAdapter : IAsyncDisposable
 {
     Task PrepareAsync(CancellationToken cancellationToken);
     Task<CorrectnessEvidence> VerifyCorrectnessAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Prepares the process-local fixture used by measurement and returns its correctness evidence. The
+    /// default preserves the original lifecycle for adapters whose correctness setup is already cheap.
+    /// </summary>
+    Task<CorrectnessEvidence> PrepareMeasurementAsync(CancellationToken cancellationToken) =>
+        VerifyCorrectnessAsync(cancellationToken);
+
     IReadOnlyList<IBenchmarkOperation> Operations { get; }
 
     /// <summary>Exact provider-native command observer used by measured artifacts.</summary>
@@ -285,7 +293,7 @@ public static class ProcessMeasurement
                 throw new PerformanceContractException(
                     $"The round-trip observer targets provider '{observer.Provider}', not requested provider '{request.Provider}'.");
         }
-        var correctness = await adapter.VerifyCorrectnessAsync(cancellationToken);
+        var correctness = await PrepareMeasurementFixtureAsync(adapter, cancellationToken);
         ArtifactAdmission.ValidateCorrectness(workload, request, correctness, outputDirectory);
         var operations = new List<OperationSample>();
         foreach (var operation in adapter.Operations)
@@ -300,6 +308,11 @@ public static class ProcessMeasurement
             RoundTripInstrumentation = observer?.Instrumentation
         };
     }
+
+    internal static Task<CorrectnessEvidence> PrepareMeasurementFixtureAsync(
+        IBenchmarkAdapter adapter,
+        CancellationToken cancellationToken) =>
+        adapter.PrepareMeasurementAsync(cancellationToken);
 
     private static async Task WarmAsync(IBenchmarkOperation operation, int count, CancellationToken token)
     {

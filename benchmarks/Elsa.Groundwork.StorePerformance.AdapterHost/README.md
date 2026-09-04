@@ -80,6 +80,13 @@ callback, while the timed calls remain public runtime-store operations.
 the adapter prepares the same five phases for either process kind. The separate `verify-correctness`
 command remains useful for provider admission without running the timed protocol.
 
+The diagnostics adapter keeps every warmup and measured child on its own deterministic persistence scope.
+Its standalone `verify-correctness` command retains the frozen 64-record OpenTelemetry write shape. During
+`run`, only the untimed construction of that child's private fixture uses 1,000-record writes; it then runs
+the same fifteen assertions and produces the same ratified result digest before any measured callback is
+admitted. This is a setup optimization, not fixture reuse across processes and not a change to measured
+operation shape.
+
 **Historical correctness evidence (not current-version acceptance).** The following results were produced
 before this host's current probe/evidence path and must not be read as evidence for the current package family:
 

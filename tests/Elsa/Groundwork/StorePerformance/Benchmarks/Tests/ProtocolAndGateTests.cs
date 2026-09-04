@@ -38,6 +38,28 @@ public sealed class ProtocolAndGateTests
         Assert.Equal(["prepare:7", "timer-start", "invoke:7"], events);
     }
 
+    [Fact]
+    public async Task Measurement_preparation_defaults_to_the_existing_correctness_lifecycle()
+    {
+        IBenchmarkAdapter adapter = new DefaultMeasurementPreparationAdapter();
+
+        await ProcessMeasurement.PrepareMeasurementFixtureAsync(adapter, CancellationToken.None);
+
+        Assert.True(((DefaultMeasurementPreparationAdapter)adapter).CorrectnessCalled);
+    }
+
+    [Fact]
+    public async Task Adapter_can_specialize_only_the_untimed_measurement_preparation()
+    {
+        IBenchmarkAdapter adapter = new SpecializedMeasurementPreparationAdapter();
+
+        await ProcessMeasurement.PrepareMeasurementFixtureAsync(adapter, CancellationToken.None);
+
+        var specialized = (SpecializedMeasurementPreparationAdapter)adapter;
+        Assert.True(specialized.MeasurementPreparationCalled);
+        Assert.False(specialized.CorrectnessCalled);
+    }
+
     [Theory]
     [InlineData(99, 30, true)]
     [InlineData(100, 29, true)]
@@ -1069,6 +1091,38 @@ public sealed class ProtocolAndGateTests
         }
         public Task<CorrectnessEvidence> VerifyCorrectnessAsync(CancellationToken cancellationToken) =>
             throw new InvalidOperationException("Correctness must not run for a mismatched host.");
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private class DefaultMeasurementPreparationAdapter : IBenchmarkAdapter
+    {
+        public bool CorrectnessCalled { get; protected set; }
+        public IReadOnlyList<IBenchmarkOperation> Operations => [];
+        public Task PrepareAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<CorrectnessEvidence> VerifyCorrectnessAsync(CancellationToken cancellationToken)
+        {
+            CorrectnessCalled = true;
+            return Task.FromResult<CorrectnessEvidence>(null!);
+        }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class SpecializedMeasurementPreparationAdapter : IBenchmarkAdapter
+    {
+        public bool CorrectnessCalled { get; private set; }
+        public bool MeasurementPreparationCalled { get; private set; }
+        public IReadOnlyList<IBenchmarkOperation> Operations => [];
+        public Task PrepareAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<CorrectnessEvidence> VerifyCorrectnessAsync(CancellationToken cancellationToken)
+        {
+            CorrectnessCalled = true;
+            throw new InvalidOperationException("The measurement runner must use the specialized preparation seam.");
+        }
+        public Task<CorrectnessEvidence> PrepareMeasurementAsync(CancellationToken cancellationToken)
+        {
+            MeasurementPreparationCalled = true;
+            return Task.FromResult<CorrectnessEvidence>(null!);
+        }
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
