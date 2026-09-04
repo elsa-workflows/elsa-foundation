@@ -902,20 +902,23 @@ public static class DiagnosticsNativePlanContract
     private static bool ContainsOnlyExactReplayRangePredicates(string where, bool requireStorageScope)
     {
         const string parameter = @"(?:@\w+|\?|\$\d+)";
+        static string ColumnExpression(string column) =>
+            $@"\(*\s*\b{Regex.Escape(column)}\b\s*\)*";
+
         var required = new List<string>
         {
-            $@"\bsequence\b\s*>\s*{parameter}",
-            $@"\bsequence\b\s*<=\s*{parameter}"
+            $@"{ColumnExpression("sequence")}\s*>\s*{parameter}",
+            $@"{ColumnExpression("sequence")}\s*<=\s*{parameter}"
         };
         if (requireStorageScope)
-            required.Add($@"\b__groundwork_scope\b\s*=\s*{parameter}");
+            required.Add($@"{ColumnExpression("__groundwork_scope")}\s*=\s*{parameter}");
         if (required.Any(pattern =>
                 Regex.Matches(where, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count != 1))
             return false;
 
         var remainder = Regex.Replace(
             where,
-            @"\b(?:sequence|__groundwork_scope)\b\s+IS\s+NOT\s+NULL",
+            $@"(?:{ColumnExpression("sequence")}|{ColumnExpression("__groundwork_scope")})\s+IS\s+NOT\s+NULL",
             string.Empty,
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         foreach (var pattern in required)
