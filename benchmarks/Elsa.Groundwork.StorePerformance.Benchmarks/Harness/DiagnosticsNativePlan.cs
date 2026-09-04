@@ -613,11 +613,16 @@ public static class DiagnosticsNativePlanContract
         }
     }
 
-    private static void ValidateSqlContinuationPredicate(string where, DiagnosticsNativeRouteSpec specification)
+    private static void ValidateSqlContinuationPredicate(
+        string provider,
+        string where,
+        DiagnosticsNativeRouteSpec specification)
     {
         var parameter = @"(?:@\w+|\?|\$\d+)";
         var baseColumns = new[] { "__groundwork_scope", specification.PredicateColumn! };
-        var keyset = where;
+        var keyset = string.Equals(provider, "sqlserver", StringComparison.Ordinal)
+            ? RemoveSqlServerContinuationLengthPredicates(where, specification)
+            : where;
         foreach (var column in baseColumns)
         {
             var predicate = $@"\b{Regex.Escape(column)}\b\s*=\s*{parameter}";
@@ -658,6 +663,70 @@ public static class DiagnosticsNativePlanContract
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' continuation contains an unrecognized keyset expression.");
     }
 
+    private static string RemoveSqlServerContinuationLengthPredicates(
+        string where,
+        DiagnosticsNativeRouteSpec specification)
+    {
+        const string parameter = @"(?:@\w+|\?|\$\d+)";
+        var stringColumns = new[] { "__groundwork_scope", specification.PredicateColumn! }
+            .Concat(specification.EffectiveOrdering
+                .Where(term => IsOrdinalStringOrderColumn(term.Column))
+                .Select(term => term.Column))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var remainder = where;
+        foreach (var column in stringColumns)
+        {
+            var escapedColumn = Regex.Escape(column);
+            var comparisons = Regex.Matches(
+                    where,
+                    $@"\b{escapedColumn}\b\s*(?<operator>=|>|<)\s*(?<parameter>{parameter})",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+                .Cast<Match>()
+                .GroupBy(
+                    match => match.Groups["parameter"].Value,
+                    StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (comparisons.Length == 0)
+                throw new PerformanceContractException(
+                    $"Diagnostics route '{specification.RouteIdentity}' SQL Server continuation omits its exact string comparison evidence.");
+
+            foreach (var group in comparisons)
+            {
+                var operators = group.Select(match => match.Groups["operator"].Value).ToArray();
+                var strict = operators.Where(value => value is ">" or "<").Distinct(StringComparer.Ordinal).ToArray();
+                var expectedLengthOperator = strict.Length switch
+                {
+                    0 when operators.Length == 1 && operators[0] == "=" => "=",
+                    1 when operators.Length == 2 && operators.Count(value => value == "=") == 1 => strict[0],
+                    _ => null
+                };
+                if (expectedLengthOperator is null)
+                    throw new PerformanceContractException(
+                        $"Diagnostics route '{specification.RouteIdentity}' SQL Server continuation has an ambiguous string comparison shape.");
+
+                var boundParameter = Regex.Escape(group.Key);
+                var lengthPattern = SqlServerLengthComparisonPattern(
+                    $@"\b{escapedColumn}\b",
+                    expectedLengthOperator,
+                    boundParameter);
+                if (Regex.Matches(
+                        remainder,
+                        lengthPattern,
+                        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count != 1)
+                    throw new PerformanceContractException(
+                        $"Diagnostics route '{specification.RouteIdentity}' SQL Server continuation does not bind its string comparison to the same length boundary.");
+                remainder = Regex.Replace(
+                    remainder,
+                    lengthPattern,
+                    string.Empty,
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            }
+        }
+
+        return remainder;
+    }
+
     private static void ValidateSqlCommand(
         string provider,
         string command,
@@ -690,7 +759,7 @@ public static class DiagnosticsNativePlanContract
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command contains a computed or tautological predicate.");
         if (continuation)
         {
-            ValidateSqlContinuationPredicate(where, specification);
+            ValidateSqlContinuationPredicate(provider, where, specification);
             return;
         }
 
@@ -788,8 +857,10 @@ public static class DiagnosticsNativePlanContract
                 RequiresSqlServerLengthEquality(specification, column))
             {
                 var boundParameter = Regex.Escape(equalityMatches[0].Groups["parameter"].Value);
-                var lengthPattern =
-                    $@"DATALENGTH\s*\(\s*{columnExpression}\s*\)\s*=\s*DATALENGTH\s*\(\s*{boundParameter}\s*\)";
+                var lengthPattern = SqlServerLengthComparisonPattern(
+                    columnExpression,
+                    "=",
+                    boundParameter);
                 if (Regex.Matches(
                         remainder,
                         lengthPattern,
@@ -820,6 +891,13 @@ public static class DiagnosticsNativePlanContract
          string.Equals(column, specification.PredicateColumn, StringComparison.OrdinalIgnoreCase) &&
          (string.Equals(specification.RouteIdentity, "resources-by-service", StringComparison.Ordinal) ||
           specification.RouteIdentity.StartsWith("trace-detail/", StringComparison.Ordinal)));
+
+    private static string SqlServerLengthComparisonPattern(
+        string columnExpression,
+        string comparison,
+        string boundParameter) =>
+        $@"DATALENGTH\s*\(\s*{columnExpression}\s*\)\s*{Regex.Escape(comparison)}\s*" +
+        $@"DATALENGTH\s*\(\s*{boundParameter}\s*\)";
 
     private static bool ContainsOnlyExactReplayRangePredicates(string where, bool requireStorageScope)
     {

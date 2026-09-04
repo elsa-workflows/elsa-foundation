@@ -449,6 +449,89 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             path);
     }
 
+    [Fact]
+    public void SqlServer_trace_detail_continuation_accepts_exact_string_length_boundaries()
+    {
+        var specification = DiagnosticsNativePlanContract.TraceDetailConstituents(
+                DiagnosticsNativePlanContract.GroundworkAdapter)
+            .Single(item => item.RouteIdentity == "trace-detail/spans-by-trace-key-start-id");
+        var route = new DiagnosticsNativeRouteSpec(
+            specification.RouteIdentity,
+            specification.TableName,
+            specification.IndexName,
+            specification.Ordering.First().Column,
+            specification.PredicateColumn,
+            specification.PhysicalCardinality,
+            specification.FiniteLimit,
+            specification.StorageScopeRequired,
+            false,
+            specification.Ordering,
+            []);
+        var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("sqlserver", route);
+        const string collation = " COLLATE Latin1_General_100_BIN2";
+        var command =
+            "SELECT * FROM [elsa_otel_spans_v2] WHERE " +
+            $"(([__groundwork_scope]{collation} IS NOT NULL AND DATALENGTH([__groundwork_scope]{collation}) = DATALENGTH(@p0) AND [__groundwork_scope]{collation} = @p0) " +
+            $"AND ([traceKey]{collation} IS NOT NULL AND DATALENGTH([traceKey]{collation}) = DATALENGTH(@p1) AND [traceKey]{collation} = @p1)) " +
+            "AND (((([startTime] IS NOT NULL AND [startTime] > @p2) OR [startTime] IS NULL) " +
+            $"OR (([startTime] IS NOT NULL AND [startTime] = @p3) AND ((([spanId]{collation} IS NOT NULL AND [spanId]{collation} > @p4) OR ([spanId]{collation} = @p4 AND DATALENGTH([spanId]{collation}) > DATALENGTH(@p4))) OR [spanId]{collation} IS NULL)) " +
+            $"OR (([startTime] IS NOT NULL AND [startTime] = @p5) AND ([spanId]{collation} IS NOT NULL AND DATALENGTH([spanId]{collation}) = DATALENGTH(@p6) AND [spanId]{collation} = @p6) AND (([sequence] IS NOT NULL AND [sequence] > @p7) OR [sequence] IS NULL))) " +
+            $"ORDER BY [startTime] ASC, [spanId]{collation} ASC, DATALENGTH([spanId]{collation}) ASC, [sequence] ASC OFFSET 0 ROWS FETCH NEXT @p8 ROWS ONLY;";
+        using var directory = new TemporaryDirectory();
+        var path = Path.Combine(directory.FullName, "sqlserver-continuation.raw.json");
+        var artifact = new DiagnosticsNativePlanArtifact(
+            1,
+            "sqlserver",
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            specification.RouteIdentity,
+            specification.TableName,
+            specification.IndexName,
+            physicalIndex,
+            command,
+            SqlServerIndexSeekPlan(route));
+        File.WriteAllText(path, JsonSerializer.Serialize(artifact));
+        var evidence = new DiagnosticsTraceDetailConstituentEvidence(
+            specification.RouteIdentity,
+            "sqlserver-continuation.raw.json",
+            new string('a', 64),
+            DiagnosticsNativePlanContract.IndexSearchPlanClassification,
+            physicalIndex,
+            command,
+            specification.PhysicalCardinality,
+            true,
+            true,
+            specification.FiniteLimit,
+            specification.PublicRowBound,
+            specification.PublicRowBound,
+            specification.MaxInvocationCount,
+            specification.MaxInvocationCount);
+
+        DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
+            "sqlserver",
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            evidence,
+            path);
+
+        var invalidCommands = new[]
+        {
+            command.Replace("DATALENGTH(@p4)", "DATALENGTH(@wrong)", StringComparison.Ordinal),
+            command.Replace(
+                $" AND DATALENGTH([spanId]{collation}) > DATALENGTH(@p4)",
+                string.Empty,
+                StringComparison.Ordinal)
+        };
+        foreach (var invalidCommand in invalidCommands)
+        {
+            File.WriteAllText(path, JsonSerializer.Serialize(artifact with { CommandText = invalidCommand }));
+            Assert.Throws<PerformanceContractException>(() =>
+                DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
+                    "sqlserver",
+                    DiagnosticsNativePlanContract.GroundworkAdapter,
+                    evidence with { CommandText = invalidCommand },
+                    path));
+        }
+    }
+
     [Theory]
     [InlineData("resources-by-status", "status", true)]
     [InlineData("resources-by-service", "serviceNameKey", true)]
