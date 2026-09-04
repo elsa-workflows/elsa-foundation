@@ -728,7 +728,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             evidenceDocument.Scale,
             evidenceDocument.CommitSha,
             evidenceDocument.HarnessAssemblySha256,
-            new Dictionary<string, string> { ["Groundwork.MongoDb"] = "0.4.0-preview.11" },
+            new Dictionary<string, string> { ["Groundwork.MongoDb"] = "0.4.0-preview.12" },
             evidenceDocument.CompositionFingerprint,
             evidenceDocument.HostFingerprintSha256,
             evidenceDocument.ProviderVersion,
