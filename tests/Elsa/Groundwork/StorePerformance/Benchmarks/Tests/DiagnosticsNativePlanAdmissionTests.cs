@@ -503,6 +503,45 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     }
 
     [Fact]
+    public void Mongo_explain_command_accepts_preview_10_non_null_and_persisted_order_key_optimization()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var command = JsonNode.Parse(Fixture.MongoAggregateCommand(specification))!.AsObject();
+        var pipeline = command["pipeline"]!.AsArray();
+        pipeline[1] = JsonNode.Parse("""
+            {"$set":{"_groundwork_ordinal_key_2":{"$function":{"body":"ordinal","args":["$id"],"lang":"js"}}}}
+            """);
+        pipeline.Insert(2, JsonNode.Parse("""
+            {"$sort":{"lastSeen":-1,"idOrderKey":1,"_groundwork_ordinal_key_2":1}}
+            """));
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            command: command.ToJsonString(),
+            nativePlan: """
+                {
+                  "queryPlanner": {
+                    "winningPlan": {
+                      "stage": "SORT",
+                      "sortPattern": { "lastSeen": -1, "idOrderKey": 1, "_groundwork_ordinal_key_2": 1 },
+                      "limitAmount": 127,
+                      "inputStage": { "stage": "COLLSCAN", "direction": "forward" }
+                    }
+                  }
+                }
+                """,
+            planClassification: DiagnosticsNativePlanContract.BoundedMongoScanSortPlanClassification);
+
+        DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path);
+    }
+
+    [Fact]
     public void Mongo_scoped_collection_evidence_passes_complete_artifact_admission_without_a_synthetic_scope_predicate()
     {
         using var fixture = Fixture.Create("mongodb", "resources-by-last-seen");

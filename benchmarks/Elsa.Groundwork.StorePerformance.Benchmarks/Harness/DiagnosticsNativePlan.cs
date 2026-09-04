@@ -1101,33 +1101,51 @@ public static class DiagnosticsNativePlanContract
         if (ValidateMongoOrdering(sort, specification))
             return true;
 
-        var expected = new List<(string Column, RuntimeNativeOrderDirection Direction)>();
-        foreach (var (term, index) in specification.EffectiveOrdering.Select((term, index) => (term, index)))
-        {
-            expected.Add(("_groundwork_null_rank_" + index, RuntimeNativeOrderDirection.Ascending));
-            expected.Add((IsMongoStringOrderColumn(term.Column) ? "_groundwork_ordinal_key_" + index : term.Column, term.Direction));
-        }
         var actual = ParseMongoOrdering(sort);
-        if (actual.Count != expected.Count || !actual.Zip(expected).All(pair =>
-                pair.First.Column == pair.Second.Column && pair.First.Direction == pair.Second.Direction))
+        var expanded = ExpectedMongoRenderedOrdering(specification, includeNullRanks: true, usePersistedOrderKeys: false);
+        var optimized = ExpectedMongoRenderedOrdering(specification, includeNullRanks: false, usePersistedOrderKeys: true);
+        var expected = OrderingMatches(actual, expanded) ? expanded : OrderingMatches(actual, optimized) ? optimized : null;
+        if (expected is null)
             return false;
 
         var setFields = pipeline.EnumerateArray()
             .Where(stage => stage.ValueKind == JsonValueKind.Object && stage.TryGetProperty("$set", out _))
             .SelectMany(stage => stage.GetProperty("$set").EnumerateObject().Select(property => property.Name))
             .ToHashSet(StringComparer.Ordinal);
-        for (var index = 0; index < specification.EffectiveOrdering.Count; index++)
-        {
-            if (!setFields.Contains($"_groundwork_null_rank_{index}") ||
-                IsMongoStringOrderColumn(specification.EffectiveOrdering[index].Column) &&
-                !setFields.Contains($"_groundwork_ordinal_key_{index}"))
-                return false;
-        }
-        return true;
+        return expected
+            .Where(term => term.Column.StartsWith("_groundwork_", StringComparison.Ordinal))
+            .All(term => setFields.Contains(term.Column));
     }
+
+    private static IReadOnlyList<(string Column, RuntimeNativeOrderDirection Direction)> ExpectedMongoRenderedOrdering(
+        DiagnosticsNativeRouteSpec specification,
+        bool includeNullRanks,
+        bool usePersistedOrderKeys)
+    {
+        var expected = new List<(string Column, RuntimeNativeOrderDirection Direction)>();
+        foreach (var (term, index) in specification.EffectiveOrdering.Select((term, index) => (term, index)))
+        {
+            if (includeNullRanks)
+                expected.Add(("_groundwork_null_rank_" + index, RuntimeNativeOrderDirection.Ascending));
+            expected.Add((IsMongoStringOrderColumn(term.Column) &&
+                          !(usePersistedOrderKeys && IsMongoPersistedOrderKeyColumn(term.Column))
+                    ? "_groundwork_ordinal_key_" + index
+                    : term.Column,
+                term.Direction));
+        }
+        return expected;
+    }
+
+    private static bool OrderingMatches(
+        IReadOnlyList<(string Column, RuntimeNativeOrderDirection Direction)> actual,
+        IReadOnlyList<(string Column, RuntimeNativeOrderDirection Direction)> expected) =>
+        actual.Count == expected.Count && actual.Zip(expected).All(pair =>
+            pair.First.Column == pair.Second.Column && pair.First.Direction == pair.Second.Direction);
 
     private static bool IsMongoStringOrderColumn(string column) =>
         column is "id" or "idOrderKey" or "serviceNameKey" or "traceKey" or "spanId";
+
+    private static bool IsMongoPersistedOrderKeyColumn(string column) => column == "idOrderKey";
 
     private static bool ValidateMongoOrdering(JsonElement sort, DiagnosticsNativeRouteSpec specification) =>
         ParseMongoOrdering(sort).Count == specification.EffectiveOrdering.Count &&
@@ -1233,7 +1251,10 @@ public static class DiagnosticsNativePlanContract
         var sortStages = stages.Where(stage => string.Equals(MongoStageName(stage), "SORT", StringComparison.OrdinalIgnoreCase)).ToArray();
         if (sortStages.Length != 1 ||
             !sortStages[0].TryGetProperty("sortPattern", out var sortPattern) ||
-            !ValidateMongoOrdering(sortPattern, specification))
+            !ValidateMongoOrdering(sortPattern, specification) &&
+            !OrderingMatches(
+                ParseMongoOrdering(sortPattern),
+                ExpectedMongoRenderedOrdering(specification, includeNullRanks: false, usePersistedOrderKeys: true)))
             throw BlockedPlan(specification, "MongoDB bounded scan/sort plan does not bind its complete effective ordering");
 
         var limits = FindObjects(winningPlans[0], "limitAmount").ToArray();

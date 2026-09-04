@@ -172,6 +172,68 @@ public sealed class GroundworkV2OpenTelemetryTests
     }
 
     [Fact]
+    public async Task New_trace_summaries_use_one_provider_bounded_batch_read_instead_of_point_reads()
+    {
+        using var database = new TemporarySqliteDatabase();
+        var observer = new RecordingCommandObserver();
+        await using var fixture = await OpenStoreAsync(database, commandObserver: observer);
+        var now = DateTimeOffset.UtcNow;
+        var resource = Resource("batch-read-resource", "orders", now);
+        var traces = Enumerable.Range(0, 32)
+            .Select(index => new TelemetryTrace(
+                $"trace-{index}",
+                null,
+                "operation",
+                now,
+                now,
+                TimeSpan.Zero,
+                SpanStatus.Ok,
+                [resource.Id],
+                [],
+                0))
+            .ToArray();
+
+        await fixture.Store.WriteAsync(
+            DiagnosticsDrainBatchId.New(),
+            new OpenTelemetryBatch([resource], traces, [], [], [], []));
+
+        AssertSingleBatchRead(observer, "elsa_otel_trace_summaries_v3");
+    }
+
+    [Fact]
+    public async Task Retained_resource_enrichment_uses_one_provider_bounded_batch_read_instead_of_point_reads()
+    {
+        using var database = new TemporarySqliteDatabase();
+        var observer = new RecordingCommandObserver();
+        await using var fixture = await OpenStoreAsync(database, commandObserver: observer);
+        var now = DateTimeOffset.UtcNow;
+        var resource = Resource("retained-batch-read-resource", "orders", now);
+        await fixture.Store.WriteAsync(
+            DiagnosticsDrainBatchId.New(),
+            new OpenTelemetryBatch([resource], [], [], [], [], []));
+        observer.Clear();
+        var traces = Enumerable.Range(0, 32)
+            .Select(index => new TelemetryTrace(
+                $"retained-resource-trace-{index}",
+                null,
+                "operation",
+                now,
+                now,
+                TimeSpan.Zero,
+                SpanStatus.Ok,
+                [resource.Id],
+                [],
+                0))
+            .ToArray();
+
+        await fixture.Store.WriteAsync(
+            DiagnosticsDrainBatchId.New(),
+            new OpenTelemetryBatch([], traces, [], [], [], []));
+
+        AssertSingleBatchRead(observer, "elsa_otel_resources_v2");
+    }
+
+    [Fact]
     public async Task Trace_summary_refuses_names_beyond_the_cross_provider_search_key_bound()
     {
         using var database = new TemporarySqliteDatabase();
@@ -852,14 +914,16 @@ public sealed class GroundworkV2OpenTelemetryTests
         OpenTelemetryDiagnosticsOptions? options = null,
         V2OpenTelemetryBinding? binding = null,
         bool start = false,
-        IOpenTelemetrySourceRegistry? sourceRegistry = null)
+        IOpenTelemetrySourceRegistry? sourceRegistry = null,
+        IProviderCommandObserver? commandObserver = null)
     {
         var connection = new SqliteProviderFactory().Create(database.ConnectionString);
         var store = new GroundworkOpenTelemetryStore(
             connection,
             Options.Create(options ?? new OpenTelemetryDiagnosticsOptions { MaxQuerySize = 100 }),
             binding ?? V2OpenTelemetryBinding.Default,
-            sourceRegistry: sourceRegistry);
+            sourceRegistry: sourceRegistry,
+            commandObserver: commandObserver);
         IDiagnosticsPersistenceResourceLease? lease = null;
         try
         {
@@ -1138,5 +1202,41 @@ public sealed class GroundworkV2OpenTelemetryTests
         public void MarkSeen(TelemetryResource resource) => resources[resource.Id] = resource;
 
         public IReadOnlyCollection<TelemetryResource> List() => resources.Values.ToArray();
+    }
+
+    private sealed class RecordingCommandObserver : IProviderCommandObserver
+    {
+        private readonly List<ProviderCommandEvent> commands = [];
+
+        internal IReadOnlyList<ProviderCommandEvent> Commands
+        {
+            get
+            {
+                lock (commands)
+                    return commands.ToArray();
+            }
+        }
+
+        public void Observe(ProviderCommandEvent command)
+        {
+            lock (commands)
+                commands.Add(command);
+        }
+
+        internal void Clear()
+        {
+            lock (commands)
+                commands.Clear();
+        }
+    }
+
+    private static void AssertSingleBatchRead(RecordingCommandObserver observer, string table)
+    {
+        var dataReads = observer.Commands.Where(command =>
+            command.Kind == ProviderCommandKind.Read &&
+            command.CommandText?.Contains(table, StringComparison.OrdinalIgnoreCase) == true &&
+            (command.Operation.EndsWith(".query", StringComparison.Ordinal) ||
+             command.Operation.EndsWith(".read", StringComparison.Ordinal))).ToArray();
+        Assert.EndsWith(".query", Assert.Single(dataReads).Operation, StringComparison.Ordinal);
     }
 }

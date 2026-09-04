@@ -299,7 +299,9 @@ public sealed class GroundworkPerformanceHandoffTests
             job,
             StringComparison.Ordinal);
         Assert.Contains("timeout-minutes: 300", job, StringComparison.Ordinal);
-        Assert.Contains("matrix:\n        provider:\n          - sqlite\n          - postgresql\n          - sqlserver\n          - mongodb", job, StringComparison.Ordinal);
+        Assert.Contains("diagnostics_provider:", workflow, StringComparison.Ordinal);
+        Assert.Contains("provider: ${{ fromJSON(inputs.diagnostics_provider", job, StringComparison.Ordinal);
+        Assert.Contains("[\"sqlite\",\"postgresql\",\"sqlserver\",\"mongodb\"]", job, StringComparison.Ordinal);
         Assert.Contains("run-e3-medium-baseline.py capture", job, StringComparison.Ordinal);
         Assert.Contains("run-e3-medium-baseline.py correctness", job, StringComparison.Ordinal);
         Assert.Contains("DIAGNOSTICS_CORRECTNESS_DIR:", job, StringComparison.Ordinal);
