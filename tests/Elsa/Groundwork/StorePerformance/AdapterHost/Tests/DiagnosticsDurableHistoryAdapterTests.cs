@@ -210,7 +210,7 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
 
         Assert.InRange(store.DiagnosticsReadCount, 1, 2);
         Assert.Contains("resources 0/1", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("last trace not required", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("trace probe not required", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -226,6 +226,31 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
 
         Assert.Contains("untimed flush budget", exception.Message, StringComparison.Ordinal);
         Assert.Equal(1, store.DiagnosticsReadCount);
+    }
+
+    [Fact]
+    public async Task Durability_poll_uses_a_retained_trace_without_the_native_plan_fanout()
+    {
+        var diagnostics = EmptyDiagnostics() with
+        {
+            TraceCapacity = 2,
+            SpanCapacity = 1,
+            LogRecordCapacity = 1,
+            TraceCount = 2,
+            SpanCount = 1,
+            LogRecordCount = 1
+        };
+        var store = new ProbeOpenTelemetryStore(diagnostics);
+        var tracking = new DiagnosticsDurableHistoryAdapter.TrackingOpenTelemetryStore(store);
+        var cheapTrace = Trace("trace-cheap");
+        var fanoutTrace = Trace("TRACE-FANOUT");
+        var span = Span("trace-fanout");
+        var log = Log("trace-fanout");
+
+        await tracking.WriteAsync(new OpenTelemetryBatch([], [cheapTrace, fanoutTrace], [span], [], [], [log]));
+        await tracking.WaitForDurabilityAsync(CancellationToken.None);
+
+        Assert.Equal([cheapTrace.TraceId], store.TraceReads);
     }
 
     [Fact]
@@ -593,6 +618,45 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
         DroppedMetricPointCount: 0,
         DroppedLogRecordCount: 0);
 
+    private static TelemetryTrace Trace(string traceId) => new(
+        traceId,
+        null,
+        null,
+        DateTimeOffset.UnixEpoch,
+        DateTimeOffset.UnixEpoch,
+        TimeSpan.Zero,
+        SpanStatus.Ok,
+        [],
+        [],
+        0);
+
+    private static TelemetrySpan Span(string traceId) => new(
+        "span-row",
+        traceId,
+        "span-id",
+        null,
+        "resource-id",
+        "span",
+        "Internal",
+        DateTimeOffset.UnixEpoch,
+        DateTimeOffset.UnixEpoch,
+        SpanStatus.Ok,
+        null,
+        new Dictionary<string, string?>(),
+        [],
+        []);
+
+    private static OtlpLogRecord Log(string traceId) => new(
+        "log-id",
+        "resource-id",
+        DateTimeOffset.UnixEpoch,
+        "Information",
+        9,
+        "body",
+        traceId,
+        "span-id",
+        new Dictionary<string, string?>());
+
     private static OpenTelemetryStorageDiagnostics EmptyDiagnostics() => DiagnosticsWithResourceCount(0);
 
     private static RunRequest Request(
@@ -643,11 +707,17 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public int DiagnosticsReadCount { get; private set; }
+        public List<string> TraceReads { get; } = [];
 
         public ValueTask WriteAsync(OpenTelemetryBatch batch, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
         public ValueTask<OpenTelemetryResourceResult> QueryResourcesAsync(OpenTelemetryResourceFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<OpenTelemetryTraceResult> QueryTracesAsync(OpenTelemetryTraceFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public ValueTask<OpenTelemetryTraceDetail?> GetTraceAsync(string traceId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<OpenTelemetryTraceDetail?> GetTraceAsync(string traceId, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            TraceReads.Add(traceId);
+            return ValueTask.FromResult<OpenTelemetryTraceDetail?>(new(Trace(traceId), [], [], []));
+        }
         public ValueTask<OpenTelemetryMetricResult> QueryMetricsAsync(OpenTelemetryMetricFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<OpenTelemetryLogResult> QueryLogsAsync(OpenTelemetryLogFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 

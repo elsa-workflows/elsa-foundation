@@ -323,7 +323,7 @@ internal sealed class EfDiagnosticsDurableHistoryAdapter : IBenchmarkAdapter, ID
         private int expectedLogs;
         private int expectedResources;
         private int expectedInstruments;
-        private string? expectedLastTraceId;
+        private string? expectedTraceProbeId;
 
         public ValueTask WriteAsync(OpenTelemetryBatch batch, CancellationToken cancellationToken = default)
         {
@@ -333,8 +333,8 @@ internal sealed class EfDiagnosticsDurableHistoryAdapter : IBenchmarkAdapter, ID
             Interlocked.Add(ref expectedLogs, batch.Logs.Count);
             Interlocked.Add(ref expectedResources, batch.Resources.Count);
             Interlocked.Add(ref expectedInstruments, batch.Instruments.Count);
-            if (batch.Traces.Count > 0)
-                expectedLastTraceId = batch.Traces.Last().TraceId;
+            if (OpenTelemetryDurabilityProbe.SelectTraceId(batch) is { } traceProbeId)
+                Volatile.Write(ref expectedTraceProbeId, traceProbeId);
             return inner.WriteAsync(batch, cancellationToken);
         }
 
@@ -353,7 +353,7 @@ internal sealed class EfDiagnosticsDurableHistoryAdapter : IBenchmarkAdapter, ID
             var logs = Volatile.Read(ref expectedLogs);
             var resources = Volatile.Read(ref expectedResources);
             var instruments = Volatile.Read(ref expectedInstruments);
-            var lastTraceId = expectedLastTraceId;
+            var traceProbeId = Volatile.Read(ref expectedTraceProbeId);
             var deadline = DateTime.UtcNow + TimeSpan.FromMinutes(30);
             while (true)
             {
@@ -364,7 +364,7 @@ internal sealed class EfDiagnosticsDurableHistoryAdapter : IBenchmarkAdapter, ID
                     diagnostics.LogRecordCount >= Math.Min(logs, diagnostics.LogRecordCapacity) &&
                     diagnostics.ResourceCount >= Math.Min(resources, DiagnosticsDurableHistoryWorkload.ResourceCount) &&
                     diagnostics.MetricInstrumentCount >= Math.Min(instruments, DiagnosticsDurableHistoryWorkload.InstrumentCount) &&
-                    (lastTraceId is null || await inner.GetTraceAsync(lastTraceId, cancellationToken) is not null))
+                    (traceProbeId is null || await inner.GetTraceAsync(traceProbeId, cancellationToken) is not null))
                     return;
                 if (DateTime.UtcNow >= deadline)
                     throw new PerformanceContractException("EF OpenTelemetry durability did not become visible within the untimed flush budget.");

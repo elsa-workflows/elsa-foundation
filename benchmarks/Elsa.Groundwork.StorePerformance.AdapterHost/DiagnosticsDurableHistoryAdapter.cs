@@ -410,7 +410,7 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
         private int expectedLogs;
         private int expectedResources;
         private int expectedInstruments;
-        private string? expectedLastTraceId;
+        private string? expectedTraceProbeId;
 
         public ValueTask WriteAsync(OpenTelemetryBatch batch, CancellationToken cancellationToken = default)
         {
@@ -420,8 +420,8 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
             Interlocked.Add(ref expectedLogs, batch.Logs.Count);
             Interlocked.Add(ref expectedResources, batch.Resources.Count);
             Interlocked.Add(ref expectedInstruments, batch.Instruments.Count);
-            if (batch.Traces.Count > 0)
-                expectedLastTraceId = batch.Traces.Last().TraceId;
+            if (OpenTelemetryDurabilityProbe.SelectTraceId(batch) is { } traceProbeId)
+                Volatile.Write(ref expectedTraceProbeId, traceProbeId);
             return inner.WriteAsync(batch, cancellationToken);
         }
 
@@ -440,7 +440,7 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
             var logs = Volatile.Read(ref expectedLogs);
             var resources = Volatile.Read(ref expectedResources);
             var instruments = Volatile.Read(ref expectedInstruments);
-            var lastTraceId = expectedLastTraceId;
+            var traceProbeId = Volatile.Read(ref expectedTraceProbeId);
             var deadline = DateTime.UtcNow + (durabilityTimeout ?? TimeSpan.FromMinutes(30));
             var timeoutMessage = "OpenTelemetry durability did not become visible within the untimed flush budget.";
             while (true)
@@ -474,15 +474,15 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
                     $"logs {diagnostics.LogRecordCount}/{expectedLogCount}, " +
                     $"resources {diagnostics.ResourceCount}/{expectedResourceCount}, " +
                     $"instruments {diagnostics.MetricInstrumentCount}/{expectedInstrumentCount}; " +
-                    $"last trace {(lastTraceId is null ? "not required" : "not yet checked or visible")}.";
+                    $"trace probe {(traceProbeId is null ? "not required" : "not yet checked or visible")}.";
                 if (diagnostics.TraceCount >= expectedTraceCount &&
                     diagnostics.SpanCount >= expectedSpanCount &&
                     diagnostics.MetricPointCount >= expectedPointCount &&
                     diagnostics.LogRecordCount >= expectedLogCount &&
                     diagnostics.ResourceCount >= expectedResourceCount &&
                     diagnostics.MetricInstrumentCount >= expectedInstrumentCount &&
-                    (lastTraceId is null || await ReadDurabilityProbeAsync(
-                        token => inner.GetTraceAsync(lastTraceId, token),
+                    (traceProbeId is null || await ReadDurabilityProbeAsync(
+                        token => inner.GetTraceAsync(traceProbeId, token),
                         deadline,
                         timeoutMessage,
                         cancellationToken) is not null))
