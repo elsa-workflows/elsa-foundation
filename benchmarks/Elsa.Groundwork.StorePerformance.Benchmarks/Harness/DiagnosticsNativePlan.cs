@@ -28,7 +28,8 @@ public sealed record DiagnosticsNativeRouteSpec(
     int FiniteLimit,
     bool StorageScopeRequired = false,
     bool Descending = true,
-    IReadOnlyList<RuntimeNativeOrderTerm>? Ordering = null)
+    IReadOnlyList<RuntimeNativeOrderTerm>? Ordering = null,
+    IReadOnlyList<string>? NullableOrderingColumns = null)
 {
     /// <summary>Relational Groundwork injects this equality into every scoped query. MongoDB isolates
     /// scopes with a provider-owned physical collection and therefore has no synthetic scope field.</summary>
@@ -36,6 +37,12 @@ public sealed record DiagnosticsNativeRouteSpec(
         (OrderColumn is null
             ? []
             : [new RuntimeNativeOrderTerm(OrderColumn, Descending ? RuntimeNativeOrderDirection.Descending : RuntimeNativeOrderDirection.Ascending)]);
+
+    /// <summary>Whether the provider must retain an explicit null-rank term for this ordered column.
+    /// A null value means the caller has not supplied nullability evidence, so admission stays
+    /// conservative and requires null ranks for every term.</summary>
+    public bool RequiresNullRank(string column) =>
+        NullableOrderingColumns is null || NullableOrderingColumns.Contains(column, StringComparer.Ordinal);
 }
 
 public enum DiagnosticsTraceDetailOperationKind
@@ -246,7 +253,8 @@ public static class DiagnosticsNativePlanContract
                     "structured-log-recent" => [new("sequence", RuntimeNativeOrderDirection.Descending)],
                     "structured-log-replay" => [new("sequence", RuntimeNativeOrderDirection.Ascending)],
                     _ => []
-                });
+                },
+                adapter == GroundworkAdapter ? [] : null);
 
         return route switch
         {
@@ -718,14 +726,15 @@ public static class DiagnosticsNativePlanContract
             order,
             @"\bCOLLATE\s+(?:""(?<name>[^""]+)""|(?<name>[A-Za-z_][A-Za-z0-9_.]*))",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        if (collations.Count != ordinalColumns.Length * 2 ||
-            collations.Any(match => !string.Equals(match.Groups["name"].Value, "C", StringComparison.Ordinal)))
+        if (collations.Any(match => !string.Equals(match.Groups["name"].Value, "C", StringComparison.Ordinal)))
             return false;
 
-        return ordinalColumns.All(column => Regex.Matches(
+        var occurrences = ordinalColumns.Select(column => Regex.Matches(
                 order,
                 $@"(?<![A-Za-z0-9_])""?{Regex.Escape(column)}""?(?![A-Za-z0-9_])\s+COLLATE\s+(?:""C""|C\b)",
-                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count == 2);
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count)
+            .ToArray();
+        return occurrences.All(count => count is 1 or 2) && occurrences.Sum() == collations.Count;
     }
 
     private static string NormalizeSqlCommand(string command)
@@ -815,52 +824,60 @@ public static class DiagnosticsNativePlanContract
     private static bool SqlOrderingMatches(
         string provider,
         IReadOnlyList<string> terms,
-        DiagnosticsNativeRouteSpec specification,
-        bool requireNullRank = false)
+        DiagnosticsNativeRouteSpec specification)
     {
-        var actual = new List<RuntimeNativeOrderTerm>(specification.EffectiveOrdering.Count);
-        string? pendingNullOrdering = null;
-        for (var index = 0; index < terms.Count; index++)
+        var index = 0;
+        foreach (var expected in specification.EffectiveOrdering)
         {
-            var term = terms[index].Trim().TrimEnd(';');
-            var nullOrdering = Regex.Match(
-                term,
-                @"^CASE\s+WHEN\s+\(*\s*(?:[A-Za-z_][A-Za-z0-9_]*\.)?(?<column>[A-Za-z_][A-Za-z0-9_]*)\s*\)*\s+IS\s+NULL\s+THEN\s+(?:0\s+ELSE\s+1|1\s+ELSE\s+0)\s+END\s+ASC$",
-                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-            if (nullOrdering.Success)
+            if (index < terms.Count && IsSqlNullRank(terms[index]))
             {
-                if (pendingNullOrdering is not null)
+                if (!SqlNullRankMatches(terms[index], expected.Column))
                     return false;
-                pendingNullOrdering = nullOrdering.Groups["column"].Value;
-                continue;
+                index++;
             }
 
-            if (requireNullRank && pendingNullOrdering is null ||
-                !TryParseSqlOrderValue(provider, term, out var ordered) ||
+            if (index >= terms.Count ||
+                !TryParseSqlOrderValue(provider, terms[index].Trim().TrimEnd(';'), out var ordered) ||
                 ordered is null ||
-                pendingNullOrdering is not null &&
-                !string.Equals(pendingNullOrdering, ordered.Column, StringComparison.OrdinalIgnoreCase))
+                !string.Equals(ordered.Column, expected.Column, StringComparison.OrdinalIgnoreCase) ||
+                ordered.Direction != expected.Direction)
                 return false;
-            pendingNullOrdering = null;
-            actual.Add(ordered);
+            index++;
 
             if (!string.Equals(provider, "sqlserver", StringComparison.Ordinal) ||
-                index + 1 >= terms.Count ||
-                !TryParseSqlServerLengthOrder(terms[index + 1], out var lengthOrder))
+                !IsOrdinalStringOrderColumn(expected.Column))
                 continue;
+
+            var requiresLength = IsBoundedResourceRoute("sqlserver", GroundworkAdapter, specification);
+            if (index >= terms.Count || !TryParseSqlServerLengthOrder(terms[index], out var lengthOrder))
+            {
+                if (requiresLength)
+                    return false;
+                continue;
+            }
             if (lengthOrder is null ||
-                !IsOrdinalStringOrderColumn(ordered.Column) ||
-                !string.Equals(lengthOrder.Column, ordered.Column, StringComparison.OrdinalIgnoreCase) ||
-                lengthOrder.Direction != ordered.Direction)
+                !string.Equals(lengthOrder.Column, expected.Column, StringComparison.OrdinalIgnoreCase) ||
+                lengthOrder.Direction != expected.Direction)
                 return false;
             index++;
         }
 
-        return pendingNullOrdering is null &&
-               actual.Count == specification.EffectiveOrdering.Count &&
-               actual.Zip(specification.EffectiveOrdering).All(pair =>
-                   string.Equals(pair.First.Column, pair.Second.Column, StringComparison.OrdinalIgnoreCase) &&
-                   pair.First.Direction == pair.Second.Direction);
+        return index == terms.Count;
+    }
+
+    private static bool IsSqlNullRank(string term) => Regex.IsMatch(
+        term.Trim().TrimEnd(';'),
+        @"^CASE\s+WHEN\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    private static bool SqlNullRankMatches(string term, string column)
+    {
+        var match = Regex.Match(
+            term.Trim().TrimEnd(';'),
+            @"^CASE\s+WHEN\s+\(*\s*(?:[A-Za-z_][A-Za-z0-9_]*\.)?(?<column>[A-Za-z_][A-Za-z0-9_]*)\s*\)*\s+IS\s+NULL\s+THEN\s+(?:0\s+ELSE\s+1|1\s+ELSE\s+0)\s+END\s+ASC$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return match.Success &&
+               string.Equals(match.Groups["column"].Value, column, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool TryParseSqlOrderValue(
@@ -1179,28 +1196,35 @@ public static class DiagnosticsNativePlanContract
         if (!sort.TryGetProperty("Sort Key", out var sortKey) || sortKey.ValueKind != JsonValueKind.Array)
             return false;
         var terms = sortKey.EnumerateArray().ToArray();
-        if (terms.Length != specification.EffectiveOrdering.Count * 2 ||
-            terms.Any(key => key.ValueKind != JsonValueKind.String))
+        if (terms.Any(key => key.ValueKind != JsonValueKind.String))
             return false;
         var subplan = 0;
-        for (var index = 0; index < specification.EffectiveOrdering.Count; index++)
+        var termIndex = 0;
+        foreach (var expected in specification.EffectiveOrdering)
         {
-            var expected = specification.EffectiveOrdering[index];
-            if (!PostgreSqlNullRankMatches(terms[index * 2].GetString()!, expected.Column))
+            if (specification.RequiresNullRank(expected.Column))
+            {
+                if (termIndex >= terms.Length ||
+                    !PostgreSqlNullRankMatches(terms[termIndex].GetString()!, expected.Column))
+                    return false;
+                termIndex++;
+            }
+            if (termIndex >= terms.Length)
                 return false;
             if (IsOrdinalStringOrderColumn(expected.Column))
             {
                 subplan++;
-                if (!PostgreSqlSubplanOrderMatches(terms[index * 2 + 1].GetString()!, subplan, expected.Direction))
+                if (!PostgreSqlSubplanOrderMatches(terms[termIndex].GetString()!, subplan, expected.Direction))
                     return false;
             }
             else if (!PostgreSqlColumnOrderMatches(
-                         terms[index * 2 + 1].GetString()!,
+                         terms[termIndex].GetString()!,
                          expected.Column,
                          expected.Direction))
                 return false;
+            termIndex++;
         }
-        return true;
+        return termIndex == terms.Length;
     }
 
     private static bool PostgreSqlNullRankMatches(string value, string column)
@@ -1363,7 +1387,8 @@ public static class DiagnosticsNativePlanContract
         var expected = new List<(SqlServerSortKeyKind Kind, string Column, RuntimeNativeOrderDirection Direction)>();
         foreach (var term in specification.EffectiveOrdering)
         {
-            expected.Add((SqlServerSortKeyKind.NullRank, term.Column, RuntimeNativeOrderDirection.Ascending));
+            if (specification.RequiresNullRank(term.Column))
+                expected.Add((SqlServerSortKeyKind.NullRank, term.Column, RuntimeNativeOrderDirection.Ascending));
             expected.Add((SqlServerSortKeyKind.Value, term.Column, term.Direction));
             if (IsOrdinalStringOrderColumn(term.Column))
                 expected.Add((SqlServerSortKeyKind.ByteLength, term.Column, term.Direction));

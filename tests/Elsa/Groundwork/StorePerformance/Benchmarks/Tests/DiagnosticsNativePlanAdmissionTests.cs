@@ -1123,8 +1123,8 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     {
         var document = System.Xml.Linq.XDocument.Parse(BoundedCatalogPlan("sqlserver"));
         var orderBy = document.Descendants().Single(element => element.Name.LocalName == "OrderBy");
-        var first = orderBy.Elements().ElementAt(2).Descendants().Single(element => element.Name.LocalName == "ColumnReference");
-        var second = orderBy.Elements().ElementAt(3).Descendants().Single(element => element.Name.LocalName == "ColumnReference");
+        var first = orderBy.Elements().ElementAt(1).Descendants().Single(element => element.Name.LocalName == "ColumnReference");
+        var second = orderBy.Elements().ElementAt(2).Descendants().Single(element => element.Name.LocalName == "ColumnReference");
         (first.Attribute("Column")!.Value, second.Attribute("Column")!.Value) =
             (second.Attribute("Column")!.Value, first.Attribute("Column")!.Value);
 
@@ -1151,7 +1151,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     {
         var document = System.Xml.Linq.XDocument.Parse(BoundedCatalogPlan("sqlserver"));
         var orderBy = document.Descendants().Single(element => element.Name.LocalName == "OrderBy");
-        var ordinalValue = orderBy.Elements().ElementAt(3).Descendants()
+        var ordinalValue = orderBy.Elements().ElementAt(1).Descendants()
             .Single(element => element.Name.LocalName == "ColumnReference");
         ordinalValue.SetAttributeValue("Column", "[idOrderKey]");
 
@@ -1159,16 +1159,15 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     }
 
     [Fact]
-    public void SqlServer_bounded_catalog_scan_sort_rejects_a_reversed_null_rank_expression()
+    public void SqlServer_bounded_catalog_scan_sort_rejects_an_unexpected_null_rank_expression()
     {
         var document = System.Xml.Linq.XDocument.Parse(BoundedCatalogPlan("sqlserver"));
-        var definition = document.Descendants().Single(element =>
-            element.Name.LocalName == "DefinedValue" &&
-            element.Descendants().Any(child =>
-                child.Name.LocalName == "ColumnReference" &&
-                child.Attribute("Column")?.Value == "[Expr1004]"));
-        definition.Descendants().Single(element => element.Name.LocalName == "ScalarOperator")
-            .SetAttributeValue("ScalarString", "CASE WHEN [idOrderKey] IS NULL THEN (0) ELSE (1) END");
+        var orderBy = document.Descendants().Single(element => element.Name.LocalName == "OrderBy");
+        orderBy.AddFirst(System.Xml.Linq.XElement.Parse(
+            "<OrderByColumn Ascending=\"1\"><ColumnReference Column=\"[Expr1010]\" /></OrderByColumn>"));
+        var definitions = document.Descendants().Single(element => element.Name.LocalName == "DefinedValues");
+        definitions.AddFirst(System.Xml.Linq.XElement.Parse(
+            "<DefinedValue><ColumnReference Column=\"[Expr1010]\" /><ScalarOperator ScalarString=\"CASE WHEN [lastSeen] IS NULL THEN (1) ELSE (0) END\" /></DefinedValue>"));
 
         AssertBoundedCatalogRejected("sqlserver", document.ToString(System.Xml.Linq.SaveOptions.DisableFormatting));
     }
@@ -1250,14 +1249,35 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     }
 
     [Fact]
-    public void PostgreSql_bounded_catalog_scan_sort_rejects_reversed_null_rank_polarity()
+    public void PostgreSql_bounded_catalog_scan_sort_rejects_an_unexpected_null_rank()
     {
-        var plan = BoundedCatalogPlan("postgresql").Replace(
-            "THEN 1 ELSE 0",
-            "THEN 0 ELSE 1",
-            StringComparison.Ordinal);
+        var plan = JsonNode.Parse(BoundedCatalogPlan("postgresql"))!.AsArray();
+        var sortKeys = plan[0]!["Plan"]!["Plans"]![0]!["Sort Key"]!.AsArray();
+        sortKeys.Insert(0, "(CASE WHEN (elsa_otel_resources_v2.\"lastSeen\" IS NULL) THEN 1 ELSE 0 END)");
 
-        AssertBoundedCatalogRejected("postgresql", plan);
+        AssertBoundedCatalogRejected("postgresql", plan.ToJsonString());
+    }
+
+    [Theory]
+    [InlineData("postgresql")]
+    [InlineData("sqlserver")]
+    public void Relational_bounded_catalog_scan_sort_requires_a_null_rank_for_declared_nullable_columns(
+        string provider)
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen") with
+        {
+            NullableOrderingColumns = ["lastSeen"]
+        };
+
+        Assert.Equal(
+            DiagnosticsNativePlanContract.IndexSearchPlanClassification,
+            DiagnosticsNativePlanContract.ClassifyPlan(
+                provider,
+                DiagnosticsNativePlanContract.GroundworkAdapter,
+                specification,
+                BoundedCatalogPlan(provider)));
     }
 
     [Fact]
@@ -1872,20 +1892,14 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 <ShowPlanXML>
                   <RelOp PhysicalOp="Top"><Top><RelOp PhysicalOp="Filter"><Filter>
                     <RelOp PhysicalOp="Sort"><Sort><OrderBy>
-                      <OrderByColumn Ascending="1"><ColumnReference Column="[Expr1003]" /></OrderByColumn>
                       <OrderByColumn Ascending="0"><ColumnReference Column="[lastSeen]" /></OrderByColumn>
-                      <OrderByColumn Ascending="1"><ColumnReference Column="[Expr1004]" /></OrderByColumn>
                       <OrderByColumn Ascending="1"><ColumnReference Column="[Expr1005]" /></OrderByColumn>
                       <OrderByColumn Ascending="1"><ColumnReference Column="[Expr1006]" /></OrderByColumn>
-                      <OrderByColumn Ascending="1"><ColumnReference Column="[Expr1007]" /></OrderByColumn>
                       <OrderByColumn Ascending="1"><ColumnReference Column="[Expr1008]" /></OrderByColumn>
                       <OrderByColumn Ascending="1"><ColumnReference Column="[Expr1009]" /></OrderByColumn>
                     </OrderBy><RelOp PhysicalOp="Compute Scalar"><ComputeScalar><DefinedValues>
-                      <DefinedValue><ColumnReference Column="[Expr1003]" /><ScalarOperator ScalarString="CASE WHEN [lastSeen] IS NULL THEN (1) ELSE (0) END" /></DefinedValue>
-                      <DefinedValue><ColumnReference Column="[Expr1004]" /><ScalarOperator ScalarString="CASE WHEN [idOrderKey] IS NULL THEN (1) ELSE (0) END" /></DefinedValue>
                       <DefinedValue><ColumnReference Column="[Expr1005]" /><ScalarOperator ScalarString="[idOrderKey] COLLATE Latin1_General_100_BIN2" /></DefinedValue>
                       <DefinedValue><ColumnReference Column="[Expr1006]" /><ScalarOperator ScalarString="DATALENGTH([idOrderKey] COLLATE Latin1_General_100_BIN2)" /></DefinedValue>
-                      <DefinedValue><ColumnReference Column="[Expr1007]" /><ScalarOperator ScalarString="CASE WHEN [id] IS NULL THEN (1) ELSE (0) END" /></DefinedValue>
                       <DefinedValue><ColumnReference Column="[Expr1008]" /><ScalarOperator ScalarString="[id] COLLATE Latin1_General_100_BIN2" /></DefinedValue>
                       <DefinedValue><ColumnReference Column="[Expr1009]" /><ScalarOperator ScalarString="DATALENGTH([id] COLLATE Latin1_General_100_BIN2)" /></DefinedValue>
                     </DefinedValues>
@@ -1906,20 +1920,13 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 ? $"(\"{term.Column}\" COLLATE \"C\")"
                 : $"\"{term.Column}\"";
             var direction = term.Direction == RuntimeNativeOrderDirection.Descending ? "DESC" : "ASC";
-            return new[]
-            {
-                $"CASE WHEN {expression} IS NULL THEN 1 ELSE 0 END ASC",
-                (ordinal ? PostgreSqlOrdinalKey(expression) : expression) + " " + direction
-            };
+            return new[] { (ordinal ? PostgreSqlOrdinalKey(expression) : expression) + " " + direction };
         }).ToArray();
 
     private static string[] PostgreSqlExplainSortKeys() =>
     [
-        "(CASE WHEN (elsa_otel_resources_v2.\"lastSeen\" IS NULL) THEN 1 ELSE 0 END)",
         "elsa_otel_resources_v2.\"lastSeen\" DESC",
-        "(CASE WHEN ((elsa_otel_resources_v2.\"idOrderKey\")::text IS NULL) THEN 1 ELSE 0 END)",
         "(COALESCE((SubPlan 1), ''::text))",
-        "(CASE WHEN ((elsa_otel_resources_v2.id)::text IS NULL) THEN 1 ELSE 0 END)",
         "(COALESCE((SubPlan 2), ''::text))"
     ];
 
@@ -1941,11 +1948,9 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             "postgresql" => string.Join(", ", PostgreSqlRenderedOrderTerms(specification)),
             "sqlserver" => string.Join(", ", new[]
             {
-                "CASE WHEN [lastSeen] IS NULL THEN 1 ELSE 0 END ASC", "[lastSeen] DESC",
-                "CASE WHEN [idOrderKey] COLLATE Latin1_General_100_BIN2 IS NULL THEN 1 ELSE 0 END ASC",
+                "[lastSeen] DESC",
                 "[idOrderKey] COLLATE Latin1_General_100_BIN2 ASC",
                 "DATALENGTH([idOrderKey] COLLATE Latin1_General_100_BIN2) ASC",
-                "CASE WHEN [id] COLLATE Latin1_General_100_BIN2 IS NULL THEN 1 ELSE 0 END ASC",
                 "[id] COLLATE Latin1_General_100_BIN2 ASC",
                 "DATALENGTH([id] COLLATE Latin1_General_100_BIN2) ASC"
             }),
@@ -2066,9 +2071,9 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             command ??= provider switch
             {
                 "mongodb" => MongoAggregateCommand(spec),
-                "postgresql" when spec.EffectiveOrdering.Any(term =>
+                "postgresql" or "sqlserver" when spec.EffectiveOrdering.Any(term =>
                     term.Column is "id" or "idOrderKey" or "traceKey" or "spanId") =>
-                    ProviderRenderedRelationalCommand("postgresql", spec),
+                    ProviderRenderedRelationalCommand(provider, spec),
                 _ => "SELECT * FROM elsa_otel_resources_v2 WHERE __groundwork_scope = @scope ORDER BY lastSeen DESC, idOrderKey ASC, id ASC LIMIT 127"
             };
             var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(provider, spec);
