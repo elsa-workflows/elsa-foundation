@@ -30,7 +30,7 @@ public sealed class DiagnosticsDurableHistoryWorkload
 {
     // Native-plan capture is untimed setup: use larger batches to preserve the exact final cardinality
     // without paying the measured workload's deliberately small transaction shape.
-    internal const int NativePlanFixtureBatchSize = 1_000;
+    internal const int UntimedFixtureBatchSize = 1_000;
     private static readonly ReproducibleWorkloadScenario Scenario = ReproducibleWorkloadScenarioCatalog.Get(WorkloadId);
     private static readonly JsonSerializerOptions CanonicalJsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
@@ -132,9 +132,15 @@ public sealed class DiagnosticsDurableHistoryWorkload
         VerifyCrossScopeIsolation
     ];
 
-    public async ValueTask<DiagnosticsDurableHistoryWorkloadResult> ExecuteAsync(
+    public ValueTask<DiagnosticsDurableHistoryWorkloadResult> ExecuteAsync(
         IDiagnosticsDurableHistoryWorkloadAdapter adapter,
         CancellationToken cancellationToken = default)
+        => ExecuteCoreAsync(adapter, NormalizedRecordsPerOtlpBatch, cancellationToken);
+
+    private async ValueTask<DiagnosticsDurableHistoryWorkloadResult> ExecuteCoreAsync(
+        IDiagnosticsDurableHistoryWorkloadAdapter adapter,
+        int openTelemetryBatchSize,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(adapter);
         var scenario = ValidateScenario();
@@ -195,7 +201,7 @@ public sealed class DiagnosticsDurableHistoryWorkload
         // 6. Fan the normalized OTLP batches into the four record streams. Each stream receives exactly the
         //    retained capacity plus the overflow, so provider-side capacity retention has something to
         //    evict and the inspected counts below are exact rather than approximate.
-        await AppendOpenTelemetryAsync(scopes.Primary, cancellationToken);
+        await AppendOpenTelemetryAsync(scopes.Primary, openTelemetryBatchSize, cancellationToken);
         await adapter.FlushAsync(cancellationToken);
         operations.Add(AppendOpenTelemetryBatches);
 
@@ -361,6 +367,16 @@ public sealed class DiagnosticsDurableHistoryWorkload
             operations,
             actualObservations);
     }
+
+    /// <summary>
+    /// Builds and verifies the same process-local fixture used by the standalone correctness command,
+    /// while allowing larger OpenTelemetry writes during untimed child-process setup. The observable
+    /// contract and every assertion remain identical; only the setup transaction shape changes.
+    /// </summary>
+    internal ValueTask<DiagnosticsDurableHistoryWorkloadResult> PrepareMeasurementFixtureAsync(
+        IDiagnosticsDurableHistoryWorkloadAdapter adapter,
+        CancellationToken cancellationToken = default)
+        => ExecuteCoreAsync(adapter, UntimedFixtureBatchSize, cancellationToken);
 
     /// <summary>
     /// Prepares the fifteen catalog-owned diagnostics phases for process measurement. Correctness leaves
@@ -707,9 +723,12 @@ public sealed class DiagnosticsDurableHistoryWorkload
         return (await Task.WhenAll(writers)).Max();
     }
 
-    private static async Task AppendOpenTelemetryAsync(DiagnosticsDurableHistoryClient client, CancellationToken cancellationToken)
+    private static async Task AppendOpenTelemetryAsync(
+        DiagnosticsDurableHistoryClient client,
+        int batchSize,
+        CancellationToken cancellationToken)
     {
-        foreach (var batch in OpenTelemetryBatches(AppendedPerStream, bindSignalsToLatestTrace: false))
+        foreach (var batch in OpenTelemetryBatches(AppendedPerStream, bindSignalsToLatestTrace: false, batchSize))
             await client.OpenTelemetry.WriteAsync(batch, cancellationToken);
     }
 
@@ -834,7 +853,7 @@ public sealed class DiagnosticsDurableHistoryWorkload
         OpenTelemetryBatches(
             RetainedRecordsPerStream,
             bindSignalsToLatestTrace: true,
-            batchSize: NativePlanFixtureBatchSize);
+            batchSize: UntimedFixtureBatchSize);
 
     private static StructuredLogEntry StructuredLogEntryFor(int index, string category, string sourceId) => new()
     {

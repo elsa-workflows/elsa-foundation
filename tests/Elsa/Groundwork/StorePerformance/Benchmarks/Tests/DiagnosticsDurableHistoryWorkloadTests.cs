@@ -72,18 +72,39 @@ public sealed class DiagnosticsDurableHistoryWorkloadTests
         var native = DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatches().ToArray();
         Assert.Equal(
             (DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream +
-             DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatchSize - 1) /
-            DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatchSize,
+             DiagnosticsDurableHistoryWorkload.UntimedFixtureBatchSize - 1) /
+            DiagnosticsDurableHistoryWorkload.UntimedFixtureBatchSize,
             native.Length);
         Assert.Equal(
             DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream,
             native.Sum(batch => batch.Traces.Count));
 
         var nativeFirst = native[0];
-        Assert.Equal(DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatchSize, nativeFirst.Traces.Count);
-        Assert.Equal(DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatchSize, nativeFirst.Spans.Count);
-        Assert.Equal(DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatchSize, nativeFirst.MetricPoints.Count);
-        Assert.Equal(DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatchSize, nativeFirst.Logs.Count);
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.UntimedFixtureBatchSize, nativeFirst.Traces.Count);
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.UntimedFixtureBatchSize, nativeFirst.Spans.Count);
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.UntimedFixtureBatchSize, nativeFirst.MetricPoints.Count);
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.UntimedFixtureBatchSize, nativeFirst.Logs.Count);
+    }
+
+    [Fact]
+    public void Untimed_measurement_fixture_batching_preserves_every_record_and_catalog_entry()
+    {
+        var batches = DiagnosticsDurableHistoryWorkload.OpenTelemetryBatches(
+            DiagnosticsDurableHistoryWorkload.AppendedRecordsPerStream,
+            bindSignalsToLatestTrace: false,
+            DiagnosticsDurableHistoryWorkload.UntimedFixtureBatchSize).ToArray();
+
+        Assert.Equal(
+            (DiagnosticsDurableHistoryWorkload.AppendedRecordsPerStream +
+             DiagnosticsDurableHistoryWorkload.UntimedFixtureBatchSize - 1) /
+            DiagnosticsDurableHistoryWorkload.UntimedFixtureBatchSize,
+            batches.Length);
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.AppendedRecordsPerStream, batches.Sum(batch => batch.Traces.Count));
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.AppendedRecordsPerStream, batches.Sum(batch => batch.Spans.Count));
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.AppendedRecordsPerStream, batches.Sum(batch => batch.MetricPoints.Count));
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.AppendedRecordsPerStream, batches.Sum(batch => batch.Logs.Count));
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.ResourceCount, batches.Sum(batch => batch.Resources.Count));
+        Assert.Equal(DiagnosticsDurableHistoryWorkload.InstrumentCount, batches.Sum(batch => batch.Instruments.Count));
     }
 
     [Fact]

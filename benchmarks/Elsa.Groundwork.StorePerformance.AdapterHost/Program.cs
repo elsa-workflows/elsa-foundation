@@ -292,8 +292,9 @@ static async Task<int> CapturePlan(string[] args)
 // The measured path the matrix runner drives, writing the process artifact where the runner reads it
 // after the child exits.
 //
-// The adapter prepares the workload-owned public operation phases after the correctness baseline succeeds;
-// ProcessMeasurement then warms and times those same phases without rebuilding their private fixtures.
+// The adapter prepares the workload-owned public operation phases after a correctness-equivalent fixture
+// has been verified. Diagnostics may use larger writes during this untimed setup, but retain the standalone
+// baseline's process isolation, observable result digest, assertions, and measured operation shapes.
 static async Task<int> Run(string[] args)
 {
     AdmitOutput(args, "run");
