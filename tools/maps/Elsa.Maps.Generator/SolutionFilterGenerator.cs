@@ -130,7 +130,7 @@ public static class SolutionFilterGenerator
             throw new InvalidOperationException("Solution filter manifest must define at least one profile.");
 
         var duplicateOutput = manifest.Profiles
-            .GroupBy(profile => Normalize(profile.OutputPath), StringComparer.Ordinal)
+            .GroupBy(profile => Normalize(profile.OutputPath), StringComparer.OrdinalIgnoreCase)
             .FirstOrDefault(group => group.Count() > 1);
         if (duplicateOutput is not null)
             throw new InvalidOperationException($"Solution filter manifest defines output '{duplicateOutput.Key}' more than once.");
@@ -146,12 +146,19 @@ public static class SolutionFilterGenerator
             throw new InvalidOperationException($"Solution file not found: {solutionPath}");
 
         var document = XDocument.Load(absoluteSolutionPath);
-        var projectPaths = document.Descendants()
+        var listedProjectPaths = document.Descendants()
             .Where(element => element.Name.LocalName == "Project")
             .Select(element => element.Attribute("Path")?.Value)
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .Select(path => Normalize(path!))
-            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var duplicateProjectPath = listedProjectPaths
+            .GroupBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(group => group.Count() > 1);
+        if (duplicateProjectPath is not null)
+            throw new InvalidOperationException($"Solution '{solutionPath}' lists project path '{duplicateProjectPath.Key}' more than once, possibly with different casing.");
+
+        var projectPaths = listedProjectPaths
             .Order(StringComparer.Ordinal)
             .ToArray();
 
@@ -300,7 +307,7 @@ public static class SolutionFilterGenerator
         IReadOnlyDictionary<string, SolutionProject> projects,
         IReadOnlyList<string> roots)
     {
-        var selected = new HashSet<string>(roots, StringComparer.Ordinal);
+        var selected = new HashSet<string>(roots, StringComparer.OrdinalIgnoreCase);
         var pending = new Queue<string>(roots);
 
         while (pending.TryDequeue(out var path))

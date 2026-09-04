@@ -10,7 +10,7 @@ public static class SolutionFilterGeneratorContractTests
 {
     public static void Run()
     {
-        var root = Path.Combine(Path.GetTempPath(), $"elsa-solution-filter-tests-{Environment.ProcessId}-{Guid.NewGuid():N}");
+        var root = Path.Join(Path.GetTempPath(), $"elsa-solution-filter-tests-{Environment.ProcessId}-{Guid.NewGuid():N}");
 
         try
         {
@@ -25,21 +25,40 @@ public static class SolutionFilterGeneratorContractTests
                     .SequenceEqual(["tests/Container.csproj"], StringComparer.Ordinal),
                 "Root listing must use parsed PackageReference elements and ignore comment text.");
 
-            var first = File.ReadAllBytes(Path.Combine(root, "Feature.slnf"));
+            var first = File.ReadAllBytes(Path.Join(root, "Feature.slnf"));
             SolutionFilterGenerator.Generate(repo);
-            Assert(first.AsSpan().SequenceEqual(File.ReadAllBytes(Path.Combine(root, "Feature.slnf"))),
+            Assert(first.AsSpan().SequenceEqual(File.ReadAllBytes(Path.Join(root, "Feature.slnf"))),
                 "Generating the same graph twice must be byte deterministic.");
 
-            File.WriteAllText(Path.Combine(root, "src/Feature/Feature.csproj"),
+            WriteManifest(root, [], duplicateOutput: true);
+            AssertThrows(
+                () => SolutionFilterGenerator.Generate(repo),
+                "more than once",
+                "Output paths that differ only by casing must be rejected.");
+            WriteManifest(root, []);
+
+            var solutionPath = Path.Join(root, "Elsa.Server.slnx");
+            var solution = File.ReadAllText(solutionPath);
+            File.WriteAllText(solutionPath, solution.Replace(
+                "</Solution>",
+                "  <Project Path=\"src/feature/feature.csproj\" />\n</Solution>",
+                StringComparison.Ordinal));
+            AssertThrows(
+                () => SolutionFilterGenerator.Generate(repo),
+                "more than once",
+                "Solution paths that differ only by casing must be rejected.");
+            File.WriteAllText(solutionPath, solution);
+
+            File.WriteAllText(Path.Join(root, "src/Feature/Feature.csproj"),
                 "<Project><ItemGroup><ProjectReference Include=\"../Missing/Missing.csproj\" /></ItemGroup></Project>");
             AssertThrows(
                 () => SolutionFilterGenerator.Generate(repo),
                 "references a project outside",
                 "A missing ProjectReference must fail closed.");
 
-            Directory.CreateDirectory(Path.Combine(root, "tools"));
-            File.WriteAllText(Path.Combine(root, "tools/External.csproj"), "<Project />");
-            File.WriteAllText(Path.Combine(root, "src/Feature/Feature.csproj"),
+            Directory.CreateDirectory(Path.Join(root, "tools"));
+            File.WriteAllText(Path.Join(root, "tools/External.csproj"), "<Project />");
+            File.WriteAllText(Path.Join(root, "src/Feature/Feature.csproj"),
                 "<Project><ItemGroup><ProjectReference Include=\"../../tools/External.csproj\" /></ItemGroup></Project>");
             WriteManifest(root, ["tools\\External.csproj"]);
             SolutionFilterGenerator.Generate(repo);
@@ -62,13 +81,13 @@ public static class SolutionFilterGeneratorContractTests
 
     private static void WriteFixture(string root)
     {
-        Directory.CreateDirectory(Path.Combine(root, "src/Feature"));
-        Directory.CreateDirectory(Path.Combine(root, "src/Shared"));
-        Directory.CreateDirectory(Path.Combine(root, "tests"));
-        Directory.CreateDirectory(Path.Combine(root, "benchmarks/Feature"));
-        Directory.CreateDirectory(Path.Combine(root, "tools/solution-filters"));
+        Directory.CreateDirectory(Path.Join(root, "src/Feature"));
+        Directory.CreateDirectory(Path.Join(root, "src/Shared"));
+        Directory.CreateDirectory(Path.Join(root, "tests"));
+        Directory.CreateDirectory(Path.Join(root, "benchmarks/Feature"));
+        Directory.CreateDirectory(Path.Join(root, "tools/solution-filters"));
 
-        File.WriteAllText(Path.Combine(root, "Elsa.Server.slnx"),
+        File.WriteAllText(Path.Join(root, "Elsa.Server.slnx"),
             """
             <Solution>
               <Project Path="src\Feature\Feature.csproj" />
@@ -78,49 +97,56 @@ public static class SolutionFilterGeneratorContractTests
               <Project Path="benchmarks/Feature/Feature.Benchmarks.csproj" />
             </Solution>
             """);
-        File.WriteAllText(Path.Combine(root, "src/Feature/Feature.csproj"),
+        File.WriteAllText(Path.Join(root, "src/Feature/Feature.csproj"),
             "<Project><ItemGroup><ProjectReference Include=\"..\\Shared\\Shared.csproj\" /></ItemGroup></Project>");
-        File.WriteAllText(Path.Combine(root, "src/Shared/Shared.csproj"), "<Project />");
-        File.WriteAllText(Path.Combine(root, "tests/Comment.csproj"),
+        File.WriteAllText(Path.Join(root, "src/Shared/Shared.csproj"), "<Project />");
+        File.WriteAllText(Path.Join(root, "tests/Comment.csproj"),
             "<Project><!-- <PackageReference Include=\"Testcontainers.CommentOnly\" /> --></Project>");
-        File.WriteAllText(Path.Combine(root, "tests/Container.csproj"),
+        File.WriteAllText(Path.Join(root, "tests/Container.csproj"),
             "<Project><ItemGroup><PackageReference Include=\"Testcontainers.Real\" /></ItemGroup></Project>");
-        File.WriteAllText(Path.Combine(root, "benchmarks/Feature/Feature.Benchmarks.csproj"), "<Project />");
+        File.WriteAllText(Path.Join(root, "benchmarks/Feature/Feature.Benchmarks.csproj"), "<Project />");
         WriteManifest(root, []);
     }
 
-    private static void WriteManifest(string root, IReadOnlyList<string> allowedExternalReferences)
+    private static void WriteManifest(
+        string root,
+        IReadOnlyList<string> allowedExternalReferences,
+        bool duplicateOutput = false)
     {
+        var profiles = new List<object>
+        {
+            new
+            {
+                outputPath = "Feature.slnf",
+                includeProjectPathContains = new[] { "Feature" },
+                requiredRootPaths = new[] { "src\\Feature\\Feature.csproj" }
+            },
+            new
+            {
+                outputPath = "Integration.slnf",
+                includeProjectPathPrefixes = new[] { "tests\\" },
+                requirePackageReferencePrefixes = new[] { "Testcontainers." }
+            }
+        };
+        if (duplicateOutput)
+            profiles.Add(new { outputPath = "feature.slnf", includeProjectNames = new[] { "Feature" } });
+
         var manifest = new
         {
             solutionPath = "Elsa.Server.slnx",
             excludeRootPathPrefixes = new[] { "benchmarks\\" },
             allowedExternalProjectReferences = allowedExternalReferences,
-            profiles = new object[]
-            {
-                new
-                {
-                    outputPath = "Feature.slnf",
-                    includeProjectPathContains = new[] { "Feature" },
-                    requiredRootPaths = new[] { "src\\Feature\\Feature.csproj" }
-                },
-                new
-                {
-                    outputPath = "Integration.slnf",
-                    includeProjectPathPrefixes = new[] { "tests\\" },
-                    requirePackageReferencePrefixes = new[] { "Testcontainers." }
-                }
-            }
+            profiles
         };
 
         File.WriteAllText(
-            Path.Combine(root, "tools/solution-filters/profiles.json"),
+            Path.Join(root, "tools/solution-filters/profiles.json"),
             JsonSerializer.Serialize(manifest));
     }
 
     private static void AssertProjects(string root, string filter, IReadOnlyList<string> expected)
     {
-        using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, filter)));
+        using var document = JsonDocument.Parse(File.ReadAllText(Path.Join(root, filter)));
         var actual = document.RootElement.GetProperty("solution").GetProperty("projects")
             .EnumerateArray()
             .Select(element => element.GetString()!)
