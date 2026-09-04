@@ -1,0 +1,40 @@
+{
+  "solution": {
+    "path": "Elsa.Server.slnx",
+    "projects": [
+      "benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks.csproj",
+      "src/Elsa/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj",
+      "src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj",
+      "src/Elsa/Attention/Core/Elsa.Attention.Core.csproj",
+      "src/Elsa/Events/Core/Elsa.Events.Core.csproj",
+      "src/Elsa/Expressions/Core/Elsa.Expressions.Core.csproj",
+      "src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj",
+      "src/Elsa/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj",
+      "src/Elsa/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj",
+      "src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj",
+      "src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.csproj",
+      "src/Elsa/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj",
+      "src/Elsa/Foundation/Identity/OpenIddict/Behavior/Elsa.Foundation.Identity.OpenIddict.Behavior.csproj",
+      "src/Elsa/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj",
+      "src/Elsa/Foundation/Identity/Persistence/Groundwork/Elsa.Foundation.Identity.Persistence.Groundwork.csproj",
+      "src/Elsa/Persistence/Core/Elsa.Persistence.Core.csproj",
+      "src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj",
+      "src/Elsa/Pipelines/Core/Elsa.Pipelines.Core.csproj",
+      "src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj",
+      "src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj",
+      "src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj",
+      "src/Elsa/Tasks/Schedules/Elsa.Tasks.Schedules.csproj",
+      "src/Elsa/Workflows/Primitives/Elsa.Workflows.Primitives.csproj",
+      "src/Elsa/Workflows/Runtime/Attention/Elsa.Workflows.Runtime.Attention.csproj",
+      "src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj",
+      "src/Elsa/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed.csproj",
+      "src/Elsa/Workflows/Runtime/Elsa.Workflows.Runtime.csproj",
+      "tests/Elsa/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj",
+      "tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/ProcessProbe/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.ProcessProbe.csproj",
+      "tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.csproj",
+      "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.Tests.csproj",
+      "tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj",
+      "tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj"
+    ]
+  }
+}

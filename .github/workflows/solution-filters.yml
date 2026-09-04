@@ -1,0 +1,57 @@
+name: Solution filters
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  solution-filter-freshness:
+    name: Solution filters fresh
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Check generated filters against the project graph
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -- solution-filters-check
+
+      - name: Exercise generator contracts
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -- solution-filters-self-test
+
+      - name: Validate filters with the .NET CLI
+        shell: bash
+        run: |
+          for filter in Elsa.Server.*.slnf; do
+            echo "Validating $filter"
+            dotnet sln "$filter" list >/dev/null
+          done
+
+      - name: Explain how to refresh
+        if: failure()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Generated solution filters are stale or invalid
+
+          Refresh and validate them locally:
+
+          ```bash
+          tools/solution-filters/generate-solution-filters.sh
+          tools/solution-filters/generate-solution-filters.sh --check
+          ```
+
+          Commit every changed `.slnf` file together with any manifest or generator change.
+          EOF

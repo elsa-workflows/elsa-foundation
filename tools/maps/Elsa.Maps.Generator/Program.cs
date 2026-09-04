@@ -5,6 +5,8 @@ using Elsa.Maps.Generator;
 //
 // Usage: dotnet run --project tools/maps/Elsa.Maps.Generator -- <layer> [<layer> ...]
 //   domain | extension-points | architecture-reference | feature-dependency | maps | all | check
+//   solution-filters | solution-filters-check | solution-filters-self-test
+//   solution-filter-roots <filter-path>
 
 // "maps" first: the v2 findings report reads summary lines out of the v1 maps, so they must exist first.
 string[] knownLayers = ["maps", "domain", "extension-points", "architecture-reference", "feature-dependency"];
@@ -13,6 +15,31 @@ var layers = args.Length > 0 ? args : ["all"];
 try
 {
     var repo = RepoContext.Discover();
+
+    if (layers.SequenceEqual(["solution-filters"], StringComparer.Ordinal))
+    {
+        var filterPaths = SolutionFilterGenerator.Generate(repo);
+        Console.WriteLine("Generated solution filters:");
+        foreach (var path in filterPaths)
+            Console.WriteLine($" - {path}");
+        return 0;
+    }
+
+    if (layers.SequenceEqual(["solution-filters-check"], StringComparer.Ordinal))
+        return SolutionFilterGenerator.Check(repo);
+
+    if (layers.SequenceEqual(["solution-filters-self-test"], StringComparer.Ordinal))
+    {
+        SolutionFilterGeneratorContractTests.Run();
+        return 0;
+    }
+
+    if (layers.Length == 2 && string.Equals(layers[0], "solution-filter-roots", StringComparison.Ordinal))
+    {
+        foreach (var path in SolutionFilterGenerator.GetRoots(repo, layers[1]))
+            Console.WriteLine(path);
+        return 0;
+    }
 
     // Freshness check: regenerates into a scratch directory and compares the bytes with what is
     // committed. Writes nothing into the repository, so it is safe to run in CI while generation
@@ -29,7 +56,7 @@ try
     // writing part of the maps and then throwing.
     var requested = layers.Contains("all", StringComparer.Ordinal) ? knownLayers : layers;
     if (requested.FirstOrDefault(layer => !knownLayers.Contains(layer, StringComparer.Ordinal)) is { } unknown)
-        throw new ArgumentException($"Unknown map layer '{unknown}'. Known layers: {string.Join(", ", knownLayers)}, all, check.");
+        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test, solution-filter-roots <filter-path>.");
 
     var projects = ProjectGraph.Read(repo);
     var written = new List<string>();
