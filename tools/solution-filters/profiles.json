@@ -1,0 +1,67 @@
+{
+  "solutionPath": "Elsa.Server.slnx",
+  "profiles": [
+    {
+      "outputPath": "Elsa.Server.Workflows.Publishing.slnf",
+      "includeProjectNamePrefixes": [
+        "Elsa.Workflows.Publishing"
+      ],
+      "excludeWhenProjectFileContains": [
+        "Testcontainers"
+      ]
+    },
+    {
+      "outputPath": "Elsa.Server.Workflows.Runtime.slnf",
+      "includeProjectNamePrefixes": [
+        "Elsa.Activities.Runtime",
+        "Elsa.Workflows.Runtime"
+      ],
+      "excludeWhenProjectFileContains": [
+        "Testcontainers"
+      ]
+    },
+    {
+      "outputPath": "Elsa.Server.Workflows.Design.slnf",
+      "includeProjectNamePrefixes": [
+        "Elsa.Activities.Design",
+        "Elsa.Workflows.Design"
+      ],
+      "excludeWhenProjectFileContains": [
+        "Testcontainers"
+      ]
+    },
+    {
+      "outputPath": "Elsa.Server.Foundation.Identity.slnf",
+      "includeProjectNamePrefixes": [
+        "Elsa.Foundation.Identity"
+      ],
+      "excludeWhenProjectFileContains": [
+        "Testcontainers"
+      ]
+    },
+    {
+      "outputPath": "Elsa.Server.Persistence.Groundwork.slnf",
+      "includeProjectNameContains": [
+        "Groundwork"
+      ],
+      "excludeWhenProjectFileContains": [
+        "Testcontainers"
+      ]
+    },
+    {
+      "outputPath": "Elsa.Server.Persistence.Groundwork.Integration.slnf",
+      "includeProjectNameContains": [
+        "Groundwork"
+      ],
+      "requireProjectFileContains": [
+        "Testcontainers"
+      ]
+    },
+    {
+      "outputPath": "Elsa.Server.Workbench.slnf",
+      "includeProjectNames": [
+        "Elsa.Workbench"
+      ]
+    }
+  ]
+}
