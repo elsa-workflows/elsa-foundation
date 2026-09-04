@@ -475,7 +475,8 @@ public static class DiagnosticsNativePlanContract
             specification.FiniteLimit,
             specification.StorageScopeRequired,
             false,
-            specification.Ordering));
+            specification.Ordering,
+            adapter == GroundworkAdapter ? [] : null));
         if (artifact.SchemaVersion != 1 || artifact.Provider != provider || artifact.Adapter != adapter ||
             artifact.RouteIdentity != evidence.RouteIdentity || artifact.TableName != specification.TableName ||
             artifact.IndexName != specification.IndexName || artifact.PhysicalIndexName != expectedPhysicalIndex ||
@@ -494,7 +495,8 @@ public static class DiagnosticsNativePlanContract
             specification.FiniteLimit,
             specification.StorageScopeRequired,
             false,
-            specification.Ordering);
+            specification.Ordering,
+            adapter == GroundworkAdapter ? [] : null);
         if (string.Equals(provider, "mongodb", StringComparison.Ordinal))
             ValidateMongoCommand(artifact.CommandText, routeSpecification, artifact.NativePlan);
         else
@@ -829,7 +831,15 @@ public static class DiagnosticsNativePlanContract
         var index = 0;
         foreach (var expected in specification.EffectiveOrdering)
         {
-            if (index < terms.Count && IsSqlNullRank(terms[index]))
+            if (specification.RequiresNullRank(expected.Column))
+            {
+                if (index >= terms.Count ||
+                    !IsSqlNullRank(terms[index]) ||
+                    !SqlNullRankMatches(terms[index], expected.Column))
+                    return false;
+                index++;
+            }
+            else if (index < terms.Count && IsSqlNullRank(terms[index]))
             {
                 if (!SqlNullRankMatches(terms[index], expected.Column))
                     return false;

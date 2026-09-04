@@ -20,6 +20,9 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         var trace = DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, "traces-by-last-seen");
 
         Assert.Equal(("elsa_otel_resources_v2", "elsa_otel_resources_last_seen"), (resource.TableName, resource.IndexName));
+        Assert.NotNull(resource.NullableOrderingColumns);
+        Assert.Empty(resource.NullableOrderingColumns!);
+        Assert.False(resource.RequiresNullRank("lastSeen"));
         Assert.Equal(("elsa_otel_trace_summaries_v3", "elsa_otel_trace_summaries_start"), (trace.TableName, trace.IndexName));
         Assert.Equal("elsa_otel_resources_status_last_seen", DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, "resources-by-status").IndexName);
         Assert.Equal("elsa_otel_resources_service_last_seen", DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, "resources-by-service").IndexName);
@@ -1197,6 +1200,44 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     }
 
     [Fact]
+    public void SqlServer_command_rejects_missing_null_ranks_for_conservative_nullable_ordering()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.EfAdapter,
+            "resources-by-last-seen");
+
+        Assert.True(specification.RequiresNullRank("lastSeen"));
+        using var fixture = Fixture.Create(
+            "sqlserver",
+            specification.RouteIdentity,
+            command: SqlServerNullableOrderingCommand(specification, includeNullRanks: false),
+            nativePlan: SqlServerIndexSeekPlan(specification),
+            adapter: DiagnosticsNativePlanContract.EfAdapter);
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "sqlserver", fixture.Adapter, fixture.Route, fixture.Path));
+    }
+
+    [Fact]
+    public void SqlServer_command_accepts_null_ranks_for_conservative_nullable_ordering()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.EfAdapter,
+            "resources-by-last-seen");
+
+        Assert.True(specification.RequiresNullRank("lastSeen"));
+        using var fixture = Fixture.Create(
+            "sqlserver",
+            specification.RouteIdentity,
+            command: SqlServerNullableOrderingCommand(specification, includeNullRanks: true),
+            nativePlan: SqlServerIndexSeekPlan(specification),
+            adapter: DiagnosticsNativePlanContract.EfAdapter);
+
+        DiagnosticsNativePlanContract.ValidateEnvelope(
+            "sqlserver", fixture.Adapter, fixture.Route, fixture.Path);
+    }
+
+    [Fact]
     public void PostgreSql_bounded_catalog_scan_sort_rejects_incomplete_native_sort_keys()
     {
         var plan = JsonNode.Parse(BoundedCatalogPlan("postgresql"))!.AsArray();
@@ -2011,6 +2052,26 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             : $"SELECT * FROM {specification.TableName} WHERE {predicate} ORDER BY {ordering} LIMIT {specification.FiniteLimit}";
     }
 
+    private static string SqlServerNullableOrderingCommand(
+        DiagnosticsNativeRouteSpec specification,
+        bool includeNullRanks)
+    {
+        var ordering = specification.EffectiveOrdering.SelectMany(term =>
+        {
+            var value = $"[{term.Column}] {(term.Direction == RuntimeNativeOrderDirection.Descending ? "DESC" : "ASC")}";
+            return includeNullRanks
+                ? new[] { $"CASE WHEN [{term.Column}] IS NULL THEN 1 ELSE 0 END ASC", value }
+                : new[] { value };
+        });
+        return $"SELECT TOP ({specification.FiniteLimit}) * FROM {specification.TableName} ORDER BY {string.Join(", ", ordering)}";
+    }
+
+    private static string SqlServerIndexSeekPlan(DiagnosticsNativeRouteSpec specification)
+    {
+        var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("sqlserver", specification);
+        return $"<ShowPlanXML><RelOp PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[{specification.TableName}]\" Index=\"[{physicalIndex}]\" /></IndexScan></RelOp></ShowPlanXML>";
+    }
+
     private static void AssertBoundedCatalogRejected(string provider, string nativePlan)
     {
         using var fixture = Fixture.Create(
@@ -2031,12 +2092,13 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     {
         private Fixture(
             string provider,
+            string adapter,
             string routeIdentity,
             string commandText,
             string nativePlan,
             string? planClassification)
         {
-            Adapter = DiagnosticsNativePlanContract.GroundworkAdapter;
+            Adapter = adapter;
             Route = RouteFor(Adapter, provider, routeIdentity, planClassification);
             var artifact = new DiagnosticsNativePlanArtifact(
                 1,
@@ -2065,9 +2127,11 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             string? command = null,
             string? nativePlan = null,
             bool attachCommandToNativePlan = true,
-            string? planClassification = null)
+            string? planClassification = null,
+            string? adapter = null)
         {
-            var spec = DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, routeIdentity);
+            adapter ??= DiagnosticsNativePlanContract.GroundworkAdapter;
+            var spec = DiagnosticsNativePlanContract.For(adapter, routeIdentity);
             command ??= provider switch
             {
                 "mongodb" => MongoAggregateCommand(spec),
@@ -2093,7 +2157,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                                    throw new InvalidOperationException("Mongo fixture command must be valid JSON.");
                 nativePlan = plan.ToJsonString();
             }
-            return new Fixture(provider, routeIdentity, command, nativePlan, planClassification);
+            return new Fixture(provider, adapter, routeIdentity, command, nativePlan, planClassification);
         }
 
         internal static string MongoPhysicalCollection(DiagnosticsNativeRouteSpec specification) =>
