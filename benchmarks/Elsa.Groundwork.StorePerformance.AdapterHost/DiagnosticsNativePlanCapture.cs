@@ -125,15 +125,15 @@ internal static class DiagnosticsNativePlanCapture
                             nativePath);
                     }
                     catch (ExplainAssertionException exception) when (
-                        DiagnosticsNativePlanContract.IsBoundedMongoResourceRoute(
+                        DiagnosticsNativePlanContract.IsBoundedResourceRoute(
                             request.Provider,
                             request.Adapter,
                             specification))
                     {
                         // Groundwork retains the provider explain response before asserting the
-                        // declared index. A small Mongo resource catalog may legitimately choose a
-                        // bounded collection scan/sort, so preserve that asserted artifact and then
-                        // repeat only the public call with assertion disabled to prove its exact page.
+                        // declared index. PostgreSQL, SQL Server, or MongoDB may legitimately scan this
+                        // frozen 128-row catalog to return its 127-row page, so preserve that asserted
+                        // artifact and repeat only the public call with assertion disabled to prove its exact page.
                         nativePath = RequireAssertionArtifact(
                             explainDirectory,
                             before,
@@ -147,7 +147,7 @@ internal static class DiagnosticsNativePlanCapture
                             specification,
                             nativePath);
                         adapter.CommandObserver.ClearCommands();
-                        result = await InvokeBoundedMongoResourceRouteWithoutExplainAssertionAsync(
+                        result = await InvokeBoundedResourceRouteWithoutExplainAssertionAsync(
                             scopes.Primary,
                             route,
                             limit,
@@ -671,7 +671,7 @@ internal static class DiagnosticsNativePlanCapture
         return fullPath;
     }
 
-    private static async Task<int> InvokeBoundedMongoResourceRouteWithoutExplainAssertionAsync(
+    private static async Task<int> InvokeBoundedResourceRouteWithoutExplainAssertionAsync(
         DiagnosticsDurableHistoryClient client,
         string route,
         int limit,
@@ -680,7 +680,7 @@ internal static class DiagnosticsNativePlanCapture
         using var suppression = ExplainAssertionMode.Suppress();
         var result = await QueryResourceRouteAsync(client, route, limit, cancellationToken);
         var diagnostics = await client.OpenTelemetry.GetDiagnosticsAsync(cancellationToken);
-        ValidateBoundedMongoResourcePage(route, result, diagnostics, limit);
+        ValidateBoundedResourcePage(route, result, diagnostics, limit);
         return result.Items.Count;
     }
 
@@ -703,12 +703,12 @@ internal static class DiagnosticsNativePlanCapture
                 ServiceName = DiagnosticsDurableHistoryWorkload.ServiceNameFor(0),
                 Take = limit
             },
-            _ => throw new PerformanceContractException($"Unsupported bounded Mongo resource route '{route}'.")
+            _ => throw new PerformanceContractException($"Unsupported bounded resource route '{route}'.")
         };
         return await client.OpenTelemetry.QueryResourcesAsync(filter, cancellationToken);
     }
 
-    internal static void ValidateBoundedMongoResourcePage(
+    internal static void ValidateBoundedResourcePage(
         string route,
         OpenTelemetryResourceResult result,
         OpenTelemetryStorageDiagnostics diagnostics,
@@ -716,7 +716,7 @@ internal static class DiagnosticsNativePlanCapture
     {
         if (diagnostics.ResourceCount != DiagnosticsDurableHistoryWorkload.ResourceCount)
             throw new PerformanceContractException(
-                $"Diagnostics bounded Mongo resource route '{route}' observed {diagnostics.ResourceCount} scoped resources; expected {DiagnosticsDurableHistoryWorkload.ResourceCount}.");
+                $"Diagnostics bounded resource route '{route}' observed {diagnostics.ResourceCount} scoped resources; expected {DiagnosticsDurableHistoryWorkload.ResourceCount}.");
 
         var expected = Enumerable.Range(0, DiagnosticsDurableHistoryWorkload.ResourceCount)
             .Select(ordinal => DiagnosticsDurableHistoryWorkload.ResourceFor(
@@ -732,7 +732,7 @@ internal static class DiagnosticsNativePlanCapture
                 expected.Select(resource => resource.Id),
                 StringComparer.Ordinal))
             throw new PerformanceContractException(
-                $"Diagnostics bounded Mongo resource route '{route}' did not return the frozen deterministic resource identity/order page.");
+                $"Diagnostics bounded resource route '{route}' did not return the frozen deterministic resource identity/order page.");
 
         for (var index = 0; index < expected.Length; index++)
         {
@@ -748,7 +748,7 @@ internal static class DiagnosticsNativePlanCapture
                     !actualResource.Attributes.TryGetValue(attribute.Key, out var value) ||
                     !string.Equals(value, attribute.Value, StringComparison.Ordinal)))
                 throw new PerformanceContractException(
-                    $"Diagnostics bounded Mongo resource route '{route}' returned resource '{actualResource.Id}' with non-canonical fixture fields.");
+                    $"Diagnostics bounded resource route '{route}' returned resource '{actualResource.Id}' with non-canonical fixture fields.");
         }
     }
 

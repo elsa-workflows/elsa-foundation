@@ -25,11 +25,12 @@ prevents the default ratio gate from being silently applied. The generic no-comp
 but it accepts only an explicit independently reviewed policy and has no diagnostics defaults.
 
 Native-plan admission keeps every scale-bearing diagnostics route index-backed and free of provider
-sort or spill stages. The three MongoDB resource-catalog routes have a narrower workload-specific
-alternative: because their frozen physical cardinality is exactly 128 rows and their finite page is
-exactly 127 rows, an explicit collection scan plus complete in-memory sort may be classified as
-`bounded-scan-sort`. That classification is rejected for any other route or bound, for incomplete
-ordering, or for any spill/materialization evidence; it does not weaken the 100,000-row stream gates.
+sort or spill stages. The three resource-catalog routes have a narrower workload-specific alternative
+for PostgreSQL, SQL Server, and MongoDB optimizers: because their frozen physical cardinality is exactly
+128 rows and their finite page is exactly 127 rows, one explicit physical scan plus one complete in-memory sort may be
+classified as `bounded-scan-sort`. That classification is rejected for any other route or bound, for
+incomplete ordering, or for any spill/materialization evidence; it does not weaken the 100,000-row
+stream gates. SQLite retains the stricter index-search requirement proven by its native plan.
 
 `matrix <scale>` executes one untimed adapter-host warm-up process followed by three independent measured
 adapter-host processes. A measured artifact carries the frozen seed/input fingerprint, provider-native plan

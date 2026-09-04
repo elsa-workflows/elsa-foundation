@@ -181,6 +181,37 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
     }
 
     [Fact]
+    public async Task Durability_poll_timeout_reports_the_last_observed_and_required_counts()
+    {
+        var store = new ProbeOpenTelemetryStore();
+        var tracking = new DiagnosticsDurableHistoryAdapter.TrackingOpenTelemetryStore(store, TimeSpan.Zero);
+        await tracking.WriteAsync(new OpenTelemetryBatch(
+            Resources:
+            [
+                new TelemetryResource(
+                    "resource-1",
+                    "service-1",
+                    null,
+                    null,
+                    new Dictionary<string, string?>(),
+                    DateTimeOffset.UtcNow,
+                    TelemetryResourceStatus.Active)
+            ],
+            Traces: [],
+            Spans: [],
+            Instruments: [],
+            MetricPoints: [],
+            Logs: []));
+
+        var exception = await Assert.ThrowsAsync<PerformanceContractException>(
+            () => tracking.WaitForDurabilityAsync(CancellationToken.None));
+
+        Assert.Equal(1, store.DiagnosticsReadCount);
+        Assert.Contains("resources 0/1", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("last trace not required", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Frozen_sequence_and_native_route_cardinalities_match_the_catalog()
     {
         var workload = WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()).Workloads[
@@ -401,7 +432,7 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
     }
 
     [Fact]
-    public void Mongo_bounded_resource_page_validation_requires_the_canonical_page_and_scope_count()
+    public void Bounded_resource_page_validation_requires_the_canonical_page_and_scope_count()
     {
         var page = new OpenTelemetryResourceResult(
             Enumerable.Range(0, DiagnosticsDurableHistoryWorkload.ResourceCount)
@@ -414,7 +445,7 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
             0);
         var diagnostics = DiagnosticsWithResourceCount(DiagnosticsDurableHistoryWorkload.ResourceCount);
 
-        DiagnosticsNativePlanCapture.ValidateBoundedMongoResourcePage(
+        DiagnosticsNativePlanCapture.ValidateBoundedResourcePage(
             "resources-by-last-seen",
             page,
             diagnostics,
@@ -424,7 +455,7 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
     [Theory]
     [InlineData(127, false)]
     [InlineData(128, true)]
-    public void Mongo_bounded_resource_page_validation_rejects_stale_or_duplicate_pages(
+    public void Bounded_resource_page_validation_rejects_stale_or_duplicate_pages(
         int resourceCount,
         bool duplicatePage)
     {
@@ -447,7 +478,7 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
                     .ToArray(),
                 0);
         var exception = Assert.Throws<PerformanceContractException>(() =>
-            DiagnosticsNativePlanCapture.ValidateBoundedMongoResourcePage(
+            DiagnosticsNativePlanCapture.ValidateBoundedResourcePage(
                 "resources-by-last-seen",
                 page,
                 DiagnosticsWithResourceCount(resourceCount),

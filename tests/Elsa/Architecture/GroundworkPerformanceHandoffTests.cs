@@ -307,13 +307,21 @@ public sealed class GroundworkPerformanceHandoffTests
         Assert.Contains("DIAGNOSTICS_CORRECTNESS_DIR:", job, StringComparison.Ordinal);
         Assert.Contains("/${{ matrix.provider }}/correctness", job, StringComparison.Ordinal);
         var correctnessStart = job.IndexOf("      - name: Verify diagnostics correctness", StringComparison.Ordinal);
-        var correctnessEnd = job.IndexOf("      - name: Stop non-target containers before timing", correctnessStart, StringComparison.Ordinal);
+        var correctnessEnd = job.IndexOf("      - name: Reset SQLite database before timing", correctnessStart, StringComparison.Ordinal);
         Assert.True(correctnessStart >= 0 && correctnessEnd > correctnessStart);
         var correctnessStep = job[correctnessStart..correctnessEnd];
         Assert.Contains("--out \"$DIAGNOSTICS_CORRECTNESS_DIR\"", correctnessStep, StringComparison.Ordinal);
         Assert.DoesNotContain("--out \"$DIAGNOSTICS_OUTPUT_DIR\"", correctnessStep, StringComparison.Ordinal);
         Assert.Contains("--execute | tee \"$DIAGNOSTICS_WORK_ROOT/correctness-summary.txt\"", correctnessStep, StringComparison.Ordinal);
-        var measurementStart = job.IndexOf("      - name: Measure diagnostics evidence", correctnessEnd, StringComparison.Ordinal);
+        var timingPreparationEnd = job.IndexOf("      - name: Stop non-target containers before timing", correctnessEnd, StringComparison.Ordinal);
+        Assert.True(timingPreparationEnd > correctnessEnd);
+        var sqliteResetStep = job[correctnessEnd..timingPreparationEnd];
+        Assert.Contains("if: ${{ matrix.provider == 'sqlite' }}", sqliteResetStep, StringComparison.Ordinal);
+        Assert.Contains(
+            "rm -f -- \"$sqlite_file\" \"$sqlite_file-shm\" \"$sqlite_file-wal\"",
+            sqliteResetStep,
+            StringComparison.Ordinal);
+        var measurementStart = job.IndexOf("      - name: Measure diagnostics evidence", timingPreparationEnd, StringComparison.Ordinal);
         var measurementEnd = job.IndexOf("      - name: Record provider diagnostics", measurementStart, StringComparison.Ordinal);
         Assert.True(measurementStart >= 0 && measurementEnd > measurementStart);
         var measurementStep = job[measurementStart..measurementEnd];
