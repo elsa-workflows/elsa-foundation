@@ -25,7 +25,7 @@ public sealed class PublishingGroundworkFeature : IShellFeature
 {
     [ManifestSetting(
         DisplayName = "Target",
-        Description = "The Groundwork target holding publication slots, records, policies and receipts. Defaults to 'default'. Reusable-activity publication commits design, runtime and publishing documents together, so those lanes must currently agree on one target.",
+        Description = "The Groundwork target holding publication records, policies and receipts. Activation slots are Runtime-owned and use the Runtime target. Defaults to 'default'. Reusable-activity publication commits design, runtime and publishing documents together, so those lanes must currently agree on one target.",
         Category = "Persistence")]
     public string? Target { get; set; }
 

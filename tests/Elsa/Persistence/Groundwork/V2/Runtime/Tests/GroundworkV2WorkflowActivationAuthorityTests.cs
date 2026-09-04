@@ -1,9 +1,11 @@
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Persistence.Groundwork.V2.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Kernel;
+using Groundwork.Query.Model;
 using Groundwork.Store;
 using Xunit;
 
@@ -72,6 +74,53 @@ public sealed class GroundworkV2WorkflowActivationAuthorityTests
                         now)),
                 WriteOptions.CreateOnly);
         Assert.Equal(WriteOutcomeStatus.UniqueViolation, duplicateActive.Status);
+    }
+
+    [Fact]
+    public async Task Sqlite_activation_slot_listing_uses_bounded_keyset_continuation_pages()
+    {
+        await using var persistence = GroundworkV2TestPersistence.Create(
+            "sqlite",
+            [ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDocumentKind)]);
+        var seeder = CreateAuthority(persistence);
+        var now = new DateTimeOffset(2026, 8, 15, 12, 0, 0, TimeSpan.Zero);
+
+        for (var index = 0; index < 101; index++)
+        {
+            var result = await seeder.TryActivateAsync(new(
+                "definition-paged",
+                $"slot-{index:D3}",
+                $"activation-{index:D3}",
+                WorkflowActivationSource.Publishing,
+                0,
+                now));
+            Assert.True(result.Succeeded);
+        }
+
+        var requests = new List<QueryRequest>();
+        var recording = new RecordingSessionSource(persistence.Sessions, requests);
+        var authority = new GroundworkV2WorkflowActivationAuthority(
+            recording,
+            persistence.Access(),
+            new GroundworkStorageTransactionFactory(recording, persistence.Access()));
+
+        var slots = await authority.ListByDefinitionAsync("definition-paged");
+
+        Assert.Equal(101, slots.Count);
+        Assert.Equal(
+            Enumerable.Range(0, 101).Select(index => $"slot-{index:D3}"),
+            slots.Select(slot => slot.SlotName));
+        Assert.Equal(2, requests.Count);
+        Assert.All(requests, request => Assert.Equal(100, request.Paging.Limit));
+        Assert.Null(requests[0].Paging.ContinuationToken);
+        Assert.NotNull(requests[1].Paging.ContinuationToken);
+        Assert.Equal(
+            [
+                ElsaRuntimeV2StorageManifest.WorkflowActivationSlotNameField,
+                ElsaRuntimeV2StorageManifest.IdField
+            ],
+            requests[0].Order.Select(term => term.Column.Name));
+        Assert.Equal(requests[0].Order.Select(term => term.Column.Name), requests[1].Order.Select(term => term.Column.Name));
     }
 
     [Fact]
@@ -350,6 +399,44 @@ public sealed class GroundworkV2WorkflowActivationAuthorityTests
             source,
             persistence.Access(),
             new GroundworkStorageTransactionFactory(source, persistence.Access()));
+
+    private sealed class RecordingSessionSource(
+        IGroundworkStorageSessionSource inner,
+        ICollection<QueryRequest> requests) : IGroundworkStorageSessionSource
+    {
+        public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) =>
+            new RecordingSession(inner.Open(unitId, access, targetName), requests);
+
+        public IUnitOfWork BeginUnitOfWork(
+            StorageAccess access,
+            BatchWriteOptions options,
+            IReadOnlyList<string> unitIds,
+            string? targetName = null) =>
+            inner.BeginUnitOfWork(access, options, unitIds, targetName);
+
+        public StorageUnit Unit(string unitId, string? targetName = null) => inner.Unit(unitId, targetName);
+    }
+
+    private sealed class RecordingSession(IStorageSession inner, ICollection<QueryRequest> requests)
+        : SynchronousStorageSessionTestDouble, IStorageSession
+    {
+        public StorageUnit Unit => inner.Unit;
+        public StorageAccess Access => inner.Access;
+        public StoredEntry? Read(StorageKey key) => inner.Read(key);
+
+        public QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null)
+        {
+            requests.Add(request);
+            return inner.Query(request, options);
+        }
+
+        public AggregationResult Aggregate(AggregationQuery query) => inner.Aggregate(query);
+        public WriteOutcome Insert(StorageValues values, WriteOptions? options = null) => inner.Insert(values, options);
+        public WriteOutcome Update(StorageValues values, WriteOptions? options = null) => inner.Update(values, options);
+        public WriteOutcome Upsert(StorageValues values, WriteOptions? options = null) => inner.Upsert(values, options);
+        public WriteOutcome Delete(StorageKey key, WriteOptions? options = null) => inner.Delete(key, options);
+        public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) => inner.Append(operationId, values);
+    }
 
     private sealed class FaultingBatchSessionSource(IGroundworkStorageSessionSource inner) :
         IGroundworkStorageSessionSource,

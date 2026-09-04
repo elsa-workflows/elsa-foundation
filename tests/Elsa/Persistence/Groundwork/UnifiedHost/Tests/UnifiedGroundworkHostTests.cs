@@ -166,7 +166,7 @@ public class UnifiedGroundworkHostTests
         };
         var publication = new PublicationRecord(
             "publication-1",
-            PublicationSlotIdentity.Create("workflow-1", "default"),
+            WorkflowActivationSlotIdentity.Create("workflow-1", "default"),
             "workflow-1",
             "workflow-version-1",
             "artifact-1",
@@ -243,7 +243,7 @@ public class UnifiedGroundworkHostTests
             ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind,
             WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
             ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
-            PublishingGroundworkStorageManifest.PublicationSlotDocumentKind
+            ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDocumentKind
         };
 
         foreach (var unitId in lanes)
@@ -264,7 +264,7 @@ public class UnifiedGroundworkHostTests
     {
         await using var database = new TemporarySqliteDatabase();
         var now = DateTimeOffset.Parse("2026-07-13T10:00:00Z");
-        var slotId = PublicationSlotIdentity.Create("definition-1", "default");
+        var slotId = WorkflowActivationSlotIdentity.Create("definition-1", "default");
         var record = new PublicationRecord(
             "publication-1", slotId, "definition-1", "version-1", "artifact-1", "reference-1", 0,
             PublicationStatus.Active, now, now, null, null);

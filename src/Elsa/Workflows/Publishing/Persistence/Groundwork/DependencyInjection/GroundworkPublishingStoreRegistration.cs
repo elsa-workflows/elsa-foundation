@@ -12,8 +12,9 @@ namespace Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
 /// <summary>
 /// Registers the publishing ports against public Groundwork v2 storage units.
 /// <para>
-/// Publishing owns its own documents — publication slots, records, policies, projection intents, snapshot
-/// reviews and receipts — in the target named here. A reusable-activity publication also writes design and
+/// Publishing owns its own documents — records, policies, projection intents, snapshot reviews and receipts —
+/// in the target named here. Activation slots belong to the Runtime store family. A reusable-activity
+/// publication also writes design and
 /// runtime material: the design rows and the publishing receipt commit together in one v2 transaction, and
 /// the runtime rows follow as a replayable post-commit intent, so the path behaves the same whether or not
 /// the lanes share a database.

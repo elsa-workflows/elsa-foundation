@@ -2,6 +2,11 @@
 
 Status: accepted (2026-07-13)
 
+Ownership amendment (2026-09-04): the start-authority semantics in this decision remain accepted, but
+the ledger is now Runtime-owned as `IWorkflowActivationAuthority`. Publishing owns lifecycle commands
+and publication records and reaches the ledger through `IWorkflowActivationCoordinator`; it does not
+own or persist a parallel publication-slot authority.
+
 Related decisions: ADR 0038 (content-addressed executable identity), ADR 0039 (layout on source
 references), and ADR 0040 (reference- and execution-derived artifact lifetime).
 Plan of record: `specs/092-domain-owned-apis/`.
@@ -29,8 +34,9 @@ candidate failed, and a successful response must not conceal a partially activat
 
 ### A publication slot is the sole start authority
 
-Publishing owns a `PublicationSlot` identified by `(WorkflowDefinitionId, SlotName)`. A slot selects
-zero or one active `PublicationRecord`. Only the publication selected by an authoritative slot may
+Runtime owns a `WorkflowActivationSlot` identified by `(WorkflowDefinitionId, SlotName)`. Publishing
+addresses it through `IWorkflowActivationCoordinator` and retains the corresponding `PublicationRecord`.
+A slot selects zero or one active publication. Only the publication selected by an authoritative slot may
 contribute trigger bindings or recurring-start schedules visible to new-start routing.
 
 Neither an executable artifact, a source reference, a trigger binding, a schedule, nor an in-memory
@@ -116,7 +122,7 @@ retirement timestamp.
 
 ### Projection intent makes cross-store activation durable
 
-When the slot store and every serving projection cannot share a transaction, Publishing records
+When the Runtime activation authority and every serving projection cannot share a transaction, Publishing records
 durable `PublicationProjectionIntent` entries. An intent identifies the publication, projection kind,
 operation, delivery status, and bounded retry diagnostics.
 
@@ -180,10 +186,11 @@ Ordinary Elsa publishing regains intuitive replacement semantics while explicitl
 long-requested side-by-side scenario. Studio and other supported clients must preflight publication,
 show the resolved slot/action, require a name for coexistence, and surface Pending or Failed states.
 
-Publishing gains durable slot, publication, policy, trigger-claim, and projection-intent models plus
-compare-and-swap persistence. Trigger and schedule stores gain publication-scoped operations, and
-providers must declare cardinality. Persistence providers need unique slot identities, revisioned
-writes, indexes, serialization versions, and restart-safe intent processing.
+Runtime gains the durable activation-slot model and compare-and-swap persistence. Publishing gains
+publication, policy, trigger-claim, and projection-intent models. Trigger and schedule stores gain
+publication-scoped operations, and providers must declare cardinality. Runtime persistence providers
+need unique slot identities and revisioned writes; Publishing persistence providers need versioned,
+restart-safe publication and intent processing.
 
 The activation path is more involved than append-only indexing, and temporarily prepared artifacts or
 projections may require reconciliation cleanup. In return, there is one auditable source of truth for

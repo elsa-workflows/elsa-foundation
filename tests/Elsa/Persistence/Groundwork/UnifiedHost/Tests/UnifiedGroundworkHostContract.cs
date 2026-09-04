@@ -57,7 +57,7 @@ public static class UnifiedGroundworkHostContract
                      ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind,
                      WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
                      ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
-                     PublishingGroundworkStorageManifest.PublicationSlotDocumentKind
+                     ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDocumentKind
                  })
         {
             var unit = sessions.Unit(unitId);
