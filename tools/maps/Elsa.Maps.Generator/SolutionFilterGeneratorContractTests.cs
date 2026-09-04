@@ -21,6 +21,9 @@ public static class SolutionFilterGeneratorContractTests
             SolutionFilterGenerator.Generate(repo);
             AssertProjects(root, "Feature.slnf", ["src/Feature/Feature.csproj", "src/Shared/Shared.csproj"]);
             AssertProjects(root, "Integration.slnf", ["tests/Container.csproj"]);
+            Assert(SolutionFilterGenerator.GetRoots(repo, "Integration.slnf")
+                    .SequenceEqual(["tests/Container.csproj"], StringComparer.Ordinal),
+                "Root listing must use parsed PackageReference elements and ignore comment text.");
 
             var first = File.ReadAllBytes(Path.Combine(root, "Feature.slnf"));
             SolutionFilterGenerator.Generate(repo);

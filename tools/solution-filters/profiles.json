@@ -127,7 +127,7 @@
         "Elsa.Workbench"
       ],
       "requiredRootPaths": [
-        "src/apps/Elsa.Workbench/Elsa.Workbench.csproj"
+        "src/Apps/Elsa.Workbench/Elsa.Workbench.csproj"
       ]
     }
   ]

@@ -85,6 +85,8 @@ dotnet run --project tools/maps/Elsa.Maps.Generator -- solution-filters-self-tes
 
 CI runs the same check and asks `dotnet sln` to parse every committed filter. A new matching project
 or changed dependency therefore makes the check fail until the generated profiles are refreshed.
+The fast CI lane also asks the generator for the integration profile's explicit roots, ensuring each
+parsed Testcontainers test belongs to the nightly lane while comment-only mentions remain in fast CI.
 
 ## Completion gate
 

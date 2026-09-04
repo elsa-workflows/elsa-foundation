@@ -67,6 +67,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
+      - name: Validate committed integration filter
+        run: |
+          dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -- solution-filters-check
+          dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- solution-filters-self-test
+
       - name: Restore
         run: dotnet restore Elsa.Server.slnx -p:WarningsNotAsErrors=NU1603
 

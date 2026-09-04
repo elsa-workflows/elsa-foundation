@@ -84,17 +84,25 @@ jobs:
       - name: Generate container-free test solution filter
         # Run the fast unit tests only. Any test project that references
         # Testcontainers spins up Docker containers, so exclude those by reference --
-        # this is self-maintaining (new Testcontainers projects are auto-excluded) and
-        # provably starts no containers. Historical BeforeCapture executables are evidence
+        # the shared solution-filter generator parses PackageReference elements rather than
+        # matching comments or other raw text. Historical BeforeCapture executables are evidence
         # projects rather than product-solution projects, so a solution filter must omit them
         # as well; MSBuild rejects a filter that names a project absent from the solution.
         run: |
+          declare -A container_tests=()
+          while IFS= read -r p; do
+            container_tests["$p"]=1
+          done < <(dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -v:q -- \
+            solution-filter-roots Elsa.Server.Persistence.Groundwork.Integration.slnf)
+
           keep=()
           while IFS= read -r p; do
             case "$p" in
               */Capture/*.BeforeCapture.csproj) continue ;;
             esac
-            grep -q "Testcontainers" "$p" || keep+=("$p")
+            if [[ -z "${container_tests[$p]+x}" ]]; then
+              keep+=("$p")
+            fi
           done < <(find tests -name '*.csproj' | sort)
           projects=$(printf '"%s",' "${keep[@]}" | sed 's/,$//')
           printf '{"solution":{"path":"Elsa.Server.slnx","projects":[%s]}}' "$projects" > Elsa.Server.test.slnf

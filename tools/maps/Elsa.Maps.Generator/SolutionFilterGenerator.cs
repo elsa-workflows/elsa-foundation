@@ -32,37 +32,7 @@ public static class SolutionFilterGenerator
         foreach (var profile in manifest.Profiles)
         {
             ValidateProfile(profile);
-
-            var roots = solution.Projects.Values
-                .Where(project => Matches(project, profile))
-                .Where(project => !manifest.ExcludeRootPathPrefixes
-                    .Select(Normalize)
-                    .Any(prefix => project.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
-                .Where(project => !profile.ExcludeRootPathContains
-                    .Select(Normalize)
-                    .Any(value => project.Path.Contains(value, StringComparison.OrdinalIgnoreCase)))
-                .Where(project => profile.RequirePackageReferencePrefixes.Count == 0 ||
-                                  profile.RequirePackageReferencePrefixes.Any(required =>
-                                      project.PackageReferences.Any(package =>
-                                          package.StartsWith(required, StringComparison.OrdinalIgnoreCase))))
-                .Where(project => !profile.ExcludeWhenPackageReferencePrefixes.Any(excluded =>
-                    project.PackageReferences.Any(package =>
-                        package.StartsWith(excluded, StringComparison.OrdinalIgnoreCase))))
-                .Select(project => project.Path)
-                .Order(StringComparer.Ordinal)
-                .ToArray();
-
-            if (roots.Length == 0)
-                throw new InvalidOperationException($"Solution filter profile '{profile.OutputPath}' selected no projects.");
-
-            var selectedRoots = roots.ToHashSet(StringComparer.OrdinalIgnoreCase);
-            foreach (var requiredRoot in profile.RequiredRootPaths.Select(Normalize))
-            {
-                if (!solution.Projects.ContainsKey(requiredRoot))
-                    throw new InvalidOperationException($"Solution filter profile '{profile.OutputPath}' requires a project that is absent from the solution: {requiredRoot}");
-                if (!selectedRoots.Contains(requiredRoot))
-                    throw new InvalidOperationException($"Solution filter profile '{profile.OutputPath}' did not select required root: {requiredRoot}");
-            }
+            var roots = SelectRoots(manifest, solution, profile);
 
             var projects = ExpandDependencies(solution.Projects, roots);
             var document = new
@@ -82,6 +52,18 @@ public static class SolutionFilterGenerator
         }
 
         return written;
+    }
+
+    /// <summary>Returns the explicitly selected roots for one configured profile.</summary>
+    public static IReadOnlyList<string> GetRoots(RepoContext repo, string outputPath)
+    {
+        var manifest = ReadManifest(repo);
+        var normalizedOutputPath = Normalize(outputPath);
+        var profile = manifest.Profiles.SingleOrDefault(candidate =>
+            string.Equals(Normalize(candidate.OutputPath), normalizedOutputPath, StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException($"Unknown solution filter profile: {outputPath}");
+        ValidateProfile(profile);
+        return SelectRoots(manifest, ReadSolution(repo, manifest), profile);
     }
 
     /// <summary>Returns zero when committed filters match freshly generated output, one otherwise.</summary>
@@ -272,6 +254,47 @@ public static class SolutionFilterGenerator
         profile.IncludeProjectNameContains.Any(value => project.Name.Contains(value, StringComparison.Ordinal)) ||
         profile.IncludeProjectPathPrefixes.Select(Normalize).Any(prefix => project.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) ||
         profile.IncludeProjectPathContains.Select(Normalize).Any(value => project.Path.Contains(value, StringComparison.OrdinalIgnoreCase));
+
+    private static IReadOnlyList<string> SelectRoots(
+        SolutionFilterManifest manifest,
+        SolutionGraph solution,
+        SolutionFilterProfile profile)
+    {
+        var roots = solution.Projects.Values
+            .Where(project => Matches(project, profile))
+            .Where(project => !manifest.ExcludeRootPathPrefixes
+                .Select(Normalize)
+                .Any(prefix => project.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+            .Where(project => !profile.ExcludeRootPathContains
+                .Select(Normalize)
+                .Any(value => project.Path.Contains(value, StringComparison.OrdinalIgnoreCase)))
+            .Where(project => profile.RequirePackageReferencePrefixes.Count == 0 ||
+                              profile.RequirePackageReferencePrefixes.Any(required =>
+                                  project.PackageReferences.Any(package =>
+                                      package.StartsWith(required, StringComparison.OrdinalIgnoreCase))))
+            .Where(project => !profile.ExcludeWhenPackageReferencePrefixes.Any(excluded =>
+                project.PackageReferences.Any(package =>
+                    package.StartsWith(excluded, StringComparison.OrdinalIgnoreCase))))
+            .Select(project => project.Path)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        if (roots.Length == 0)
+            throw new InvalidOperationException($"Solution filter profile '{profile.OutputPath}' selected no projects.");
+
+        var selectedRoots = roots.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var requiredRoot in profile.RequiredRootPaths.Select(Normalize))
+        {
+            if (!solution.Projects.TryGetValue(requiredRoot, out var canonicalProject))
+                throw new InvalidOperationException($"Solution filter profile '{profile.OutputPath}' requires a project that is absent from the solution: {requiredRoot}");
+            if (!string.Equals(requiredRoot, canonicalProject.Path, StringComparison.Ordinal))
+                throw new InvalidOperationException($"Solution filter profile '{profile.OutputPath}' required-root casing differs from the solution: expected '{canonicalProject.Path}', got '{requiredRoot}'.");
+            if (!selectedRoots.Contains(requiredRoot))
+                throw new InvalidOperationException($"Solution filter profile '{profile.OutputPath}' did not select required root: {requiredRoot}");
+        }
+
+        return roots;
+    }
 
     private static IReadOnlyList<string> ExpandDependencies(
         IReadOnlyDictionary<string, SolutionProject> projects,
