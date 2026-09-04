@@ -259,6 +259,8 @@ public sealed class GroundworkV2ActivityDesignStore(
         var table = new TableId(unit.Name);
         var order = query.Order.Count == 0
             ? RouteOrder(query.Identity)
+            : IsUniqueVersionRoute(query.DocumentKind, query.Identity, query.Order)
+                ? query.Order
             : query.Order.Any(item => StringComparer.Ordinal.Equals(item.Field, ActivitiesDesignStorageManifest.IdField))
                 ? query.Order
                 : query.Order.Append(new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.IdField)).ToArray();
@@ -445,6 +447,19 @@ public sealed class GroundworkV2ActivityDesignStore(
         _ => [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.IdField)]
     };
 
+    private static bool IsUniqueVersionRoute(
+        string documentKind,
+        string identity,
+        IReadOnlyList<ActivityDesignQueryOrder> order) =>
+        StringComparer.Ordinal.Equals(documentKind, ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind) &&
+        identity is ActivitiesDesignStorageManifest.ListActivityDefinitionVersionsByDefinitionQuery or
+            ActivitiesDesignStorageManifest.FindActivityDefinitionVersionByDefinitionAndSortKeyQuery &&
+        order.Count == 2 &&
+        StringComparer.Ordinal.Equals(order[0].Field, ActivitiesDesignStorageManifest.ActivityDefinitionVersionDefinitionIdField) &&
+        StringComparer.Ordinal.Equals(order[1].Field, ActivitiesDesignStorageManifest.ActivityDefinitionVersionSemVerSortKeyField) &&
+        !order[0].Descending &&
+        !order[1].Descending;
+
     private static string? ResolveRouteIndex(StorageUnit unit, string documentKind, string identity)
     {
         var index = (documentKind, identity) switch
@@ -471,7 +486,7 @@ public sealed class GroundworkV2ActivityDesignStore(
                 ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionIndex,
             (ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
                 ActivitiesDesignStorageManifest.FindActivityDefinitionVersionByDefinitionAndSortKeyQuery) =>
-                ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionAndSortKeyIndex,
+                ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionIndex,
             (_, "list-by-definition") => ActivitiesDesignStorageManifest.ByDefinitionIndex,
             (_, "list-by-head-version") => ActivitiesDesignStorageManifest.ByHeadVersionIndex,
             (_, "list-by-draft") => ActivitiesDesignStorageManifest.ByDraftIndex,

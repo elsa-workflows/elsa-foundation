@@ -66,7 +66,7 @@ public sealed class GroundworkActivityDefinitionVersionStoreTests
     {
         using var harness = await SeededAsync(
             [Definition("def1"), Definition("def2")],
-            Version("v1", "def1"), Version("v2", "def1"), Version("v3", "def2"));
+            Version("v1", "def1", "1.0.0"), Version("v2", "def1", "2.0.0"), Version("v3", "def2", "1.0.0"));
 
         var result = await VersionStore(harness).ListByDefinitionAsync("def1");
         Assert.Equal(2, result.Count);
@@ -103,7 +103,83 @@ public sealed class GroundworkActivityDefinitionVersionStoreTests
         using var harness = await SeededAsync([Definition("def1")], Version("v1", "def1"));
         var store = VersionStore(harness);
         Assert.NotNull(await store.FindByDefinitionAndSortKeyAsync("def1", Version("v1", "def1").SemVerSortKey));
+        Assert.Equal(
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionOrder.Select(order => order.Field),
+            harness.QueryRequests.Single().Order.Select(order => order.Column.Name));
         Assert.Empty(await store.ListByDefinitionIdsAsync([]));
+    }
+
+    [Fact]
+    public async Task ListByDefinition_uses_the_unique_domain_order_for_deterministic_continuations()
+    {
+        var versions = Enumerable.Range(1, 205)
+            .Select(number => Version($"v-{number:D3}", "def1", $"{number}.0.0"))
+            .ToArray();
+        using var harness = await SeededAsync([Definition("def1")], versions);
+
+        var result = await VersionStore(harness).ListByDefinitionAsync("def1");
+
+        Assert.Equal(versions.Select(version => version.Id), result.Select(version => version.Id));
+        Assert.Equal(3, harness.QueryRequests.Count);
+        Assert.All(harness.QueryRequests, request =>
+            Assert.Equal(
+                ActivitiesDesignStorageManifest.ActivityDefinitionVersionOrder.Select(order => order.Field),
+                request.Order.Select(order => order.Column.Name)));
+    }
+
+    [Fact]
+    public async Task Version_storage_rejects_duplicate_semantic_versions_per_definition()
+    {
+        var existing = Version("v1", "def1", "1.0.0");
+        using var harness = await SeededAsync([Definition("def1")], existing);
+        var options = GroundworkActivitiesDesignDocumentSerialization.Create(Payloads);
+        var duplicate = Version("v2", "def1", "1.0.0");
+        var request = GroundworkV2ActivityDesignDocumentWriter.ToSaveRequest(
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionCollection,
+            ActivitiesDesignStorageManifest.SchemaVersion,
+            duplicate,
+            options);
+
+        await Assert.ThrowsAsync<ActivityDesignWriteConflictException>(() => harness.Store.SaveAsync(request));
+        Assert.Single(harness.Rows(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind));
+    }
+
+    [Fact]
+    public async Task Version_route_only_omits_id_for_the_canonical_order()
+    {
+        using var harness = await SeededAsync(
+            [Definition("def1")],
+            Version("v1", "def1", "1.0.0"),
+            Version("v2", "def1", "2.0.0"));
+        var clauses = new[]
+        {
+            ActivityDesignQueryClause.Of(ActivityDesignQueryComparison.Equal(
+                ActivitiesDesignStorageManifest.ActivityDefinitionVersionDefinitionIdField, "def1"))
+        };
+
+        harness.QueryRequests.Clear();
+        harness.Store.Query(new ActivityDesignQuery(
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
+            ActivitiesDesignStorageManifest.ListActivityDefinitionVersionsByDefinitionQuery,
+            clauses,
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionOrder,
+            Take: 1));
+        Assert.Equal(
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionOrder.Select(order => order.Field),
+            harness.QueryRequests.Single().Order.Select(order => order.Column.Name));
+
+        harness.QueryRequests.Clear();
+        harness.Store.Query(new ActivityDesignQuery(
+            ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
+            ActivitiesDesignStorageManifest.ListActivityDefinitionVersionsByDefinitionQuery,
+            clauses,
+            [new ActivityDesignQueryOrder(ActivitiesDesignStorageManifest.ActivityDefinitionVersionDefinitionIdField)],
+            Take: 1));
+        Assert.Equal(
+            [ActivitiesDesignStorageManifest.ActivityDefinitionVersionDefinitionIdField,
+                ActivitiesDesignStorageManifest.IdField],
+            harness.QueryRequests.Single().Order.Select(order => order.Column.Name));
     }
 
     [Fact]

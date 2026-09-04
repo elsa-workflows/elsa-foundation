@@ -53,7 +53,11 @@ public sealed class GroundworkActivitiesDesignRegistrationTests
         {
             Assert.Equal(ScopePolicy.Scoped, registration.Unit.Scope);
             Assert.True(registration.Unit.Concurrency.IsOptimistic);
-            Assert.Equal(ActivitiesDesignStorageManifest.StorageSchemaVersion, registration.Unit.SchemaVersion);
+            Assert.Equal(
+                registration.Unit.Id.Value == ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind
+                    ? ActivitiesDesignStorageManifest.ActivityDefinitionVersionStorageSchemaVersion
+                    : ActivitiesDesignStorageManifest.StorageSchemaVersion,
+                registration.Unit.SchemaVersion);
         });
         Assert.Contains(registry.Registrations, registration =>
             registration.Unit.Id.Value == ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind);

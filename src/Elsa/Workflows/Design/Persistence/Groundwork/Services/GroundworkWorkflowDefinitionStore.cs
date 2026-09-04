@@ -47,77 +47,74 @@ public sealed class GroundworkWorkflowDefinitionStore(
         }
         if (filter.Name is not null)
             basePredicates.Add(storage.Equal(unit, WorkflowsDesignStorageManifest.DefinitionNameField, filter.Name));
+        if (filter.Names is not null && filter.Names.Count == 0)
+            return Task.FromResult<IReadOnlyList<WorkflowDefinition>>([]);
         if (filter.Names is not null)
-        {
-            if (filter.Names.Count == 0)
-                return Task.FromResult<IReadOnlyList<WorkflowDefinition>>([]);
             basePredicates.Add(storage.In(unit, WorkflowsDesignStorageManifest.DefinitionNameField, filter.Names.Cast<object?>()));
-        }
         if (filter.Description is not null)
             basePredicates.Add(storage.Equal(unit, WorkflowsDesignStorageManifest.DefinitionDescriptionField, filter.Description));
 
         var acrossScopes = filter.TenantAgnostic == true;
         var rows = new Dictionary<GroundworkDesignRowIdentity, GroundworkDesignEntry>();
-        if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
+        var hasIdFilter = filter.Id is not null || filter.Ids is not null;
+        var hasNameFilter = filter.Name is not null || filter.Names is not null;
+        var hasDescriptionFilter = filter.Description is not null;
+        var exactRoute = hasIdFilter
+            ? WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex
+            : hasDescriptionFilter
+                ? WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex
+                : hasNameFilter
+                    ? WorkflowsDesignStorageManifest.DefinitionByNameIndex
+                    : WorkflowsDesignStorageManifest.DefinitionByIdIndex;
+        var exactRouteOrder = exactRoute switch
         {
-            var searchTerm = filter.SearchTerm;
-            var probe = storage.Probe(
+            WorkflowsDesignStorageManifest.DefinitionByNameIndex =>
+            [
+                storage.Order(unit, WorkflowsDesignStorageManifest.DefinitionNameLookupHashField),
+                storage.Order(unit, WorkflowsDesignStorageManifest.DefinitionIdField)
+            ],
+            WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex =>
+            [
+                storage.Order(unit, WorkflowsDesignStorageManifest.DefinitionDescriptionLookupHashField),
+                storage.Order(unit, WorkflowsDesignStorageManifest.DefinitionIdField)
+            ],
+            _ => SearchOrder(unit, WorkflowsDesignStorageManifest.IdField)
+        };
+        // A SearchTerm without an exact route is the only public shape that needs a bounded
+        // catalog probe. Exact ID/name/description predicates first narrow the provider read
+        // through their fixed-width lookup-hash index; Matches remains the collision guard.
+        var requiresCandidateScan = !string.IsNullOrWhiteSpace(filter.SearchTerm) && !hasIdFilter &&
+                                    !hasNameFilter && !hasDescriptionFilter;
+        if (requiresCandidateScan)
+        {
+            var candidates = storage.Probe(
                 unit,
-                And(basePredicates),
+                Predicate.AlwaysTrue.Instance,
                 [storage.Order(unit, WorkflowsDesignStorageManifest.DefinitionIdField)],
                 acrossScopes,
                 cancellationToken);
 
-            foreach (var (field, index) in new[]
-                    {
-                         (WorkflowsDesignStorageManifest.IdField, WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex),
-                         (WorkflowsDesignStorageManifest.DefinitionNameField, WorkflowsDesignStorageManifest.DefinitionByNameIndex),
-                         (WorkflowsDesignStorageManifest.DefinitionDescriptionField, WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex)
-                     })
+            foreach (var row in candidates)
             {
-                var predicates = new List<Predicate>(basePredicates)
-                {
-                    storage.Contains(unit, field, filter.SearchTerm)
-                };
-                foreach (var row in storage.Query(
-                             unit,
-                             And(predicates),
-                             SearchOrder(unit, field),
-                             index,
-                             acrossScopes,
-                             cancellationToken))
-                {
-                    var id = row.Entry.Values.Values.TryGetValue(WorkflowsDesignStorageManifest.IdField, out var value)
-                        ? Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture)
-                        : null;
-                    if (id is not null)
-                        rows[GroundworkDesignStorage.Identity(row)] = row;
-                }
+                cancellationToken.ThrowIfCancellationRequested();
+                var definition = storage.MapDefinition(row);
+                if (Matches(definition, filter))
+                    rows[GroundworkDesignStorage.Identity(row)] = row;
             }
         }
         else
         {
-            var index = filter.Description is not null
-                ? WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex
-                : filter.Name is not null || filter.Names is not null
-                    ? WorkflowsDesignStorageManifest.DefinitionByNameIndex
-                    : filter.Id is not null || filter.Ids is not null
-                        ? WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex
-                    : WorkflowsDesignStorageManifest.DefinitionByIdIndex;
             foreach (var row in storage.Query(
                          unit,
                          And(basePredicates),
-                         SearchOrder(unit, index == WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex
-                             ? WorkflowsDesignStorageManifest.DefinitionDescriptionField
-                             : index == WorkflowsDesignStorageManifest.DefinitionByNameIndex
-                                 ? WorkflowsDesignStorageManifest.DefinitionNameField
-                                 : WorkflowsDesignStorageManifest.IdField),
-                         index,
+                         exactRouteOrder,
+                         exactRoute,
                          acrossScopes,
                          cancellationToken))
             {
-                var id = Convert.ToString(row.Entry.Values.Values[WorkflowsDesignStorageManifest.IdField], System.Globalization.CultureInfo.InvariantCulture)!;
-                rows[GroundworkDesignStorage.Identity(row)] = row;
+                var definition = storage.MapDefinition(row);
+                if (Matches(definition, filter))
+                    rows[GroundworkDesignStorage.Identity(row)] = row;
             }
         }
 
@@ -128,6 +125,39 @@ public sealed class GroundworkWorkflowDefinitionStore(
                 .ThenBy(x => x.TenantId, StringComparer.Ordinal)
                 .ToArray());
     }
+
+    private static bool Matches(WorkflowDefinition definition, WorkflowDefinitionFilter filter)
+    {
+        if (filter.Id is not null && !GroundworkDesignStorage.SameDefinitionIdentity(definition.Id, filter.Id))
+            return false;
+        if (filter.Ids is not null && !filter.Ids.Any(id => GroundworkDesignStorage.SameDefinitionIdentity(definition.Id, id)))
+            return false;
+        if (filter.Name is not null && !StringComparer.Ordinal.Equals(definition.Name, filter.Name))
+            return false;
+        if (filter.Names is not null && !filter.Names.Contains(definition.Name, StringComparer.Ordinal))
+            return false;
+        if (filter.Description is not null && !StringComparer.Ordinal.Equals(definition.Description, filter.Description))
+            return false;
+        if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
+        {
+            var term = QuerySearchKeys.Encode(filter.SearchTerm, QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase);
+            if (!ContainsIdentity(definition.Id, term) &&
+                !ContainsText(definition.Name, term) &&
+                !ContainsText(definition.Description, term))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool ContainsIdentity(string value, string encodedTerm) =>
+        QuerySearchKeys.Encode(value, QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase)
+            .Contains(encodedTerm, StringComparison.Ordinal);
+
+    private static bool ContainsText(string? value, string encodedTerm) =>
+        value is not null &&
+        QuerySearchKeys.Encode(value, QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase)
+            .Contains(encodedTerm, StringComparison.Ordinal);
 
     private static Predicate And(IReadOnlyCollection<Predicate> predicates) => predicates.Count switch
     {
