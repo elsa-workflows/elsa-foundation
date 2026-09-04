@@ -21,7 +21,6 @@ public static class PublishingGroundworkStorageManifest
     public const int IdentityMaximumLength = 256;
     public const int SchemaVersionMaximumLength = 32;
 
-    public const string PublicationSlotDocumentKind = "publishingPublicationSlot";
     public const string PublicationRecordDocumentKind = "publishingPublicationRecord";
     public const string PublicationPolicyDocumentKind = "publishingPublicationPolicy";
     public const string ProjectionIntentDocumentKind = "publishingProjectionIntent";
@@ -38,12 +37,9 @@ public static class PublishingGroundworkStorageManifest
     public const string WorkflowDefinitionIdField = "workflowDefinitionId";
     public const string SlotIdField = "slotId";
     public const string PublicationIdField = "publicationId";
-    public const string ActivePublicationIdField = "activePublicationId";
     public const string ExpiresAtField = "expiresAt";
     public const string ReceiptExpiresAtField = "receiptExpiresAt";
 
-    public const string SlotByDefinitionIndex = "publication_slot_by_definition";
-    public const string SlotByActivePublicationIndex = "publication_slot_by_active_publication";
     public const string RecordBySlotIndex = "publication_record_by_slot";
     public const string IntentByPublicationIndex = "publication_intent_by_publication";
     public const string SnapshotReviewByExpiryIndex = "publication_snapshot_review_by_expiry";
@@ -51,7 +47,6 @@ public static class PublishingGroundworkStorageManifest
 
     public static IReadOnlyList<StorageUnit> CreateUnits() =>
     [
-        SlotUnit(),
         RecordUnit(),
         PolicyUnit(),
         ProjectionIntentUnit(),
@@ -69,25 +64,6 @@ public static class PublishingGroundworkStorageManifest
             .String(SchemaVersionField, SchemaVersionMaximumLength, column => column.Required())
             .Json(ContentField, column => column.Required())
             .String(TenantIdField, IdentityMaximumLength);
-
-    private static StorageUnit SlotUnit() =>
-        Document(PublicationSlotDocumentKind, "elsa_publication_slots")
-            .String(WorkflowDefinitionIdField, IdentityMaximumLength, column => column.Required())
-            // Null until a publication occupies the slot, which is what makes an unpublished slot
-            // invisible to the active-publication route rather than a row it has to filter out.
-            .String(ActivePublicationIdField, IdentityMaximumLength)
-            .Key(IdField)
-            .OptimisticConcurrency(ConcurrencyTokenField)
-            .Index(SlotByDefinitionIndex, WorkflowDefinitionIdField, IdField)
-            // A publication occupies at most one slot, and the database is what enforces it: checking for
-            // another owner with a read and then writing lets two concurrent activations both observe a
-            // free publication and both commit. Missing values are excluded because an unpublished slot
-            // has no active publication, and every one of those would otherwise collide with the others.
-            .UniqueIndex(SlotByActivePublicationIndex, index => index
-                .Ascending(ActivePublicationIdField)
-                .ExcludeMissingValues())
-            .Scoped()
-            .Build();
 
     private static StorageUnit RecordUnit() =>
         Document(PublicationRecordDocumentKind, "elsa_publication_records")

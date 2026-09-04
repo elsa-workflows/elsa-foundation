@@ -8,6 +8,24 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost.Tests;
 public sealed class RuntimeNativePlanContractTests
 {
     [Fact]
+    public void Activation_slot_listing_has_an_explicit_correctness_only_evidence_disposition()
+    {
+        var disposition = RuntimeNativePlanContract.EvidenceDispositionFor(
+            RuntimeNativePlanContract.ActivationSlotListRouteIdentity);
+
+        Assert.Equal(
+            RuntimeNativePlanContract.ActivationSlotListRouteIdentity,
+            disposition.RouteIdentity);
+        Assert.Equal(RuntimeRouteEvidenceStatus.CorrectnessOnlyExempted, disposition.ProviderAdmission);
+        Assert.Equal(RuntimeRouteEvidenceStatus.CorrectnessOnlyExempted, disposition.NativePlan);
+        Assert.Contains("complete per-definition collection", disposition.Rationale, StringComparison.Ordinal);
+        Assert.Contains("bounded internal keyset pages", disposition.Rationale, StringComparison.Ordinal);
+        Assert.Contains("#646", disposition.Rationale, StringComparison.Ordinal);
+        Assert.Throws<PerformanceContractException>(() =>
+            RuntimeNativePlanContract.EvidenceDispositionFor("GET /runtime/workflows/activation-slots/{slotName}"));
+    }
+
+    [Fact]
     public void Frozen_runtime_routes_bind_the_current_units_indexes_order_and_page_limits()
     {
         var bookmarkRoutes = RuntimeNativePlanContract.ForWorkload(RuntimeBookmarkLookupWorkload.WorkloadId);

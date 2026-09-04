@@ -41,17 +41,6 @@ public sealed record PublicationSlotView(
     PublicationStatusView? Status,
     PublicationView? Publication)
 {
-    public static PublicationSlotView From(PublicationSlot slot, PublicationRecord? publication) =>
-        new(
-            slot.SlotId,
-            slot.WorkflowDefinitionId,
-            slot.SlotName,
-            slot.ActivePublicationId,
-            slot.Revision,
-            slot.UpdatedAt,
-            publication is null ? null : PublicationContract.ToView(publication.Status),
-            publication is null ? null : PublicationView.From(publication));
-
     public static PublicationSlotView From(WorkflowActivationSlot slot, PublicationRecord? publication) =>
         new(
             slot.SlotId,

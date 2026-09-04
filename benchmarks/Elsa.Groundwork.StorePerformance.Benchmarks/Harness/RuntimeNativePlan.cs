@@ -59,6 +59,23 @@ public sealed record RuntimeNativeLatestPerKeySpec(string KeyColumn, string Time
 
 public sealed record RuntimeNativePredicateSpec(string Column, string Operator);
 
+/// <summary>
+/// Records the admission decision for a runtime route that is intentionally outside the bounded
+/// provider-native performance workload. Both dimensions are explicit so an omitted native plan
+/// cannot be mistaken for evidence that was never assessed.
+/// </summary>
+public enum RuntimeRouteEvidenceStatus
+{
+    Admitted,
+    CorrectnessOnlyExempted
+}
+
+public sealed record RuntimeRouteEvidenceDisposition(
+    string RouteIdentity,
+    RuntimeRouteEvidenceStatus ProviderAdmission,
+    RuntimeRouteEvidenceStatus NativePlan,
+    string Rationale);
+
 /// <summary>Retained command and normalized provider-native plan for one runtime route.</summary>
 public sealed record RuntimeNativePlanArtifact(
     [property: JsonPropertyName("schemaVersion")] int SchemaVersion,
@@ -82,6 +99,26 @@ public static class RuntimeNativePlanContract
     public const string GroundworkAdapter = "groundwork-v2";
     public const string RouteContract = "provider-native-routes";
     public const string WorkflowExecutionOrdinalKeyColumn = "__groundwork_ordinal_workflow_execution_id";
+    public const string ActivationSlotListRouteIdentity = "GET /runtime/workflows/activation-slots/{definitionId}";
+    public static RuntimeRouteEvidenceDisposition ActivationSlotListEvidenceDisposition { get; } = new(
+        ActivationSlotListRouteIdentity,
+        RuntimeRouteEvidenceStatus.CorrectnessOnlyExempted,
+        RuntimeRouteEvidenceStatus.CorrectnessOnlyExempted,
+        "The public route returns the complete per-definition collection and has no caller-bounded page; it is correctness-tested with bounded internal keyset pages but is not admitted to #646 provider-native timing or native-plan evidence.");
+
+    /// <summary>
+    /// The explicit route dispositions are kept beside native-plan admission so adding a runtime
+    /// read cannot silently omit its provider-evidence decision.
+    /// </summary>
+    public static IReadOnlyList<RuntimeRouteEvidenceDisposition> ExplicitRouteEvidenceDispositions =>
+        [ActivationSlotListEvidenceDisposition];
+
+    public static RuntimeRouteEvidenceDisposition EvidenceDispositionFor(string routeIdentity) =>
+        ExplicitRouteEvidenceDispositions.SingleOrDefault(route =>
+            string.Equals(route.RouteIdentity, routeIdentity, StringComparison.Ordinal)) ??
+        throw new PerformanceContractException(
+            $"Runtime route evidence disposition is not declared for route '{routeIdentity}'.");
+
     private const string TriggerTable = "runtime_workflow_trigger_binding";
     private const string BookmarkTable = "runtime_bookmark_state";
     private const string SourceReferenceTable = "runtime_workflow_executable_source_reference";

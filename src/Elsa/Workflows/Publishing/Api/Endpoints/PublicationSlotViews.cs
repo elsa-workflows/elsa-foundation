@@ -23,29 +23,10 @@ internal static class PublicationSlotViews
         exception.Message.Contains("no source reference", StringComparison.Ordinal);
 
     public static async ValueTask<PublicationSlotView> ComposeAsync(
-        PublicationSlot slot,
-        IPublicationRecordStore publicationStore,
-        CancellationToken cancellationToken) =>
-        PublicationSlotView.From(slot, await ResolveVisiblePublicationAsync(slot, publicationStore, cancellationToken));
-
-    public static async ValueTask<PublicationSlotView> ComposeAsync(
         WorkflowActivationSlot slot,
         IPublicationRecordStore publicationStore,
         CancellationToken cancellationToken) =>
         PublicationSlotView.From(slot, await ResolveVisiblePublicationAsync(slot, publicationStore, cancellationToken));
-
-    private static async ValueTask<PublicationRecord?> ResolveVisiblePublicationAsync(
-        PublicationSlot slot,
-        IPublicationRecordStore publicationStore,
-        CancellationToken cancellationToken)
-    {
-        if (slot.ActivePublicationId is { } activePublicationId)
-            return await publicationStore.FindAsync(activePublicationId, cancellationToken);
-        return (await publicationStore.ListBySlotAsync(slot.SlotId, cancellationToken))
-            .OrderByDescending(publication => publication.CreatedAt)
-            .ThenByDescending(publication => publication.PublicationId, StringComparer.Ordinal)
-            .FirstOrDefault();
-    }
 
     private static async ValueTask<PublicationRecord?> ResolveVisiblePublicationAsync(
         WorkflowActivationSlot slot,
