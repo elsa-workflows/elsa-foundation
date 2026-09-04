@@ -152,12 +152,32 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
     [Fact]
     public async Task SQLite_durability_poll_retries_a_transient_schema_lock()
     {
-        var store = new TransientLockedOpenTelemetryStore();
+        var store = new ProbeOpenTelemetryStore(throwTransientLock: true);
         var tracking = new DiagnosticsDurableHistoryAdapter.TrackingOpenTelemetryStore(store);
 
         await tracking.WaitForDurabilityAsync(CancellationToken.None);
 
         Assert.Equal(2, store.DiagnosticsReadCount);
+    }
+
+    [Fact]
+    public async Task Durability_poll_fails_immediately_when_the_background_drain_dropped_records()
+    {
+        var store = new ProbeOpenTelemetryStore(
+            diagnostics: EmptyDiagnostics() with
+            {
+                DroppedTraceCount = 2,
+                DroppedSpanCount = 3,
+                DroppedMetricPointCount = 5,
+                DroppedLogRecordCount = 7
+            });
+        var tracking = new DiagnosticsDurableHistoryAdapter.TrackingOpenTelemetryStore(store);
+
+        var exception = await Assert.ThrowsAsync<PerformanceContractException>(
+            () => tracking.WaitForDurabilityAsync(CancellationToken.None));
+
+        Assert.Equal(1, store.DiagnosticsReadCount);
+        Assert.Contains("traces: 2, spans: 3, metric points: 5, logs: 7", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -477,6 +497,8 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
         DroppedMetricPointCount: 0,
         DroppedLogRecordCount: 0);
 
+    private static OpenTelemetryStorageDiagnostics EmptyDiagnostics() => DiagnosticsWithResourceCount(0);
+
     private static RunRequest Request(
         string provider = "sqlite",
         string adapter = DiagnosticsDurableHistoryAdapter.AdapterId,
@@ -516,7 +538,9 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
         limit = 1
     });
 
-    private sealed class TransientLockedOpenTelemetryStore : IOpenTelemetryStore
+    private sealed class ProbeOpenTelemetryStore(
+        OpenTelemetryStorageDiagnostics? diagnostics = null,
+        bool throwTransientLock = false) : IOpenTelemetryStore
     {
         public int DiagnosticsReadCount { get; private set; }
 
@@ -531,10 +555,10 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             DiagnosticsReadCount++;
-            if (DiagnosticsReadCount == 1)
+            if (throwTransientLock && DiagnosticsReadCount == 1)
                 throw new SqliteException("database schema is locked: main", 6, 6);
 
-            return ValueTask.FromResult(new OpenTelemetryStorageDiagnostics(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
+            return ValueTask.FromResult(diagnostics ?? EmptyDiagnostics());
         }
     }
 }

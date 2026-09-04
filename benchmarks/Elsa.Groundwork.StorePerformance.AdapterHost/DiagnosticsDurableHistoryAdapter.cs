@@ -434,6 +434,16 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
                     deadline,
                     "OpenTelemetry durability did not become visible within the untimed flush budget.",
                     cancellationToken);
+                if (diagnostics.DroppedTraceCount != 0 ||
+                    diagnostics.DroppedSpanCount != 0 ||
+                    diagnostics.DroppedMetricPointCount != 0 ||
+                    diagnostics.DroppedLogRecordCount != 0)
+                {
+                    throw new PerformanceContractException(
+                        "OpenTelemetry durability failed because the background drain dropped queued records " +
+                        $"(traces: {diagnostics.DroppedTraceCount}, spans: {diagnostics.DroppedSpanCount}, " +
+                        $"metric points: {diagnostics.DroppedMetricPointCount}, logs: {diagnostics.DroppedLogRecordCount}).");
+                }
                 if (diagnostics.TraceCount >= Math.Min(traces, diagnostics.TraceCapacity) &&
                     diagnostics.SpanCount >= Math.Min(spans, diagnostics.SpanCapacity) &&
                     diagnostics.MetricPointCount >= Math.Min(points, diagnostics.MetricPointCapacity) &&

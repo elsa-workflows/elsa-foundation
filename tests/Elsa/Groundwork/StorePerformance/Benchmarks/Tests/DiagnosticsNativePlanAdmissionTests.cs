@@ -10,6 +10,9 @@ namespace Elsa.Groundwork.StorePerformance.Benchmarks.Tests;
 
 public sealed class DiagnosticsNativePlanAdmissionTests
 {
+    private const string MongoOrdinalKeyFunctionBody =
+        "function(value) { if (value === null || value === undefined) return null; var key = ''; for (var i = 0; i < value.length; i++) { var unit = value.charCodeAt(i).toString(16); key += ('0000' + unit).slice(-4); } return key; }";
+
     [Fact]
     public void Current_route_contract_admits_only_declared_order_covering_indexes()
     {
@@ -500,6 +503,144 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             fixture.Adapter,
             fixture.Route,
             fixture.Path);
+    }
+
+    [Fact]
+    public void Mongo_explain_command_accepts_preview_10_non_null_and_persisted_order_key_optimization()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var command = JsonNode.Parse(Fixture.MongoAggregateCommand(specification))!.AsObject();
+        var pipeline = command["pipeline"]!.AsArray();
+        pipeline[1] = MongoOrdinalKeyStage(2, "id");
+        pipeline.Insert(2, JsonNode.Parse("""
+            {"$sort":{"lastSeen":-1,"idOrderKey":1,"_groundwork_ordinal_key_2":1}}
+            """));
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            command: command.ToJsonString(),
+            nativePlan: """
+                {
+                  "queryPlanner": {
+                    "winningPlan": {
+                      "stage": "SORT",
+                      "sortPattern": { "lastSeen": -1, "idOrderKey": 1, "_groundwork_ordinal_key_2": 1 },
+                      "limitAmount": 127,
+                      "inputStage": { "stage": "COLLSCAN", "direction": "forward" }
+                    }
+                  }
+                }
+                """,
+            planClassification: DiagnosticsNativePlanContract.BoundedMongoScanSortPlanClassification);
+
+        DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path);
+    }
+
+    [Fact]
+    public void Mongo_bounded_plan_order_must_match_the_retained_command_order()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            nativePlan: """
+                {
+                  "queryPlanner": {
+                    "winningPlan": {
+                      "stage": "SORT",
+                      "sortPattern": { "lastSeen": -1, "idOrderKey": 1, "_groundwork_ordinal_key_2": 1 },
+                      "limitAmount": 127,
+                      "inputStage": { "stage": "COLLSCAN", "direction": "forward" }
+                    }
+                  }
+                }
+                """,
+            planClassification: DiagnosticsNativePlanContract.BoundedMongoScanSortPlanClassification);
+
+        var exception = Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateEnvelope(
+                "mongodb",
+                fixture.Adapter,
+                fixture.Route,
+                fixture.Path));
+
+        Assert.Contains("complete effective ordering", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Mongo_order_helpers_must_precede_the_sort_stage()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var command = JsonNode.Parse(Fixture.MongoAggregateCommand(specification))!.AsObject();
+        var pipeline = command["pipeline"]!.AsArray();
+        pipeline[1] = JsonNode.Parse("""
+            {"$sort":{"lastSeen":-1,"idOrderKey":1,"_groundwork_ordinal_key_2":1}}
+            """);
+        pipeline.Insert(2, MongoOrdinalKeyStage(2, "id"));
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            command: command.ToJsonString(),
+            nativePlan: """
+                {
+                  "queryPlanner": {
+                    "winningPlan": {
+                      "stage": "SORT",
+                      "sortPattern": { "lastSeen": -1, "idOrderKey": 1, "_groundwork_ordinal_key_2": 1 },
+                      "limitAmount": 127,
+                      "inputStage": { "stage": "COLLSCAN", "direction": "forward" }
+                    }
+                  }
+                }
+                """,
+            planClassification: DiagnosticsNativePlanContract.BoundedMongoScanSortPlanClassification);
+
+        var exception = Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateEnvelope(
+                "mongodb",
+                fixture.Adapter,
+                fixture.Route,
+                fixture.Path));
+
+        Assert.Contains("complete effective ordering", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Mongo_ordinal_helper_must_bind_the_exact_function_and_source_column()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var command = JsonNode.Parse(Fixture.MongoAggregateCommand(specification))!.AsObject();
+        var pipeline = command["pipeline"]!.AsArray();
+        pipeline[1] = MongoOrdinalKeyStage(2, "id", "function(value) { return value; }");
+        pipeline.Insert(2, JsonNode.Parse("""
+            {"$sort":{"lastSeen":-1,"idOrderKey":1,"_groundwork_ordinal_key_2":1}}
+            """));
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            command: command.ToJsonString(),
+            planClassification: DiagnosticsNativePlanContract.BoundedMongoScanSortPlanClassification);
+
+        var exception = Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateEnvelope(
+                "mongodb",
+                fixture.Adapter,
+                fixture.Route,
+                fixture.Path));
+
+        Assert.Contains("complete effective ordering", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1225,6 +1366,23 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
             "sqlite", fixture.Adapter, fixture.Route, fixture.Path));
     }
+
+    private static JsonObject MongoOrdinalKeyStage(int index, string column, string? body = null) =>
+        new()
+        {
+            ["$set"] = new JsonObject
+            {
+                [$"_groundwork_ordinal_key_{index}"] = new JsonObject
+                {
+                    ["$function"] = new JsonObject
+                    {
+                        ["body"] = body ?? MongoOrdinalKeyFunctionBody,
+                        ["args"] = new JsonArray(JsonValue.Create("$" + column)),
+                        ["lang"] = "js"
+                    }
+                }
+            }
+        };
 
     private sealed class Fixture : IDisposable
     {

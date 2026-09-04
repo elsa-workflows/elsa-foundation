@@ -340,14 +340,17 @@ public sealed class GroundworkOpenTelemetryStore :
             throw new ArgumentException("The diagnostics drain batch identity cannot be empty.", nameof(batchId));
         cancellationToken.ThrowIfCancellationRequested();
 
-        var services = batch.Resources.ToDictionary(resource => resource.Id, resource => resource.ServiceName, StringComparer.OrdinalIgnoreCase);
+        var services = await ResolveServicesAsync(batch, cancellationToken);
         var traceServices = batch.Traces
-            .Select(trace => (Trace: trace, ServiceNames: ServicesFor(trace.ResourceIds, services)))
+            .Select(trace => (Trace: trace, ServiceNames: ServicesFrom(trace.ResourceIds, services)))
             .ToArray();
+        var traceGroups = traceServices.GroupBy(
+            item => V2OpenTelemetryCodec.TraceKey(item.Trace.TraceId),
+            StringComparer.Ordinal).ToArray();
         var traces = traceServices.Select(item => V2OpenTelemetryCodec.Trace(item.Trace, item.ServiceNames.FirstOrDefault())).ToArray();
         var spans = batch.Spans.Select(V2OpenTelemetryCodec.Span).ToArray();
-        var points = batch.MetricPoints.Select(point => V2OpenTelemetryCodec.MetricPoint(point, ServiceFor([point.ResourceId], services))).ToArray();
-        var logs = batch.Logs.Select(log => V2OpenTelemetryCodec.Log(log, ServiceFor([log.ResourceId], services))).ToArray();
+        var points = batch.MetricPoints.Select(point => V2OpenTelemetryCodec.MetricPoint(point, ServiceFrom(point.ResourceId, services))).ToArray();
+        var logs = batch.Logs.Select(log => V2OpenTelemetryCodec.Log(log, ServiceFrom(log.ResourceId, services))).ToArray();
         var resources = batch.Resources.Select(V2OpenTelemetryCodec.Resource).ToArray();
         var instruments = batch.Instruments.Select(instrument => V2OpenTelemetryCodec.Instrument(instrument, batchId.IssuedAt)).ToArray();
         // The durable identity describes caller-supplied batch content, not mutable catalog
@@ -390,6 +393,10 @@ public sealed class GroundworkOpenTelemetryStore :
                     work.Rollback();
                     return;
                 }
+                var existingTraceSummaryKeys = await ReadExistingTraceSummaryKeysAsync(
+                    transaction.TraceSummaries,
+                    traceGroups.Select(group => group.Key).ToArray(),
+                    cancellationToken);
 
                 foreach (var resource in resources)
                     work.Stage(RowWrite.Upsert(resourceUnit, resource));
@@ -401,15 +408,18 @@ public sealed class GroundworkOpenTelemetryStore :
                 await AppendExactAsync(transaction.MetricPoints, points, batchId, "metric-points", cancellationToken);
                 await AppendExactAsync(transaction.Logs, logs, batchId, "logs", cancellationToken);
 
-                foreach (var group in traceServices.GroupBy(
-                             item => V2OpenTelemetryCodec.TraceKey(item.Trace.TraceId),
-                             StringComparer.Ordinal))
+                foreach (var group in traceGroups)
                 {
                     var key = new StorageKey(new Dictionary<string, object?>
                     {
                         [V2OpenTelemetryStorageSchema.TraceKey] = group.Key
                     });
-                    var existing = transaction.TraceSummaries.Read(key);
+                    // The provider-neutral keyed batch read proves which summaries exist without one
+                    // point read per new trace. Existing rows are still read individually so their
+                    // optimistic-concurrency versions remain authoritative inside this transaction.
+                    var existing = existingTraceSummaryKeys.Contains(group.Key)
+                        ? transaction.TraceSummaries.Read(key)
+                        : null;
                     var records = existing is null
                         ? group.Select(item => item.Trace).ToArray()
                         : new[] { V2OpenTelemetryCodec.DeserializeTraceSummary(existing.Values.Values) }
@@ -479,6 +489,67 @@ public sealed class GroundworkOpenTelemetryStore :
         }
 
         throw new IOException("The OpenTelemetry v3 atomic capture failed after retries.", failure);
+    }
+
+    private async ValueTask<IReadOnlyDictionary<string, string>> ResolveServicesAsync(
+        OpenTelemetryBatch batch,
+        CancellationToken cancellationToken)
+    {
+        var services = batch.Resources.ToDictionary(
+            resource => resource.Id,
+            resource => resource.ServiceName,
+            StringComparer.OrdinalIgnoreCase);
+        var missingResourceIds = batch.Traces.SelectMany(trace => trace.ResourceIds)
+            .Concat(batch.MetricPoints.Select(point => point.ResourceId))
+            .Concat(batch.Logs.Select(log => log.ResourceId))
+            .Where(id => !services.ContainsKey(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Cast<object?>()
+            .ToArray();
+        if (missingResourceIds.Length == 0)
+            return services;
+
+        var retained = await sessions.Resources.BatchReadAsync(
+            new KeyedBatchReadRequest(
+                new TableId(sessions.Resources.Unit.Name),
+                ResourceColumns.Id,
+                missingResourceIds,
+                Projection.ColumnsOnly(ResourceColumns.Id, ResourceColumns.ServiceName)),
+            connection,
+            cancellationToken);
+        foreach (var row in retained.Rows)
+        {
+            var id = row.Values.TryGetValue(V2OpenTelemetryStorageSchema.Id, out var rawId) && rawId is string resourceId
+                ? resourceId
+                : throw new InvalidDataException("The OpenTelemetry resource batch read omitted its identity.");
+            var serviceName = row.Values.TryGetValue(V2OpenTelemetryStorageSchema.ServiceName, out var rawServiceName) && rawServiceName is string service
+                ? service
+                : throw new InvalidDataException("The OpenTelemetry resource batch read omitted its service name.");
+            services[id] = serviceName;
+        }
+        return services;
+    }
+
+    private async ValueTask<HashSet<string>> ReadExistingTraceSummaryKeysAsync(
+        IStorageSession session,
+        IReadOnlyList<string> traceKeys,
+        CancellationToken cancellationToken)
+    {
+        if (traceKeys.Count == 0)
+            return new(StringComparer.Ordinal);
+
+        var result = await session.BatchReadAsync(
+            new KeyedBatchReadRequest(
+                new TableId(session.Unit.Name),
+                TraceSummaryColumns.TraceKey,
+                traceKeys.Cast<object?>().ToArray(),
+                Projection.ColumnsOnly(TraceSummaryColumns.TraceKey)),
+            connection,
+            cancellationToken);
+        return result.Rows.Select(row => row.Values.TryGetValue(V2OpenTelemetryStorageSchema.TraceKey, out var value) && value is string key
+                ? key
+                : throw new InvalidDataException("The OpenTelemetry trace-summary batch read omitted its trace key."))
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     private static async ValueTask AppendExactAsync(
@@ -678,8 +749,17 @@ public sealed class GroundworkOpenTelemetryStore :
             throw new CaptureBatchIdentityConflictException();
     }
 
-    private string? ServiceFor(IEnumerable<string> resourceIds, IReadOnlyDictionary<string, string> batchServices)
-        => ServicesFor(resourceIds, batchServices).FirstOrDefault();
+    private static string? ServiceFrom(string resourceId, IReadOnlyDictionary<string, string> services) =>
+        services.TryGetValue(resourceId, out var serviceName) ? serviceName : null;
+
+    private static IReadOnlyList<string> ServicesFrom(
+        IEnumerable<string> resourceIds,
+        IReadOnlyDictionary<string, string> services) =>
+        resourceIds.Where(services.ContainsKey)
+            .Select(resourceId => services[resourceId])
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
 
     private IReadOnlyList<string> ServicesFor(
         IEnumerable<string> resourceIds,

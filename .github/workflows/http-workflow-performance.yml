@@ -52,6 +52,17 @@ on:
         options:
           - http
           - groundwork-diagnostics
+      diagnostics_provider:
+        description: Diagnostics provider evidence to run
+        required: false
+        default: all
+        type: choice
+        options:
+          - all
+          - sqlite
+          - postgresql
+          - sqlserver
+          - mongodb
 
 permissions:
   contents: read
@@ -177,19 +188,16 @@ jobs:
   # the already-registered performance workflow so maintainers can dispatch the branch version before
   # this change reaches the default branch. It is deliberately a separate matrix from the HTTP job:
   # the four providers run on dedicated hosts, while each provider's capture -> correctness -> measure
-  # sequence remains serial and fail-closed. Nothing here is a required PR check, a budget policy, or a
-  # verdict claim.
+  # sequence remains serial and fail-closed. Manual remediation can select one provider without paying
+  # for three irrelevant jobs; the default remains the complete four-provider cohort. Nothing here is a
+  # required PR check, a budget policy, or a verdict claim.
   groundwork-diagnostics:
     name: Diagnostics durable-history evidence (${{ matrix.provider }})
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.suite == 'groundwork-diagnostics' }}
     strategy:
       fail-fast: false
       matrix:
-        provider:
-          - sqlite
-          - postgresql
-          - sqlserver
-          - mongodb
+        provider: ${{ fromJSON(inputs.diagnostics_provider == 'all' && '["sqlite","postgresql","sqlserver","mongodb"]' || format('["{0}"]', inputs.diagnostics_provider)) }}
     runs-on: ubuntu-latest
     # The frozen 100k-record fixture is rebuilt for capture, the standalone correctness pass, and
     # each of the four independently isolated protocol processes. This is a failure ceiling, not a
