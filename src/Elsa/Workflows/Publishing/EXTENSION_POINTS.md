@@ -92,7 +92,8 @@ A Publishing persistence package that backs the engine's authority state should:
    register them as one composition unit. Activation is not among them: it is `IWorkflowActivationAuthority`,
    backed by the Runtime Groundwork store family, and a Publishing persistence package must neither implement
    nor register it.
-2. Enforce unique slot identity and compare-and-swap revisions in storage, not only in process memory.
+2. Compose Runtime persistence that enforces unique activation-slot identity and compare-and-swap revisions
+   in storage, not only in process memory; do not recreate that authority inside Publishing.
 3. Index publication records by slot and projection intents by publication.
 4. Version wire documents and provide upcasters/fixtures for every prior version.
 5. Prove restart behavior, stale-revision rejection, idempotent intent replay, and compensation with provider

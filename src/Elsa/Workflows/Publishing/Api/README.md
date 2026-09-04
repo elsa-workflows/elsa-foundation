@@ -32,7 +32,7 @@ The registration replaces (or, when composed first, prevents) the API feature's 
 `IPublicationRecordStore`, `IPublicationPolicyStore`, and
 `IPublicationProjectionIntentStore`; it does not couple Publishing to a particular server application.
 Activation is not included: the slot ledger is `IWorkflowActivationAuthority`, owned by the Runtime store
-family (spec 151, FR-B-006).
+family and consumed by Publishing through `IWorkflowActivationCoordinator`.
 The host must also compose the Runtime persistence used for executable artifacts, source references, trigger
 bindings, and recurring schedules.
 
