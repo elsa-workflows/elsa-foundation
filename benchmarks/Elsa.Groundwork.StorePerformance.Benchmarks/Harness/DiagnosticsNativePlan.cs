@@ -1013,15 +1013,13 @@ public static class DiagnosticsNativePlanContract
     {
         var simple = Regex.Match(
             term,
-            @"^(?:[A-Za-z_][A-Za-z0-9_]*\.)?(?<column>[A-Za-z_][A-Za-z0-9_]*)\s+(?<direction>ASC|DESC)$",
+            @"^(?:[A-Za-z_][A-Za-z0-9_]*\.)?(?<column>[A-Za-z_][A-Za-z0-9_]*)\s+(?<direction>ASC|DESC)(?:\s+NULLS\s+(?<nulls>FIRST|LAST))?$",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        if (simple.Success)
+        if (simple.Success && TryParseSqlOrderDirection(provider, simple, out var direction))
         {
             ordered = new RuntimeNativeOrderTerm(
                 simple.Groups["column"].Value,
-                string.Equals(simple.Groups["direction"].Value, "DESC", StringComparison.OrdinalIgnoreCase)
-                    ? RuntimeNativeOrderDirection.Descending
-                    : RuntimeNativeOrderDirection.Ascending);
+                direction);
             return true;
         }
         if (string.Equals(provider, "postgresql", StringComparison.Ordinal) &&
@@ -1038,9 +1036,9 @@ public static class DiagnosticsNativePlanContract
     {
         var match = Regex.Match(
             term,
-            @"^(?<expression>.+)\s+(?<direction>ASC|DESC)$",
+            @"^(?<expression>.+)\s+(?<direction>ASC|DESC)(?:\s+NULLS\s+(?<nulls>FIRST|LAST))?$",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
-        if (!match.Success)
+        if (!match.Success || !TryParseSqlOrderDirection("postgresql", match, out var direction))
         {
             ordered = default;
             return false;
@@ -1054,14 +1052,39 @@ public static class DiagnosticsNativePlanContract
                 continue;
             ordered = new RuntimeNativeOrderTerm(
                 column,
-                string.Equals(match.Groups["direction"].Value, "DESC", StringComparison.OrdinalIgnoreCase)
-                    ? RuntimeNativeOrderDirection.Descending
-                    : RuntimeNativeOrderDirection.Ascending);
+                direction);
             return true;
         }
 
         ordered = default;
         return false;
+    }
+
+    private static bool TryParseSqlOrderDirection(
+        string provider,
+        Match match,
+        out RuntimeNativeOrderDirection direction)
+    {
+        var descending = string.Equals(
+            match.Groups["direction"].Value,
+            "DESC",
+            StringComparison.OrdinalIgnoreCase);
+        var nulls = match.Groups["nulls"];
+        if (nulls.Success &&
+            (!string.Equals(provider, "postgresql", StringComparison.Ordinal) ||
+             !string.Equals(
+                 nulls.Value,
+                 descending ? "LAST" : "FIRST",
+                 StringComparison.OrdinalIgnoreCase)))
+        {
+            direction = default;
+            return false;
+        }
+
+        direction = descending
+            ? RuntimeNativeOrderDirection.Descending
+            : RuntimeNativeOrderDirection.Ascending;
+        return true;
     }
 
     private static string PostgreSqlOrdinalExpression(string expression) =>

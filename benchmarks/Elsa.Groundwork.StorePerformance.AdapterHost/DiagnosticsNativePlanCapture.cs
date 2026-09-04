@@ -6,6 +6,7 @@ using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using Groundwork.Diagnostics;
 using Groundwork.Kernel;
 using Microsoft.Data.Sqlite;
+using Npgsql;
 
 namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 
@@ -43,6 +44,7 @@ internal static class DiagnosticsNativePlanCapture
         foreach (var batch in DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatches())
             await scopes.Primary.OpenTelemetry.WriteAsync(batch, cancellationToken);
         await adapter.FlushAsync(cancellationToken);
+        await AnalyzePostgreSqlFixtureAsync(request, connectionString, cancellationToken);
         adapter.CommandObserver.ClearCommands();
 
         await ExplainCaptureLock.WaitAsync(cancellationToken);
@@ -211,6 +213,15 @@ internal static class DiagnosticsNativePlanCapture
                     outputDirectory,
                     CreateDocument(request, observed, routes, routeContract, blockedRoutes, traceDetailConstituents: traceDetailConstituents));
             }
+            catch (ExplainAssertionException)
+            {
+                PreserveFailedExplainArtifacts(
+                    explainDirectory,
+                    outputDirectory,
+                    request.Provider,
+                    request.MeasurementSetId);
+                throw;
+            }
             finally
             {
                 Environment.SetEnvironmentVariable("GW_EXPLAIN_ASSERT", previousFlag);
@@ -335,6 +346,57 @@ internal static class DiagnosticsNativePlanCapture
         }
         if (acknowledgements.Count != 0)
             await Task.WhenAll(acknowledgements);
+    }
+
+    private static async Task AnalyzePostgreSqlFixtureAsync(
+        RunRequest request,
+        string connectionString,
+        CancellationToken cancellationToken)
+    {
+        if (!string.Equals(request.Provider, "postgresql", StringComparison.Ordinal))
+            return;
+
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        foreach (var commandText in PostgreSqlAnalyzeCommands(request.Adapter))
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = commandText;
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+    }
+
+    internal static IReadOnlyList<string> PostgreSqlAnalyzeCommands(string adapter) =>
+        DiagnosticsDurableHistoryWorkload.NativeRouteLimits.Keys
+            .Select(route => DiagnosticsNativePlanContract.For(adapter, route).TableName)
+            .Concat(DiagnosticsNativePlanContract.TraceDetailConstituents(adapter).Select(item => item.TableName))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .Select(table => $"ANALYZE \"{table.Replace("\"", "\"\"", StringComparison.Ordinal)}\"")
+            .ToArray();
+
+    internal static IReadOnlyList<string> PreserveFailedExplainArtifacts(
+        string explainDirectory,
+        string outputDirectory,
+        string provider,
+        string measurementSetId)
+    {
+        if (!Directory.Exists(explainDirectory))
+            return [];
+
+        Directory.CreateDirectory(outputDirectory);
+        var extension = IamNativePlanParser.RawPlanExtension(provider);
+        var retained = new List<string>();
+        foreach (var source in Directory.EnumerateFiles(explainDirectory, $"*{extension}")
+                     .Order(StringComparer.Ordinal))
+        {
+            var reference = ArtifactStore.RawPlanName(
+                $"diagnostics.{provider}.{measurementSetId}.failed-explain-{retained.Count + 1}{extension}");
+            File.Copy(source, Path.Combine(outputDirectory, reference), overwrite: true);
+            retained.Add(reference);
+        }
+
+        return retained;
     }
 
     private static async Task<IReadOnlyList<DiagnosticsTraceDetailConstituentEvidence>> CaptureTraceDetailConstituentsAsync(
