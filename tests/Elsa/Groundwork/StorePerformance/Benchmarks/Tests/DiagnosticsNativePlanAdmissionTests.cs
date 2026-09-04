@@ -814,7 +814,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             evidenceDocument.Scale,
             evidenceDocument.CommitSha,
             evidenceDocument.HarnessAssemblySha256,
-            new Dictionary<string, string> { ["Groundwork.MongoDb"] = "0.4.0-preview.12" },
+            new Dictionary<string, string> { ["Groundwork.MongoDb"] = "0.4.0-preview.13" },
             evidenceDocument.CompositionFingerprint,
             evidenceDocument.HostFingerprintSha256,
             evidenceDocument.ProviderVersion,
@@ -1412,6 +1412,67 @@ public sealed class DiagnosticsNativePlanAdmissionTests
 
         Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
             "postgresql", fixture.Adapter, fixture.Route, fixture.Path));
+    }
+
+    [Fact]
+    public void PostgreSql_bounded_catalog_command_accepts_index_ddl_null_placement_for_non_nullable_ordering()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        using var fixture = Fixture.Create(
+            "postgresql",
+            specification.RouteIdentity,
+            command: ProviderRenderedRelationalCommand("postgresql", specification),
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+            nativePlan: BoundedCatalogPlan("postgresql"));
+
+        DiagnosticsNativePlanContract.ValidateEnvelope(
+            "postgresql", fixture.Adapter, fixture.Route, fixture.Path);
+    }
+
+    [Fact]
+    public void PostgreSql_bounded_catalog_command_rejects_mismatched_non_nullable_null_placement()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var command = ProviderRenderedRelationalCommand("postgresql", specification).Replace(
+            "DESC NULLS LAST",
+            "DESC NULLS FIRST",
+            StringComparison.Ordinal);
+        using var fixture = Fixture.Create(
+            "postgresql",
+            specification.RouteIdentity,
+            command: command,
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+            nativePlan: BoundedCatalogPlan("postgresql"));
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "postgresql", fixture.Adapter, fixture.Route, fixture.Path));
+    }
+
+    [Fact]
+    public void Non_PostgreSql_command_rejects_PostgreSql_null_placement_syntax()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "structured-log-replay");
+        var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("sqlite", specification);
+        using var fixture = Fixture.Create(
+            "sqlite",
+            specification.RouteIdentity,
+            command:
+                "SELECT * FROM elsa_structured_logs WHERE " +
+                "(__groundwork_scope IS NOT NULL AND __groundwork_scope = @p0) AND " +
+                "(sequence IS NOT NULL AND sequence > @p1 AND sequence <= @p2) " +
+                "ORDER BY sequence ASC NULLS FIRST LIMIT @p3",
+            nativePlan:
+                $"2 0 SEARCH elsa_structured_logs USING INDEX {physicalIndex} " +
+                "(__groundwork_scope=? AND sequence>? AND sequence<?)");
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "sqlite", fixture.Adapter, fixture.Route, fixture.Path));
     }
 
     [Fact]
@@ -2087,7 +2148,13 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 ? $"(\"{term.Column}\" COLLATE \"C\")"
                 : $"\"{term.Column}\"";
             var direction = term.Direction == RuntimeNativeOrderDirection.Descending ? "DESC" : "ASC";
-            return new[] { (ordinal ? PostgreSqlOrdinalKey(expression) : expression) + " " + direction };
+            var nullPlacement = term.Direction == RuntimeNativeOrderDirection.Descending
+                ? "NULLS LAST"
+                : "NULLS FIRST";
+            return new[]
+            {
+                (ordinal ? PostgreSqlOrdinalKey(expression) : expression) + " " + direction + " " + nullPlacement
+            };
         }).ToArray();
 
     private static string[] PostgreSqlExplainSortKeys() =>

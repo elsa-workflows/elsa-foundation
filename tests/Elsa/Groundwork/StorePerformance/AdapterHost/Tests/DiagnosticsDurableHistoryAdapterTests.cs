@@ -302,6 +302,54 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
     }
 
     [Fact]
+    public void PostgreSql_diagnostics_fixture_refreshes_statistics_for_every_distinct_plan_table()
+    {
+        var commands = DiagnosticsNativePlanCapture.PostgreSqlAnalyzeCommands(
+            DiagnosticsNativePlanContract.GroundworkAdapter);
+
+        Assert.NotEmpty(commands);
+        Assert.Equal(commands.Count, commands.Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains("ANALYZE \"elsa_otel_trace_summaries_v3\"", commands);
+        Assert.Contains("ANALYZE \"elsa_otel_spans_v2\"", commands);
+        Assert.Contains("ANALYZE \"elsa_otel_logs_v2\"", commands);
+        Assert.All(commands, command => Assert.Matches("^ANALYZE \\\"[A-Za-z0-9_]+\\\"$", command));
+    }
+
+    [Fact]
+    public void Failed_explain_artifacts_are_copied_out_before_the_temporary_capture_directory_is_deleted()
+    {
+        var explain = Directory.CreateTempSubdirectory("diagnostics-failed-explain-");
+        var output = Directory.CreateTempSubdirectory("diagnostics-failed-output-");
+        try
+        {
+            File.WriteAllText(Path.Combine(explain.FullName, "000002-postgresql-plan.json"), "second");
+            File.WriteAllText(Path.Combine(explain.FullName, "000001-postgresql-plan.json"), "first");
+            File.WriteAllText(Path.Combine(explain.FullName, "ignored.txt"), "ignored");
+
+            var retained = DiagnosticsNativePlanCapture.PreserveFailedExplainArtifacts(
+                explain.FullName,
+                output.FullName,
+                "postgresql",
+                "diagnostics-set");
+
+            Assert.Equal(
+                [
+                    "diagnostics.postgresql.diagnostics-set.failed-explain-1.json",
+                    "diagnostics.postgresql.diagnostics-set.failed-explain-2.json"
+                ],
+                retained);
+            Assert.Equal("first", File.ReadAllText(Path.Combine(output.FullName, retained[0])));
+            Assert.Equal("second", File.ReadAllText(Path.Combine(output.FullName, retained[1])));
+            Assert.False(File.Exists(Path.Combine(output.FullName, "ignored.txt")));
+        }
+        finally
+        {
+            explain.Delete(true);
+            output.Delete(true);
+        }
+    }
+
+    [Fact]
     public void Trace_detail_page_is_hashed_before_validation_and_published_only_after_admission()
     {
         var specification = DiagnosticsNativePlanContract.TraceDetailConstituents(
