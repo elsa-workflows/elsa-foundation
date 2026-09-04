@@ -1260,6 +1260,33 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         AssertBoundedCatalogRejected("postgresql", plan);
     }
 
+    [Fact]
+    public void PostgreSql_bounded_catalog_scan_sort_rejects_swapped_ordinal_subplan_sources()
+    {
+        var plan = JsonNode.Parse(BoundedCatalogPlan("postgresql"))!.AsArray();
+        var subplans = plan[0]!["Plan"]!["Plans"]![0]!["Plans"]![0]!["Plans"]!.AsArray();
+        var firstCall = subplans[0]!["Plans"]![0]!["Function Call"];
+        var secondCall = subplans[1]!["Plans"]![0]!["Function Call"];
+        subplans[0]!["Plans"]![0]!["Function Call"] = secondCall!.DeepClone();
+        subplans[1]!["Plans"]![0]!["Function Call"] = firstCall!.DeepClone();
+
+        AssertBoundedCatalogRejected("postgresql", plan.ToJsonString());
+    }
+
+    [Fact]
+    public void PostgreSql_bounded_catalog_scan_sort_rejects_a_mutated_ordinal_subplan_expression()
+    {
+        var plan = JsonNode.Parse(BoundedCatalogPlan("postgresql"))!.AsArray();
+        var aggregate = plan[0]!["Plan"]!["Plans"]![0]!["Plans"]![0]!["Plans"]![0]!;
+        var output = aggregate["Output"]![0]!.GetValue<string>().Replace(
+            "ascii(chars.ch) <= 65535",
+            "ascii(chars.ch) <= 65534",
+            StringComparison.Ordinal);
+        aggregate["Output"]![0] = output;
+
+        AssertBoundedCatalogRejected("postgresql", plan.ToJsonString());
+    }
+
     [Theory]
     [InlineData("postgresql")]
     [InlineData("sqlserver")]
@@ -1785,25 +1812,39 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     {
         if (provider == "postgresql")
         {
+            var ordinalColumns = new[] { "idOrderKey", "id" };
             var scan = new Dictionary<string, object>
             {
                 ["Node Type"] = "Seq Scan",
                 ["Relation Name"] = "elsa_otel_resources_v2",
                 ["Plans"] = Enumerable.Range(1, 2).Select(index =>
-                    new Dictionary<string, object>
+                {
+                    var alias = index == 1 ? "chars" : $"chars_{index - 1}";
+                    return new Dictionary<string, object>
                     {
                         ["Node Type"] = "Aggregate",
                         ["Parent Relationship"] = "SubPlan",
                         ["Subplan Name"] = $"SubPlan {index}",
+                        ["Output"] = new[]
+                        {
+                            $"string_agg(CASE WHEN (ascii({alias}.ch) <= 65535) THEN lpad(to_hex(ascii({alias}.ch)), 4, '0'::text) ELSE " +
+                            $"(lpad(to_hex((55296 + ((ascii({alias}.ch) - 65536) >> 10))), 4, '0'::text) || " +
+                            $"lpad(to_hex((56320 + ((ascii({alias}.ch) - 65536) & 1023))), 4, '0'::text)) END, ''::text ORDER BY {alias}.ord)"
+                        },
                         ["Plans"] = new[]
                         {
                             new Dictionary<string, object>
                             {
                                 ["Node Type"] = "Function Scan",
-                                ["Function Name"] = "unnest"
+                                ["Function Name"] = "unnest",
+                                ["Alias"] = alias,
+                                ["Output"] = new[] { $"{alias}.ch", $"{alias}.ord" },
+                                ["Function Call"] =
+                                    $"unnest(string_to_array((elsa_otel_resources_v2.{ordinalColumns[index - 1]})::text, NULL::text))"
                             }
                         }
-                    }).ToArray()
+                    };
+                }).ToArray()
             };
             var sort = new Dictionary<string, object>
             {

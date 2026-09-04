@@ -1087,7 +1087,11 @@ public static class DiagnosticsNativePlanContract
         JsonElement scan,
         DiagnosticsNativeRouteSpec specification)
     {
-        var expected = specification.EffectiveOrdering.Count(term => IsOrdinalStringOrderColumn(term.Column));
+        var expectedColumns = specification.EffectiveOrdering
+            .Where(term => IsOrdinalStringOrderColumn(term.Column))
+            .Select(term => term.Column)
+            .ToArray();
+        var expected = expectedColumns.Length;
         if (!scan.TryGetProperty("Plans", out var plans))
             return expected == 0;
         if (plans.ValueKind != JsonValueKind.Array || plans.GetArrayLength() != expected)
@@ -1095,6 +1099,7 @@ public static class DiagnosticsNativePlanContract
         for (var index = 0; index < expected; index++)
         {
             var aggregate = plans[index];
+            var expectedAlias = index == 0 ? "chars" : $"chars_{index}";
             if (!PostgreSqlNodeIs(aggregate, "Aggregate") ||
                 !aggregate.TryGetProperty("Parent Relationship", out var relationship) ||
                 relationship.ValueKind != JsonValueKind.String ||
@@ -1102,16 +1107,70 @@ public static class DiagnosticsNativePlanContract
                 !aggregate.TryGetProperty("Subplan Name", out var name) ||
                 name.ValueKind != JsonValueKind.String ||
                 !string.Equals(name.GetString(), $"SubPlan {index + 1}", StringComparison.Ordinal) ||
+                !PostgreSqlAggregateOutputMatches(aggregate, expectedAlias) ||
                 !TryGetSinglePostgreSqlPlanChild(aggregate, out var function) ||
                 !PostgreSqlNodeIs(function, "Function Scan") ||
                 function.TryGetProperty("Plans", out _) ||
                 !function.TryGetProperty("Function Name", out var functionName) ||
                 functionName.ValueKind != JsonValueKind.String ||
-                !string.Equals(functionName.GetString(), "unnest", StringComparison.Ordinal))
+                !string.Equals(functionName.GetString(), "unnest", StringComparison.Ordinal) ||
+                !PostgreSqlFunctionCallMatches(
+                    function,
+                    specification.TableName,
+                    expectedColumns[index],
+                    expectedAlias))
                 return false;
         }
         return true;
     }
+
+    private static bool PostgreSqlAggregateOutputMatches(JsonElement aggregate, string alias)
+    {
+        if (!aggregate.TryGetProperty("Output", out var output) ||
+            output.ValueKind != JsonValueKind.Array ||
+            output.GetArrayLength() != 1 ||
+            output[0].ValueKind != JsonValueKind.String)
+            return false;
+
+        var expected =
+            $"string_agg(CASE WHEN (ascii({alias}.ch) <= 65535) THEN lpad(to_hex(ascii({alias}.ch)), 4, '0'::text) ELSE " +
+            $"(lpad(to_hex((55296 + ((ascii({alias}.ch) - 65536) >> 10))), 4, '0'::text) || " +
+            $"lpad(to_hex((56320 + ((ascii({alias}.ch) - 65536) & 1023))), 4, '0'::text)) END, ''::text ORDER BY {alias}.ord)";
+        return string.Equals(
+            CanonicalPostgreSqlVerboseExpression(output[0].GetString()!),
+            CanonicalPostgreSqlVerboseExpression(expected),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool PostgreSqlFunctionCallMatches(
+        JsonElement function,
+        string table,
+        string column,
+        string alias)
+    {
+        if (!function.TryGetProperty("Alias", out var actualAlias) ||
+            actualAlias.ValueKind != JsonValueKind.String ||
+            !string.Equals(actualAlias.GetString(), alias, StringComparison.Ordinal) ||
+            !function.TryGetProperty("Output", out var output) ||
+            output.ValueKind != JsonValueKind.Array ||
+            output.GetArrayLength() != 2 ||
+            output[0].ValueKind != JsonValueKind.String ||
+            output[1].ValueKind != JsonValueKind.String ||
+            !string.Equals(output[0].GetString(), $"{alias}.ch", StringComparison.Ordinal) ||
+            !string.Equals(output[1].GetString(), $"{alias}.ord", StringComparison.Ordinal) ||
+            !function.TryGetProperty("Function Call", out var call) ||
+            call.ValueKind != JsonValueKind.String)
+            return false;
+
+        var expected = $"unnest(string_to_array(({table}.{column})::text, NULL::text))";
+        return string.Equals(
+            CanonicalPostgreSqlVerboseExpression(call.GetString()!),
+            CanonicalPostgreSqlVerboseExpression(expected),
+            StringComparison.Ordinal);
+    }
+
+    private static string CanonicalPostgreSqlVerboseExpression(string value) =>
+        Regex.Replace(value, "[\\s\\\"]", string.Empty, RegexOptions.CultureInvariant);
 
     private static bool PostgreSqlOrderingMatches(
         JsonElement sort,
