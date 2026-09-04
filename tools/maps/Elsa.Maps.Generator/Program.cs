@@ -5,7 +5,7 @@ using Elsa.Maps.Generator;
 //
 // Usage: dotnet run --project tools/maps/Elsa.Maps.Generator -- <layer> [<layer> ...]
 //   domain | extension-points | architecture-reference | feature-dependency | maps | all | check
-//   solution-filters | solution-filters-check
+//   solution-filters | solution-filters-check | solution-filters-self-test
 
 // "maps" first: the v2 findings report reads summary lines out of the v1 maps, so they must exist first.
 string[] knownLayers = ["maps", "domain", "extension-points", "architecture-reference", "feature-dependency"];
@@ -27,6 +27,12 @@ try
     if (layers.SequenceEqual(["solution-filters-check"], StringComparer.Ordinal))
         return SolutionFilterGenerator.Check(repo);
 
+    if (layers.SequenceEqual(["solution-filters-self-test"], StringComparer.Ordinal))
+    {
+        SolutionFilterGeneratorContractTests.Run();
+        return 0;
+    }
+
     // Freshness check: regenerates into a scratch directory and compares the bytes with what is
     // committed. Writes nothing into the repository, so it is safe to run in CI while generation
     // itself stays manually initiated.
@@ -42,7 +48,7 @@ try
     // writing part of the maps and then throwing.
     var requested = layers.Contains("all", StringComparer.Ordinal) ? knownLayers : layers;
     if (requested.FirstOrDefault(layer => !knownLayers.Contains(layer, StringComparer.Ordinal)) is { } unknown)
-        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check.");
+        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test.");
 
     var projects = ProjectGraph.Read(repo);
     var written = new List<string>();

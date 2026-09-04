@@ -29,6 +29,9 @@ jobs:
       - name: Check generated filters against the project graph
         run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -- solution-filters-check
 
+      - name: Exercise generator contracts
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -- solution-filters-self-test
+
       - name: Validate filters with the .NET CLI
         shell: bash
         run: |

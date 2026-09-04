@@ -25,7 +25,7 @@ public static class SolutionFilterGenerator
     public static IReadOnlyList<string> Generate(RepoContext repo, string? destinationRoot = null)
     {
         var manifest = ReadManifest(repo);
-        var solution = ReadSolution(repo, manifest.SolutionPath);
+        var solution = ReadSolution(repo, manifest);
         var outputRoot = destinationRoot ?? repo.Root;
         var written = new List<string>();
 
@@ -35,11 +35,19 @@ public static class SolutionFilterGenerator
 
             var roots = solution.Projects.Values
                 .Where(project => Matches(project, profile))
-                .Where(project => !manifest.ExcludeRootPathPrefixes.Any(project.Path.StartsWith))
-                .Where(project => !profile.ExcludeRootPathContains.Any(project.Path.Contains))
-                .Where(project => profile.RequireProjectFileContains.Count == 0 ||
-                                  profile.RequireProjectFileContains.Any(project.Content.Contains))
-                .Where(project => !profile.ExcludeWhenProjectFileContains.Any(project.Content.Contains))
+                .Where(project => !manifest.ExcludeRootPathPrefixes
+                    .Select(Normalize)
+                    .Any(prefix => project.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                .Where(project => !profile.ExcludeRootPathContains
+                    .Select(Normalize)
+                    .Any(value => project.Path.Contains(value, StringComparison.OrdinalIgnoreCase)))
+                .Where(project => profile.RequirePackageReferencePrefixes.Count == 0 ||
+                                  profile.RequirePackageReferencePrefixes.Any(required =>
+                                      project.PackageReferences.Any(package =>
+                                          package.StartsWith(required, StringComparison.OrdinalIgnoreCase))))
+                .Where(project => !profile.ExcludeWhenPackageReferencePrefixes.Any(excluded =>
+                    project.PackageReferences.Any(package =>
+                        package.StartsWith(excluded, StringComparison.OrdinalIgnoreCase))))
                 .Select(project => project.Path)
                 .Order(StringComparer.Ordinal)
                 .ToArray();
@@ -47,12 +55,21 @@ public static class SolutionFilterGenerator
             if (roots.Length == 0)
                 throw new InvalidOperationException($"Solution filter profile '{profile.OutputPath}' selected no projects.");
 
+            var selectedRoots = roots.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var requiredRoot in profile.RequiredRootPaths.Select(Normalize))
+            {
+                if (!solution.Projects.ContainsKey(requiredRoot))
+                    throw new InvalidOperationException($"Solution filter profile '{profile.OutputPath}' requires a project that is absent from the solution: {requiredRoot}");
+                if (!selectedRoots.Contains(requiredRoot))
+                    throw new InvalidOperationException($"Solution filter profile '{profile.OutputPath}' did not select required root: {requiredRoot}");
+            }
+
             var projects = ExpandDependencies(solution.Projects, roots);
             var document = new
             {
                 solution = new
                 {
-                    path = manifest.SolutionPath,
+                    path = Normalize(manifest.SolutionPath),
                     projects
                 }
             };
@@ -139,8 +156,9 @@ public static class SolutionFilterGenerator
         return manifest;
     }
 
-    private static SolutionGraph ReadSolution(RepoContext repo, string solutionPath)
+    private static SolutionGraph ReadSolution(RepoContext repo, SolutionFilterManifest manifest)
     {
+        var solutionPath = Normalize(manifest.SolutionPath);
         var absoluteSolutionPath = repo.Absolute(Normalize(solutionPath));
         if (!File.Exists(absoluteSolutionPath))
             throw new InvalidOperationException($"Solution file not found: {solutionPath}");
@@ -155,7 +173,7 @@ public static class SolutionFilterGenerator
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        var projects = new Dictionary<string, SolutionProject>(StringComparer.Ordinal);
+        var projects = new Dictionary<string, SolutionProject>(StringComparer.OrdinalIgnoreCase);
         foreach (var projectPath in projectPaths)
         {
             var absoluteProjectPath = repo.Absolute(projectPath);
@@ -164,33 +182,67 @@ public static class SolutionFilterGenerator
 
             var content = File.ReadAllText(absoluteProjectPath);
             var projectName = Path.GetFileNameWithoutExtension(projectPath);
-            projects.Add(projectPath, new SolutionProject(projectName, projectPath, content, []));
-        }
-
-        foreach (var project in projects.Values.ToArray())
-        {
-            var projectDocument = XDocument.Parse(project.Content);
-            var projectDirectory = Path.GetDirectoryName(repo.Absolute(project.Path))!;
-            var includes = projectDocument.Descendants()
+            var projectDocument = XDocument.Parse(content);
+            var packageReferences = projectDocument.Descendants()
+                .Where(element => element.Name.LocalName == "PackageReference")
+                .Select(element => element.Attribute("Include")?.Value)
+                .Where(include => !string.IsNullOrWhiteSpace(include))
+                .Select(include => include!)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            var projectReferenceIncludes = projectDocument.Descendants()
                 .Where(element => element.Name.LocalName == "ProjectReference")
                 .Select(element => element.Attribute("Include")?.Value)
                 .Where(include => !string.IsNullOrWhiteSpace(include))
                 .Select(include => include!)
                 .ToArray();
 
+            projects.Add(projectPath, new SolutionProject(projectName, projectPath, projectReferenceIncludes, [], packageReferences));
+        }
+
+        var allowedExternalReferences = manifest.AllowedExternalProjectReferences
+            .Select(Normalize)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var observedExternalReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var project in projects.Values.ToArray())
+        {
+            var projectDirectory = Path.GetDirectoryName(repo.Absolute(project.Path))!;
+            var includes = project.ProjectReferenceIncludes;
+
             if (includes.FirstOrDefault(include => include.Contains("$(", StringComparison.Ordinal)) is { } dynamicInclude)
                 throw new InvalidOperationException($"Project '{project.Path}' has an unresolved ProjectReference: {dynamicInclude}");
 
-            var references = includes
+            var references = new List<string>();
+            foreach (var candidate in includes
                 .Select(include => Path.GetFullPath(include!.Replace('\\', Path.DirectorySeparatorChar), projectDirectory))
                 .Select(absolute => Normalize(Path.GetRelativePath(repo.Root, absolute)))
-                .Where(projects.ContainsKey)
-                .Distinct(StringComparer.Ordinal)
-                .Order(StringComparer.Ordinal)
-                .ToArray();
+                .Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (projects.TryGetValue(candidate, out var referencedProject))
+                {
+                    references.Add(referencedProject.Path);
+                    continue;
+                }
 
-            projects[project.Path] = project with { References = references };
+                if (!allowedExternalReferences.Contains(candidate))
+                    throw new InvalidOperationException($"Project '{project.Path}' references a project outside '{solutionPath}': {candidate}. Add it to the solution or explicitly allowlist it.");
+                if (!File.Exists(repo.Absolute(candidate)))
+                    throw new InvalidOperationException($"Allowlisted external project does not exist: {candidate}");
+
+                observedExternalReferences.Add(candidate);
+            }
+
+            projects[project.Path] = project with
+            {
+                References = references.Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.Ordinal).ToArray()
+            };
         }
+
+        var unusedAllowlistEntries = allowedExternalReferences.Except(observedExternalReferences, StringComparer.OrdinalIgnoreCase).Order(StringComparer.Ordinal).ToArray();
+        if (unusedAllowlistEntries.Length > 0)
+            throw new InvalidOperationException($"Solution filter external-project allowlist contains unused entries: {string.Join(", ", unusedAllowlistEntries)}");
 
         return new SolutionGraph(projects);
     }
@@ -208,14 +260,18 @@ public static class SolutionFilterGenerator
 
         if (profile.IncludeProjectNames.Count == 0 &&
             profile.IncludeProjectNamePrefixes.Count == 0 &&
-            profile.IncludeProjectNameContains.Count == 0)
-            throw new InvalidOperationException($"Solution filter profile '{profile.OutputPath}' must define at least one project-name selector.");
+            profile.IncludeProjectNameContains.Count == 0 &&
+            profile.IncludeProjectPathPrefixes.Count == 0 &&
+            profile.IncludeProjectPathContains.Count == 0)
+            throw new InvalidOperationException($"Solution filter profile '{profile.OutputPath}' must define at least one project selector.");
     }
 
     private static bool Matches(SolutionProject project, SolutionFilterProfile profile) =>
         profile.IncludeProjectNames.Contains(project.Name, StringComparer.Ordinal) ||
-        profile.IncludeProjectNamePrefixes.Any(project.Name.StartsWith) ||
-        profile.IncludeProjectNameContains.Any(project.Name.Contains);
+        profile.IncludeProjectNamePrefixes.Any(prefix => project.Name.StartsWith(prefix, StringComparison.Ordinal)) ||
+        profile.IncludeProjectNameContains.Any(value => project.Name.Contains(value, StringComparison.Ordinal)) ||
+        profile.IncludeProjectPathPrefixes.Select(Normalize).Any(prefix => project.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) ||
+        profile.IncludeProjectPathContains.Select(Normalize).Any(value => project.Path.Contains(value, StringComparison.OrdinalIgnoreCase));
 
     private static IReadOnlyList<string> ExpandDependencies(
         IReadOnlyDictionary<string, SolutionProject> projects,
@@ -242,13 +298,19 @@ public static class SolutionFilterGenerator
         File.Exists(left) && File.Exists(right) && File.ReadAllBytes(left).AsSpan().SequenceEqual(File.ReadAllBytes(right));
 
     private sealed record SolutionGraph(IReadOnlyDictionary<string, SolutionProject> Projects);
-    private sealed record SolutionProject(string Name, string Path, string Content, IReadOnlyList<string> References);
+    private sealed record SolutionProject(
+        string Name,
+        string Path,
+        IReadOnlyList<string> ProjectReferenceIncludes,
+        IReadOnlyList<string> References,
+        IReadOnlyList<string> PackageReferences);
 }
 
 public sealed class SolutionFilterManifest
 {
     public string SolutionPath { get; init; } = string.Empty;
     public IReadOnlyList<string> ExcludeRootPathPrefixes { get; init; } = [];
+    public IReadOnlyList<string> AllowedExternalProjectReferences { get; init; } = [];
     public IReadOnlyList<SolutionFilterProfile> Profiles { get; init; } = [];
 }
 
@@ -258,7 +320,10 @@ public sealed class SolutionFilterProfile
     public IReadOnlyList<string> IncludeProjectNames { get; init; } = [];
     public IReadOnlyList<string> IncludeProjectNamePrefixes { get; init; } = [];
     public IReadOnlyList<string> IncludeProjectNameContains { get; init; } = [];
+    public IReadOnlyList<string> IncludeProjectPathPrefixes { get; init; } = [];
+    public IReadOnlyList<string> IncludeProjectPathContains { get; init; } = [];
+    public IReadOnlyList<string> RequiredRootPaths { get; init; } = [];
     public IReadOnlyList<string> ExcludeRootPathContains { get; init; } = [];
-    public IReadOnlyList<string> RequireProjectFileContains { get; init; } = [];
-    public IReadOnlyList<string> ExcludeWhenProjectFileContains { get; init; } = [];
+    public IReadOnlyList<string> RequirePackageReferencePrefixes { get; init; } = [];
+    public IReadOnlyList<string> ExcludeWhenPackageReferencePrefixes { get; init; } = [];
 }

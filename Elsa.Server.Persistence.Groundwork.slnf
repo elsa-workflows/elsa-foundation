@@ -92,7 +92,6 @@
       "tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/ProcessProbe/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.ProcessProbe.csproj",
       "tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.csproj",
       "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.Tests.csproj",
-      "tests/Elsa/Groundwork/ProviderEvidenceImporter/Tests/Elsa.Groundwork.ProviderEvidenceImporter.Tests.csproj",
       "tests/Elsa/Persistence/Groundwork/DesignConformance/Sqlite/Tests/Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests.csproj",
       "tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/Elsa.Persistence.Groundwork.DesignConformance.Tests.csproj",
       "tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj",

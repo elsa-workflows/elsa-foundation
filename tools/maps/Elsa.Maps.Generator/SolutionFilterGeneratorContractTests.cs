@@ -1,0 +1,148 @@
+using System.Text.Json;
+
+namespace Elsa.Maps.Generator;
+
+/// <summary>
+/// Dependency-free contract tests for the solution-filter generator. Keeping these beside the tool
+/// lets CI exercise path and graph behavior without introducing another project into the solution.
+/// </summary>
+public static class SolutionFilterGeneratorContractTests
+{
+    public static void Run()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"elsa-solution-filter-tests-{Environment.ProcessId}-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(root);
+            WriteFixture(root);
+            var repo = RepoContext.Discover(root);
+
+            SolutionFilterGenerator.Generate(repo);
+            AssertProjects(root, "Feature.slnf", ["src/Feature/Feature.csproj", "src/Shared/Shared.csproj"]);
+            AssertProjects(root, "Integration.slnf", ["tests/Container.csproj"]);
+
+            var first = File.ReadAllBytes(Path.Combine(root, "Feature.slnf"));
+            SolutionFilterGenerator.Generate(repo);
+            Assert(first.AsSpan().SequenceEqual(File.ReadAllBytes(Path.Combine(root, "Feature.slnf"))),
+                "Generating the same graph twice must be byte deterministic.");
+
+            File.WriteAllText(Path.Combine(root, "src/Feature/Feature.csproj"),
+                "<Project><ItemGroup><ProjectReference Include=\"../Missing/Missing.csproj\" /></ItemGroup></Project>");
+            AssertThrows(
+                () => SolutionFilterGenerator.Generate(repo),
+                "references a project outside",
+                "A missing ProjectReference must fail closed.");
+
+            Directory.CreateDirectory(Path.Combine(root, "tools"));
+            File.WriteAllText(Path.Combine(root, "tools/External.csproj"), "<Project />");
+            File.WriteAllText(Path.Combine(root, "src/Feature/Feature.csproj"),
+                "<Project><ItemGroup><ProjectReference Include=\"../../tools/External.csproj\" /></ItemGroup></Project>");
+            WriteManifest(root, ["tools\\External.csproj"]);
+            SolutionFilterGenerator.Generate(repo);
+            AssertProjects(root, "Feature.slnf", ["src/Feature/Feature.csproj"]);
+
+            Console.WriteLine("Solution filter generator contract tests passed.");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch (IOException)
+            {
+                // Best-effort cleanup.
+            }
+        }
+    }
+
+    private static void WriteFixture(string root)
+    {
+        Directory.CreateDirectory(Path.Combine(root, "src/Feature"));
+        Directory.CreateDirectory(Path.Combine(root, "src/Shared"));
+        Directory.CreateDirectory(Path.Combine(root, "tests"));
+        Directory.CreateDirectory(Path.Combine(root, "benchmarks/Feature"));
+        Directory.CreateDirectory(Path.Combine(root, "tools/solution-filters"));
+
+        File.WriteAllText(Path.Combine(root, "Elsa.Server.slnx"),
+            """
+            <Solution>
+              <Project Path="src\Feature\Feature.csproj" />
+              <Project Path="src/Shared/Shared.csproj" />
+              <Project Path="tests/Comment.csproj" />
+              <Project Path="tests/Container.csproj" />
+              <Project Path="benchmarks/Feature/Feature.Benchmarks.csproj" />
+            </Solution>
+            """);
+        File.WriteAllText(Path.Combine(root, "src/Feature/Feature.csproj"),
+            "<Project><ItemGroup><ProjectReference Include=\"..\\Shared\\Shared.csproj\" /></ItemGroup></Project>");
+        File.WriteAllText(Path.Combine(root, "src/Shared/Shared.csproj"), "<Project />");
+        File.WriteAllText(Path.Combine(root, "tests/Comment.csproj"),
+            "<Project><!-- <PackageReference Include=\"Testcontainers.CommentOnly\" /> --></Project>");
+        File.WriteAllText(Path.Combine(root, "tests/Container.csproj"),
+            "<Project><ItemGroup><PackageReference Include=\"Testcontainers.Real\" /></ItemGroup></Project>");
+        File.WriteAllText(Path.Combine(root, "benchmarks/Feature/Feature.Benchmarks.csproj"), "<Project />");
+        WriteManifest(root, []);
+    }
+
+    private static void WriteManifest(string root, IReadOnlyList<string> allowedExternalReferences)
+    {
+        var manifest = new
+        {
+            solutionPath = "Elsa.Server.slnx",
+            excludeRootPathPrefixes = new[] { "benchmarks\\" },
+            allowedExternalProjectReferences = allowedExternalReferences,
+            profiles = new object[]
+            {
+                new
+                {
+                    outputPath = "Feature.slnf",
+                    includeProjectPathContains = new[] { "Feature" },
+                    requiredRootPaths = new[] { "src\\Feature\\Feature.csproj" }
+                },
+                new
+                {
+                    outputPath = "Integration.slnf",
+                    includeProjectPathPrefixes = new[] { "tests\\" },
+                    requirePackageReferencePrefixes = new[] { "Testcontainers." }
+                }
+            }
+        };
+
+        File.WriteAllText(
+            Path.Combine(root, "tools/solution-filters/profiles.json"),
+            JsonSerializer.Serialize(manifest));
+    }
+
+    private static void AssertProjects(string root, string filter, IReadOnlyList<string> expected)
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, filter)));
+        var actual = document.RootElement.GetProperty("solution").GetProperty("projects")
+            .EnumerateArray()
+            .Select(element => element.GetString()!)
+            .ToArray();
+        Assert(actual.SequenceEqual(expected, StringComparer.Ordinal),
+            $"{filter} projects differed. Expected [{string.Join(", ", expected)}], got [{string.Join(", ", actual)}].");
+    }
+
+    private static void AssertThrows(Action action, string expectedMessage, string failureMessage)
+    {
+        try
+        {
+            action();
+        }
+        catch (InvalidOperationException exception) when (exception.Message.Contains(expectedMessage, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(failureMessage);
+    }
+
+    private static void Assert(bool condition, string message)
+    {
+        if (!condition)
+            throw new InvalidOperationException(message);
+    }
+}
