@@ -410,6 +410,17 @@ jobs:
             --out "$DIAGNOSTICS_CORRECTNESS_DIR" \
             --execute | tee "$DIAGNOSTICS_WORK_ROOT/correctness-summary.txt"
 
+      # Correctness and timing are separate evidence gates. SQLite is the only single-file provider
+      # in this cohort, so do not make the timed fixture drain through the rows and indexes retained
+      # by capture plus standalone correctness. The connection string remains identical and the
+      # measurement process recreates the same admitted schema in a fresh physical database.
+      - name: Reset SQLite database before timing
+        if: ${{ matrix.provider == 'sqlite' }}
+        run: |
+          set -euo pipefail
+          sqlite_file="$DIAGNOSTICS_WORK_ROOT/diagnostics.sqlite"
+          rm -f -- "$sqlite_file" "$sqlite_file-shm" "$sqlite_file-wal" "$sqlite_file-journal"
+
       # The runner performs its own fail-closed require_idle_host check immediately before spawning the
       # timed matrix. It must be the only build/test process on this dedicated provider host.
       - name: Stop non-target containers before timing

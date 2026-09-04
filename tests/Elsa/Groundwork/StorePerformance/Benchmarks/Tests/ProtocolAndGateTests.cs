@@ -169,14 +169,14 @@ public sealed class ProtocolAndGateTests
         var repositoryRoot = SourceProvenance.FindRepositoryRoot();
         var expected = ProviderPackageProvenance.CurrentVersions(repositoryRoot, "groundwork-v2", "sqlite");
 
-        Assert.Equal("0.4.0-preview.11", expected["Groundwork.Sqlite"]);
+        Assert.Equal("0.4.0-preview.12", expected["Groundwork.Sqlite"]);
         ProviderPackageProvenance.RequireExactCurrent(repositoryRoot, "groundwork-v2", "sqlite", expected);
         Assert.Throws<PerformanceContractException>(() =>
             ProviderPackageProvenance.RequireExactCurrent(
                 repositoryRoot,
                 "groundwork-v2",
                 "sqlite",
-                new Dictionary<string, string> { ["Groundwork.Store"] = "0.4.0-preview.11" }));
+                new Dictionary<string, string> { ["Groundwork.Store"] = "0.4.0-preview.12" }));
         Assert.Throws<PerformanceContractException>(() =>
             ProviderPackageProvenance.RequireExactCurrent(
                 repositoryRoot,
@@ -271,7 +271,7 @@ public sealed class ProtocolAndGateTests
             WorkloadVersion = workload.Version,
             Adapter = DiagnosticsNativePlanContract.GroundworkAdapter,
             PhysicalForm = "ordinary-groundwork-diagnostics-units",
-            PackageVersions = new Dictionary<string, string> { ["Groundwork.Sqlite"] = "0.4.0-preview.11" },
+            PackageVersions = new Dictionary<string, string> { ["Groundwork.Sqlite"] = "0.4.0-preview.12" },
             NativePlanIdentity = "diagnostics-plan",
             NativePlanEvidenceReference = "diagnostics-set.native-plan.json",
             Seed = workload.Input.Seed,

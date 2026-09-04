@@ -30,6 +30,28 @@ public sealed class ProviderProbeTests
     }
 
     [Fact]
+    public async Task Sqlite_probe_attests_the_same_connection_policy_as_groundwork()
+    {
+        var root = Directory.CreateTempSubdirectory("sqlite-provider-probe-");
+        var path = Path.Combine(root.FullName, "probe.sqlite");
+        try
+        {
+            var result = await ProviderProbe.ReadAsync(
+                "sqlite",
+                $"Data Source={path};Mode=ReadWriteCreate;Cache=Private;Pooling=False");
+
+            Assert.Equal("wal", result.Configuration["journal_mode"], ignoreCase: true);
+            Assert.Equal("1", result.Configuration["synchronous"]);
+            Assert.Equal("5000", result.Configuration["busy_timeout_ms"]);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            root.Delete(true);
+        }
+    }
+
+    [Fact]
     public void Mongo_hello_requires_a_replica_set_or_sharded_cluster()
     {
         Assert.Throws<PerformanceContractException>(() =>

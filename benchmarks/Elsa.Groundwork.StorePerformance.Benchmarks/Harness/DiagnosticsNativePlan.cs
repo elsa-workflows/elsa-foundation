@@ -71,9 +71,9 @@ public static class DiagnosticsNativePlanContract
 {
     private const string BlockedPlanMarker = "blocked provider plan:";
     internal const string IndexSearchPlanClassification = "index-search";
-    internal const string BoundedMongoScanSortPlanClassification = "bounded-scan-sort";
-    private const int BoundedMongoResourceCardinality = 128;
-    private const int BoundedMongoResourceLimit = 127;
+    internal const string BoundedCatalogScanSortPlanClassification = "bounded-scan-sort";
+    private const int BoundedResourceCardinality = 128;
+    private const int BoundedResourceLimit = 127;
     public const string GroundworkAdapter = "groundwork-v2";
     public const string EfAdapter = "ef-diagnostics-oracle";
     public const string EfCorrectnessOnlyRouteContract = "ef-correctness-only-unbounded-resource-routes";
@@ -84,13 +84,15 @@ public static class DiagnosticsNativePlanContract
     /// <summary>
     /// The one deliberately bounded scan exception in the diagnostics native-plan contract. The
     /// resource catalog is frozen at 128 physical rows and the public page is frozen at 127 rows;
-    /// every other route remains an index-backed, no-sort claim.
+    /// every other route remains an index-backed, no-sort claim. Eligibility belongs to the frozen
+    /// workload shape rather than one optimizer: each provider must still prove its exact bounded
+    /// scan, complete deterministic sort, finite limit, and absence of spill/materialization.
     /// </summary>
-    internal static bool IsBoundedMongoResourceRoute(
+    internal static bool IsBoundedResourceRoute(
         string provider,
         string adapter,
         DiagnosticsNativeRouteSpec specification) =>
-        string.Equals(provider, "mongodb", StringComparison.Ordinal) &&
+        provider is "postgresql" or "sqlserver" or "mongodb" &&
         string.Equals(adapter, GroundworkAdapter, StringComparison.Ordinal) &&
         specification.RouteIdentity is "resources-by-last-seen" or "resources-by-status" or "resources-by-service" &&
         string.Equals(specification.TableName, GroundworkTable, StringComparison.Ordinal) &&
@@ -104,19 +106,19 @@ public static class DiagnosticsNativePlanContract
         string.Equals(specification.OrderColumn, "lastSeen", StringComparison.Ordinal) &&
         specification.StorageScopeRequired &&
         specification.Descending &&
-        specification.PhysicalCardinality == BoundedMongoResourceCardinality &&
-        specification.FiniteLimit == BoundedMongoResourceLimit;
+        specification.PhysicalCardinality == BoundedResourceCardinality &&
+        specification.FiniteLimit == BoundedResourceLimit;
 
-    /// <summary>Classifies only the exact Mongo resource scan/sort exception; unknown or malformed
+    /// <summary>Classifies only the exact bounded resource-catalog scan/sort exception; unknown or malformed
     /// plans fall back to the strict index-search classification and are rejected by validation.</summary>
     internal static string ClassifyPlan(
         string provider,
         string adapter,
         DiagnosticsNativeRouteSpec specification,
         string nativePlan) =>
-        IsBoundedMongoResourceRoute(provider, adapter, specification) &&
-        IsBoundedMongoScanSortShape(nativePlan)
-            ? BoundedMongoScanSortPlanClassification
+        IsBoundedResourceRoute(provider, adapter, specification) &&
+        IsBoundedScanSortShape(provider, nativePlan, specification)
+            ? BoundedCatalogScanSortPlanClassification
             : IndexSearchPlanClassification;
 
     public static IReadOnlyList<DiagnosticsTraceDetailConstituentSpec> TraceDetailConstituents(string adapter)
@@ -345,20 +347,23 @@ public static class DiagnosticsNativePlanContract
                 $"Diagnostics route '{specification.RouteIdentity}' does not bind its provider-owned physical index name.");
 
         if (!string.Equals(route.PlanClassification, IndexSearchPlanClassification, StringComparison.Ordinal) &&
-            !string.Equals(route.PlanClassification, BoundedMongoScanSortPlanClassification, StringComparison.Ordinal))
+            !string.Equals(route.PlanClassification, BoundedCatalogScanSortPlanClassification, StringComparison.Ordinal))
             throw new PerformanceContractException(
                 $"Diagnostics route '{specification.RouteIdentity}' has an unsupported native-plan classification '{route.PlanClassification}'.");
 
-        if (string.Equals(route.PlanClassification, BoundedMongoScanSortPlanClassification, StringComparison.Ordinal) &&
-            !IsBoundedMongoResourceRoute(provider, adapter, specification))
+        var boundedCatalogScan = string.Equals(
+            route.PlanClassification,
+            BoundedCatalogScanSortPlanClassification,
+            StringComparison.Ordinal);
+        if (boundedCatalogScan && !IsBoundedResourceRoute(provider, adapter, specification))
             throw new PerformanceContractException(
-                $"Diagnostics route '{specification.RouteIdentity}' may use '{BoundedMongoScanSortPlanClassification}' only for the frozen MongoDB resource catalog routes.");
+                $"Diagnostics route '{specification.RouteIdentity}' may use '{BoundedCatalogScanSortPlanClassification}' only for the frozen resource catalog routes.");
 
         IReadOnlyList<(string Column, RuntimeNativeOrderDirection Direction)>? mongoCommandOrdering = null;
         if (string.Equals(provider, "mongodb", StringComparison.Ordinal))
             mongoCommandOrdering = ValidateMongoCommand(artifact.CommandText, specification, artifact.NativePlan);
         else
-            ValidateSqlCommand(artifact.CommandText, specification);
+            ValidateSqlCommand(provider, artifact.CommandText, specification);
 
         switch (provider)
         {
@@ -366,13 +371,19 @@ public static class DiagnosticsNativePlanContract
                 ValidateSqlitePlan(artifact.NativePlan, specification, physicalIndexName);
                 break;
             case "postgresql":
-                ValidatePostgreSqlPlan(artifact.NativePlan, specification, physicalIndexName);
+                if (boundedCatalogScan)
+                    ValidatePostgreSqlBoundedScanSortPlan(artifact.NativePlan, specification);
+                else
+                    ValidatePostgreSqlPlan(artifact.NativePlan, specification, physicalIndexName);
                 break;
             case "sqlserver":
-                ValidateSqlServerPlan(artifact.NativePlan, specification, physicalIndexName);
+                if (boundedCatalogScan)
+                    ValidateSqlServerBoundedScanSortPlan(artifact.NativePlan, specification);
+                else
+                    ValidateSqlServerPlan(artifact.NativePlan, specification, physicalIndexName);
                 break;
             case "mongodb":
-                if (string.Equals(route.PlanClassification, BoundedMongoScanSortPlanClassification, StringComparison.Ordinal))
+                if (boundedCatalogScan)
                     ValidateMongoBoundedScanSortPlan(
                         artifact.NativePlan,
                         specification,
@@ -479,7 +490,7 @@ public static class DiagnosticsNativePlanContract
         if (string.Equals(provider, "mongodb", StringComparison.Ordinal))
             ValidateMongoCommand(artifact.CommandText, routeSpecification, artifact.NativePlan);
         else
-            ValidateSqlCommand(artifact.CommandText, routeSpecification);
+            ValidateSqlCommand(provider, artifact.CommandText, routeSpecification);
 
         switch (provider)
         {
@@ -637,8 +648,15 @@ public static class DiagnosticsNativePlanContract
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' continuation contains an unrecognized keyset expression.");
     }
 
-    private static void ValidateSqlCommand(string command, DiagnosticsNativeRouteSpec specification)
+    private static void ValidateSqlCommand(
+        string provider,
+        string command,
+        DiagnosticsNativeRouteSpec specification)
     {
+        if (string.Equals(provider, "postgresql", StringComparison.Ordinal) &&
+            !PostgreSqlOrdinalCollationsMatch(command, specification))
+            throw new PerformanceContractException(
+                $"Diagnostics route '{specification.RouteIdentity}' command does not bind its exact PostgreSQL ordinal collation.");
         var normalized = NormalizeSqlCommand(command);
 
         if (!Regex.IsMatch(normalized, $@"\bFROM\s+{Regex.Escape(specification.TableName)}\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
@@ -648,7 +666,7 @@ public static class DiagnosticsNativePlanContract
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command does not bind its exact table, descending order, and finite page.");
 
-        ValidateSqlOrdering(normalized, specification);
+        ValidateSqlOrdering(provider, normalized, specification);
 
         var continuation = specification.RouteIdentity.StartsWith("trace-detail/", StringComparison.Ordinal) &&
                            normalized.Contains(" OR ", StringComparison.OrdinalIgnoreCase);
@@ -681,6 +699,33 @@ public static class DiagnosticsNativePlanContract
             requiredAtoms.Add(specification.PredicateColumn);
         if (!ContainsOnlyExactEqualityPredicates(where, requiredAtoms, allowNullGuards: true))
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command must contain only its exact equality predicates and no extra conditions.");
+    }
+
+    private static bool PostgreSqlOrdinalCollationsMatch(
+        string command,
+        DiagnosticsNativeRouteSpec specification)
+    {
+        var order = Regex.Match(
+            command,
+            @"\bORDER\s+BY\s+(?<order>.*?)(?:\bLIMIT\b|\bOFFSET\b|\bFETCH\b|$)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)
+            .Groups["order"].Value;
+        var ordinalColumns = specification.EffectiveOrdering
+            .Where(term => IsOrdinalStringOrderColumn(term.Column))
+            .Select(term => term.Column)
+            .ToArray();
+        var collations = Regex.Matches(
+            order,
+            @"\bCOLLATE\s+(?:""(?<name>[^""]+)""|(?<name>[A-Za-z_][A-Za-z0-9_.]*))",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (collations.Count != ordinalColumns.Length * 2 ||
+            collations.Any(match => !string.Equals(match.Groups["name"].Value, "C", StringComparison.Ordinal)))
+            return false;
+
+        return ordinalColumns.All(column => Regex.Matches(
+                order,
+                $@"(?<![A-Za-z0-9_])""?{Regex.Escape(column)}""?(?![A-Za-z0-9_])\s+COLLATE\s+(?:""C""|C\b)",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count == 2);
     }
 
     private static string NormalizeSqlCommand(string command)
@@ -752,48 +797,191 @@ public static class DiagnosticsNativePlanContract
         return remainder.Length == 0;
     }
 
-    private static void ValidateSqlOrdering(string command, DiagnosticsNativeRouteSpec specification)
+    private static void ValidateSqlOrdering(
+        string provider,
+        string command,
+        DiagnosticsNativeRouteSpec specification)
     {
-        var match = Regex.Match(command, @"\bORDER\s+BY\s+(?<order>.*?)(?:\bLIMIT\b|\bOFFSET\b|\bFETCH\b|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
-        var terms = match.Groups["order"].Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        var actual = new List<RuntimeNativeOrderTerm>(terms.Length);
+        var match = Regex.Match(
+            command,
+            @"\bORDER\s+BY\s+(?<order>.*?)(?:\bLIMIT\b|\bOFFSET\b|\bFETCH\b|$)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+        var terms = SplitTopLevelSqlTerms(match.Groups["order"].Value);
+        if (!SqlOrderingMatches(provider, terms, specification))
+            throw new PerformanceContractException(
+                $"Diagnostics route '{specification.RouteIdentity}' command does not bind its complete ordered term list.");
+    }
+
+    private static bool SqlOrderingMatches(
+        string provider,
+        IReadOnlyList<string> terms,
+        DiagnosticsNativeRouteSpec specification,
+        bool requireNullRank = false)
+    {
+        var actual = new List<RuntimeNativeOrderTerm>(specification.EffectiveOrdering.Count);
         string? pendingNullOrdering = null;
-        foreach (var term in terms)
+        for (var index = 0; index < terms.Count; index++)
         {
-            var trimmed = term.Trim().TrimEnd(';');
+            var term = terms[index].Trim().TrimEnd(';');
             var nullOrdering = Regex.Match(
-                trimmed,
-                @"^CASE\s+WHEN\s+(?<column>[A-Za-z_][A-Za-z0-9_]*)\s+IS\s+NULL\s+THEN\s+(?:0\s+ELSE\s+1|1\s+ELSE\s+0)\s+END\s+ASC$",
+                term,
+                @"^CASE\s+WHEN\s+\(*\s*(?:[A-Za-z_][A-Za-z0-9_]*\.)?(?<column>[A-Za-z_][A-Za-z0-9_]*)\s*\)*\s+IS\s+NULL\s+THEN\s+(?:0\s+ELSE\s+1|1\s+ELSE\s+0)\s+END\s+ASC$",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             if (nullOrdering.Success)
             {
                 if (pendingNullOrdering is not null)
-                    throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command does not bind its complete ordered term list.");
+                    return false;
                 pendingNullOrdering = nullOrdering.Groups["column"].Value;
                 continue;
             }
 
-            var ordered = Regex.Match(
-                trimmed,
-                @"^(?:[A-Za-z_][A-Za-z0-9_]*\.)?(?<column>[A-Za-z_][A-Za-z0-9_]*)\s+(?<direction>ASC|DESC)$",
-                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-            if (!ordered.Success || pendingNullOrdering is not null &&
-                !string.Equals(pendingNullOrdering, ordered.Groups["column"].Value, StringComparison.OrdinalIgnoreCase))
-                throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command does not bind its complete ordered term list.");
+            if (requireNullRank && pendingNullOrdering is null ||
+                !TryParseSqlOrderValue(provider, term, out var ordered) ||
+                ordered is null ||
+                pendingNullOrdering is not null &&
+                !string.Equals(pendingNullOrdering, ordered.Column, StringComparison.OrdinalIgnoreCase))
+                return false;
             pendingNullOrdering = null;
-            actual.Add(new RuntimeNativeOrderTerm(
-                ordered.Groups["column"].Value,
-                string.Equals(ordered.Groups["direction"].Value, "DESC", StringComparison.OrdinalIgnoreCase)
-                    ? RuntimeNativeOrderDirection.Descending
-                    : RuntimeNativeOrderDirection.Ascending));
+            actual.Add(ordered);
+
+            if (!string.Equals(provider, "sqlserver", StringComparison.Ordinal) ||
+                index + 1 >= terms.Count ||
+                !TryParseSqlServerLengthOrder(terms[index + 1], out var lengthOrder))
+                continue;
+            if (lengthOrder is null ||
+                !IsOrdinalStringOrderColumn(ordered.Column) ||
+                !string.Equals(lengthOrder.Column, ordered.Column, StringComparison.OrdinalIgnoreCase) ||
+                lengthOrder.Direction != ordered.Direction)
+                return false;
+            index++;
         }
 
-        if (pendingNullOrdering is not null ||
-            actual.Count != specification.EffectiveOrdering.Count ||
-            !actual.Zip(specification.EffectiveOrdering).All(pair =>
-                string.Equals(pair.First.Column, pair.Second.Column, StringComparison.OrdinalIgnoreCase) &&
-                pair.First.Direction == pair.Second.Direction))
-            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command does not bind its complete ordered term list.");
+        return pendingNullOrdering is null &&
+               actual.Count == specification.EffectiveOrdering.Count &&
+               actual.Zip(specification.EffectiveOrdering).All(pair =>
+                   string.Equals(pair.First.Column, pair.Second.Column, StringComparison.OrdinalIgnoreCase) &&
+                   pair.First.Direction == pair.Second.Direction);
+    }
+
+    private static bool TryParseSqlOrderValue(
+        string provider,
+        string term,
+        out RuntimeNativeOrderTerm? ordered)
+    {
+        var simple = Regex.Match(
+            term,
+            @"^(?:[A-Za-z_][A-Za-z0-9_]*\.)?(?<column>[A-Za-z_][A-Za-z0-9_]*)\s+(?<direction>ASC|DESC)$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (simple.Success)
+        {
+            ordered = new RuntimeNativeOrderTerm(
+                simple.Groups["column"].Value,
+                string.Equals(simple.Groups["direction"].Value, "DESC", StringComparison.OrdinalIgnoreCase)
+                    ? RuntimeNativeOrderDirection.Descending
+                    : RuntimeNativeOrderDirection.Ascending);
+            return true;
+        }
+        if (string.Equals(provider, "postgresql", StringComparison.Ordinal) &&
+            TryParsePostgreSqlOrdinalOrder(term, out ordered))
+            return true;
+
+        ordered = default;
+        return false;
+    }
+
+    private static bool TryParsePostgreSqlOrdinalOrder(
+        string term,
+        out RuntimeNativeOrderTerm? ordered)
+    {
+        var match = Regex.Match(
+            term,
+            @"^(?<expression>.+)\s+(?<direction>ASC|DESC)$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+        if (!match.Success)
+        {
+            ordered = default;
+            return false;
+        }
+
+        var actual = Regex.Replace(match.Groups["expression"].Value.Trim(), @"\s+", " ");
+        foreach (var column in new[] { "id", "idOrderKey", "traceKey", "spanId" })
+        {
+            var expected = Regex.Replace(PostgreSqlOrdinalExpression("(" + column + ")"), @"\s+", " ");
+            if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
+                continue;
+            ordered = new RuntimeNativeOrderTerm(
+                column,
+                string.Equals(match.Groups["direction"].Value, "DESC", StringComparison.OrdinalIgnoreCase)
+                    ? RuntimeNativeOrderDirection.Descending
+                    : RuntimeNativeOrderDirection.Ascending);
+            return true;
+        }
+
+        ordered = default;
+        return false;
+    }
+
+    private static string PostgreSqlOrdinalExpression(string expression) =>
+        "COALESCE((SELECT string_agg(CASE WHEN ascii(chars.ch) <= 65535 THEN " +
+        "lpad(to_hex(ascii(chars.ch)), 4, '0') ELSE " +
+        "lpad(to_hex(55296 + ((ascii(chars.ch) - 65536) >> 10)), 4, '0') || " +
+        "lpad(to_hex(56320 + ((ascii(chars.ch) - 65536) & 1023)), 4, '0') END, '' ORDER BY chars.ord) " +
+        "FROM unnest(string_to_array(" + expression + ", NULL)) WITH ORDINALITY AS chars(ch, ord)), '')";
+
+    private static bool TryParseSqlServerLengthOrder(
+        string term,
+        out RuntimeNativeOrderTerm? ordered)
+    {
+        var match = Regex.Match(
+            term,
+            @"^DATALENGTH\(\s*(?:[A-Za-z_][A-Za-z0-9_]*\.)?(?<column>[A-Za-z_][A-Za-z0-9_]*)\s*\)\s+(?<direction>ASC|DESC)$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        ordered = match.Success
+            ? new RuntimeNativeOrderTerm(
+                match.Groups["column"].Value,
+                string.Equals(match.Groups["direction"].Value, "DESC", StringComparison.OrdinalIgnoreCase)
+                    ? RuntimeNativeOrderDirection.Descending
+                    : RuntimeNativeOrderDirection.Ascending)
+            : default;
+        return match.Success;
+    }
+
+    private static IReadOnlyList<string> SplitTopLevelSqlTerms(string value)
+    {
+        var terms = new List<string>();
+        var start = 0;
+        var depth = 0;
+        var quoted = false;
+        for (var index = 0; index < value.Length; index++)
+        {
+            var character = value[index];
+            if (character == '\'' && quoted && index + 1 < value.Length && value[index + 1] == '\'')
+            {
+                index++;
+                continue;
+            }
+            if (character == '\'')
+            {
+                quoted = !quoted;
+                continue;
+            }
+            if (quoted)
+                continue;
+            if (character == '(')
+                depth++;
+            else if (character == ')' && depth > 0)
+                depth--;
+            else if (character == ',' && depth == 0)
+            {
+                terms.Add(value[start..index].Trim());
+                start = index + 1;
+            }
+        }
+        if (quoted || depth != 0)
+            return [];
+        if (start < value.Length)
+            terms.Add(value[start..].Trim());
+        return terms.Where(term => term.Length != 0).ToArray();
     }
 
     private static void ValidateSqlitePlan(string plan, DiagnosticsNativeRouteSpec specification, string physicalIndexName)
@@ -845,6 +1033,229 @@ public static class DiagnosticsNativePlanContract
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' retained plan is not the exact PostgreSQL index scan.");
     }
 
+    private static void ValidatePostgreSqlBoundedScanSortPlan(
+        string plan,
+        DiagnosticsNativeRouteSpec specification)
+    {
+        using var document = ParseJson(plan, "PostgreSQL");
+        var root = document.RootElement;
+        var sort = default(JsonElement);
+        var exactTopology = root.ValueKind == JsonValueKind.Array &&
+                            root.GetArrayLength() == 1 &&
+                            root[0].TryGetProperty("Plan", out var limit) &&
+                            PostgreSqlNodeIs(limit, "Limit") &&
+                            TryGetSinglePostgreSqlPlanChild(limit, out sort) &&
+                            PostgreSqlNodeIs(sort, "Sort") &&
+                            TryGetSinglePostgreSqlPlanChild(sort, out var scan) &&
+                            PostgreSqlNodeIs(scan, "Seq Scan") &&
+                            scan.TryGetProperty("Relation Name", out var relation) &&
+                            relation.ValueKind == JsonValueKind.String &&
+                            string.Equals(relation.GetString(), specification.TableName, StringComparison.Ordinal) &&
+                            PostgreSqlOrdinalSubplansMatch(scan, specification);
+        var exactOrdering = exactTopology && PostgreSqlOrderingMatches(sort, specification);
+        var spilledSort = FindObjects(document.RootElement, "Sort Method").Any(node =>
+                              node.GetProperty("Sort Method").ValueKind == JsonValueKind.String &&
+                              node.GetProperty("Sort Method").GetString()?.Contains("external", StringComparison.OrdinalIgnoreCase) == true) ||
+                          FindObjects(document.RootElement, "Sort Space Type").Any(node =>
+                              node.GetProperty("Sort Space Type").ValueKind == JsonValueKind.String &&
+                              string.Equals(node.GetProperty("Sort Space Type").GetString(), "Disk", StringComparison.OrdinalIgnoreCase));
+        if (!exactTopology || !exactOrdering || spilledSort ||
+            HasSpillMarker(document.RootElement))
+            throw BlockedPlan(
+                specification,
+                "PostgreSQL bounded catalog plan is not exactly one sequential scan, one in-memory sort, and one limit");
+    }
+
+    private static bool PostgreSqlNodeIs(JsonElement node, string kind) =>
+        node.ValueKind == JsonValueKind.Object &&
+        node.TryGetProperty("Node Type", out var nodeType) &&
+        nodeType.ValueKind == JsonValueKind.String &&
+        string.Equals(nodeType.GetString(), kind, StringComparison.OrdinalIgnoreCase);
+
+    private static bool TryGetSinglePostgreSqlPlanChild(JsonElement node, out JsonElement child)
+    {
+        child = default;
+        if (!node.TryGetProperty("Plans", out var plans) ||
+            plans.ValueKind != JsonValueKind.Array ||
+            plans.GetArrayLength() != 1)
+            return false;
+        child = plans[0];
+        return true;
+    }
+
+    private static bool PostgreSqlOrdinalSubplansMatch(
+        JsonElement scan,
+        DiagnosticsNativeRouteSpec specification)
+    {
+        var expectedColumns = specification.EffectiveOrdering
+            .Where(term => IsOrdinalStringOrderColumn(term.Column))
+            .Select(term => term.Column)
+            .ToArray();
+        var expected = expectedColumns.Length;
+        if (!scan.TryGetProperty("Plans", out var plans))
+            return expected == 0;
+        if (plans.ValueKind != JsonValueKind.Array || plans.GetArrayLength() != expected)
+            return false;
+        for (var index = 0; index < expected; index++)
+        {
+            var aggregate = plans[index];
+            var expectedAlias = index == 0 ? "chars" : $"chars_{index}";
+            if (!PostgreSqlNodeIs(aggregate, "Aggregate") ||
+                !aggregate.TryGetProperty("Parent Relationship", out var relationship) ||
+                relationship.ValueKind != JsonValueKind.String ||
+                !string.Equals(relationship.GetString(), "SubPlan", StringComparison.Ordinal) ||
+                !aggregate.TryGetProperty("Subplan Name", out var name) ||
+                name.ValueKind != JsonValueKind.String ||
+                !string.Equals(name.GetString(), $"SubPlan {index + 1}", StringComparison.Ordinal) ||
+                !PostgreSqlAggregateOutputMatches(aggregate, expectedAlias) ||
+                !TryGetSinglePostgreSqlPlanChild(aggregate, out var function) ||
+                !PostgreSqlNodeIs(function, "Function Scan") ||
+                function.TryGetProperty("Plans", out _) ||
+                !function.TryGetProperty("Function Name", out var functionName) ||
+                functionName.ValueKind != JsonValueKind.String ||
+                !string.Equals(functionName.GetString(), "unnest", StringComparison.Ordinal) ||
+                !PostgreSqlFunctionCallMatches(
+                    function,
+                    specification.TableName,
+                    expectedColumns[index],
+                    expectedAlias))
+                return false;
+        }
+        return true;
+    }
+
+    private static bool PostgreSqlAggregateOutputMatches(JsonElement aggregate, string alias)
+    {
+        if (!aggregate.TryGetProperty("Output", out var output) ||
+            output.ValueKind != JsonValueKind.Array ||
+            output.GetArrayLength() != 1 ||
+            output[0].ValueKind != JsonValueKind.String)
+            return false;
+
+        var expected =
+            $"string_agg(CASE WHEN (ascii({alias}.ch) <= 65535) THEN lpad(to_hex(ascii({alias}.ch)), 4, '0'::text) ELSE " +
+            $"(lpad(to_hex((55296 + ((ascii({alias}.ch) - 65536) >> 10))), 4, '0'::text) || " +
+            $"lpad(to_hex((56320 + ((ascii({alias}.ch) - 65536) & 1023))), 4, '0'::text)) END, ''::text ORDER BY {alias}.ord)";
+        return string.Equals(
+            CanonicalPostgreSqlVerboseExpression(output[0].GetString()!),
+            CanonicalPostgreSqlVerboseExpression(expected),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool PostgreSqlFunctionCallMatches(
+        JsonElement function,
+        string table,
+        string column,
+        string alias)
+    {
+        if (!function.TryGetProperty("Alias", out var actualAlias) ||
+            actualAlias.ValueKind != JsonValueKind.String ||
+            !string.Equals(actualAlias.GetString(), alias, StringComparison.Ordinal) ||
+            !function.TryGetProperty("Output", out var output) ||
+            output.ValueKind != JsonValueKind.Array ||
+            output.GetArrayLength() != 2 ||
+            output[0].ValueKind != JsonValueKind.String ||
+            output[1].ValueKind != JsonValueKind.String ||
+            !string.Equals(output[0].GetString(), $"{alias}.ch", StringComparison.Ordinal) ||
+            !string.Equals(output[1].GetString(), $"{alias}.ord", StringComparison.Ordinal) ||
+            !function.TryGetProperty("Function Call", out var call) ||
+            call.ValueKind != JsonValueKind.String)
+            return false;
+
+        var expected = $"unnest(string_to_array(({table}.{column})::text, NULL::text))";
+        return string.Equals(
+            CanonicalPostgreSqlVerboseExpression(call.GetString()!),
+            CanonicalPostgreSqlVerboseExpression(expected),
+            StringComparison.Ordinal);
+    }
+
+    private static string CanonicalPostgreSqlVerboseExpression(string value) =>
+        Regex.Replace(value, "[\\s\\\"]", string.Empty, RegexOptions.CultureInvariant);
+
+    private static bool PostgreSqlOrderingMatches(
+        JsonElement sort,
+        DiagnosticsNativeRouteSpec specification)
+    {
+        if (!sort.TryGetProperty("Sort Key", out var sortKey) || sortKey.ValueKind != JsonValueKind.Array)
+            return false;
+        var terms = sortKey.EnumerateArray().ToArray();
+        if (terms.Length != specification.EffectiveOrdering.Count * 2 ||
+            terms.Any(key => key.ValueKind != JsonValueKind.String))
+            return false;
+        var subplan = 0;
+        for (var index = 0; index < specification.EffectiveOrdering.Count; index++)
+        {
+            var expected = specification.EffectiveOrdering[index];
+            if (!PostgreSqlNullRankMatches(terms[index * 2].GetString()!, expected.Column))
+                return false;
+            if (IsOrdinalStringOrderColumn(expected.Column))
+            {
+                subplan++;
+                if (!PostgreSqlSubplanOrderMatches(terms[index * 2 + 1].GetString()!, subplan, expected.Direction))
+                    return false;
+            }
+            else if (!PostgreSqlColumnOrderMatches(
+                         terms[index * 2 + 1].GetString()!,
+                         expected.Column,
+                         expected.Direction))
+                return false;
+        }
+        return true;
+    }
+
+    private static bool PostgreSqlNullRankMatches(string value, string column)
+    {
+        var canonical = CanonicalPostgreSqlSortKey(value);
+        return Regex.IsMatch(
+            canonical,
+            $@"^CASEWHEN(?:[A-Za-z_][A-Za-z0-9_]*\.)?{Regex.Escape(column)}ISNULLTHEN1ELSE0END(?:ASC)?$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+
+    private static bool PostgreSqlColumnOrderMatches(
+        string value,
+        string column,
+        RuntimeNativeOrderDirection direction)
+    {
+        var canonical = CanonicalPostgreSqlSortKey(value);
+        var match = Regex.Match(
+            canonical,
+            $@"^(?:[A-Za-z_][A-Za-z0-9_]*\.)?{Regex.Escape(column)}(?<direction>ASC|DESC)?$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return match.Success && ParseOrderDirection(match.Groups["direction"].Value) == direction;
+    }
+
+    private static bool PostgreSqlSubplanOrderMatches(
+        string value,
+        int subplan,
+        RuntimeNativeOrderDirection direction)
+    {
+        var match = Regex.Match(
+            CanonicalPostgreSqlSortKey(value),
+            $@"^COALESCESubPlan{subplan},''(?<direction>ASC|DESC)?$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return match.Success && ParseOrderDirection(match.Groups["direction"].Value) == direction;
+    }
+
+    private static string CanonicalPostgreSqlSortKey(string value)
+    {
+        var normalized = NormalizeSqlCommand(value);
+        normalized = Regex.Replace(
+            normalized,
+            @"::[A-Za-z_][A-Za-z0-9_]*(?:\[\])?",
+            string.Empty,
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return Regex.Replace(normalized, @"[()\s]", string.Empty, RegexOptions.CultureInvariant);
+    }
+
+    private static RuntimeNativeOrderDirection ParseOrderDirection(string value) =>
+        string.Equals(value, "DESC", StringComparison.OrdinalIgnoreCase)
+            ? RuntimeNativeOrderDirection.Descending
+            : RuntimeNativeOrderDirection.Ascending;
+
+    private static bool IsOrdinalStringOrderColumn(string column) =>
+        column is "id" or "idOrderKey" or "traceKey" or "spanId";
+
     private static void ValidateSqlServerPlan(string plan, DiagnosticsNativeRouteSpec specification, string physicalIndexName)
     {
         try
@@ -872,6 +1283,238 @@ public static class DiagnosticsNativePlanContract
         {
             throw new PerformanceContractException($"Diagnostics SQL Server native plan is invalid: {exception.Message}");
         }
+    }
+
+    private static void ValidateSqlServerBoundedScanSortPlan(
+        string plan,
+        DiagnosticsNativeRouteSpec specification)
+    {
+        try
+        {
+            var document = System.Xml.Linq.XDocument.Parse(plan, System.Xml.Linq.LoadOptions.PreserveWhitespace);
+            var relops = document.Descendants().Where(element => element.Name.LocalName == "RelOp").ToArray();
+            var allScans = relops.Where(element =>
+                element.Attribute("PhysicalOp")?.Value.Contains("Scan", StringComparison.OrdinalIgnoreCase) == true).ToArray();
+            var scans = allScans.Where(element =>
+                element.Descendants().Any(objectElement =>
+                    objectElement.Name.LocalName == "Object" &&
+                    objectElement.Attribute("Table")?.Value.Trim('[', ']') == specification.TableName)).ToArray();
+            var sorts = relops.Where(element =>
+                element.Attribute("PhysicalOp")?.Value.Contains("Sort", StringComparison.OrdinalIgnoreCase) == true).ToArray();
+            var tops = relops.Where(element =>
+                element.Attribute("PhysicalOp")?.Value.Contains("Top", StringComparison.OrdinalIgnoreCase) == true).ToArray();
+            // ShowPlan rewrites the renderer's null-rank and DATALENGTH order expressions into
+            // Compute Scalar Expr references. Validate their exact physical order and directions
+            // from the retained definitions; this artifact must prove one Top over one Sort over one scan.
+            var exactTopology = tops.Length == 1 &&
+                                sorts.Length == 1 &&
+                                scans.Length == 1 &&
+                                sorts[0].Ancestors().Contains(tops[0]) &&
+                                scans[0].Ancestors().Contains(sorts[0]);
+            var exactOrdering = exactTopology &&
+                                SqlServerOrderingMatches(document, sorts[0], specification);
+            var unexpected = relops.Any(element =>
+            {
+                var operation = element.Attribute("PhysicalOp")?.Value ?? string.Empty;
+                return operation is not ("Top" or "Filter" or "Sort" or "Compute Scalar" or "Table Scan") ||
+                       operation.Contains("Seek", StringComparison.OrdinalIgnoreCase) ||
+                       operation.Contains("Spool", StringComparison.OrdinalIgnoreCase) ||
+                       operation.Contains("Material", StringComparison.OrdinalIgnoreCase);
+            });
+            var spilled = document.Descendants().Any(element =>
+                              element.Name.LocalName is "SpillOccurred" or "SpillWarning" or "SpillToTempDb") ||
+                          document.Descendants().SelectMany(element => element.Attributes()).Any(attribute =>
+                              attribute.Name.LocalName.Contains("Spill", StringComparison.OrdinalIgnoreCase) &&
+                              IsPositiveFlag(attribute.Value));
+            if (allScans.Length != 1 || scans.Length != 1 || sorts.Length != 1 || tops.Length != 1 ||
+                !exactTopology || !exactOrdering || unexpected || spilled)
+                throw BlockedPlan(
+                    specification,
+                    "SQL Server bounded catalog plan is not exactly one scan, one in-memory sort, and its complete physical ordering");
+        }
+        catch (System.Xml.XmlException exception)
+        {
+            throw new PerformanceContractException($"Diagnostics SQL Server native plan is invalid: {exception.Message}");
+        }
+    }
+
+    private enum SqlServerSortKeyKind
+    {
+        NullRank,
+        Value,
+        ByteLength
+    }
+
+    private const string SqlServerOrdinalCollation = "Latin1_General_100_BIN2";
+
+    private static bool SqlServerOrderingMatches(
+        System.Xml.Linq.XDocument document,
+        System.Xml.Linq.XElement sort,
+        DiagnosticsNativeRouteSpec specification)
+    {
+        var orderBy = sort.Descendants().Where(element => element.Name.LocalName == "OrderBy").ToArray();
+        if (orderBy.Length != 1)
+            return false;
+
+        var orderByElements = orderBy[0].Elements().ToArray();
+        if (orderByElements.Any(element => element.Name.LocalName != "OrderByColumn"))
+            return false;
+        var columns = orderByElements;
+        var expected = new List<(SqlServerSortKeyKind Kind, string Column, RuntimeNativeOrderDirection Direction)>();
+        foreach (var term in specification.EffectiveOrdering)
+        {
+            expected.Add((SqlServerSortKeyKind.NullRank, term.Column, RuntimeNativeOrderDirection.Ascending));
+            expected.Add((SqlServerSortKeyKind.Value, term.Column, term.Direction));
+            if (IsOrdinalStringOrderColumn(term.Column))
+                expected.Add((SqlServerSortKeyKind.ByteLength, term.Column, term.Direction));
+        }
+
+        if (columns.Length != expected.Count)
+            return false;
+
+        foreach (var (column, index) in columns.Select((column, index) => (column, index)))
+        {
+            var ascending = column.Attribute("Ascending")?.Value;
+            var direction = ascending switch
+            {
+                "1" => RuntimeNativeOrderDirection.Ascending,
+                "0" => RuntimeNativeOrderDirection.Descending,
+                _ => (RuntimeNativeOrderDirection?)null
+            };
+            if (direction is null ||
+                !TryResolveSqlServerSortKey(document, column, specification, out var key) ||
+                !string.Equals(key.Column, expected[index].Column, StringComparison.OrdinalIgnoreCase) ||
+                key.Kind != expected[index].Kind ||
+                direction.Value != expected[index].Direction)
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryResolveSqlServerSortKey(
+        System.Xml.Linq.XDocument document,
+        System.Xml.Linq.XElement orderByColumn,
+        DiagnosticsNativeRouteSpec specification,
+        out (SqlServerSortKeyKind Kind, string Column) key)
+    {
+        key = default;
+        var references = orderByColumn.Descendants()
+            .Where(element => element.Name.LocalName == "ColumnReference")
+            .ToArray();
+        if (references.Length != 1)
+            return false;
+
+        var reference = references[0].Attribute("Column")?.Value.Trim('[', ']');
+        if (string.IsNullOrWhiteSpace(reference))
+            return false;
+
+        if (!reference.StartsWith("Expr", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!specification.EffectiveOrdering.Any(term =>
+                    string.Equals(term.Column, reference, StringComparison.OrdinalIgnoreCase)))
+                return false;
+            if (IsOrdinalStringOrderColumn(reference))
+                return false;
+            key = (SqlServerSortKeyKind.Value, reference);
+            return true;
+        }
+
+        var definitions = document.Descendants()
+            .Where(element => element.Name.LocalName == "DefinedValue" &&
+                              element.Descendants().Any(child =>
+                                  child.Name.LocalName == "ColumnReference" &&
+                                  string.Equals(child.Attribute("Column")?.Value.Trim('[', ']'), reference, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+        var expressions = definitions
+            .SelectMany(definition => definition.Elements()
+                .Where(element => element.Name.LocalName == "ScalarOperator")
+                .Select(element => element.Attribute("ScalarString")?.Value))
+            .Where(expression => !string.IsNullOrWhiteSpace(expression))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (expressions.Length != 1)
+            return false;
+
+        var expression = expressions[0]!;
+        if (TryParseSqlServerNullRankExpression(expression, specification, out var sourceColumn))
+        {
+            key = (SqlServerSortKeyKind.NullRank, sourceColumn);
+            return true;
+        }
+        if (TryParseSqlServerByteLengthExpression(expression, specification, out sourceColumn))
+        {
+            key = (SqlServerSortKeyKind.ByteLength, sourceColumn);
+            return true;
+        }
+        if (TryParseSqlServerValueExpression(expression, specification, requireOrdinalCollation: true, out sourceColumn))
+        {
+            key = (SqlServerSortKeyKind.Value, sourceColumn);
+            return true;
+        }
+        return false;
+    }
+
+    private static bool TryParseSqlServerNullRankExpression(
+        string expression,
+        DiagnosticsNativeRouteSpec specification,
+        out string column)
+    {
+        column = string.Empty;
+        var match = Regex.Match(
+            expression,
+            @"^CASE\s+WHEN\s+(?<value>(?:(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\.)*(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)(?:\s+COLLATE\s+[A-Za-z_][A-Za-z0-9_]*)?)\s+IS\s+NULL\s+THEN\s+\(?1\)?\s+ELSE\s+\(?0\)?\s+END$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return match.Success &&
+               TryParseSqlServerValueExpression(
+                   match.Groups["value"].Value,
+                   specification,
+                   requireOrdinalCollation: false,
+                   out column);
+    }
+
+    private static bool TryParseSqlServerByteLengthExpression(
+        string expression,
+        DiagnosticsNativeRouteSpec specification,
+        out string column)
+    {
+        column = string.Empty;
+        var match = Regex.Match(
+            expression,
+            @"^DATALENGTH\(\s*(?<value>(?:(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\.)*(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)(?:\s+COLLATE\s+[A-Za-z_][A-Za-z0-9_]*)?)\s*\)$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return match.Success &&
+               TryParseSqlServerValueExpression(
+                   match.Groups["value"].Value,
+                   specification,
+                   requireOrdinalCollation: true,
+                   out column) &&
+               IsOrdinalStringOrderColumn(column);
+    }
+
+    private static bool TryParseSqlServerValueExpression(
+        string expression,
+        DiagnosticsNativeRouteSpec specification,
+        bool requireOrdinalCollation,
+        out string column)
+    {
+        var match = Regex.Match(
+            expression,
+            @"^(?:(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\.)*(?<column>\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)(?:\s+COLLATE\s+(?<collation>[A-Za-z_][A-Za-z0-9_]*))?$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        var parsedColumn = match.Success ? match.Groups["column"].Value.Trim('[', ']') : string.Empty;
+        column = parsedColumn;
+        if (!match.Success || !specification.EffectiveOrdering.Any(term =>
+                string.Equals(term.Column, parsedColumn, StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        var collation = match.Groups["collation"].Value;
+        var ordinal = IsOrdinalStringOrderColumn(column);
+        return !ordinal
+            ? string.IsNullOrEmpty(collation)
+            : string.IsNullOrEmpty(collation)
+                ? !requireOrdinalCollation
+                : string.Equals(collation, SqlServerOrdinalCollation, StringComparison.OrdinalIgnoreCase);
     }
 
     private static IReadOnlyList<(string Column, RuntimeNativeOrderDirection Direction)> ValidateMongoCommand(
@@ -934,14 +1577,19 @@ public static class DiagnosticsNativePlanContract
             throw new PerformanceContractException(
                 $"Diagnostics route '{specification.RouteIdentity}' MongoDB command must not fabricate a __groundwork_scope predicate.");
 
-        var stages = pipeline.EnumerateArray().Where(stage => stage.ValueKind == JsonValueKind.Object).ToArray();
-        var matchStages = stages.Where(stage => stage.TryGetProperty("$match", out var match) && match.ValueKind == JsonValueKind.Object)
-            .Select(stage => stage.GetProperty("$match")).ToArray();
-        if (matchStages.Length == 0 || !ValidateMongoRoutePredicate(matchStages[0], specification))
+        var stages = pipeline.EnumerateArray().ToArray();
+        if (stages.Any(stage => stage.ValueKind != JsonValueKind.Object || stage.EnumerateObject().Count() != 1))
+            throw new PerformanceContractException(
+                $"Diagnostics route '{specification.RouteIdentity}' MongoDB aggregate command contains a non-object pipeline stage.");
+        var matchStages = stages.Select((stage, index) => (Stage: stage, Index: index))
+            .Where(item => item.Stage.TryGetProperty("$match", out var match) && match.ValueKind == JsonValueKind.Object)
+            .ToArray();
+        if (matchStages.Length == 0 || matchStages[0].Index != 0 ||
+            !ValidateMongoRoutePredicate(matchStages[0].Stage.GetProperty("$match"), specification))
             throw new PerformanceContractException(
                 $"Diagnostics route '{specification.RouteIdentity}' MongoDB aggregate command must retain only its exact route predicate.");
 
-        var continuationStages = matchStages.Skip(1).ToArray();
+        var continuationStages = matchStages.Skip(1).Select(item => item.Stage.GetProperty("$match")).ToArray();
         if (continuationStages.Length != 0 &&
             (!specification.RouteIdentity.StartsWith("trace-detail/", StringComparison.Ordinal) ||
              continuationStages.Length != 1 ||
@@ -950,19 +1598,27 @@ public static class DiagnosticsNativePlanContract
             throw new PerformanceContractException(
                 $"Diagnostics route '{specification.RouteIdentity}' MongoDB aggregate command contains an invalid continuation predicate.");
 
-        var sortStages = stages.Where(stage => stage.TryGetProperty("$sort", out var sort) && sort.ValueKind == JsonValueKind.Object)
-            .Select(stage => stage.GetProperty("$sort")).ToArray();
-        if (sortStages.Length != 1 || !ValidateMongoPipelineOrdering(pipeline, sortStages[0], specification))
+        var sortStages = stages.Select((stage, index) => (Stage: stage, Index: index))
+            .Where(item => item.Stage.TryGetProperty("$sort", out var sort) && sort.ValueKind == JsonValueKind.Object)
+            .ToArray();
+        var limits = stages.Select((stage, index) => (Stage: stage, Index: index))
+            .Where(item => item.Stage.TryGetProperty("$limit", out _)).ToArray();
+        if (sortStages.Length != 1 || limits.Length != 1 ||
+            matchStages.Any(item => item.Index >= sortStages[0].Index) ||
+            sortStages[0].Index + 1 != limits[0].Index ||
+            limits[0].Index != stages.Length - 1 ||
+            stages.Take(sortStages[0].Index).Any(stage =>
+                !stage.TryGetProperty("$match", out _) && !stage.TryGetProperty("$set", out _)) ||
+            !ValidateMongoPipelineOrdering(pipeline, sortStages[0].Stage.GetProperty("$sort"), specification))
             throw new PerformanceContractException(
                 $"Diagnostics route '{specification.RouteIdentity}' MongoDB aggregate command does not bind its complete effective ordering.");
 
-        var limits = stages.Where(stage => stage.TryGetProperty("$limit", out _)).ToArray();
-        if (limits.Length != 1 || !limits[0].GetProperty("$limit").TryGetInt32(out var finiteLimit) ||
+        if (!limits[0].Stage.GetProperty("$limit").TryGetInt32(out var finiteLimit) ||
             finiteLimit != specification.FiniteLimit)
             throw new PerformanceContractException(
                 $"Diagnostics route '{specification.RouteIdentity}' MongoDB aggregate command does not bind its finite page limit.");
 
-        return ParseMongoOrdering(sortStages[0]);
+        return ParseMongoOrdering(sortStages[0].Stage.GetProperty("$sort"));
     }
 
     private static IReadOnlyList<(string Column, RuntimeNativeOrderDirection Direction)> ValidateMongoFindCommand(
@@ -1110,13 +1766,22 @@ public static class DiagnosticsNativePlanContract
         JsonElement sort,
         DiagnosticsNativeRouteSpec specification)
     {
-        if (ValidateMongoOrdering(sort, specification))
+        if (!specification.EffectiveOrdering.Any(term => IsMongoStringOrderColumn(term.Column)) &&
+            ValidateMongoOrdering(sort, specification))
             return true;
 
         var actual = ParseMongoOrdering(sort);
-        var expanded = ExpectedMongoRenderedOrdering(specification, includeNullRanks: true, usePersistedOrderKeys: false);
-        var optimized = ExpectedMongoRenderedOrdering(specification, includeNullRanks: false, usePersistedOrderKeys: true);
-        var expected = OrderingMatches(actual, expanded) ? expanded : OrderingMatches(actual, optimized) ? optimized : null;
+        // Index metadata can prove every ordered column non-null independently of whether the
+        // provider options recognize a physical string order key. Preview.11's StorageUnit helper
+        // carries the former but not the latter for Elsa's explicit idOrderKey column, so the
+        // released Mongo shape suppresses null ranks while still rendering ordinal helpers for
+        // both idOrderKey and id. Keep the candidates explicit and validate every helper below.
+        var expected = new[]
+            {
+                ExpectedMongoRenderedOrdering(specification, includeNullRanks: true),
+                ExpectedMongoRenderedOrdering(specification, includeNullRanks: false)
+            }
+            .FirstOrDefault(candidate => OrderingMatches(actual, candidate));
         if (expected is null)
             return false;
 
@@ -1135,10 +1800,13 @@ public static class DiagnosticsNativePlanContract
                     return false;
             }
         }
-        return expected
+        var helpers = expected
             .Where(term => term.Column.StartsWith("_groundwork_", StringComparison.Ordinal))
-            .All(term => setFields.TryGetValue(term.Column, out var value) &&
-                         ValidateMongoOrderingHelper(term.Column, value, specification));
+            .Select(term => term.Column)
+            .ToHashSet(StringComparer.Ordinal);
+        return setFields.Keys.ToHashSet(StringComparer.Ordinal).SetEquals(helpers) &&
+               helpers.All(helper => setFields.TryGetValue(helper, out var value) &&
+                                     ValidateMongoOrderingHelper(helper, value, specification));
     }
 
     private const string MongoOrdinalKeyFunctionBody =
@@ -1203,16 +1871,14 @@ public static class DiagnosticsNativePlanContract
 
     private static IReadOnlyList<(string Column, RuntimeNativeOrderDirection Direction)> ExpectedMongoRenderedOrdering(
         DiagnosticsNativeRouteSpec specification,
-        bool includeNullRanks,
-        bool usePersistedOrderKeys)
+        bool includeNullRanks)
     {
         var expected = new List<(string Column, RuntimeNativeOrderDirection Direction)>();
         foreach (var (term, index) in specification.EffectiveOrdering.Select((term, index) => (term, index)))
         {
             if (includeNullRanks)
                 expected.Add(("_groundwork_null_rank_" + index, RuntimeNativeOrderDirection.Ascending));
-            expected.Add((IsMongoStringOrderColumn(term.Column) &&
-                          !(usePersistedOrderKeys && IsMongoPersistedOrderKeyColumn(term.Column))
+            expected.Add((IsMongoStringOrderColumn(term.Column)
                     ? "_groundwork_ordinal_key_" + index
                     : term.Column,
                 term.Direction));
@@ -1228,8 +1894,6 @@ public static class DiagnosticsNativePlanContract
 
     private static bool IsMongoStringOrderColumn(string column) =>
         column is "id" or "idOrderKey" or "serviceNameKey" or "traceKey" or "spanId";
-
-    private static bool IsMongoPersistedOrderKeyColumn(string column) => column == "idOrderKey";
 
     private static bool ValidateMongoOrdering(JsonElement sort, DiagnosticsNativeRouteSpec specification) =>
         ParseMongoOrdering(sort).Count == specification.EffectiveOrdering.Count &&
@@ -1279,6 +1943,33 @@ public static class DiagnosticsNativePlanContract
         return value.ValueKind == JsonValueKind.Array && value.EnumerateArray().Any(item => ContainsMongoProperty(item, name));
     }
 
+    private static bool IsBoundedScanSortShape(
+        string provider,
+        string plan,
+        DiagnosticsNativeRouteSpec specification)
+    {
+        try
+        {
+            switch (provider)
+            {
+                case "postgresql":
+                    ValidatePostgreSqlBoundedScanSortPlan(plan, specification);
+                    return true;
+                case "sqlserver":
+                    ValidateSqlServerBoundedScanSortPlan(plan, specification);
+                    return true;
+                case "mongodb":
+                    return IsBoundedMongoScanSortShape(plan);
+                default:
+                    return false;
+            }
+        }
+        catch (PerformanceContractException)
+        {
+            return false;
+        }
+    }
+
     private static bool IsBoundedMongoScanSortShape(string plan)
     {
         try
@@ -1300,7 +1991,7 @@ public static class DiagnosticsNativePlanContract
                    !names.Any(name => name!.Contains("MATERIAL", StringComparison.OrdinalIgnoreCase)) &&
                    !HasSpillMarker(document.RootElement) &&
                    limits.Length != 0 &&
-                   limits.All(limit => limit.GetProperty("limitAmount").TryGetInt32(out var value) && value == BoundedMongoResourceLimit);
+                   limits.All(limit => limit.GetProperty("limitAmount").TryGetInt32(out var value) && value == BoundedResourceLimit);
         }
         catch (JsonException)
         {

@@ -506,17 +506,21 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     }
 
     [Fact]
-    public void Mongo_explain_command_accepts_preview_10_non_null_and_persisted_order_key_optimization()
+    public void Mongo_explain_command_rejects_stale_direct_id_order_key_optimization()
     {
         var specification = DiagnosticsNativePlanContract.For(
             DiagnosticsNativePlanContract.GroundworkAdapter,
             "resources-by-last-seen");
         var command = JsonNode.Parse(Fixture.MongoAggregateCommand(specification))!.AsObject();
         var pipeline = command["pipeline"]!.AsArray();
-        pipeline[1] = MongoOrdinalKeyStage(2, "id");
-        pipeline.Insert(2, JsonNode.Parse("""
+        var match = pipeline[0]!.DeepClone();
+        pipeline.Clear();
+        pipeline.Add(match);
+        pipeline.Add(MongoOrdinalKeyStage(2, "id"));
+        pipeline.Add(JsonNode.Parse("""
             {"$sort":{"lastSeen":-1,"idOrderKey":1,"_groundwork_ordinal_key_2":1}}
             """));
+        pipeline.Add(new JsonObject { ["$limit"] = specification.FiniteLimit });
         using var fixture = Fixture.Create(
             "mongodb",
             specification.RouteIdentity,
@@ -533,7 +537,36 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                   }
                 }
                 """,
-            planClassification: DiagnosticsNativePlanContract.BoundedMongoScanSortPlanClassification);
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification);
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb", fixture.Adapter, fixture.Route, fixture.Path));
+    }
+
+    [Fact]
+    public void Mongo_explain_command_accepts_preview_11_non_null_index_with_rendered_ordinal_helpers()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var command = JsonNode.Parse(Fixture.MongoAggregateCommand(specification))!.AsObject();
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            command: command.ToJsonString(),
+            nativePlan: """
+                {
+                  "queryPlanner": {
+                    "winningPlan": {
+                      "stage": "SORT",
+                      "sortPattern": { "lastSeen": -1, "_groundwork_ordinal_key_1": 1, "_groundwork_ordinal_key_2": 1 },
+                      "limitAmount": 127,
+                      "inputStage": { "stage": "COLLSCAN", "direction": "forward" }
+                    }
+                  }
+                }
+                """,
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification);
 
         DiagnosticsNativePlanContract.ValidateEnvelope(
             "mongodb",
@@ -563,7 +596,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                   }
                 }
                 """,
-            planClassification: DiagnosticsNativePlanContract.BoundedMongoScanSortPlanClassification);
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification);
 
         var exception = Assert.Throws<PerformanceContractException>(() =>
             DiagnosticsNativePlanContract.ValidateEnvelope(
@@ -583,10 +616,9 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             "resources-by-last-seen");
         var command = JsonNode.Parse(Fixture.MongoAggregateCommand(specification))!.AsObject();
         var pipeline = command["pipeline"]!.AsArray();
-        pipeline[1] = JsonNode.Parse("""
-            {"$sort":{"lastSeen":-1,"idOrderKey":1,"_groundwork_ordinal_key_2":1}}
-            """);
-        pipeline.Insert(2, MongoOrdinalKeyStage(2, "id"));
+        var ordinalId = pipeline[2];
+        pipeline.RemoveAt(2);
+        pipeline.Insert(3, ordinalId);
         using var fixture = Fixture.Create(
             "mongodb",
             specification.RouteIdentity,
@@ -603,7 +635,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                   }
                 }
                 """,
-            planClassification: DiagnosticsNativePlanContract.BoundedMongoScanSortPlanClassification);
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification);
 
         var exception = Assert.Throws<PerformanceContractException>(() =>
             DiagnosticsNativePlanContract.ValidateEnvelope(
@@ -623,15 +655,12 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             "resources-by-last-seen");
         var command = JsonNode.Parse(Fixture.MongoAggregateCommand(specification))!.AsObject();
         var pipeline = command["pipeline"]!.AsArray();
-        pipeline[1] = MongoOrdinalKeyStage(2, "id", "function(value) { return value; }");
-        pipeline.Insert(2, JsonNode.Parse("""
-            {"$sort":{"lastSeen":-1,"idOrderKey":1,"_groundwork_ordinal_key_2":1}}
-            """));
+        pipeline[2] = MongoOrdinalKeyStage(2, "id", "function(value) { return value; }");
         using var fixture = Fixture.Create(
             "mongodb",
             specification.RouteIdentity,
             command: command.ToJsonString(),
-            planClassification: DiagnosticsNativePlanContract.BoundedMongoScanSortPlanClassification);
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification);
 
         var exception = Assert.Throws<PerformanceContractException>(() =>
             DiagnosticsNativePlanContract.ValidateEnvelope(
@@ -699,7 +728,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             evidenceDocument.Scale,
             evidenceDocument.CommitSha,
             evidenceDocument.HarnessAssemblySha256,
-            new Dictionary<string, string> { ["Groundwork.MongoDb"] = "0.4.0-preview.11" },
+            new Dictionary<string, string> { ["Groundwork.MongoDb"] = "0.4.0-preview.12" },
             evidenceDocument.CompositionFingerprint,
             evidenceDocument.HostFingerprintSha256,
             evidenceDocument.ProviderVersion,
@@ -838,9 +867,67 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             "resources-by-last-seen");
         var command = JsonNode.Parse(Fixture.MongoAggregateCommand(specification))!.AsObject();
         var pipeline = command["pipeline"]!.AsArray();
-        pipeline[1]!["$sort"]!.AsObject().Remove("id");
-        pipeline[2]!["$limit"] = 1;
+        pipeline[3]!["$sort"]!.AsObject().Remove("_groundwork_ordinal_key_2");
+        pipeline[4]!["$limit"] = 1;
         using var fixture = Fixture.Create("mongodb", specification.RouteIdentity, command: command.ToJsonString());
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb", fixture.Adapter, fixture.Route, fixture.Path));
+    }
+
+    [Fact]
+    public void Mongo_aggregate_command_rejects_a_limit_before_its_sort()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var command = JsonNode.Parse(Fixture.MongoAggregateCommand(specification))!.AsObject();
+        var pipeline = command["pipeline"]!.AsArray();
+        var limit = pipeline[4];
+        pipeline.RemoveAt(4);
+        pipeline.Insert(3, limit);
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            command: command.ToJsonString());
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb", fixture.Adapter, fixture.Route, fixture.Path));
+    }
+
+    [Fact]
+    public void Mongo_aggregate_command_rejects_a_mutating_stage_before_its_sort()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var command = JsonNode.Parse(Fixture.MongoAggregateCommand(specification))!.AsObject();
+        command["pipeline"]!.AsArray().Insert(3, JsonNode.Parse("""
+            {"$set":{"lastSeen":0}}
+            """));
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            command: command.ToJsonString());
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb", fixture.Adapter, fixture.Route, fixture.Path));
+    }
+
+    [Fact]
+    public void Mongo_aggregate_command_rejects_a_stage_after_its_limit()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var command = JsonNode.Parse(Fixture.MongoAggregateCommand(specification))!.AsObject();
+        command["pipeline"]!.AsArray().Add(JsonNode.Parse("""
+            {"$project":{"id":1}}
+            """));
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            command: command.ToJsonString());
 
         Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
             "mongodb", fixture.Adapter, fixture.Route, fixture.Path));
@@ -874,7 +961,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             specification,
             nativePlan);
 
-        Assert.Equal(DiagnosticsNativePlanContract.BoundedMongoScanSortPlanClassification, classification);
+        Assert.Equal(DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification, classification);
     }
 
     [Theory]
@@ -886,13 +973,13 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         using var fixture = Fixture.Create(
             "mongodb",
             route,
-            planClassification: DiagnosticsNativePlanContract.BoundedMongoScanSortPlanClassification,
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
             nativePlan: """
                 {
                   "queryPlanner": {
                     "winningPlan": {
                       "stage": "SORT",
-                      "sortPattern": { "lastSeen": -1, "idOrderKey": 1, "id": 1 },
+                      "sortPattern": { "lastSeen": -1, "_groundwork_ordinal_key_1": 1, "_groundwork_ordinal_key_2": 1 },
                       "limitAmount": 127,
                       "inputStage": { "stage": "COLLSCAN", "direction": "forward" }
                     }
@@ -909,6 +996,362 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     }
 
     [Theory]
+    [InlineData("postgresql", "resources-by-last-seen")]
+    [InlineData("postgresql", "resources-by-status")]
+    [InlineData("postgresql", "resources-by-service")]
+    [InlineData("sqlserver", "resources-by-last-seen")]
+    [InlineData("sqlserver", "resources-by-status")]
+    [InlineData("sqlserver", "resources-by-service")]
+    public void Relational_frozen_resource_catalog_admits_its_exact_bounded_scan_sort(
+        string provider,
+        string route)
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            route);
+        var nativePlan = BoundedCatalogPlan(provider);
+
+        Assert.Equal(
+            DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+            DiagnosticsNativePlanContract.ClassifyPlan(
+                provider,
+                DiagnosticsNativePlanContract.GroundworkAdapter,
+                specification,
+                nativePlan));
+
+        using var fixture = Fixture.Create(
+            provider,
+            route,
+            command: ProviderRenderedRelationalCommand(provider, specification),
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+            nativePlan: nativePlan);
+        DiagnosticsNativePlanContract.ValidateEnvelope(
+            provider,
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path);
+    }
+
+    [Theory]
+    [InlineData("postgresql")]
+    [InlineData("sqlserver")]
+    public void Relational_bounded_catalog_scan_sort_rejects_spill_or_materialization(string provider)
+    {
+        var nativePlan = provider switch
+        {
+            "postgresql" => BoundedCatalogPlan(provider).Replace(
+                "\"Node Type\":\"Sort\"",
+                "\"Node Type\":\"Sort\",\"Sort Method\":\"external merge\",\"Sort Space Type\":\"Disk\"",
+                StringComparison.Ordinal),
+            "sqlserver" => BoundedCatalogPlan(provider).Replace(
+                "<RelOp PhysicalOp=\"Sort\">",
+                "<RelOp PhysicalOp=\"Sort\"><Warnings><SpillOccurred /></Warnings>",
+                StringComparison.Ordinal),
+            _ => throw new ArgumentOutOfRangeException(nameof(provider))
+        };
+        AssertBoundedCatalogRejected(provider, nativePlan);
+    }
+
+    [Fact]
+    public void Sqlite_resource_catalog_remains_a_strict_index_search_contract()
+    {
+        const string provider = "sqlite";
+        const string route = "resources-by-last-seen";
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            route);
+        var nativePlan = BoundedCatalogPlan(provider);
+
+        Assert.Equal(
+            DiagnosticsNativePlanContract.IndexSearchPlanClassification,
+            DiagnosticsNativePlanContract.ClassifyPlan(
+                provider,
+                DiagnosticsNativePlanContract.GroundworkAdapter,
+                specification,
+                nativePlan));
+
+        using var fixture = Fixture.Create(
+            provider,
+            route,
+            command: RelationalCommand(provider, specification),
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+            nativePlan: nativePlan);
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            provider,
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path));
+    }
+
+    [Theory]
+    [InlineData("postgresql")]
+    [InlineData("sqlserver")]
+    public void Relational_bounded_catalog_scan_sort_rejects_incomplete_command_ordering(string provider)
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var command = RelationalCommand(provider, specification)
+            .Replace(", idOrderKey ASC", string.Empty, StringComparison.Ordinal);
+        using var fixture = Fixture.Create(
+            provider,
+            specification.RouteIdentity,
+            command: command,
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+            nativePlan: BoundedCatalogPlan(provider));
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            provider,
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path));
+    }
+
+    [Fact]
+    public void SqlServer_bounded_catalog_scan_sort_rejects_a_wrong_physical_sort_direction()
+    {
+        var nativePlan = BoundedCatalogPlan("sqlserver").Replace(
+            "<OrderByColumn Ascending=\"0\"><ColumnReference Column=\"[lastSeen]\" /></OrderByColumn>",
+            "<OrderByColumn Ascending=\"1\"><ColumnReference Column=\"[lastSeen]\" /></OrderByColumn>",
+            StringComparison.Ordinal);
+
+        AssertBoundedCatalogRejected("sqlserver", nativePlan);
+    }
+
+    [Fact]
+    public void SqlServer_bounded_catalog_scan_sort_rejects_reordered_physical_sort_keys()
+    {
+        var document = System.Xml.Linq.XDocument.Parse(BoundedCatalogPlan("sqlserver"));
+        var orderBy = document.Descendants().Single(element => element.Name.LocalName == "OrderBy");
+        var first = orderBy.Elements().ElementAt(2).Descendants().Single(element => element.Name.LocalName == "ColumnReference");
+        var second = orderBy.Elements().ElementAt(3).Descendants().Single(element => element.Name.LocalName == "ColumnReference");
+        (first.Attribute("Column")!.Value, second.Attribute("Column")!.Value) =
+            (second.Attribute("Column")!.Value, first.Attribute("Column")!.Value);
+
+        AssertBoundedCatalogRejected("sqlserver", document.ToString(System.Xml.Linq.SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void SqlServer_bounded_catalog_scan_sort_rejects_a_noncanonical_value_expression()
+    {
+        var document = System.Xml.Linq.XDocument.Parse(BoundedCatalogPlan("sqlserver"));
+        var definition = document.Descendants().Single(element =>
+            element.Name.LocalName == "DefinedValue" &&
+            element.Descendants().Any(child =>
+                child.Name.LocalName == "ColumnReference" &&
+                child.Attribute("Column")?.Value == "[Expr1005]"));
+        definition.Descendants().Single(element => element.Name.LocalName == "ScalarOperator")
+            .SetAttributeValue("ScalarString", "REVERSE([idOrderKey] COLLATE Latin1_General_100_BIN2)");
+
+        AssertBoundedCatalogRejected("sqlserver", document.ToString(System.Xml.Linq.SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void SqlServer_bounded_catalog_scan_sort_rejects_a_direct_ordinal_value_reference()
+    {
+        var document = System.Xml.Linq.XDocument.Parse(BoundedCatalogPlan("sqlserver"));
+        var orderBy = document.Descendants().Single(element => element.Name.LocalName == "OrderBy");
+        var ordinalValue = orderBy.Elements().ElementAt(3).Descendants()
+            .Single(element => element.Name.LocalName == "ColumnReference");
+        ordinalValue.SetAttributeValue("Column", "[idOrderKey]");
+
+        AssertBoundedCatalogRejected("sqlserver", document.ToString(System.Xml.Linq.SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void SqlServer_bounded_catalog_scan_sort_rejects_a_reversed_null_rank_expression()
+    {
+        var document = System.Xml.Linq.XDocument.Parse(BoundedCatalogPlan("sqlserver"));
+        var definition = document.Descendants().Single(element =>
+            element.Name.LocalName == "DefinedValue" &&
+            element.Descendants().Any(child =>
+                child.Name.LocalName == "ColumnReference" &&
+                child.Attribute("Column")?.Value == "[Expr1004]"));
+        definition.Descendants().Single(element => element.Name.LocalName == "ScalarOperator")
+            .SetAttributeValue("ScalarString", "CASE WHEN [idOrderKey] IS NULL THEN (0) ELSE (1) END");
+
+        AssertBoundedCatalogRejected("sqlserver", document.ToString(System.Xml.Linq.SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void SqlServer_bounded_catalog_command_rejects_a_non_ordinal_datalength_companion()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var command = ProviderRenderedRelationalCommand("sqlserver", specification).Replace(
+            "DATALENGTH([idOrderKey] COLLATE Latin1_General_100_BIN2)",
+            "DATALENGTH([lastSeen])",
+            StringComparison.Ordinal);
+        using var fixture = Fixture.Create(
+            "sqlserver",
+            specification.RouteIdentity,
+            command: command,
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+            nativePlan: BoundedCatalogPlan("sqlserver"));
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "sqlserver",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path));
+    }
+
+    [Fact]
+    public void PostgreSql_bounded_catalog_scan_sort_rejects_incomplete_native_sort_keys()
+    {
+        var plan = JsonNode.Parse(BoundedCatalogPlan("postgresql"))!.AsArray();
+        var sortKeys = plan[0]!["Plan"]!["Plans"]![0]!["Sort Key"]!.AsArray();
+        sortKeys.RemoveAt(2);
+
+        AssertBoundedCatalogRejected("postgresql", plan.ToJsonString());
+    }
+
+    [Fact]
+    public void PostgreSql_bounded_catalog_command_rejects_a_mutated_ordinal_expression()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var command = ProviderRenderedRelationalCommand("postgresql", specification).Replace(
+            "ascii(chars.ch) <= 65535",
+            "ascii(chars.ch) <= 65534",
+            StringComparison.Ordinal);
+        using var fixture = Fixture.Create(
+            "postgresql",
+            specification.RouteIdentity,
+            command: command,
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+            nativePlan: BoundedCatalogPlan("postgresql"));
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "postgresql", fixture.Adapter, fixture.Route, fixture.Path));
+    }
+
+    [Fact]
+    public void PostgreSql_bounded_catalog_command_rejects_a_noncanonical_ordinal_collation()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var command = ProviderRenderedRelationalCommand("postgresql", specification).Replace(
+            "COLLATE \"C\"",
+            "COLLATE \"en_US\"",
+            StringComparison.Ordinal);
+        using var fixture = Fixture.Create(
+            "postgresql",
+            specification.RouteIdentity,
+            command: command,
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+            nativePlan: BoundedCatalogPlan("postgresql"));
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "postgresql", fixture.Adapter, fixture.Route, fixture.Path));
+    }
+
+    [Fact]
+    public void PostgreSql_bounded_catalog_scan_sort_rejects_reversed_null_rank_polarity()
+    {
+        var plan = BoundedCatalogPlan("postgresql").Replace(
+            "THEN 1 ELSE 0",
+            "THEN 0 ELSE 1",
+            StringComparison.Ordinal);
+
+        AssertBoundedCatalogRejected("postgresql", plan);
+    }
+
+    [Fact]
+    public void PostgreSql_bounded_catalog_scan_sort_rejects_swapped_ordinal_subplan_sources()
+    {
+        var plan = JsonNode.Parse(BoundedCatalogPlan("postgresql"))!.AsArray();
+        var subplans = plan[0]!["Plan"]!["Plans"]![0]!["Plans"]![0]!["Plans"]!.AsArray();
+        var firstCall = subplans[0]!["Plans"]![0]!["Function Call"];
+        var secondCall = subplans[1]!["Plans"]![0]!["Function Call"];
+        subplans[0]!["Plans"]![0]!["Function Call"] = secondCall!.DeepClone();
+        subplans[1]!["Plans"]![0]!["Function Call"] = firstCall!.DeepClone();
+
+        AssertBoundedCatalogRejected("postgresql", plan.ToJsonString());
+    }
+
+    [Fact]
+    public void PostgreSql_bounded_catalog_scan_sort_rejects_a_mutated_ordinal_subplan_expression()
+    {
+        var plan = JsonNode.Parse(BoundedCatalogPlan("postgresql"))!.AsArray();
+        var aggregate = plan[0]!["Plan"]!["Plans"]![0]!["Plans"]![0]!["Plans"]![0]!;
+        var output = aggregate["Output"]![0]!.GetValue<string>().Replace(
+            "ascii(chars.ch) <= 65535",
+            "ascii(chars.ch) <= 65534",
+            StringComparison.Ordinal);
+        aggregate["Output"]![0] = output;
+
+        AssertBoundedCatalogRejected("postgresql", plan.ToJsonString());
+    }
+
+    [Theory]
+    [InlineData("postgresql")]
+    [InlineData("sqlserver")]
+    public void Relational_bounded_catalog_scan_sort_rejects_an_extra_scan(string provider)
+    {
+        var nativePlan = provider switch
+        {
+            "postgresql" => BoundedCatalogPlan(provider).Replace(
+                "\"Plans\":[{\"Node Type\":\"Sort\"",
+                "\"Plans\":[{\"Node Type\":\"Seq Scan\",\"Relation Name\":\"other\"},{\"Node Type\":\"Sort\"",
+                StringComparison.Ordinal),
+            "sqlserver" => BoundedCatalogPlan(provider).Replace(
+                "</ShowPlanXML>",
+                "<RelOp PhysicalOp=\"Table Scan\"><TableScan><Object Table=\"[other]\" /></TableScan></RelOp></ShowPlanXML>",
+                StringComparison.Ordinal),
+            _ => throw new ArgumentOutOfRangeException(nameof(provider))
+        };
+        AssertBoundedCatalogRejected(provider, nativePlan);
+    }
+
+    [Theory]
+    [InlineData("postgresql")]
+    [InlineData("sqlserver")]
+    public void Relational_bounded_catalog_scan_sort_rejects_disconnected_topology(string provider)
+    {
+        var nativePlan = provider switch
+        {
+            "postgresql" => PostgreSqlPlanWithSwappedLimitAndSort(),
+            "sqlserver" => SqlServerPlanWithDetachedSort(),
+            _ => throw new ArgumentOutOfRangeException(nameof(provider))
+        };
+
+        AssertBoundedCatalogRejected(provider, nativePlan);
+    }
+
+    [Fact]
+    public void SqlServer_bounded_catalog_scan_sort_rejects_an_unrecognized_intermediate_operator()
+    {
+        var nativePlan = BoundedCatalogPlan("sqlserver").Replace(
+            "<RelOp PhysicalOp=\"Compute Scalar\"><ComputeScalar>",
+            "<RelOp PhysicalOp=\"Hash Match\"><Hash><RelOp PhysicalOp=\"Compute Scalar\"><ComputeScalar>",
+            StringComparison.Ordinal).Replace(
+            "</ComputeScalar></RelOp></Sort>",
+            "</ComputeScalar></RelOp></Hash></RelOp></Sort>",
+            StringComparison.Ordinal);
+
+        AssertBoundedCatalogRejected("sqlserver", nativePlan);
+    }
+
+    [Theory]
+    [InlineData("postgresql")]
+    [InlineData("sqlserver")]
+    public void Relational_bounded_catalog_scan_sort_requires_its_limit_operator(string provider)
+    {
+        var nativePlan = provider switch
+        {
+            "postgresql" =>
+                "[{\"Plan\":{\"Node Type\":\"Sort\",\"Sort Key\":[\"lastSeen DESC\",\"idOrderKey\",\"id\"],\"Plans\":[{\"Node Type\":\"Seq Scan\",\"Relation Name\":\"elsa_otel_resources_v2\"}]}}]",
+            "sqlserver" => SqlServerPlanWithoutTop(),
+            _ => throw new ArgumentOutOfRangeException(nameof(provider))
+        };
+        AssertBoundedCatalogRejected(provider, nativePlan);
+    }
+
+    [Theory]
     [InlineData(129, 127)]
     [InlineData(128, 126)]
     public void Mongo_bounded_collection_scan_sort_requires_the_frozen_resource_bounds(
@@ -918,7 +1361,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         using var fixture = Fixture.Create(
             "mongodb",
             "resources-by-last-seen",
-            planClassification: DiagnosticsNativePlanContract.BoundedMongoScanSortPlanClassification,
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
             nativePlan: """
                 {
                   "queryPlanner": {
@@ -949,7 +1392,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         using var fixture = Fixture.Create(
             "mongodb",
             "resources-by-last-seen",
-            planClassification: DiagnosticsNativePlanContract.BoundedMongoScanSortPlanClassification,
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
             nativePlan: """
                 {
                   "queryPlanner": {
@@ -981,7 +1424,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         using var fixture = Fixture.Create(
             "mongodb",
             "resources-by-last-seen",
-            planClassification: DiagnosticsNativePlanContract.BoundedMongoScanSortPlanClassification,
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
             nativePlan: $$"""
                 {
                   "queryPlanner": {
@@ -1013,7 +1456,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         using var fixture = Fixture.Create(
             "mongodb",
             route,
-            planClassification: DiagnosticsNativePlanContract.BoundedMongoScanSortPlanClassification,
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
             nativePlan: """
                 {
                   "queryPlanner": {
@@ -1069,47 +1512,28 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             false,
             constituent.Ordering);
         var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("mongodb", routeSpecification);
-        var command = JsonSerializer.Serialize(new
-        {
-            aggregate = Fixture.MongoPhysicalCollection(routeSpecification),
-            pipeline = new object[]
+        var commandDocument = JsonNode.Parse(Fixture.MongoAggregateCommand(
+            routeSpecification,
+            match: "{\"traceKey\":\"trace\"}"))!.AsObject();
+        commandDocument["pipeline"]!.AsArray().Insert(1, JsonNode.Parse("""
             {
-                new Dictionary<string, object> { ["$match"] = new Dictionary<string, string> { ["traceKey"] = "trace" } },
-                new Dictionary<string, object>
-                {
-                    ["$match"] = new Dictionary<string, object>
-                    {
-                        ["$or"] = new object[]
-                        {
-                            new Dictionary<string, object> { ["startTime"] = new Dictionary<string, int> { ["$gt"] = 1 } },
-                            new Dictionary<string, object>
-                            {
-                                ["$and"] = new object[]
-                                {
-                                    new Dictionary<string, object> { ["startTime"] = new Dictionary<string, int> { ["$eq"] = 1 } },
-                                    new Dictionary<string, object> { ["spanId"] = new Dictionary<string, string> { ["$gt"] = "span" } }
-                                }
-                            },
-                            new Dictionary<string, object>
-                            {
-                                ["$and"] = new object[]
-                                {
-                                    new Dictionary<string, object> { ["startTime"] = new Dictionary<string, int> { ["$eq"] = 1 } },
-                                    new Dictionary<string, object> { ["spanId"] = new Dictionary<string, string> { ["$eq"] = "span" } },
-                                    new Dictionary<string, object> { ["sequence"] = new Dictionary<string, int> { ["$gt"] = 1 } }
-                                }
-                            }
-                        }
-                    }
-                },
-                new Dictionary<string, object>
-                {
-                    ["$sort"] = new Dictionary<string, int> { ["startTime"] = 1, ["spanId"] = 1, ["sequence"] = 1 }
-                },
-                new Dictionary<string, int> { ["$limit"] = constituent.FiniteLimit }
-            },
-            cursor = new { }
-        });
+              "$match": {
+                "$or": [
+                  { "startTime": { "$gt": 1 } },
+                  { "$and": [
+                    { "startTime": { "$eq": 1 } },
+                    { "spanId": { "$gt": "span" } }
+                  ] },
+                  { "$and": [
+                    { "startTime": { "$eq": 1 } },
+                    { "spanId": { "$eq": "span" } },
+                    { "sequence": { "$gt": 1 } }
+                  ] }
+                ]
+              }
+            }
+            """));
+        var command = commandDocument.ToJsonString();
         var nativePlan = new JsonObject
         {
             ["queryPlanner"] = new JsonObject
@@ -1384,6 +1808,220 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             }
         };
 
+    private static string BoundedCatalogPlan(string provider)
+    {
+        if (provider == "postgresql")
+        {
+            var ordinalColumns = new[] { "idOrderKey", "id" };
+            var scan = new Dictionary<string, object>
+            {
+                ["Node Type"] = "Seq Scan",
+                ["Relation Name"] = "elsa_otel_resources_v2",
+                ["Plans"] = Enumerable.Range(1, 2).Select(index =>
+                {
+                    var alias = index == 1 ? "chars" : $"chars_{index - 1}";
+                    return new Dictionary<string, object>
+                    {
+                        ["Node Type"] = "Aggregate",
+                        ["Parent Relationship"] = "SubPlan",
+                        ["Subplan Name"] = $"SubPlan {index}",
+                        ["Output"] = new[]
+                        {
+                            $"string_agg(CASE WHEN (ascii({alias}.ch) <= 65535) THEN lpad(to_hex(ascii({alias}.ch)), 4, '0'::text) ELSE " +
+                            $"(lpad(to_hex((55296 + ((ascii({alias}.ch) - 65536) >> 10))), 4, '0'::text) || " +
+                            $"lpad(to_hex((56320 + ((ascii({alias}.ch) - 65536) & 1023))), 4, '0'::text)) END, ''::text ORDER BY {alias}.ord)"
+                        },
+                        ["Plans"] = new[]
+                        {
+                            new Dictionary<string, object>
+                            {
+                                ["Node Type"] = "Function Scan",
+                                ["Function Name"] = "unnest",
+                                ["Alias"] = alias,
+                                ["Output"] = new[] { $"{alias}.ch", $"{alias}.ord" },
+                                ["Function Call"] =
+                                    $"unnest(string_to_array((elsa_otel_resources_v2.{ordinalColumns[index - 1]})::text, NULL::text))"
+                            }
+                        }
+                    };
+                }).ToArray()
+            };
+            var sort = new Dictionary<string, object>
+            {
+                ["Node Type"] = "Sort",
+                ["Sort Key"] = PostgreSqlExplainSortKeys(),
+                ["Plans"] = new[] { scan }
+            };
+            var limit = new Dictionary<string, object>
+            {
+                ["Node Type"] = "Limit",
+                ["Plans"] = new[] { sort }
+            };
+            return JsonSerializer.Serialize(new[]
+            {
+                new Dictionary<string, object> { ["Plan"] = limit }
+            });
+        }
+
+        return provider switch
+        {
+            "sqlite" =>
+                "2 0 SCAN elsa_otel_resources_v2\n3 0 USE TEMP B-TREE FOR ORDER BY",
+            "sqlserver" =>
+                """
+                <ShowPlanXML>
+                  <RelOp PhysicalOp="Top"><Top><RelOp PhysicalOp="Filter"><Filter>
+                    <RelOp PhysicalOp="Sort"><Sort><OrderBy>
+                      <OrderByColumn Ascending="1"><ColumnReference Column="[Expr1003]" /></OrderByColumn>
+                      <OrderByColumn Ascending="0"><ColumnReference Column="[lastSeen]" /></OrderByColumn>
+                      <OrderByColumn Ascending="1"><ColumnReference Column="[Expr1004]" /></OrderByColumn>
+                      <OrderByColumn Ascending="1"><ColumnReference Column="[Expr1005]" /></OrderByColumn>
+                      <OrderByColumn Ascending="1"><ColumnReference Column="[Expr1006]" /></OrderByColumn>
+                      <OrderByColumn Ascending="1"><ColumnReference Column="[Expr1007]" /></OrderByColumn>
+                      <OrderByColumn Ascending="1"><ColumnReference Column="[Expr1008]" /></OrderByColumn>
+                      <OrderByColumn Ascending="1"><ColumnReference Column="[Expr1009]" /></OrderByColumn>
+                    </OrderBy><RelOp PhysicalOp="Compute Scalar"><ComputeScalar><DefinedValues>
+                      <DefinedValue><ColumnReference Column="[Expr1003]" /><ScalarOperator ScalarString="CASE WHEN [lastSeen] IS NULL THEN (1) ELSE (0) END" /></DefinedValue>
+                      <DefinedValue><ColumnReference Column="[Expr1004]" /><ScalarOperator ScalarString="CASE WHEN [idOrderKey] IS NULL THEN (1) ELSE (0) END" /></DefinedValue>
+                      <DefinedValue><ColumnReference Column="[Expr1005]" /><ScalarOperator ScalarString="[idOrderKey] COLLATE Latin1_General_100_BIN2" /></DefinedValue>
+                      <DefinedValue><ColumnReference Column="[Expr1006]" /><ScalarOperator ScalarString="DATALENGTH([idOrderKey] COLLATE Latin1_General_100_BIN2)" /></DefinedValue>
+                      <DefinedValue><ColumnReference Column="[Expr1007]" /><ScalarOperator ScalarString="CASE WHEN [id] IS NULL THEN (1) ELSE (0) END" /></DefinedValue>
+                      <DefinedValue><ColumnReference Column="[Expr1008]" /><ScalarOperator ScalarString="[id] COLLATE Latin1_General_100_BIN2" /></DefinedValue>
+                      <DefinedValue><ColumnReference Column="[Expr1009]" /><ScalarOperator ScalarString="DATALENGTH([id] COLLATE Latin1_General_100_BIN2)" /></DefinedValue>
+                    </DefinedValues>
+                      <RelOp PhysicalOp="Table Scan"><TableScan><Object Table="[elsa_otel_resources_v2]" /></TableScan></RelOp>
+                    </ComputeScalar></RelOp></Sort></RelOp>
+                  </Filter></RelOp></Top></RelOp>
+                </ShowPlanXML>
+                """,
+            _ => throw new ArgumentOutOfRangeException(nameof(provider))
+        };
+    }
+
+    private static string[] PostgreSqlRenderedOrderTerms(DiagnosticsNativeRouteSpec specification) =>
+        specification.EffectiveOrdering.SelectMany(term =>
+        {
+            var ordinal = term.Column is "id" or "idOrderKey" or "traceKey" or "spanId";
+            var expression = ordinal
+                ? $"(\"{term.Column}\" COLLATE \"C\")"
+                : $"\"{term.Column}\"";
+            var direction = term.Direction == RuntimeNativeOrderDirection.Descending ? "DESC" : "ASC";
+            return new[]
+            {
+                $"CASE WHEN {expression} IS NULL THEN 1 ELSE 0 END ASC",
+                (ordinal ? PostgreSqlOrdinalKey(expression) : expression) + " " + direction
+            };
+        }).ToArray();
+
+    private static string[] PostgreSqlExplainSortKeys() =>
+    [
+        "(CASE WHEN (elsa_otel_resources_v2.\"lastSeen\" IS NULL) THEN 1 ELSE 0 END)",
+        "elsa_otel_resources_v2.\"lastSeen\" DESC",
+        "(CASE WHEN ((elsa_otel_resources_v2.\"idOrderKey\")::text IS NULL) THEN 1 ELSE 0 END)",
+        "(COALESCE((SubPlan 1), ''::text))",
+        "(CASE WHEN ((elsa_otel_resources_v2.id)::text IS NULL) THEN 1 ELSE 0 END)",
+        "(COALESCE((SubPlan 2), ''::text))"
+    ];
+
+    private static string PostgreSqlOrdinalKey(string expression) =>
+        "COALESCE((SELECT string_agg(CASE WHEN ascii(chars.ch) <= 65535 THEN lpad(to_hex(ascii(chars.ch)), 4, '0') ELSE " +
+        "lpad(to_hex(55296 + ((ascii(chars.ch) - 65536) >> 10)), 4, '0') || " +
+        "lpad(to_hex(56320 + ((ascii(chars.ch) - 65536) & 1023)), 4, '0') END, '' ORDER BY chars.ord) " +
+        "FROM unnest(string_to_array(" + expression + ", NULL)) WITH ORDINALITY AS chars(ch, ord)), '')";
+
+    private static string ProviderRenderedRelationalCommand(
+        string provider,
+        DiagnosticsNativeRouteSpec specification)
+    {
+        var predicate = specification.PredicateColumn is null
+            ? "__groundwork_scope = @p0"
+            : $"__groundwork_scope = @p0 AND {specification.PredicateColumn} = @p1";
+        var ordering = provider switch
+        {
+            "postgresql" => string.Join(", ", PostgreSqlRenderedOrderTerms(specification)),
+            "sqlserver" => string.Join(", ", new[]
+            {
+                "CASE WHEN [lastSeen] IS NULL THEN 1 ELSE 0 END ASC", "[lastSeen] DESC",
+                "CASE WHEN [idOrderKey] COLLATE Latin1_General_100_BIN2 IS NULL THEN 1 ELSE 0 END ASC",
+                "[idOrderKey] COLLATE Latin1_General_100_BIN2 ASC",
+                "DATALENGTH([idOrderKey] COLLATE Latin1_General_100_BIN2) ASC",
+                "CASE WHEN [id] COLLATE Latin1_General_100_BIN2 IS NULL THEN 1 ELSE 0 END ASC",
+                "[id] COLLATE Latin1_General_100_BIN2 ASC",
+                "DATALENGTH([id] COLLATE Latin1_General_100_BIN2) ASC"
+            }),
+            _ => throw new ArgumentOutOfRangeException(nameof(provider))
+        };
+        return provider == "sqlserver"
+            ? $"SELECT * FROM {specification.TableName} WHERE {predicate} ORDER BY {ordering} OFFSET 0 ROWS FETCH NEXT @p9 ROWS ONLY"
+            : $"SELECT * FROM {specification.TableName} WHERE {predicate} ORDER BY {ordering} LIMIT @p9";
+    }
+
+    private static string SqlServerPlanWithoutTop()
+    {
+        var document = System.Xml.Linq.XDocument.Parse(BoundedCatalogPlan("sqlserver"));
+        var top = document.Descendants().Single(element =>
+            element.Name.LocalName == "RelOp" &&
+            element.Attribute("PhysicalOp")?.Value == "Top");
+        var child = top.Descendants().First(element => element.Name.LocalName == "RelOp");
+        top.ReplaceWith(new System.Xml.Linq.XElement(child));
+        return document.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+    }
+
+    private static string PostgreSqlPlanWithSwappedLimitAndSort()
+    {
+        var document = JsonNode.Parse(BoundedCatalogPlan("postgresql"))!.AsArray();
+        var limit = document[0]!["Plan"]!.AsObject();
+        var sort = limit["Plans"]![0]!.AsObject();
+        limit["Node Type"] = "Sort";
+        sort["Node Type"] = "Limit";
+        return document.ToJsonString();
+    }
+
+    private static string SqlServerPlanWithDetachedSort()
+    {
+        var document = System.Xml.Linq.XDocument.Parse(BoundedCatalogPlan("sqlserver"));
+        var top = document.Descendants().Single(element =>
+            element.Name.LocalName == "RelOp" &&
+            element.Attribute("PhysicalOp")?.Value == "Top");
+        var sort = document.Descendants().Single(element =>
+            element.Name.LocalName == "RelOp" &&
+            element.Attribute("PhysicalOp")?.Value == "Sort");
+        var detachedSort = new System.Xml.Linq.XElement(sort);
+        top.RemoveNodes();
+        document.Root!.Add(detachedSort);
+        return document.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+    }
+
+    private static string RelationalCommand(string provider, DiagnosticsNativeRouteSpec specification)
+    {
+        var predicate = specification.PredicateColumn is null
+            ? "__groundwork_scope = @scope"
+            : $"__groundwork_scope = @scope AND {specification.PredicateColumn} = @value";
+        var ordering = string.Join(
+            ", ",
+            specification.EffectiveOrdering.Select(term =>
+                $"{term.Column} {(term.Direction == RuntimeNativeOrderDirection.Descending ? "DESC" : "ASC")}"));
+        return provider == "sqlserver"
+            ? $"SELECT TOP ({specification.FiniteLimit}) * FROM {specification.TableName} WHERE {predicate} ORDER BY {ordering}"
+            : $"SELECT * FROM {specification.TableName} WHERE {predicate} ORDER BY {ordering} LIMIT {specification.FiniteLimit}";
+    }
+
+    private static void AssertBoundedCatalogRejected(string provider, string nativePlan)
+    {
+        using var fixture = Fixture.Create(
+            provider,
+            "resources-by-last-seen",
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+            nativePlan: nativePlan);
+        var exception = Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateEnvelope(
+                provider,
+                fixture.Adapter,
+                fixture.Route,
+                fixture.Path));
+        Assert.True(DiagnosticsNativePlanContract.IsExpectedBlockedPlanFailure(exception));
+    }
+
     private sealed class Fixture : IDisposable
     {
         private Fixture(
@@ -1428,6 +2066,9 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             command ??= provider switch
             {
                 "mongodb" => MongoAggregateCommand(spec),
+                "postgresql" when spec.EffectiveOrdering.Any(term =>
+                    term.Column is "id" or "idOrderKey" or "traceKey" or "spanId") =>
+                    ProviderRenderedRelationalCommand("postgresql", spec),
                 _ => "SELECT * FROM elsa_otel_resources_v2 WHERE __groundwork_scope = @scope ORDER BY lastSeen DESC, idOrderKey ASC, id ASC LIMIT 127"
             };
             var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(provider, spec);
@@ -1458,25 +2099,27 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             string? collection = null,
             string? match = null)
         {
-            using var matchDocument = JsonDocument.Parse(match ??
-                (specification.PredicateColumn is null
-                    ? "{}"
-                    : $"{{\"{specification.PredicateColumn}\":1}}"));
-            var sort = specification.EffectiveOrdering.ToDictionary(
-                term => term.Column,
-                term => term.Direction == RuntimeNativeOrderDirection.Descending ? -1 : 1,
-                StringComparer.Ordinal);
-            return JsonSerializer.Serialize(new
+            var matchNode = JsonNode.Parse(match ??
+                (specification.PredicateColumn is null ? "{}" : $"{{\"{specification.PredicateColumn}\":1}}"))!;
+            var pipeline = new JsonArray(new JsonObject { ["$match"] = matchNode });
+            var sort = new JsonObject();
+            foreach (var (term, index) in specification.EffectiveOrdering.Select((term, index) => (term, index)))
             {
-                aggregate = collection ?? MongoPhysicalCollection(specification),
-                pipeline = new object[]
-                {
-                    new Dictionary<string, JsonElement> { ["$match"] = matchDocument.RootElement.Clone() },
-                    new Dictionary<string, object> { ["$sort"] = sort },
-                    new Dictionary<string, int> { ["$limit"] = specification.FiniteLimit }
-                },
-                cursor = new { }
-            });
+                var column = term.Column is "id" or "idOrderKey" or "serviceNameKey" or "traceKey" or "spanId"
+                    ? "_groundwork_ordinal_key_" + index
+                    : term.Column;
+                if (column.StartsWith("_groundwork_ordinal_key_", StringComparison.Ordinal))
+                    pipeline.Add(MongoOrdinalKeyStage(index, term.Column));
+                sort[column] = term.Direction == RuntimeNativeOrderDirection.Descending ? -1 : 1;
+            }
+            pipeline.Add(new JsonObject { ["$sort"] = sort });
+            pipeline.Add(new JsonObject { ["$limit"] = specification.FiniteLimit });
+            return new JsonObject
+            {
+                ["aggregate"] = collection ?? MongoPhysicalCollection(specification),
+                ["pipeline"] = pipeline,
+                ["cursor"] = new JsonObject()
+            }.ToJsonString();
         }
 
         public void Dispose()

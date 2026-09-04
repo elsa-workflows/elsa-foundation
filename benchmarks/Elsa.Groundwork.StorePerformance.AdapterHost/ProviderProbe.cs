@@ -99,9 +99,18 @@ internal static class ProviderProbe
         var settings = new SqliteConnectionStringBuilder(connectionString);
         await using var connection = new SqliteConnection(settings.ConnectionString);
         await connection.OpenAsync(cancellationToken);
+        // Groundwork applies this policy to every SQLite connection it opens. Apply the same policy
+        // to the independent attestation connection before reading it; otherwise synchronous is a
+        // connection-local raw-driver default and the evidence describes FULL while timing runs NORMAL.
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;";
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
         var version = await ScalarAsync(connection, "SELECT sqlite_version();", cancellationToken);
         var journalMode = await ScalarAsync(connection, "PRAGMA journal_mode;", cancellationToken);
         var synchronous = await ScalarAsync(connection, "PRAGMA synchronous;", cancellationToken);
+        var busyTimeout = await ScalarAsync(connection, "PRAGMA busy_timeout;", cancellationToken);
 
         return new Result(
             "sqlite",
@@ -115,6 +124,7 @@ internal static class ProviderProbe
                 ["pooling"] = settings.Pooling.ToString(),
                 ["journal_mode"] = journalMode,
                 ["synchronous"] = synchronous,
+                ["busy_timeout_ms"] = busyTimeout,
                 ["options_digest"] = ConnectionOptionsDigest(settings.ConnectionString)
             });
     }
