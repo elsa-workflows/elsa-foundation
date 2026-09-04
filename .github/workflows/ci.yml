@@ -113,6 +113,10 @@ jobs:
               keep+=("$p")
             fi
           done < <(find tests -name '*.csproj' | sort)
+          if (( ${#keep[@]} == 0 )); then
+            echo "::error::No container-free test projects found; refusing to run an empty fast-test filter."
+            exit 1
+          fi
           projects=$(printf '"%s",' "${keep[@]}" | sed 's/,$//')
           printf '{"solution":{"path":"Elsa.Server.slnx","projects":[%s]}}' "$projects" > Elsa.Server.test.slnf
           echo "Kept ${#keep[@]} test project(s) in the container-free filter."
