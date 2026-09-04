@@ -13,6 +13,7 @@ Use the constitution files in `.specify/memory/` for gates, allowed exceptions, 
 - [Git operating models](git-operating-models.md) - committed catalog of supported Git workflow shapes; personal selections belong in `.agent-prefs/`.
 - [Spec lifecycle](spec-lifecycle.md) - how specs under `specs/` are numbered, the closed status vocabulary, when a spec reaches a terminal status, and why specs are never moved or deleted.
 - [First-user prompt options](first-user-prompts.md) - simple prompts for new architects and engineers entering the workspace.
+- [Developer solution filters](developer-solution-filters.md) - generated, task-oriented `.slnf` profiles for faster inner-loop work without weakening the full solution gate.
 - [Identity generators](identity-generators.md) - swappable `IIdentityGenerator` strategies (UUIDv7, short 64-bit, Snowflake, GUID) for short/sortable entity ids.
 - [Activity Definition authoring composition](activity-definition-authoring-composition.md) - host opt-in/opt-out guidance for provider-neutral authoring, Activity Graph design, and Activity Graph runtime features.
 - [Authentication architecture](authentication-architecture.md) - integrator guide to the auth stack: the two-plane (IAM vs protocol) architecture, the module taxonomy, OpenIddict-as-IdP vs Oidc-as-relying-party, cookies vs JWTs, the composition matrix per deployment scenario, how Studio consumes it, security posture, and per-IdP recipes.
