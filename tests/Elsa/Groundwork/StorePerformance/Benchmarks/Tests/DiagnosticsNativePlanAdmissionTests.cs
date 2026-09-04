@@ -1035,6 +1035,48 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             fixture.Path);
     }
 
+    [Fact]
+    public void SqlServer_renderer_scope_equality_requires_its_exact_length_companion()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var command = ProviderRenderedRelationalCommand("sqlserver", specification).Replace(
+            "DATALENGTH([__groundwork_scope] COLLATE Latin1_General_100_BIN2) = DATALENGTH(@p0) AND ",
+            string.Empty,
+            StringComparison.Ordinal);
+        using var fixture = Fixture.Create(
+            "sqlserver",
+            specification.RouteIdentity,
+            command: command,
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+            nativePlan: BoundedCatalogPlan("sqlserver"));
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "sqlserver", fixture.Adapter, fixture.Route, fixture.Path));
+    }
+
+    [Fact]
+    public void SqlServer_renderer_scope_length_companion_must_bind_the_same_parameter()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var command = ProviderRenderedRelationalCommand("sqlserver", specification).Replace(
+            "DATALENGTH(@p0)",
+            "DATALENGTH(@wrong)",
+            StringComparison.Ordinal);
+        using var fixture = Fixture.Create(
+            "sqlserver",
+            specification.RouteIdentity,
+            command: command,
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+            nativePlan: BoundedCatalogPlan("sqlserver"));
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "sqlserver", fixture.Adapter, fixture.Route, fixture.Path));
+    }
+
     [Theory]
     [InlineData("postgresql")]
     [InlineData("sqlserver")]
@@ -1707,7 +1749,8 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         {
             "CASE WHEN __groundwork_scope = @scope THEN 1 END = 1",
             "LOWER(__groundwork_scope) = @scope",
-            "__groundwork_scope = @scope OR 1 = 1"
+            "__groundwork_scope = @scope OR 1 = 1",
+            "__groundwork_scope = @scope AND 1 = 1"
         })
         {
             using var fixture = Fixture.Create(
@@ -1981,9 +2024,13 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         string provider,
         DiagnosticsNativeRouteSpec specification)
     {
-        var predicate = specification.PredicateColumn is null
-            ? "__groundwork_scope = @p0"
-            : $"__groundwork_scope = @p0 AND {specification.PredicateColumn} = @p1";
+        var predicateColumns = new[] { "__groundwork_scope" }
+            .Concat(specification.PredicateColumn is null ? [] : [specification.PredicateColumn])
+            .ToArray();
+        var predicate = string.Join(
+            " AND ",
+            predicateColumns.Select((column, index) =>
+                ProviderRenderedEquality(provider, specification, column, "@p" + index)));
         var ordering = provider switch
         {
             "postgresql" => string.Join(", ", PostgreSqlRenderedOrderTerms(specification)),
@@ -2000,6 +2047,28 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         return provider == "sqlserver"
             ? $"SELECT * FROM {specification.TableName} WHERE {predicate} ORDER BY {ordering} OFFSET 0 ROWS FETCH NEXT @p9 ROWS ONLY"
             : $"SELECT * FROM {specification.TableName} WHERE {predicate} ORDER BY {ordering} LIMIT @p9";
+    }
+
+    private static string ProviderRenderedEquality(
+        string provider,
+        DiagnosticsNativeRouteSpec specification,
+        string column,
+        string parameter)
+    {
+        var isString = string.Equals(column, "__groundwork_scope", StringComparison.Ordinal) ||
+                       string.Equals(column, specification.PredicateColumn, StringComparison.Ordinal) &&
+                       string.Equals(specification.RouteIdentity, "resources-by-service", StringComparison.Ordinal);
+        var expression = provider switch
+        {
+            "postgresql" when isString => $"(\"{column}\" COLLATE \"C\")",
+            "postgresql" => $"\"{column}\"",
+            "sqlserver" when isString => $"[{column}] COLLATE Latin1_General_100_BIN2",
+            "sqlserver" => $"[{column}]",
+            _ => throw new ArgumentOutOfRangeException(nameof(provider))
+        };
+        return provider == "sqlserver" && isString
+            ? $"({expression} IS NOT NULL AND DATALENGTH({expression}) = DATALENGTH({parameter}) AND {expression} = {parameter})"
+            : $"({expression} IS NOT NULL AND {expression} = {parameter})";
     }
 
     private static string SqlServerPlanWithoutTop()

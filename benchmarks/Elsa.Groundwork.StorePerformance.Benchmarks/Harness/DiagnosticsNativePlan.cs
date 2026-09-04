@@ -559,7 +559,7 @@ public static class DiagnosticsNativePlanContract
             @"\bWHERE\s+(?<where>.*?)(?:;|$)",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline).Groups["where"].Value.Trim();
         var required = new[] { "__groundwork_scope", specification.PredicateColumn };
-        if (!ContainsOnlyExactEqualityPredicates(where, required, allowNullGuards: false))
+        if (!ContainsOnlyExactEqualityPredicates(provider, where, null, required, allowNullGuards: false))
             throw new PerformanceContractException($"Diagnostics point read '{specification.RouteIdentity}' must contain only scope and its exact key predicate.");
     }
 
@@ -707,7 +707,7 @@ public static class DiagnosticsNativePlanContract
             requiredAtoms.Add("__groundwork_scope");
         if (specification.PredicateColumn is not null)
             requiredAtoms.Add(specification.PredicateColumn);
-        if (!ContainsOnlyExactEqualityPredicates(where, requiredAtoms, allowNullGuards: true))
+        if (!ContainsOnlyExactEqualityPredicates(provider, where, specification, requiredAtoms, allowNullGuards: true))
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command must contain only its exact equality predicates and no extra conditions.");
     }
 
@@ -753,35 +753,73 @@ public static class DiagnosticsNativePlanContract
     }
 
     private static bool ContainsOnlyExactEqualityPredicates(
+        string provider,
         string where,
+        DiagnosticsNativeRouteSpec? specification,
         IReadOnlyList<string> requiredColumns,
         bool allowNullGuards)
     {
+        // Keep this compatibility check limited to equality shapes emitted by the
+        // supported Groundwork renderers. Provider-owned structured evidence is
+        // the durable boundary; this is deliberately not a general SQL parser.
         const string parameter = @"(?:@\w+|\?|\$\d+)";
-        if (requiredColumns.Any(column =>
-                Regex.Matches(where, $@"\b{Regex.Escape(column)}\b\s*=\s*{parameter}", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count != 1))
-            return false;
-
         var remainder = where;
         foreach (var column in requiredColumns)
         {
+            var columnExpression = $@"\(*\s*\b{Regex.Escape(column)}\b\s*\)*";
+            var equalityPattern = $@"{columnExpression}\s*=\s*(?<parameter>{parameter})";
+            var equalityMatches = Regex.Matches(
+                remainder,
+                equalityPattern,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (equalityMatches.Count != 1)
+                return false;
+
             if (allowNullGuards)
             {
                 remainder = Regex.Replace(
                     remainder,
-                    $@"\b{Regex.Escape(column)}\b\s+IS\s+NOT\s+NULL",
+                    $@"{columnExpression}\s+IS\s+NOT\s+NULL",
                     string.Empty,
                     RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             }
+
+            if (string.Equals(provider, "sqlserver", StringComparison.Ordinal) &&
+                RequiresSqlServerLengthEquality(specification, column))
+            {
+                var boundParameter = Regex.Escape(equalityMatches[0].Groups["parameter"].Value);
+                var lengthPattern =
+                    $@"DATALENGTH\s*\(\s*{columnExpression}\s*\)\s*=\s*DATALENGTH\s*\(\s*{boundParameter}\s*\)";
+                if (Regex.Matches(
+                        remainder,
+                        lengthPattern,
+                        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count != 1)
+                    return false;
+                remainder = Regex.Replace(
+                    remainder,
+                    lengthPattern,
+                    string.Empty,
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            }
+
             remainder = Regex.Replace(
                 remainder,
-                $@"\b{Regex.Escape(column)}\b\s*=\s*{parameter}",
+                equalityPattern,
                 string.Empty,
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         }
         remainder = Regex.Replace(remainder, @"\bAND\b|[();\s]", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         return remainder.Length == 0;
     }
+
+    private static bool RequiresSqlServerLengthEquality(
+        DiagnosticsNativeRouteSpec? specification,
+        string column) =>
+        specification is not null &&
+        (string.Equals(column, "__groundwork_scope", StringComparison.OrdinalIgnoreCase) ||
+         string.Equals(column, specification.PredicateColumn, StringComparison.OrdinalIgnoreCase) &&
+         (string.Equals(specification.RouteIdentity, "resources-by-service", StringComparison.Ordinal) ||
+          specification.RouteIdentity.StartsWith("trace-detail/", StringComparison.Ordinal)));
 
     private static bool ContainsOnlyExactReplayRangePredicates(string where, bool requireStorageScope)
     {
