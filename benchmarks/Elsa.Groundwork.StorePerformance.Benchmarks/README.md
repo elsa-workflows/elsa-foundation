@@ -71,6 +71,10 @@ tampering fail closed. The cohort directory may otherwise contain only the defau
 `comparison.from-gate.v1.json`, `gate.v1.json`, `measurement.v1.json`, and `budget-gate.v1.json` result files;
 write custom result paths outside it.
 
+Post-child admission validates the planned measurement set as Measurement, not Comparison. Existing
+cohort sets still require Comparison admission, so this handoff does not allow a second ungraded
+diagnostics set or promote collected evidence into an accepted performance verdict.
+
 `measure` validates one complete four-process target without an oracle and emits a distinct no-comparand
 measurement result whose schema-v2 `EvaluationStatus` is explicitly `ungraded`. Diagnostics uses this same one-set path for budget-derivation evidence;
 `compare` and the ratio `gate` continue to refuse diagnostics artifacts. `budget-gate` derives a fresh admitted measurement from that manifest-bound artifact

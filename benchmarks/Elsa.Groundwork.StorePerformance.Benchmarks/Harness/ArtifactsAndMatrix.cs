@@ -529,7 +529,12 @@ public static class ProcessMatrixRunner
             if (produced == default || !SameRequest(run, produced.Artifact.Request))
                 throw new PerformanceContractException($"The adapter child process emitted an artifact that does not exactly match its request for {run.ProcessKind}/{run.ProcessIndex}.");
             foreach (var entry in currentEntries)
-                ArtifactAdmission.Validate(plan.Workload, entry.Artifact, outputDirectory);
+            {
+                if (string.Equals(entry.Artifact.Request.MeasurementSetId, plan.Runs[0].MeasurementSetId, StringComparison.Ordinal))
+                    ArtifactAdmission.ValidateForMeasurement(plan.Workload, entry.Artifact, outputDirectory);
+                else
+                    ArtifactAdmission.Validate(plan.Workload, entry.Artifact, outputDirectory);
+            }
             var allowedNames = currentEntries.Select(entry => Path.GetFileName(entry.Path))
                 .Concat(currentEntries.Select(entry => ArtifactStore.EvidenceName(entry.Artifact.Request.NativePlanEvidenceReference)))
                 .Concat(currentEntries.SelectMany(entry => ArtifactStore.ReferencedRawPlanNames(entry.Artifact.Correctness.NativePlan)))
