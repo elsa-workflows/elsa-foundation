@@ -18,6 +18,7 @@ public sealed class GroundworkV2OpenTelemetryTests
 {
     private const string IdOrdinalIdentity = "__groundwork_ordinal_id";
     private const string SpanIdOrdinalIdentity = "__groundwork_ordinal_spanId";
+    private const string TraceKeyOrdinalIdentity = "__groundwork_ordinal_traceKey";
     [Fact]
     public void Public_declarations_are_ordinary_scoped_units_with_pre_source_aggregation()
     {
@@ -118,6 +119,9 @@ public sealed class GroundworkV2OpenTelemetryTests
         Assert.Equal("elsa_otel_trace_summaries_v3", summaries.Name);
         Assert.True(summaries.Concurrency.IsOptimistic);
         Assert.Equal([V2OpenTelemetryStorageSchema.TraceKey], summaries.Key.Columns);
+        Assert.Equal(
+            TraceKeyOrdinalIdentity,
+            Assert.Single(summaries.Columns, column => column.Name == V2OpenTelemetryStorageSchema.TraceKey).OrdinalIdentity?.PhysicalColumn);
         var workflowIds = Assert.Single(summaries.Columns,
             column => column.Name == V2OpenTelemetryStorageSchema.WorkflowInstanceIds);
         Assert.Equal(PortableCollation.UnicodeOrdinalIgnoreCase, workflowIds.ElementSearchKey!.Collation);
@@ -141,6 +145,7 @@ public sealed class GroundworkV2OpenTelemetryTests
                 new IndexColumn(V2OpenTelemetryStorageSchema.TraceKey)
             ],
             order.Columns);
+        Assert.True(order.UseOrdinalIdentities);
 
         var ledger = Assert.Single(units, unit => unit.Id.Value == V2OpenTelemetryStorageSchema.CaptureLedgerUnitId);
         Assert.Equal("elsa_otel_capture_ledger_v3", ledger.Name);
@@ -195,6 +200,36 @@ public sealed class GroundworkV2OpenTelemetryTests
             ],
             firstDescending: false,
             expectedOrder: $"ORDER BY [{V2OpenTelemetryStorageSchema.Timestamp}] ASC, [{IdOrdinalIdentity}] COLLATE Latin1_General_100_BIN2 ASC, [{V2OpenTelemetryStorageSchema.Sequence}] ASC");
+
+        var summaries = V2OpenTelemetryStorageSchema.CreateTraceSummaries();
+        AssertSqlServerOrder(
+            summaries,
+            "elsa_otel_trace_summaries_start",
+            [
+                Column(summaries, V2OpenTelemetryStorageSchema.StartTime, QueryType.DateTimeOffset, false),
+                Column(summaries, V2OpenTelemetryStorageSchema.TraceKey, QueryType.String, false, 64)
+            ],
+            firstDescending: true,
+            expectedOrder: $"ORDER BY [{V2OpenTelemetryStorageSchema.StartTime}] DESC, [{TraceKeyOrdinalIdentity}] COLLATE Latin1_General_100_BIN2 ASC");
+    }
+
+    [Fact]
+    public void Trace_summary_ordinal_identity_is_selected_only_by_its_start_index()
+    {
+        var logical = V2OpenTelemetryStorageSchema.CreateTraceSummaries();
+        var physical = SearchKeyProjection.Expand(logical);
+
+        var selected = SearchKeyQueryMappings.For(physical, "elsa_otel_trace_summaries_start")[V2OpenTelemetryStorageSchema.TraceKey];
+        Assert.Equal(V2OpenTelemetryStorageSchema.TraceKey, selected.SourceColumn);
+        Assert.Equal(TraceKeyOrdinalIdentity, selected.PhysicalColumn);
+        Assert.True(selected.OrderByPhysicalColumn);
+        Assert.True(selected.PreservesOrdinalIdentity);
+
+        var ordinary = SearchKeyQueryMappings.For(physical)[V2OpenTelemetryStorageSchema.TraceKey];
+        Assert.Equal(V2OpenTelemetryStorageSchema.TraceKey, ordinary.SourceColumn);
+        Assert.Equal(V2OpenTelemetryStorageSchema.TraceKey, ordinary.PhysicalColumn);
+        Assert.False(ordinary.OrderByPhysicalColumn);
+        Assert.False(ordinary.PreservesOrdinalIdentity);
     }
 
     private static void AssertSignalId(StorageUnit unit)

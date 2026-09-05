@@ -24,8 +24,10 @@ The diagnostics Groundwork adapter keeps the existing EF persistence bound of 12
 for metric-point IDs, log-record IDs, span-record IDs, and the `SpanId` identity on span records.
 This is not a blanket span-reference bound: the optional log-record `SpanId` and trace/summary
 `RootSpanId` fields retain their existing 256-code-unit v2 declarations. The unintegrated v2 declarations
-use Groundwork's persisted ordinal identities only on the four selected indexes whose logical order
-contains one of those strings: metric timestamp, log timestamp, and span/log trace detail. This keeps
+keep the required 64-code-unit v3 trace-summary `TraceKey` and its raw storage/key/API unchanged, while
+adding a provider-owned ordinal identity for its selected start-time index. They use Groundwork's
+persisted ordinal identities on exactly five selected indexes: metric timestamp, log timestamp,
+trace-summary start, and span/log trace detail. This keeps
 the public logical order (`timestamp` or `start time`, then ID, then provider sequence) while giving SQL
 Server an exact physical pathkey that fits its 1,700-byte index-key limit. Raw strings retain
 Groundwork's length-aware ordering everywhere else.
@@ -36,7 +38,7 @@ the 128-code-unit correction is made before its first supported deployment rathe
 a migration from the superseded 512/256-code-unit draft declarations. A future change to these bounds
 requires explicit compatibility and migration evidence.
 
-Native command admission binds these four route/table/index triples to their exact persisted column
+Native command admission binds these five route/table/index triples to their exact persisted column
 names; the public route metadata remains logical. A physical-name prefix alone is not authority.
 PostgreSQL still has to prove its C-collated index path, and MongoDB must use the stored key directly,
 without an intervening stage that overwrites it. Renderer/envelope tests use synthetic plans only to

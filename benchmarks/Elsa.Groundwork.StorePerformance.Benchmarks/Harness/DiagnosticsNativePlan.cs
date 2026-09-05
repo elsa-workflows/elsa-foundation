@@ -846,9 +846,9 @@ public static class DiagnosticsNativePlanContract
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
     }
 
-    // Elsa owns these four declarations. Keep public route metadata logical, but bind retained
+    // Elsa owns these five declarations. Keep public route metadata logical, but bind retained
     // commands to the exact selected physical keys. Never infer trust from a column-name prefix.
-    private static DiagnosticsNativeRouteSpec PhysicalCommandSpecification(DiagnosticsNativeRouteSpec specification)
+    internal static DiagnosticsNativeRouteSpec PhysicalCommandSpecification(DiagnosticsNativeRouteSpec specification)
     {
         var logicalColumn = (specification.RouteIdentity, specification.TableName, specification.IndexName) switch
         {
@@ -856,6 +856,7 @@ public static class DiagnosticsNativePlanContract
             ("logs-by-last-seen", "elsa_otel_logs_v2", "elsa_otel_logs_timestamp") => "id",
             ("trace-detail/logs-by-trace-key-timestamp-id", "elsa_otel_logs_v2", "elsa_otel_logs_trace_detail") => "id",
             ("trace-detail/spans-by-trace-key-start-id", "elsa_otel_spans_v2", "elsa_otel_spans_trace_detail") => "spanId",
+            ("traces-by-last-seen", "elsa_otel_trace_summaries_v3", "elsa_otel_trace_summaries_start") => "traceKey",
             _ => null
         };
         if (logicalColumn is null)
@@ -872,7 +873,7 @@ public static class DiagnosticsNativePlanContract
     }
 
     private static bool IsPersistedOrdinalColumn(string column) =>
-        column is "__groundwork_ordinal_id" or "__groundwork_ordinal_spanId";
+        column is "__groundwork_ordinal_id" or "__groundwork_ordinal_spanId" or "__groundwork_ordinal_traceKey";
 
     // Groundwork's page executor fetches one extra row to determine continuation. FiniteLimit
     // and retained evidence counts remain the public page bound, not this native fetch ceiling.
@@ -1085,11 +1086,34 @@ public static class DiagnosticsNativePlanContract
             return true;
         }
         if (string.Equals(provider, "postgresql", StringComparison.Ordinal) &&
+            TryParsePostgreSqlPersistedOrdinalOrder(term, out ordered))
+            return true;
+        if (string.Equals(provider, "postgresql", StringComparison.Ordinal) &&
             TryParsePostgreSqlOrdinalOrder(term, out ordered))
             return true;
 
         ordered = default;
         return false;
+    }
+
+    private static bool TryParsePostgreSqlPersistedOrdinalOrder(
+        string term,
+        out RuntimeNativeOrderTerm? ordered)
+    {
+        var match = Regex.Match(
+            term,
+            @"^\(*\s*(?<column>__groundwork_ordinal_(?:id|spanId|traceKey))\s+COLLATE\s+C\s*\)*\s+(?<direction>ASC|DESC)(?:\s+NULLS\s+(?<nulls>FIRST|LAST))?$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (!match.Success || !TryParseSqlOrderDirection("postgresql", match, out var direction))
+        {
+            ordered = default;
+            return false;
+        }
+
+        ordered = new RuntimeNativeOrderTerm(
+            match.Groups["column"].Value,
+            direction);
+        return true;
     }
 
     private static bool TryParsePostgreSqlOrdinalOrder(
@@ -1107,7 +1131,7 @@ public static class DiagnosticsNativePlanContract
         }
 
         var actual = Regex.Replace(match.Groups["expression"].Value.Trim(), @"\s+", " ");
-        foreach (var column in new[] { "id", "idOrderKey", "traceKey", "spanId", "__groundwork_ordinal_id", "__groundwork_ordinal_spanId" })
+        foreach (var column in new[] { "id", "idOrderKey", "traceKey", "spanId", "__groundwork_ordinal_id", "__groundwork_ordinal_spanId", "__groundwork_ordinal_traceKey" })
         {
             var expected = Regex.Replace(PostgreSqlOrdinalExpression("(" + column + ")"), @"\s+", " ");
             if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))

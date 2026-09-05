@@ -55,6 +55,7 @@ public static class V2OpenTelemetryStorageSchema
 
     internal const string IdOrdinalIdentity = "__groundwork_ordinal_id";
     internal const string SpanIdOrdinalIdentity = "__groundwork_ordinal_spanId";
+    internal const string TraceKeyOrdinalIdentity = "__groundwork_ordinal_traceKey";
 
     internal const string TraceSummaryStartIndex = "elsa_otel_trace_summaries_start";
     internal const string SpanTraceDetailIndex = "elsa_otel_spans_trace_detail";
@@ -117,7 +118,7 @@ public static class V2OpenTelemetryStorageSchema
 
     public static StorageUnit CreateTraceSummaries() =>
         StorageUnit.Declare(TraceSummaryUnitId, "elsa_otel_trace_summaries_v3")
-            .String(TraceKey, 64, c => c.Required())
+            .String(TraceKey, 64, c => c.Required().OrdinalIdentity(TraceKeyOrdinalIdentity))
             .String(TraceId, V2OpenTelemetryCodec.MaximumTraceIdCodeUnits, c => c.Required())
             .String(TraceIdSearchKey, V2OpenTelemetryCodec.MaximumTraceIdSearchKeyCodeUnits, c => c.Required())
             .String(RootSpanId, 256)
@@ -134,8 +135,10 @@ public static class V2OpenTelemetryStorageSchema
                 .ElementSearchKey(PortableCollation.UnicodeOrdinalIgnoreCase, 512))
             .Json(Payload, c => c.Required())
             .Key(TraceKey)
-            .Index(TraceSummaryStartIndex, index =>
-                index.Descending(StartTime).Ascending(TraceKey))
+            .Index(TraceSummaryStartIndex, index => index
+                .UseOrdinalIdentities()
+                .Descending(StartTime)
+                .Ascending(TraceKey))
             .OptimisticConcurrency()
             .Scoped()
             .Build();
