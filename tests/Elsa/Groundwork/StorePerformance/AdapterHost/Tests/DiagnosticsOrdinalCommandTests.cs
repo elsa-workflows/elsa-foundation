@@ -25,16 +25,20 @@ public sealed class DiagnosticsOrdinalCommandTests(ITestOutputHelper output)
     {
         foreach (var provider in new[] { "sqlite", "postgresql", "sqlserver", "mongodb" })
         foreach (var route in new[]
-                 {
-                     "metrics-by-last-seen", "logs-by-last-seen",
-                     "trace-detail/spans-by-trace-key-start-id", "trace-detail/logs-by-trace-key-timestamp-id"
-                 })
+                {
+                    "resources-by-last-seen", "resources-by-status", "resources-by-service",
+                    "metrics-by-last-seen", "logs-by-last-seen",
+                    "trace-detail/spans-by-trace-key-start-id", "trace-detail/logs-by-trace-key-timestamp-id"
+                })
         {
             yield return [provider, route, false];
             if (route.StartsWith("trace-detail/", StringComparison.Ordinal))
                 yield return [provider, route, true];
         }
     }
+
+    public static IEnumerable<object[]> OrdinalRoutes() =>
+        Routes().Where(row => !((string)row[1]).StartsWith("resources-", StringComparison.Ordinal));
 
     [Theory]
     [MemberData(nameof(Routes))]
@@ -43,12 +47,15 @@ public sealed class DiagnosticsOrdinalCommandTests(ITestOutputHelper output)
         var specification = Specification(route);
         var command = Render(provider, specification, continuation);
         output.WriteLine(command);
-        Assert.Contains("__groundwork_ordinal_", command, StringComparison.Ordinal);
+        if (route.StartsWith("resources-", StringComparison.Ordinal))
+            Assert.DoesNotContain("__groundwork_ordinal_", command, StringComparison.Ordinal);
+        else
+            Assert.Contains("__groundwork_ordinal_", command, StringComparison.Ordinal);
         Validate(provider, specification, command);
     }
 
     [Theory]
-    [MemberData(nameof(Routes))]
+    [MemberData(nameof(OrdinalRoutes))]
     public void Physical_order_key_cannot_be_replaced_by_a_logical_or_unknown_column(string provider, string route, bool continuation)
     {
         var specification = Specification(route);
@@ -72,6 +79,52 @@ public sealed class DiagnosticsOrdinalCommandTests(ITestOutputHelper output)
             ["$set"] = new JsonObject { ["__groundwork_ordinal_id"] = "constant" }
         });
         Assert.Throws<PerformanceContractException>(() => Validate("mongodb", specification, command.ToJsonString()));
+    }
+
+    [Theory]
+    [InlineData("unknown-helper")]
+    [InlineData("payload-removal")]
+    [InlineData("helper-inclusion")]
+    [InlineData("additional-stage")]
+    public void Mongo_resource_helper_projection_must_remove_only_rendered_order_helpers(string mutation)
+    {
+        var specification = Specification("resources-by-last-seen");
+        var command = JsonNode.Parse(Render("mongodb", specification, false))!.AsObject();
+        var pipeline = command["pipeline"]!.AsArray();
+        var projection = pipeline
+            .Single(stage => stage!["$project"] is not null)!["$project"]!.AsObject();
+        switch (mutation)
+        {
+            case "unknown-helper":
+                projection["_groundwork_ordinal_unknown"] = 0;
+                break;
+            case "payload-removal":
+                projection["id"] = 0;
+                break;
+            case "helper-inclusion":
+                projection[projection.First().Key] = 1;
+                break;
+            case "additional-stage":
+                pipeline.Insert(pipeline.Count - 1, new JsonObject { ["$skip"] = 1 });
+                break;
+        }
+
+        Assert.Throws<PerformanceContractException>(() => Validate("mongodb", specification, command.ToJsonString()));
+    }
+
+    [Fact]
+    public void Mongo_resource_helper_projection_cannot_repeat_one_helper_in_place_of_another()
+    {
+        var specification = Specification("resources-by-last-seen");
+        var command = JsonNode.Parse(Render("mongodb", specification, false))!.AsObject();
+        var projection = command["pipeline"]!.AsArray()
+            .Single(stage => stage!["$project"] is not null)!["$project"]!.AsObject();
+        Assert.True(projection.Count > 1);
+        var repeatedField = JsonSerializer.Serialize(projection.First().Key) + ":0";
+        var duplicateProjection = "{" + string.Join(",", Enumerable.Repeat(repeatedField, projection.Count)) + "}";
+        var malformed = command.ToJsonString().Replace(projection.ToJsonString(), duplicateProjection, StringComparison.Ordinal);
+
+        Assert.Throws<PerformanceContractException>(() => Validate("mongodb", specification, malformed));
     }
 
     [Theory]
@@ -144,7 +197,11 @@ public sealed class DiagnosticsOrdinalCommandTests(ITestOutputHelper output)
         }
 
         Predicate predicate = specification.PredicateColumn is { } predicateColumn
-            ? new Predicate.Equal(Column(predicateColumn), QueryConstant.Of(Column(predicateColumn), new string('a', 64)))
+            ? new Predicate.Equal(
+                Column(predicateColumn),
+                QueryConstant.Of(
+                    Column(predicateColumn),
+                    Column(predicateColumn).Type == QueryType.Int64 ? 1L : new string('a', 64)))
             : Predicate.AlwaysTrue.Instance;
         if (provider != "mongodb")
         {
@@ -153,9 +210,10 @@ public sealed class DiagnosticsOrdinalCommandTests(ITestOutputHelper output)
             predicate = specification.PredicateColumn is null ? scopePredicate : new Predicate.And([scopePredicate, predicate]);
         }
         var request = new QueryRequest(table, predicate,
-            specification.EffectiveOrdering.Select(term => new OrderTerm(Column(term.Column),
+            specification.EffectiveOrdering.Select((term, index) => new OrderTerm(Column(term.Column),
                 term.Direction == RuntimeNativeOrderDirection.Ascending ? OrderDirection.Ascending : OrderDirection.Descending,
-                NullOrder.Last)).ToImmutableArray(), Projection.All, Paging.Keyset(specification.FiniteLimit));
+                index == 0 && specification.Descending ? NullOrder.First : NullOrder.Last)).ToImmutableArray(),
+            Projection.All, Paging.Keyset(specification.FiniteLimit));
         var execution = QueryRequestExecution.ForProviderPage(request, options);
         if (continuation)
         {
@@ -228,7 +286,8 @@ public sealed class DiagnosticsOrdinalCommandTests(ITestOutputHelper output)
             else
             {
                 var evidence = new NativeRouteEvidence(specification.RouteIdentity, "route.json", ArtifactStore.HashFile(path),
-                    "index-search", index, specification.PhysicalCardinality, provider != "mongodb", false,
+                    "index-search", index, specification.PhysicalCardinality, provider != "mongodb",
+                    specification.PredicateColumn is not null,
                     specification.FiniteLimit, specification.FiniteLimit);
                 DiagnosticsNativePlanContract.ValidateEnvelope(provider, DiagnosticsNativePlanContract.GroundworkAdapter, evidence, path);
             }

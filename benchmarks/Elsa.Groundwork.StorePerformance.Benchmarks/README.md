@@ -32,6 +32,11 @@ classified as `bounded-scan-sort`. That classification is rejected for any other
 incomplete ordering, or for any spill/materialization evidence; it does not weaken the 100,000-row
 stream gates. SQLite retains the stricter index-search requirement proven by its native plan.
 
+MongoDB command admission permits the renderer's exact ordering-helper removal projection between
+sort and limit. It requires every rendered helper to be removed and rejects unknown helper fields,
+payload removal, helper inclusion, and additional post-sort stages. This is a released-renderer
+compatibility rule, not permission for arbitrary post-sort transformations.
+
 Blocked diagnostics captures retain a separate `*.blocked-capture.json` diagnostic document with
 route, phase, stable reason code, and hashes of provider-normalized rejected plans. These files are
 failure diagnostics, not accepted native-plan evidence. Durability timeout messages distinguish
