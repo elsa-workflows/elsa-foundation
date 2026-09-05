@@ -271,6 +271,11 @@ static async Task<int> CapturePlan(string[] args)
         var diagnosticsEvidence = NativePlanEvidenceStaging.Read(
             ArtifactStore.EvidencePath(outputDirectory, request.NativePlanEvidenceReference));
         Console.WriteLine($"native-plan-routes={diagnosticsEvidence.Routes.Count}; trace-detail-constituents={(diagnosticsEvidence.TraceDetailConstituents ?? []).Count}; blocked-routes={(diagnosticsEvidence.BlockedRoutes ?? []).Count}");
+        var blockedDiagnosticsPath = Path.Combine(
+            outputDirectory,
+            $"diagnostics.{request.Provider}.{request.MeasurementSetId}.blocked-capture.json");
+        if (File.Exists(blockedDiagnosticsPath))
+            Console.WriteLine($"blocked-capture-diagnostics-sha256={NativePlanEvidenceStaging.Sha256(blockedDiagnosticsPath)}");
         return 0;
     }
 

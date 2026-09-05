@@ -576,6 +576,7 @@ document = {
     "SchemaVersion": 2,
     **{name: value for name, value in request.items() if name != "NativePlanIdentity"},
     "Identity": request["NativePlanIdentity"],
+    "RouteContract": "provider-native-routes",
     "Routes": [],
     "BlockedRoutes": [],
     "TraceDetailConstituents": [],
@@ -652,6 +653,40 @@ with tempfile.TemporaryDirectory() as directory:
 
     path.write_text(json.dumps(document), encoding="utf-8")
     validate_evidence(path, request, registration, timing=True)
+
+    for invalid_contract in ("provider-native-routes-blocked", "unknown", None):
+        invalid_document = json.loads(json.dumps(document))
+        invalid_document["RouteContract"] = invalid_contract
+        path.write_text(json.dumps(invalid_document), encoding="utf-8")
+        try:
+            validate_evidence(path, request, registration, timing=False)
+        except ValueError as exception:
+            assert "route contract" in str(exception), exception
+        else:
+            raise AssertionError("standalone correctness accepted an invalid route contract")
+
+    blocked_document = json.loads(json.dumps(document))
+    blocked_document["RouteContract"] = "provider-native-routes-blocked"
+    blocked_document["TraceDetailConstituents"] = []
+    blocked_document["BlockedRoutes"] = ["trace-detail"]
+    path.write_text(json.dumps(blocked_document), encoding="utf-8")
+    validate_evidence(path, request, registration, timing=False)
+    try:
+        validate_evidence(path, request, registration, timing=False, require_complete=True)
+    except ValueError as exception:
+        assert "blocked or incomplete" in str(exception), exception
+    else:
+        raise AssertionError("workflow completeness opt-in accepted blocked native evidence")
+
+    contradictory = json.loads(json.dumps(blocked_document))
+    contradictory["RouteContract"] = "provider-native-routes"
+    path.write_text(json.dumps(contradictory), encoding="utf-8")
+    try:
+        validate_evidence(path, request, registration, timing=False)
+    except ValueError as exception:
+        assert "declares blocked routes" in str(exception), exception
+    else:
+        raise AssertionError("standalone correctness accepted contradictory native evidence")
 
     reserved_plan = Path(directory) / "Gate.v1.json"
     reserved_plan.write_text('{"plan":"reserved"}', encoding="utf-8")

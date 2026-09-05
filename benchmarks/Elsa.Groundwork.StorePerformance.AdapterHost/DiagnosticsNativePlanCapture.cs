@@ -50,17 +50,18 @@ internal static class DiagnosticsNativePlanCapture
         await ExplainCaptureLock.WaitAsync(cancellationToken);
         try
         {
-            var previousFlag = Environment.GetEnvironmentVariable("GW_EXPLAIN_ASSERT");
-            var previousDirectory = Environment.GetEnvironmentVariable("GW_EXPLAIN_ARTIFACT_DIR");
             var explainDirectory = Path.Combine(Path.GetTempPath(), $"groundwork-diagnostics-explain-{request.Provider}-{request.MeasurementSetId}-{Guid.NewGuid():N}");
-            Directory.CreateDirectory(explainDirectory);
-            Environment.SetEnvironmentVariable("GW_EXPLAIN_ASSERT", "1");
-            Environment.SetEnvironmentVariable("GW_EXPLAIN_ARTIFACT_DIR", explainDirectory);
-            try
-            {
+            return await ExecuteExplainCaptureAsync(
+                explainDirectory,
+                outputDirectory,
+                request.Provider,
+                request.MeasurementSetId,
+                async () =>
+                {
                 var routes = new List<NativeRouteEvidence>(DiagnosticsDurableHistoryWorkload.NativeRouteLimits.Count);
                 var traceDetailConstituents = new List<DiagnosticsTraceDetailConstituentEvidence>();
                 var blockedRoutes = new List<string>();
+                var blockedRouteDiagnostics = new List<DiagnosticsBlockedRouteEvidence>();
                 foreach (var (route, limit) in DiagnosticsDurableHistoryWorkload.NativeRouteLimits)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -69,6 +70,7 @@ internal static class DiagnosticsNativePlanCapture
                     if (route == "trace-detail")
                     {
                         adapter.CommandObserver.ClearCommands();
+                        var beforeTraceDetail = Directory.EnumerateFiles(explainDirectory).ToHashSet(StringComparer.Ordinal);
                         try
                         {
                             traceDetailConstituents.AddRange(await CaptureTraceDetailConstituentsAsync(
@@ -82,13 +84,36 @@ internal static class DiagnosticsNativePlanCapture
                         catch (PerformanceContractException exception) when (DiagnosticsNativePlanContract.IsExpectedBlockedPlanFailure(exception))
                         {
                             blockedRoutes.Add(route);
+                            blockedRouteDiagnostics.Add(CreateBlockedRouteDiagnostic(
+                                route,
+                                "trace-detail-plan-validation",
+                                DiagnosticsNativePlanContract.BlockedPlanReasonCode(exception),
+                                PreserveBlockedExplainArtifacts(
+                                    explainDirectory,
+                                    beforeTraceDetail,
+                                    outputDirectory,
+                                    request.Provider,
+                                    request.MeasurementSetId,
+                                    route)));
                         }
-                        catch (ExplainAssertionException)
+                        catch (ExplainAssertionException exception)
                         {
                             // Groundwork's assertion mode has already retained the provider artifact;
                             // an unchosen index/scan is an honest blocked composite, never evidence that
                             // the public call used a bounded native plan.
                             blockedRoutes.Add(route);
+                            blockedRouteDiagnostics.Add(CreateBlockedRouteDiagnostic(
+                                route,
+                                "trace-detail-plan-assertion",
+                                "native-plan.assertion-mismatch",
+                                PreserveBlockedExplainArtifacts(
+                                    explainDirectory,
+                                    beforeTraceDetail,
+                                    outputDirectory,
+                                    request.Provider,
+                                    request.MeasurementSetId,
+                                    route,
+                                    exception.ArtifactPath)));
                         }
                         continue;
                     }
@@ -100,6 +125,11 @@ internal static class DiagnosticsNativePlanCapture
                     if (string.IsNullOrWhiteSpace(specification.IndexName))
                     {
                         blockedRoutes.Add(route);
+                        blockedRouteDiagnostics.Add(CreateBlockedRouteDiagnostic(
+                            route,
+                            "route-admission",
+                            "native-plan.missing-index-declaration",
+                            []));
                         continue;
                     }
 
@@ -187,6 +217,18 @@ internal static class DiagnosticsNativePlanCapture
                         catch (PerformanceContractException exception) when (DiagnosticsNativePlanContract.IsExpectedBlockedPlanFailure(exception))
                         {
                             blockedRoutes.Add(route);
+                            blockedRouteDiagnostics.Add(CreateBlockedRouteDiagnostic(
+                                route,
+                                "route-plan-validation",
+                                DiagnosticsNativePlanContract.BlockedPlanReasonCode(exception),
+                                PreserveBlockedExplainArtifacts(
+                                    explainDirectory,
+                                    before,
+                                    outputDirectory,
+                                    request.Provider,
+                                    request.MeasurementSetId,
+                                    route,
+                                    nativePath)));
                             continue;
                         }
 
@@ -209,25 +251,12 @@ internal static class DiagnosticsNativePlanCapture
                 var routeContract = blockedRoutes.Count == 0
                     ? "provider-native-routes"
                     : DiagnosticsNativePlanContract.BlockedRouteContract;
+                if (blockedRouteDiagnostics.Count != 0)
+                    NativePlanEvidenceStaging.WriteBlockedCapture(outputDirectory, request, blockedRouteDiagnostics);
                 return NativePlanEvidenceStaging.Write(
                     outputDirectory,
                     CreateDocument(request, observed, routes, routeContract, blockedRoutes, traceDetailConstituents: traceDetailConstituents));
-            }
-            catch (ExplainAssertionException)
-            {
-                PreserveFailedExplainArtifacts(
-                    explainDirectory,
-                    outputDirectory,
-                    request.Provider,
-                    request.MeasurementSetId);
-                throw;
-            }
-            finally
-            {
-                Environment.SetEnvironmentVariable("GW_EXPLAIN_ASSERT", previousFlag);
-                Environment.SetEnvironmentVariable("GW_EXPLAIN_ARTIFACT_DIR", previousDirectory);
-                try { if (Directory.Exists(explainDirectory)) Directory.Delete(explainDirectory, recursive: true); } catch { }
-            }
+                });
         }
         finally
         {
@@ -387,17 +416,166 @@ internal static class DiagnosticsNativePlanCapture
         Directory.CreateDirectory(outputDirectory);
         var extension = IamNativePlanParser.RawPlanExtension(provider);
         var retained = new List<string>();
+        var rejected = 0;
         foreach (var source in Directory.EnumerateFiles(explainDirectory, $"*{extension}")
-                     .Order(StringComparer.Ordinal))
+                     .Order(StringComparer.Ordinal).ToArray())
         {
             var reference = ArtifactStore.RawPlanName(
                 $"diagnostics.{provider}.{measurementSetId}.failed-explain-{retained.Count + 1}{extension}");
-            File.Copy(source, Path.Combine(outputDirectory, reference), overwrite: true);
-            retained.Add(reference);
+            try
+            {
+                PreserveSafeExplainArtifact(source, Path.Combine(outputDirectory, reference), provider);
+                retained.Add(reference);
+            }
+            catch (Exception exception) when (IsExplainRetentionFailure(exception))
+            {
+                rejected++;
+            }
         }
 
+        if (rejected != 0)
+            Console.Error.WriteLine($"native-plan.failed-explain-retention-rejected; count={rejected}");
         return retained;
     }
+
+    internal static async Task<T> ExecuteExplainCaptureAsync<T>(
+        string explainDirectory,
+        string outputDirectory,
+        string provider,
+        string measurementSetId,
+        Func<Task<T>> capture)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(explainDirectory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(provider);
+        ArgumentException.ThrowIfNullOrWhiteSpace(measurementSetId);
+        ArgumentNullException.ThrowIfNull(capture);
+
+        var previousFlag = Environment.GetEnvironmentVariable("GW_EXPLAIN_ASSERT");
+        var previousDirectory = Environment.GetEnvironmentVariable("GW_EXPLAIN_ARTIFACT_DIR");
+        Directory.CreateDirectory(explainDirectory);
+        Environment.SetEnvironmentVariable("GW_EXPLAIN_ASSERT", "1");
+        Environment.SetEnvironmentVariable("GW_EXPLAIN_ARTIFACT_DIR", explainDirectory);
+        try
+        {
+            return await capture();
+        }
+        catch (Exception exception) when (exception is ExplainAssertionException or PerformanceContractException)
+        {
+            try
+            {
+                PreserveFailedExplainArtifacts(explainDirectory, outputDirectory, provider, measurementSetId);
+            }
+            catch (Exception retentionFailure) when (retentionFailure is IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine("native-plan.failed-explain-retention-unavailable");
+            }
+            throw;
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GW_EXPLAIN_ASSERT", previousFlag);
+            Environment.SetEnvironmentVariable("GW_EXPLAIN_ARTIFACT_DIR", previousDirectory);
+            try { if (Directory.Exists(explainDirectory)) Directory.Delete(explainDirectory, recursive: true); } catch { }
+        }
+    }
+
+    internal static IReadOnlyList<DiagnosticsBlockedRawPlanEvidence> PreserveBlockedExplainArtifacts(
+        string explainDirectory,
+        IReadOnlySet<string> before,
+        string outputDirectory,
+        string provider,
+        string measurementSetId,
+        string route,
+        string? explicitArtifactPath = null)
+    {
+        if (!Directory.Exists(explainDirectory))
+            return [];
+
+        var fullDirectory = Path.GetFullPath(explainDirectory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var pathComparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        var extension = IamNativePlanParser.RawPlanExtension(provider);
+        var candidates = Directory.EnumerateFiles(explainDirectory, $"*{extension}")
+            .Where(path => !before.Any(previous => string.Equals(previous, path, pathComparison)))
+            .ToList();
+        if (!string.IsNullOrWhiteSpace(explicitArtifactPath))
+        {
+            try
+            {
+                var fullPath = Path.GetFullPath(explicitArtifactPath);
+                if (fullPath.StartsWith(fullDirectory, pathComparison) &&
+                    File.Exists(fullPath) &&
+                    fullPath.EndsWith(extension, StringComparison.Ordinal) &&
+                    !before.Any(path => string.Equals(path, fullPath, pathComparison)))
+                    candidates.Add(fullPath);
+            }
+            catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
+            {
+                // Provider assertion paths are advisory; malformed paths must not hide the original
+                // assertion failure or prevent other newly emitted raw plans from being retained.
+            }
+        }
+
+        Directory.CreateDirectory(outputDirectory);
+        var slug = route.Replace("/", "-", StringComparison.Ordinal);
+        var retained = new List<DiagnosticsBlockedRawPlanEvidence>();
+        var rejected = 0;
+        foreach (var source in candidates.Distinct(pathComparison == StringComparison.OrdinalIgnoreCase
+                     ? StringComparer.OrdinalIgnoreCase
+                     : StringComparer.Ordinal).Order(StringComparer.Ordinal))
+        {
+            var reference = ArtifactStore.RawPlanName(
+                $"diagnostics.{provider}.{measurementSetId}.blocked-{slug}-{retained.Count + 1}{extension}");
+            var destination = Path.Combine(outputDirectory, reference);
+            try
+            {
+                PreserveSafeExplainArtifact(source, destination, provider);
+                retained.Add(new DiagnosticsBlockedRawPlanEvidence(reference, ArtifactStore.HashFile(destination)));
+            }
+            catch (Exception exception) when (IsExplainRetentionFailure(exception))
+            {
+                rejected++;
+            }
+        }
+
+        if (rejected != 0)
+            Console.Error.WriteLine($"native-plan.blocked-retention-rejected; count={rejected}");
+        return retained;
+    }
+
+    private static bool IsExplainRetentionFailure(Exception exception) =>
+        exception is PerformanceContractException or IOException or UnauthorizedAccessException;
+
+    private static void PreserveSafeExplainArtifact(string source, string destination, string provider)
+    {
+        if (new FileInfo(source).Length is <= 0 or > 16 * 1024 * 1024)
+            throw new PerformanceContractException("native-plan.failure-artifact-size-invalid");
+
+        var normalized = IamNativePlanParser.NormalizeForArtifact(provider, File.ReadAllText(source));
+        // Validate outside the upload directory. A failed safety check must never leave the rejected
+        // contents in an artifact picked up by the workflow's always-on failure upload.
+        var staging = Directory.CreateTempSubdirectory("groundwork-safe-explain-");
+        try
+        {
+            var candidate = Path.Combine(staging.FullName, "plan" + IamNativePlanParser.RawPlanExtension(provider));
+            File.WriteAllText(candidate, normalized);
+            ArtifactStore.ValidateRawPlanFile(candidate);
+            File.Copy(candidate, destination, overwrite: true);
+        }
+        finally
+        {
+            staging.Delete(recursive: true);
+        }
+    }
+
+    private static DiagnosticsBlockedRouteEvidence CreateBlockedRouteDiagnostic(
+        string route,
+        string phase,
+        string reasonCode,
+        IReadOnlyList<DiagnosticsBlockedRawPlanEvidence> rawPlans) =>
+        new(route, phase, reasonCode, rawPlans);
 
     private static async Task<IReadOnlyList<DiagnosticsTraceDetailConstituentEvidence>> CaptureTraceDetailConstituentsAsync(
         DiagnosticsDurableHistoryClient client,

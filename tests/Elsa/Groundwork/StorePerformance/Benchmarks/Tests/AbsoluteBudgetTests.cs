@@ -86,6 +86,33 @@ public sealed class AbsoluteBudgetTests
     }
 
     [Fact]
+    public void Standalone_correctness_rejects_a_complete_contract_with_blocked_routes()
+    {
+        using var fixture = DiagnosticsArtifactFixture.Create();
+        var artifact = ArtifactStore.LoadProcessArtifactsWithoutManifest(fixture.Directory).First().Artifact;
+        var workload = WorkloadCatalog.Load(Repository.Root()).Workloads[artifact.Request.WorkloadId];
+        ArtifactAdmission.ValidateCorrectness(workload, artifact.Request, artifact.Correctness, fixture.Directory);
+
+        var path = ArtifactStore.EvidencePath(fixture.Directory, artifact.Request.NativePlanEvidenceReference);
+        var document = JsonSerializer.Deserialize<NativePlanEvidenceDocument>(File.ReadAllText(path), ArtifactStore.JsonOptions)!;
+        File.WriteAllText(path, JsonSerializer.Serialize(document with { RouteContract = "provider-native-routes" }, ArtifactStore.JsonOptions));
+        var hash = ArtifactStore.HashFile(path);
+        var request = artifact.Request with { NativePlanContentSha256 = hash };
+        var correctness = artifact.Correctness with
+        {
+            NativePlan = artifact.Correctness.NativePlan! with
+            {
+                RouteContract = "provider-native-routes",
+                ContentSha256 = hash
+            }
+        };
+
+        var exception = Assert.Throws<PerformanceContractException>(() =>
+            ArtifactAdmission.ValidateCorrectness(workload, request, correctness, fixture.Directory));
+        Assert.Contains("cannot declare blocked routes", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Absolute_gate_uses_only_the_measured_target_and_requires_every_operation_budget()
     {
         using var fixture = ArtifactFixture.Create();

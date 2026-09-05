@@ -54,6 +54,56 @@ internal static class NativePlanEvidenceStaging
     }
 
     /// <summary>
+    /// Retains a value-free explanation of a blocked diagnostics capture beside its incomplete native-plan
+    /// envelope. It is intentionally a separate artifact: blocked routes must remain visible to operators
+    /// without becoming part of the accepted evidence contract consumed by correctness or measurement.
+    /// </summary>
+    public static string WriteBlockedCapture(
+        string directory,
+        RunRequest request,
+        IReadOnlyList<DiagnosticsBlockedRouteEvidence> routes)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(routes);
+        if (routes.Count == 0)
+            throw new ArgumentException("At least one blocked route is required.", nameof(routes));
+
+        foreach (var route in routes)
+        {
+            if (string.IsNullOrWhiteSpace(route.RouteIdentity) ||
+                string.IsNullOrWhiteSpace(route.FailurePhase) ||
+                string.IsNullOrWhiteSpace(route.ReasonCode) ||
+                route.RawPlans is null)
+                throw new PerformanceContractException("Blocked diagnostics evidence requires a route identity, failure phase, reason code, and raw-plan list.");
+            foreach (var rawPlan in route.RawPlans)
+            {
+                var rawReference = ArtifactStore.RawPlanName(rawPlan.Reference);
+                var path = Path.Combine(directory, rawReference);
+                if (!File.Exists(path) || Sha256(path) != rawPlan.Sha256)
+                    throw new PerformanceContractException(
+                        $"Blocked diagnostics raw-plan artifact '{rawReference}' is missing or does not match its digest.");
+                ArtifactStore.ValidateRawPlanFile(path);
+            }
+        }
+
+        var document = new DiagnosticsBlockedCaptureDocument(
+            SchemaVersion: 1,
+            Provider: request.Provider,
+            Adapter: request.Adapter,
+            WorkloadId: request.WorkloadId,
+            WorkloadVersion: request.WorkloadVersion,
+            MeasurementSetId: request.MeasurementSetId,
+            Routes: routes);
+        ArtifactSafety.Validate(document);
+        Directory.CreateDirectory(directory);
+        var reference = ArtifactStore.EvidenceName(
+            $"diagnostics.{request.Provider}.{request.MeasurementSetId}.blocked-capture.json");
+        var pathToWrite = Path.Combine(directory, reference);
+        File.WriteAllText(pathToWrite, JsonSerializer.Serialize(document, ArtifactStore.JsonOptions));
+        return Sha256(pathToWrite);
+    }
+
+    /// <summary>
     /// Creates the checkpoint contract's provenance document after a live provider probe. The empty route
     /// list is not an omitted capture: the frozen workload declares no native routes, so this document
     /// records that contract explicitly and still binds provider identity, topology, configuration and

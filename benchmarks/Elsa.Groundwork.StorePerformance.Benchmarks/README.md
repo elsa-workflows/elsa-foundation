@@ -37,6 +37,20 @@ sort and limit. It requires every rendered helper to be removed and rejects unkn
 payload removal, helper inclusion, and additional post-sort stages. This is a released-renderer
 compatibility rule, not permission for arbitrary post-sort transformations.
 
+Blocked diagnostics captures retain a separate `*.blocked-capture.json` diagnostic document with
+route, phase, stable reason code, and hashes of provider-normalized rejected plans. These files are
+failure diagnostics, not accepted native-plan evidence. Durability timeout messages distinguish
+counts not yet visible, a diagnostics read in progress, a trace read in progress, and a missing trace.
+Both blocked-route and outer-failure paths normalize and safety-check retained plans before placing
+them in the upload directory. Malformed, oversized, or unsafe files are omitted with a value-free
+rejection count; they do not replace the original capture exception or turn blocked evidence into an
+accepted native-plan claim.
+
+The performance workflow passes `--require-complete-native-plan` to the operator runner's
+`correctness` command, refusing incomplete capture before costly verification. The flag is opt-in:
+standalone correctness remains usable with a blocked capture for diagnosis, while measurement and
+verdict gates still require complete admitted evidence.
+
 `matrix <scale>` executes one untimed adapter-host warm-up process followed by three independent measured
 adapter-host processes. A measured artifact carries the frozen seed/input fingerprint, provider-native plan
 identity/evidence reference/content digest, provider server version/topology/material settings, an opaque
