@@ -1291,6 +1291,163 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             fixture.Path);
     }
 
+    [Fact]
+    public void Mongo_captured_status_only_ixscan_admits_the_frozen_status_resource_route()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-status");
+        var nativePlan = JsonNode.Parse(ReadMongoExplainFixture(
+            "mongodb-resources-by-status-explain.json"))!.AsObject();
+        var cursor = nativePlan["stages"]!.AsArray()
+            .Single(stage => stage!["$cursor"] is not null)!["$cursor"]!.AsObject();
+        var winningPlan = cursor["queryPlanner"]!["winningPlan"]!.AsObject();
+        var inputStage = winningPlan["inputStage"]!.AsObject();
+        var sortStage = nativePlan["stages"]!.AsArray()
+            .Single(stage => stage!["$sort"] is not null)!["$sort"]!.AsObject();
+
+        Assert.Equal("FETCH", winningPlan["stage"]!.GetValue<string>());
+        Assert.Equal("IXSCAN", inputStage["stage"]!.GetValue<string>());
+        Assert.Equal("elsa_otel_resources_status", inputStage["indexName"]!.GetValue<string>());
+        Assert.Equal(new JsonObject { ["status"] = 1 }.ToJsonString(), inputStage["keyPattern"]!.ToJsonString());
+        Assert.Equal(128, cursor["executionStats"]!["nReturned"]!.GetValue<int>());
+        Assert.Equal(128, sortStage["limit"]!.GetValue<int>());
+        Assert.False(nativePlan["stages"]!.AsArray()
+            .Single(stage => stage!["$sort"] is not null)!["usedDisk"]!.GetValue<bool>());
+        Assert.Equal(0, nativePlan["stages"]!.AsArray()
+            .Single(stage => stage!["$sort"] is not null)!["spills"]!.GetValue<int>());
+
+        var serializedPlan = nativePlan.ToJsonString();
+        var command = nativePlan["command"]!.ToJsonString();
+        Assert.Equal(
+            DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+            DiagnosticsNativePlanContract.ClassifyPlan(
+                "mongodb",
+                DiagnosticsNativePlanContract.GroundworkAdapter,
+                specification,
+                serializedPlan));
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            command,
+            serializedPlan,
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification);
+
+        Assert.Equal(128, fixture.Route.PhysicalCardinality);
+        Assert.Equal(127, fixture.Route.FiniteLimit);
+        Assert.Equal(127, fixture.Route.MaterializedCandidateCount);
+        DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path);
+    }
+
+    [Theory]
+    [InlineData("resources-by-last-seen")]
+    [InlineData("resources-by-service")]
+    public void Mongo_captured_status_only_ixscan_is_not_admitted_for_other_resource_routes(string route)
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            route);
+        var nativePlan = ReadMongoExplainFixture("mongodb-resources-by-status-explain.json");
+
+        Assert.Equal(
+            DiagnosticsNativePlanContract.IndexSearchPlanClassification,
+            DiagnosticsNativePlanContract.ClassifyPlan(
+                "mongodb",
+                DiagnosticsNativePlanContract.GroundworkAdapter,
+                specification,
+                nativePlan));
+    }
+
+    [Theory]
+    [InlineData("wrong-index")]
+    [InlineData("wrong-key")]
+    [InlineData("wrong-order")]
+    [InlineData("wrong-limit")]
+    [InlineData("spill")]
+    public void Mongo_captured_status_only_ixscan_rejects_mutated_shape(string mutation)
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-status");
+        var nativePlan = JsonNode.Parse(ReadMongoExplainFixture(
+            "mongodb-resources-by-status-explain.json"))!.AsObject();
+        var cursor = nativePlan["stages"]!.AsArray()
+            .Single(stage => stage!["$cursor"] is not null)!["$cursor"]!.AsObject();
+        var inputStage = cursor["queryPlanner"]!["winningPlan"]!["inputStage"]!.AsObject();
+        var sortStage = nativePlan["stages"]!.AsArray()
+            .Single(stage => stage!["$sort"] is not null)!.AsObject();
+
+        switch (mutation)
+        {
+            case "wrong-index":
+                inputStage["indexName"] = "elsa_otel_resources_status_last_seen";
+                break;
+            case "wrong-key":
+                inputStage["keyPattern"] = new JsonObject { ["status"] = 1, ["lastSeen"] = -1 };
+                break;
+            case "wrong-order":
+                sortStage["$sort"]!["sortKey"]!["lastSeen"] = 1;
+                break;
+            case "wrong-limit":
+                sortStage["$sort"]!["limit"] = 127;
+                break;
+            case "spill":
+                sortStage["usedDisk"] = true;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(mutation), mutation, null);
+        }
+
+        var serializedPlan = nativePlan.ToJsonString();
+        Assert.Equal(
+            DiagnosticsNativePlanContract.IndexSearchPlanClassification,
+            DiagnosticsNativePlanContract.ClassifyPlan(
+                "mongodb",
+                DiagnosticsNativePlanContract.GroundworkAdapter,
+                specification,
+                serializedPlan));
+        AssertBoundedCatalogRejected(
+            "mongodb",
+            serializedPlan,
+            specification.RouteIdentity,
+            nativePlan["command"]!.ToJsonString());
+    }
+
+    [Theory]
+    [InlineData("physical-cardinality")]
+    [InlineData("public-limit")]
+    [InlineData("materialized-count")]
+    public void Mongo_captured_status_only_ixscan_rejects_unbound_resource_counts(string mutation)
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-status");
+        var nativePlan = ReadMongoExplainFixture("mongodb-resources-by-status-explain.json");
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            JsonNode.Parse(nativePlan)!["command"]!.ToJsonString(),
+            nativePlan,
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification);
+        var route = mutation switch
+        {
+            "physical-cardinality" => fixture.Route with { PhysicalCardinality = 127 },
+            "public-limit" => fixture.Route with { FiniteLimit = 128 },
+            "materialized-count" => fixture.Route with { MaterializedCandidateCount = 128 },
+            _ => throw new ArgumentOutOfRangeException(nameof(mutation), mutation, null)
+        };
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb",
+            fixture.Adapter,
+            route,
+            fixture.Path));
+    }
+
     [Theory]
     [InlineData("resources-by-last-seen")]
     [InlineData("resources-by-status")]

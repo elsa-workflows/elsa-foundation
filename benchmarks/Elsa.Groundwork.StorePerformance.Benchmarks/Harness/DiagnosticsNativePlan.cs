@@ -81,6 +81,7 @@ public static partial class DiagnosticsNativePlanContract
     internal const string BoundedCatalogScanSortPlanClassification = "bounded-scan-sort";
     private const int BoundedResourceCardinality = 128;
     private const int BoundedResourceLimit = 127;
+    private const string MongoStatusOnlyResourceIndex = "elsa_otel_resources_status";
     public const string GroundworkAdapter = "groundwork-v2";
     public const string EfAdapter = "ef-diagnostics-oracle";
     public const string EfCorrectnessOnlyRouteContract = "ef-correctness-only-unbounded-resource-routes";
@@ -2680,7 +2681,6 @@ public static partial class DiagnosticsNativePlanContract
             !string.Equals(indexStage.GetString(), "IXSCAN", StringComparison.OrdinalIgnoreCase) ||
             !inputStage.TryGetProperty("indexName", out var indexName) ||
             indexName.ValueKind != JsonValueKind.String ||
-            !string.Equals(indexName.GetString(), ExpectedPhysicalIndexName("mongodb", specification), StringComparison.Ordinal) ||
             !inputStage.TryGetProperty("direction", out var direction) ||
             direction.ValueKind != JsonValueKind.String ||
             !string.Equals(direction.GetString(), "forward", StringComparison.OrdinalIgnoreCase) ||
@@ -2688,9 +2688,29 @@ public static partial class DiagnosticsNativePlanContract
             keyPattern.ValueKind != JsonValueKind.Object)
             return false;
 
+        var isExpectedCompoundIndex = string.Equals(
+            indexName.GetString(),
+            ExpectedPhysicalIndexName("mongodb", specification),
+            StringComparison.Ordinal);
+        var isCapturedStatusOnlyIndex = IsMongoCapturedStatusOnlyResourceIndex(
+            inputStage,
+            specification);
+        if (!isExpectedCompoundIndex && !isCapturedStatusOnlyIndex)
+            return false;
+
         foreach (var propertyName in new[] { "isMultiKey", "isSparse", "isPartial" })
             if (!inputStage.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.False)
                 return false;
+
+        if (isCapturedStatusOnlyIndex)
+        {
+            var statusKey = keyPattern.EnumerateObject().ToArray();
+            return statusKey.Length == 1 &&
+                   string.Equals(statusKey[0].Name, "status", StringComparison.Ordinal) &&
+                   statusKey[0].Value.ValueKind == JsonValueKind.Number &&
+                   statusKey[0].Value.TryGetInt32(out var statusDirection) &&
+                   statusDirection == 1;
+        }
 
         var predicateColumns = specification.PredicateColumn is null
             ? Enumerable.Empty<string>()
@@ -2707,6 +2727,19 @@ public static partial class DiagnosticsNativePlanContract
                    pair.First.Value.TryGetInt32(out var directionValue) &&
                    directionValue == pair.Second.Direction);
     }
+
+    /// <summary>MongoDB's captured diagnostics status route can select its existing status-only
+    /// prefilter index. This is not a replacement for the declared compound index: only the frozen
+    /// 128-row resource-status workload may use it, and the bounded pipeline below still proves the
+    /// complete deterministic ordering, native lookahead limit, and no-spill requirement.</summary>
+    private static bool IsMongoCapturedStatusOnlyResourceIndex(
+        JsonElement inputStage,
+        DiagnosticsNativeRouteSpec specification) =>
+        IsBoundedResourceRoute("mongodb", GroundworkAdapter, specification) &&
+        string.Equals(specification.RouteIdentity, "resources-by-status", StringComparison.Ordinal) &&
+        inputStage.TryGetProperty("indexName", out var indexName) &&
+        indexName.ValueKind == JsonValueKind.String &&
+        string.Equals(indexName.GetString(), MongoStatusOnlyResourceIndex, StringComparison.Ordinal);
 
     private static bool ValidateMongoBoundedExplainPipeline(
         IReadOnlyList<JsonElement> stages,
