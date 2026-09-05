@@ -785,7 +785,7 @@ public sealed class GroundworkOpenTelemetryStore :
         return services.OrderBy(value => value, StringComparer.Ordinal).ToArray();
     }
 
-    private static QueryMaterializedResult Query(
+    private QueryMaterializedResult Query(
         IStorageSession session,
         IEnumerable<Predicate> predicates,
         ColumnRef orderColumn,
@@ -795,7 +795,7 @@ public sealed class GroundworkOpenTelemetryStore :
         params ColumnRef[] tieBreakers) =>
         QueryPage(session, predicates, orderColumn, take, descending, selectedIndex, null, tieBreakers);
 
-    private static QueryMaterializedResult QueryPage(
+    private QueryMaterializedResult QueryPage(
         IStorageSession session,
         IEnumerable<Predicate> predicates,
         ColumnRef orderColumn,
@@ -816,10 +816,12 @@ public sealed class GroundworkOpenTelemetryStore :
                 order.ToImmutable(),
                 Projection.All,
                 continuation is null ? Paging.Keyset(take) : Paging.Continuation(continuation, take)),
-            session.Unit.CreateQueryRenderOptions(selectedIndex));
+            // Supply the declaration used to open the session. A provider's session unit can
+            // include physical covering keys, which must not be retargeted as logical columns.
+            schema.Unit(session.Unit.Id.Value).CreateQueryRenderOptions(selectedIndex));
     }
 
-    private static IReadOnlyList<IReadOnlyDictionary<string, object?>> QueryAll(
+    private IReadOnlyList<IReadOnlyDictionary<string, object?>> QueryAll(
         IStorageSession session,
         IEnumerable<Predicate> predicates,
         ColumnRef orderColumn,
@@ -1270,7 +1272,7 @@ public sealed class GroundworkOpenTelemetryStore :
         internal static ColumnRef TraceId => Column(
             V2OpenTelemetryStorageSchema.TraceId, QueryType.String, false, V2OpenTelemetryCodec.MaximumTraceIdCodeUnits);
         internal static ColumnRef TraceKey => Column(V2OpenTelemetryStorageSchema.TraceKey, QueryType.String, false, 64);
-        internal static ColumnRef SpanId => Column(V2OpenTelemetryStorageSchema.SpanId, QueryType.String, false, 256);
+        internal static ColumnRef SpanId => Column(V2OpenTelemetryStorageSchema.SpanId, QueryType.String, false, 128);
         internal static ColumnRef StartTime => Column(V2OpenTelemetryStorageSchema.StartTime, QueryType.DateTimeOffset, false);
         private static ColumnRef Column(string name, QueryType type, bool nullable, int? max = null) => new(new TableId("elsa_otel_spans_v2"), name, type, nullable, max);
     }
@@ -1278,7 +1280,7 @@ public sealed class GroundworkOpenTelemetryStore :
     private static class MetricColumns
     {
         internal static ColumnRef Sequence => Column(V2OpenTelemetryStorageSchema.Sequence, QueryType.Int64, false);
-        internal static ColumnRef Id => Column(V2OpenTelemetryStorageSchema.Id, QueryType.String, false, 512);
+        internal static ColumnRef Id => Column(V2OpenTelemetryStorageSchema.Id, QueryType.String, false, 128);
         internal static ColumnRef ResourceId => Column(V2OpenTelemetryStorageSchema.ResourceId, QueryType.String, false, 512);
         internal static ColumnRef ServiceName => Column(V2OpenTelemetryStorageSchema.ServiceName, QueryType.String, true, 512);
         internal static ColumnRef InstrumentName => Column(V2OpenTelemetryStorageSchema.InstrumentName, QueryType.String, false);
@@ -1289,7 +1291,7 @@ public sealed class GroundworkOpenTelemetryStore :
     private static class LogColumns
     {
         internal static ColumnRef Sequence => Column(V2OpenTelemetryStorageSchema.Sequence, QueryType.Int64, false);
-        internal static ColumnRef Id => Column(V2OpenTelemetryStorageSchema.Id, QueryType.String, false, 512);
+        internal static ColumnRef Id => Column(V2OpenTelemetryStorageSchema.Id, QueryType.String, false, 128);
         internal static ColumnRef ResourceId => Column(V2OpenTelemetryStorageSchema.ResourceId, QueryType.String, false, 512);
         internal static ColumnRef ServiceName => Column(V2OpenTelemetryStorageSchema.ServiceName, QueryType.String, true, 512);
         internal static ColumnRef TraceId => Column(

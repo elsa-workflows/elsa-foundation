@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
@@ -5,6 +6,7 @@ using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 using Elsa.Diagnostics.Persistence.Draining;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
+using Groundwork.SqlServer;
 using Groundwork.Sqlite;
 using Groundwork.Store;
 using Microsoft.Extensions.Options;
@@ -14,6 +16,8 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests;
 
 public sealed class GroundworkV2OpenTelemetryTests
 {
+    private const string IdOrdinalIdentity = "__groundwork_ordinal_id";
+    private const string SpanIdOrdinalIdentity = "__groundwork_ordinal_spanId";
     [Fact]
     public void Public_declarations_are_ordinary_scoped_units_with_pre_source_aggregation()
     {
@@ -35,6 +39,10 @@ public sealed class GroundworkV2OpenTelemetryTests
         Assert.Contains(spans.Columns, column =>
             column.Name == V2OpenTelemetryStorageSchema.TraceKey && column.MaxLength == 64 && !column.IsNullable);
         Assert.Equal(
+            SpanIdOrdinalIdentity,
+            Assert.Single(spans.Columns, column => column.Name == V2OpenTelemetryStorageSchema.SpanId).OrdinalIdentity?.PhysicalColumn);
+        Assert.Equal(128, Assert.Single(spans.Columns, column => column.Name == V2OpenTelemetryStorageSchema.SpanId).MaxLength);
+        Assert.Equal(
             [
                 new IndexColumn(V2OpenTelemetryStorageSchema.TraceKey),
                 new IndexColumn(V2OpenTelemetryStorageSchema.StartTime),
@@ -42,9 +50,11 @@ public sealed class GroundworkV2OpenTelemetryTests
                 new IndexColumn(V2OpenTelemetryStorageSchema.Sequence)
             ],
             Assert.Single(spans.Indexes, index => index.Name == "elsa_otel_spans_trace_detail").Columns);
+        Assert.True(Assert.Single(spans.Indexes, index => index.Name == "elsa_otel_spans_trace_detail").UseOrdinalIdentities);
         var logs = Assert.Single(units, unit => unit.Id.Value == V2OpenTelemetryStorageSchema.LogUnitId);
         Assert.Contains(logs.Columns, column =>
             column.Name == V2OpenTelemetryStorageSchema.TraceKey && column.MaxLength == 64 && column.IsNullable);
+        AssertSignalId(logs);
         Assert.Equal(
             [
                 new IndexColumn(V2OpenTelemetryStorageSchema.TraceKey),
@@ -53,6 +63,7 @@ public sealed class GroundworkV2OpenTelemetryTests
                 new IndexColumn(V2OpenTelemetryStorageSchema.Sequence)
             ],
             Assert.Single(logs.Indexes, index => index.Name == "elsa_otel_logs_trace_detail").Columns);
+        Assert.True(Assert.Single(logs.Indexes, index => index.Name == "elsa_otel_logs_trace_detail").UseOrdinalIdentities);
 
         var resources = Assert.Single(units, unit => unit.Id.Value == V2OpenTelemetryStorageSchema.ResourceUnitId);
         Assert.Contains(resources.Columns, column =>
@@ -85,6 +96,7 @@ public sealed class GroundworkV2OpenTelemetryTests
         var portability = PortabilityValidator.Validate(resources);
         Assert.True(portability.IsPortable, string.Join("; ", portability.Refusals.Select(refusal => refusal.Message)));
         var metrics = Assert.Single(units, unit => unit.Id.Value == V2OpenTelemetryStorageSchema.MetricPointUnitId);
+        AssertSignalId(metrics);
         Assert.Equal(
             [
                 new IndexColumn(V2OpenTelemetryStorageSchema.Timestamp, SortDirection.Descending),
@@ -92,6 +104,7 @@ public sealed class GroundworkV2OpenTelemetryTests
                 new IndexColumn(V2OpenTelemetryStorageSchema.Sequence)
             ],
             Assert.Single(metrics.Indexes, index => index.Name == "elsa_otel_metric_points_timestamp").Columns);
+        Assert.True(Assert.Single(metrics.Indexes, index => index.Name == "elsa_otel_metric_points_timestamp").UseOrdinalIdentities);
         Assert.Equal(
             [
                 new IndexColumn(V2OpenTelemetryStorageSchema.Timestamp, SortDirection.Descending),
@@ -99,6 +112,7 @@ public sealed class GroundworkV2OpenTelemetryTests
                 new IndexColumn(V2OpenTelemetryStorageSchema.Sequence)
             ],
             Assert.Single(logs.Indexes, index => index.Name == "elsa_otel_logs_timestamp").Columns);
+        Assert.True(Assert.Single(logs.Indexes, index => index.Name == "elsa_otel_logs_timestamp").UseOrdinalIdentities);
 
         var summaries = Assert.Single(units, unit => unit.Id.Value == V2OpenTelemetryStorageSchema.TraceSummaryUnitId);
         Assert.Equal("elsa_otel_trace_summaries_v3", summaries.Name);
@@ -131,6 +145,104 @@ public sealed class GroundworkV2OpenTelemetryTests
         var ledger = Assert.Single(units, unit => unit.Id.Value == V2OpenTelemetryStorageSchema.CaptureLedgerUnitId);
         Assert.Equal("elsa_otel_capture_ledger_v3", ledger.Name);
     }
+
+    [Fact]
+    public void SqlServer_selected_signal_routes_use_index_compatible_ordinal_order_keys()
+    {
+        var metrics = V2OpenTelemetryStorageSchema.CreateMetricPoints();
+        AssertSqlServerOrder(
+            metrics,
+            "elsa_otel_metric_points_timestamp",
+            [
+                Column(metrics, V2OpenTelemetryStorageSchema.Timestamp, QueryType.DateTimeOffset, false),
+                Column(metrics, V2OpenTelemetryStorageSchema.Id, QueryType.String, false, 128),
+                Column(metrics, V2OpenTelemetryStorageSchema.Sequence, QueryType.Int64, false)
+            ],
+            firstDescending: true,
+            expectedOrder: $"ORDER BY [{V2OpenTelemetryStorageSchema.Timestamp}] DESC, [{IdOrdinalIdentity}] COLLATE Latin1_General_100_BIN2 ASC, [{V2OpenTelemetryStorageSchema.Sequence}] ASC");
+
+        var logs = V2OpenTelemetryStorageSchema.CreateLogs();
+        AssertSqlServerOrder(
+            logs,
+            "elsa_otel_logs_timestamp",
+            [
+                Column(logs, V2OpenTelemetryStorageSchema.Timestamp, QueryType.DateTimeOffset, false),
+                Column(logs, V2OpenTelemetryStorageSchema.Id, QueryType.String, false, 128),
+                Column(logs, V2OpenTelemetryStorageSchema.Sequence, QueryType.Int64, false)
+            ],
+            firstDescending: true,
+            expectedOrder: $"ORDER BY [{V2OpenTelemetryStorageSchema.Timestamp}] DESC, [{IdOrdinalIdentity}] COLLATE Latin1_General_100_BIN2 ASC, [{V2OpenTelemetryStorageSchema.Sequence}] ASC");
+
+        var spans = V2OpenTelemetryStorageSchema.CreateSpans();
+        AssertSqlServerOrder(
+            spans,
+            "elsa_otel_spans_trace_detail",
+            [
+                Column(spans, V2OpenTelemetryStorageSchema.StartTime, QueryType.DateTimeOffset, false),
+                Column(spans, V2OpenTelemetryStorageSchema.SpanId, QueryType.String, false, 128),
+                Column(spans, V2OpenTelemetryStorageSchema.Sequence, QueryType.Int64, false)
+            ],
+            firstDescending: false,
+            expectedOrder: $"ORDER BY [{V2OpenTelemetryStorageSchema.StartTime}] ASC, [{SpanIdOrdinalIdentity}] COLLATE Latin1_General_100_BIN2 ASC, [{V2OpenTelemetryStorageSchema.Sequence}] ASC");
+
+        AssertSqlServerOrder(
+            logs,
+            "elsa_otel_logs_trace_detail",
+            [
+                Column(logs, V2OpenTelemetryStorageSchema.Timestamp, QueryType.DateTimeOffset, false),
+                Column(logs, V2OpenTelemetryStorageSchema.Id, QueryType.String, false, 128),
+                Column(logs, V2OpenTelemetryStorageSchema.Sequence, QueryType.Int64, false)
+            ],
+            firstDescending: false,
+            expectedOrder: $"ORDER BY [{V2OpenTelemetryStorageSchema.Timestamp}] ASC, [{IdOrdinalIdentity}] COLLATE Latin1_General_100_BIN2 ASC, [{V2OpenTelemetryStorageSchema.Sequence}] ASC");
+    }
+
+    private static void AssertSignalId(StorageUnit unit)
+    {
+        var column = Assert.Single(unit.Columns, item => item.Name == V2OpenTelemetryStorageSchema.Id);
+        Assert.Equal(128, column.MaxLength);
+        Assert.False(column.IsNullable);
+        Assert.Null(column.Default);
+        Assert.Equal(IdOrdinalIdentity, column.OrdinalIdentity?.PhysicalColumn);
+    }
+
+    private static void AssertSqlServerOrder(
+        StorageUnit logical,
+        string selectedIndex,
+        IReadOnlyList<ColumnRef> orderColumns,
+        bool firstDescending,
+        string expectedOrder)
+    {
+        var physical = SearchKeyProjection.Expand(logical);
+        var supplied = logical.CreateQueryRenderOptions(selectedIndex);
+        var options = supplied with
+        {
+            Indexes = SearchKeyQueryMappings.RetargetIndexes(physical, supplied.Indexes).ToImmutableArray(),
+            SearchKeyColumns = SearchKeyQueryMappings.For(physical, selectedIndex)
+        };
+        var request = new QueryRequest(
+            new TableId(logical.Name),
+            Predicate.AlwaysTrue.Instance,
+            [
+                new OrderTerm(
+                    orderColumns[0],
+                    firstDescending ? OrderDirection.Descending : OrderDirection.Ascending,
+                    firstDescending ? NullOrder.First : NullOrder.Last),
+                ..orderColumns.Skip(1).Select(column => new OrderTerm(column, OrderDirection.Ascending, NullOrder.Last))
+            ],
+            Projection.All,
+            Paging.OffsetLimit(0, 10));
+
+        var execution = QueryRequestExecution.ForProviderPage(request, options);
+        var command = new SqlServerQueryRenderer().Render(execution, options);
+
+        Assert.Contains(expectedOrder, command.CommandText, StringComparison.Ordinal);
+        var renderedOrder = command.CommandText[(command.CommandText.IndexOf("ORDER BY", StringComparison.Ordinal))..];
+        Assert.DoesNotContain("DATALENGTH", renderedOrder, StringComparison.Ordinal);
+    }
+
+    private static ColumnRef Column(StorageUnit unit, string name, QueryType type, bool nullable, int? maxLength = null) =>
+        new(new TableId(unit.Name), name, type, nullable, maxLength);
 
     [Fact]
     public async Task Trace_summary_accepts_every_declared_cross_provider_search_key_bound()

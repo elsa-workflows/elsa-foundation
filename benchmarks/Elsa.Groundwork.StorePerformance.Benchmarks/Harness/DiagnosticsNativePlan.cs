@@ -625,13 +625,14 @@ public static class DiagnosticsNativePlanContract
             : where;
         foreach (var column in baseColumns)
         {
-            var predicate = $@"\b{Regex.Escape(column)}\b\s*=\s*{parameter}";
+            var columnExpression = SqlColumnExpression(column);
+            var predicate = $@"{columnExpression}\s*=\s*{parameter}";
             if (Regex.Matches(keyset, predicate, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count != 1)
                 throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' continuation does not retain its exact scope and route predicates.");
             keyset = Regex.Replace(keyset, predicate, string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             keyset = Regex.Replace(
                 keyset,
-                $@"\b{Regex.Escape(column)}\b\s+IS\s+NOT\s+NULL",
+                $@"{columnExpression}\s+IS\s+NOT\s+NULL",
                 string.Empty,
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         }
@@ -643,18 +644,18 @@ public static class DiagnosticsNativePlanContract
         var remainder = keyset;
         foreach (var term in specification.EffectiveOrdering)
         {
-            var column = Regex.Escape(term.Column);
+            var column = SqlColumnExpression(term.Column);
             var after = term.Direction == RuntimeNativeOrderDirection.Ascending ? ">" : "<";
             if (!Regex.IsMatch(
                     keyset,
-                    $@"\b{column}\b\s*{Regex.Escape(after)}\s*{parameter}",
+                    $@"{column}\s*{Regex.Escape(after)}\s*{parameter}",
                     RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
                 throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' continuation does not retain its complete ascending keyset predicate.");
 
-            remainder = Regex.Replace(remainder, $@"\b{column}\b\s+IS\s+NOT\s+NULL", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-            remainder = Regex.Replace(remainder, $@"\b{column}\b\s+IS\s+NULL", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-            remainder = Regex.Replace(remainder, $@"\b{column}\b\s*=\s*{parameter}", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-            remainder = Regex.Replace(remainder, $@"\b{column}\b\s*{Regex.Escape(after)}\s*{parameter}", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            remainder = Regex.Replace(remainder, $@"{column}\s+IS\s+NOT\s+NULL", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            remainder = Regex.Replace(remainder, $@"{column}\s+IS\s+NULL", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            remainder = Regex.Replace(remainder, $@"{column}\s*=\s*{parameter}", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            remainder = Regex.Replace(remainder, $@"{column}\s*{Regex.Escape(after)}\s*{parameter}", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         }
         remainder = Regex.Replace(remainder, @"\b(?:AND|OR)\b|[();\s]", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         if (!string.IsNullOrWhiteSpace(remainder) ||
@@ -732,6 +733,7 @@ public static class DiagnosticsNativePlanContract
         string command,
         DiagnosticsNativeRouteSpec specification)
     {
+        specification = PhysicalCommandSpecification(specification);
         if (string.Equals(provider, "postgresql", StringComparison.Ordinal) &&
             !PostgreSqlOrdinalCollationsMatch(command, specification))
             throw new PerformanceContractException(
@@ -753,7 +755,7 @@ public static class DiagnosticsNativePlanContract
             !Regex.IsMatch(normalized, @"\bWHERE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) && specification.StorageScopeRequired)
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command contains an unbound boolean predicate.");
 
-        var where = Regex.Match(normalized, @"\bWHERE\s+(?<where>.*?)(?:\bORDER\s+BY\b|\bLIMIT\b|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Groups["where"].Value.Trim();
+        var where = Regex.Match(normalized, @"\bWHERE\s+(?<where>.*?)(?:\bORDER\s+BY\b|\bLIMIT\b|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline).Groups["where"].Value.Trim();
         if (Regex.IsMatch(where, @"\b(?:CASE|SELECT|LOWER|UPPER|COALESCE|CAST|SUBSTR|DATE|DATETIME)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
             Regex.IsMatch(where, @"\bOR\s+(?:1\s*=\s*1|TRUE)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command contains a computed or tautological predicate.");
@@ -790,7 +792,7 @@ public static class DiagnosticsNativePlanContract
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)
             .Groups["order"].Value;
         var ordinalColumns = specification.EffectiveOrdering
-            .Where(term => IsOrdinalStringOrderColumn(term.Column))
+            .Where(term => IsOrdinalStringOrderColumn(term.Column) || IsPersistedOrdinalColumn(term.Column))
             .Select(term => term.Column)
             .ToArray();
         var collations = Regex.Matches(
@@ -821,6 +823,39 @@ public static class DiagnosticsNativePlanContract
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
     }
 
+    // Elsa owns these four declarations. Keep public route metadata logical, but bind retained
+    // commands to the exact selected physical keys. Never infer trust from a column-name prefix.
+    private static DiagnosticsNativeRouteSpec PhysicalCommandSpecification(DiagnosticsNativeRouteSpec specification)
+    {
+        var logicalColumn = (specification.RouteIdentity, specification.TableName, specification.IndexName) switch
+        {
+            ("metrics-by-last-seen", "elsa_otel_metric_points_v2", "elsa_otel_metric_points_timestamp") => "id",
+            ("logs-by-last-seen", "elsa_otel_logs_v2", "elsa_otel_logs_timestamp") => "id",
+            ("trace-detail/logs-by-trace-key-timestamp-id", "elsa_otel_logs_v2", "elsa_otel_logs_trace_detail") => "id",
+            ("trace-detail/spans-by-trace-key-start-id", "elsa_otel_spans_v2", "elsa_otel_spans_trace_detail") => "spanId",
+            _ => null
+        };
+        if (logicalColumn is null)
+            return specification;
+        var physicalColumn = "__groundwork_ordinal_" + logicalColumn;
+        return specification with
+        {
+            Ordering = specification.EffectiveOrdering.Select(term => term.Column == logicalColumn
+                ? term with { Column = physicalColumn }
+                : term).ToArray(),
+            NullableOrderingColumns = specification.NullableOrderingColumns?.Select(column =>
+                column == logicalColumn ? physicalColumn : column).ToArray()
+        };
+    }
+
+    private static bool IsPersistedOrdinalColumn(string column) =>
+        column is "__groundwork_ordinal_id" or "__groundwork_ordinal_spanId";
+
+    // Groundwork's page executor fetches one extra row to determine continuation. FiniteLimit
+    // and retained evidence counts remain the public page bound, not this native fetch ceiling.
+    private static int ExpectedNativeFetchLimit(DiagnosticsNativeRouteSpec specification) =>
+        specification.StorageScopeRequired ? checked(specification.FiniteLimit + 1) : specification.FiniteLimit;
+
     private static bool ContainsOnlyExactEqualityPredicates(
         string provider,
         string where,
@@ -835,7 +870,7 @@ public static class DiagnosticsNativePlanContract
         var remainder = where;
         foreach (var column in requiredColumns)
         {
-            var columnExpression = $@"\(*\s*\b{Regex.Escape(column)}\b\s*\)*";
+            var columnExpression = SqlColumnExpression(column);
             var equalityPattern = $@"{columnExpression}\s*=\s*(?<parameter>{parameter})";
             var equalityMatches = Regex.Matches(
                 remainder,
@@ -902,23 +937,21 @@ public static class DiagnosticsNativePlanContract
     private static bool ContainsOnlyExactReplayRangePredicates(string where, bool requireStorageScope)
     {
         const string parameter = @"(?:@\w+|\?|\$\d+)";
-        static string ColumnExpression(string column) =>
-            $@"\(*\s*\b{Regex.Escape(column)}\b\s*\)*";
 
         var required = new List<string>
         {
-            $@"{ColumnExpression("sequence")}\s*>\s*{parameter}",
-            $@"{ColumnExpression("sequence")}\s*<=\s*{parameter}"
+            $@"{SqlColumnExpression("sequence")}\s*>\s*{parameter}",
+            $@"{SqlColumnExpression("sequence")}\s*<=\s*{parameter}"
         };
         if (requireStorageScope)
-            required.Add($@"{ColumnExpression("__groundwork_scope")}\s*=\s*{parameter}");
+            required.Add($@"{SqlColumnExpression("__groundwork_scope")}\s*=\s*{parameter}");
         if (required.Any(pattern =>
                 Regex.Matches(where, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count != 1))
             return false;
 
         var remainder = Regex.Replace(
             where,
-            $@"(?:{ColumnExpression("sequence")}|{ColumnExpression("__groundwork_scope")})\s+IS\s+NOT\s+NULL",
+            $@"(?:{SqlColumnExpression("sequence")}|{SqlColumnExpression("__groundwork_scope")})\s+IS\s+NOT\s+NULL",
             string.Empty,
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         foreach (var pattern in required)
@@ -926,6 +959,9 @@ public static class DiagnosticsNativePlanContract
         remainder = Regex.Replace(remainder, @"\bAND\b|[();\s]", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         return remainder.Length == 0;
     }
+
+    private static string SqlColumnExpression(string column) =>
+        $@"\(*\s*\b{Regex.Escape(column)}\b\s*\)*";
 
     private static void ValidateSqlOrdering(
         string provider,
@@ -1016,7 +1052,7 @@ public static class DiagnosticsNativePlanContract
     {
         var simple = Regex.Match(
             term,
-            @"^(?:[A-Za-z_][A-Za-z0-9_]*\.)?(?<column>[A-Za-z_][A-Za-z0-9_]*)\s+(?<direction>ASC|DESC)(?:\s+NULLS\s+(?<nulls>FIRST|LAST))?$",
+            @"^\(*\s*(?:[A-Za-z_][A-Za-z0-9_]*\.)?(?<column>[A-Za-z_][A-Za-z0-9_]*)\s*\)*\s+(?<direction>ASC|DESC)(?:\s+NULLS\s+(?<nulls>FIRST|LAST))?$",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         if (simple.Success && TryParseSqlOrderDirection(provider, simple, out var direction))
         {
@@ -1048,7 +1084,7 @@ public static class DiagnosticsNativePlanContract
         }
 
         var actual = Regex.Replace(match.Groups["expression"].Value.Trim(), @"\s+", " ");
-        foreach (var column in new[] { "id", "idOrderKey", "traceKey", "spanId" })
+        foreach (var column in new[] { "id", "idOrderKey", "traceKey", "spanId", "__groundwork_ordinal_id", "__groundwork_ordinal_spanId" })
         {
             var expected = Regex.Replace(PostgreSqlOrdinalExpression("(" + column + ")"), @"\s+", " ");
             if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
@@ -1699,6 +1735,7 @@ public static class DiagnosticsNativePlanContract
         DiagnosticsNativeRouteSpec specification,
         string rawPlan)
     {
+        specification = PhysicalCommandSpecification(specification);
         // The observer's descriptive text is only "MongoDB.Aggregate(page)". Reparse the retained
         // server explain response and require the envelope command to be byte-structurally the same
         // native command, so neither a logical collection nor a synthetic scope field can be claimed.
@@ -1791,7 +1828,7 @@ public static class DiagnosticsNativePlanContract
                 $"Diagnostics route '{specification.RouteIdentity}' MongoDB aggregate command does not bind its complete effective ordering.");
 
         if (!limits[0].Stage.GetProperty("$limit").TryGetInt32(out var finiteLimit) ||
-            finiteLimit != specification.FiniteLimit)
+            finiteLimit != ExpectedNativeFetchLimit(specification))
             throw new PerformanceContractException(
                 $"Diagnostics route '{specification.RouteIdentity}' MongoDB aggregate command does not bind its finite page limit.");
 
@@ -1817,7 +1854,7 @@ public static class DiagnosticsNativePlanContract
         if (!command.TryGetProperty("sort", out var sort) || sort.ValueKind != JsonValueKind.Object ||
             !ValidateMongoOrdering(sort, specification) ||
             !command.TryGetProperty("limit", out var limit) || !limit.TryGetInt32(out var finiteLimit) ||
-            finiteLimit != specification.FiniteLimit)
+            finiteLimit != ExpectedNativeFetchLimit(specification))
             throw new PerformanceContractException(
                 $"Diagnostics route '{specification.RouteIdentity}' MongoDB find command does not bind its complete ordering and finite page limit.");
 
@@ -1945,7 +1982,7 @@ public static class DiagnosticsNativePlanContract
     {
         if (!specification.EffectiveOrdering.Any(term => IsMongoStringOrderColumn(term.Column)) &&
             ValidateMongoOrdering(sort, specification))
-            return true;
+            return !pipeline.EnumerateArray().Any(stage => stage.TryGetProperty("$set", out _));
 
         var actual = ParseMongoOrdering(sort);
         // Index metadata can prove every ordered column non-null independently of whether the
@@ -2168,7 +2205,7 @@ public static class DiagnosticsNativePlanContract
                    !names.Any(name => name!.Contains("MATERIAL", StringComparison.OrdinalIgnoreCase)) &&
                    !HasSpillMarker(document.RootElement) &&
                    limits.Length != 0 &&
-                   limits.All(limit => limit.GetProperty("limitAmount").TryGetInt32(out var value) && value == BoundedResourceLimit);
+                   limits.All(limit => limit.GetProperty("limitAmount").TryGetInt32(out var value) && value == BoundedResourceLimit + 1);
         }
         catch (JsonException)
         {
@@ -2209,7 +2246,7 @@ public static class DiagnosticsNativePlanContract
 
         var limits = FindObjects(winningPlans[0], "limitAmount").ToArray();
         if (limits.Length == 0 ||
-            limits.Any(limit => !limit.GetProperty("limitAmount").TryGetInt32(out var value) || value != specification.FiniteLimit))
+            limits.Any(limit => !limit.GetProperty("limitAmount").TryGetInt32(out var value) || value != ExpectedNativeFetchLimit(specification)))
             throw BlockedPlan(specification, "MongoDB bounded scan/sort plan does not bind the frozen finite page limit");
     }
 

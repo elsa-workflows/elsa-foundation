@@ -317,24 +317,11 @@ internal sealed class EfDiagnosticsDurableHistoryAdapter : IBenchmarkAdapter, ID
 
     private sealed class TrackingOpenTelemetryStore(IOpenTelemetryStore inner) : IOpenTelemetryStore
     {
-        private int expectedTraces;
-        private int expectedSpans;
-        private int expectedPoints;
-        private int expectedLogs;
-        private int expectedResources;
-        private int expectedInstruments;
-        private string? expectedLastTraceId;
+        private readonly OpenTelemetryDurabilityExpectations expectations = new();
 
         public ValueTask WriteAsync(OpenTelemetryBatch batch, CancellationToken cancellationToken = default)
         {
-            Interlocked.Add(ref expectedTraces, batch.Traces.Count);
-            Interlocked.Add(ref expectedSpans, batch.Spans.Count);
-            Interlocked.Add(ref expectedPoints, batch.MetricPoints.Count);
-            Interlocked.Add(ref expectedLogs, batch.Logs.Count);
-            Interlocked.Add(ref expectedResources, batch.Resources.Count);
-            Interlocked.Add(ref expectedInstruments, batch.Instruments.Count);
-            if (batch.Traces.Count > 0)
-                expectedLastTraceId = batch.Traces.Last().TraceId;
+            expectations.Record(batch);
             return inner.WriteAsync(batch, cancellationToken);
         }
 
@@ -347,24 +334,18 @@ internal sealed class EfDiagnosticsDurableHistoryAdapter : IBenchmarkAdapter, ID
 
         public async Task WaitForDurabilityAsync(CancellationToken cancellationToken)
         {
-            var traces = Volatile.Read(ref expectedTraces);
-            var spans = Volatile.Read(ref expectedSpans);
-            var points = Volatile.Read(ref expectedPoints);
-            var logs = Volatile.Read(ref expectedLogs);
-            var resources = Volatile.Read(ref expectedResources);
-            var instruments = Volatile.Read(ref expectedInstruments);
-            var lastTraceId = expectedLastTraceId;
+            var target = expectations.Read();
             var deadline = DateTime.UtcNow + TimeSpan.FromMinutes(30);
             while (true)
             {
                 var diagnostics = await inner.GetDiagnosticsAsync(cancellationToken);
-                if (diagnostics.TraceCount >= Math.Min(traces, diagnostics.TraceCapacity) &&
-                    diagnostics.SpanCount >= Math.Min(spans, diagnostics.SpanCapacity) &&
-                    diagnostics.MetricPointCount >= Math.Min(points, diagnostics.MetricPointCapacity) &&
-                    diagnostics.LogRecordCount >= Math.Min(logs, diagnostics.LogRecordCapacity) &&
-                    diagnostics.ResourceCount >= Math.Min(resources, DiagnosticsDurableHistoryWorkload.ResourceCount) &&
-                    diagnostics.MetricInstrumentCount >= Math.Min(instruments, DiagnosticsDurableHistoryWorkload.InstrumentCount) &&
-                    (lastTraceId is null || await inner.GetTraceAsync(lastTraceId, cancellationToken) is not null))
+                if (diagnostics.TraceCount >= Math.Min(target.Traces, diagnostics.TraceCapacity) &&
+                    diagnostics.SpanCount >= Math.Min(target.Spans, diagnostics.SpanCapacity) &&
+                    diagnostics.MetricPointCount >= Math.Min(target.Points, diagnostics.MetricPointCapacity) &&
+                    diagnostics.LogRecordCount >= Math.Min(target.Logs, diagnostics.LogRecordCapacity) &&
+                    diagnostics.ResourceCount >= Math.Min(target.Resources, DiagnosticsDurableHistoryWorkload.ResourceCount) &&
+                    diagnostics.MetricInstrumentCount >= Math.Min(target.Instruments, DiagnosticsDurableHistoryWorkload.InstrumentCount) &&
+                    (target.TraceProbeId is null || await inner.GetTraceAsync(target.TraceProbeId, cancellationToken) is not null))
                     return;
                 if (DateTime.UtcNow >= deadline)
                     throw new PerformanceContractException("EF OpenTelemetry durability did not become visible within the untimed flush budget.");
