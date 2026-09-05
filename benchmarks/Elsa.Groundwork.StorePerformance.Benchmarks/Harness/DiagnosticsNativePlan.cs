@@ -74,7 +74,7 @@ public sealed record DiagnosticsTraceDetailConstituentSpec(
 /// primary-key constituents intentionally have no secondary index claim. No instrument route is listed because the public
 /// <c>IOpenTelemetryStore</c> contract has no instrument-catalog query.
 /// </summary>
-public static class DiagnosticsNativePlanContract
+public static partial class DiagnosticsNativePlanContract
 {
     private const string BlockedPlanMarker = "blocked provider plan:";
     internal const string IndexSearchPlanClassification = "index-search";
@@ -355,10 +355,16 @@ public static class DiagnosticsNativePlanContract
         }
 
         var specification = For(adapter, route.RouteIdentity);
+        var expectedPhysicalIndexName = ExpectedPhysicalIndexName(provider, specification);
+        var primaryKeyEquivalent = string.Equals(provider, "sqlserver", StringComparison.Ordinal) &&
+                                   string.Equals(adapter, GroundworkAdapter, StringComparison.Ordinal) &&
+                                   IsSqlServerStructuredLogPrimaryKeyRoute(provider, adapter, specification) &&
+                                   string.Equals(artifact.PhysicalIndexName, StructuredLogsSqlServerPrimaryKey, StringComparison.Ordinal) &&
+                                   string.Equals(route.IndexName, StructuredLogsSqlServerPrimaryKey, StringComparison.Ordinal);
         if (artifact.SchemaVersion != 1 || artifact.Provider != provider || artifact.Adapter != adapter ||
             artifact.RouteIdentity != route.RouteIdentity || artifact.TableName != specification.TableName ||
             artifact.IndexName != specification.IndexName ||
-            artifact.PhysicalIndexName != ExpectedPhysicalIndexName(provider, specification) ||
+            (!string.Equals(artifact.PhysicalIndexName, expectedPhysicalIndexName, StringComparison.Ordinal) && !primaryKeyEquivalent) ||
             string.IsNullOrWhiteSpace(artifact.CommandText) ||
             string.IsNullOrWhiteSpace(artifact.NativePlan))
             throw new PerformanceContractException(
@@ -372,7 +378,7 @@ public static class DiagnosticsNativePlanContract
             throw new PerformanceContractException(
                 $"Diagnostics native-plan route '{route.RouteIdentity}' has unbound cardinality, finite-page, or predicate facts.");
 
-        var physicalIndexName = ExpectedPhysicalIndexName(provider, specification);
+        var physicalIndexName = primaryKeyEquivalent ? StructuredLogsSqlServerPrimaryKey : expectedPhysicalIndexName;
         if (route.IndexName != physicalIndexName)
             throw new PerformanceContractException(
                 $"Diagnostics route '{specification.RouteIdentity}' does not bind its provider-owned physical index name.");
@@ -410,6 +416,18 @@ public static class DiagnosticsNativePlanContract
             case "sqlserver":
                 if (boundedCatalogScan)
                     ValidateSqlServerBoundedScanSortPlan(artifact.NativePlan, specification);
+                else if (primaryKeyEquivalent)
+                {
+                    if (!TryResolveSqlServerStructuredLogPrimaryKey(
+                            provider,
+                            adapter,
+                            specification,
+                            artifact.CommandText,
+                            artifact.NativePlan,
+                            out _))
+                        throw new PerformanceContractException(
+                            $"Diagnostics route '{specification.RouteIdentity}' retained plan is not the approved SQL Server primary-key equivalent access path.");
+                }
                 else
                     ValidateSqlServerPlan(artifact.NativePlan, specification, physicalIndexName);
                 break;
