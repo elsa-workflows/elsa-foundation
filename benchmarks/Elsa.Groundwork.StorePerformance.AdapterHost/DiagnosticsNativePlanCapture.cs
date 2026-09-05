@@ -140,6 +140,7 @@ internal static class DiagnosticsNativePlanCapture
                     string command;
                     string classification;
                     int result;
+                    var physicalIndexName = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(request.Provider, specification);
                     try
                     {
                         result = await InvokeRouteAsync(scopes.Primary, route, limit, cancellationToken);
@@ -185,9 +186,47 @@ internal static class DiagnosticsNativePlanCapture
                             limit,
                             cancellationToken);
                     }
+                    catch (ExplainAssertionException exception) when (
+                        DiagnosticsNativePlanContract.IsSqlServerStructuredLogPrimaryKeyRoute(
+                            request.Provider,
+                            request.Adapter,
+                            specification))
+                    {
+                        // SQL Server can select the exact primary-key access path for these two
+                        // structured-log routes. Keep the failed invocation's command and XML,
+                        // prove that pair against the narrow equivalence contract, then rerun the
+                        // same public call only to establish its materialized page count.
+                        nativePath = RequireAssertionArtifact(
+                            explainDirectory,
+                            before,
+                            request.Provider,
+                            specification.IndexName,
+                            exception);
+                        (rawPlan, command, classification) = CaptureRouteEvidence(
+                            request.Provider,
+                            adapter.CommandObserver.Commands,
+                            request.Adapter,
+                            specification,
+                            nativePath);
+                        if (!DiagnosticsNativePlanContract.TryResolveSqlServerStructuredLogPrimaryKey(
+                                request.Provider,
+                                request.Adapter,
+                                specification,
+                                command,
+                                rawPlan,
+                                out physicalIndexName))
+                            throw;
+
+                        adapter.CommandObserver.ClearCommands();
+                        using var suppression = ExplainAssertionMode.Suppress();
+                        result = await InvokeRouteAsync(
+                            scopes.Primary,
+                            route,
+                            limit,
+                            cancellationToken);
+                    }
                     if (result != limit)
                         throw new PerformanceContractException($"Diagnostics native route '{route}' returned {result} rows; expected {limit}.");
-                    var physicalIndexName = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(request.Provider, specification);
                     var rawReference = ArtifactStore.RawPlanName($"diagnostics.{request.Provider}.{request.MeasurementSetId}.{route}.raw.json");
                     var rawPath = Path.Combine(outputDirectory, rawReference);
                     var artifact = new DiagnosticsNativePlanArtifact(1, request.Provider, request.Adapter, route, specification.TableName, specification.IndexName, physicalIndexName, command, rawPlan);
