@@ -17,5 +17,8 @@
     <None Update="Fixtures/mongodb-resources-by-last-seen-explain.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Fixtures/mongodb-resources-by-service-explain.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>

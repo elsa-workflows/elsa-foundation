@@ -2561,16 +2561,18 @@ public static partial class DiagnosticsNativePlanContract
             .ToArray();
         var hasUnknownWinnerProperty = winningPlan.EnumerateObject()
             .Any(property => property.Name is not ("stage" or "direction"));
-        if (winningStages.Length != 1 ||
-            winningNames.Length != 1 ||
-            !string.Equals(winningNames[0], "COLLSCAN", StringComparison.OrdinalIgnoreCase) ||
-            hasUnknownWinnerProperty ||
-            !winningPlan.TryGetProperty("direction", out var direction) ||
-            direction.ValueKind != JsonValueKind.String ||
-            !string.Equals(direction.GetString(), "forward", StringComparison.OrdinalIgnoreCase))
+        var isForwardCollectionScan = winningStages.Length == 1 &&
+                                      winningNames.Length == 1 &&
+                                      string.Equals(winningNames[0], "COLLSCAN", StringComparison.OrdinalIgnoreCase) &&
+                                      !hasUnknownWinnerProperty &&
+                                      winningPlan.TryGetProperty("direction", out var direction) &&
+                                      direction.ValueKind == JsonValueKind.String &&
+                                      string.Equals(direction.GetString(), "forward", StringComparison.OrdinalIgnoreCase);
+        var isBoundedResourceIndexFetch = IsBoundedMongoResourceIndexFetch(winningPlan, specification);
+        if (!isForwardCollectionScan && !isBoundedResourceIndexFetch)
         {
             failure = winningNames.Any(name => string.Equals(name, "IXSCAN", StringComparison.OrdinalIgnoreCase))
-                ? "MongoDB bounded scan/sort plan unexpectedly uses an index scan"
+                ? "MongoDB bounded scan/sort plan does not prove an eligible winning access path"
                 : "MongoDB bounded scan/sort plan is missing its explicit collection scan or sort";
             return false;
         }
@@ -2615,6 +2617,51 @@ public static partial class DiagnosticsNativePlanContract
             return false;
 
         return true;
+    }
+
+    private static bool IsBoundedMongoResourceIndexFetch(
+        JsonElement winningPlan,
+        DiagnosticsNativeRouteSpec specification)
+    {
+        if (winningPlan.ValueKind != JsonValueKind.Object ||
+            !winningPlan.TryGetProperty("stage", out var fetchStage) ||
+            fetchStage.ValueKind != JsonValueKind.String ||
+            !string.Equals(fetchStage.GetString(), "FETCH", StringComparison.OrdinalIgnoreCase) ||
+            winningPlan.EnumerateObject().Any(property => property.Name is not ("stage" or "inputStage")) ||
+            !winningPlan.TryGetProperty("inputStage", out var inputStage) ||
+            inputStage.ValueKind != JsonValueKind.Object ||
+            inputStage.EnumerateObject().Any(property => property.Name is not ("stage" or "keyPattern" or "indexName" or "direction" or "indexBounds" or "isMultiKey" or "multiKeyPaths" or "isUnique" or "isSparse" or "isPartial" or "indexVersion")) ||
+            !inputStage.TryGetProperty("stage", out var indexStage) ||
+            indexStage.ValueKind != JsonValueKind.String ||
+            !string.Equals(indexStage.GetString(), "IXSCAN", StringComparison.OrdinalIgnoreCase) ||
+            !inputStage.TryGetProperty("indexName", out var indexName) ||
+            indexName.ValueKind != JsonValueKind.String ||
+            !string.Equals(indexName.GetString(), ExpectedPhysicalIndexName("mongodb", specification), StringComparison.Ordinal) ||
+            !inputStage.TryGetProperty("direction", out var direction) ||
+            direction.ValueKind != JsonValueKind.String ||
+            !string.Equals(direction.GetString(), "forward", StringComparison.OrdinalIgnoreCase) ||
+            !inputStage.TryGetProperty("keyPattern", out var keyPattern) ||
+            keyPattern.ValueKind != JsonValueKind.Object)
+            return false;
+
+        foreach (var propertyName in new[] { "isMultiKey", "isSparse", "isPartial" })
+            if (!inputStage.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.False)
+                return false;
+
+        var predicateColumns = specification.PredicateColumn is null
+            ? Enumerable.Empty<string>()
+            : [specification.PredicateColumn];
+        var expectedKeyPattern = predicateColumns
+            .Concat(["lastSeen", "idOrderKey", "id"])
+            .Select((column, index) => (Column: column, Direction: index == (specification.PredicateColumn is null ? 0 : 1) ? -1 : 1))
+            .ToArray();
+        var actualKeyPattern = keyPattern.EnumerateObject().ToArray();
+        return actualKeyPattern.Length == expectedKeyPattern.Length &&
+               actualKeyPattern.Zip(expectedKeyPattern).All(pair =>
+                   string.Equals(pair.First.Name, pair.Second.Column, StringComparison.Ordinal) &&
+                   pair.First.Value.ValueKind == JsonValueKind.Number &&
+                   pair.First.Value.TryGetInt32(out var directionValue) &&
+                   directionValue == pair.Second.Direction);
     }
 
     private static bool ValidateMongoBoundedExplainPipeline(
