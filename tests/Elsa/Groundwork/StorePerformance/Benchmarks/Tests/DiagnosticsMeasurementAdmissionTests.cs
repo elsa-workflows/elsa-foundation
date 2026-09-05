@@ -25,6 +25,52 @@ public sealed class DiagnosticsMeasurementAdmissionTests
     }
 
     [Fact]
+    public async Task Diagnostics_matrix_produces_one_ungraded_measurement_without_promoting_the_workload()
+    {
+        using var fixture = DiagnosticsMatrixFixture.Create();
+
+        await ProcessMatrixRunner.RunForTestAsync(
+            fixture.Plan,
+            fixture.OutputDirectory,
+            fixture.WriteArtifactAsync,
+            CancellationToken.None);
+
+        var measurement = Measurement.Measure(fixture.OutputDirectory, fixture.Catalog);
+
+        Assert.Equal(MeasurementResultStatus.Ungraded, measurement.EvaluationStatus);
+        Assert.True(measurement.Complete);
+        Assert.True(measurement.CorrectnessValid);
+        Assert.Null(measurement.BlockReason);
+    }
+
+    [Fact]
+    public async Task Diagnostics_matrix_rejects_a_second_ungraded_measurement_set_before_starting_a_child()
+    {
+        using var fixture = DiagnosticsMatrixFixture.Create();
+
+        await ProcessMatrixRunner.RunForTestAsync(
+            fixture.Plan,
+            fixture.OutputDirectory,
+            fixture.WriteArtifactAsync,
+            CancellationToken.None);
+
+        var childCalled = false;
+        var error = await Assert.ThrowsAsync<PerformanceContractException>(() =>
+            ProcessMatrixRunner.RunForTestAsync(
+                fixture.PlanFor("diagnostics-set-2", "diagnostics-set-2.native-plan.json"),
+                fixture.OutputDirectory,
+                (_, _, _) =>
+                {
+                    childCalled = true;
+                    return Task.FromResult(0);
+                },
+                CancellationToken.None));
+
+        Assert.Contains(ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode, error.Message, StringComparison.Ordinal);
+        Assert.False(childCalled);
+    }
+
+    [Fact]
     public void Diagnostics_comparison_phase_remains_blocked_after_measurement_admission()
     {
         var workload = WorkloadCatalog.Load(Repository.Root()).Workloads[
@@ -145,4 +191,82 @@ public sealed class DiagnosticsMeasurementAdmissionTests
         "diagnostics-plan",
         "diagnostics-set.native-plan.json",
         new string('e', 64));
+
+    private static MatrixRequest MatrixRequest(RunRequest request) => new(
+        request.ComparisonCohortId,
+        request.MeasurementSetId,
+        request.WorkloadId,
+        request.WorkloadVersion,
+        request.Provider,
+        request.Adapter,
+        request.PhysicalForm,
+        request.Scale,
+        request.CommitSha,
+        request.HarnessAssemblySha256,
+        request.PackageVersions,
+        request.CompositionFingerprint,
+        request.HostFingerprintSha256,
+        request.ProviderVersion,
+        request.ProviderTopology,
+        request.ProviderConfiguration,
+        request.Seed,
+        request.InputFingerprintSha256,
+        request.NativePlanIdentity,
+        request.NativePlanEvidenceReference,
+        request.NativePlanContentSha256);
+
+    private sealed class DiagnosticsMatrixFixture : IDisposable
+    {
+        private readonly DiagnosticsArtifactFixture source;
+        private readonly IReadOnlyDictionary<(ProcessKind ProcessKind, int ProcessIndex), ProcessArtifact> sourceArtifacts;
+        private readonly RunRequest anchor;
+
+        private DiagnosticsMatrixFixture()
+        {
+            source = DiagnosticsArtifactFixture.Create(fullNativePlan: true);
+            source.Bind();
+            sourceArtifacts = ArtifactStore.ReadAll(source.Directory).Artifacts
+                .ToDictionary(artifact => (artifact.Request.ProcessKind, artifact.Request.ProcessIndex));
+            Catalog = DiagnosticsArtifactFixture.CatalogWithDeclaredRoutes(DiagnosticsArtifactFixture.IndexedDiagnosticsRoutes);
+            Workload = Catalog.Workloads[ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId];
+            anchor = sourceArtifacts[(ProcessKind.Warmup, 0)].Request;
+            Plan = MatrixPlan.Create(Workload, MatrixRequest(anchor));
+            OutputDirectory = Path.Combine(Path.GetTempPath(), $"elsa646-diagnostics-matrix-{Guid.NewGuid():N}");
+        }
+
+        public WorkloadCatalog Catalog { get; }
+        public PerformanceWorkload Workload { get; }
+        public MatrixPlan Plan { get; }
+        public string OutputDirectory { get; }
+
+        public static DiagnosticsMatrixFixture Create() => new();
+
+        public MatrixPlan PlanFor(string measurementSetId, string nativePlanEvidenceReference) =>
+            MatrixPlan.Create(Workload, MatrixRequest(anchor) with
+            {
+                MeasurementSetId = measurementSetId,
+                NativePlanEvidenceReference = nativePlanEvidenceReference
+            });
+
+        public Task<int> WriteArtifactAsync(RunRequest run, string outputDirectory, CancellationToken _)
+        {
+            var sourceArtifact = sourceArtifacts[(run.ProcessKind, run.ProcessIndex)];
+            Directory.CreateDirectory(outputDirectory);
+            File.Copy(
+                ArtifactStore.EvidencePath(source.Directory, run.NativePlanEvidenceReference),
+                ArtifactStore.EvidencePath(outputDirectory, run.NativePlanEvidenceReference),
+                overwrite: true);
+            foreach (var rawPlan in ArtifactStore.ReferencedRawPlanNames(sourceArtifact.Correctness.NativePlan))
+                File.Copy(ArtifactStore.RawPlanPath(source.Directory, rawPlan), ArtifactStore.RawPlanPath(outputDirectory, rawPlan), overwrite: true);
+            ArtifactStore.Write(outputDirectory, sourceArtifact with { Request = run });
+            return Task.FromResult(0);
+        }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(OutputDirectory))
+                Directory.Delete(OutputDirectory, recursive: true);
+            source.Dispose();
+        }
+    }
 }
