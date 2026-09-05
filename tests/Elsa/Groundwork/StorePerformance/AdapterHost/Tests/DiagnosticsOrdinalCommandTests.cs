@@ -81,6 +81,58 @@ public sealed class DiagnosticsOrdinalCommandTests(ITestOutputHelper output)
         Assert.Throws<PerformanceContractException>(() => Validate("mongodb", specification, command.ToJsonString()));
     }
 
+    [Fact]
+    public void PostgreSql_real_bounded_catalog_plan_is_normalized_before_serialized_admission()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var rawPlan = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "Fixtures",
+            "postgresql-bounded-resources-by-last-seen.json"));
+        var normalizedPlan = IamNativePlanParser.NormalizeForArtifact("postgresql", rawPlan);
+        var command = Render("postgresql", specification, continuation: false);
+        var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("postgresql", specification);
+        var artifact = new DiagnosticsNativePlanArtifact(
+            1,
+            "postgresql",
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            specification.RouteIdentity,
+            specification.TableName,
+            specification.IndexName,
+            physicalIndex,
+            command,
+            normalizedPlan);
+        var directory = Directory.CreateTempSubdirectory("diagnostics-postgresql-normalized-plan-");
+        try
+        {
+            var path = Path.Combine(directory.FullName, "route.json");
+            File.WriteAllText(path, JsonSerializer.Serialize(artifact));
+            var evidence = new NativeRouteEvidence(
+                specification.RouteIdentity,
+                "route.json",
+                ArtifactStore.HashFile(path),
+                DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+                physicalIndex,
+                specification.PhysicalCardinality,
+                true,
+                false,
+                specification.FiniteLimit,
+                specification.FiniteLimit);
+
+            DiagnosticsNativePlanContract.ValidateEnvelope(
+                "postgresql",
+                artifact.Adapter,
+                evidence,
+                path);
+        }
+        finally
+        {
+            directory.Delete(true);
+        }
+    }
+
     [Theory]
     [InlineData("unknown-helper")]
     [InlineData("payload-removal")]
