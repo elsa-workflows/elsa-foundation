@@ -1408,9 +1408,21 @@ public sealed class GroundworkV2OpenTelemetryTests
 
         public async ValueTask DisposeAsync()
         {
-            await store.DisposeAsync();
-            await lease.DisposeAsync();
-            connection.Dispose();
+            try
+            {
+                await store.DisposeAsync();
+            }
+            finally
+            {
+                try
+                {
+                    await lease.DisposeAsync();
+                }
+                finally
+                {
+                    connection.Dispose();
+                }
+            }
         }
     }
 
