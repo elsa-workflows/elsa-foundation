@@ -2499,6 +2499,8 @@ public static class DiagnosticsNativePlanContract
         if (stages.Any(stage => stage.TryGetProperty("stage", out var value) && value.ValueKind == JsonValueKind.String &&
                                 string.Equals(value.GetString(), "COLLSCAN", StringComparison.OrdinalIgnoreCase)))
             throw BlockedPlan(specification, "MongoDB collection scan");
+        if (stages.Any(stage => stage.TryGetProperty("stage", out var value) && value.ValueKind != JsonValueKind.String))
+            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' retained plan is not the exact MongoDB index scan.");
         var indexScans = stages
             .Where(stage => stage.TryGetProperty("stage", out var value) &&
                             value.ValueKind == JsonValueKind.String &&

@@ -1173,17 +1173,27 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         Assert.Contains("exact MongoDB index scan", exception.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void Mongo_strict_admission_rejects_a_non_string_stage_as_a_contract_failure()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Mongo_strict_admission_rejects_a_non_string_stage_as_a_contract_failure(bool nested)
     {
         var specification = DiagnosticsNativePlanContract.For(
             DiagnosticsNativePlanContract.GroundworkAdapter,
             "resources-by-service");
+        var winningPlan = nested
+            ? new JsonObject
+            {
+                ["stage"] = "IXSCAN",
+                ["indexName"] = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("mongodb", specification),
+                ["inputStage"] = new JsonObject { ["stage"] = 1 }
+            }
+            : new JsonObject { ["stage"] = 1 };
         var nativePlan = new JsonObject
         {
             ["queryPlanner"] = new JsonObject
             {
-                ["winningPlan"] = new JsonObject { ["stage"] = 1 }
+                ["winningPlan"] = winningPlan
             }
         };
         using var fixture = Fixture.Create(
