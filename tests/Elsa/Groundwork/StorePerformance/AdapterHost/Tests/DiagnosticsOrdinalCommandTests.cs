@@ -221,6 +221,64 @@ public sealed class DiagnosticsOrdinalCommandTests(ITestOutputHelper output)
             command.Replace("AND \"sequence\" > @sequence", string.Empty, StringComparison.Ordinal)));
     }
 
+    [Theory]
+    [InlineData("column-order")]
+    [InlineData("operator")]
+    [InlineData("parameter-reuse")]
+    [InlineData("extra-condition")]
+    [InlineData("tuple-collation")]
+    [InlineData("tuple-collation-missing")]
+    [InlineData("scope-collation")]
+    [InlineData("route-collation")]
+    [InlineData("malformed-conjunction")]
+    [InlineData("unbalanced-parentheses")]
+    public void PostgreSql_tuple_cursor_comparison_rejects_non_equivalent_shapes(string mutation)
+    {
+        var specification = Specification("trace-detail/spans-by-trace-key-start-id");
+        var command = Render("postgresql", specification, continuation: true);
+        var orderIndex = command.IndexOf(" ORDER BY ", StringComparison.Ordinal);
+        Assert.True(orderIndex > 0);
+        var predicateCommand = command[..orderIndex];
+        var invalid = mutation switch
+        {
+            "column-order" => command.Replace(
+                "(\"startTime\", (\"__groundwork_ordinal_spanId\" COLLATE \"C\"), \"sequence\")",
+                "(\"__groundwork_ordinal_spanId\" COLLATE \"C\", \"startTime\", \"sequence\")",
+                StringComparison.Ordinal),
+            "operator" => command.Replace(") > (", ") < (", StringComparison.Ordinal),
+            "parameter-reuse" => command.Replace("@p4", "@p1", StringComparison.Ordinal),
+            "extra-condition" => command.Replace(
+                " ORDER BY ",
+                " AND \"sequence\" = @p6 ORDER BY ",
+                StringComparison.Ordinal),
+            "tuple-collation" => predicateCommand.Replace(
+                "(\"__groundwork_ordinal_spanId\" COLLATE \"C\")",
+                "(\"__groundwork_ordinal_spanId\" COLLATE \"POSIX\")",
+                StringComparison.Ordinal) + command[orderIndex..],
+            "tuple-collation-missing" => predicateCommand.Replace(
+                "(\"__groundwork_ordinal_spanId\" COLLATE \"C\")",
+                "\"__groundwork_ordinal_spanId\"",
+                StringComparison.Ordinal) + command[orderIndex..],
+            "scope-collation" => command.Replace(
+                "\"__groundwork_scope\" COLLATE \"C\"",
+                "\"__groundwork_scope\" COLLATE \"POSIX\"",
+                StringComparison.Ordinal),
+            "route-collation" => command.Replace(
+                "\"traceKey\" COLLATE \"C\"",
+                "\"traceKey\" COLLATE \"POSIX\"",
+                StringComparison.Ordinal),
+            "malformed-conjunction" => command.Replace(
+                " AND ",
+                " AND AND ",
+                StringComparison.Ordinal),
+            "unbalanced-parentheses" => command.Replace(" WHERE ", " WHERE ) ", StringComparison.Ordinal),
+            _ => throw new ArgumentOutOfRangeException(nameof(mutation), mutation, null)
+        };
+
+        Assert.NotEqual(command, invalid);
+        Assert.Throws<PerformanceContractException>(() => Validate("postgresql", specification, invalid));
+    }
+
     [Fact]
     public void Trace_summary_unselected_renderer_keeps_the_raw_trace_key_order()
     {

@@ -36,6 +36,12 @@ MongoDB proves this exception from the aggregate explain's winning `COLLSCAN` pl
 pipeline `$sort` and finite limit; an `IXSCAN` followed by a pipeline sort remains a blocked strict
 route. SQLite retains the stricter index-search requirement proven by its native plan.
 
+PostgreSQL trace-detail command admission also accepts the published preview.16 row-value
+continuation for required, uniformly directed ordering columns. The complete ordered tuple,
+comparison direction, distinct cursor parameters, scope and trace-key equalities, and ordinal
+`C` collations must remain intact. Nullable and mixed-direction continuations keep their existing
+portable form; this compatibility rule does not admit extra predicates or relax native-plan gates.
+
 MongoDB command admission permits the renderer's exact ordering-helper removal projection between
 sort and limit. It requires every rendered helper to be removed and rejects unknown helper fields,
 payload removal, helper inclusion, and additional post-sort stages. This is a released-renderer
