@@ -64,6 +64,7 @@ public sealed class ForEach : StructuralActivity, IRuntimeStructuralActivity, IR
     public object? Collection { get; set; }
 
     /// <summary>When <c>true</c>, the zero-based iteration index is exposed to the body alongside the current item.</summary>
+    [ActivityInput(Key = nameof(ExposeIndex))]
     public bool ExposeIndex { get; set; } = true;
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
