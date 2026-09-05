@@ -36,9 +36,10 @@ Blocked diagnostics captures retain a separate `*.blocked-capture.json` diagnost
 route, phase, stable reason code, and hashes of provider-normalized rejected plans. These files are
 failure diagnostics, not accepted native-plan evidence. Durability timeout messages distinguish
 counts not yet visible, a diagnostics read in progress, a trace read in progress, and a missing trace.
-The outer failure path also normalizes and safety-checks retained plans before placing them in the
-upload directory. Malformed, oversized, or unsafe files are omitted with a value-free rejection
-count; they do not replace the original capture exception.
+Both blocked-route and outer-failure paths normalize and safety-check retained plans before placing
+them in the upload directory. Malformed, oversized, or unsafe files are omitted with a value-free
+rejection count; they do not replace the original capture exception or turn blocked evidence into an
+accepted native-plan claim.
 
 The performance workflow passes `--require-complete-native-plan` to the operator runner's
 `correctness` command, refusing incomplete capture before costly verification. The flag is opt-in:

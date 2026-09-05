@@ -427,7 +427,7 @@ internal static class DiagnosticsNativePlanCapture
                 PreserveSafeExplainArtifact(source, Path.Combine(outputDirectory, reference), provider);
                 retained.Add(reference);
             }
-            catch (Exception exception) when (exception is PerformanceContractException or IOException or UnauthorizedAccessException)
+            catch (Exception exception) when (IsExplainRetentionFailure(exception))
             {
                 rejected++;
             }
@@ -521,6 +521,7 @@ internal static class DiagnosticsNativePlanCapture
         Directory.CreateDirectory(outputDirectory);
         var slug = route.Replace("/", "-", StringComparison.Ordinal);
         var retained = new List<DiagnosticsBlockedRawPlanEvidence>();
+        var rejected = 0;
         foreach (var source in candidates.Distinct(pathComparison == StringComparison.OrdinalIgnoreCase
                      ? StringComparer.OrdinalIgnoreCase
                      : StringComparer.Ordinal).Order(StringComparer.Ordinal))
@@ -528,12 +529,24 @@ internal static class DiagnosticsNativePlanCapture
             var reference = ArtifactStore.RawPlanName(
                 $"diagnostics.{provider}.{measurementSetId}.blocked-{slug}-{retained.Count + 1}{extension}");
             var destination = Path.Combine(outputDirectory, reference);
-            PreserveSafeExplainArtifact(source, destination, provider);
-            retained.Add(new DiagnosticsBlockedRawPlanEvidence(reference, ArtifactStore.HashFile(destination)));
+            try
+            {
+                PreserveSafeExplainArtifact(source, destination, provider);
+                retained.Add(new DiagnosticsBlockedRawPlanEvidence(reference, ArtifactStore.HashFile(destination)));
+            }
+            catch (Exception exception) when (IsExplainRetentionFailure(exception))
+            {
+                rejected++;
+            }
         }
 
+        if (rejected != 0)
+            Console.Error.WriteLine($"native-plan.blocked-retention-rejected; count={rejected}");
         return retained;
     }
+
+    private static bool IsExplainRetentionFailure(Exception exception) =>
+        exception is PerformanceContractException or IOException or UnauthorizedAccessException;
 
     private static void PreserveSafeExplainArtifact(string source, string destination, string provider)
     {

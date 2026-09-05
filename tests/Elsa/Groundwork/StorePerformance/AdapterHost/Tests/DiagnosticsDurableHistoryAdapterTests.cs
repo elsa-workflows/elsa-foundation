@@ -547,6 +547,13 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
             File.WriteAllText(
                 xmlPath,
                 "<ShowPlanXML xmlns=\"http://schemas.microsoft.com/sqlserver/2004/07/showplan\"><RelOp PhysicalOp=\"Index Scan\" /></ShowPlanXML>");
+            File.WriteAllText(Path.Combine(xmlExplain.FullName, "000002-malformed.xml"), "<invalid");
+            File.WriteAllText(
+                Path.Combine(xmlExplain.FullName, "000003-unsafe.xml"),
+                "<ShowPlanXML><RelOp Note=\"https://example.invalid/private\" /></ShowPlanXML>");
+            File.WriteAllText(
+                Path.Combine(xmlExplain.FullName, "000004-oversized.xml"),
+                new string('x', 16 * 1024 * 1024 + 1));
             var xmlRetained = DiagnosticsNativePlanCapture.PreserveBlockedExplainArtifacts(
                 xmlExplain.FullName,
                 new HashSet<string>(StringComparer.Ordinal),
@@ -559,6 +566,7 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
             var normalizedXml = File.ReadAllText(Path.Combine(xmlOutput.FullName, xmlRetained[0].Reference));
             Assert.DoesNotContain("http://", normalizedXml, StringComparison.Ordinal);
             Assert.Contains("<ShowPlanXML>", normalizedXml, StringComparison.Ordinal);
+            Assert.Single(Directory.EnumerateFiles(xmlOutput.FullName));
 
             var request = Request() with { Provider = "sqlserver", MeasurementSetId = "diagnostics-set" };
             var blockedRoute = new DiagnosticsBlockedRouteEvidence(
@@ -569,6 +577,7 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
                 File.ReadAllText(diagnosticPath), ArtifactStore.JsonOptions)!;
             Assert.Equal(digest, ArtifactStore.HashFile(diagnosticPath));
             Assert.Equal("native-plan.index-scan", Assert.Single(document.Routes).ReasonCode);
+            Assert.Equal("route-plan-validation", Assert.Single(document.Routes).FailurePhase);
             Assert.Equal(xmlRetained[0], Assert.Single(document.Routes[0].RawPlans));
             Assert.Empty(Directory.EnumerateFiles(xmlOutput.FullName, "*.native-plan.json"));
         }
