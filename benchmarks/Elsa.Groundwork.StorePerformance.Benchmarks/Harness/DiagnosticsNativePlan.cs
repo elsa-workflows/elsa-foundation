@@ -1819,10 +1819,16 @@ public static class DiagnosticsNativePlanContract
             .Where(item => item.Stage.TryGetProperty("$limit", out _)).ToArray();
         if (sortStages.Length != 1 || limits.Length != 1 ||
             matchStages.Any(item => item.Index >= sortStages[0].Index) ||
-            sortStages[0].Index + 1 != limits[0].Index ||
+            sortStages[0].Index >= limits[0].Index ||
             limits[0].Index != stages.Length - 1 ||
             stages.Take(sortStages[0].Index).Any(stage =>
                 !stage.TryGetProperty("$match", out _) && !stage.TryGetProperty("$set", out _)) ||
+            !ValidateMongoPostSortStages(
+                stages,
+                sortStages[0].Index,
+                limits[0].Index,
+                sortStages[0].Stage.GetProperty("$sort"),
+                specification) ||
             !ValidateMongoPipelineOrdering(pipeline, sortStages[0].Stage.GetProperty("$sort"), specification))
             throw new PerformanceContractException(
                 $"Diagnostics route '{specification.RouteIdentity}' MongoDB aggregate command does not bind its complete effective ordering.");
@@ -1833,6 +1839,36 @@ public static class DiagnosticsNativePlanContract
                 $"Diagnostics route '{specification.RouteIdentity}' MongoDB aggregate command does not bind its finite page limit.");
 
         return ParseMongoOrdering(sortStages[0].Stage.GetProperty("$sort"));
+    }
+
+    private static bool ValidateMongoPostSortStages(
+        IReadOnlyList<JsonElement> stages,
+        int sortIndex,
+        int limitIndex,
+        JsonElement sort,
+        DiagnosticsNativeRouteSpec specification)
+    {
+        var betweenSortAndLimit = stages.Skip(sortIndex + 1).Take(limitIndex - sortIndex - 1).ToArray();
+        if (betweenSortAndLimit.Length == 0)
+            return true;
+        if (betweenSortAndLimit.Length != 1 ||
+            !betweenSortAndLimit[0].TryGetProperty("$project", out var project) ||
+            project.ValueKind != JsonValueKind.Object)
+            return false;
+
+        var expected = MatchingMongoRenderedOrdering(sort, specification);
+        if (expected is null)
+            return false;
+
+        var helpers = expected
+            .Where(term => term.Column.StartsWith("_groundwork_", StringComparison.Ordinal))
+            .Select(term => term.Column)
+            .ToHashSet(StringComparer.Ordinal);
+        var projection = project.EnumerateObject().ToArray();
+        return helpers.Count != 0 &&
+               projection.Length == helpers.Count &&
+               helpers.SetEquals(projection.Select(property => property.Name)) &&
+               projection.All(property => property.Value.TryGetInt32(out var mode) && mode == 0);
     }
 
     private static IReadOnlyList<(string Column, RuntimeNativeOrderDirection Direction)> ValidateMongoFindCommand(
@@ -1984,18 +2020,12 @@ public static class DiagnosticsNativePlanContract
             ValidateMongoOrdering(sort, specification))
             return !pipeline.EnumerateArray().Any(stage => stage.TryGetProperty("$set", out _));
 
-        var actual = ParseMongoOrdering(sort);
         // Index metadata can prove every ordered column non-null independently of whether the
         // provider options recognize a physical string order key. Preview.11's StorageUnit helper
         // carries the former but not the latter for Elsa's explicit idOrderKey column, so the
         // released Mongo shape suppresses null ranks while still rendering ordinal helpers for
         // both idOrderKey and id. Keep the candidates explicit and validate every helper below.
-        var expected = new[]
-            {
-                ExpectedMongoRenderedOrdering(specification, includeNullRanks: true),
-                ExpectedMongoRenderedOrdering(specification, includeNullRanks: false)
-            }
-            .FirstOrDefault(candidate => OrderingMatches(actual, candidate));
+        var expected = MatchingMongoRenderedOrdering(sort, specification);
         if (expected is null)
             return false;
 
@@ -2081,6 +2111,19 @@ public static class DiagnosticsNativePlanContract
             return false;
         var values = arguments.EnumerateArray().ToArray();
         return values.Length == 1 && values[0].ValueKind == JsonValueKind.String && values[0].GetString() == source;
+    }
+
+    private static IReadOnlyList<(string Column, RuntimeNativeOrderDirection Direction)>? MatchingMongoRenderedOrdering(
+        JsonElement sort,
+        DiagnosticsNativeRouteSpec specification)
+    {
+        var actual = ParseMongoOrdering(sort);
+        return new[]
+            {
+                ExpectedMongoRenderedOrdering(specification, includeNullRanks: true),
+                ExpectedMongoRenderedOrdering(specification, includeNullRanks: false)
+            }
+            .FirstOrDefault(candidate => OrderingMatches(actual, candidate));
     }
 
     private static IReadOnlyList<(string Column, RuntimeNativeOrderDirection Direction)> ExpectedMongoRenderedOrdering(

@@ -32,6 +32,11 @@ classified as `bounded-scan-sort`. That classification is rejected for any other
 incomplete ordering, or for any spill/materialization evidence; it does not weaken the 100,000-row
 stream gates. SQLite retains the stricter index-search requirement proven by its native plan.
 
+MongoDB command admission permits the renderer's exact ordering-helper removal projection between
+sort and limit. It requires every rendered helper to be removed and rejects unknown helper fields,
+payload removal, helper inclusion, and additional post-sort stages. This is a released-renderer
+compatibility rule, not permission for arbitrary post-sort transformations.
+
 `matrix <scale>` executes one untimed adapter-host warm-up process followed by three independent measured
 adapter-host processes. A measured artifact carries the frozen seed/input fingerprint, provider-native plan
 identity/evidence reference/content digest, provider server version/topology/material settings, an opaque
