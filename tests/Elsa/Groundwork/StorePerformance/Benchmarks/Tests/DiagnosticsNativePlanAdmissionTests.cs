@@ -303,7 +303,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             specification.TableName,
             specification.IndexName,
             physicalIndex,
-            "SELECT * FROM elsa_otel_spans_v2 WHERE __groundwork_scope = @scope AND traceKey = @traceKey ORDER BY startTime ASC, spanId ASC, sequence ASC LIMIT 127",
+            "SELECT * FROM elsa_otel_spans_v2 WHERE __groundwork_scope = @scope AND traceKey = @traceKey ORDER BY startTime ASC, __groundwork_ordinal_spanId ASC, sequence ASC LIMIT 127",
             $"2 0 SEARCH elsa_otel_spans_v2 USING INDEX {physicalIndex} (__groundwork_scope=? AND traceKey=?)");
         File.WriteAllText(path, JsonSerializer.Serialize(artifact));
         var evidence = new DiagnosticsTraceDetailConstituentEvidence(
@@ -358,7 +358,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             specification.TableName,
             specification.IndexName,
             physicalIndex,
-            "SELECT * FROM elsa_otel_logs_v2 WHERE __groundwork_scope = @scope AND traceKey = @traceKey ORDER BY timestamp ASC, id ASC, sequence ASC LIMIT 127",
+            "SELECT * FROM elsa_otel_logs_v2 WHERE __groundwork_scope = @scope AND traceKey = @traceKey ORDER BY timestamp ASC, __groundwork_ordinal_id ASC, sequence ASC LIMIT 127",
             $"2 0 SCAN elsa_otel_logs_v2\n3 0 USE TEMP B-TREE FOR ORDER BY");
         File.WriteAllText(path, JsonSerializer.Serialize(artifact));
         var evidence = new DiagnosticsTraceDetailConstituentEvidence(
@@ -412,9 +412,9 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             "((\"__groundwork_scope\" COLLATE GROUNDWORK_UTF16_ORDINAL IS NOT NULL AND \"__groundwork_scope\" COLLATE GROUNDWORK_UTF16_ORDINAL = @p0) " +
             "AND (\"traceKey\" COLLATE GROUNDWORK_UTF16_ORDINAL IS NOT NULL AND \"traceKey\" COLLATE GROUNDWORK_UTF16_ORDINAL = @p1)) " +
             "AND ((((\"startTime\" IS NOT NULL AND \"startTime\" > @p2) OR \"startTime\" IS NULL) " +
-            "OR ((\"startTime\" IS NOT NULL AND \"startTime\" = @p3) AND ((\"spanId\" COLLATE GROUNDWORK_UTF16_ORDINAL IS NOT NULL AND \"spanId\" COLLATE GROUNDWORK_UTF16_ORDINAL > @p4) OR \"spanId\" COLLATE GROUNDWORK_UTF16_ORDINAL IS NULL)) " +
-            "OR ((\"startTime\" IS NOT NULL AND \"startTime\" = @p5) AND (\"spanId\" COLLATE GROUNDWORK_UTF16_ORDINAL IS NOT NULL AND \"spanId\" COLLATE GROUNDWORK_UTF16_ORDINAL = @p6) AND ((\"sequence\" IS NOT NULL AND \"sequence\" > @p7) OR \"sequence\" IS NULL))) " +
-            "ORDER BY \"startTime\" ASC, \"spanId\" COLLATE GROUNDWORK_UTF16_ORDINAL ASC, \"sequence\" ASC LIMIT @p8;";
+            "OR ((\"startTime\" IS NOT NULL AND \"startTime\" = @p3) AND ((\"__groundwork_ordinal_spanId\" COLLATE GROUNDWORK_UTF16_ORDINAL IS NOT NULL AND \"__groundwork_ordinal_spanId\" COLLATE GROUNDWORK_UTF16_ORDINAL > @p4) OR \"__groundwork_ordinal_spanId\" COLLATE GROUNDWORK_UTF16_ORDINAL IS NULL)) " +
+            "OR ((\"startTime\" IS NOT NULL AND \"startTime\" = @p5) AND (\"__groundwork_ordinal_spanId\" COLLATE GROUNDWORK_UTF16_ORDINAL IS NOT NULL AND \"__groundwork_ordinal_spanId\" COLLATE GROUNDWORK_UTF16_ORDINAL = @p6) AND ((\"sequence\" IS NOT NULL AND \"sequence\" > @p7) OR \"sequence\" IS NULL))) " +
+            "ORDER BY \"startTime\" ASC, \"__groundwork_ordinal_spanId\" COLLATE GROUNDWORK_UTF16_ORDINAL ASC, \"sequence\" ASC LIMIT @p8;";
         var artifact = new DiagnosticsNativePlanArtifact(
             1,
             "sqlite",
@@ -450,7 +450,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     }
 
     [Fact]
-    public void SqlServer_trace_detail_continuation_accepts_exact_string_length_boundaries()
+    public void SqlServer_trace_detail_continuation_keeps_raw_predicate_length_boundaries_but_orders_on_persisted_keys()
     {
         var specification = DiagnosticsNativePlanContract.TraceDetailConstituents(
                 DiagnosticsNativePlanContract.GroundworkAdapter)
@@ -474,9 +474,9 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             $"(([__groundwork_scope]{collation} IS NOT NULL AND DATALENGTH([__groundwork_scope]{collation}) = DATALENGTH(@p0) AND [__groundwork_scope]{collation} = @p0) " +
             $"AND ([traceKey]{collation} IS NOT NULL AND DATALENGTH([traceKey]{collation}) = DATALENGTH(@p1) AND [traceKey]{collation} = @p1)) " +
             "AND (((([startTime] IS NOT NULL AND [startTime] > @p2) OR [startTime] IS NULL) " +
-            $"OR (([startTime] IS NOT NULL AND [startTime] = @p3) AND ((([spanId]{collation} IS NOT NULL AND [spanId]{collation} > @p4) OR ([spanId]{collation} = @p4 AND DATALENGTH([spanId]{collation}) > DATALENGTH(@p4))) OR [spanId]{collation} IS NULL)) " +
-            $"OR (([startTime] IS NOT NULL AND [startTime] = @p5) AND ([spanId]{collation} IS NOT NULL AND DATALENGTH([spanId]{collation}) = DATALENGTH(@p6) AND [spanId]{collation} = @p6) AND (([sequence] IS NOT NULL AND [sequence] > @p7) OR [sequence] IS NULL))) " +
-            $"ORDER BY [startTime] ASC, [spanId]{collation} ASC, DATALENGTH([spanId]{collation}) ASC, [sequence] ASC OFFSET 0 ROWS FETCH NEXT @p8 ROWS ONLY;";
+            $"OR (([startTime] IS NOT NULL AND [startTime] = @p3) AND ([__groundwork_ordinal_spanId]{collation} > @p4)) " +
+            $"OR (([startTime] IS NOT NULL AND [startTime] = @p5) AND ([__groundwork_ordinal_spanId]{collation} = @p6) AND (([sequence] IS NOT NULL AND [sequence] > @p7) OR [sequence] IS NULL))) " +
+            $"ORDER BY [startTime] ASC, [__groundwork_ordinal_spanId]{collation} ASC, [sequence] ASC OFFSET 0 ROWS FETCH NEXT @p8 ROWS ONLY;";
         using var directory = new TemporaryDirectory();
         var path = Path.Combine(directory.FullName, "sqlserver-continuation.raw.json");
         var artifact = new DiagnosticsNativePlanArtifact(
@@ -514,9 +514,9 @@ public sealed class DiagnosticsNativePlanAdmissionTests
 
         var invalidCommands = new[]
         {
-            command.Replace("DATALENGTH(@p4)", "DATALENGTH(@wrong)", StringComparison.Ordinal),
+            command.Replace("DATALENGTH(@p1)", "DATALENGTH(@wrong)", StringComparison.Ordinal),
             command.Replace(
-                $" AND DATALENGTH([spanId]{collation}) > DATALENGTH(@p4)",
+                $"DATALENGTH([traceKey]{collation}) = DATALENGTH(@p1) AND ",
                 string.Empty,
                 StringComparison.Ordinal)
         };
@@ -606,7 +606,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         pipeline.Add(JsonNode.Parse("""
             {"$sort":{"lastSeen":-1,"idOrderKey":1,"_groundwork_ordinal_key_2":1}}
             """));
-        pipeline.Add(new JsonObject { ["$limit"] = specification.FiniteLimit });
+        pipeline.Add(new JsonObject { ["$limit"] = specification.FiniteLimit + 1 });
         using var fixture = Fixture.Create(
             "mongodb",
             specification.RouteIdentity,
@@ -617,7 +617,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                     "winningPlan": {
                       "stage": "SORT",
                       "sortPattern": { "lastSeen": -1, "idOrderKey": 1, "_groundwork_ordinal_key_2": 1 },
-                      "limitAmount": 127,
+                      "limitAmount": 128,
                       "inputStage": { "stage": "COLLSCAN", "direction": "forward" }
                     }
                   }
@@ -646,7 +646,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                     "winningPlan": {
                       "stage": "SORT",
                       "sortPattern": { "lastSeen": -1, "_groundwork_ordinal_key_1": 1, "_groundwork_ordinal_key_2": 1 },
-                      "limitAmount": 127,
+                      "limitAmount": 128,
                       "inputStage": { "stage": "COLLSCAN", "direction": "forward" }
                     }
                   }
@@ -676,7 +676,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                     "winningPlan": {
                       "stage": "SORT",
                       "sortPattern": { "lastSeen": -1, "idOrderKey": 1, "_groundwork_ordinal_key_2": 1 },
-                      "limitAmount": 127,
+                      "limitAmount": 128,
                       "inputStage": { "stage": "COLLSCAN", "direction": "forward" }
                     }
                   }
@@ -715,7 +715,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                     "winningPlan": {
                       "stage": "SORT",
                       "sortPattern": { "lastSeen": -1, "idOrderKey": 1, "_groundwork_ordinal_key_2": 1 },
-                      "limitAmount": 127,
+                      "limitAmount": 128,
                       "inputStage": { "stage": "COLLSCAN", "direction": "forward" }
                     }
                   }
@@ -814,7 +814,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             evidenceDocument.Scale,
             evidenceDocument.CommitSha,
             evidenceDocument.HarnessAssemblySha256,
-            new Dictionary<string, string> { ["Groundwork.MongoDb"] = "0.4.0-preview.13" },
+            new Dictionary<string, string> { ["Groundwork.MongoDb"] = "0.4.0-preview.15" },
             evidenceDocument.CompositionFingerprint,
             evidenceDocument.HostFingerprintSha256,
             evidenceDocument.ProviderVersion,
@@ -1034,7 +1034,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 "winningPlan": {
                   "stage": "SORT",
                   "sortPattern": { "lastSeen": -1, "idOrderKey": 1, "id": 1 },
-                  "limitAmount": 127,
+                  "limitAmount": 128,
                   "inputStage": { "stage": "COLLSCAN", "direction": "forward" }
                 }
               }
@@ -1066,7 +1066,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                     "winningPlan": {
                       "stage": "SORT",
                       "sortPattern": { "lastSeen": -1, "_groundwork_ordinal_key_1": 1, "_groundwork_ordinal_key_2": 1 },
-                      "limitAmount": 127,
+                      "limitAmount": 128,
                       "inputStage": { "stage": "COLLSCAN", "direction": "forward" }
                     }
                   },
@@ -1614,7 +1614,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                   "queryPlanner": {
                     "winningPlan": {
                       "stage": "SORT",
-                      "limitAmount": 127,
+                      "limitAmount": 128,
                       "inputStage": { "stage": "COLLSCAN" }
                     }
                   }
@@ -1645,7 +1645,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                   "queryPlanner": {
                     "winningPlan": {
                       "stage": "SORT",
-                      "limitAmount": 127,
+                      "limitAmount": 128,
                       "inputStage": { "stage": "COLLSCAN" }
                     }
                   }
@@ -1677,7 +1677,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                   "queryPlanner": {
                     "winningPlan": {
                       "stage": "SORT",
-                      "limitAmount": 127,
+                      "limitAmount": 128,
                       "inputStage": { "stage": "COLLSCAN" }
                     }
                   },
@@ -1709,7 +1709,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                   "queryPlanner": {
                     "winningPlan": {
                       "stage": "SORT",
-                      "limitAmount": 127,
+                      "limitAmount": 128,
                       "inputStage": { "stage": "COLLSCAN" }
                     }
                   }
@@ -1769,11 +1769,11 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                   { "startTime": { "$gt": 1 } },
                   { "$and": [
                     { "startTime": { "$eq": 1 } },
-                    { "spanId": { "$gt": "span" } }
+                    { "__groundwork_ordinal_spanId": { "$gt": "span" } }
                   ] },
                   { "$and": [
                     { "startTime": { "$eq": 1 } },
-                    { "spanId": { "$eq": "span" } },
+                    { "__groundwork_ordinal_spanId": { "$eq": "span" } },
                     { "sequence": { "$gt": 1 } }
                   ] }
                 ]
@@ -2411,6 +2411,13 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             string? collection = null,
             string? match = null)
         {
+            if (specification.RouteIdentity == "trace-detail/spans-by-trace-key-start-id")
+                specification = specification with
+                {
+                    Ordering = specification.EffectiveOrdering.Select(term => term.Column == "spanId"
+                        ? term with { Column = "__groundwork_ordinal_spanId" }
+                        : term).ToArray()
+                };
             var matchNode = JsonNode.Parse(match ??
                 (specification.PredicateColumn is null ? "{}" : $"{{\"{specification.PredicateColumn}\":1}}"))!;
             var pipeline = new JsonArray(new JsonObject { ["$match"] = matchNode });
@@ -2425,7 +2432,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 sort[column] = term.Direction == RuntimeNativeOrderDirection.Descending ? -1 : 1;
             }
             pipeline.Add(new JsonObject { ["$sort"] = sort });
-            pipeline.Add(new JsonObject { ["$limit"] = specification.FiniteLimit });
+            pipeline.Add(new JsonObject { ["$limit"] = specification.FiniteLimit + 1 });
             return new JsonObject
             {
                 ["aggregate"] = collection ?? MongoPhysicalCollection(specification),

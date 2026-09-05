@@ -53,6 +53,9 @@ public static class V2OpenTelemetryStorageSchema
     public const string BatchId = "batchId";
     public const string CreatedAt = "createdAt";
 
+    internal const string IdOrdinalIdentity = "__groundwork_ordinal_id";
+    internal const string SpanIdOrdinalIdentity = "__groundwork_ordinal_spanId";
+
     internal const string TraceSummaryStartIndex = "elsa_otel_trace_summaries_start";
     internal const string SpanTraceDetailIndex = "elsa_otel_spans_trace_detail";
     internal const string MetricPointTimestampIndex = "elsa_otel_metric_points_timestamp";
@@ -143,13 +146,14 @@ public static class V2OpenTelemetryStorageSchema
         (builder) => builder
             .String(TraceId, V2OpenTelemetryCodec.MaximumTraceIdCodeUnits, c => c.Required())
             .String(TraceKey, 64, c => c.Required())
-            .String(SpanId, 256, c => c.Required())
+            .String(SpanId, 128, c => c.Required().OrdinalIdentity(SpanIdOrdinalIdentity))
             .String(ResourceId, 512, c => c.Required())
             .String(Name, c => c.Required())
             .Int64(Status, c => c.Required())
             .Timestamp(StartTime, c => c.Required())
             .Timestamp(EndTime, c => c.Required()),
         index => index
+            .UseOrdinalIdentities()
             .Ascending(TraceKey)
             .Ascending(StartTime)
             .Ascending(SpanId)
@@ -166,10 +170,12 @@ public static class V2OpenTelemetryStorageSchema
             .String(ServiceName, 512)
             .Timestamp(Timestamp, c => c.Required()),
         index => index
+            .UseOrdinalIdentities()
             .Descending(Timestamp)
             .Ascending(Id)
             .Ascending(Sequence),
-        MetricPointTimestampIndex);
+        MetricPointTimestampIndex,
+        idOrdinalIdentity: IdOrdinalIdentity);
 
     public static StorageUnit CreateLogs() => CreateSignal(
         LogUnitId,
@@ -185,15 +191,18 @@ public static class V2OpenTelemetryStorageSchema
             .String(Body, c => c.Required())
             .Timestamp(Timestamp, c => c.Required()),
         index => index
+            .UseOrdinalIdentities()
             .Descending(Timestamp)
             .Ascending(Id)
             .Ascending(Sequence),
         LogTimestampIndex,
         builder => builder.Index(LogTraceDetailIndex, index => index
+            .UseOrdinalIdentities()
             .Ascending(TraceKey)
             .Ascending(Timestamp)
             .Ascending(Id)
-            .Ascending(Sequence)));
+            .Ascending(Sequence)),
+        IdOrdinalIdentity);
 
     public static StorageUnit CreateResources() =>
         StorageUnit.Declare(ResourceUnitId, "elsa_otel_resources_v2")
@@ -258,11 +267,17 @@ public static class V2OpenTelemetryStorageSchema
         Func<StorageDeclarationBuilder, StorageDeclarationBuilder> fields,
         Action<IndexBuilder>? orderIndex = null,
         string? orderIndexName = null,
-        Action<StorageDeclarationBuilder>? additionalIndexes = null)
+        Action<StorageDeclarationBuilder>? additionalIndexes = null,
+        string? idOrdinalIdentity = null)
     {
         var builder = fields(StorageUnit.Declare(id, name)
                 .Int64(Sequence, c => c.Required().ProviderSequence())
-                .String(Id, 512, c => c.Required())
+                .String(Id, 128, c =>
+                {
+                    c.Required();
+                    if (idOrdinalIdentity is not null)
+                        c.OrdinalIdentity(idOrdinalIdentity);
+                })
                 .Json(Payload, c => c.Required()))
             .Key(Sequence);
 

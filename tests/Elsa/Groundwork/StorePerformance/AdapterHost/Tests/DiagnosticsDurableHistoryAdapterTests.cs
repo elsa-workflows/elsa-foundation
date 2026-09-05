@@ -428,7 +428,7 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
         var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("sqlite", route);
         var command =
             "SELECT * FROM elsa_otel_spans_v2 WHERE __groundwork_scope = @scope AND traceKey = @traceKey " +
-            "ORDER BY startTime ASC, spanId ASC, sequence ASC LIMIT 127";
+            "ORDER BY startTime ASC, __groundwork_ordinal_spanId ASC, sequence ASC LIMIT 127";
         var artifact = new DiagnosticsNativePlanArtifact(
             1,
             "sqlite",
