@@ -106,17 +106,24 @@ public sealed partial class DiagnosticsPersistenceArchitectureTests
             .ToArray();
 
         Assert.Equal(46, factRows.Length);
-        Assert.Equal(43, factRows.Count(line => line.Contains("covered", StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal(39, factRows.Count(line => line.Contains("covered", StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal(4, factRows.Count(line => line.Contains("Superseded contract:", StringComparison.Ordinal)));
         Assert.Equal(3, factRows.Count(line => line.Contains(
             "Retired at the Groundwork boundary", StringComparison.Ordinal)));
         Assert.All(factRows, line => Assert.True(
-            line.Contains("covered", StringComparison.OrdinalIgnoreCase) ^
-            line.Contains("Retired at the Groundwork boundary", StringComparison.Ordinal),
+            new[]
+            {
+                line.Contains("covered", StringComparison.OrdinalIgnoreCase),
+                line.Contains("Superseded contract:", StringComparison.Ordinal),
+                line.Contains("Retired at the Groundwork boundary", StringComparison.Ordinal)
+            }.Count(disposition => disposition) == 1,
             $"Ledger row must have exactly one closeout disposition: {line}"));
         var currentTestSources = Directory.EnumerateFiles(DiagnosticsTestRoot, "*.cs", SearchOption.AllDirectories)
             .Select(File.ReadAllText)
             .ToArray();
-        foreach (var row in factRows.Where(line => line.Contains("covered", StringComparison.OrdinalIgnoreCase)))
+        foreach (var row in factRows.Where(line =>
+                     line.Contains("covered", StringComparison.OrdinalIgnoreCase) ||
+                     line.Contains("Superseded contract:", StringComparison.Ordinal)))
         {
             var evidenceColumn = row.Split('|')[3];
             var evidence = LedgerEvidencePattern().Matches(evidenceColumn)
@@ -129,7 +136,7 @@ public sealed partial class DiagnosticsPersistenceArchitectureTests
         }
         var ledgerText = string.Join(Environment.NewLine, ledger);
         Assert.Contains($"**Groundwork baseline:** exact `{EfLedgerGroundworkVersion}`", ledgerText, StringComparison.Ordinal);
-        Assert.Contains("Disposition: 43 covered; 3 EF-mechanism-only facts retired at the Groundwork boundary", ledgerText, StringComparison.Ordinal);
+        Assert.Contains("Disposition: 39 covered; 4 superseded contracts; 3 EF-mechanism-only facts retired at the Groundwork boundary", ledgerText, StringComparison.Ordinal);
         Assert.DoesNotContain("one remaining OpenTelemetry test", ledgerText, StringComparison.OrdinalIgnoreCase);
     }
 

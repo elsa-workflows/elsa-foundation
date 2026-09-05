@@ -4,6 +4,7 @@ using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork;
 using Elsa.Diagnostics.Persistence.Draining;
+using Elsa.Diagnostics.Persistence.Observability;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.SqlServer;
@@ -448,6 +449,57 @@ public sealed class GroundworkV2OpenTelemetryTests
         Assert.Single((await fixture.Store.GetTraceAsync(trace.TraceId))!.Spans);
         Assert.Single((await fixture.Store.QueryMetricsAsync(new() { Take = 10 })).Points);
         Assert.Single((await fixture.Store.QueryLogsAsync(new() { Take = 10 })).Items);
+    }
+
+    [Fact]
+    public async Task SQLite_negative_shutdown_timeout_settles_an_accepted_capture_at_the_adapter_boundary()
+    {
+        using var database = new TemporarySqliteDatabase();
+        using var inner = new SqliteProviderFactory().Create(database.ConnectionString);
+        var gate = new BeforeCommitGate();
+        using var connection = new FaultInjectingConnection(
+            inner,
+            CommitFault.BeforeCommit,
+            beforeCommitGate: gate);
+        var observer = new DiagnosticsPersistenceCounters();
+        await using var fixture = await OpenStoreAsync(
+            database,
+            new OpenTelemetryDiagnosticsOptions
+            {
+                ShutdownDrainTimeout = TimeSpan.FromSeconds(-1),
+                MaxQuerySize = 100
+            },
+            start: true,
+            observer: observer,
+            connectionOverride: connection);
+
+        await fixture.Store.WriteAsync(CaptureBatch("negative-shutdown"));
+        var entered = false;
+        try
+        {
+            await gate.Entered.WaitAsync(TimeSpan.FromSeconds(10));
+            entered = true;
+
+            var accepted = observer.Snapshot();
+            Assert.Equal(1, accepted.Accepted);
+            Assert.Equal(0, accepted.QueueDepth);
+
+            await fixture.Store.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+
+            var snapshot = observer.Snapshot();
+            Assert.Equal(DiagnosticsDrainState.TimedOut, snapshot.State);
+            Assert.All(
+                snapshot.Losses,
+                entry => Assert.Equal(
+                    entry.Key == DiagnosticsPersistenceLossReason.ShutdownTimeout ? 1L : 0L,
+                    entry.Value));
+        }
+        finally
+        {
+            gate.Release();
+            if (entered)
+                await gate.Exited.WaitAsync(TimeSpan.FromSeconds(10));
+        }
     }
 
     [Fact]
@@ -1062,14 +1114,17 @@ public sealed class GroundworkV2OpenTelemetryTests
         V2OpenTelemetryBinding? binding = null,
         bool start = false,
         IOpenTelemetrySourceRegistry? sourceRegistry = null,
-        IProviderCommandObserver? commandObserver = null)
+        IDiagnosticsPersistenceObserver? observer = null,
+        IProviderCommandObserver? commandObserver = null,
+        IStorageProviderConnection? connectionOverride = null)
     {
-        var connection = new SqliteProviderFactory().Create(database.ConnectionString);
+        var connection = connectionOverride ?? new SqliteProviderFactory().Create(database.ConnectionString);
         var store = new GroundworkOpenTelemetryStore(
             connection,
             Options.Create(options ?? new OpenTelemetryDiagnosticsOptions { MaxQuerySize = 100 }),
             binding ?? V2OpenTelemetryBinding.Default,
             sourceRegistry: sourceRegistry,
+            observer: observer,
             commandObserver: commandObserver);
         IDiagnosticsPersistenceResourceLease? lease = null;
         try
@@ -1121,18 +1176,34 @@ public sealed class GroundworkV2OpenTelemetryTests
         AfterCommit
     }
 
+    private sealed class BeforeCommitGate
+    {
+        private readonly TaskCompletionSource entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource exited = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Entered => entered.Task;
+        public Task Exited => exited.Task;
+        public void Enter() => entered.TrySetResult();
+        public Task WaitForReleaseAsync(CancellationToken cancellationToken) => release.Task.WaitAsync(cancellationToken);
+        public void Release() => release.TrySetResult();
+        public void Exit() => exited.TrySetResult();
+    }
+
     private sealed class FaultInjectingConnection(
         IStorageProviderConnection inner,
         CommitFault? fault,
         CapabilityId? hiddenCapability = null,
         int faultAtCommit = 1,
-        bool recordRetentionOperations = false) : IStorageProviderConnection
+        bool recordRetentionOperations = false,
+        BeforeCommitGate? beforeCommitGate = null) : IStorageProviderConnection
     {
         private readonly List<OperationId> retentionOperations = [];
         private int commitCount;
         private CommitFault? Fault { get; } = fault;
         private int FaultAtCommit { get; } = faultAtCommit;
         private bool RecordRetentionOperations { get; } = recordRetentionOperations;
+        private BeforeCommitGate? CommitGate { get; } = beforeCommitGate;
 
         public IReadOnlyList<OperationId> RetentionOperations
         {
@@ -1185,6 +1256,8 @@ public sealed class GroundworkV2OpenTelemetryTests
             FaultInjectingConnection owner,
             IUnitOfWork inner) : IUnitOfWork
         {
+            private int commitGateEntered;
+
             public IStorageSession OpenSession(StorageUnit unit)
             {
                 var session = inner.OpenSession(unit);
@@ -1204,6 +1277,13 @@ public sealed class GroundworkV2OpenTelemetryTests
                 var currentCommit = Interlocked.Increment(ref owner.commitCount);
                 if (currentCommit == owner.FaultAtCommit && owner.Fault == CommitFault.BeforeCommit)
                 {
+                    var gate = owner.CommitGate;
+                    if (gate is not null)
+                    {
+                        Volatile.Write(ref commitGateEntered, 1);
+                        gate.Enter();
+                        await gate.WaitForReleaseAsync(cancellationToken);
+                    }
                     inner.Rollback();
                     throw new IOException("Injected rollback before commit.");
                 }
@@ -1218,7 +1298,18 @@ public sealed class GroundworkV2OpenTelemetryTests
                 inner.CommitAsync(cancellationToken);
 
             public void Rollback() => inner.Rollback();
-            public void Dispose() => inner.Dispose();
+            public void Dispose()
+            {
+                try
+                {
+                    inner.Dispose();
+                }
+                finally
+                {
+                    if (Interlocked.Exchange(ref commitGateEntered, 0) != 0)
+                        owner.CommitGate?.Exit();
+                }
+            }
         }
 
         private sealed class RecordingRetentionSession(
@@ -1317,9 +1408,21 @@ public sealed class GroundworkV2OpenTelemetryTests
 
         public async ValueTask DisposeAsync()
         {
-            await lease.DisposeAsync();
-            await store.DisposeAsync();
-            connection.Dispose();
+            try
+            {
+                await store.DisposeAsync();
+            }
+            finally
+            {
+                try
+                {
+                    await lease.DisposeAsync();
+                }
+                finally
+                {
+                    connection.Dispose();
+                }
+            }
         }
     }
 

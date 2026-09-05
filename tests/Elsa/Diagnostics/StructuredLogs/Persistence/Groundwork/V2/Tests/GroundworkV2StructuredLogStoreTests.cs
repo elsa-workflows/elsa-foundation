@@ -4,11 +4,13 @@ using Elsa.Diagnostics.StructuredLogs.Core.Exceptions;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Core.Options;
 using Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork;
+using Elsa.Diagnostics.Persistence.Observability;
 using Elsa.Persistence.Groundwork.Composition;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Sqlite;
 using Groundwork.Store;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -191,6 +193,29 @@ public sealed class GroundworkV2StructuredLogStoreTests
     }
 
     [Fact]
+    public async Task Failed_append_rolls_back_durable_row_and_lifetime_high_water_before_commit()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        await fixture.CreateAppendFailureTriggerAsync();
+        var faulting = new AcknowledgementLosingSession(fixture.OpenSession());
+        var observer = new DiagnosticsPersistenceCounters();
+        await using var store = fixture.CreateStore(sessionOverride: faulting, observer: observer);
+
+        await Assert.ThrowsAsync<StructuredLogsException>(() =>
+            store.AppendAsync(Entry(99, "doomed")).AsTask());
+
+        Assert.Equal(1, observer.Snapshot().Accepted);
+        Assert.True(faulting.Calls > 0, "Expected the accepted append to reach the Groundwork provider.");
+        // Groundwork translates the trigger rejection to its atomic append failure,
+        // rather than exposing the SQLite trigger message through the drain.
+        var providerFailure = Assert.IsType<InvalidOperationException>(faulting.FirstProviderFailure);
+        Assert.Contains("payload row was not accepted", providerFailure.Message, StringComparison.Ordinal);
+        Assert.Equal(0, await store.GetHighWaterMarkAsync());
+        var verification = fixture.OpenSession();
+        Assert.Empty(verification.Query(AllRows(StructuredLogsGroundworkStorageSchema.CreateUnit())).Rows);
+    }
+
+    [Fact]
     public async Task Acknowledgement_loss_reuses_one_exact_operation_and_publishes_one_row()
     {
         await using var fixture = await Fixture.CreateAsync();
@@ -268,6 +293,49 @@ public sealed class GroundworkV2StructuredLogStoreTests
     }
 
     [Fact]
+    public async Task Recent_query_clamps_to_requested_count_after_filtering()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        await using var store = fixture.CreateStore();
+        await store.AppendAsync(Entry(0, "selected-1") with { SourceId = "selected" });
+        await store.AppendAsync(Entry(0, "selected-2") with { SourceId = "selected" });
+        await store.AppendAsync(Entry(0, "selected-3") with { SourceId = "selected" });
+
+        var recent = await store.GetRecentAsync(new StructuredLogFilter { SourceId = "selected", MaxCount = 2 });
+
+        Assert.Equal(["selected-2", "selected-3"], recent.Select(entry => entry.Message));
+    }
+
+    [Fact]
+    public async Task Recent_query_clamps_a_large_requested_count_to_configured_maximum()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var options = Options.Create(new StructuredLogsOptions { MaxRecentQuerySize = 2 });
+        await using var store = fixture.CreateStore(options: options);
+        await store.AppendAsync(Entry(0, "one"));
+        await store.AppendAsync(Entry(0, "two"));
+        await store.AppendAsync(Entry(0, "three"));
+
+        var recent = await store.GetRecentAsync(new StructuredLogFilter { MaxCount = 100 });
+
+        Assert.Equal(["two", "three"], recent.Select(entry => entry.Message));
+    }
+
+    [Fact]
+    public async Task Recent_query_applies_the_minimum_level_to_durable_rows()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        await using var store = fixture.CreateStore();
+        await store.AppendAsync(Entry(0, "debug") with { Level = LogLevel.Debug });
+        await store.AppendAsync(Entry(0, "warning") with { Level = LogLevel.Warning });
+        await store.AppendAsync(Entry(0, "error") with { Level = LogLevel.Error });
+
+        var recent = await store.GetRecentAsync(new StructuredLogFilter { MinimumLevel = LogLevel.Warning });
+
+        Assert.Equal(["warning", "error"], recent.Select(entry => entry.Message));
+    }
+
+    [Fact]
     public async Task Wrong_scope_tampered_and_trimmed_cursors_are_non_disclosing()
     {
         await using var fixture = await Fixture.CreateAsync();
@@ -341,6 +409,64 @@ public sealed class GroundworkV2StructuredLogStoreTests
     }
 
     [Fact]
+    public async Task Periodic_retention_retries_a_transient_failure_and_keeps_the_counter_healthy()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var faulting = new RetentionFailureSession(fixture.OpenSession(), failuresBeforeSuccess: 1);
+        await using var store = fixture.CreateStore(
+            maxRetainedEntries: 2,
+            retentionInterval: 3,
+            sessionOverride: faulting);
+
+        await store.AppendAsync(Entry(0, "one"));
+        await store.AppendAsync(Entry(0, "two"));
+        await store.AppendAsync(Entry(0, "three"));
+        await WaitUntilAsync(() => faulting.Calls >= 2);
+
+        Assert.Equal(2, faulting.Calls);
+        Assert.Equal(faulting.Operations[0], faulting.Operations[1]);
+        Assert.Equal(["two", "three"], (await store.GetRecentAsync(StructuredLogFilter.None)).Select(entry => entry.Message));
+    }
+
+    [Fact]
+    public async Task Exhausted_periodic_retention_retries_remain_armed_for_the_next_batch()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var faulting = new RetentionFailureSession(fixture.OpenSession(), failuresBeforeSuccess: 3);
+        await using var store = fixture.CreateStore(
+            maxRetainedEntries: 2,
+            retentionInterval: 2,
+            sessionOverride: faulting);
+
+        await store.AppendAsync(Entry(0, "one"));
+        await store.AppendAsync(Entry(0, "two"));
+        await WaitUntilAsync(() => faulting.Calls >= 3);
+
+        await store.AppendAsync(Entry(0, "three"));
+        await WaitUntilAsync(() => faulting.Calls >= 4);
+
+        Assert.Equal(faulting.Operations[0], faulting.Operations[1]);
+        Assert.Equal(faulting.Operations[1], faulting.Operations[2]);
+        Assert.Equal(faulting.Operations[2], faulting.Operations[3]);
+        Assert.Equal(["two", "three"], (await store.GetRecentAsync(StructuredLogFilter.None)).Select(entry => entry.Message));
+    }
+
+    [Fact]
+    public async Task Final_retention_prunes_rows_below_the_periodic_interval()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        await using var store = fixture.CreateStore(maxRetainedEntries: 2, retentionInterval: 100);
+
+        await store.AppendAsync(Entry(0, "one"));
+        await store.AppendAsync(Entry(0, "two"));
+        await store.AppendAsync(Entry(0, "three"));
+
+        await store.StopAsync();
+
+        Assert.Equal(["two", "three"], (await store.GetRecentAsync(StructuredLogFilter.None)).Select(entry => entry.Message));
+    }
+
+    [Fact]
     public async Task Connection_constructor_applies_schema_and_publishes_actual_provider_capabilities()
     {
         await using var fixture = await Fixture.CreateAsync();
@@ -399,6 +525,7 @@ public sealed class GroundworkV2StructuredLogStoreTests
         Assert.Single(replayed);
         Assert.Equal(ordered[1].Message, replayed[0].Message);
         Assert.NotEqual(commits[0].ReplayCursor, commits[1].ReplayCursor);
+        Assert.Equal(commits.Max(commit => commit.Sequence), await first.GetHighWaterMarkAsync());
     }
 
     [Fact]
@@ -440,20 +567,64 @@ public sealed class GroundworkV2StructuredLogStoreTests
     }
 
     [Fact]
+    public async Task High_water_mark_propagates_a_direct_inspection_failure()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var failure = new StructuredLogsException("The diagnostics inspection is unavailable.");
+        var failing = new QueryFailingSession(fixture.OpenSession(), failure) { FailInspection = true };
+        await using var store = fixture.CreateStore(sessionOverride: failing);
+
+        var actual = await Assert.ThrowsAsync<StructuredLogsException>(() => store.GetHighWaterMarkAsync());
+
+        Assert.Same(failure, actual);
+    }
+
+    [Fact]
+    public async Task Negative_shutdown_timeout_is_clamped_and_disposal_settles_an_accepted_append()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var hanging = new HangingAppendSession(fixture.OpenSession());
+        var options = Options.Create(new StructuredLogsOptions { ShutdownDrainTimeout = TimeSpan.FromMilliseconds(-1) });
+        await using var store = fixture.CreateStore(sessionOverride: hanging, options: options);
+        var append = store.AppendAsync(Entry(0, "pending")).AsTask();
+        var entered = false;
+        try
+        {
+            await hanging.Entered.WaitAsync(TimeSpan.FromSeconds(10));
+            entered = true;
+            await store.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1));
+            await Assert.ThrowsAsync<StructuredLogsException>(() => append.WaitAsync(TimeSpan.FromSeconds(1)));
+        }
+        finally
+        {
+            hanging.Release();
+            if (entered || !append.IsCompleted)
+                await hanging.Exited.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+    }
+
+    [Fact]
     public async Task Hard_stop_settles_accepted_append_when_provider_ignores_cancellation()
     {
         await using var fixture = await Fixture.CreateAsync();
         var hanging = new HangingAppendSession(fixture.OpenSession());
         var options = Options.Create(new StructuredLogsOptions { ShutdownDrainTimeout = TimeSpan.FromMilliseconds(20) });
-        var store = fixture.CreateStore(sessionOverride: hanging, options: options);
+        await using var store = fixture.CreateStore(sessionOverride: hanging, options: options);
         var append = store.AppendAsync(Entry(0, "pending")).AsTask();
-        await hanging.Entered.WaitAsync(TimeSpan.FromSeconds(10));
-
-        await store.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1));
-
-        await Assert.ThrowsAsync<StructuredLogsException>(() => append.WaitAsync(TimeSpan.FromSeconds(1)));
-        hanging.Release();
-        await hanging.Exited.WaitAsync(TimeSpan.FromSeconds(10));
+        var entered = false;
+        try
+        {
+            await hanging.Entered.WaitAsync(TimeSpan.FromSeconds(10));
+            entered = true;
+            await store.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1));
+            await Assert.ThrowsAsync<StructuredLogsException>(() => append.WaitAsync(TimeSpan.FromSeconds(1)));
+        }
+        finally
+        {
+            hanging.Release();
+            if (entered || !append.IsCompleted)
+                await hanging.Exited.WaitAsync(TimeSpan.FromSeconds(10));
+        }
     }
 
     [Fact]
@@ -524,12 +695,23 @@ public sealed class GroundworkV2StructuredLogStoreTests
 
         public SqliteProviderConnection Connection => connection!;
 
+        public async Task CreateAppendFailureTriggerAsync()
+        {
+            await using var sqlite = new SqliteConnection($"Data Source={databasePath}");
+            await sqlite.OpenAsync();
+            await using var command = sqlite.CreateCommand();
+            var tableName = StructuredLogsGroundworkStorageSchema.UnitName.Replace("\"", "\"\"");
+            command.CommandText = $"CREATE TRIGGER fail_structured_log BEFORE INSERT ON \"{tableName}\" BEGIN SELECT RAISE(ABORT, 'structured log append rejected'); END;";
+            await command.ExecuteNonQueryAsync();
+        }
+
         public GroundworkStructuredLogStore CreateStore(
             StructuredLogStoreBinding? binding = null,
             IStorageSession? sessionOverride = null,
             int maxRetainedEntries = 100_000,
             int retentionInterval = 5_000,
-            IOptions<StructuredLogsOptions>? options = null)
+            IOptions<StructuredLogsOptions>? options = null,
+            IDiagnosticsPersistenceObserver? observer = null)
         {
             var actualBinding = binding ?? StructuredLogStoreBinding.Default;
             var unit = StructuredLogsGroundworkStorageSchema.CreateUnit();
@@ -539,7 +721,8 @@ public sealed class GroundworkV2StructuredLogStoreTests
                 options ?? Options.Create(new StructuredLogsOptions()),
                 actualBinding,
                 maxRetainedEntries,
-                retentionInterval);
+                retentionInterval,
+                observer);
             store.Start();
             return store;
         }
@@ -571,17 +754,30 @@ public sealed class GroundworkV2StructuredLogStoreTests
         }
     }
 
-    private sealed class AcknowledgementLosingSession(IStorageSession inner) : DelegatingStorageSession(inner), IExactAppendStorageSession
+    private sealed class AcknowledgementLosingSession(IStorageSession inner) : DelegatingStorageSession(inner), IExactAppendStorageSession, IStorageInspectionSession
     {
         private int loseAcknowledgement = 1;
 
         public int Calls { get; private set; }
+        public Exception? FirstProviderFailure { get; private set; }
         public List<OperationId> Operations { get; } = [];
+        public StorageInspection Inspect() =>
+            Assert.IsAssignableFrom<IStorageInspectionSession>(Inner).Inspect();
+
         public AppendOutcomeReport AppendWithOutcomes(OperationId operationId, IReadOnlyList<StorageValues> values)
         {
             Calls++;
             Operations.Add(operationId);
-            var result = Inner.AppendWithOutcomes(operationId, values);
+            AppendOutcomeReport result;
+            try
+            {
+                result = Inner.AppendWithOutcomes(operationId, values);
+            }
+            catch (Exception exception)
+            {
+                FirstProviderFailure ??= exception;
+                throw;
+            }
             if (Interlocked.Exchange(ref loseAcknowledgement, 0) == 1)
                 throw new IOException("The provider committed but the acknowledgement was lost.");
             return result;
@@ -606,6 +802,34 @@ public sealed class GroundworkV2StructuredLogStoreTests
             if (Interlocked.Exchange(ref loseAcknowledgement, 0) == 1)
                 throw new IOException("The provider committed but the retention acknowledgement was lost.");
             return result;
+        }
+    }
+
+    private sealed class RetentionFailureSession(IStorageSession inner, int failuresBeforeSuccess) : DelegatingStorageSession(inner), IExactAppendStorageSession, IExactRetentionStorageSession
+    {
+        private readonly IExactRetentionStorageSession exact = Assert.IsAssignableFrom<IExactRetentionStorageSession>(inner);
+        private int failuresRemaining = failuresBeforeSuccess;
+        private int calls;
+
+        public int Calls => Volatile.Read(ref calls);
+        public List<OperationId> Operations { get; } = [];
+
+        public AppendOutcomeReport AppendWithOutcomes(OperationId operationId, IReadOnlyList<StorageValues> values) =>
+            Assert.IsAssignableFrom<IExactAppendStorageSession>(Inner).AppendWithOutcomes(operationId, values);
+
+        public RetentionOperationResult ApplyRetention(OperationId operationId, RetentionExecutionOptions? options = null)
+        {
+            Operations.Add(operationId);
+            try
+            {
+                if (Interlocked.Decrement(ref failuresRemaining) >= 0)
+                    throw new IOException("The provider temporarily rejected retention.");
+                return exact.ApplyRetention(operationId, options);
+            }
+            finally
+            {
+                Interlocked.Increment(ref calls);
+            }
         }
     }
 
@@ -637,7 +861,10 @@ public sealed class GroundworkV2StructuredLogStoreTests
     private sealed class QueryFailingSession(IStorageSession inner, Exception failure) : DelegatingStorageSession(inner), IExactAppendStorageSession, IStorageInspectionSession
     {
         public bool FailQueries { get; set; }
-        public StorageInspection Inspect() => Assert.IsAssignableFrom<IStorageInspectionSession>(Inner).Inspect();
+        public bool FailInspection { get; set; }
+        public StorageInspection Inspect() => FailInspection
+            ? throw failure
+            : Assert.IsAssignableFrom<IStorageInspectionSession>(Inner).Inspect();
 
         public override QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null) =>
             FailQueries ? throw failure : Inner.Query(request, options);
