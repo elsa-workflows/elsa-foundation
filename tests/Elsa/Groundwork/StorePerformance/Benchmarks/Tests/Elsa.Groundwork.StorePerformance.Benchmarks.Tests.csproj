@@ -13,7 +13,7 @@
     <ProjectReference Include="../../../../../../src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="../../Fixtures/*.json" Link="Fixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+    <None Include="../../Fixtures/*.json;../../Fixtures/*.xml" Link="Fixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
     <None Update="Fixtures/mongodb-resources-by-last-seen-explain.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
