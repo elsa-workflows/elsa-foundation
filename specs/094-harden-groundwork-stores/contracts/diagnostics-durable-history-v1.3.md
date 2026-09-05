@@ -21,7 +21,9 @@ clean exact v1.3 head before any performance verdict can consume the successor.
 ## Native string-order routes
 
 The diagnostics Groundwork adapter keeps the existing EF persistence bound of 128 UTF-16 code units
-for metric-point IDs, log-record IDs, span-record IDs, and span IDs. The unintegrated v2 declarations
+for metric-point IDs, log-record IDs, span-record IDs, and the `SpanId` identity on span records.
+This is not a blanket span-reference bound: the optional log-record `SpanId` and trace/summary
+`RootSpanId` fields retain their existing 256-code-unit v2 declarations. The unintegrated v2 declarations
 use Groundwork's persisted ordinal identities only on the four selected indexes whose logical order
 contains one of those strings: metric timestamp, log timestamp, and span/log trace detail. This keeps
 the public logical order (`timestamp` or `start time`, then ID, then provider sequence) while giving SQL
