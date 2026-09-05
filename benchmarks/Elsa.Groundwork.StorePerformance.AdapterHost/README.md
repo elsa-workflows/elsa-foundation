@@ -273,10 +273,13 @@ only from the retained provider plan; the public query is replayed with explain 
 to confirm its row count.
 
 MongoDB diagnostics has one bounded exception for the three resource-catalog routes (`resources-by-last-seen`,
-`resources-by-status`, and `resources-by-service`): a winning `FETCH` over the declared route index may be
-followed by the aggregate pipeline sort when the provider proves the exact ordering and helper stages, a
-128-row native fetch limit over exactly 128 physical resource rows for the frozen 127-row public page, and no spill
-or materialization. This is an admission boundary for the captured plan, not a performance verdict; all
+`resources-by-status`, and `resources-by-service`): a winning `FETCH` over the declared compound route index may be
+followed by the aggregate pipeline sort when the provider proves the exact ordering and helper stages. For the
+captured `resources-by-status` shape only, the existing status-only `IXSCAN` `elsa_otel_resources_status` with exact
+`{status: 1}` key pattern is also admitted; the declared compound path remains valid. Both paths require a 128-row
+native fetch over exactly 128 physical resource rows for the frozen 127-row public page, with no spill or materialization.
+See the [canonical diagnostics durable-history v1.3 workload contract](../../specs/094-harden-groundwork-stores/contracts/diagnostics-durable-history-v1.3.md)
+for the bounded route details. This is an admission boundary for the captured plan, not a performance verdict; all
 scale-bearing non-resource routes remain strictly index-backed and sort-free.
 Winning access-path admission uses `queryPlanner.winningPlan`; execution counters do not replace the
 separate envelope cardinality, materialized-page, and correctness evidence.

@@ -609,26 +609,23 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         using var fixture = Fixture.Create(
             "sqlserver",
             "structured-log-replay",
-            command:
-                "SELECT * FROM [elsa_structured_logs] WHERE " +
-                "([__groundwork_scope] IS NOT NULL AND [__groundwork_scope] = @p0) AND " +
-                "([sequence] IS NOT NULL AND [sequence] > @p1 AND [sequence] <= @p2) " +
-                "ORDER BY [sequence] ASC OFFSET 0 ROWS FETCH NEXT @p3 ROWS ONLY",
+            command: SqlServerCapturedStructuredLogReplayCommand(),
             nativePlan: SqlServerStructuredLogPrimaryKeyPlan(),
             physicalIndexName: "__groundwork_pk_elsa_structured_logs");
 
-        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+        var exception = Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
             "sqlserver",
             fixture.Adapter,
             fixture.Route,
             fixture.Path));
+        Assert.Contains("approved SQL Server primary-key equivalent access path", exception.Message);
     }
 
     [Fact]
     public void Synthetic_sqlserver_structured_log_replay_primary_key_branch_requires_exact_dual_ranges()
     {
-        // Synthetic structural proof only: no live SQL Server replay plan has been accepted yet.
-        var command = SqlServerStructuredLogReplayCommand();
+        // The physical-plan branch is synthetic, but the command preserves the captured renderer shape.
+        var command = SqlServerCapturedStructuredLogReplayCommand();
         var validPlan = SqlServerStructuredLogReplayPlan();
         var invalidPlans = new[]
         {
@@ -666,6 +663,65 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 fixture.Route,
                 fixture.Path));
         }
+    }
+
+    [Fact]
+    public void Sqlserver_structured_log_replay_rejects_missing_scope_length_guard()
+    {
+        using var fixture = Fixture.Create(
+            "sqlserver",
+            "structured-log-replay",
+            command: SqlServerStructuredLogReplayCommandWithoutScopeLengthGuard(),
+            nativePlan: SqlServerStructuredLogReplayPlan(),
+            physicalIndexName: "__groundwork_pk_elsa_structured_logs");
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "sqlserver",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path));
+    }
+
+    [Fact]
+    public void Captured_sqlserver_structured_log_replay_accepts_renderer_scope_length_guard()
+    {
+        using var fixture = Fixture.Create(
+            "sqlserver",
+            "structured-log-replay",
+            command: SqlServerCapturedStructuredLogReplayCommand(),
+            nativePlan: SqlServerStructuredLogReplayPlan(),
+            physicalIndexName: "__groundwork_pk_elsa_structured_logs");
+
+        DiagnosticsNativePlanContract.ValidateEnvelope(
+            "sqlserver",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path);
+    }
+
+    [Theory]
+    [InlineData("DATALENGTH(@p1)")]
+    [InlineData("DATALENGTH(@p0) AND DATALENGTH([__groundwork_scope]) = DATALENGTH(@p0)")]
+    [InlineData("DATALENGTH(@p0) AND [__groundwork_scope] = @p0")]
+    [InlineData("DATALENGTH(@p0) AND [categoryKey] = @p4")]
+    [InlineData("DATALENGTH(@p0) AND [sequence] <= @p2")]
+    public void Captured_sqlserver_structured_log_replay_rejects_mismatched_duplicate_or_extra_predicates(
+        string scopeLengthOrExtraPredicate)
+    {
+        var command = SqlServerCapturedStructuredLogReplayCommand()
+            .Replace("DATALENGTH(@p0)", scopeLengthOrExtraPredicate, StringComparison.Ordinal);
+        using var fixture = Fixture.Create(
+            "sqlserver",
+            "structured-log-replay",
+            command: command,
+            nativePlan: SqlServerStructuredLogReplayPlan(),
+            physicalIndexName: "__groundwork_pk_elsa_structured_logs");
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "sqlserver",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path));
     }
 
     [Theory]
@@ -1233,6 +1289,163 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             fixture.Adapter,
             fixture.Route,
             fixture.Path);
+    }
+
+    [Fact]
+    public void Mongo_captured_status_only_ixscan_admits_the_frozen_status_resource_route()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-status");
+        var nativePlan = JsonNode.Parse(ReadMongoExplainFixture(
+            "mongodb-resources-by-status-explain.json"))!.AsObject();
+        var cursor = nativePlan["stages"]!.AsArray()
+            .Single(stage => stage!["$cursor"] is not null)!["$cursor"]!.AsObject();
+        var winningPlan = cursor["queryPlanner"]!["winningPlan"]!.AsObject();
+        var inputStage = winningPlan["inputStage"]!.AsObject();
+        var sortStage = nativePlan["stages"]!.AsArray()
+            .Single(stage => stage!["$sort"] is not null)!["$sort"]!.AsObject();
+
+        Assert.Equal("FETCH", winningPlan["stage"]!.GetValue<string>());
+        Assert.Equal("IXSCAN", inputStage["stage"]!.GetValue<string>());
+        Assert.Equal("elsa_otel_resources_status", inputStage["indexName"]!.GetValue<string>());
+        Assert.Equal(new JsonObject { ["status"] = 1 }.ToJsonString(), inputStage["keyPattern"]!.ToJsonString());
+        Assert.Equal(128, cursor["executionStats"]!["nReturned"]!.GetValue<int>());
+        Assert.Equal(128, sortStage["limit"]!.GetValue<int>());
+        Assert.False(nativePlan["stages"]!.AsArray()
+            .Single(stage => stage!["$sort"] is not null)!["usedDisk"]!.GetValue<bool>());
+        Assert.Equal(0, nativePlan["stages"]!.AsArray()
+            .Single(stage => stage!["$sort"] is not null)!["spills"]!.GetValue<int>());
+
+        var serializedPlan = nativePlan.ToJsonString();
+        var command = nativePlan["command"]!.ToJsonString();
+        Assert.Equal(
+            DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+            DiagnosticsNativePlanContract.ClassifyPlan(
+                "mongodb",
+                DiagnosticsNativePlanContract.GroundworkAdapter,
+                specification,
+                serializedPlan));
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            command,
+            serializedPlan,
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification);
+
+        Assert.Equal(128, fixture.Route.PhysicalCardinality);
+        Assert.Equal(127, fixture.Route.FiniteLimit);
+        Assert.Equal(127, fixture.Route.MaterializedCandidateCount);
+        DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path);
+    }
+
+    [Theory]
+    [InlineData("resources-by-last-seen")]
+    [InlineData("resources-by-service")]
+    public void Mongo_captured_status_only_ixscan_is_not_admitted_for_other_resource_routes(string route)
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            route);
+        var nativePlan = ReadMongoExplainFixture("mongodb-resources-by-status-explain.json");
+
+        Assert.Equal(
+            DiagnosticsNativePlanContract.IndexSearchPlanClassification,
+            DiagnosticsNativePlanContract.ClassifyPlan(
+                "mongodb",
+                DiagnosticsNativePlanContract.GroundworkAdapter,
+                specification,
+                nativePlan));
+    }
+
+    [Theory]
+    [InlineData("wrong-index")]
+    [InlineData("wrong-key")]
+    [InlineData("wrong-order")]
+    [InlineData("wrong-limit")]
+    [InlineData("spill")]
+    public void Mongo_captured_status_only_ixscan_rejects_mutated_shape(string mutation)
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-status");
+        var nativePlan = JsonNode.Parse(ReadMongoExplainFixture(
+            "mongodb-resources-by-status-explain.json"))!.AsObject();
+        var cursor = nativePlan["stages"]!.AsArray()
+            .Single(stage => stage!["$cursor"] is not null)!["$cursor"]!.AsObject();
+        var inputStage = cursor["queryPlanner"]!["winningPlan"]!["inputStage"]!.AsObject();
+        var sortStage = nativePlan["stages"]!.AsArray()
+            .Single(stage => stage!["$sort"] is not null)!.AsObject();
+
+        switch (mutation)
+        {
+            case "wrong-index":
+                inputStage["indexName"] = "elsa_otel_resources_status_last_seen";
+                break;
+            case "wrong-key":
+                inputStage["keyPattern"] = new JsonObject { ["status"] = 1, ["lastSeen"] = -1 };
+                break;
+            case "wrong-order":
+                sortStage["$sort"]!["sortKey"]!["lastSeen"] = 1;
+                break;
+            case "wrong-limit":
+                sortStage["$sort"]!["limit"] = 127;
+                break;
+            case "spill":
+                sortStage["usedDisk"] = true;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(mutation), mutation, null);
+        }
+
+        var serializedPlan = nativePlan.ToJsonString();
+        Assert.Equal(
+            DiagnosticsNativePlanContract.IndexSearchPlanClassification,
+            DiagnosticsNativePlanContract.ClassifyPlan(
+                "mongodb",
+                DiagnosticsNativePlanContract.GroundworkAdapter,
+                specification,
+                serializedPlan));
+        AssertBoundedCatalogRejected(
+            "mongodb",
+            serializedPlan,
+            specification.RouteIdentity,
+            nativePlan["command"]!.ToJsonString());
+    }
+
+    [Theory]
+    [InlineData("physical-cardinality")]
+    [InlineData("public-limit")]
+    [InlineData("materialized-count")]
+    public void Mongo_captured_status_only_ixscan_rejects_unbound_resource_counts(string mutation)
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-status");
+        var nativePlan = ReadMongoExplainFixture("mongodb-resources-by-status-explain.json");
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            JsonNode.Parse(nativePlan)!["command"]!.ToJsonString(),
+            nativePlan,
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification);
+        var route = mutation switch
+        {
+            "physical-cardinality" => fixture.Route with { PhysicalCardinality = 127 },
+            "public-limit" => fixture.Route with { FiniteLimit = 128 },
+            "materialized-count" => fixture.Route with { MaterializedCandidateCount = 128 },
+            _ => throw new ArgumentOutOfRangeException(nameof(mutation), mutation, null)
+        };
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb",
+            fixture.Adapter,
+            route,
+            fixture.Path));
     }
 
     [Theory]
@@ -3081,10 +3294,18 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         "[__groundwork_scope] COLLATE Latin1_General_100_BIN2 = @p0) " +
         "ORDER BY [sequence] DESC OFFSET 0 ROWS FETCH NEXT @p1 ROWS ONLY";
 
-    private static string SqlServerStructuredLogReplayCommand() =>
+    private static string SqlServerStructuredLogReplayCommandWithoutScopeLengthGuard() =>
         "SELECT * FROM [elsa_structured_logs] WHERE " +
         "([__groundwork_scope] IS NOT NULL AND [__groundwork_scope] = @p0) AND " +
         "([sequence] IS NOT NULL AND [sequence] > @p1 AND [sequence] <= @p2) " +
+        "ORDER BY [sequence] ASC OFFSET 0 ROWS FETCH NEXT @p3 ROWS ONLY";
+
+    private static string SqlServerCapturedStructuredLogReplayCommand() =>
+        "SELECT * FROM [elsa_structured_logs] WHERE " +
+        "(([__groundwork_scope] COLLATE Latin1_General_100_BIN2 IS NOT NULL AND " +
+        "DATALENGTH([__groundwork_scope] COLLATE Latin1_General_100_BIN2) = DATALENGTH(@p0) AND " +
+        "[__groundwork_scope] COLLATE Latin1_General_100_BIN2 = @p0) AND " +
+        "([sequence] IS NOT NULL AND [sequence] > @p1 AND [sequence] <= @p2)) " +
         "ORDER BY [sequence] ASC OFFSET 0 ROWS FETCH NEXT @p3 ROWS ONLY";
 
     private static string SqlServerStructuredLogPrimaryKeyPlan() =>

@@ -27,14 +27,16 @@ but it accepts only an explicit independently reviewed policy and has no diagnos
 Native-plan admission keeps every scale-bearing diagnostics route index-backed and free of provider
 sort or spill stages. The three resource-catalog routes have a narrower workload-specific alternative
 for PostgreSQL, SQL Server, and MongoDB optimizers: because their frozen physical cardinality is exactly
-128 rows and their finite page is exactly 127 rows, one explicit physical scan plus one complete in-memory sort may be
-classified as `bounded-scan-sort`. That classification is rejected for any other route or bound, for
-incomplete ordering, or for any spill/materialization evidence; it does not weaken the 100,000-row
-stream gates. PostgreSQL native sort keys may spell out `NULLS LAST` for descending terms or
-`NULLS FIRST` for ascending terms, but contradictory placement remains rejected.
-MongoDB proves this exception from the aggregate explain's winning `COLLSCAN` plus its
-pipeline `$sort` and finite limit; an `IXSCAN` followed by a pipeline sort remains a blocked strict
-route. SQLite retains the stricter index-search requirement proven by its native plan.
+128 rows and their finite page is exactly 127 rows, an approved bounded access path followed by one complete
+in-memory sort may be classified as `bounded-scan-sort`. MongoDB retains the declared compound index path and,
+for the captured `resources-by-status` shape only, also admits the existing status-only `IXSCAN`
+`elsa_otel_resources_status` with exact `{status: 1}` key pattern. The aggregate explain must still prove the
+complete deterministic order, native limit 128, and no spill/materialization. This classification is rejected for
+any other route or bound, incomplete ordering, or any spill/materialization evidence; it does not weaken the
+100,000-row stream gates. PostgreSQL native sort keys may spell out `NULLS LAST` for descending terms or
+`NULLS FIRST` for ascending terms, but contradictory placement remains rejected. See the
+[canonical diagnostics durable-history v1.3 workload contract](../../specs/094-harden-groundwork-stores/contracts/diagnostics-durable-history-v1.3.md).
+SQLite retains the stricter index-search requirement proven by its native plan.
 
 PostgreSQL trace-detail command admission also accepts the published preview.16 row-value
 continuation for required, uniformly directed ordering columns. The complete ordered tuple,

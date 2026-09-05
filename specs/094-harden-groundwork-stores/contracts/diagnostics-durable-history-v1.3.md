@@ -57,3 +57,11 @@ larger page. The evidence's `FiniteLimit` and returned/materialized public candi
 127; they do not claim that the provider fetched only 127 rows. Physical table cardinality and
 scan/sort restrictions are unchanged, including the separately bounded 128-row resource catalog.
 The extra row and its cost are part of the actual provider command and measured public operation.
+For the frozen `resources-by-status` route only, the captured MongoDB shape may use the existing
+status-only `IXSCAN` named `elsa_otel_resources_status` with the exact `{status: 1}` key pattern.
+The aggregate pipeline must still prove 128 physical rows, the complete deterministic
+`lastSeen DESC, idOrderKey ASC, id ASC` ordering, native limit 128, public/materialized bound 127,
+and zero sort spill. The logical Groundwork envelope remains bound to its declared compound status
+index; this captured status-only allowance does not apply to the other resource routes or any
+non-resource route. MongoDB `IXSCAN` plans for those routes continue to require their declared
+provider-owned index shape.

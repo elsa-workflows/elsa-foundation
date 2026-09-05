@@ -818,6 +818,52 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
             64);
     }
 
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("postgresql")]
+    [InlineData("sqlserver")]
+    [InlineData("mongodb")]
+    public void Native_plan_phase_identity_separates_capture_and_correctness_requests_without_changing_matrix_isolation(
+        string provider)
+    {
+        // Capture uses the placeholder digest while correctness binds the staged evidence digest;
+        // both requests intentionally retain the runner's measured/zero process identity.
+        var capture = Request(provider, processIndex: 0) with
+        {
+            NativePlanContentSha256 = new string('0', 64)
+        };
+        var correctness = capture with
+        {
+            NativePlanContentSha256 = new string('f', 64)
+        };
+        var correctnessRestart = correctness with { };
+        var warmup = correctness with { ProcessKind = ProcessKind.Warmup };
+        var measured = correctness with { ProcessKind = ProcessKind.Measured, ProcessIndex = 1 };
+
+        Assert.Equal(ProcessKind.Measured, capture.ProcessKind);
+        Assert.Equal(capture.ProcessKind, correctness.ProcessKind);
+        Assert.Equal(capture.ProcessIndex, correctness.ProcessIndex);
+        Assert.NotEqual(
+            DiagnosticsDurableHistoryAdapter.PersistenceScopeForTesting(capture),
+            DiagnosticsDurableHistoryAdapter.PersistenceScopeForTesting(correctness));
+        Assert.NotEqual(
+            DiagnosticsDurableHistoryAdapter.BindingTenantForTesting(capture, "primary"),
+            DiagnosticsDurableHistoryAdapter.BindingTenantForTesting(correctness, "primary"));
+        Assert.NotEqual(
+            DiagnosticsDurableHistoryAdapter.BindingStorageScopeForTesting(capture, "primary"),
+            DiagnosticsDurableHistoryAdapter.BindingStorageScopeForTesting(correctness, "primary"));
+
+        Assert.Equal(
+            DiagnosticsDurableHistoryAdapter.BindingScopeForTesting(correctness, "primary"),
+            DiagnosticsDurableHistoryAdapter.BindingScopeForTesting(correctnessRestart, "primary"));
+        Assert.NotEqual(
+            DiagnosticsDurableHistoryAdapter.BindingScopeForTesting(warmup, "primary"),
+            DiagnosticsDurableHistoryAdapter.BindingScopeForTesting(measured, "primary"));
+        Assert.NotEqual(
+            DiagnosticsDurableHistoryAdapter.PersistenceScopeForTesting(warmup),
+            DiagnosticsDurableHistoryAdapter.PersistenceScopeForTesting(measured));
+    }
+
     private static OpenTelemetryStorageDiagnostics DiagnosticsWithResourceCount(int resourceCount) => new(
         TraceCapacity: 0,
         SpanCapacity: 0,

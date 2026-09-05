@@ -1,0 +1,279 @@
+{
+  "explainVersion": "1",
+  "stages": [
+    {
+      "$cursor": {
+        "queryPlanner": {
+          "namespace": "groundwork_diagnostics_33965580734_1.elsa_otel_resources_v2__scope__847260DC2FDB636767CBBA7F5DF45A87BC9ECFF2B3BF0C5B381357D8EDB7E43B",
+          "indexFilterSet": false,
+          "parsedQuery": {
+            "status": {
+              "$eq": 1
+            }
+          },
+          "queryHash": "4B6FAB47",
+          "planCacheKey": "10C35D2C",
+          "optimizationTimeMillis": 0,
+          "maxIndexedOrSolutionsReached": false,
+          "maxIndexedAndSolutionsReached": false,
+          "maxScansToExplodeReached": false,
+          "winningPlan": {
+            "stage": "FETCH",
+            "inputStage": {
+              "stage": "IXSCAN",
+              "keyPattern": {
+                "status": 1
+              },
+              "indexName": "elsa_otel_resources_status",
+              "isMultiKey": false,
+              "multiKeyPaths": {
+                "status": []
+              },
+              "isUnique": false,
+              "isSparse": false,
+              "isPartial": false,
+              "indexVersion": 2,
+              "direction": "forward",
+              "indexBounds": {
+                "status": [
+                  "[1, 1]"
+                ]
+              }
+            }
+          },
+          "rejectedPlans": [
+            {
+              "stage": "FETCH",
+              "inputStage": {
+                "stage": "IXSCAN",
+                "keyPattern": {
+                  "status": 1,
+                  "lastSeen": -1,
+                  "idOrderKey": 1,
+                  "id": 1
+                },
+                "indexName": "elsa_otel_resources_status_last_seen",
+                "isMultiKey": false,
+                "multiKeyPaths": {
+                  "status": [],
+                  "lastSeen": [],
+                  "idOrderKey": [],
+                  "id": []
+                },
+                "isUnique": false,
+                "isSparse": false,
+                "isPartial": false,
+                "indexVersion": 2,
+                "direction": "forward",
+                "indexBounds": {
+                  "status": [
+                    "[1, 1]"
+                  ],
+                  "lastSeen": [
+                    "[MaxKey, MinKey]"
+                  ],
+                  "idOrderKey": [
+                    "[MinKey, MaxKey]"
+                  ],
+                  "id": [
+                    "[MinKey, MaxKey]"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "executionStats": {
+          "executionSuccess": true,
+          "nReturned": 128,
+          "executionTimeMillis": 16,
+          "totalKeysExamined": 128,
+          "totalDocsExamined": 128,
+          "executionStages": {
+            "stage": "FETCH",
+            "nReturned": 128,
+            "executionTimeMillisEstimate": 0,
+            "works": 129,
+            "advanced": 128,
+            "needTime": 0,
+            "needYield": 0,
+            "saveState": 1,
+            "restoreState": 1,
+            "isEOF": 1,
+            "docsExamined": 128,
+            "alreadyHasObj": 0,
+            "inputStage": {
+              "stage": "IXSCAN",
+              "nReturned": 128,
+              "executionTimeMillisEstimate": 0,
+              "works": 129,
+              "advanced": 128,
+              "needTime": 0,
+              "needYield": 0,
+              "saveState": 1,
+              "restoreState": 1,
+              "isEOF": 1,
+              "keyPattern": {
+                "status": 1
+              },
+              "indexName": "elsa_otel_resources_status",
+              "isMultiKey": false,
+              "multiKeyPaths": {
+                "status": []
+              },
+              "isUnique": false,
+              "isSparse": false,
+              "isPartial": false,
+              "indexVersion": 2,
+              "direction": "forward",
+              "indexBounds": {
+                "status": [
+                  "[1, 1]"
+                ]
+              },
+              "keysExamined": 128,
+              "seeks": 1,
+              "dupsTested": 0,
+              "dupsDropped": 0
+            }
+          }
+        }
+      },
+      "nReturned": 128,
+      "executionTimeMillisEstimate": 0
+    },
+    {
+      "$set": {
+        "_groundwork_ordinal_key_1": {
+          "$function": {
+            "body": "function(value) { if (value === null || value === undefined) return null; var key = \u0027\u0027; for (var i = 0; i \u003C value.length; i\u002B\u002B) { var unit = value.charCodeAt(i).toString(16); key \u002B= (\u00270000\u0027 \u002B unit).slice(-4); } return key; }",
+            "args": [
+              "$idOrderKey"
+            ],
+            "lang": "js"
+          }
+        }
+      },
+      "nReturned": 128,
+      "executionTimeMillisEstimate": 8
+    },
+    {
+      "$set": {
+        "_groundwork_ordinal_key_2": {
+          "$function": {
+            "body": "function(value) { if (value === null || value === undefined) return null; var key = \u0027\u0027; for (var i = 0; i \u003C value.length; i\u002B\u002B) { var unit = value.charCodeAt(i).toString(16); key \u002B= (\u00270000\u0027 \u002B unit).slice(-4); } return key; }",
+            "args": [
+              "$id"
+            ],
+            "lang": "js"
+          }
+        }
+      },
+      "nReturned": 128,
+      "executionTimeMillisEstimate": 16
+    },
+    {
+      "$sort": {
+        "sortKey": {
+          "lastSeen": -1,
+          "_groundwork_ordinal_key_1": 1,
+          "_groundwork_ordinal_key_2": 1
+        },
+        "limit": 128
+      },
+      "totalDataSizeSortedBytesEstimate": 214529,
+      "usedDisk": false,
+      "spills": 0,
+      "spilledDataStorageSize": 0,
+      "nReturned": 128,
+      "executionTimeMillisEstimate": 16
+    },
+    {
+      "$project": {
+        "_groundwork_ordinal_key_1": false,
+        "_groundwork_ordinal_key_2": false,
+        "_id": true
+      },
+      "nReturned": 128,
+      "executionTimeMillisEstimate": 16
+    }
+  ],
+  "command": {
+    "aggregate": "elsa_otel_resources_v2__scope__847260DC2FDB636767CBBA7F5DF45A87BC9ECFF2B3BF0C5B381357D8EDB7E43B",
+    "pipeline": [
+      {
+        "$match": {
+          "status": 1
+        }
+      },
+      {
+        "$set": {
+          "_groundwork_ordinal_key_1": {
+            "$function": {
+              "body": "function(value) { if (value === null || value === undefined) return null; var key = \u0027\u0027; for (var i = 0; i \u003C value.length; i\u002B\u002B) { var unit = value.charCodeAt(i).toString(16); key \u002B= (\u00270000\u0027 \u002B unit).slice(-4); } return key; }",
+              "args": [
+                "$idOrderKey"
+              ],
+              "lang": "js"
+            }
+          }
+        }
+      },
+      {
+        "$set": {
+          "_groundwork_ordinal_key_2": {
+            "$function": {
+              "body": "function(value) { if (value === null || value === undefined) return null; var key = \u0027\u0027; for (var i = 0; i \u003C value.length; i\u002B\u002B) { var unit = value.charCodeAt(i).toString(16); key \u002B= (\u00270000\u0027 \u002B unit).slice(-4); } return key; }",
+              "args": [
+                "$id"
+              ],
+              "lang": "js"
+            }
+          }
+        }
+      },
+      {
+        "$sort": {
+          "lastSeen": -1,
+          "_groundwork_ordinal_key_1": 1,
+          "_groundwork_ordinal_key_2": 1
+        }
+      },
+      {
+        "$project": {
+          "_groundwork_ordinal_key_1": 0,
+          "_groundwork_ordinal_key_2": 0
+        }
+      },
+      {
+        "$limit": 128
+      }
+    ],
+    "cursor": {},
+    "$db": "groundwork_diagnostics_33965580734_1"
+  },
+  "ok": 1.0,
+  "$clusterTime": {
+    "clusterTime": {
+      "$timestamp": {
+        "t": 1788611919,
+        "i": 2
+      }
+    },
+    "signature": {
+      "hash": {
+        "$binary": {
+          "base64": "AAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+          "subType": "00"
+        }
+      },
+      "keyId": 0
+    }
+  },
+  "operationTime": {
+    "$timestamp": {
+      "t": 1788611919,
+      "i": 1
+    }
+  }
+}

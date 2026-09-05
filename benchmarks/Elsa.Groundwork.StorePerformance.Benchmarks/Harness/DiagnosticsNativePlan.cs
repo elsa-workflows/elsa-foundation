@@ -81,6 +81,7 @@ public static partial class DiagnosticsNativePlanContract
     internal const string BoundedCatalogScanSortPlanClassification = "bounded-scan-sort";
     private const int BoundedResourceCardinality = 128;
     private const int BoundedResourceLimit = 127;
+    private const string MongoStatusOnlyResourceIndex = "elsa_otel_resources_status";
     public const string GroundworkAdapter = "groundwork-v2";
     public const string EfAdapter = "ef-diagnostics-oracle";
     public const string EfCorrectnessOnlyRouteContract = "ef-correctness-only-unbounded-resource-routes";
@@ -991,7 +992,7 @@ public static partial class DiagnosticsNativePlanContract
 
         if (string.Equals(specification.RouteIdentity, "structured-log-replay", StringComparison.Ordinal))
         {
-            if (!ContainsOnlyExactReplayRangePredicates(where, specification.StorageScopeRequired))
+            if (!ContainsOnlyExactReplayRangePredicates(provider, where, specification))
                 throw new PerformanceContractException(
                     "Diagnostics route 'structured-log-replay' command must retain only its exact scope and bounded sequence window.");
             return;
@@ -1201,28 +1202,72 @@ public static partial class DiagnosticsNativePlanContract
         $@"DATALENGTH\s*\(\s*{columnExpression}\s*\)\s*{Regex.Escape(comparison)}\s*" +
         $@"DATALENGTH\s*\(\s*{boundParameter}\s*\)";
 
-    private static bool ContainsOnlyExactReplayRangePredicates(string where, bool requireStorageScope)
+    private static bool ContainsOnlyExactReplayRangePredicates(
+        string provider,
+        string where,
+        DiagnosticsNativeRouteSpec specification)
     {
         const string parameter = @"(?:@\w+|\?|\$\d+)";
+        var remainder = where;
 
-        var required = new List<string>
+        if (specification.StorageScopeRequired)
+        {
+            var columnExpression = SqlColumnExpression("__groundwork_scope");
+            var equalityPattern = $@"{columnExpression}\s*=\s*(?<parameter>{parameter})";
+            var equalityMatches = Regex.Matches(
+                remainder,
+                equalityPattern,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (equalityMatches.Count != 1)
+                return false;
+
+            if (string.Equals(provider, "sqlserver", StringComparison.Ordinal) &&
+                RequiresSqlServerLengthEquality(specification, "__groundwork_scope"))
+            {
+                var boundParameter = Regex.Escape(equalityMatches[0].Groups["parameter"].Value);
+                var lengthPattern = SqlServerLengthComparisonPattern(
+                    columnExpression,
+                    "=",
+                    boundParameter);
+                if (Regex.Matches(
+                        remainder,
+                        lengthPattern,
+                        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count != 1)
+                    return false;
+                remainder = Regex.Replace(
+                    remainder,
+                    lengthPattern,
+                    string.Empty,
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            }
+
+            remainder = Regex.Replace(
+                remainder,
+                equalityPattern,
+                string.Empty,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
+        remainder = Regex.Replace(
+            remainder,
+            $@"(?:{SqlColumnExpression("sequence")}|{SqlColumnExpression("__groundwork_scope")})\s+IS\s+NOT\s+NULL",
+            string.Empty,
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        var ranges = new[]
         {
             $@"{SqlColumnExpression("sequence")}\s*>\s*{parameter}",
             $@"{SqlColumnExpression("sequence")}\s*<=\s*{parameter}"
         };
-        if (requireStorageScope)
-            required.Add($@"{SqlColumnExpression("__groundwork_scope")}\s*=\s*{parameter}");
-        if (required.Any(pattern =>
-                Regex.Matches(where, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count != 1))
-            return false;
-
-        var remainder = Regex.Replace(
-            where,
-            $@"(?:{SqlColumnExpression("sequence")}|{SqlColumnExpression("__groundwork_scope")})\s+IS\s+NOT\s+NULL",
-            string.Empty,
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        foreach (var pattern in required)
-            remainder = Regex.Replace(remainder, pattern, string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        foreach (var pattern in ranges)
+        {
+            if (Regex.Matches(remainder, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count != 1)
+                return false;
+            remainder = Regex.Replace(
+                remainder,
+                pattern,
+                string.Empty,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
         remainder = Regex.Replace(remainder, @"\bAND\b|[();\s]", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         return remainder.Length == 0;
     }
@@ -2636,7 +2681,6 @@ public static partial class DiagnosticsNativePlanContract
             !string.Equals(indexStage.GetString(), "IXSCAN", StringComparison.OrdinalIgnoreCase) ||
             !inputStage.TryGetProperty("indexName", out var indexName) ||
             indexName.ValueKind != JsonValueKind.String ||
-            !string.Equals(indexName.GetString(), ExpectedPhysicalIndexName("mongodb", specification), StringComparison.Ordinal) ||
             !inputStage.TryGetProperty("direction", out var direction) ||
             direction.ValueKind != JsonValueKind.String ||
             !string.Equals(direction.GetString(), "forward", StringComparison.OrdinalIgnoreCase) ||
@@ -2644,9 +2688,29 @@ public static partial class DiagnosticsNativePlanContract
             keyPattern.ValueKind != JsonValueKind.Object)
             return false;
 
+        var isExpectedCompoundIndex = string.Equals(
+            indexName.GetString(),
+            ExpectedPhysicalIndexName("mongodb", specification),
+            StringComparison.Ordinal);
+        var isCapturedStatusOnlyIndex = IsMongoCapturedStatusOnlyResourceIndex(
+            inputStage,
+            specification);
+        if (!isExpectedCompoundIndex && !isCapturedStatusOnlyIndex)
+            return false;
+
         foreach (var propertyName in new[] { "isMultiKey", "isSparse", "isPartial" })
             if (!inputStage.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.False)
                 return false;
+
+        if (isCapturedStatusOnlyIndex)
+        {
+            var statusKey = keyPattern.EnumerateObject().ToArray();
+            return statusKey.Length == 1 &&
+                   string.Equals(statusKey[0].Name, "status", StringComparison.Ordinal) &&
+                   statusKey[0].Value.ValueKind == JsonValueKind.Number &&
+                   statusKey[0].Value.TryGetInt32(out var statusDirection) &&
+                   statusDirection == 1;
+        }
 
         var predicateColumns = specification.PredicateColumn is null
             ? Enumerable.Empty<string>()
@@ -2663,6 +2727,19 @@ public static partial class DiagnosticsNativePlanContract
                    pair.First.Value.TryGetInt32(out var directionValue) &&
                    directionValue == pair.Second.Direction);
     }
+
+    /// <summary>MongoDB's captured diagnostics status route can select its existing status-only
+    /// prefilter index. This is not a replacement for the declared compound index: only the frozen
+    /// 128-row resource-status workload may use it, and the bounded pipeline below still proves the
+    /// complete deterministic ordering, native lookahead limit, and no-spill requirement.</summary>
+    private static bool IsMongoCapturedStatusOnlyResourceIndex(
+        JsonElement inputStage,
+        DiagnosticsNativeRouteSpec specification) =>
+        IsBoundedResourceRoute("mongodb", GroundworkAdapter, specification) &&
+        string.Equals(specification.RouteIdentity, "resources-by-status", StringComparison.Ordinal) &&
+        inputStage.TryGetProperty("indexName", out var indexName) &&
+        indexName.ValueKind == JsonValueKind.String &&
+        string.Equals(indexName.GetString(), MongoStatusOnlyResourceIndex, StringComparison.Ordinal);
 
     private static bool ValidateMongoBoundedExplainPipeline(
         IReadOnlyList<JsonElement> stages,
