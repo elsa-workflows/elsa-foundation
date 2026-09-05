@@ -359,6 +359,7 @@ def validate_evidence(
     registration: dict[str, Any],
     *,
     timing: bool,
+    require_complete: bool = False,
 ) -> dict[str, Any]:
     try:
         document = strict_json(path.read_text(encoding="utf-8"), path.name)
@@ -402,6 +403,14 @@ def validate_evidence(
         raise ValueError(f"{path.name} contains an invalid native route entry")
     if any(not isinstance(route, str) or not route for route in blocked):
         raise ValueError(f"{path.name} contains an invalid blocked route identity")
+    if document.get("RouteContract") == "provider-native-routes" and blocked:
+        raise ValueError(f"{path.name} claims complete provider-native evidence but declares blocked routes")
+    if request["WorkloadId"] == "diagnostics-durable-history" and request["Adapter"] == "groundwork-v2":
+        contract = document.get("RouteContract")
+        if contract not in ("provider-native-routes", "provider-native-routes-blocked"):
+            raise ValueError(f"{path.name} has an unknown diagnostics route contract")
+        if contract == "provider-native-routes-blocked" and not blocked:
+            raise ValueError(f"{path.name} claims a blocked route contract without blocked routes")
     route_names = [route["RouteIdentity"] for route in routes]
     admitted_route_names = route_names + (["trace-detail"] if trace_detail else [])
     required = registration["RequiredNativeRoutes"]
@@ -411,6 +420,18 @@ def validate_evidence(
         raise ValueError(f"{path.name} does not account for every required route as captured or blocked")
     if len(admitted_route_names + blocked) != len(set(admitted_route_names + blocked)):
         raise ValueError(f"{path.name} contains duplicate captured/blocked route identities")
+    if (timing or require_complete) and (
+        request["WorkloadId"] == "diagnostics-durable-history"
+        and request["Adapter"] == "groundwork-v2"
+        and (
+            document.get("RouteContract") != "provider-native-routes"
+            or blocked
+        )
+    ):
+        raise ValueError(
+            f"{path.name} contains blocked or incomplete provider-native diagnostics evidence; "
+            "the workflow cannot promote it to correctness or measurement"
+        )
     raw_references = []
     for route in routes:
         reference = route.get("RawPlanReference")
@@ -676,7 +697,13 @@ def correctness(args: argparse.Namespace) -> int:
     root, child, _, registration, provenance, probe = target_context(args, "correctness", root)
     path = evidence / evidence_reference(args)
     request = request_document(registration, probe, args, provenance, sha256(path))
-    validate_evidence(path, request, registration, timing=False)
+    validate_evidence(
+        path,
+        request,
+        registration,
+        timing=False,
+        require_complete=args.require_complete_native_plan,
+    )
     command = [str(child), "verify-correctness", "--request", json.dumps(request, separators=(",", ":")), "--out", str(output)]
     command_text(command)
     if args.execute:
@@ -771,7 +798,13 @@ def parser() -> argparse.ArgumentParser:
     status_parser = commands.add_parser("status", help="show current registration and phase readiness")
     status_parser.add_argument("--json", action="store_true")
     add_target_arguments(commands.add_parser("capture", help="capture provider-native plan evidence"), output=False)
-    add_target_arguments(commands.add_parser("correctness", help="run correctness only"), output=True)
+    correctness_parser = commands.add_parser("correctness", help="run correctness only")
+    add_target_arguments(correctness_parser, output=True)
+    correctness_parser.add_argument(
+        "--require-complete-native-plan",
+        action="store_true",
+        help="require complete provider-native evidence before running correctness",
+    )
     add_target_arguments(commands.add_parser("measure", help="run the timed matrix only"), output=True)
     for name in ("compare", "gate"):
         phase = commands.add_parser(name, help=f"{name} retained measurement sets")

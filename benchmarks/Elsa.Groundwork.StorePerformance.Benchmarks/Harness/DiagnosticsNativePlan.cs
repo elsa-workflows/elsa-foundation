@@ -208,6 +208,29 @@ public static class DiagnosticsNativePlanContract
         return exception.Message.Contains(BlockedPlanMarker, StringComparison.Ordinal);
     }
 
+    /// <summary>Maps the fixed provider-plan failure vocabulary to value-free diagnostic codes. The
+    /// exception text is deliberately not retained because it may include provider command details.</summary>
+    internal static string BlockedPlanReasonCode(PerformanceContractException exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        var marker = exception.Message.IndexOf(BlockedPlanMarker, StringComparison.Ordinal);
+        if (marker < 0)
+            return "native-plan.blocked";
+
+        var detail = exception.Message[(marker + BlockedPlanMarker.Length)..];
+        return detail switch
+        {
+            _ when detail.Contains("sort or materialization spill", StringComparison.Ordinal) => "native-plan.sort-or-materialization-spill",
+            _ when detail.Contains("sequential scan", StringComparison.Ordinal) => "native-plan.sequential-scan",
+            _ when detail.Contains("explicit collection scan or sort", StringComparison.Ordinal) => "native-plan.scan-sort-shape",
+            _ when detail.Contains("collection scan", StringComparison.Ordinal) => "native-plan.collection-scan",
+            _ when detail.Contains("index scan", StringComparison.Ordinal) => "native-plan.index-scan",
+            _ when detail.Contains("complete effective ordering", StringComparison.Ordinal) => "native-plan.ordering-mismatch",
+            _ when detail.Contains("finite page limit", StringComparison.Ordinal) => "native-plan.limit-mismatch",
+            _ => "native-plan.blocked"
+        };
+    }
+
     private static PerformanceContractException BlockedPlan(
         DiagnosticsNativeRouteSpec specification,
         string detail) =>

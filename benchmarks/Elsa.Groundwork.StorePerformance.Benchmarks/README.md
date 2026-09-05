@@ -32,6 +32,19 @@ classified as `bounded-scan-sort`. That classification is rejected for any other
 incomplete ordering, or for any spill/materialization evidence; it does not weaken the 100,000-row
 stream gates. SQLite retains the stricter index-search requirement proven by its native plan.
 
+Blocked diagnostics captures retain a separate `*.blocked-capture.json` diagnostic document with
+route, phase, stable reason code, and hashes of provider-normalized rejected plans. These files are
+failure diagnostics, not accepted native-plan evidence. Durability timeout messages distinguish
+counts not yet visible, a diagnostics read in progress, a trace read in progress, and a missing trace.
+The outer failure path also normalizes and safety-checks retained plans before placing them in the
+upload directory. Malformed, oversized, or unsafe files are omitted with a value-free rejection
+count; they do not replace the original capture exception.
+
+The performance workflow passes `--require-complete-native-plan` to the operator runner's
+`correctness` command, refusing incomplete capture before costly verification. The flag is opt-in:
+standalone correctness remains usable with a blocked capture for diagnosis, while measurement and
+verdict gates still require complete admitted evidence.
+
 `matrix <scale>` executes one untimed adapter-host warm-up process followed by three independent measured
 adapter-host processes. A measured artifact carries the frozen seed/input fingerprint, provider-native plan
 identity/evidence reference/content digest, provider server version/topology/material settings, an opaque

@@ -211,6 +211,9 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
         Assert.InRange(store.DiagnosticsReadCount, 1, 2);
         Assert.Contains("resources 0/1", exception.Message, StringComparison.Ordinal);
         Assert.Contains("trace probe not required", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("diagnostics counts insufficient", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("attempt:", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("duration:", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -259,7 +262,56 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
             () => tracking.WaitForDurabilityAsync(CancellationToken.None)).WaitAsync(TimeSpan.FromSeconds(2));
 
         Assert.Contains("untimed flush budget", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("diagnostics read in progress", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("attempt: 1", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("duration:", exception.Message, StringComparison.Ordinal);
         Assert.Equal(1, store.DiagnosticsReadCount);
+    }
+
+    [Fact]
+    public async Task Durability_poll_reports_a_missing_trace_after_counts_become_visible()
+    {
+        var trace = Trace("trace-missing");
+        var diagnostics = EmptyDiagnostics() with
+        {
+            TraceCapacity = 1,
+            TraceCount = 1
+        };
+        var store = new ProbeOpenTelemetryStore(diagnostics, blockTrace: false, returnMissingTrace: true);
+        var tracking = new DiagnosticsDurableHistoryAdapter.TrackingOpenTelemetryStore(
+            store,
+            TimeSpan.FromMilliseconds(20));
+
+        await tracking.WriteAsync(new OpenTelemetryBatch([], [trace], [], [], [], []));
+        var exception = await Assert.ThrowsAsync<PerformanceContractException>(
+            () => tracking.WaitForDurabilityAsync(CancellationToken.None));
+
+        Assert.Contains("trace read missing", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("attempt:", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("duration:", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Durability_poll_reports_a_trace_read_in_progress_when_detail_never_completes()
+    {
+        var trace = Trace("trace-blocked");
+        var diagnostics = EmptyDiagnostics() with
+        {
+            TraceCapacity = 1,
+            TraceCount = 1
+        };
+        var store = new ProbeOpenTelemetryStore(diagnostics, blockTrace: true);
+        var tracking = new DiagnosticsDurableHistoryAdapter.TrackingOpenTelemetryStore(
+            store,
+            TimeSpan.FromMilliseconds(20));
+
+        await tracking.WriteAsync(new OpenTelemetryBatch([], [trace], [], [], [], []));
+        var exception = await Assert.ThrowsAsync<PerformanceContractException>(
+            () => tracking.WaitForDurabilityAsync(CancellationToken.None));
+
+        Assert.Contains("trace read in progress", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("attempt:", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("duration:", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -381,8 +433,8 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
         var output = Directory.CreateTempSubdirectory("diagnostics-failed-output-");
         try
         {
-            File.WriteAllText(Path.Combine(explain.FullName, "000002-postgresql-plan.json"), "second");
-            File.WriteAllText(Path.Combine(explain.FullName, "000001-postgresql-plan.json"), "first");
+            File.WriteAllText(Path.Combine(explain.FullName, "000002-postgresql-plan.json"), "{\"plan\":\"second\"}");
+            File.WriteAllText(Path.Combine(explain.FullName, "000001-postgresql-plan.json"), "{\"plan\":\"first\"}");
             File.WriteAllText(Path.Combine(explain.FullName, "ignored.txt"), "ignored");
 
             var retained = DiagnosticsNativePlanCapture.PreserveFailedExplainArtifacts(
@@ -397,14 +449,135 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
                     "diagnostics.postgresql.diagnostics-set.failed-explain-2.json"
                 ],
                 retained);
-            Assert.Equal("first", File.ReadAllText(Path.Combine(output.FullName, retained[0])));
-            Assert.Equal("second", File.ReadAllText(Path.Combine(output.FullName, retained[1])));
+            using var first = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.FullName, retained[0])));
+            using var second = JsonDocument.Parse(File.ReadAllText(Path.Combine(output.FullName, retained[1])));
+            Assert.Equal("first", first.RootElement.GetProperty("plan").GetString());
+            Assert.Equal("second", second.RootElement.GetProperty("plan").GetString());
             Assert.False(File.Exists(Path.Combine(output.FullName, "ignored.txt")));
         }
         finally
         {
             explain.Delete(true);
             output.Delete(true);
+        }
+    }
+
+    [Fact]
+    public async Task Failed_explain_capture_retains_raw_provider_output_restores_environment_and_rethrows_original_failure()
+    {
+        var explain = Directory.CreateTempSubdirectory("diagnostics-capture-boundary-explain-");
+        var output = Directory.CreateTempSubdirectory("diagnostics-capture-boundary-output-");
+        var failure = new PerformanceContractException("injected capture failure");
+        var previousFlag = Environment.GetEnvironmentVariable("GW_EXPLAIN_ASSERT");
+        var previousDirectory = Environment.GetEnvironmentVariable("GW_EXPLAIN_ARTIFACT_DIR");
+        Environment.SetEnvironmentVariable("GW_EXPLAIN_ASSERT", "previous-flag");
+        Environment.SetEnvironmentVariable("GW_EXPLAIN_ARTIFACT_DIR", "previous-directory");
+        try
+        {
+            var exception = await Assert.ThrowsAsync<PerformanceContractException>(() =>
+                DiagnosticsNativePlanCapture.ExecuteExplainCaptureAsync<string>(
+                    explain.FullName,
+                    output.FullName,
+                    "sqlserver",
+                    "capture-set",
+                    async () =>
+                    {
+                        Environment.SetEnvironmentVariable("GW_EXPLAIN_ASSERT", "callback-flag");
+                        Environment.SetEnvironmentVariable("GW_EXPLAIN_ARTIFACT_DIR", "callback-directory");
+                        await File.WriteAllTextAsync(
+                            Path.Combine(explain.FullName, "000001-sqlserver-plan.xml"),
+                            "<ShowPlanXML xmlns=\"http://schemas.microsoft.com/sqlserver/2004/07/showplan\"><RelOp PhysicalOp=\"Index Scan\" /></ShowPlanXML>");
+                        await File.WriteAllTextAsync(Path.Combine(explain.FullName, "000002-malformed.xml"), "<invalid");
+                        await File.WriteAllTextAsync(Path.Combine(explain.FullName, "000003-unsafe.xml"),
+                            "<ShowPlanXML><RelOp Note=\"https://example.invalid/private\" /></ShowPlanXML>");
+                        await File.WriteAllTextAsync(Path.Combine(explain.FullName, "000004-oversized.xml"),
+                            new string('x', 16 * 1024 * 1024 + 1));
+                        throw failure;
+                    }));
+
+            Assert.Same(failure, exception);
+            var retained = Path.Combine(output.FullName, "diagnostics.sqlserver.capture-set.failed-explain-1.xml");
+            Assert.True(File.Exists(retained));
+            Assert.Single(Directory.EnumerateFiles(output.FullName));
+            Assert.DoesNotContain("http://", File.ReadAllText(retained), StringComparison.Ordinal);
+            ArtifactStore.ValidateRawPlanFile(retained);
+            Assert.Empty(Directory.EnumerateFiles(output.FullName, "*.native-plan.json"));
+            Assert.False(Directory.Exists(explain.FullName));
+            Assert.Equal("previous-flag", Environment.GetEnvironmentVariable("GW_EXPLAIN_ASSERT"));
+            Assert.Equal("previous-directory", Environment.GetEnvironmentVariable("GW_EXPLAIN_ARTIFACT_DIR"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GW_EXPLAIN_ASSERT", previousFlag);
+            Environment.SetEnvironmentVariable("GW_EXPLAIN_ARTIFACT_DIR", previousDirectory);
+            if (explain.Exists)
+                explain.Delete(true);
+            if (output.Exists)
+                output.Delete(true);
+        }
+    }
+
+    [Fact]
+    public void Blocked_explain_artifacts_are_copied_with_value_free_route_diagnostics()
+    {
+        var explain = Directory.CreateTempSubdirectory("diagnostics-blocked-explain-");
+        var output = Directory.CreateTempSubdirectory("diagnostics-blocked-output-");
+        var xmlExplain = Directory.CreateTempSubdirectory("diagnostics-blocked-xml-explain-");
+        var xmlOutput = Directory.CreateTempSubdirectory("diagnostics-blocked-xml-output-");
+        try
+        {
+            var beforePath = Path.Combine(explain.FullName, "000001-postgresql-before.json");
+            var afterPath = Path.Combine(explain.FullName, "000002-postgresql-plan.json");
+            File.WriteAllText(beforePath, "{\"plan\":\"before\"}");
+            File.WriteAllText(afterPath, "{\"plan\":\"scan\"}");
+
+            var retained = DiagnosticsNativePlanCapture.PreserveBlockedExplainArtifacts(
+                explain.FullName,
+                new HashSet<string>(StringComparer.Ordinal) { beforePath },
+                output.FullName,
+                "postgresql",
+                "diagnostics-set",
+                "resources-by-last-seen");
+
+            Assert.Single(retained);
+            Assert.Equal("{\"plan\":\"scan\"}", File.ReadAllText(Path.Combine(output.FullName, retained[0].Reference)));
+            Assert.Matches("^[0-9a-f]{64}$", retained[0].Sha256);
+
+            var xmlPath = Path.Combine(xmlExplain.FullName, "000001-sqlserver-plan.xml");
+            File.WriteAllText(
+                xmlPath,
+                "<ShowPlanXML xmlns=\"http://schemas.microsoft.com/sqlserver/2004/07/showplan\"><RelOp PhysicalOp=\"Index Scan\" /></ShowPlanXML>");
+            var xmlRetained = DiagnosticsNativePlanCapture.PreserveBlockedExplainArtifacts(
+                xmlExplain.FullName,
+                new HashSet<string>(StringComparer.Ordinal),
+                xmlOutput.FullName,
+                "sqlserver",
+                "diagnostics-set",
+                "resources-by-last-seen");
+
+            Assert.Single(xmlRetained);
+            var normalizedXml = File.ReadAllText(Path.Combine(xmlOutput.FullName, xmlRetained[0].Reference));
+            Assert.DoesNotContain("http://", normalizedXml, StringComparison.Ordinal);
+            Assert.Contains("<ShowPlanXML>", normalizedXml, StringComparison.Ordinal);
+
+            var request = Request() with { Provider = "sqlserver", MeasurementSetId = "diagnostics-set" };
+            var blockedRoute = new DiagnosticsBlockedRouteEvidence(
+                "resources-by-last-seen", "route-plan-validation", "native-plan.index-scan", xmlRetained);
+            var digest = NativePlanEvidenceStaging.WriteBlockedCapture(xmlOutput.FullName, request, [blockedRoute]);
+            var diagnosticPath = Path.Combine(xmlOutput.FullName, "diagnostics.sqlserver.diagnostics-set.blocked-capture.json");
+            var document = JsonSerializer.Deserialize<DiagnosticsBlockedCaptureDocument>(
+                File.ReadAllText(diagnosticPath), ArtifactStore.JsonOptions)!;
+            Assert.Equal(digest, ArtifactStore.HashFile(diagnosticPath));
+            Assert.Equal("native-plan.index-scan", Assert.Single(document.Routes).ReasonCode);
+            Assert.Equal(xmlRetained[0], Assert.Single(document.Routes[0].RawPlans));
+            Assert.Empty(Directory.EnumerateFiles(xmlOutput.FullName, "*.native-plan.json"));
+        }
+        finally
+        {
+            explain.Delete(true);
+            output.Delete(true);
+            xmlExplain.Delete(true);
+            xmlOutput.Delete(true);
         }
     }
 
@@ -735,9 +908,13 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
     private sealed class ProbeOpenTelemetryStore(
         OpenTelemetryStorageDiagnostics? diagnostics = null,
         bool throwTransientLock = false,
-        bool blockDiagnostics = false) : IOpenTelemetryStore
+        bool blockDiagnostics = false,
+        bool blockTrace = false,
+        bool returnMissingTrace = false) : IOpenTelemetryStore
     {
         private readonly TaskCompletionSource<OpenTelemetryStorageDiagnostics> blockedDiagnostics =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<OpenTelemetryTraceDetail?> blockedTrace =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public int DiagnosticsReadCount { get; private set; }
@@ -750,6 +927,10 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             TraceReads.Add(traceId);
+            if (blockTrace)
+                return new ValueTask<OpenTelemetryTraceDetail?>(blockedTrace.Task);
+            if (returnMissingTrace)
+                return ValueTask.FromResult<OpenTelemetryTraceDetail?>(null);
             return ValueTask.FromResult<OpenTelemetryTraceDetail?>(new(Trace(traceId), [], [], []));
         }
         public ValueTask<OpenTelemetryMetricResult> QueryMetricsAsync(OpenTelemetryMetricFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
