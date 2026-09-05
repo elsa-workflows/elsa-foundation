@@ -1086,34 +1086,11 @@ public static class DiagnosticsNativePlanContract
             return true;
         }
         if (string.Equals(provider, "postgresql", StringComparison.Ordinal) &&
-            TryParsePostgreSqlPersistedOrdinalOrder(term, out ordered))
-            return true;
-        if (string.Equals(provider, "postgresql", StringComparison.Ordinal) &&
             TryParsePostgreSqlOrdinalOrder(term, out ordered))
             return true;
 
         ordered = default;
         return false;
-    }
-
-    private static bool TryParsePostgreSqlPersistedOrdinalOrder(
-        string term,
-        out RuntimeNativeOrderTerm? ordered)
-    {
-        var match = Regex.Match(
-            term,
-            @"^\(*\s*(?<column>__groundwork_ordinal_(?:id|spanId|traceKey))\s+COLLATE\s+C\s*\)*\s+(?<direction>ASC|DESC)(?:\s+NULLS\s+(?<nulls>FIRST|LAST))?$",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        if (!match.Success || !TryParseSqlOrderDirection("postgresql", match, out var direction))
-        {
-            ordered = default;
-            return false;
-        }
-
-        ordered = new RuntimeNativeOrderTerm(
-            match.Groups["column"].Value,
-            direction);
-        return true;
     }
 
     private static bool TryParsePostgreSqlOrdinalOrder(
