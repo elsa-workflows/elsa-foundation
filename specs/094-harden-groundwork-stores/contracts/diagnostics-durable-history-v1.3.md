@@ -27,8 +27,9 @@ This is not a blanket span-reference bound: the optional log-record `SpanId` and
 keep the required 64-code-unit v3 trace-summary `TraceKey` and its raw storage/key/API unchanged, while
 adding a provider-owned ordinal identity for its selected start-time index. They use Groundwork's
 persisted ordinal identities on exactly five selected indexes: metric timestamp, log timestamp,
-trace-summary start, and span/log trace detail. This keeps
-the public logical order (`timestamp` or `start time`, then ID, then provider sequence) while giving SQL
+trace-summary start, and span/log trace detail. This keeps each route's public logical order:
+trace summaries use start time then trace key; signal routes retain their declared timestamp/start-time,
+identity and sequence terms. The persisted keys give SQL
 Server an exact physical pathkey that fits its 1,700-byte index-key limit. Raw strings retain
 Groundwork's length-aware ordering everywhere else.
 

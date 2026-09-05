@@ -596,6 +596,28 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     }
 
     [Fact]
+    public void PostgreSql_trace_summary_rejects_reencoding_the_persisted_ordinal_key()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "traces-by-last-seen");
+        var command = ProviderRenderedRelationalCommand("postgresql", specification);
+        const string physicalKey = "(\"__groundwork_ordinal_traceKey\" COLLATE \"C\")";
+        Assert.Contains(physicalKey, command, StringComparison.Ordinal);
+        Assert.DoesNotContain("string_agg", command, StringComparison.Ordinal);
+        using var fixture = Fixture.Create(
+            "postgresql",
+            specification.RouteIdentity,
+            command: command.Replace(physicalKey, PostgreSqlOrdinalKey(physicalKey), StringComparison.Ordinal));
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "postgresql",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path));
+    }
+
+    [Fact]
     public void Mongo_explain_command_binds_the_physical_scoped_collection_and_actual_aggregate_shape()
     {
         using var fixture = Fixture.Create("mongodb", "resources-by-status");
@@ -2252,9 +2274,10 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     private static string[] PostgreSqlRenderedOrderTerms(DiagnosticsNativeRouteSpec specification) =>
         specification.EffectiveOrdering.SelectMany(term =>
         {
-            var ordinal = term.Column is "id" or "idOrderKey" or "traceKey" or "spanId" or
+            var ordinal = term.Column is "id" or "idOrderKey" or "traceKey" or "spanId";
+            var persistedOrdinal = term.Column is
                 "__groundwork_ordinal_id" or "__groundwork_ordinal_spanId" or "__groundwork_ordinal_traceKey";
-            var expression = ordinal
+            var expression = ordinal || persistedOrdinal
                 ? $"(\"{term.Column}\" COLLATE \"C\")"
                 : $"\"{term.Column}\"";
             var direction = term.Direction == RuntimeNativeOrderDirection.Descending ? "DESC" : "ASC";

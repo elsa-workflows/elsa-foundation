@@ -1131,7 +1131,7 @@ public static class DiagnosticsNativePlanContract
         }
 
         var actual = Regex.Replace(match.Groups["expression"].Value.Trim(), @"\s+", " ");
-        foreach (var column in new[] { "id", "idOrderKey", "traceKey", "spanId", "__groundwork_ordinal_id", "__groundwork_ordinal_spanId", "__groundwork_ordinal_traceKey" })
+        foreach (var column in new[] { "id", "idOrderKey", "traceKey", "spanId" })
         {
             var expected = Regex.Replace(PostgreSqlOrdinalExpression("(" + column + ")"), @"\s+", " ");
             if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
