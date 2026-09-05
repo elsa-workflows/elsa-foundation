@@ -31,6 +31,7 @@ public sealed class GroundworkSaveWorkflowDefinitionCommand(
             definition.DeletedAt,
             definition.DeletedReason,
             definition.IsSourceOwned);
+        GroundworkDesignSaveRequest? save = null;
 
         _ = await GroundworkDesignAtomicCommand.ExecuteAsync(
             atomicWrite,
@@ -40,13 +41,23 @@ public sealed class GroundworkSaveWorkflowDefinitionCommand(
             [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind],
             async (context, token) =>
             {
-                var existingEntry = storage.Read(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind, definition.Id);
+                var acceptedSave = save ?? throw new InvalidOperationException(
+                    "Workflow definition resolution did not complete before staging.");
+                await context.SaveAsync(acceptedSave, token);
+                return definition.Id;
+            },
+            cancellationToken: cancellationToken,
+            beforeAttempt: token =>
+            {
+                token.ThrowIfCancellationRequested();
+                var existingEntry = storage.Read(
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+                    definition.Id);
                 var existing = existingEntry is null ? null : storage.MapDefinition(existingEntry);
                 if (existing is null)
                     throw new InvalidOperationException($"Workflow definition '{definition.Id}' not found");
                 GroundworkEntityTimestamps.StampSaved(definition, existing, clock.UtcNow);
-                await context.SaveAsync(
-                    GroundworkDocumentWriter.ToTenantScopedSaveRequest(
+                save = GroundworkDocumentWriter.ToTenantScopedSaveRequest(
                     WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
                     WorkflowsDesignStorageManifest.WorkflowDefinitionCollection,
                     WorkflowsDesignStorageManifest.SchemaVersion,
@@ -54,11 +65,9 @@ public sealed class GroundworkSaveWorkflowDefinitionCommand(
                     GroundworkDesignJson.Options,
                     accessContextAccessor.Current,
                     persistenceDomain: DesignPersistenceDomain.Workflow) with
-                    { ExpectedVersion = existingEntry!.Entry.Version },
-                    token);
-                return definition.Id;
-            },
-            cancellationToken: cancellationToken);
+                { ExpectedVersion = existingEntry!.Entry.Version };
+                return Task.CompletedTask;
+            });
     }
 
     private sealed record SaveDefinitionRequestMaterial(

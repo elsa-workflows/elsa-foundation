@@ -97,8 +97,7 @@ public sealed class GroundworkWorkflowDefinitionStore(
             foreach (var row in candidates)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var definition = storage.MapDefinition(row);
-                if (Matches(definition, filter))
+                if (MatchesSearchTerm(row, filter.SearchTerm!))
                     rows[GroundworkDesignStorage.Identity(row)] = row;
             }
         }
@@ -149,6 +148,18 @@ public sealed class GroundworkWorkflowDefinitionStore(
 
         return true;
     }
+
+    private static bool MatchesSearchTerm(GroundworkDesignEntry entry, string searchTerm)
+    {
+        var term = QuerySearchKeys.Encode(searchTerm, QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase);
+        var definitionId = Projection(entry, WorkflowsDesignStorageManifest.DefinitionIdField);
+        return definitionId is not null && ContainsIdentity(definitionId, term) ||
+               ContainsText(Projection(entry, WorkflowsDesignStorageManifest.DefinitionNameField), term) ||
+               ContainsText(Projection(entry, WorkflowsDesignStorageManifest.DefinitionDescriptionField), term);
+    }
+
+    private static string? Projection(GroundworkDesignEntry entry, string field) =>
+        entry.Entry.Values.Values.TryGetValue(field, out var value) ? value as string : null;
 
     private static bool ContainsIdentity(string value, string encodedTerm) =>
         QuerySearchKeys.Encode(value, QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase)

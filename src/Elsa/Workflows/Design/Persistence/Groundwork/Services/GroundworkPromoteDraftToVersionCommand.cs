@@ -54,6 +54,9 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
         var draftLockKey = WorkflowDesignPersistenceLockKeys.DraftKey(draftId);
         IDistributedSynchronizationHandle? draftLock = null;
         IDistributedSynchronizationHandle? definitionLock = null;
+        GroundworkDesignSaveRequest? versionSave = null;
+        GroundworkDesignSaveRequest? layoutSave = null;
+        PromoteDraftResult? resolvedResult = null;
         GroundworkDesignAtomicCommandResult<PromoteDraftResult> outcome;
 
         try
@@ -72,18 +75,36 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
                 ],
                 async (context, token) =>
                 {
+                    var acceptedVersionSave = versionSave ?? throw new InvalidOperationException(
+                        "Workflow version allocation did not complete before staging.");
+                    var acceptedLayoutSave = layoutSave ?? throw new InvalidOperationException(
+                        "Workflow version layout allocation did not complete before staging.");
+                    var acceptedResult = resolvedResult ?? throw new InvalidOperationException(
+                        "Workflow draft promotion did not complete before staging.");
+                    await context.SaveAsync(acceptedVersionSave, token);
+                    await context.SaveAsync(acceptedLayoutSave, token);
+                    return acceptedResult;
+                },
+                cancellationToken: cancellationToken,
+                beforeAttempt: async token =>
+                {
+                    // Marker replay must win before source reads and locks: a successfully promoted
+                    // draft may later be discarded while its authoritative version remains valid.
+                    draftLock = await lockProvider.AcquireLockAsync(draftLockKey, null, token);
                     var document = await documents.FindByIdAsync(draftId, token)
                                    ?? throw EntityNotFoundException.ForEntity(
                                        typeof(WorkflowDefinitionDraft),
                                        draftId);
-
+                    var draft = document.Entity;
+                    var definitionLockKey =
+                        WorkflowDesignPersistenceLockKeys.DefinitionKey(draft.WorkflowDefinitionId);
+                    definitionLock = await lockProvider.AcquireLockAsync(definitionLockKey, null, token);
                     // FR-024 promotion gate: derive errors against the loaded Draft (see DraftValidationGate).
                     // Runs inside the per-Draft lock, so the validated state is exactly the state promoted.
                     var errors = await inlineEventPublisher.DeriveValidationErrorsAsync(document.Entity, token);
                     if (errors.Count > 0)
                         throw new DraftHasValidationErrorsException(draftId, errors);
 
-                    var draft = document.Entity;
                     var lastVersion = await versionStore.FindLatestVersionAsync(
                         draft.WorkflowDefinitionId,
                         token);
@@ -124,7 +145,7 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
                     var now = clock.UtcNow;
                     GroundworkEntityTimestamps.StampAdded(version, now);
                     GroundworkEntityTimestamps.StampAdded(versionLayout, now);
-                    var versionSave = GroundworkDocumentWriter.ToTenantScopedSaveRequest(
+                    versionSave = GroundworkDocumentWriter.ToTenantScopedSaveRequest(
                         WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
                         WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,
                         WorkflowsDesignStorageManifest.SchemaVersion,
@@ -133,7 +154,7 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
                         accessContextAccessor.Current,
                         persistenceDomain: DesignPersistenceDomain.Workflow) with
                     { ExpectedVersion = 0 };
-                    var layoutSave = GroundworkDocumentWriter.ToTenantScopedSaveRequest(
+                    layoutSave = GroundworkDocumentWriter.ToTenantScopedSaveRequest(
                         WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutDocumentKind,
                         WorkflowsDesignStorageManifest.WorkflowDefinitionVersionLayoutCollection,
                         WorkflowsDesignStorageManifest.SchemaVersion,
@@ -142,27 +163,11 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
                         accessContextAccessor.Current,
                         persistenceDomain: DesignPersistenceDomain.Workflow) with
                     { ExpectedVersion = 0 };
-                    await context.SaveAsync(versionSave, token);
-                    await context.SaveAsync(layoutSave, token);
-                    return new PromoteDraftResult(
+                    resolvedResult = new PromoteDraftResult(
                         draft.Id,
                         draft.WorkflowDefinitionId,
                         version.Id,
                         version.Version);
-                },
-                cancellationToken: cancellationToken,
-                beforeAttempt: async token =>
-                {
-                    // Marker replay must win before source reads and locks: a successfully promoted
-                    // draft may later be discarded while its authoritative version remains valid.
-                    draftLock = await lockProvider.AcquireLockAsync(draftLockKey, null, token);
-                    var observed = await documents.FindByIdAsync(draftId, token)
-                                   ?? throw EntityNotFoundException.ForEntity(
-                                       typeof(WorkflowDefinitionDraft),
-                                       draftId);
-                    var definitionLockKey =
-                        WorkflowDesignPersistenceLockKeys.DefinitionKey(observed.Entity.WorkflowDefinitionId);
-                    definitionLock = await lockProvider.AcquireLockAsync(definitionLockKey, null, token);
                 });
         }
         catch (GroundworkDesignOperationConflictException exception)
