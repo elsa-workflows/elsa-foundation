@@ -361,6 +361,18 @@
           "defaultValue": null,
           "defaultSyntax": null,
           "uiSpecifications": null
+        },
+        {
+          "key": "ExposeIndex",
+          "name": "ExposeIndex",
+          "type": "Boolean",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": true,
+          "defaultSyntax": null,
+          "uiSpecifications": null
         }
       ],
       "outputs": [],
