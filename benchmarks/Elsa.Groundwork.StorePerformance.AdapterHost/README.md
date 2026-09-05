@@ -266,6 +266,12 @@ server version, admitted topology, and sanitized provider settings into the gene
 document's `RouteContract=no-native-routes-declared` is a provenance statement derived from the frozen
 checkpoint workload, not a provider-plan capture or a performance result.
 
+For the diagnostics Groundwork capture, the SQL Server structured-log recent and replay routes retain the
+logical `elsa_structured_logs_sequence_order` artifact name and command, even when SQL Server proves the
+same ordered page through `__groundwork_pk_elsa_structured_logs`. The primary-key equivalence is admitted
+only from the retained provider plan; the public query is replayed with explain assertion suppressed only
+to confirm its row count.
+
 Two additions for v2:
 
 - **Verify the resolved Groundwork version, never the pin.** A performance number measured against the wrong
