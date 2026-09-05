@@ -295,6 +295,9 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
 
     private static string ProcessTokenFor(RunRequest request)
     {
+        // Capture uses the zero digest placeholder while correctness uses the staged evidence digest;
+        // both intentionally retain the same measured process tuple, so the plan digest must isolate
+        // those untimed phases without changing warmup/measured or restart identity.
         var identity = string.Join(
             '|',
             request.ComparisonCohortId,
@@ -302,6 +305,7 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
             request.WorkloadId,
             request.WorkloadVersion,
             request.Provider,
+            request.NativePlanContentSha256,
             request.ProcessKind,
             request.ProcessIndex);
         return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
