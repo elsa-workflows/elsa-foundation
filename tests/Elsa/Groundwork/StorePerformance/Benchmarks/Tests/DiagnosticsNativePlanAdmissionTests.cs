@@ -1337,11 +1337,15 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 DiagnosticsNativePlanContract.GroundworkAdapter,
                 specification,
                 serializedPlan));
+        AssertBoundedCatalogRejected("mongodb", serializedPlan, specification.RouteIdentity,
+            nativePlan["command"]!.ToJsonString());
     }
 
     [Theory]
     [InlineData("direction")]
     [InlineData("isMultiKey")]
+    [InlineData("isSparse")]
+    [InlineData("isPartial")]
     [InlineData("spills")]
     public void Mongo_captured_ixscan_rejects_mutated_bounded_plan_metadata(string mutation)
     {
@@ -1357,7 +1361,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         if (mutation == "spills")
         {
             nativePlan["stages"]!.AsArray()
-                .Single(stage => stage!["$sort"] is not null)!["$sort"]![mutation] = 1;
+                .Single(stage => stage!["$sort"] is not null)![mutation] = 1;
         }
         else if (mutation == "direction")
             inputStage[mutation] = "backward";
@@ -1371,6 +1375,8 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 DiagnosticsNativePlanContract.GroundworkAdapter,
                 specification,
                 nativePlan.ToJsonString()));
+        AssertBoundedCatalogRejected("mongodb", nativePlan.ToJsonString(), specification.RouteIdentity,
+            nativePlan["command"]!.ToJsonString());
     }
 
     [Fact]
@@ -3145,11 +3151,16 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         return $"<ShowPlanXML><RelOp PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[{specification.TableName}]\" Index=\"[{physicalIndex}]\" /></IndexScan></RelOp></ShowPlanXML>";
     }
 
-    private static void AssertBoundedCatalogRejected(string provider, string nativePlan)
+    private static void AssertBoundedCatalogRejected(
+        string provider,
+        string nativePlan,
+        string routeIdentity = "resources-by-last-seen",
+        string? command = null)
     {
         using var fixture = Fixture.Create(
             provider,
-            "resources-by-last-seen",
+            routeIdentity,
+            command: command,
             planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
             nativePlan: nativePlan);
         var exception = Assert.Throws<PerformanceContractException>(() =>
@@ -3193,6 +3204,14 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         inputStage["indexName"] = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(
             "mongodb",
             specification);
+
+        // Only the service route is captured. Keep both native trees consistent when deriving
+        // status and last-seen variants; these variants are contract tests, not live-provider evidence.
+        inputStage["multiKeyPaths"] = new JsonObject(keyPattern.Select(property =>
+            new KeyValuePair<string, JsonNode?>(property.Key, new JsonArray())));
+        var executionIndex = cursor["executionStats"]!["executionStages"]!["inputStage"]!.AsObject();
+        foreach (var property in inputStage)
+            executionIndex[property.Key] = property.Value?.DeepClone();
 
         var match = nativePlan["command"]!["pipeline"]!.AsArray()[0]!["$match"]!.AsObject();
         if (specification.PredicateColumn is null)
