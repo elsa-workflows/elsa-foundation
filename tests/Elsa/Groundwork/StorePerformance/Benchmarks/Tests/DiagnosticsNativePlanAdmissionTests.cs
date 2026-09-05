@@ -609,26 +609,23 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         using var fixture = Fixture.Create(
             "sqlserver",
             "structured-log-replay",
-            command:
-                "SELECT * FROM [elsa_structured_logs] WHERE " +
-                "([__groundwork_scope] IS NOT NULL AND [__groundwork_scope] = @p0) AND " +
-                "([sequence] IS NOT NULL AND [sequence] > @p1 AND [sequence] <= @p2) " +
-                "ORDER BY [sequence] ASC OFFSET 0 ROWS FETCH NEXT @p3 ROWS ONLY",
+            command: SqlServerCapturedStructuredLogReplayCommand(),
             nativePlan: SqlServerStructuredLogPrimaryKeyPlan(),
             physicalIndexName: "__groundwork_pk_elsa_structured_logs");
 
-        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+        var exception = Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
             "sqlserver",
             fixture.Adapter,
             fixture.Route,
             fixture.Path));
+        Assert.Contains("approved SQL Server primary-key equivalent access path", exception.Message);
     }
 
     [Fact]
     public void Synthetic_sqlserver_structured_log_replay_primary_key_branch_requires_exact_dual_ranges()
     {
-        // Synthetic structural proof only: no live SQL Server replay plan has been accepted yet.
-        var command = SqlServerStructuredLogReplayCommand();
+        // The physical-plan branch is synthetic, but the command preserves the captured renderer shape.
+        var command = SqlServerCapturedStructuredLogReplayCommand();
         var validPlan = SqlServerStructuredLogReplayPlan();
         var invalidPlans = new[]
         {
@@ -666,6 +663,65 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 fixture.Route,
                 fixture.Path));
         }
+    }
+
+    [Fact]
+    public void Sqlserver_structured_log_replay_rejects_missing_scope_length_guard()
+    {
+        using var fixture = Fixture.Create(
+            "sqlserver",
+            "structured-log-replay",
+            command: SqlServerStructuredLogReplayCommandWithoutScopeLengthGuard(),
+            nativePlan: SqlServerStructuredLogReplayPlan(),
+            physicalIndexName: "__groundwork_pk_elsa_structured_logs");
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "sqlserver",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path));
+    }
+
+    [Fact]
+    public void Captured_sqlserver_structured_log_replay_accepts_renderer_scope_length_guard()
+    {
+        using var fixture = Fixture.Create(
+            "sqlserver",
+            "structured-log-replay",
+            command: SqlServerCapturedStructuredLogReplayCommand(),
+            nativePlan: SqlServerStructuredLogReplayPlan(),
+            physicalIndexName: "__groundwork_pk_elsa_structured_logs");
+
+        DiagnosticsNativePlanContract.ValidateEnvelope(
+            "sqlserver",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path);
+    }
+
+    [Theory]
+    [InlineData("DATALENGTH(@p1)")]
+    [InlineData("DATALENGTH(@p0) AND DATALENGTH([__groundwork_scope]) = DATALENGTH(@p0)")]
+    [InlineData("DATALENGTH(@p0) AND [__groundwork_scope] = @p0")]
+    [InlineData("DATALENGTH(@p0) AND [categoryKey] = @p4")]
+    [InlineData("DATALENGTH(@p0) AND [sequence] <= @p2")]
+    public void Captured_sqlserver_structured_log_replay_rejects_mismatched_duplicate_or_extra_predicates(
+        string scopeLengthOrExtraPredicate)
+    {
+        var command = SqlServerCapturedStructuredLogReplayCommand()
+            .Replace("DATALENGTH(@p0)", scopeLengthOrExtraPredicate, StringComparison.Ordinal);
+        using var fixture = Fixture.Create(
+            "sqlserver",
+            "structured-log-replay",
+            command: command,
+            nativePlan: SqlServerStructuredLogReplayPlan(),
+            physicalIndexName: "__groundwork_pk_elsa_structured_logs");
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "sqlserver",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path));
     }
 
     [Theory]
@@ -3081,10 +3137,18 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         "[__groundwork_scope] COLLATE Latin1_General_100_BIN2 = @p0) " +
         "ORDER BY [sequence] DESC OFFSET 0 ROWS FETCH NEXT @p1 ROWS ONLY";
 
-    private static string SqlServerStructuredLogReplayCommand() =>
+    private static string SqlServerStructuredLogReplayCommandWithoutScopeLengthGuard() =>
         "SELECT * FROM [elsa_structured_logs] WHERE " +
         "([__groundwork_scope] IS NOT NULL AND [__groundwork_scope] = @p0) AND " +
         "([sequence] IS NOT NULL AND [sequence] > @p1 AND [sequence] <= @p2) " +
+        "ORDER BY [sequence] ASC OFFSET 0 ROWS FETCH NEXT @p3 ROWS ONLY";
+
+    private static string SqlServerCapturedStructuredLogReplayCommand() =>
+        "SELECT * FROM [elsa_structured_logs] WHERE " +
+        "(([__groundwork_scope] COLLATE Latin1_General_100_BIN2 IS NOT NULL AND " +
+        "DATALENGTH([__groundwork_scope] COLLATE Latin1_General_100_BIN2) = DATALENGTH(@p0) AND " +
+        "[__groundwork_scope] COLLATE Latin1_General_100_BIN2 = @p0) AND " +
+        "([sequence] IS NOT NULL AND [sequence] > @p1 AND [sequence] <= @p2)) " +
         "ORDER BY [sequence] ASC OFFSET 0 ROWS FETCH NEXT @p3 ROWS ONLY";
 
     private static string SqlServerStructuredLogPrimaryKeyPlan() =>

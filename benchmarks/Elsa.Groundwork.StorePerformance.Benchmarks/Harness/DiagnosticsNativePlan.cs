@@ -991,7 +991,7 @@ public static partial class DiagnosticsNativePlanContract
 
         if (string.Equals(specification.RouteIdentity, "structured-log-replay", StringComparison.Ordinal))
         {
-            if (!ContainsOnlyExactReplayRangePredicates(where, specification.StorageScopeRequired))
+            if (!ContainsOnlyExactReplayRangePredicates(provider, where, specification))
                 throw new PerformanceContractException(
                     "Diagnostics route 'structured-log-replay' command must retain only its exact scope and bounded sequence window.");
             return;
@@ -1201,28 +1201,72 @@ public static partial class DiagnosticsNativePlanContract
         $@"DATALENGTH\s*\(\s*{columnExpression}\s*\)\s*{Regex.Escape(comparison)}\s*" +
         $@"DATALENGTH\s*\(\s*{boundParameter}\s*\)";
 
-    private static bool ContainsOnlyExactReplayRangePredicates(string where, bool requireStorageScope)
+    private static bool ContainsOnlyExactReplayRangePredicates(
+        string provider,
+        string where,
+        DiagnosticsNativeRouteSpec specification)
     {
         const string parameter = @"(?:@\w+|\?|\$\d+)";
+        var remainder = where;
 
-        var required = new List<string>
+        if (specification.StorageScopeRequired)
+        {
+            var columnExpression = SqlColumnExpression("__groundwork_scope");
+            var equalityPattern = $@"{columnExpression}\s*=\s*(?<parameter>{parameter})";
+            var equalityMatches = Regex.Matches(
+                remainder,
+                equalityPattern,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (equalityMatches.Count != 1)
+                return false;
+
+            if (string.Equals(provider, "sqlserver", StringComparison.Ordinal) &&
+                RequiresSqlServerLengthEquality(specification, "__groundwork_scope"))
+            {
+                var boundParameter = Regex.Escape(equalityMatches[0].Groups["parameter"].Value);
+                var lengthPattern = SqlServerLengthComparisonPattern(
+                    columnExpression,
+                    "=",
+                    boundParameter);
+                if (Regex.Matches(
+                        remainder,
+                        lengthPattern,
+                        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count != 1)
+                    return false;
+                remainder = Regex.Replace(
+                    remainder,
+                    lengthPattern,
+                    string.Empty,
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            }
+
+            remainder = Regex.Replace(
+                remainder,
+                equalityPattern,
+                string.Empty,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
+        remainder = Regex.Replace(
+            remainder,
+            $@"(?:{SqlColumnExpression("sequence")}|{SqlColumnExpression("__groundwork_scope")})\s+IS\s+NOT\s+NULL",
+            string.Empty,
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        var ranges = new[]
         {
             $@"{SqlColumnExpression("sequence")}\s*>\s*{parameter}",
             $@"{SqlColumnExpression("sequence")}\s*<=\s*{parameter}"
         };
-        if (requireStorageScope)
-            required.Add($@"{SqlColumnExpression("__groundwork_scope")}\s*=\s*{parameter}");
-        if (required.Any(pattern =>
-                Regex.Matches(where, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count != 1))
-            return false;
-
-        var remainder = Regex.Replace(
-            where,
-            $@"(?:{SqlColumnExpression("sequence")}|{SqlColumnExpression("__groundwork_scope")})\s+IS\s+NOT\s+NULL",
-            string.Empty,
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        foreach (var pattern in required)
-            remainder = Regex.Replace(remainder, pattern, string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        foreach (var pattern in ranges)
+        {
+            if (Regex.Matches(remainder, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count != 1)
+                return false;
+            remainder = Regex.Replace(
+                remainder,
+                pattern,
+                string.Empty,
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
         remainder = Regex.Replace(remainder, @"\bAND\b|[();\s]", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         return remainder.Length == 0;
     }
