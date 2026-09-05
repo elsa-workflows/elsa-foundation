@@ -9,6 +9,7 @@ using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using Groundwork.Store;
 using Microsoft.Data.Sqlite;
+using System.Diagnostics;
 
 namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 
@@ -240,14 +241,14 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
     private static async ValueTask<T> ReadDurabilityProbeAsync<T>(
         Func<CancellationToken, ValueTask<T>> read,
         DateTime deadline,
-        string timeoutMessage,
+        Func<string> timeoutMessage,
         CancellationToken cancellationToken)
     {
         while (true)
         {
             var remaining = deadline - DateTime.UtcNow;
             if (remaining <= TimeSpan.Zero)
-                throw new PerformanceContractException(timeoutMessage);
+                throw new PerformanceContractException(timeoutMessage());
             using var deadlineTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             deadlineTokenSource.CancelAfter(remaining);
             try
@@ -257,16 +258,16 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
             catch (SqliteException exception) when (exception.SqliteErrorCode is 5 or 6)
             {
                 if (DateTime.UtcNow >= deadline)
-                    throw new PerformanceContractException(timeoutMessage);
+                    throw new PerformanceContractException(timeoutMessage());
                 await Task.Delay(50, cancellationToken);
             }
             catch (TimeoutException)
             {
-                throw new PerformanceContractException(timeoutMessage);
+                throw new PerformanceContractException(timeoutMessage());
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                throw new PerformanceContractException(timeoutMessage);
+                throw new PerformanceContractException(timeoutMessage());
             }
         }
     }
@@ -390,7 +391,7 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
             while (await ReadDurabilityProbeAsync(
                        token => new ValueTask<long>(inner.GetHighWaterMarkAsync(token)),
                        deadline,
-                       "Structured-log durability did not become visible within the untimed flush budget.",
+                       () => "Structured-log durability did not become visible within the untimed flush budget.",
                        cancellationToken) < target)
             {
                 if (DateTime.UtcNow >= deadline)
@@ -405,6 +406,14 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
         TimeSpan? durabilityTimeout = null) : IOpenTelemetryStore
     {
         private readonly OpenTelemetryDurabilityExpectations expectations = new();
+        private DurabilityProbeProgress progress = new("not started", 0, TimeSpan.Zero, 0);
+        private int readAttempt;
+
+        private sealed record DurabilityProbeProgress(
+            string Phase,
+            int Attempt,
+            TimeSpan Duration,
+            long StartedTimestamp);
 
         public ValueTask WriteAsync(OpenTelemetryBatch batch, CancellationToken cancellationToken = default)
         {
@@ -426,10 +435,11 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
             var timeoutMessage = "OpenTelemetry durability did not become visible within the untimed flush budget.";
             while (true)
             {
-                var diagnostics = await ReadDurabilityProbeAsync(
+                var diagnostics = await ReadTrackedProbeAsync(
+                    "diagnostics read in progress",
                     inner.GetDiagnosticsAsync,
                     deadline,
-                    timeoutMessage,
+                    () => WithProgress(timeoutMessage),
                     cancellationToken);
                 if (diagnostics.DroppedTraceCount != 0 ||
                     diagnostics.DroppedSpanCount != 0 ||
@@ -456,23 +466,63 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
                     $"resources {diagnostics.ResourceCount}/{expectedResourceCount}, " +
                     $"instruments {diagnostics.MetricInstrumentCount}/{expectedInstrumentCount}; " +
                     $"trace probe {(target.TraceProbeId is null ? "not required" : "not yet checked or visible")}.";
-                if (diagnostics.TraceCount >= expectedTraceCount &&
+                var countsSufficient = diagnostics.TraceCount >= expectedTraceCount &&
                     diagnostics.SpanCount >= expectedSpanCount &&
                     diagnostics.MetricPointCount >= expectedPointCount &&
                     diagnostics.LogRecordCount >= expectedLogCount &&
                     diagnostics.ResourceCount >= expectedResourceCount &&
-                    diagnostics.MetricInstrumentCount >= expectedInstrumentCount &&
-                    (target.TraceProbeId is null || await ReadDurabilityProbeAsync(
+                    diagnostics.MetricInstrumentCount >= expectedInstrumentCount;
+                progress = progress with { Phase = countsSufficient
+                    ? "diagnostics counts sufficient"
+                    : "diagnostics counts insufficient" };
+                var traceVisible = !countsSufficient || target.TraceProbeId is null || await ReadTrackedProbeAsync(
+                        "trace read in progress",
                         token => inner.GetTraceAsync(target.TraceProbeId, token),
                         deadline,
-                        timeoutMessage,
-                        cancellationToken) is not null))
+                        () => WithProgress(timeoutMessage),
+                        cancellationToken) is not null;
+                if (countsSufficient && traceVisible)
                     return;
+                if (target.TraceProbeId is not null && !traceVisible)
+                    progress = progress with { Phase = "trace read missing" };
                 if (DateTime.UtcNow >= deadline)
-                    throw new PerformanceContractException(timeoutMessage);
+                    throw new PerformanceContractException(WithProgress(timeoutMessage));
                 await Task.Delay(50, cancellationToken);
             }
         }
+
+        private async ValueTask<T> ReadTrackedProbeAsync<T>(
+            string phase,
+            Func<CancellationToken, ValueTask<T>> read,
+            DateTime deadline,
+            Func<string> timeoutMessage,
+            CancellationToken cancellationToken)
+        {
+            if (DateTime.UtcNow >= deadline)
+                throw new PerformanceContractException(timeoutMessage());
+            var attempt = Interlocked.Increment(ref readAttempt);
+            var started = Stopwatch.GetTimestamp();
+            progress = new DurabilityProbeProgress(phase, attempt, TimeSpan.Zero, started);
+            try
+            {
+                return await ReadDurabilityProbeAsync(
+                    read,
+                    deadline,
+                    timeoutMessage,
+                    cancellationToken);
+            }
+            finally
+            {
+                progress = progress with { Duration = Stopwatch.GetElapsedTime(started), StartedTimestamp = 0 };
+            }
+        }
+
+        private string WithProgress(string message) =>
+            $"{message} Last probe phase: {progress.Phase}; attempt: {progress.Attempt}; duration: {CurrentDuration.TotalMilliseconds:F1} ms.";
+
+        private TimeSpan CurrentDuration => progress.StartedTimestamp == 0
+            ? progress.Duration
+            : Stopwatch.GetElapsedTime(progress.StartedTimestamp);
     }
 
     private sealed class BenchmarkOperation(IDiagnosticsDurableHistoryWorkloadOperation operation) : IBenchmarkOperation

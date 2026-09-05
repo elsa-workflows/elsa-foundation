@@ -408,6 +408,7 @@ jobs:
             --scale medium \
             --evidence-dir "$DIAGNOSTICS_EVIDENCE_DIR" \
             --out "$DIAGNOSTICS_CORRECTNESS_DIR" \
+            --require-complete-native-plan \
             --execute | tee "$DIAGNOSTICS_WORK_ROOT/correctness-summary.txt"
 
       # Correctness and timing are separate evidence gates. SQLite is the only single-file provider

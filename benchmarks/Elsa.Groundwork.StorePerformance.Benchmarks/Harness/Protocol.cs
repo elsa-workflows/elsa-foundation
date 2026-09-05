@@ -90,6 +90,31 @@ public sealed record DiagnosticsTraceDetailPageEvidence(
     string RawPlanReference,
     string RawPlanSha256,
     string CommandText);
+/// <summary>
+/// Value-free diagnostics for one provider-native route that was deliberately blocked. Raw plans are
+/// retained separately and referenced by safe artifact name plus digest; the failure message itself is
+/// never persisted because it may contain provider command text or identifiers.
+/// </summary>
+public sealed record DiagnosticsBlockedRouteEvidence(
+    string RouteIdentity,
+    string FailurePhase,
+    string ReasonCode,
+    IReadOnlyList<DiagnosticsBlockedRawPlanEvidence> RawPlans);
+
+public sealed record DiagnosticsBlockedRawPlanEvidence(
+    string Reference,
+    string Sha256);
+
+/// <summary>Standalone capture output for an incomplete diagnostics native-plan capture. This envelope
+/// is useful for diagnosis, but is intentionally not a native-plan acceptance envelope.</summary>
+public sealed record DiagnosticsBlockedCaptureDocument(
+    int SchemaVersion,
+    string Provider,
+    string Adapter,
+    string WorkloadId,
+    string WorkloadVersion,
+    string MeasurementSetId,
+    IReadOnlyList<DiagnosticsBlockedRouteEvidence> Routes);
 public sealed record DiagnosticsOracleRouteObservation(
     string RouteIdentity,
     IReadOnlyList<string> CommandTexts,
@@ -498,6 +523,8 @@ public static class ArtifactAdmission
         var diagnosticsRoutesBlocked = diagnosticsWorkload &&
                                        (string.Equals(nativePlan.RouteContract, DiagnosticsNativePlanContract.BlockedRouteContract, StringComparison.Ordinal) || efCorrectnessOnly);
         var blockedRoutes = nativePlan.BlockedRoutes ?? [];
+        if (nativePlan.RouteContract == "provider-native-routes" && blockedRoutes.Count != 0)
+            throw new PerformanceContractException("Complete provider-native evidence cannot declare blocked routes.");
         var traceDetailConstituents = nativePlan.TraceDetailConstituents ?? [];
         if (!diagnosticsWorkload && traceDetailConstituents.Count != 0)
             throw new PerformanceContractException("Trace-detail constituent evidence is valid only for the diagnostics workload.");
