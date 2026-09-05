@@ -214,7 +214,18 @@ public sealed class GroundworkDesignStorage(
         var session = Open(unitId);
         try
         {
-            return ReadDefinitionResult(session.Query(request, options), id);
+            var candidate = ReadDefinitionResult(session.Query(request, options), id);
+            if (candidate is null)
+                return null;
+            // The hash query resolves the case-insensitive identity; the point read retains
+            // the provider version required by conditional metadata saves and deletes.
+            var actualId = (string)candidate.Entry.Values.Values[WorkflowsDesignStorageManifest.IdField]!;
+            var stored = session.Read(Key(actualId));
+            if (stored is null)
+                return null;
+            var entry = new GroundworkDesignEntry(stored, null);
+            EnsureDefinitionIdentity(entry, id);
+            return entry;
         }
         catch (OperationCanceledException)
         {
@@ -421,7 +432,7 @@ public sealed class GroundworkDesignStorage(
         catch (Exception exception)
         {
             throw new GroundworkProviderFailureException(
-                $"Provider SearchTerm cardinality probe for unit '{unitId}' failed.", exception);
+                $"Provider workflow-design cardinality probe for unit '{unitId}' failed.", exception);
         }
     }
 

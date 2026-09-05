@@ -295,7 +295,7 @@ public sealed class ActivitiesDesignStorageManifestTests
                 Assert.DoesNotContain("comparisonKey", index.Columns.Select(column => column.Column));
 
                 // The version index intentionally serves both the ordered list and exact
-                // (definition, sort-key) lookup.  semVerSortKey is unique within a definition,
+                // (definition, sort-key) lookup. semVerSortKey is unique within a definition,
                 // so the exact lookup does not need the entity id in its physical key.
                 if (index.Name is not (ActivitiesDesignStorageManifest.ActivityDefinitionVersionByDefinitionIndex
                     or ActivitiesDesignStorageManifest.ManagementExpiredIndex))

@@ -2,9 +2,9 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -55,6 +55,8 @@ public sealed class GroundworkUpdateDraftCommand(
             activityPresentation.Select(ToMaterial).ToArray());
         var documents = DraftDocuments();
         var lockKey = WorkflowDesignPersistenceLockKeys.DraftKey(request.DraftId);
+        GroundworkDesignSaveRequest? save = null;
+        UpdateDraftResult? resolvedResult = null;
         GroundworkDesignAtomicCommandResult<UpdateDraftResult> outcome;
 
         await using (var lockHandle = await lockProvider.AcquireLockAsync(lockKey, null, cancellationToken))
@@ -67,8 +69,18 @@ public sealed class GroundworkUpdateDraftCommand(
                 [WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind],
                 async (context, token) =>
                 {
-                    var transactionDocuments = documents.ForStorage(context.Storage);
-                    var document = await transactionDocuments.FindByIdAsync(request.DraftId, token)
+                    var acceptedSave = save ?? throw new InvalidOperationException(
+                        "Workflow definition draft resolution did not complete before staging.");
+                    var acceptedResult = resolvedResult ?? throw new InvalidOperationException(
+                        "Workflow definition draft validation did not complete before staging.");
+                    await context.SaveAsync(acceptedSave, token);
+                    return acceptedResult;
+                },
+                GroundworkDesignDocumentSerialization.Create(payloadSerializer),
+                cancellationToken,
+                beforeAttempt: async token =>
+                {
+                    var document = await documents.FindByIdAsync(request.DraftId, token)
                                    ?? throw new InvalidOperationException(
                                        $"Workflow definition draft '{request.DraftId}' not found");
                     var draft = document.Entity;
@@ -77,17 +89,13 @@ public sealed class GroundworkUpdateDraftCommand(
                     // In-lock validation gate (see DraftValidationGate); errors are derived, never persisted.
                     var errors = await inlineEventPublisher.DeriveValidationErrorsAsync(draft, token);
                     GroundworkEntityTimestamps.StampModified(draft, clock.UtcNow);
-                    await context.SaveAsync(
-                        documents.ToSaveRequest(
-                            draft,
-                            request.Layout.ToArray(),
-                            activityPresentation,
-                            document.Version),
-                        token);
-                    return new UpdateDraftResult(draft, errors.ToArray());
-                },
-                GroundworkDesignDocumentSerialization.Create(payloadSerializer),
-                cancellationToken);
+                    save = documents.ToSaveRequest(
+                        draft,
+                        request.Layout.ToArray(),
+                        activityPresentation,
+                        document.Version);
+                    resolvedResult = new UpdateDraftResult(draft, errors.ToArray());
+                });
         }
 
         if (outcome.ShouldPublishPostCommitOutcome)

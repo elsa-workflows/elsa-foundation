@@ -17,7 +17,7 @@ using Xunit;
 namespace Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests;
 
 /// <summary>
-/// T054 negative proof: the unified MongoDB substrate composed against an unsupported topology (a
+/// T054 negative proof: the Groundwork MongoDB provider composed against an unsupported topology (a
 /// standalone server that cannot serve multi-document transactions) may apply its idempotent schema,
 /// but must refuse an atomic design write before a unit of work is acquired or any design row is staged.
 /// </summary>

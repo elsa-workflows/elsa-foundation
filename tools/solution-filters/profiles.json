@@ -1,0 +1,134 @@
+{
+  "solutionPath": "Elsa.Server.slnx",
+  "excludeRootPathPrefixes": [
+    "benchmarks/",
+    "samples/",
+    "tools/"
+  ],
+  "allowedExternalProjectReferences": [
+    "tools/groundwork/Elsa.Groundwork.ProviderEvidenceImporter/Elsa.Groundwork.ProviderEvidenceImporter.csproj"
+  ],
+  "profiles": [
+    {
+      "outputPath": "Elsa.Server.Workflows.Publishing.slnf",
+      "includeProjectPathPrefixes": [
+        "src/Elsa/Workflows/Publishing/",
+        "tests/Elsa/Workflows/Publishing/"
+      ],
+      "requiredRootPaths": [
+        "src/Elsa/Workflows/Publishing/Elsa.Workflows.Publishing.csproj",
+        "tests/Elsa/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj"
+      ],
+      "excludeWhenPackageReferencePrefixes": [
+        "Testcontainers."
+      ]
+    },
+    {
+      "outputPath": "Elsa.Server.Workflows.Runtime.slnf",
+      "includeProjectPathPrefixes": [
+        "src/Elsa/Activities/Runtime/",
+        "src/Elsa/Activities/DispatchWorkflow/Runtime/",
+        "src/Elsa/Activities/Graph/Runtime/",
+        "src/Elsa/Workflows/Runtime/",
+        "tests/Elsa/Activities/Runtime/",
+        "tests/Elsa/Activities/DispatchWorkflow/",
+        "tests/Elsa/Activities/Graph/",
+        "tests/Elsa/Workflows/Runtime/"
+      ],
+      "requiredRootPaths": [
+        "src/Elsa/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj",
+        "src/Elsa/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj",
+        "src/Elsa/Workflows/Runtime/Elsa.Workflows.Runtime.csproj",
+        "tests/Elsa/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj",
+        "tests/Elsa/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj",
+        "tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj"
+      ],
+      "excludeWhenPackageReferencePrefixes": [
+        "Testcontainers."
+      ]
+    },
+    {
+      "outputPath": "Elsa.Server.Workflows.Design.slnf",
+      "includeProjectPathPrefixes": [
+        "src/Elsa/Activities/Design/",
+        "src/Elsa/Activities/DispatchWorkflow/Design/",
+        "src/Elsa/Activities/Graph/Design/",
+        "src/Elsa/Workflows/Design/",
+        "tests/Elsa/Activities/Design/",
+        "tests/Elsa/Activities/DispatchWorkflow/",
+        "tests/Elsa/Activities/Graph/",
+        "tests/Elsa/Workflows/Design/"
+      ],
+      "requiredRootPaths": [
+        "src/Elsa/Activities/DispatchWorkflow/Design/Elsa.Activities.DispatchWorkflow.Design.csproj",
+        "src/Elsa/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj",
+        "src/Elsa/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj",
+        "tests/Elsa/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj",
+        "tests/Elsa/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj",
+        "tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj"
+      ],
+      "excludeWhenPackageReferencePrefixes": [
+        "Testcontainers."
+      ]
+    },
+    {
+      "outputPath": "Elsa.Server.Foundation.Identity.slnf",
+      "includeProjectPathPrefixes": [
+        "src/Elsa/Foundation/Identity/",
+        "tests/Elsa/Foundation/Identity/"
+      ],
+      "requiredRootPaths": [
+        "src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj",
+        "tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj"
+      ],
+      "excludeWhenPackageReferencePrefixes": [
+        "Testcontainers."
+      ]
+    },
+    {
+      "outputPath": "Elsa.Server.Persistence.Groundwork.slnf",
+      "includeProjectPathPrefixes": [
+        "tests/Elsa/Workflows/Publishing/Api/GroundworkTests/"
+      ],
+      "includeProjectPathContains": [
+        "/Groundwork/"
+      ],
+      "requiredRootPaths": [
+        "src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj",
+        "tests/Elsa/Persistence/Groundwork/V2/Tests/Elsa.Persistence.Groundwork.V2.Tests.csproj",
+        "tests/Elsa/Workflows/Publishing/Api/GroundworkTests/Elsa.Workflows.Publishing.Api.GroundworkTests.csproj"
+      ],
+      "excludeRootPathContains": [
+        "/ProviderEvidenceImporter/",
+        "/StorePerformance/"
+      ],
+      "excludeWhenPackageReferencePrefixes": [
+        "Testcontainers."
+      ]
+    },
+    {
+      "outputPath": "Elsa.Server.Persistence.Groundwork.Integration.slnf",
+      "includeProjectPathPrefixes": [
+        "tests/"
+      ],
+      "requiredRootPaths": [
+        "tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj",
+        "tests/Elsa/Persistence/Groundwork/DesignConformance/MongoDb/Tests/Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests.csproj",
+        "tests/Elsa/Persistence/Groundwork/DesignConformance/PostgreSql/Tests/Elsa.Persistence.Groundwork.DesignConformance.PostgreSql.Tests.csproj",
+        "tests/Elsa/Persistence/Groundwork/DesignConformance/SqlServer/Tests/Elsa.Persistence.Groundwork.DesignConformance.SqlServer.Tests.csproj"
+      ],
+      "requirePackageReferencePrefixes": [
+        "Testcontainers."
+      ]
+    },
+    {
+      "outputPath": "Elsa.Server.Workbench.slnf",
+      "includeProjectNames": [
+        "Elsa.Workbench"
+      ],
+      "requiredRootPaths": [
+        "src/Apps/Elsa.Workbench/Elsa.Workbench.csproj"
+      ]
+    }
+  ]
+}
