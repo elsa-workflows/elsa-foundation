@@ -111,6 +111,8 @@ public sealed class GroundworkWorkflowDefinitionStore(
                          acrossScopes,
                          cancellationToken))
             {
+                if (!string.IsNullOrWhiteSpace(filter.SearchTerm) && !MatchesSearchTerm(row, filter.SearchTerm))
+                    continue;
                 var definition = storage.MapDefinition(row);
                 if (Matches(definition, filter))
                     rows[GroundworkDesignStorage.Identity(row)] = row;

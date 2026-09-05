@@ -195,6 +195,49 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
         Assert.Equal(["b-valid"], result.Select(definition => definition.Id));
     }
 
+    [Theory]
+    [InlineData("id", false)]
+    [InlineData("name", false)]
+    [InlineData("description", false)]
+    [InlineData("id", true)]
+    [InlineData("name", true)]
+    [InlineData("description", true)]
+    public async Task Combined_search_filters_projected_candidates_before_deserialization(string route, bool matchesCorrupt)
+    {
+        using var raw = new DesignGroundworkTestPersistence { RecordQueries = true };
+        raw.InsertRaw(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            CorruptDefinitionValues("a-corrupt", route == "name" ? "Shared" : "Unrelated",
+                route == "name" ? "Unrelated" : "Shared"));
+        raw.SeedDefinition(new WorkflowDefinition
+        {
+            Id = "b-valid",
+            Name = route == "name" ? "Shared" : "Invoice",
+            Description = route == "name" ? "Invoice" : "Shared"
+        });
+        var filter = route switch
+        {
+            "id" => new WorkflowDefinitionFilter { Ids = ["a-corrupt", "b-valid"] },
+            "name" => new WorkflowDefinitionFilter { Name = "Shared" },
+            _ => new WorkflowDefinitionFilter { Description = "Shared" }
+        };
+        filter.SearchTerm = matchesCorrupt ? "unrelated" : "invoice";
+        var store = new GroundworkWorkflowDefinitionStore(raw, DesignGroundworkTestAccess.DefaultAccessContextAccessor);
+
+        if (matchesCorrupt)
+            await Assert.ThrowsAsync<GroundworkCorruptPayloadException>(() => store.ListAsync(filter));
+        else
+            Assert.Equal(["b-valid"], (await store.ListAsync(filter)).Select(definition => definition.Id));
+
+        var query = Assert.Single(raw.Queries);
+        Assert.Null(query.Request.AcceptedScan);
+        Assert.Equal(route switch
+        {
+            "id" => WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex,
+            "name" => WorkflowsDesignStorageManifest.DefinitionByNameIndex,
+            _ => WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex
+        }, query.IndexName);
+    }
+
     [Fact]
     public async Task List_by_description_matches_exact()
     {

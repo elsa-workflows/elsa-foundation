@@ -1,8 +1,12 @@
 using CShells.Lifecycle;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.DesignConformance.Tests;
 using Elsa.Persistence.Groundwork.MongoDb.Unified.DependencyInjection;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
+using Elsa.Workflows.Design.Persistence.Groundwork;
+using Groundwork.Kernel;
+using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
 using Xunit;
@@ -12,14 +16,16 @@ namespace Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests;
 /// <summary>
 /// T054 negative proof: the unified MongoDB substrate composed against an unsupported topology (a
 /// standalone server that cannot serve multi-document transactions) must fail readiness during runtime
-/// admission <em>before</em> any design document — or even any collection — is written, and the schema
-/// tool must surface the same incompatibility rather than reporting a ready target.
+/// admission <em>before</em> any design document — or even any collection — is written, and
+/// direct session access must reject the same incompatibility.
 /// </summary>
 [Collection(MongoDbStandaloneTopologyCollection.Name)]
 public sealed class MongoDbStandaloneTopologyContractTests(MongoDbStandaloneTopologyFixture container)
 {
-    [SkippableFact]
-    public async Task Standalone_topology_fails_runtime_readiness_before_any_design_write()
+    [SkippableTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Standalone_topology_fails_runtime_readiness_before_any_design_write(bool openSessionDirectly)
     {
         Skip.IfNot(container.IsAvailable, container.SkipReason ?? "Docker unavailable.");
 
@@ -32,13 +38,19 @@ public sealed class MongoDbStandaloneTopologyContractTests(MongoDbStandaloneTopo
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
+            if (openSessionDirectly)
+            {
+                services.GetRequiredService<IGroundworkStorageSessionSource>().Open(
+                    WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+                    StorageAccess.Scoped(new StorageScope("standalone-proof")));
+                return;
+            }
             foreach (var initializer in initializers)
                 await initializer.InitializeAsync(CancellationToken.None);
         });
 
-        // The established runtime-admission failure: MongoDbGroundworkRuntimeAdmission requires the
-        // configured and observed deployment to be the same writable replica set with working
-        // transactions; a standalone server is rejected and no store is opened.
+        // Unified registration checks the provider's observed atomic-commit capability before
+        // admitting schema or opening sessions. A standalone server cannot provide that capability.
         Assert.Contains("writable replica set", exception.Message, StringComparison.Ordinal);
         Assert.Contains("no store was opened", exception.Message, StringComparison.Ordinal);
 

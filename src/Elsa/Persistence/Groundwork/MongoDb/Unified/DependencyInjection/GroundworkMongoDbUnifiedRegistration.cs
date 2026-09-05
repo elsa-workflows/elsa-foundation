@@ -2,7 +2,9 @@ using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.ReferenceComposition;
 using Elsa.Workflows.Dashboard.Persistence.Groundwork.V2;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Kernel;
 using Groundwork.MongoDb;
+using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
 
@@ -45,7 +47,7 @@ public static class GroundworkMongoDbUnifiedRegistration
 
         // The v2 provider takes one connection string, so the explicitly named database wins over any
         // database the caller happened to encode in the string itself.
-        services.AddGroundworkStorageProviderConnection(_ => new MongoProviderFactory().Create(
+        services.AddGroundworkStorageProviderConnection(_ => CreateConnection(
             new MongoUrlBuilder(connectionString) { DatabaseName = databaseName }.ToString()));
         services.AddGroundworkUnifiedStoreFamilies(workflowExecutableCacheOptions);
         // Both tiles read the v2 lanes through the storage session source, so they need no connection
@@ -53,5 +55,24 @@ public static class GroundworkMongoDbUnifiedRegistration
         services.AddGroundworkV2WorkflowRunHealth();
         services.AddGroundworkV2WorkflowPortfolio();
         return services;
+    }
+
+    private static IStorageProviderConnection CreateConnection(string connectionString)
+    {
+        var connection = new MongoProviderFactory().Create(connectionString);
+        try
+        {
+            // Unified runtime and design writes require multi-document atomic commits. Check the
+            // provider's observed topology before schema admission can create any collections.
+            if (!connection.Capabilities.Any(capability => capability.Id.Equals(WellKnownCapabilities.AtomicCommit)))
+                throw new InvalidOperationException(
+                    "Unified MongoDB persistence requires a writable replica set or sharded deployment with transaction support; no store was opened.");
+            return connection;
+        }
+        catch
+        {
+            connection.Dispose();
+            throw;
+        }
     }
 }
