@@ -1452,6 +1452,75 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             "postgresql", fixture.Adapter, fixture.Route, fixture.Path));
     }
 
+    [Theory]
+    [InlineData("resources-by-last-seen", "postgresql-bounded-resources-by-last-seen.json")]
+    [InlineData("resources-by-status", "postgresql-bounded-resources-by-status.json")]
+    [InlineData("resources-by-service", "postgresql-bounded-resources-by-service.json")]
+    public void PostgreSql_real_bounded_catalog_plans_survive_serialized_envelope_admission(
+        string route,
+        string fixtureName)
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            route);
+        var nativePlan = ReadRealPostgreSqlBoundedCatalogPlan(fixtureName);
+        using var fixture = Fixture.Create(
+            "postgresql",
+            route,
+            command: ProviderRenderedRelationalCommand("postgresql", specification),
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+            nativePlan: nativePlan);
+
+        DiagnosticsNativePlanContract.ValidateEnvelope(
+            "postgresql",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path);
+    }
+
+    [Theory]
+    [InlineData("simple-null-placement")]
+    [InlineData("simple-direction")]
+    [InlineData("subplan-null-placement")]
+    [InlineData("subplan-direction")]
+    public void PostgreSql_real_bounded_catalog_plan_rejects_wrong_native_null_order_or_direction(
+        string mutation)
+    {
+        var nativePlan = MutateRealPostgreSqlBoundedCatalogPlan(mutation);
+
+        AssertBoundedCatalogRejected("postgresql", nativePlan);
+    }
+
+    [Theory]
+    [InlineData("traces-by-last-seen")]
+    [InlineData("metrics-by-last-seen")]
+    [InlineData("logs-by-last-seen")]
+    public void PostgreSql_real_bounded_catalog_sort_plan_remains_rejected_for_non_resource_routes(
+        string route)
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            route);
+        using var fixture = Fixture.Create(
+            "postgresql",
+            route,
+            command: PostgreSqlRenderedRelationalCommandForRoute(specification),
+            nativePlan: RealPostgreSqlBoundedCatalogPlanForRoute(specification));
+
+        var exception = Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateEnvelope(
+                "postgresql",
+                fixture.Adapter,
+                fixture.Route,
+                fixture.Path));
+        Assert.True(
+            DiagnosticsNativePlanContract.IsExpectedBlockedPlanFailure(exception),
+            exception.Message);
+        Assert.Equal(
+            "native-plan.sort-or-materialization-spill",
+            DiagnosticsNativePlanContract.BlockedPlanReasonCode(exception));
+    }
+
     [Fact]
     public void Non_PostgreSql_command_rejects_PostgreSql_null_placement_syntax()
     {
@@ -2167,7 +2236,8 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     private static string[] PostgreSqlRenderedOrderTerms(DiagnosticsNativeRouteSpec specification) =>
         specification.EffectiveOrdering.SelectMany(term =>
         {
-            var ordinal = term.Column is "id" or "idOrderKey" or "traceKey" or "spanId";
+            var ordinal = term.Column is "id" or "idOrderKey" or "traceKey" or "spanId" or
+                "__groundwork_ordinal_id" or "__groundwork_ordinal_spanId";
             var expression = ordinal
                 ? $"(\"{term.Column}\" COLLATE \"C\")"
                 : $"\"{term.Column}\"";
@@ -2329,6 +2399,55 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 fixture.Route,
                 fixture.Path));
         Assert.True(DiagnosticsNativePlanContract.IsExpectedBlockedPlanFailure(exception));
+    }
+
+    private static string ReadRealPostgreSqlBoundedCatalogPlan(string fixtureName) =>
+        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", fixtureName));
+
+    private static string RealPostgreSqlBoundedCatalogPlanForRoute(
+        DiagnosticsNativeRouteSpec specification)
+    {
+        var plan = JsonNode.Parse(ReadRealPostgreSqlBoundedCatalogPlan(
+            "postgresql-bounded-resources-by-last-seen.json"))!.AsArray();
+        var scan = plan[0]!["Plan"]!["Plans"]![0]!["Plans"]![0]!;
+        var originalTable = scan["Relation Name"]!.GetValue<string>();
+        Assert.Equal("elsa_otel_resources_v2", originalTable);
+        scan["Relation Name"] = specification.TableName;
+        return plan.ToJsonString();
+    }
+
+    private static string PostgreSqlRenderedRelationalCommandForRoute(
+        DiagnosticsNativeRouteSpec specification)
+    {
+        var commandSpecification = specification.RouteIdentity is "metrics-by-last-seen" or "logs-by-last-seen"
+            ? specification with
+            {
+                Ordering = specification.EffectiveOrdering.Select(term => term.Column == "id"
+                    ? term with { Column = "__groundwork_ordinal_id" }
+                    : term).ToArray()
+            }
+            : specification;
+        return ProviderRenderedRelationalCommand("postgresql", commandSpecification);
+    }
+
+    private static string MutateRealPostgreSqlBoundedCatalogPlan(string mutation)
+    {
+        var plan = JsonNode.Parse(ReadRealPostgreSqlBoundedCatalogPlan(
+                "postgresql-bounded-resources-by-last-seen.json"))!.AsArray();
+        var sortKeys = plan[0]!["Plan"]!["Plans"]![0]!["Sort Key"]!.AsArray();
+        var index = mutation.StartsWith("subplan-", StringComparison.Ordinal) ? 1 : 0;
+        var original = sortKeys[index]!.GetValue<string>();
+        var replacement = mutation switch
+        {
+            "simple-null-placement" => original.Replace("DESC NULLS LAST", "DESC NULLS FIRST", StringComparison.Ordinal),
+            "simple-direction" => original.Replace("DESC NULLS LAST", "ASC NULLS FIRST", StringComparison.Ordinal),
+            "subplan-null-placement" => original.Replace("NULLS FIRST", "NULLS LAST", StringComparison.Ordinal),
+            "subplan-direction" => original.Replace("NULLS FIRST", "DESC NULLS LAST", StringComparison.Ordinal),
+            _ => throw new ArgumentOutOfRangeException(nameof(mutation), mutation, null)
+        };
+        Assert.NotEqual(original, replacement);
+        sortKeys[index] = replacement;
+        return plan.ToJsonString();
     }
 
     private sealed class Fixture : IDisposable

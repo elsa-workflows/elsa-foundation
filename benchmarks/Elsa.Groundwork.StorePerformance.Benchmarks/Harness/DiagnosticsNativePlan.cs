@@ -1455,9 +1455,11 @@ public static class DiagnosticsNativePlanContract
         var canonical = CanonicalPostgreSqlSortKey(value);
         var match = Regex.Match(
             canonical,
-            $@"^(?:[A-Za-z_][A-Za-z0-9_]*\.)?{Regex.Escape(column)}(?<direction>ASC|DESC)?$",
+            $@"^(?:[A-Za-z_][A-Za-z0-9_]*\.)?{Regex.Escape(column)}(?<direction>ASC|DESC)?(?:NULLS(?<nulls>FIRST|LAST))?$",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        return match.Success && ParseOrderDirection(match.Groups["direction"].Value) == direction;
+        return match.Success &&
+               TryParseSqlOrderDirection("postgresql", match, out var actualDirection) &&
+               actualDirection == direction;
     }
 
     private static bool PostgreSqlSubplanOrderMatches(
@@ -1467,9 +1469,11 @@ public static class DiagnosticsNativePlanContract
     {
         var match = Regex.Match(
             CanonicalPostgreSqlSortKey(value),
-            $@"^COALESCESubPlan{subplan},''(?<direction>ASC|DESC)?$",
+            $@"^COALESCESubPlan{subplan},''(?<direction>ASC|DESC)?(?:NULLS(?<nulls>FIRST|LAST))?$",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        return match.Success && ParseOrderDirection(match.Groups["direction"].Value) == direction;
+        return match.Success &&
+               TryParseSqlOrderDirection("postgresql", match, out var actualDirection) &&
+               actualDirection == direction;
     }
 
     private static string CanonicalPostgreSqlSortKey(string value)

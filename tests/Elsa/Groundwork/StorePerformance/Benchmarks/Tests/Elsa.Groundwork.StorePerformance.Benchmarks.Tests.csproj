@@ -12,4 +12,7 @@
     <ProjectReference Include="../../../../../../benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks.csproj" />
     <ProjectReference Include="../../../../../../src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="../../Fixtures/*.json" Link="Fixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+  </ItemGroup>
 </Project>

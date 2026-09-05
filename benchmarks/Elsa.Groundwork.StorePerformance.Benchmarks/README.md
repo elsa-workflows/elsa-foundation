@@ -30,7 +30,9 @@ for PostgreSQL, SQL Server, and MongoDB optimizers: because their frozen physica
 128 rows and their finite page is exactly 127 rows, one explicit physical scan plus one complete in-memory sort may be
 classified as `bounded-scan-sort`. That classification is rejected for any other route or bound, for
 incomplete ordering, or for any spill/materialization evidence; it does not weaken the 100,000-row
-stream gates. SQLite retains the stricter index-search requirement proven by its native plan.
+stream gates. PostgreSQL native sort keys may spell out `NULLS LAST` for descending terms or
+`NULLS FIRST` for ascending terms, but contradictory placement remains rejected. SQLite retains the
+stricter index-search requirement proven by its native plan.
 
 MongoDB command admission permits the renderer's exact ordering-helper removal projection between
 sort and limit. It requires every rendered helper to be removed and rejects unknown helper fields,
