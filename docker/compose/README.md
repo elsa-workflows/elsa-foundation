@@ -210,7 +210,7 @@ docker compose exec postgres psql -U elsa -d elsa -c '\dt'
 ```
 
 Groundwork gives every storage unit its own table, named after the unit, so `\dt` lists one per
-unit across the composed lanes: the design lanes contribute `elsa_workflow_definitions`,
+unit across the composed lanes: the design lanes contribute `elsa_workflow_definitions_v2`,
 `elsa_workflow_definition_drafts`, `elsa_workflow_definition_versions` and their siblings, and the
 runtime lane contributes the `runtime_*` family (`runtime_workflow_execution_state`,
 `runtime_checkpoint_commit`, and so on). Groundwork keeps its own bookkeeping in
@@ -220,7 +220,7 @@ To confirm a workflow you designed actually landed:
 
 ```bash
 docker compose exec postgres psql -U elsa -d elsa \
-  -c "SELECT count(*) FROM elsa_workflow_definitions;"
+  -c "SELECT count(*) FROM elsa_workflow_definitions_v2;"
 ```
 
 For the full explanation of the demo composition (which persistence lanes are included/omitted and

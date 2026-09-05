@@ -28,6 +28,14 @@ with the implementations listed in `EXTENSION_POINTS.md`.
 The selected provider owns schema admission. No migration, compatibility alias, fallback, or dual-write
 path is registered by this feature.
 
+The activity-definition-version projection has a pre-GA clean-schema boundary. Required
+`definitionId`/`semVerSortKey` projections and their unique tuple live in the versioned physical table
+`elsa_activity_definition_versions_v2` at storage schema version `2`. There is no in-place migration
+from the earlier preview table. Before enabling this build, discard and reprovision the complete
+activity-design Groundwork persistence set from the current manifest, then recreate or import the
+activity designs. Retaining old version rows beside the new table can leave authoring, publication,
+layout, and dependency records pointing at a generation the active store no longer reads.
+
 ## See also
 
 - [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md) — replacement contracts and v2 seams.

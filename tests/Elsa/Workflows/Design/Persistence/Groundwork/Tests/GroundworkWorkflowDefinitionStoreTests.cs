@@ -42,18 +42,7 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
 
         using var corrupt = new DesignGroundworkTestPersistence();
         corrupt.InsertRaw(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
-            new StorageValues(new Dictionary<string, object?>
-            {
-                [WorkflowsDesignStorageManifest.IdField] = "corrupt",
-                [WorkflowsDesignStorageManifest.TenantIdField] = DesignGroundworkTestAccess.DefaultScopeValue,
-                [WorkflowsDesignStorageManifest.SchemaVersionField] = WorkflowsDesignStorageManifest.SchemaVersion,
-                [WorkflowsDesignStorageManifest.ContentField] = "null",
-                ["createdAt"] = DateTimeOffset.UtcNow,
-                ["lastModifiedAt"] = DateTimeOffset.UtcNow,
-                [WorkflowsDesignStorageManifest.DefinitionIdField] = "corrupt",
-                [WorkflowsDesignStorageManifest.DefinitionIdSearchKeyField] =
-                    QuerySearchKeys.Encode("corrupt", QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase)
-            }));
+            CorruptDefinitionValues("corrupt"));
         var corruptException = await Assert.ThrowsAsync<GroundworkCorruptPayloadException>(() =>
             new GroundworkWorkflowDefinitionStore(corrupt, DesignGroundworkTestAccess.DefaultAccessContextAccessor).FindByIdAsync("corrupt"));
         Assert.Contains("deserialized", corruptException.Message, StringComparison.OrdinalIgnoreCase);
@@ -141,8 +130,34 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
         {
             Assert.Equal(["c"], (await store.ListAsync(new WorkflowDefinitionFilter { Name = "Shipping" })).Select(x => x.Id));
             AssertRoute(raw, WorkflowsDesignStorageManifest.DefinitionByNameIndex,
-                [WorkflowsDesignStorageManifest.DefinitionNameField, WorkflowsDesignStorageManifest.DefinitionIdField]);
+                [WorkflowsDesignStorageManifest.DefinitionNameLookupHashField,
+                 WorkflowsDesignStorageManifest.DefinitionIdField]);
         }
+    }
+
+    [Fact]
+    public async Task Exact_name_filter_remains_complete_beyond_the_search_term_bound()
+    {
+        var definitions = Enumerable.Range(0, GroundworkDesignStorage.SearchTermProbeLimit)
+            .Select(index => new WorkflowDefinition
+            {
+                Id = $"exact-{index:D5}",
+                Name = index == GroundworkDesignStorage.SearchTermMaximumMatches ? "target" : $"name-{index:D5}"
+            })
+            .ToArray();
+        using var raw = new DesignGroundworkTestPersistence { RecordQueries = true };
+        raw.SeedDefinitions(definitions);
+        var store = new GroundworkWorkflowDefinitionStore(raw, DesignGroundworkTestAccess.DefaultAccessContextAccessor);
+
+        var result = await store.ListAsync(new WorkflowDefinitionFilter { Name = "target" });
+
+        Assert.Equal(["exact-10000"], result.Select(definition => definition.Id));
+        Assert.DoesNotContain(raw.Queries, query => query.Request.AcceptedScan is not null);
+        Assert.All(raw.Queries, query => Assert.Equal(WorkflowsDesignStorageManifest.DefinitionByNameIndex, query.Options?.SelectedIndex));
+        Assert.All(raw.Queries, query => Assert.Equal(
+            [WorkflowsDesignStorageManifest.DefinitionNameLookupHashField,
+             WorkflowsDesignStorageManifest.DefinitionIdField],
+            query.Request.Order.Select(term => term.Column.Name)));
     }
 
     [Fact]
@@ -153,15 +168,74 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
         {
             Assert.Equal(["a", "c"], (await store.ListAsync(new WorkflowDefinitionFilter { Names = ["Order Processing", "Shipping"] })).Select(x => x.Id).OrderBy(x => x));
             AssertRoute(raw, WorkflowsDesignStorageManifest.DefinitionByNameIndex,
-                [WorkflowsDesignStorageManifest.DefinitionNameField, WorkflowsDesignStorageManifest.DefinitionIdField]);
+                [WorkflowsDesignStorageManifest.DefinitionNameLookupHashField,
+                 WorkflowsDesignStorageManifest.DefinitionIdField]);
         }
     }
 
     [Fact]
-    public async Task List_by_search_term_fans_out_over_name_description_and_id()
+    public async Task List_by_search_term_uses_one_bounded_catalog_probe_with_residual_matching()
     {
         var (store, raw) = Seeded(Sample());
         using (raw) Assert.Equal(["a", "c"], (await store.ListAsync(new WorkflowDefinitionFilter { SearchTerm = "order" })).Select(x => x.Id).OrderBy(x => x));
+    }
+
+    [Fact]
+    public async Task Search_term_does_not_deserialize_unrelated_candidates()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        raw.InsertRaw(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            CorruptDefinitionValues("a-corrupt", "Unrelated"));
+        raw.SeedDefinition(new WorkflowDefinition { Id = "b-valid", Name = "Invoice Generator" });
+        var store = new GroundworkWorkflowDefinitionStore(raw, DesignGroundworkTestAccess.DefaultAccessContextAccessor);
+
+        var result = await store.ListAsync(new WorkflowDefinitionFilter { SearchTerm = "invoice" });
+
+        Assert.Equal(["b-valid"], result.Select(definition => definition.Id));
+    }
+
+    [Theory]
+    [InlineData("id", false)]
+    [InlineData("name", false)]
+    [InlineData("description", false)]
+    [InlineData("id", true)]
+    [InlineData("name", true)]
+    [InlineData("description", true)]
+    public async Task Combined_search_filters_projected_candidates_before_deserialization(string route, bool matchesCorrupt)
+    {
+        using var raw = new DesignGroundworkTestPersistence { RecordQueries = true };
+        raw.InsertRaw(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            CorruptDefinitionValues("a-corrupt", route == "name" ? "Shared" : "Unrelated",
+                route == "name" ? "Unrelated" : "Shared"));
+        raw.SeedDefinition(new WorkflowDefinition
+        {
+            Id = "b-valid",
+            Name = route == "name" ? "Shared" : "Invoice",
+            Description = route == "name" ? "Invoice" : "Shared"
+        });
+        var filter = route switch
+        {
+            "id" => new WorkflowDefinitionFilter { Ids = ["a-corrupt", "b-valid"] },
+            "name" => new WorkflowDefinitionFilter { Name = "Shared" },
+            _ => new WorkflowDefinitionFilter { Description = "Shared" }
+        };
+        filter.SearchTerm = matchesCorrupt ? "unrelated" : "invoice";
+        var store = new GroundworkWorkflowDefinitionStore(raw, DesignGroundworkTestAccess.DefaultAccessContextAccessor);
+
+        if (matchesCorrupt)
+            await Assert.ThrowsAsync<GroundworkCorruptPayloadException>(() => store.ListAsync(filter));
+        else
+            Assert.Equal(["b-valid"], (await store.ListAsync(filter)).Select(definition => definition.Id));
+
+        var query = Assert.Single(raw.Queries);
+        Assert.Null(query.Request.AcceptedScan);
+        Assert.Equal(route switch
+        {
+            "id" => WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex,
+            "name" => WorkflowsDesignStorageManifest.DefinitionByNameIndex,
+            _ => WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex
+        }, query.IndexName);
     }
 
     [Fact]
@@ -172,7 +246,8 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
         {
             Assert.Equal(["a"], (await store.ListAsync(new WorkflowDefinitionFilter { Description = "Handles orders" })).Select(x => x.Id));
             AssertRoute(raw, WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex,
-                [WorkflowsDesignStorageManifest.DefinitionDescriptionField, WorkflowsDesignStorageManifest.DefinitionIdField]);
+                [WorkflowsDesignStorageManifest.DefinitionDescriptionLookupHashField,
+                 WorkflowsDesignStorageManifest.DefinitionIdField]);
         }
     }
 
@@ -225,28 +300,37 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
         });
 
         Assert.Equal(["a"], result.Select(x => x.Id));
-        Assert.Equal(4, raw.Queries.Count);
-        var probe = Assert.Single(raw.Queries, query => query.Options?.SelectedIndex is null);
-        Assert.Equal("GW-SCAN-ELSA-WORKFLOWS-DESIGN-CATALOG-CARDINALITY", probe.Request.AcceptedScan?.Id);
-        Assert.Equal("elsa-workflows-design", probe.Request.AcceptedScan?.Owner);
-        Assert.Equal(new DateTimeOffset(2027, 8, 16, 0, 0, 0, TimeSpan.Zero), probe.Request.AcceptedScan?.ExpiresOn);
-        Assert.True(probe.Request.AcceptedScan?.Allowed);
-        Assert.Equal(GroundworkDesignStorage.SearchTermProbeLimit, probe.Request.Paging.Limit);
-        var namedRoutes = raw.Queries.Where(query => query.Options?.SelectedIndex is not null).ToArray();
-        Assert.Equal(3, namedRoutes.Length);
-        var expected = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+        Assert.Single(raw.Queries);
+        var query = Assert.Single(raw.Queries, query => query.Options?.SelectedIndex == WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex);
+        Assert.Null(query.Request.AcceptedScan);
+        Assert.Equal(WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex, query.IndexName);
+        Assert.Equal(
+            [WorkflowsDesignStorageManifest.DefinitionDescriptionLookupHashField,
+             WorkflowsDesignStorageManifest.DefinitionIdField],
+            query.Request.Order.Select(x => x.Column.Name));
+    }
+
+    [Fact]
+    public async Task Combined_exact_filters_use_one_bounded_route_and_preserve_ordinal_residuals()
+    {
+        var (store, raw) = Seeded(
+            new WorkflowDefinition { Id = "a", Name = "Order Processing", Description = "Handles orders" },
+            new WorkflowDefinition { Id = "b", Name = "Order Processing", Description = "Other" },
+            new WorkflowDefinition { Id = "c", Name = "Other", Description = "Handles orders" });
+
+        using (raw)
         {
-            [WorkflowsDesignStorageManifest.DefinitionByIdSearchIndex] = [WorkflowsDesignStorageManifest.DefinitionIdField],
-            [WorkflowsDesignStorageManifest.DefinitionByNameIndex] =
-                [WorkflowsDesignStorageManifest.DefinitionNameField, WorkflowsDesignStorageManifest.DefinitionIdField],
-            [WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex] =
-                [WorkflowsDesignStorageManifest.DefinitionDescriptionField, WorkflowsDesignStorageManifest.DefinitionIdField]
-        };
-        foreach (var query in namedRoutes)
-        {
-            Assert.Equal(query.Options!.SelectedIndex, query.IndexName);
-            Assert.Contains(query.IndexName, expected.Keys);
-            Assert.Equal(expected[query.IndexName!], query.Request.Order.Select(x => x.Column.Name));
+            var result = await store.ListAsync(new WorkflowDefinitionFilter
+            {
+                Name = "Order Processing",
+                Description = "Handles orders"
+            });
+
+            Assert.Equal(["a"], result.Select(definition => definition.Id));
+            AssertRoute(raw, WorkflowsDesignStorageManifest.DefinitionByDescriptionIndex,
+                [WorkflowsDesignStorageManifest.DefinitionDescriptionLookupHashField,
+                 WorkflowsDesignStorageManifest.DefinitionIdField]);
+            Assert.DoesNotContain(raw.Queries, query => query.Request.AcceptedScan is not null);
         }
     }
 
@@ -402,4 +486,39 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
         Assert.Equal(index, query.Options!.SelectedIndex);
         Assert.Equal(order, query.Request.Order.Select(term => term.Column.Name));
     }
+
+    private static StorageValues CorruptDefinitionValues(
+        string id,
+        string? name = null,
+        string? description = null)
+    {
+        var identitySearchKey = QuerySearchKeys.Encode(id, QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase);
+        var values = new Dictionary<string, object?>
+        {
+            [WorkflowsDesignStorageManifest.IdField] = id,
+            [WorkflowsDesignStorageManifest.TenantIdField] = DesignGroundworkTestAccess.DefaultScopeValue,
+            [WorkflowsDesignStorageManifest.SchemaVersionField] = WorkflowsDesignStorageManifest.SchemaVersion,
+            [WorkflowsDesignStorageManifest.ContentField] = "null",
+            ["createdAt"] = DateTimeOffset.UtcNow,
+            ["lastModifiedAt"] = DateTimeOffset.UtcNow,
+            [WorkflowsDesignStorageManifest.DefinitionIdField] = id,
+            [WorkflowsDesignStorageManifest.DefinitionIdSearchKeyField] = identitySearchKey,
+            [WorkflowsDesignStorageManifest.DefinitionIdLookupHashField] = LookupHash(identitySearchKey)
+        };
+        if (name is not null)
+        {
+            values[WorkflowsDesignStorageManifest.DefinitionNameField] = name;
+            values[WorkflowsDesignStorageManifest.DefinitionNameLookupHashField] = LookupHash(name);
+        }
+        if (description is not null)
+        {
+            values[WorkflowsDesignStorageManifest.DefinitionDescriptionField] = description;
+            values[WorkflowsDesignStorageManifest.DefinitionDescriptionLookupHashField] = LookupHash(description);
+        }
+        return new StorageValues(values);
+    }
+
+    private static string LookupHash(string value) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value)))
+            .ToLowerInvariant();
 }

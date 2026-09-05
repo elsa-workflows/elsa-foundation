@@ -50,6 +50,7 @@ public sealed class DraftOriginator(
             accessContextAccessor);
         DraftOriginationInput? input = null;
         WorkflowDefinitionDraft? draft = null;
+        IReadOnlyList<ValidationError>? errors = null;
         IDistributedSynchronizationHandle? draftLock = null;
         GroundworkDesignAtomicCommandResult<DraftOriginationResult> outcome;
 
@@ -67,7 +68,6 @@ public sealed class DraftOriginator(
                         "Draft origination input was not resolved before staging.");
                     var acceptedDraft = draft ?? throw new InvalidOperationException(
                         "Draft identity was not allocated before staging.");
-                    var errors = await inlineEventPublisher.DeriveValidationErrorsAsync(acceptedDraft, token);
                     GroundworkEntityTimestamps.StampAdded(acceptedDraft, clock.UtcNow);
                     await context.SaveAsync(
                         documents.ToSaveRequest(
@@ -76,7 +76,8 @@ public sealed class DraftOriginator(
                             acceptedInput.ActivityPresentation) with
                         { ExpectedVersion = 0 },
                         token);
-                    return new DraftOriginationResult(acceptedDraft, errors.ToArray());
+                    return new DraftOriginationResult(acceptedDraft, errors ?? throw new InvalidOperationException(
+                        "Draft validation was not completed before staging."));
                 },
                 GroundworkDesignDocumentSerialization.Create(payloadSerializer),
                 cancellationToken,
@@ -98,6 +99,9 @@ public sealed class DraftOriginator(
                         WorkflowDesignPersistenceLockKeys.DraftKey(draft.Id),
                         null,
                         token);
+                    // Validation handlers may read persistence; run them under the draft lock
+                    // before the provider transaction reserves its connection.
+                    errors = (await inlineEventPublisher.DeriveValidationErrorsAsync(draft, token)).ToArray();
                 });
         }
         finally
