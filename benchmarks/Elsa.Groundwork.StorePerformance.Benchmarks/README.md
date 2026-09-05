@@ -53,6 +53,13 @@ The performance workflow passes `--require-complete-native-plan` to the operator
 standalone correctness remains usable with a blocked capture for diagnosis, while measurement and
 verdict gates still require complete admitted evidence.
 
+For SQL Server structured-log recent/replay, the exact scoped primary key may satisfy the redundant
+sequence-order index contract when retained native evidence proves the required traversal direction,
+scope equality seek, replay range bounds where applicable, bounded actual rows/read/lookup work, and
+unforced access without scan, sort, spill, or materialization. Evidence names the actual primary key;
+it is never relabelled as the secondary index. This is a route-specific compatibility rule, not an
+arbitrary-index allowance.
+
 `matrix <scale>` executes one untimed adapter-host warm-up process followed by three independent measured
 adapter-host processes. A measured artifact carries the frozen seed/input fingerprint, provider-native plan
 identity/evidence reference/content digest, provider server version/topology/material settings, an opaque

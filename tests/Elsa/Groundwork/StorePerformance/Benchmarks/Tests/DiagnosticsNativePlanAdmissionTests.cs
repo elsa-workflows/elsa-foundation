@@ -532,6 +532,142 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         }
     }
 
+    [Fact]
+    public void Groundwork_sqlserver_structured_log_recent_admits_the_actual_primary_key_access_path()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "structured-log-recent");
+        using var fixture = Fixture.Create(
+            "sqlserver",
+            specification.RouteIdentity,
+            command: SqlServerStructuredLogRecentCommand(),
+            nativePlan: SqlServerStructuredLogPrimaryKeyPlan(),
+            physicalIndexName: "__groundwork_pk_elsa_structured_logs");
+
+        DiagnosticsNativePlanContract.ValidateEnvelope(
+            "sqlserver",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path);
+    }
+
+    [Fact]
+    public void Groundwork_sqlserver_structured_log_primary_key_equivalence_is_fail_closed()
+    {
+        var command = SqlServerStructuredLogRecentCommand();
+        var validPlan = SqlServerStructuredLogPrimaryKeyPlan();
+        var invalidPlans = new[]
+        {
+            validPlan.Replace("Table=\"[elsa_structured_logs]\"", "Table=\"[other_table]\"", StringComparison.Ordinal),
+            validPlan.Replace("Index=\"[__groundwork_pk_elsa_structured_logs]\"", "Index=\"[other_index]\"", StringComparison.Ordinal),
+            validPlan.Replace("ScanDirection=\"BACKWARD\"", "ScanDirection=\"FORWARD\"", StringComparison.Ordinal),
+            validPlan.Replace("Column=\"__groundwork_scope\"", "Column=\"other_scope\"", StringComparison.Ordinal),
+            validPlan.Replace("ForcedIndex=\"0\"", "ForcedIndex=\"1\"", StringComparison.Ordinal),
+            validPlan.Replace("ParameterRuntimeValue=\"(128)\"", "ParameterRuntimeValue=\"(129)\"", StringComparison.Ordinal),
+            validPlan.Replace("ParameterRuntimeValue=\"(128)\"", "ParameterRuntimeValue=\"128\"", StringComparison.Ordinal),
+            validPlan.Replace("ActualRows=\"128\"", "ActualRows=\"0\"", StringComparison.Ordinal),
+            validPlan.Replace("ActualRowsRead=\"128\"", "ActualRowsRead=\"129\"", StringComparison.Ordinal),
+            validPlan.Replace("ActualExecutions=\"128\"", "ActualExecutions=\"129\"", StringComparison.Ordinal),
+            validPlan.Replace(
+                "Table=\"[elsa_structured_logs]\" TableReferenceId=\"-1\"",
+                "Table=\"[other_table]\" TableReferenceId=\"-1\"",
+                StringComparison.Ordinal),
+            validPlan.Replace(
+                "<Convert DataType=\"bigint\" Style=\"0\" Implicit=\"1\">",
+                "<Convert DataType=\"bigint\" Style=\"0\" Implicit=\"1\"><Arithmetic Operation=\"ADD\" />",
+                StringComparison.Ordinal),
+            validPlan.Replace(
+                "<Convert DataType=\"nvarchar\" Length=\"216\" Style=\"0\" Implicit=\"1\">",
+                "<Convert DataType=\"nvarchar\" Length=\"216\" Style=\"0\" Implicit=\"1\"><Arithmetic Operation=\"ADD\" />",
+                StringComparison.Ordinal),
+            validPlan.Replace("</RelOp>", "<RelOp PhysicalOp=\"Aggregate\" /></RelOp>", StringComparison.Ordinal),
+            validPlan.Replace("</ShowPlanXML>", "<RelOp PhysicalOp=\"Sort\" /></ShowPlanXML>", StringComparison.Ordinal),
+            validPlan.Replace("</ShowPlanXML>", "<SpillOccurred /></ShowPlanXML>", StringComparison.Ordinal)
+        };
+
+        foreach (var invalidPlan in invalidPlans)
+        {
+            using var fixture = Fixture.Create(
+                "sqlserver",
+                "structured-log-recent",
+                command: command,
+                nativePlan: invalidPlan,
+                physicalIndexName: "__groundwork_pk_elsa_structured_logs");
+
+            Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+                "sqlserver",
+                fixture.Adapter,
+                fixture.Route,
+                fixture.Path));
+        }
+    }
+
+    [Fact]
+    public void Groundwork_sqlserver_structured_log_replay_does_not_reuse_recent_primary_key_proof()
+    {
+        using var fixture = Fixture.Create(
+            "sqlserver",
+            "structured-log-replay",
+            command:
+                "SELECT * FROM [elsa_structured_logs] WHERE " +
+                "([__groundwork_scope] IS NOT NULL AND [__groundwork_scope] = @p0) AND " +
+                "([sequence] IS NOT NULL AND [sequence] > @p1 AND [sequence] <= @p2) " +
+                "ORDER BY [sequence] ASC OFFSET 0 ROWS FETCH NEXT @p3 ROWS ONLY",
+            nativePlan: SqlServerStructuredLogPrimaryKeyPlan(),
+            physicalIndexName: "__groundwork_pk_elsa_structured_logs");
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "sqlserver",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path));
+    }
+
+    [Fact]
+    public void Synthetic_sqlserver_structured_log_replay_primary_key_branch_requires_exact_dual_ranges()
+    {
+        // Synthetic structural proof only: no live SQL Server replay plan has been accepted yet.
+        var command = SqlServerStructuredLogReplayCommand();
+        var validPlan = SqlServerStructuredLogReplayPlan();
+        var invalidPlans = new[]
+        {
+            validPlan.Replace("<StartRange ScanType=\"GT\">", string.Empty, StringComparison.Ordinal),
+            validPlan.Replace(
+                "<EndRange ScanType=\"LE\">",
+                SqlServerStructuredLogReplayDuplicateStartRange(),
+                StringComparison.Ordinal),
+            validPlan.Replace("StartRange ScanType=\"GT\"", "StartRange ScanType=\"GE\"", StringComparison.Ordinal),
+            validPlan.Replace("<ColumnReference Column=\"@p1\" />", "<ColumnReference Column=\"@wrong\" />", StringComparison.Ordinal)
+        };
+
+        using (var fixture = Fixture.Create(
+                   "sqlserver",
+                   "structured-log-replay",
+                   command: command,
+                   nativePlan: validPlan,
+                   physicalIndexName: "__groundwork_pk_elsa_structured_logs"))
+        {
+            DiagnosticsNativePlanContract.ValidateEnvelope("sqlserver", fixture.Adapter, fixture.Route, fixture.Path);
+        }
+
+        foreach (var invalidPlan in invalidPlans)
+        {
+            using var fixture = Fixture.Create(
+                "sqlserver",
+                "structured-log-replay",
+                command: command,
+                nativePlan: invalidPlan,
+                physicalIndexName: "__groundwork_pk_elsa_structured_logs");
+
+            Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+                "sqlserver",
+                fixture.Adapter,
+                fixture.Route,
+                fixture.Path));
+        }
+    }
+
     [Theory]
     [InlineData("resources-by-status", "status", true)]
     [InlineData("resources-by-service", "serviceNameKey", true)]
@@ -2423,6 +2559,77 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         return $"SELECT TOP ({specification.FiniteLimit}) * FROM {specification.TableName} ORDER BY {string.Join(", ", ordering)}";
     }
 
+    private static string SqlServerStructuredLogRecentCommand() =>
+        "SELECT * FROM [elsa_structured_logs] WHERE " +
+        "([__groundwork_scope] COLLATE Latin1_General_100_BIN2 IS NOT NULL AND " +
+        "DATALENGTH([__groundwork_scope] COLLATE Latin1_General_100_BIN2) = DATALENGTH(@p0) AND " +
+        "[__groundwork_scope] COLLATE Latin1_General_100_BIN2 = @p0) " +
+        "ORDER BY [sequence] DESC OFFSET 0 ROWS FETCH NEXT @p1 ROWS ONLY";
+
+    private static string SqlServerStructuredLogReplayCommand() =>
+        "SELECT * FROM [elsa_structured_logs] WHERE " +
+        "([__groundwork_scope] IS NOT NULL AND [__groundwork_scope] = @p0) AND " +
+        "([sequence] IS NOT NULL AND [sequence] > @p1 AND [sequence] <= @p2) " +
+        "ORDER BY [sequence] ASC OFFSET 0 ROWS FETCH NEXT @p3 ROWS ONLY";
+
+    private static string SqlServerStructuredLogPrimaryKeyPlan() =>
+        File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "Fixtures",
+            "sqlserver-structured-log-primary-key.xml"));
+
+    private static string SqlServerStructuredLogReplayPlan()
+    {
+        var plan = SqlServerStructuredLogPrimaryKeyPlan()
+            .Replace("ScanDirection=\"BACKWARD\"", "ScanDirection=\"FORWARD\"", StringComparison.Ordinal)
+            .Replace("ScalarString=\"CONVERT_IMPLICIT(bigint,[@p1],0)\"", "ScalarString=\"CONVERT_IMPLICIT(bigint,[@p3],0)\"", StringComparison.Ordinal)
+            .Replace("FETCH NEXT @p1", "FETCH NEXT @p3", StringComparison.Ordinal)
+            .Replace("<ColumnReference Column=\"@p1\"/>", "<ColumnReference Column=\"@p3\"/>", StringComparison.Ordinal)
+            .Replace("<ColumnReference Column=\"@p1\" />", "<ColumnReference Column=\"@p3\" />", StringComparison.Ordinal)
+            .Replace("<ColumnReference Column=\"@p1\" ParameterDataType=", "<ColumnReference Column=\"@p3\" ParameterDataType=", StringComparison.Ordinal);
+        const string prefixEnd = "                                  </Prefix>\n                                </SeekKeys>";
+        const string replayRanges = """
+                                  </Prefix>
+                                  <StartRange ScanType="GT">
+                                    <RangeColumns>
+                                      <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="sequence" />
+                                    </RangeColumns>
+                                    <RangeExpressions>
+                                      <ScalarOperator>
+                                        <Identifier><ColumnReference Column="@p1" /></Identifier>
+                                      </ScalarOperator>
+                                    </RangeExpressions>
+                                  </StartRange>
+                                  <EndRange ScanType="LE">
+                                    <RangeColumns>
+                                      <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="sequence" />
+                                    </RangeColumns>
+                                    <RangeExpressions>
+                                      <ScalarOperator>
+                                        <Identifier><ColumnReference Column="@p2" /></Identifier>
+                                      </ScalarOperator>
+                                    </RangeExpressions>
+                                  </EndRange>
+                                </SeekKeys>
+        """;
+        return plan.Replace(prefixEnd, replayRanges, StringComparison.Ordinal);
+    }
+
+    private static string SqlServerStructuredLogReplayDuplicateStartRange() =>
+        """
+                              <StartRange ScanType="GT">
+                                <RangeColumns>
+                                  <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="sequence" />
+                                </RangeColumns>
+                                <RangeExpressions>
+                                  <ScalarOperator>
+                                    <Identifier><ColumnReference Column="@p1" /></Identifier>
+                                  </ScalarOperator>
+                                </RangeExpressions>
+                              </StartRange>
+                              <EndRange ScanType="LE">
+        """;
+
     private static string SqlServerIndexSeekPlan(DiagnosticsNativeRouteSpec specification)
     {
         var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("sqlserver", specification);
@@ -2502,10 +2709,11 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             string routeIdentity,
             string commandText,
             string nativePlan,
-            string? planClassification)
+            string? planClassification,
+            string? physicalIndexName)
         {
             Adapter = adapter;
-            Route = RouteFor(Adapter, provider, routeIdentity, planClassification);
+            Route = RouteFor(Adapter, provider, routeIdentity, planClassification, physicalIndexName);
             var artifact = new DiagnosticsNativePlanArtifact(
                 1,
                 provider,
@@ -2513,7 +2721,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 routeIdentity,
                 RouteSpec.TableName,
                 RouteSpec.IndexName,
-                DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(provider, RouteSpec),
+                physicalIndexName ?? DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(provider, RouteSpec),
                 commandText,
                 nativePlan);
             Directory = System.IO.Directory.CreateTempSubdirectory("diagnostics-native-plan-");
@@ -2534,7 +2742,8 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             string? nativePlan = null,
             bool attachCommandToNativePlan = true,
             string? planClassification = null,
-            string? adapter = null)
+            string? adapter = null,
+            string? physicalIndexName = null)
         {
             adapter ??= DiagnosticsNativePlanContract.GroundworkAdapter;
             var spec = DiagnosticsNativePlanContract.For(adapter, routeIdentity);
@@ -2563,7 +2772,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                                    throw new InvalidOperationException("Mongo fixture command must be valid JSON.");
                 nativePlan = plan.ToJsonString();
             }
-            return new Fixture(provider, adapter, routeIdentity, command, nativePlan, planClassification);
+            return new Fixture(provider, adapter, routeIdentity, command, nativePlan, planClassification, physicalIndexName);
         }
 
         internal static string MongoPhysicalCollection(DiagnosticsNativeRouteSpec specification) =>
@@ -2616,7 +2825,8 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             string adapter,
             string provider,
             string routeIdentity,
-            string? planClassification = null)
+            string? planClassification = null,
+            string? physicalIndexName = null)
         {
             var spec = DiagnosticsNativePlanContract.For(adapter, routeIdentity);
             return new NativeRouteEvidence(
@@ -2624,7 +2834,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 "route.raw.json",
                 new string('a', 64),
                 planClassification ?? DiagnosticsNativePlanContract.IndexSearchPlanClassification,
-                DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(provider, spec),
+                physicalIndexName ?? DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(provider, spec),
                 spec.PhysicalCardinality,
                 DiagnosticsNativePlanContract.ExpectedStorageScopePredicate(provider, spec),
                 spec.PredicateColumn is not null,
