@@ -2244,7 +2244,7 @@ public static class DiagnosticsNativePlanContract
                     ValidateSqlServerBoundedScanSortPlan(plan, specification);
                     return true;
                 case "mongodb":
-                    return IsBoundedMongoScanSortShape(plan);
+                    return IsBoundedMongoScanSortShape(plan, specification);
                 default:
                     return false;
             }
@@ -2255,28 +2255,18 @@ public static class DiagnosticsNativePlanContract
         }
     }
 
-    private static bool IsBoundedMongoScanSortShape(string plan)
+    private static bool IsBoundedMongoScanSortShape(
+        string plan,
+        DiagnosticsNativeRouteSpec specification)
     {
         try
         {
             using var document = JsonDocument.Parse(plan);
-            var winningPlans = FindPropertyValues(document.RootElement, "winningPlan").ToArray();
-            if (winningPlans.Length != 1)
-                return false;
-
-            var stages = FindObjects(winningPlans[0], "stage").ToArray();
-            var names = stages
-                .Select(MongoStageName)
-                .Where(name => name is not null)
-                .ToArray();
-            var limits = FindObjects(winningPlans[0], "limitAmount").ToArray();
-            return names.Count(name => string.Equals(name, "COLLSCAN", StringComparison.OrdinalIgnoreCase)) == 1 &&
-                   names.Count(name => string.Equals(name, "SORT", StringComparison.OrdinalIgnoreCase)) == 1 &&
-                   !names.Any(name => string.Equals(name, "IXSCAN", StringComparison.OrdinalIgnoreCase)) &&
-                   !names.Any(name => name!.Contains("MATERIAL", StringComparison.OrdinalIgnoreCase)) &&
-                   !HasSpillMarker(document.RootElement) &&
-                   limits.Length != 0 &&
-                   limits.All(limit => limit.GetProperty("limitAmount").TryGetInt32(out var value) && value == BoundedResourceLimit + 1);
+            return TryValidateMongoBoundedScanSortPlan(
+                document.RootElement,
+                specification,
+                commandOrdering: null,
+                out _);
         }
         catch (JsonException)
         {
@@ -2290,35 +2280,203 @@ public static class DiagnosticsNativePlanContract
         IReadOnlyList<(string Column, RuntimeNativeOrderDirection Direction)> commandOrdering)
     {
         using var document = ParseJson(plan, "MongoDB");
-        var winningPlans = FindPropertyValues(document.RootElement, "winningPlan").ToArray();
-        var stages = winningPlans.Length == 1
-            ? FindObjects(winningPlans[0], "stage").ToArray()
-            : [];
-        var allStages = FindObjects(document.RootElement, "stage").ToArray();
-        var names = stages
+        if (!TryValidateMongoBoundedScanSortPlan(
+                document.RootElement,
+                specification,
+                commandOrdering,
+                out var failure))
+            throw BlockedPlan(specification, failure);
+    }
+
+    private static bool TryValidateMongoBoundedScanSortPlan(
+        JsonElement root,
+        DiagnosticsNativeRouteSpec specification,
+        IReadOnlyList<(string Column, RuntimeNativeOrderDirection Direction)>? commandOrdering,
+        out string failure)
+    {
+        failure = "MongoDB bounded scan/sort plan is missing its explicit collection scan or sort";
+        if (!TryGetMongoWinningPlan(root, out var winningPlan))
+            return false;
+
+        var winningStages = FindObjects(winningPlan, "stage").ToArray();
+        var winningNames = winningStages
             .Select(MongoStageName)
             .Where(name => name is not null)
             .ToArray();
-        if (winningPlans.Length != 1 ||
-            names.Count(name => string.Equals(name, "COLLSCAN", StringComparison.OrdinalIgnoreCase)) != 1 ||
-            names.Count(name => string.Equals(name, "SORT", StringComparison.OrdinalIgnoreCase)) != 1)
-            throw BlockedPlan(specification, "MongoDB bounded scan/sort plan is missing its explicit collection scan or sort");
-        if (names.Any(name => string.Equals(name, "IXSCAN", StringComparison.OrdinalIgnoreCase)))
-            throw BlockedPlan(specification, "MongoDB bounded scan/sort plan unexpectedly uses an index scan");
-        if (allStages.Select(MongoStageName).Any(name => name?.Contains("MATERIAL", StringComparison.OrdinalIgnoreCase) == true) ||
-            HasSpillMarker(document.RootElement))
-            throw BlockedPlan(specification, "MongoDB bounded scan/sort plan has a sort or materialization spill");
+        var hasUnknownWinnerProperty = winningPlan.EnumerateObject()
+            .Any(property => property.Name is not ("stage" or "direction"));
+        if (winningStages.Length != 1 ||
+            winningNames.Length != 1 ||
+            !string.Equals(winningNames[0], "COLLSCAN", StringComparison.OrdinalIgnoreCase) ||
+            hasUnknownWinnerProperty ||
+            !winningPlan.TryGetProperty("direction", out var direction) ||
+            direction.ValueKind != JsonValueKind.String ||
+            !string.Equals(direction.GetString(), "forward", StringComparison.OrdinalIgnoreCase))
+        {
+            failure = winningNames.Any(name => string.Equals(name, "IXSCAN", StringComparison.OrdinalIgnoreCase))
+                ? "MongoDB bounded scan/sort plan unexpectedly uses an index scan"
+                : "MongoDB bounded scan/sort plan is missing its explicit collection scan or sort";
+            return false;
+        }
 
-        var sortStages = stages.Where(stage => string.Equals(MongoStageName(stage), "SORT", StringComparison.OrdinalIgnoreCase)).ToArray();
-        if (sortStages.Length != 1 ||
-            !sortStages[0].TryGetProperty("sortPattern", out var sortPattern) ||
-            !OrderingMatches(ParseMongoOrdering(sortPattern), commandOrdering))
-            throw BlockedPlan(specification, "MongoDB bounded scan/sort plan does not bind its complete effective ordering");
+        if (HasSpillMarker(root))
+        {
+            failure = "MongoDB bounded scan/sort plan has a sort or materialization spill";
+            return false;
+        }
 
-        var limits = FindObjects(winningPlans[0], "limitAmount").ToArray();
-        if (limits.Length == 0 ||
-            limits.Any(limit => !limit.GetProperty("limitAmount").TryGetInt32(out var value) || value != ExpectedNativeFetchLimit(specification)))
-            throw BlockedPlan(specification, "MongoDB bounded scan/sort plan does not bind the frozen finite page limit");
+        if (!TryGetMongoPipelineSort(root, out var pipelineStages, out var sortStage, out var sortIndex) ||
+            !sortStage.TryGetProperty("sortKey", out var sortKey) ||
+            sortKey.ValueKind != JsonValueKind.Object)
+        {
+            failure = "MongoDB bounded scan/sort plan is missing its aggregate pipeline sort";
+            return false;
+        }
+
+        var expectedOrdering = MatchingMongoRenderedOrdering(sortKey, specification);
+        if (expectedOrdering is null ||
+            commandOrdering is not null && !OrderingMatches(ParseMongoOrdering(sortKey), commandOrdering))
+        {
+            failure = "MongoDB bounded scan/sort plan does not bind its complete effective ordering";
+            return false;
+        }
+
+        if (!sortStage.TryGetProperty("limit", out var limit) ||
+            limit.ValueKind != JsonValueKind.Number ||
+            !limit.TryGetInt32(out var finiteLimit) ||
+            finiteLimit != ExpectedNativeFetchLimit(specification))
+        {
+            failure = "MongoDB bounded scan/sort plan does not bind the frozen finite page limit";
+            return false;
+        }
+
+        if (!ValidateMongoBoundedExplainPipeline(
+                pipelineStages,
+                sortIndex,
+                expectedOrdering,
+                specification,
+                out failure))
+            return false;
+
+        return true;
+    }
+
+    private static bool ValidateMongoBoundedExplainPipeline(
+        IReadOnlyList<JsonElement> stages,
+        int sortIndex,
+        IReadOnlyList<(string Column, RuntimeNativeOrderDirection Direction)> expectedOrdering,
+        DiagnosticsNativeRouteSpec specification,
+        out string failure)
+    {
+        failure = "MongoDB bounded scan/sort plan has an unexpected aggregate pipeline shape";
+        if (stages.Count == 0 ||
+            stages[0].ValueKind != JsonValueKind.Object ||
+            !stages[0].TryGetProperty("$cursor", out var cursor) ||
+            cursor.ValueKind != JsonValueKind.Object ||
+            !cursor.TryGetProperty("queryPlanner", out var queryPlanner) ||
+            queryPlanner.ValueKind != JsonValueKind.Object ||
+            !queryPlanner.TryGetProperty("winningPlan", out var cursorWinningPlan) ||
+            cursorWinningPlan.ValueKind != JsonValueKind.Object ||
+            stages.Count(stage => stage.ValueKind == JsonValueKind.Object && stage.TryGetProperty("$cursor", out _)) != 1 ||
+            sortIndex <= 0)
+            return false;
+
+        if (stages.Any(stage => stage.ValueKind != JsonValueKind.Object ||
+                                stage.EnumerateObject().Count(property => property.Name.StartsWith("$", StringComparison.Ordinal)) != 1))
+            return false;
+
+        var projectStages = stages.Select((stage, index) => (Stage: stage, Index: index))
+            .Where(item => item.Stage.ValueKind == JsonValueKind.Object &&
+                           item.Stage.TryGetProperty("$project", out var project) &&
+                           project.ValueKind == JsonValueKind.Object)
+            .ToArray();
+        if (projectStages.Length != 1 ||
+            projectStages[0].Index != sortIndex + 1 ||
+            projectStages[0].Index != stages.Count - 1)
+            return false;
+
+        var helpers = expectedOrdering
+            .Where(term => term.Column.StartsWith("_groundwork_", StringComparison.Ordinal))
+            .Select(term => term.Column)
+            .ToHashSet(StringComparer.Ordinal);
+        var setFields = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        for (var index = 1; index < sortIndex; index++)
+        {
+            if (stages[index].ValueKind != JsonValueKind.Object ||
+                !stages[index].TryGetProperty("$set", out var set) ||
+                set.ValueKind != JsonValueKind.Object)
+                return false;
+            foreach (var property in set.EnumerateObject())
+            {
+                if (!setFields.TryAdd(property.Name, property.Value))
+                    return false;
+            }
+        }
+
+        if (!setFields.Keys.ToHashSet(StringComparer.Ordinal).SetEquals(helpers) ||
+            helpers.Any(helper => !setFields.TryGetValue(helper, out var value) ||
+                                  !ValidateMongoOrderingHelper(helper, value, specification)))
+            return false;
+
+        var projection = projectStages[0].Stage.GetProperty("$project").EnumerateObject().ToArray();
+        if (!projectStages[0].Stage.GetProperty("$project").TryGetProperty("_id", out var id) ||
+            id.ValueKind != JsonValueKind.True ||
+            projection.Length != helpers.Count + 1 ||
+            projection.Count(property => property.Name != "_id") != helpers.Count ||
+            !helpers.SetEquals(projection
+                .Where(property => property.Name != "_id")
+                .Select(property => property.Name)) ||
+            projection.Where(property => property.Name != "_id").Any(property =>
+                !helpers.Contains(property.Name) ||
+                property.Value.ValueKind != JsonValueKind.False))
+            return false;
+
+        return true;
+    }
+
+    private static bool TryGetMongoWinningPlan(JsonElement root, out JsonElement winningPlan)
+    {
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            winningPlan = default;
+            return false;
+        }
+
+        var plans = FindPropertyValues(root, "winningPlan").ToArray();
+        if (plans.Length == 1 && plans[0].ValueKind == JsonValueKind.Object)
+        {
+            winningPlan = plans[0];
+            return true;
+        }
+
+        winningPlan = default;
+        return false;
+    }
+
+    private static bool TryGetMongoPipelineSort(
+        JsonElement root,
+        out JsonElement[] stages,
+        out JsonElement sortStage,
+        out int sortIndex)
+    {
+        stages = [];
+        sortStage = default;
+        sortIndex = -1;
+        if (!root.TryGetProperty("stages", out var pipeline) || pipeline.ValueKind != JsonValueKind.Array)
+            return false;
+
+        stages = pipeline.EnumerateArray().ToArray();
+        var sorts = stages.Select((stage, index) => (Stage: stage, Index: index))
+            .Where(item => item.Stage.ValueKind == JsonValueKind.Object &&
+                           item.Stage.TryGetProperty("$sort", out var sort) &&
+                           sort.ValueKind == JsonValueKind.Object)
+            .ToArray();
+        if (sorts.Length != 1)
+            return false;
+
+        sortStage = sorts[0].Stage.GetProperty("$sort");
+        sortIndex = sorts[0].Index;
+        return true;
     }
 
     private static string? MongoStageName(JsonElement stage) =>
@@ -2329,7 +2487,10 @@ public static class DiagnosticsNativePlanContract
     private static void ValidateMongoPlan(string plan, DiagnosticsNativeRouteSpec specification, string physicalIndexName)
     {
         using var document = ParseJson(plan, "MongoDB");
-        var stages = FindObjects(document.RootElement, "stage").ToArray();
+        if (!TryGetMongoWinningPlan(document.RootElement, out var winningPlan))
+            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' retained plan does not contain exactly one winning MongoDB plan.");
+
+        var stages = FindObjects(winningPlan, "stage").ToArray();
         if (stages.Any(stage => stage.TryGetProperty("stage", out var value) && value.ValueKind == JsonValueKind.String &&
                                 (value.GetString()?.Contains("SORT", StringComparison.OrdinalIgnoreCase) == true ||
                                  value.GetString()?.Contains("MATERIAL", StringComparison.OrdinalIgnoreCase) == true)) ||
@@ -2338,12 +2499,24 @@ public static class DiagnosticsNativePlanContract
         if (stages.Any(stage => stage.TryGetProperty("stage", out var value) && value.ValueKind == JsonValueKind.String &&
                                 string.Equals(value.GetString(), "COLLSCAN", StringComparison.OrdinalIgnoreCase)))
             throw BlockedPlan(specification, "MongoDB collection scan");
-        var matches = FindObjects(document.RootElement, "indexName")
-            .Where(value => value.TryGetProperty("indexName", out var index) && index.ValueKind == JsonValueKind.String && index.GetString() == physicalIndexName)
+        var indexScans = stages
+            .Where(stage => stage.TryGetProperty("stage", out var value) &&
+                            value.ValueKind == JsonValueKind.String &&
+                            string.Equals(value.GetString(), "IXSCAN", StringComparison.Ordinal))
             .ToArray();
-        if (matches.Length != 1 || !stages.Any(stage => stage.TryGetProperty("stage", out var value) && value.GetString() == "IXSCAN"))
+        if (indexScans.Length != 1 ||
+            !indexScans[0].TryGetProperty("indexName", out var index) ||
+            index.ValueKind != JsonValueKind.String ||
+            !string.Equals(index.GetString(), physicalIndexName, StringComparison.Ordinal))
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' retained plan is not the exact MongoDB index scan.");
+        if (ContainsMongoPipelineSort(document.RootElement))
+            throw BlockedPlan(specification, "MongoDB sort or materialization spill");
     }
+
+    private static bool ContainsMongoPipelineSort(JsonElement root) =>
+        root.TryGetProperty("stages", out var pipeline) &&
+        pipeline.ValueKind == JsonValueKind.Array &&
+        pipeline.EnumerateArray().Any(stage => stage.ValueKind == JsonValueKind.Object && stage.TryGetProperty("$sort", out _));
 
     private static bool IsSqlServerSortOrMaterialization(System.Xml.Linq.XElement element)
     {

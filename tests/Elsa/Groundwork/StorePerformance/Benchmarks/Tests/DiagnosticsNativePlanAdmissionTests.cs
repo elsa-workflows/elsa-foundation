@@ -678,18 +678,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             "mongodb",
             specification.RouteIdentity,
             command: command.ToJsonString(),
-            nativePlan: """
-                {
-                  "queryPlanner": {
-                    "winningPlan": {
-                      "stage": "SORT",
-                      "sortPattern": { "lastSeen": -1, "_groundwork_ordinal_key_1": 1, "_groundwork_ordinal_key_2": 1 },
-                      "limitAmount": 128,
-                      "inputStage": { "stage": "COLLSCAN", "direction": "forward" }
-                    }
-                  }
-                }
-                """,
+            nativePlan: MongoBoundedExplainPlan(specification),
             planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification);
 
         DiagnosticsNativePlanContract.ValidateEnvelope(
@@ -705,21 +694,14 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         var specification = DiagnosticsNativePlanContract.For(
             DiagnosticsNativePlanContract.GroundworkAdapter,
             "resources-by-last-seen");
+        var nativePlan = JsonNode.Parse(MongoBoundedExplainPlan(specification))!.AsObject();
+        var sort = nativePlan["stages"]!.AsArray()
+            .Single(stage => stage!["$sort"] is not null)!["$sort"]!.AsObject();
+        sort["sortKey"]!.AsObject()["lastSeen"] = 1;
         using var fixture = Fixture.Create(
             "mongodb",
             specification.RouteIdentity,
-            nativePlan: """
-                {
-                  "queryPlanner": {
-                    "winningPlan": {
-                      "stage": "SORT",
-                      "sortPattern": { "lastSeen": -1, "idOrderKey": 1, "_groundwork_ordinal_key_2": 1 },
-                      "limitAmount": 128,
-                      "inputStage": { "stage": "COLLSCAN", "direction": "forward" }
-                    }
-                  }
-                }
-                """,
+            nativePlan: nativePlan.ToJsonString(),
             planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification);
 
         var exception = Assert.Throws<PerformanceContractException>(() =>
@@ -747,18 +729,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             "mongodb",
             specification.RouteIdentity,
             command: command.ToJsonString(),
-            nativePlan: """
-                {
-                  "queryPlanner": {
-                    "winningPlan": {
-                      "stage": "SORT",
-                      "sortPattern": { "lastSeen": -1, "idOrderKey": 1, "_groundwork_ordinal_key_2": 1 },
-                      "limitAmount": 128,
-                      "inputStage": { "stage": "COLLSCAN", "direction": "forward" }
-                    }
-                  }
-                }
-                """,
+            nativePlan: MongoBoundedExplainPlan(specification),
             planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification);
 
         var exception = Assert.Throws<PerformanceContractException>(() =>
@@ -1066,18 +1037,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         var specification = DiagnosticsNativePlanContract.For(
             DiagnosticsNativePlanContract.GroundworkAdapter,
             route);
-        const string nativePlan = """
-            {
-              "queryPlanner": {
-                "winningPlan": {
-                  "stage": "SORT",
-                  "sortPattern": { "lastSeen": -1, "idOrderKey": 1, "id": 1 },
-                  "limitAmount": 128,
-                  "inputStage": { "stage": "COLLSCAN", "direction": "forward" }
-                }
-              }
-            }
-            """;
+        var nativePlan = MongoBoundedExplainPlan(specification);
 
         var classification = DiagnosticsNativePlanContract.ClassifyPlan(
             "mongodb",
@@ -1094,29 +1054,380 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     [InlineData("resources-by-service")]
     public void Mongo_frozen_resource_catalog_admits_an_explicit_bounded_collection_scan_sort(string route)
     {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            route);
         using var fixture = Fixture.Create(
             "mongodb",
             route,
             planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
-            nativePlan: """
-                {
-                  "queryPlanner": {
-                    "winningPlan": {
-                      "stage": "SORT",
-                      "sortPattern": { "lastSeen": -1, "_groundwork_ordinal_key_1": 1, "_groundwork_ordinal_key_2": 1 },
-                      "limitAmount": 128,
-                      "inputStage": { "stage": "COLLSCAN", "direction": "forward" }
-                    }
-                  },
-                  "executionStats": { "nReturned": 127 }
-                }
-                """);
+            nativePlan: MongoBoundedExplainPlan(specification));
 
         DiagnosticsNativePlanContract.ValidateEnvelope(
             "mongodb",
             fixture.Adapter,
             fixture.Route,
             fixture.Path);
+    }
+
+    [Fact]
+    public void Mongo_captured_aggregate_explain_fixture_survives_serialized_envelope_admission()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var nativePlan = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "Fixtures",
+            "mongodb-resources-by-last-seen-explain.json"));
+        var command = JsonNode.Parse(nativePlan)!["command"]!.ToJsonString();
+        Assert.Equal(
+            DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+            DiagnosticsNativePlanContract.ClassifyPlan(
+                "mongodb",
+                DiagnosticsNativePlanContract.GroundworkAdapter,
+                specification,
+                nativePlan));
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            command,
+            nativePlan,
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification);
+
+        DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path);
+    }
+
+    [Fact]
+    public void Mongo_strict_index_admission_uses_only_the_winning_plan()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-service");
+        var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("mongodb", specification);
+        var nativePlan = new JsonObject
+        {
+            ["queryPlanner"] = new JsonObject
+            {
+                ["winningPlan"] = new JsonObject { ["stage"] = "IXSCAN", ["indexName"] = physicalIndex },
+                ["rejectedPlans"] = new JsonArray
+                {
+                    new JsonObject { ["stage"] = "IXSCAN", ["indexName"] = "wrong_rejected_index" }
+                }
+            },
+            ["executionStats"] = new JsonObject
+            {
+                ["executionStages"] = new JsonObject { ["stage"] = "IXSCAN", ["indexName"] = physicalIndex }
+            }
+        };
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            nativePlan: nativePlan.ToJsonString());
+
+        DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path);
+    }
+
+    [Fact]
+    public void Mongo_strict_admission_binds_the_expected_index_to_the_winning_ixscan()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-service");
+        var nativePlan = new JsonObject
+        {
+            ["queryPlanner"] = new JsonObject
+            {
+                ["winningPlan"] = new JsonObject
+                {
+                    ["stage"] = "FETCH",
+                    ["indexName"] = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("mongodb", specification),
+                    ["inputStage"] = new JsonObject
+                    {
+                        ["stage"] = "IXSCAN",
+                        ["indexName"] = "wrong_winning_index"
+                    }
+                }
+            }
+        };
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            nativePlan: nativePlan.ToJsonString());
+
+        var exception = Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path));
+
+        Assert.False(DiagnosticsNativePlanContract.IsExpectedBlockedPlanFailure(exception));
+        Assert.Contains("exact MongoDB index scan", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Mongo_strict_admission_rejects_a_non_string_stage_as_a_contract_failure()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-service");
+        var nativePlan = new JsonObject
+        {
+            ["queryPlanner"] = new JsonObject
+            {
+                ["winningPlan"] = new JsonObject { ["stage"] = 1 }
+            }
+        };
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            nativePlan: nativePlan.ToJsonString());
+
+        var exception = Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path));
+
+        Assert.Contains("exact MongoDB index scan", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Mongo_ixscan_with_an_aggregate_pipeline_sort_remains_expected_blocked()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-service");
+        var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("mongodb", specification);
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            nativePlan: MongoBoundedExplainPlan(
+                specification,
+                new JsonObject
+                {
+                    ["stage"] = "FETCH",
+                    ["inputStage"] = new JsonObject { ["stage"] = "IXSCAN", ["indexName"] = physicalIndex }
+                }));
+
+        var exception = Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path));
+
+        Assert.True(DiagnosticsNativePlanContract.IsExpectedBlockedPlanFailure(exception));
+        Assert.Equal("native-plan.sort-or-materialization-spill",
+            DiagnosticsNativePlanContract.BlockedPlanReasonCode(exception));
+    }
+
+    [Fact]
+    public void Mongo_wrong_winning_index_is_not_rescued_by_a_rejected_plan()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-service");
+        var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("mongodb", specification);
+        var nativePlan = MongoBoundedExplainPlan(
+            specification,
+            new JsonObject
+            {
+                ["stage"] = "FETCH",
+                ["inputStage"] = new JsonObject { ["stage"] = "IXSCAN", ["indexName"] = "wrong_winning_index" }
+            },
+            rejectedIndex: physicalIndex);
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            nativePlan: nativePlan);
+
+        var exception = Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path));
+
+        Assert.False(DiagnosticsNativePlanContract.IsExpectedBlockedPlanFailure(exception));
+        Assert.Contains("exact MongoDB index scan", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Mongo_bounded_explain_rejects_an_unknown_winning_stage_wrapper()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var nativePlan = JsonNode.Parse(MongoBoundedExplainPlan(specification))!.AsObject();
+        var winningPlan = nativePlan["stages"]!.AsArray()
+            .Single(stage => stage!["$cursor"] is not null)!["$cursor"]!["queryPlanner"]!["winningPlan"]!
+            .AsObject();
+        winningPlan["inputStage"] = new JsonObject { ["stage"] = "MYSTERY" };
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            nativePlan: nativePlan.ToJsonString(),
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification);
+
+        var exception = Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path));
+
+        Assert.True(DiagnosticsNativePlanContract.IsExpectedBlockedPlanFailure(exception));
+    }
+
+    [Fact]
+    public void Mongo_bounded_explain_rejects_a_stage_between_sort_and_projection()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var nativePlan = JsonNode.Parse(MongoBoundedExplainPlan(specification))!.AsObject();
+        var stages = nativePlan["stages"]!.AsArray();
+        stages.Insert(stages.Count - 1, new JsonObject { ["$unwind"] = "$payload" });
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            nativePlan: nativePlan.ToJsonString(),
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification);
+
+        var exception = Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path));
+
+        Assert.True(DiagnosticsNativePlanContract.IsExpectedBlockedPlanFailure(exception));
+    }
+
+    [Fact]
+    public void Mongo_bounded_explain_rejects_a_non_object_root_containing_a_winning_plan()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var nativePlan = new JsonArray
+        {
+            new JsonObject
+            {
+                ["winningPlan"] = new JsonObject
+                {
+                    ["stage"] = "COLLSCAN",
+                    ["direction"] = "forward"
+                }
+            }
+        };
+        Assert.Equal(
+            DiagnosticsNativePlanContract.IndexSearchPlanClassification,
+            DiagnosticsNativePlanContract.ClassifyPlan(
+                "mongodb",
+                DiagnosticsNativePlanContract.GroundworkAdapter,
+                specification,
+                nativePlan.ToJsonString()));
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            nativePlan: nativePlan.ToJsonString(),
+            attachCommandToNativePlan: false,
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification);
+
+        var exception = Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path));
+
+        Assert.False(DiagnosticsNativePlanContract.IsExpectedBlockedPlanFailure(exception));
+    }
+
+    [Theory]
+    [InlineData("\"128\"")]
+    [InlineData("{}")]
+    public void Mongo_bounded_explain_rejects_a_non_numeric_pipeline_limit(string limitJson)
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var nativePlan = JsonNode.Parse(MongoBoundedExplainPlan(specification))!.AsObject();
+        var sortStage = nativePlan["stages"]!.AsArray()
+            .Single(stage => stage!["$sort"] is not null)!["$sort"]!.AsObject();
+        sortStage["limit"] = JsonNode.Parse(limitJson)!.DeepClone();
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            nativePlan: nativePlan.ToJsonString(),
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification);
+
+        var exception = Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path));
+
+        Assert.True(DiagnosticsNativePlanContract.IsExpectedBlockedPlanFailure(exception));
+    }
+
+    [Fact]
+    public void Mongo_bounded_explain_rejects_multiple_operators_in_one_pipeline_stage()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var nativePlan = JsonNode.Parse(MongoBoundedExplainPlan(specification))!.AsObject();
+        var setStage = nativePlan["stages"]!.AsArray()
+            .First(stage => stage!["$set"] is not null)!.AsObject();
+        setStage["$unwind"] = "$payload";
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            nativePlan: nativePlan.ToJsonString(),
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification);
+
+        var exception = Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path));
+
+        Assert.True(DiagnosticsNativePlanContract.IsExpectedBlockedPlanFailure(exception));
+    }
+
+    [Fact]
+    public void Mongo_bounded_explain_rejects_duplicate_projection_helpers()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        const string validProjection =
+            "\"_id\":true,\"_groundwork_ordinal_key_1\":false,\"_groundwork_ordinal_key_2\":false";
+        const string duplicateProjection =
+            "\"_id\":true,\"_groundwork_ordinal_key_1\":false,\"_groundwork_ordinal_key_1\":false";
+        var nativePlan = MongoBoundedExplainPlan(specification);
+        var malformedPlan = nativePlan.Replace(validProjection, duplicateProjection, StringComparison.Ordinal);
+        Assert.NotEqual(nativePlan, malformedPlan);
+        using var fixture = Fixture.Create(
+            "mongodb",
+            specification.RouteIdentity,
+            nativePlan: malformedPlan,
+            attachCommandToNativePlan: false,
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification);
+
+        var exception = Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path));
+
+        Assert.True(DiagnosticsNativePlanContract.IsExpectedBlockedPlanFailure(exception));
     }
 
     [Theory]
@@ -1743,21 +2054,18 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     [Fact]
     public void Mongo_bounded_collection_scan_sort_requires_an_explicit_sort_pattern()
     {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var nativePlan = JsonNode.Parse(MongoBoundedExplainPlan(specification))!.AsObject();
+        nativePlan["stages"]!.AsArray()
+            .Single(stage => stage!["$sort"] is not null)!["$sort"]!.AsObject()
+            .Remove("sortKey");
         using var fixture = Fixture.Create(
             "mongodb",
             "resources-by-last-seen",
             planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
-            nativePlan: """
-                {
-                  "queryPlanner": {
-                    "winningPlan": {
-                      "stage": "SORT",
-                      "limitAmount": 128,
-                      "inputStage": { "stage": "COLLSCAN" }
-                    }
-                  }
-                }
-                """);
+            nativePlan: nativePlan.ToJsonString());
 
         var exception = Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
             "mongodb",
@@ -1775,22 +2083,21 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         string metadataName,
         string metadataValue)
     {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var nativePlan = JsonNode.Parse(MongoBoundedExplainPlan(specification))!.AsObject();
+        var sortStage = nativePlan["stages"]!.AsArray()
+            .Single(stage => stage!["$sort"] is not null)!["$sort"]!.AsObject();
+        if (metadataName == "usedDisk")
+            sortStage[metadataName] = JsonValue.Create(bool.Parse(metadataValue));
+        else
+            nativePlan[metadataName] = JsonValue.Create(bool.Parse(metadataValue));
         using var fixture = Fixture.Create(
             "mongodb",
             "resources-by-last-seen",
             planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
-            nativePlan: $$"""
-                {
-                  "queryPlanner": {
-                    "winningPlan": {
-                      "stage": "SORT",
-                      "limitAmount": 128,
-                      "inputStage": { "stage": "COLLSCAN" }
-                    }
-                  },
-                  "executionStats": { "{{metadataName}}": {{metadataValue}} }
-                }
-                """);
+            nativePlan: nativePlan.ToJsonString());
 
         var exception = Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
             "mongodb",
@@ -2186,6 +2493,63 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 }
             }
         };
+
+    private static string MongoBoundedExplainPlan(
+        DiagnosticsNativeRouteSpec specification,
+        JsonObject? winningPlan = null,
+        string? rejectedIndex = null)
+    {
+        var command = JsonNode.Parse(Fixture.MongoAggregateCommand(specification))!.AsObject();
+        var commandPipeline = command["pipeline"]!.AsArray();
+        var sort = commandPipeline
+            .Single(stage => stage!["$sort"] is not null)!["$sort"]!.DeepClone()!.AsObject();
+        var projection = new JsonObject { ["_id"] = true };
+        foreach (var property in sort)
+        {
+            if (property.Key.StartsWith("_groundwork_", StringComparison.Ordinal))
+                projection[property.Key] = false;
+        }
+
+        var winner = winningPlan ?? new JsonObject { ["stage"] = "COLLSCAN", ["direction"] = "forward" };
+        var queryPlanner = new JsonObject
+        {
+            ["winningPlan"] = winner,
+            ["rejectedPlans"] = rejectedIndex is null
+                ? new JsonArray()
+                : new JsonArray
+                {
+                    new JsonObject { ["stage"] = "IXSCAN", ["indexName"] = rejectedIndex }
+                }
+        };
+        var cursor = new JsonObject
+        {
+            ["queryPlanner"] = queryPlanner,
+            ["executionStats"] = new JsonObject
+            {
+                ["executionStages"] = winner.DeepClone()
+            }
+        };
+        var stages = new JsonArray { new JsonObject { ["$cursor"] = cursor } };
+        foreach (var stage in commandPipeline.Where(stage => stage!["$set"] is not null))
+            stages.Add(stage!.DeepClone());
+        stages.Add(new JsonObject
+        {
+            ["$sort"] = new JsonObject
+            {
+                ["sortKey"] = sort,
+                ["limit"] = specification.FiniteLimit + 1,
+                ["usedDisk"] = false,
+                ["spills"] = 0
+            }
+        });
+        stages.Add(new JsonObject { ["$project"] = projection });
+
+        return new JsonObject
+        {
+            ["command"] = command,
+            ["stages"] = stages
+        }.ToJsonString();
+    }
 
     private static string BoundedCatalogPlan(string provider)
     {
