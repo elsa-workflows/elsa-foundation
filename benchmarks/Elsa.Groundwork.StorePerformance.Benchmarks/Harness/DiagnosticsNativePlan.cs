@@ -705,6 +705,181 @@ public static partial class DiagnosticsNativePlanContract
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' continuation contains an unrecognized keyset expression.");
     }
 
+    /// <summary>
+    /// PostgreSQL can render a required, uniformly directed multi-column keyset as one row-value
+    /// comparison instead of the portable OR expansion. This is a narrow admission path: the
+    /// complete tuple, its positional parameters, and the exact scope predicates must all be
+    /// proven from the rendered command. Nullable or mixed-direction orderings are not admitted
+    /// through this tuple path and retain the conservative fallback contract.
+    /// </summary>
+    private static void ValidatePostgreSqlTupleContinuation(
+        string where,
+        DiagnosticsNativeRouteSpec specification)
+    {
+        if (!specification.StorageScopeRequired || specification.PredicateColumn is null ||
+            specification.EffectiveOrdering.Count < 2 ||
+            specification.NullableOrderingColumns is null ||
+            specification.EffectiveOrdering.Any(term => specification.RequiresNullRank(term.Column)))
+            throw new PerformanceContractException(
+                $"Diagnostics route '{specification.RouteIdentity}' PostgreSQL tuple continuation requires proven non-null ordered columns and scope predicates.");
+
+        var ordering = specification.EffectiveOrdering;
+        var direction = ordering[0].Direction;
+        if (ordering.Any(term => term.Direction != direction))
+            throw new PerformanceContractException(
+                $"Diagnostics route '{specification.RouteIdentity}' PostgreSQL tuple continuation requires one effective ordering direction.");
+
+        var terms = FlattenSqlAndTerms(where);
+        if (terms.Count == 0)
+            throw InvalidPostgreSqlTupleContinuation(specification);
+
+        const string parameter = @"(?:@\w+|\?|\$\d+)";
+        var baseColumns = new[] { "__groundwork_scope", specification.PredicateColumn };
+        var baseParameters = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var nullGuardColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var tupleExpression = (string?)null;
+        foreach (var term in terms)
+        {
+            var expression = TrimSqlOuterParentheses(term);
+            var baseColumn = baseColumns.FirstOrDefault(column =>
+                Regex.IsMatch(
+                    expression,
+                    $@"^{SqlColumnExpression(column)}\s*=\s*(?<parameter>{parameter})$",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant));
+            if (baseColumn is not null)
+            {
+                var equality = Regex.Match(
+                    expression,
+                    $@"^{SqlColumnExpression(baseColumn)}\s*=\s*(?<parameter>{parameter})$",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+                if (!baseParameters.Add(equality.Groups["parameter"].Value))
+                    throw InvalidPostgreSqlTupleContinuation(specification);
+                continue;
+            }
+
+            var nullGuardColumn = baseColumns.FirstOrDefault(column => Regex.IsMatch(
+                expression,
+                $@"^{SqlColumnExpression(column)}\s+IS\s+NOT\s+NULL$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant));
+            if (nullGuardColumn is not null && nullGuardColumns.Add(nullGuardColumn))
+                continue;
+
+            if (tupleExpression is not null)
+                throw InvalidPostgreSqlTupleContinuation(specification);
+            tupleExpression = expression;
+        }
+
+        if (baseColumns.Any(column => terms.Count(term =>
+                Regex.IsMatch(
+                    TrimSqlOuterParentheses(term),
+                    $@"^{SqlColumnExpression(column)}\s*=\s*{parameter}$",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)) != 1) ||
+            tupleExpression is null)
+            throw InvalidPostgreSqlTupleContinuation(specification);
+
+        var lhs = string.Join(
+            @"\s*,\s*",
+            ordering.Select(term => $@"\(*\s*{Regex.Escape(term.Column)}\s*\)*"));
+        var rhs = string.Join(
+            @"\s*,\s*",
+            ordering.Select((_, index) => $@"(?<tupleParameter{index}>{parameter})"));
+        var tuple = Regex.Match(
+            tupleExpression,
+            $@"^\(\s*{lhs}\s*\)\s*(?<operator>[<>])\s*\(\s*{rhs}\s*\)$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        var expectedOperator = direction == RuntimeNativeOrderDirection.Ascending ? ">" : "<";
+        if (!tuple.Success || !string.Equals(tuple.Groups["operator"].Value, expectedOperator, StringComparison.Ordinal))
+            throw InvalidPostgreSqlTupleContinuation(specification);
+
+        var tupleParameters = ordering
+            .Select((_, index) => tuple.Groups[$"tupleParameter{index}"].Value)
+            .ToArray();
+        if (tupleParameters.Any(string.IsNullOrEmpty) ||
+            tupleParameters.Distinct(StringComparer.OrdinalIgnoreCase).Count() != tupleParameters.Length ||
+            tupleParameters.Any(baseParameters.Contains))
+            throw InvalidPostgreSqlTupleContinuation(specification);
+    }
+
+    private static PerformanceContractException InvalidPostgreSqlTupleContinuation(
+        DiagnosticsNativeRouteSpec specification) =>
+        new($"Diagnostics route '{specification.RouteIdentity}' PostgreSQL tuple continuation does not retain its exact ordered keyset and scope predicates.");
+
+    private static bool ContainsPostgreSqlTupleComparison(string where) =>
+        Regex.IsMatch(
+            where,
+            @"\([^<>]*,[^<>]*\)\s*[<>]\s*\(",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+
+    private static IReadOnlyList<string> FlattenSqlAndTerms(string expression)
+    {
+        var terms = SplitTopLevelSqlTerms(TrimSqlOuterParentheses(expression), "AND");
+        if (terms.Count == 0)
+            return [];
+        if (terms.Count == 1)
+            return terms;
+
+        var flattened = new List<string>();
+        foreach (var term in terms)
+        {
+            var childTerms = FlattenSqlAndTerms(term);
+            if (childTerms.Count == 0)
+                return [];
+            flattened.AddRange(childTerms);
+        }
+        return flattened;
+    }
+
+    private static string TrimSqlOuterParentheses(string value)
+    {
+        var result = value.Trim();
+        while (result.Length >= 2 && result[0] == '(')
+        {
+            var depth = 0;
+            var quoted = false;
+            var encloses = true;
+            for (var index = 0; index < result.Length; index++)
+            {
+                var character = result[index];
+                if (character == '\'' && quoted && index + 1 < result.Length && result[index + 1] == '\'')
+                {
+                    index++;
+                    continue;
+                }
+                if (character == '\'')
+                {
+                    quoted = !quoted;
+                    continue;
+                }
+                if (quoted)
+                    continue;
+                if (character == '(')
+                    depth++;
+                else if (character == ')')
+                {
+                    depth--;
+                    if (depth == 0 && index != result.Length - 1)
+                    {
+                        encloses = false;
+                        break;
+                    }
+                }
+                if (depth < 0)
+                {
+                    encloses = false;
+                    break;
+                }
+            }
+
+            if (!encloses || quoted || depth != 0)
+                break;
+            result = result[1..^1].Trim();
+        }
+        return result;
+    }
+
+    private static bool IsSqlWordCharacter(char character) =>
+        char.IsLetterOrDigit(character) || character == '_';
+
     private static string RemoveSqlServerContinuationLengthPredicates(
         string where,
         DiagnosticsNativeRouteSpec specification)
@@ -776,7 +951,8 @@ public static partial class DiagnosticsNativePlanContract
     {
         specification = PhysicalCommandSpecification(specification);
         if (string.Equals(provider, "postgresql", StringComparison.Ordinal) &&
-            !PostgreSqlOrdinalCollationsMatch(command, specification))
+            (!PostgreSqlOrdinalCollationsMatch(command, specification) ||
+             !PostgreSqlTupleOrdinalCollationsMatch(command, specification)))
             throw new PerformanceContractException(
                 $"Diagnostics route '{specification.RouteIdentity}' command does not bind its exact PostgreSQL ordinal collation.");
         var normalized = NormalizeSqlCommand(command);
@@ -790,19 +966,26 @@ public static partial class DiagnosticsNativePlanContract
 
         ValidateSqlOrdering(provider, normalized, specification);
 
+        var where = Regex.Match(normalized, @"\bWHERE\s+(?<where>.*?)(?:\bORDER\s+BY\b|\bLIMIT\b|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline).Groups["where"].Value.Trim();
+        var hasPostgreSqlTupleContinuation =
+            string.Equals(provider, "postgresql", StringComparison.Ordinal) &&
+            specification.RouteIdentity.StartsWith("trace-detail/", StringComparison.Ordinal) &&
+            ContainsPostgreSqlTupleComparison(where);
         var continuation = specification.RouteIdentity.StartsWith("trace-detail/", StringComparison.Ordinal) &&
-                           normalized.Contains(" OR ", StringComparison.OrdinalIgnoreCase);
+                           (normalized.Contains(" OR ", StringComparison.OrdinalIgnoreCase) || hasPostgreSqlTupleContinuation);
         if ((!continuation && normalized.Contains(" OR ", StringComparison.OrdinalIgnoreCase)) ||
             !Regex.IsMatch(normalized, @"\bWHERE\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) && specification.StorageScopeRequired)
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command contains an unbound boolean predicate.");
 
-        var where = Regex.Match(normalized, @"\bWHERE\s+(?<where>.*?)(?:\bORDER\s+BY\b|\bLIMIT\b|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline).Groups["where"].Value.Trim();
         if (Regex.IsMatch(where, @"\b(?:CASE|SELECT|LOWER|UPPER|COALESCE|CAST|SUBSTR|DATE|DATETIME)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) ||
             Regex.IsMatch(where, @"\bOR\s+(?:1\s*=\s*1|TRUE)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' command contains a computed or tautological predicate.");
         if (continuation)
         {
-            ValidateSqlContinuationPredicate(provider, where, specification);
+            if (hasPostgreSqlTupleContinuation)
+                ValidatePostgreSqlTupleContinuation(where, specification);
+            else
+                ValidateSqlContinuationPredicate(provider, where, specification);
             return;
         }
 
@@ -849,6 +1032,48 @@ public static partial class DiagnosticsNativePlanContract
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count)
             .ToArray();
         return occurrences.All(count => count is 1 or 2) && occurrences.Sum() == collations.Count;
+    }
+
+    private static bool PostgreSqlTupleOrdinalCollationsMatch(
+        string command,
+        DiagnosticsNativeRouteSpec specification)
+    {
+        if (!specification.RouteIdentity.StartsWith("trace-detail/", StringComparison.Ordinal))
+            return true;
+        var where = Regex.Match(
+            command,
+            @"\bWHERE\s+(?<where>.*?)(?:\bORDER\s+BY\b|\bLIMIT\b|$)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline)
+            .Groups["where"].Value;
+        if (!ContainsPostgreSqlTupleComparison(where))
+            return true;
+
+        // Inspect the complete WHERE before normalization removes COLLATE. Both the
+        // ordered string key and the scope/route equalities must retain ordinal semantics.
+        var stringColumns = specification.EffectiveOrdering
+            .Where(term => IsPersistedOrdinalColumn(term.Column))
+            .Select(term => term.Column)
+            .Concat(new[] { "__groundwork_scope", specification.PredicateColumn! })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var collations = Regex.Matches(
+            where,
+            @"\bCOLLATE\s+(?:""(?<name>[^""]+)""|(?<name>[A-Za-z_][A-Za-z0-9_.]*))",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (collations.Any(match => !string.Equals(match.Groups["name"].Value, "C", StringComparison.Ordinal)))
+            return false;
+
+        var expectedCollations = 0;
+        foreach (var column in stringColumns)
+        {
+            var expression = $@"(?<![A-Za-z0-9_])""?{Regex.Escape(column)}""?(?![A-Za-z0-9_])";
+            var occurrences = Regex.Matches(where, expression, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count;
+            if (occurrences != Regex.Matches(where, expression + @"\s+COLLATE\s+(?:""C""|C\b)",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Count)
+                return false;
+            expectedCollations += occurrences;
+        }
+        return expectedCollations == collations.Count;
     }
 
     private static string NormalizeSqlCommand(string command)
@@ -1193,7 +1418,7 @@ public static partial class DiagnosticsNativePlanContract
         return match.Success;
     }
 
-    private static IReadOnlyList<string> SplitTopLevelSqlTerms(string value)
+    private static IReadOnlyList<string> SplitTopLevelSqlTerms(string value, string separator = ",")
     {
         var terms = new List<string>();
         var start = 0;
@@ -1216,19 +1441,32 @@ public static partial class DiagnosticsNativePlanContract
                 continue;
             if (character == '(')
                 depth++;
-            else if (character == ')' && depth > 0)
-                depth--;
-            else if (character == ',' && depth == 0)
+            else if (character == ')')
             {
-                terms.Add(value[start..index].Trim());
-                start = index + 1;
+                if (depth == 0)
+                    return [];
+                depth--;
+            }
+            else if (depth == 0 && index + separator.Length <= value.Length &&
+                     string.Compare(value, index, separator, 0, separator.Length, StringComparison.OrdinalIgnoreCase) == 0 &&
+                     (!string.Equals(separator, "AND", StringComparison.OrdinalIgnoreCase) ||
+                      (index == 0 || !IsSqlWordCharacter(value[index - 1])) &&
+                      (index + separator.Length == value.Length || !IsSqlWordCharacter(value[index + separator.Length]))))
+            {
+                var term = value[start..index].Trim();
+                if (term.Length == 0)
+                    return [];
+                terms.Add(term);
+                start = index + separator.Length;
+                index += separator.Length - 1;
             }
         }
         if (quoted || depth != 0)
             return [];
-        if (start < value.Length)
-            terms.Add(value[start..].Trim());
-        return terms.Where(term => term.Length != 0).ToArray();
+        if (start >= value.Length)
+            return [];
+        var finalTerm = value[start..].Trim();
+        return finalTerm.Length == 0 ? [] : [.. terms, finalTerm];
     }
 
     private static void ValidateSqlitePlan(string plan, DiagnosticsNativeRouteSpec specification, string physicalIndexName)
