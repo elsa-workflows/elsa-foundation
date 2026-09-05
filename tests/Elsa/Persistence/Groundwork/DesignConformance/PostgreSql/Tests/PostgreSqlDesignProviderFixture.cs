@@ -56,7 +56,7 @@ public sealed class PostgreSqlDesignProviderFixture : IAsyncLifetime
         new NpgsqlConnectionStringBuilder(adminConnectionString)
         {
             Database = databaseName,
-            // Each design contract gets a unique database.  Disabling pooling prevents an exhausted
+            // Each design contract gets a unique database. Disabling pooling prevents an exhausted
             // shared server from retaining one idle pool per contract database during the nightly run.
             Pooling = false
         }.ConnectionString;

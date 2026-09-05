@@ -2,8 +2,8 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Design.Persistence.Core.Models;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
@@ -34,6 +34,8 @@ public sealed class GroundworkDiscardDraftCommand(
             GroundworkDesignDocumentSerialization.Create(payloadSerializer),
             accessContextAccessor);
         var lockKey = WorkflowDesignPersistenceLockKeys.DraftKey(draftId);
+        GroundworkDesignDeleteRequest? delete = null;
+        DiscardDraftResult? resolvedResult = null;
         GroundworkDesignAtomicCommandResult<DiscardDraftResult> outcome;
 
         await using (var lockHandle = await lockProvider.AcquireLockAsync(lockKey, null, cancellationToken))
@@ -46,17 +48,28 @@ public sealed class GroundworkDiscardDraftCommand(
                 [WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind],
                 async (context, token) =>
                 {
-                    var transactionDocuments = documents.ForStorage(context.Storage);
-                    var document = await transactionDocuments.FindByIdAsync(draftId, token);
+                    var acceptedResult = resolvedResult ?? throw new InvalidOperationException(
+                        "Workflow definition draft resolution did not complete before staging.");
+                    if (delete is not null)
+                        await context.DeleteAsync(delete, token);
+                    return acceptedResult;
+                },
+                cancellationToken: cancellationToken,
+                beforeAttempt: async token =>
+                {
+                    var document = await documents.FindByIdAsync(draftId, token);
                     if (document is null)
-                        return new DiscardDraftResult(draftId, null, false);
-                    await context.DeleteAsync(documents.ToDeleteRequest(draftId, document.Version), token);
-                    return new DiscardDraftResult(
+                    {
+                        resolvedResult = new DiscardDraftResult(draftId, null, false);
+                        return;
+                    }
+
+                    delete = documents.ToDeleteRequest(draftId, document.Version);
+                    resolvedResult = new DiscardDraftResult(
                         draftId,
                         document.Entity.WorkflowDefinitionId,
                         true);
-                },
-                cancellationToken: cancellationToken);
+                });
         }
 
         if (outcome.ShouldPublishPostCommitOutcome &&

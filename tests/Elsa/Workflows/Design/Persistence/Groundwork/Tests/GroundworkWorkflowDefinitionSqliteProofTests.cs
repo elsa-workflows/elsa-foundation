@@ -94,6 +94,18 @@ public sealed class GroundworkWorkflowDefinitionSqliteProofTests
             Assert.Equal(
                 [WorkflowsDesignStorageManifest.DefinitionIdLookupHashField],
                 idIndex.Columns.ToArray());
+
+            var storage = new GroundworkDesignStorage(source, DesignGroundworkTestAccess.AccessContext("sqlite-proof"));
+            var observed = storage.Read(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind, "SQLITE-ALPHA");
+            Assert.NotNull(observed);
+            Assert.NotNull(observed.Entry.Version);
+            var expected = WriteOptions.IfVersion(observed.Entry.Version.Value);
+            var writes = Assert.IsAssignableFrom<IConcurrencyStorageSession>(reopened.OpenSession(
+                WorkflowsDesignStorageManifest.Require(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind),
+                StorageAccess.Scoped(new StorageScope("sqlite-proof"))));
+            Assert.True(writes.ConditionalUpsert(observed.Entry.Values, expected).Succeeded);
+            Assert.Equal(WriteOutcomeStatus.ConcurrencyConflict,
+                writes.ConditionalUpsert(observed.Entry.Values, expected).Status);
         }
         finally
         {

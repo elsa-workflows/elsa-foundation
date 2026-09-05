@@ -35,6 +35,10 @@ Feature-development workflows remain here for now, but the documentation and ope
 dotnet build Elsa.Server.slnx
 ```
 
+For faster inner-loop work, open or build one of the committed
+[developer solution filters](docs/reference/developer-solution-filters.md). The full solution remains
+the completion gate.
+
 ## Supported management APIs
 
 Management-client APIs are owned by their Elsa domains and can be composed directly by custom applications.
