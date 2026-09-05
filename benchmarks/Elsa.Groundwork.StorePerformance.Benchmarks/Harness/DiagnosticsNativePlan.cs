@@ -779,7 +779,7 @@ public static partial class DiagnosticsNativePlanContract
 
         var lhs = string.Join(
             @"\s*,\s*",
-            ordering.Select(term => $@"\(*\s*{Regex.Escape(term.Column)}\s*\)*"));
+            ordering.Select(term => SqlColumnExpression(term.Column)));
         var rhs = string.Join(
             @"\s*,\s*",
             ordering.Select((_, index) => $@"(?<tupleParameter{index}>{parameter})"));
