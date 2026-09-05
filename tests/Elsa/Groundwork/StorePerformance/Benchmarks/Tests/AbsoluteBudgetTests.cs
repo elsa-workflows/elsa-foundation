@@ -397,7 +397,7 @@ internal sealed class DiagnosticsArtifactFixture : IDisposable
                     $"2 0 SEARCH elsa_otel_resources_v2 USING INDEX {route.IndexName} (__groundwork_scope=?)")
                 : new DiagnosticsNativePlanArtifact(1, provider, adapter, route.RouteIdentity, "elsa_otel_trace_summaries_v3", "elsa_otel_trace_summaries_start",
                     route.IndexName,
-                    "SELECT * FROM elsa_otel_trace_summaries_v3 WHERE __groundwork_scope = @scope ORDER BY startTime DESC, traceKey ASC LIMIT 127",
+                    "SELECT * FROM elsa_otel_trace_summaries_v3 WHERE __groundwork_scope = @scope ORDER BY startTime DESC, __groundwork_ordinal_traceKey ASC LIMIT 127",
                     $"2 0 SEARCH elsa_otel_trace_summaries_v3 USING INDEX {route.IndexName} (__groundwork_scope=?)");
             var rawBytes = JsonSerializer.SerializeToUtf8Bytes(artifact, ArtifactStore.JsonOptions);
             var rawPath = Path.Combine(Directory, route.RawPlanReference);
@@ -424,7 +424,7 @@ internal sealed class DiagnosticsArtifactFixture : IDisposable
         var rawReference = $"{identity}.raw.json";
         var rawContent = identity == "resources-by-last-seen"
             ? new DiagnosticsNativePlanArtifact(1, "sqlite", DiagnosticsNativePlanContract.GroundworkAdapter, identity, specification.TableName, specification.IndexName, physicalIndex, "SELECT * FROM elsa_otel_resources_v2 WHERE __groundwork_scope = @scope ORDER BY lastSeen DESC, idOrderKey ASC, id ASC LIMIT 127", $"2 0 SEARCH elsa_otel_resources_v2 USING INDEX {physicalIndex} (__groundwork_scope=?)")
-            : new DiagnosticsNativePlanArtifact(1, "sqlite", DiagnosticsNativePlanContract.GroundworkAdapter, identity, specification.TableName, specification.IndexName, physicalIndex, "SELECT * FROM elsa_otel_trace_summaries_v3 WHERE __groundwork_scope = @scope ORDER BY startTime DESC, traceKey ASC LIMIT 127", $"2 0 SEARCH elsa_otel_trace_summaries_v3 USING INDEX {physicalIndex} (__groundwork_scope=?)");
+            : new DiagnosticsNativePlanArtifact(1, "sqlite", DiagnosticsNativePlanContract.GroundworkAdapter, identity, specification.TableName, specification.IndexName, physicalIndex, "SELECT * FROM elsa_otel_trace_summaries_v3 WHERE __groundwork_scope = @scope ORDER BY startTime DESC, __groundwork_ordinal_traceKey ASC LIMIT 127", $"2 0 SEARCH elsa_otel_trace_summaries_v3 USING INDEX {physicalIndex} (__groundwork_scope=?)");
         return new NativeRouteEvidence(identity, rawReference, Hash(JsonSerializer.SerializeToUtf8Bytes(rawContent, ArtifactStore.JsonOptions)), "index-search", physicalIndex, specification.PhysicalCardinality, true, false, specification.FiniteLimit, specification.FiniteLimit);
     }
 

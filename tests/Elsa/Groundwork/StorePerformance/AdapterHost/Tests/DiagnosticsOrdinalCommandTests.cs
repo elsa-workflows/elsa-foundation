@@ -27,7 +27,7 @@ public sealed class DiagnosticsOrdinalCommandTests(ITestOutputHelper output)
         foreach (var route in new[]
                 {
                     "resources-by-last-seen", "resources-by-status", "resources-by-service",
-                    "metrics-by-last-seen", "logs-by-last-seen",
+                    "metrics-by-last-seen", "logs-by-last-seen", "traces-by-last-seen",
                     "trace-detail/spans-by-trace-key-start-id", "trace-detail/logs-by-trace-key-timestamp-id"
                 })
         {
@@ -51,6 +51,12 @@ public sealed class DiagnosticsOrdinalCommandTests(ITestOutputHelper output)
             Assert.DoesNotContain("__groundwork_ordinal_", command, StringComparison.Ordinal);
         else
             Assert.Contains("__groundwork_ordinal_", command, StringComparison.Ordinal);
+        if (route == "traces-by-last-seen")
+        {
+            Assert.Contains("__groundwork_ordinal_traceKey", command, StringComparison.Ordinal);
+            Assert.DoesNotContain("string_agg", command, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("unnest", command, StringComparison.OrdinalIgnoreCase);
+        }
         Validate(provider, specification, command);
     }
 
@@ -60,7 +66,9 @@ public sealed class DiagnosticsOrdinalCommandTests(ITestOutputHelper output)
     {
         var specification = Specification(route);
         var command = Render(provider, specification, continuation);
-        var logical = route.Contains("spans-", StringComparison.Ordinal) ? "spanId" : "id";
+        var logical = route.Contains("spans-", StringComparison.Ordinal)
+            ? "spanId"
+            : route == "traces-by-last-seen" ? "traceKey" : "id";
         foreach (var replacement in new[] { logical, "__groundwork_ordinal_unknown" })
         {
             var invalid = command.Replace("__groundwork_ordinal_" + logical, replacement, StringComparison.Ordinal);
@@ -213,6 +221,20 @@ public sealed class DiagnosticsOrdinalCommandTests(ITestOutputHelper output)
             command.Replace("AND \"sequence\" > @sequence", string.Empty, StringComparison.Ordinal)));
     }
 
+    [Fact]
+    public void Trace_summary_unselected_renderer_keeps_the_raw_trace_key_order()
+    {
+        var specification = Specification("traces-by-last-seen");
+        var selected = Render("postgresql", specification, continuation: false);
+        var unselected = Render("postgresql", specification, continuation: false, selectIndex: false);
+
+        Assert.Contains("__groundwork_ordinal_traceKey", selected, StringComparison.Ordinal);
+        Assert.DoesNotContain("string_agg", selected, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("__groundwork_ordinal_traceKey", unselected, StringComparison.Ordinal);
+        Assert.Contains("traceKey", unselected, StringComparison.Ordinal);
+        Assert.Contains("string_agg", unselected, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static DiagnosticsNativeRouteSpec Specification(string route)
     {
         if (!route.StartsWith("trace-detail/", StringComparison.Ordinal))
@@ -224,15 +246,20 @@ public sealed class DiagnosticsOrdinalCommandTests(ITestOutputHelper output)
             false, part.Ordering, []);
     }
 
-    private static string Render(string provider, DiagnosticsNativeRouteSpec specification, bool continuation)
+    private static string Render(
+        string provider,
+        DiagnosticsNativeRouteSpec specification,
+        bool continuation,
+        bool selectIndex = true)
     {
         var logical = V2OpenTelemetryStorageSchema.CreateUnits().Single(unit => unit.Name == specification.TableName);
         var physical = SearchKeyProjection.Expand(logical);
-        var supplied = logical.CreateQueryRenderOptions(specification.IndexName);
+        var selectedIndex = selectIndex ? specification.IndexName : null;
+        var supplied = logical.CreateQueryRenderOptions(selectedIndex);
         var options = supplied with
         {
             Indexes = SearchKeyQueryMappings.RetargetIndexes(physical, supplied.Indexes).ToImmutableArray(),
-            SearchKeyColumns = SearchKeyQueryMappings.For(physical, specification.IndexName)
+            SearchKeyColumns = SearchKeyQueryMappings.For(physical, selectedIndex)
         };
         var table = new TableId(logical.Name);
         ColumnRef Column(string name)

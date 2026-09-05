@@ -579,6 +579,44 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             fixture.Path);
     }
 
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("postgresql")]
+    [InlineData("sqlserver")]
+    [InlineData("mongodb")]
+    public void Trace_summary_native_route_binds_the_persisted_trace_key_order(string provider)
+    {
+        using var fixture = Fixture.Create(provider, "traces-by-last-seen");
+
+        DiagnosticsNativePlanContract.ValidateEnvelope(
+            provider,
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path);
+    }
+
+    [Fact]
+    public void PostgreSql_trace_summary_rejects_reencoding_the_persisted_ordinal_key()
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "traces-by-last-seen");
+        var command = ProviderRenderedRelationalCommand("postgresql", specification);
+        const string physicalKey = "(\"__groundwork_ordinal_traceKey\" COLLATE \"C\")";
+        Assert.Contains(physicalKey, command, StringComparison.Ordinal);
+        Assert.DoesNotContain("string_agg", command, StringComparison.Ordinal);
+        using var fixture = Fixture.Create(
+            "postgresql",
+            specification.RouteIdentity,
+            command: command.Replace(physicalKey, PostgreSqlOrdinalKey(physicalKey), StringComparison.Ordinal));
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "postgresql",
+            fixture.Adapter,
+            fixture.Route,
+            fixture.Path));
+    }
+
     [Fact]
     public void Mongo_explain_command_binds_the_physical_scoped_collection_and_actual_aggregate_shape()
     {
@@ -2236,9 +2274,10 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     private static string[] PostgreSqlRenderedOrderTerms(DiagnosticsNativeRouteSpec specification) =>
         specification.EffectiveOrdering.SelectMany(term =>
         {
-            var ordinal = term.Column is "id" or "idOrderKey" or "traceKey" or "spanId" or
-                "__groundwork_ordinal_id" or "__groundwork_ordinal_spanId";
-            var expression = ordinal
+            var ordinal = term.Column is "id" or "idOrderKey" or "traceKey" or "spanId";
+            var persistedOrdinal = term.Column is
+                "__groundwork_ordinal_id" or "__groundwork_ordinal_spanId" or "__groundwork_ordinal_traceKey";
+            var expression = ordinal || persistedOrdinal
                 ? $"(\"{term.Column}\" COLLATE \"C\")"
                 : $"\"{term.Column}\"";
             var direction = term.Direction == RuntimeNativeOrderDirection.Descending ? "DESC" : "ASC";
@@ -2268,6 +2307,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         string provider,
         DiagnosticsNativeRouteSpec specification)
     {
+        specification = DiagnosticsNativePlanContract.PhysicalCommandSpecification(specification);
         var predicateColumns = new[] { "__groundwork_scope" }
             .Concat(specification.PredicateColumn is null ? [] : [specification.PredicateColumn])
             .ToArray();
@@ -2278,14 +2318,18 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         var ordering = provider switch
         {
             "postgresql" => string.Join(", ", PostgreSqlRenderedOrderTerms(specification)),
-            "sqlserver" => string.Join(", ", new[]
+            "sqlserver" => string.Join(", ", specification.EffectiveOrdering.SelectMany(term =>
             {
-                "[lastSeen] DESC",
-                "[idOrderKey] COLLATE Latin1_General_100_BIN2 ASC",
-                "DATALENGTH([idOrderKey] COLLATE Latin1_General_100_BIN2) ASC",
-                "[id] COLLATE Latin1_General_100_BIN2 ASC",
-                "DATALENGTH([id] COLLATE Latin1_General_100_BIN2) ASC"
-            }),
+                var isOrdinalString = term.Column is "id" or "idOrderKey" or "traceKey" or "spanId";
+                var expression = $"[{term.Column}]" +
+                                 (isOrdinalString || term.Column.StartsWith("__groundwork_ordinal_", StringComparison.Ordinal)
+                                     ? " COLLATE Latin1_General_100_BIN2"
+                                     : string.Empty);
+                var direction = term.Direction == RuntimeNativeOrderDirection.Descending ? "DESC" : "ASC";
+                return isOrdinalString
+                    ? new[] { expression + " " + direction, $"DATALENGTH({expression}) {direction}" }
+                    : new[] { expression + " " + direction };
+            })),
             _ => throw new ArgumentOutOfRangeException(nameof(provider))
         };
         return provider == "sqlserver"
@@ -2500,14 +2544,14 @@ public sealed class DiagnosticsNativePlanAdmissionTests
                 "postgresql" or "sqlserver" when spec.EffectiveOrdering.Any(term =>
                     term.Column is "id" or "idOrderKey" or "traceKey" or "spanId") =>
                     ProviderRenderedRelationalCommand(provider, spec),
-                _ => "SELECT * FROM elsa_otel_resources_v2 WHERE __groundwork_scope = @scope ORDER BY lastSeen DESC, idOrderKey ASC, id ASC LIMIT 127"
+                _ => SqliteCommand(spec)
             };
             var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(provider, spec);
             nativePlan ??= provider switch
             {
-                "sqlite" => $"2 0 SEARCH elsa_otel_resources_v2 USING INDEX {physicalIndex} (__groundwork_scope=?)",
-                "postgresql" => $"[{{\"Plan\":{{\"Node Type\":\"Index Scan\",\"Relation Name\":\"elsa_otel_resources_v2\",\"Index Name\":\"{physicalIndex}\"}}}}]",
-                "sqlserver" => $"<ShowPlanXML><RelOp PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[elsa_otel_resources_v2]\" Index=\"[{physicalIndex}]\" /></IndexScan></RelOp></ShowPlanXML>",
+                "sqlite" => $"2 0 SEARCH {spec.TableName} USING INDEX {physicalIndex} (__groundwork_scope=?)",
+                "postgresql" => $"[{{\"Plan\":{{\"Node Type\":\"Index Scan\",\"Relation Name\":\"{spec.TableName}\",\"Index Name\":\"{physicalIndex}\"}}}}]",
+                "sqlserver" => $"<ShowPlanXML><RelOp PhysicalOp=\"Index Seek\"><IndexScan><Object Table=\"[{spec.TableName}]\" Index=\"[{physicalIndex}]\" /></IndexScan></RelOp></ShowPlanXML>",
                 "mongodb" => $"{{\"winningPlan\":{{\"stage\":\"IXSCAN\",\"indexName\":\"{physicalIndex}\"}}}}",
                 _ => throw new ArgumentOutOfRangeException(nameof(provider))
             };
@@ -2525,18 +2569,20 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         internal static string MongoPhysicalCollection(DiagnosticsNativeRouteSpec specification) =>
             $"{specification.TableName}__scope__{new string('A', 64)}";
 
+        private static string SqliteCommand(DiagnosticsNativeRouteSpec specification)
+        {
+            var physical = DiagnosticsNativePlanContract.PhysicalCommandSpecification(specification);
+            var order = string.Join(", ", physical.EffectiveOrdering.Select(term =>
+                term.Column + (term.Direction == RuntimeNativeOrderDirection.Descending ? " DESC" : " ASC")));
+            return $"SELECT * FROM {physical.TableName} WHERE __groundwork_scope = @scope ORDER BY {order} LIMIT @limit";
+        }
+
         internal static string MongoAggregateCommand(
             DiagnosticsNativeRouteSpec specification,
             string? collection = null,
             string? match = null)
         {
-            if (specification.RouteIdentity == "trace-detail/spans-by-trace-key-start-id")
-                specification = specification with
-                {
-                    Ordering = specification.EffectiveOrdering.Select(term => term.Column == "spanId"
-                        ? term with { Column = "__groundwork_ordinal_spanId" }
-                        : term).ToArray()
-                };
+            specification = DiagnosticsNativePlanContract.PhysicalCommandSpecification(specification);
             var matchNode = JsonNode.Parse(match ??
                 (specification.PredicateColumn is null ? "{}" : $"{{\"{specification.PredicateColumn}\":1}}"))!;
             var pipeline = new JsonArray(new JsonObject { ["$match"] = matchNode });
