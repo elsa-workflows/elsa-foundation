@@ -714,6 +714,9 @@ public static class ArtifactAdmission
 
     internal static bool InvalidOptionalRawPlanPair(NativeRouteEvidence route)
     {
+        if (route.RawPlanReference is null || route.RawPlanSha256 is null)
+            return true;
+
         var hasReference = !string.IsNullOrEmpty(route.RawPlanReference);
         var hasDigest = !string.IsNullOrEmpty(route.RawPlanSha256);
         return hasReference != hasDigest ||
