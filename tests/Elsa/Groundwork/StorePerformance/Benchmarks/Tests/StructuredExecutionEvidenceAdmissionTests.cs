@@ -370,6 +370,19 @@ public sealed class StructuredExecutionEvidenceAdmissionTests
     }
 
     [Fact]
+    public void Artifact_admission_rejects_explicitly_null_optional_raw_plan_fields_after_persistence()
+    {
+        using var fixture = AdmissionFixture.Create(
+            ValidRoute() with { RawPlanReference = null!, RawPlanSha256 = null! });
+
+        var persistedRoute = fixture.Evidence.NativePlan.Routes.Single(route => route.RouteIdentity == "structured-log-replay");
+        Assert.Null(persistedRoute.RawPlanReference);
+        Assert.Null(persistedRoute.RawPlanSha256);
+
+        Assert.Throws<PerformanceContractException>(fixture.Validate);
+    }
+
+    [Fact]
     public void Artifact_admission_still_validates_an_optional_raw_plan_for_the_migrated_route()
     {
         using var fixture = AdmissionFixture.Create(ValidRoute());

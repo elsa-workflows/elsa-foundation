@@ -4,7 +4,33 @@
 
 **Created**: 2026-07-26
 
-**Status**: Draft
+**Status**: Restated for first-party EF removal; implementation and final promotion remain pending.
+
+## Current governing scope — 2026-09-07
+
+This section supersedes the July specification below where it conflicts. It records the owner-approved vendor-host exception (2026-09-01) and implementation/validation split (2026-09-06); it is not a completion receipt. Issue [#1489](https://github.com/elsa-workflows/elsa-foundation/issues/1489) owns this restatement, after shared-kernel removal [#1484](https://github.com/elsa-workflows/elsa-foundation/issues/1484).
+
+1. **First-party EF-free, not package-absolute zero.** Remove Elsa-owned EF stores, adapters, wrappers, contexts, migrations, shared EF infrastructure, obsolete EF-only tests and compiled benchmark comparators. Preserve valid behavioral objectives in named replacement tests. Core contracts and Groundwork adapters remain.
+2. **Narrow vendor-host exception.** Workbench may use the vendor `OpenIddict.EntityFrameworkCore` stores and the dependencies/configuration needed for them. This does not permit Elsa-owned OpenIddict EF wrappers or first-party persistence through EF. Do not implement an OpenIddict adapter on Groundwork. Groundwork provider selection covers Elsa-owned durable lanes, not the vendor authorization-server store.
+3. **Implementation safety now; broad validation separately.** Build/compile, focused regressions, and startup/persistence smoke checks belong to this delivery. Full provider/concurrency/recovery matrices, native-plan evidence completion and controlled performance verdicts belong to the separate [#646 validation handoff](https://github.com/elsa-workflows/elsa-foundation/issues/646). They are deferred, not passed, and no longer prerequisites for EF deletion. Retain historical EF oracle source by exact Git commit, not as compiled first-party code.
+4. **Architecture boundaries remain unchanged.** Elsa production expresses persistence through Groundwork abstractions, not custom SQL/BSON. Groundwork contains no Elsa-specific or diagnostics-specific concepts. No production data migration or database deletion is authorized.
+5. **Guard first-party scope explicitly.** Keep detection of direct/transitive/imported EF dependencies, omitted projects and missing evidence. Any vendor exception must identify the host and vendor purpose narrowly; it must not exempt arbitrary first-party EF consumers or classify unknown dependency evidence as clean. Broad restored-graph certification remains the validation harness's responsibility.
+6. **Truthful closeout.** Verify implementation, narrow safety evidence, retained test dispositions, remote-main promotion and board reconciliation before closing implementation work. Link the separate validation handoff and its unresolved findings; do not close validation items or report their verdicts as passed merely because implementation ships. Spec 113/128 work is not evidence of this spec's completion.
+
+### Disposition of the original requirement identifiers
+
+| Original requirements | Current interpretation |
+|---|---|
+| FR-001, FR-007, FR-019, FR-022; SC-004, SC-005, SC-008 | Keep dependency-ordered removal and test preservation; broad validation/performance and its review program move to #646 rather than blocking deletion. |
+| FR-002, FR-003, FR-008, FR-012, FR-013; SC-001, SC-007, SC-010 | Apply to Elsa first-party persistence; retain only the narrow vendor-host OpenIddict exception above. No Groundwork OpenIddict adapter is required. |
+| FR-014–FR-018, FR-020; SC-002, SC-006 | Preserve fail-closed discovery and guard coverage, with explicit vendor-host classification instead of absolute emptiness. Do not certify missing evidence. |
+| FR-025 | Root integration review and bounded independent review apply now; broad adversarial certification is deferred with validation. |
+| FR-026–FR-028; SC-009 | Remote-main and evidence-backed board closure remain required, with deferred validation linked separately and unclaimed. |
+| Remaining requirements and SC-003 | Remain applicable where consistent with this scope, especially test preservation, feature continuity and accurate documentation. |
+
+## Historical July specification — superseded where noted above
+
+The original input, numbered requirements and scenarios below are retained for traceability, not as instructions to undo the approved scope changes.
 
 **Input**: User description: "Switch every reference host to Groundwork, delete every remaining direct and transitive EF Core dependency including diagnostics, ASP.NET Core Identity, and OpenIddict only after their prerequisite gates, preserve and rehost behavioral test coverage, replace the shrink-only EF ratchet with an absolute-zero guard that cannot be bypassed by omitted projects, reconcile program documentation, and close issue #647 as the final removal lane for parent #629."
 

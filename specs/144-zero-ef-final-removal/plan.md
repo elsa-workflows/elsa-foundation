@@ -1,5 +1,7 @@
 # Implementation Plan: Zero-EF Final Removal
 
+> **Current execution policy — 2026-09-07:** This July plan is historical. Follow [the current governing scope](spec.md#current-governing-scope--2026-09-07): delete Elsa first-party EF, preserve vendor-host OpenIddict EF, keep narrow implementation safety checks, and hand broad validation/performance to #646. The full matrices and absolute-zero language below do not reinstate superseded deletion prerequisites. Final promotion remains ordered after #1484 and evidence-backed integration review; this restatement does not claim delivery.
+
 **Branch**: `779-zero-ef-final-removal` | **Date**: 2026-07-26 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `specs/144-zero-ef-final-removal/spec.md`

@@ -1,5 +1,7 @@
 # Quickstart: Zero-EF Final Removal
 
+> **Current execution scope — 2026-09-07:** Follow [the current governing scope](spec.md#current-governing-scope--2026-09-07). This checklist and its receipts are retained history. Do not launch its broad provider, concurrency or performance commands as part of implementation delivery: those belong to the separate #646 harness. Vendor-host OpenIddict EF remains allowed; missing final validation remains unverified.
+
 ## Shared-kernel implementation checkpoint — 2026-09-07
 
 The #1484 candidate removes the shared EF kernel and Secret comparator after the diagnostics-removal parent commit. The [current shared-kernel ledger disposition](test-retention-ledger.md#shared-ef-kernel-disposition--2026-09-07) approves the 16 EF-mechanism test removals; older intake statements below about unclassified rows are historical, not the current disposition. This is not final promotion or broad validation evidence. Owner-approved broad validation/performance remains handed to #646, not a deletion prerequisite. Final integration must also apply #1489's governing-scope restatement and #1490's guard cleanup.
