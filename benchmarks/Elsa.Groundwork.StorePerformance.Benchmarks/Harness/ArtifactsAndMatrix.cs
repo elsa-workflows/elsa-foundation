@@ -54,7 +54,7 @@ public static class ArtifactStore
         if (hosts.Length != 1)
             throw new PerformanceContractException("An artifact manifest may bind exactly one expected host fingerprint.");
         var evidenceNames = entries.Select(pair => EvidenceName(pair.Artifact.Request.NativePlanEvidenceReference)).Distinct(StringComparer.Ordinal).ToArray();
-        var rawPlanNames = entries.SelectMany(pair => ReferencedRawPlanNames(pair.Artifact.Correctness.NativePlan)).Distinct(StringComparer.Ordinal).ToArray();
+        var rawPlanNames = entries.SelectMany(pair => ReferencedRawPlanNames(pair.Artifact.Correctness.NativePlan, pair.Artifact.Request)).Distinct(StringComparer.Ordinal).ToArray();
         var paths = entries.Select(pair => pair.Path)
             .Concat(evidenceNames.Select(name => Path.Combine(outputDirectory, name)))
             .Concat(rawPlanNames.Select(name => Path.Combine(outputDirectory, name)))
@@ -91,7 +91,7 @@ public static class ArtifactStore
             throw new PerformanceContractException("Artifact manifest expected harness assembly does not match every process artifact.");
         if (entries.Any(entry => entry.Artifact.Request.HostFingerprintSha256 != manifest.ExpectedHostFingerprintSha256))
             throw new PerformanceContractException("Artifact manifest expected host fingerprint does not match every process artifact.");
-        var rawPlanNames = entries.SelectMany(pair => ReferencedRawPlanNames(pair.Artifact.Correctness.NativePlan))
+        var rawPlanNames = entries.SelectMany(pair => ReferencedRawPlanNames(pair.Artifact.Correctness.NativePlan, pair.Artifact.Request))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         var expectedNames = entries.Select(pair => Path.GetFileName(pair.Path))
@@ -172,8 +172,10 @@ public static class ArtifactStore
         }
     }
 
-    internal static IEnumerable<string> ReferencedRawPlanNames(NativePlanEvidence nativePlan) =>
-        nativePlan.Routes.Select(route => RawPlanName(route.RawPlanReference))
+    internal static IEnumerable<string> ReferencedRawPlanNames(NativePlanEvidence nativePlan, RunRequest request) =>
+        nativePlan.Routes
+            .Where(route => HasRawPlanBinding(request, route))
+            .Select(route => RawPlanName(route.RawPlanReference))
             .Concat((nativePlan.TraceDetailConstituents ?? [])
                 .Where(constituent => !string.IsNullOrWhiteSpace(constituent.RawPlanReference))
                 .Select(constituent => RawPlanName(constituent.RawPlanReference)))
@@ -185,7 +187,10 @@ public static class ArtifactStore
     {
         var measurementSet = artifact.Request.MeasurementSetId;
         foreach (var route in artifact.Correctness.NativePlan.Routes)
-            yield return ($"{measurementSet}|{route.RouteIdentity}", RawPlanName(route.RawPlanReference), route.RawPlanSha256);
+        {
+            if (HasRawPlanBinding(artifact.Request, route))
+                yield return ($"{measurementSet}|{route.RouteIdentity}", RawPlanName(route.RawPlanReference), route.RawPlanSha256);
+        }
         foreach (var constituent in artifact.Correctness.NativePlan.TraceDetailConstituents ?? [])
         {
             if (!string.IsNullOrWhiteSpace(constituent.RawPlanReference))
@@ -193,6 +198,17 @@ public static class ArtifactStore
             foreach (var page in constituent.Pages ?? [])
                 yield return ($"{measurementSet}|{constituent.RouteIdentity}|page-{page.PageIndex}", RawPlanName(page.RawPlanReference), page.RawPlanSha256);
         }
+    }
+
+    private static bool HasRawPlanBinding(RunRequest request, NativeRouteEvidence route)
+    {
+        if (!ArtifactAdmission.IsStructuredEvidenceRoute(request, route))
+            return true;
+
+        if (ArtifactAdmission.InvalidOptionalRawPlanPair(route))
+            throw new PerformanceContractException(
+                $"Structured route '{route.RouteIdentity}' must provide a safe optional raw-plan reference and digest, or neither.");
+        return !string.IsNullOrEmpty(route.RawPlanReference);
     }
 
     internal static string ArtifactIdentity(RunRequest request) => string.Join('|', request.ComparisonCohortId, request.MeasurementSetId, request.WorkloadId, request.WorkloadVersion, request.Provider, request.Adapter, request.PhysicalForm, request.Scale, request.ProcessKind, request.ProcessIndex);
@@ -502,7 +518,7 @@ public static class ProcessMatrixRunner
         var existingPaths = existingEntries.Select(entry => entry.Path).ToArray();
         var existingBoundPaths = existingPaths
             .Concat(existingEntries.Select(entry => ArtifactStore.EvidencePath(outputDirectory, entry.Artifact.Request.NativePlanEvidenceReference)))
-            .Concat(existingEntries.SelectMany(entry => ArtifactStore.ReferencedRawPlanNames(entry.Artifact.Correctness.NativePlan)).Select(name => Path.Combine(outputDirectory, name)))
+            .Concat(existingEntries.SelectMany(entry => ArtifactStore.ReferencedRawPlanNames(entry.Artifact.Correctness.NativePlan, entry.Artifact.Request)).Select(name => Path.Combine(outputDirectory, name)))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         var existingHashes = existingBoundPaths.ToDictionary(path => path, ArtifactStore.HashFile, StringComparer.Ordinal);
@@ -537,7 +553,7 @@ public static class ProcessMatrixRunner
             }
             var allowedNames = currentEntries.Select(entry => Path.GetFileName(entry.Path))
                 .Concat(currentEntries.Select(entry => ArtifactStore.EvidenceName(entry.Artifact.Request.NativePlanEvidenceReference)))
-                .Concat(currentEntries.SelectMany(entry => ArtifactStore.ReferencedRawPlanNames(entry.Artifact.Correctness.NativePlan)))
+                .Concat(currentEntries.SelectMany(entry => ArtifactStore.ReferencedRawPlanNames(entry.Artifact.Correctness.NativePlan, entry.Artifact.Request)))
                 .Append("artifact-manifest.v2.json")
                 .ToHashSet(StringComparer.Ordinal);
             if (Directory.EnumerateFiles(outputDirectory, "*", SearchOption.TopDirectoryOnly)

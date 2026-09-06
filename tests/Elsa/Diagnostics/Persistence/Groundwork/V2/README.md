@@ -11,11 +11,11 @@ repository with:
 dotnet pack Groundwork.slnx \
   --configuration Release --output /tmp/groundwork-v2-feed-e2
 GROUNDWORK_E2_V2_PACKAGES=/tmp/groundwork-v2-feed-e2 \
-  GROUNDWORK_E2_V2_VERSION=0.4.0-preview.16 \
+  GROUNDWORK_E2_V2_VERSION=0.4.0-preview.17 \
   /path/to/elsa-foundation/tests/Elsa/Diagnostics/Persistence/Groundwork/V2/verify-e2-v2.sh
 ```
 
-`GroundworkVersion` defaults to `0.4.0-preview.16`; set `GROUNDWORK_E2_V2_VERSION` when
+`GroundworkVersion` defaults to `0.4.0-preview.17`; set `GROUNDWORK_E2_V2_VERSION` when
 verifying another explicitly packed version.
 
 The green journey proves an ordinary SQLite manifest, schema application, idempotent append/replay,

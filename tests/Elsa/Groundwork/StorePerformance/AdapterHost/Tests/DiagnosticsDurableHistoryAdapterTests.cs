@@ -117,6 +117,425 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
     }
 
     [Fact]
+    public async Task SQLite_ReadAfter_null_127_emits_one_typed_terminal_observation_and_preserves_legacy_count()
+    {
+        var root = Directory.CreateTempSubdirectory("structured-evidence-read-after-");
+        var connectionString = $"Data Source={Path.Combine(root.FullName, "diagnostics.db")};Mode=ReadWriteCreate;Cache=Shared";
+        try
+        {
+            var observed = await ProviderProbe.ReadAsync("sqlite", connectionString, CancellationToken.None);
+            var request = Request() with
+            {
+                ProviderVersion = observed.Version,
+                ProviderTopology = observed.Topology,
+                ProviderConfiguration = observed.Configuration
+            };
+            await using var adapter = new DiagnosticsDurableHistoryAdapter(
+                request,
+                connectionString,
+                root.FullName,
+                captureStructuredEvidence: true);
+
+            await adapter.PrepareAsync(CancellationToken.None);
+            var scopes = await adapter.OpenScopedClientsAsync(CancellationToken.None);
+            await scopes.Primary.StructuredLogs.AppendAsync(
+                new StructuredLogEntry
+                {
+                    Message = "structured-evidence-proof",
+                    Category = "structured-evidence",
+                    SourceId = "structured-evidence-test"
+                },
+                CancellationToken.None);
+            await adapter.FlushAsync(CancellationToken.None);
+
+            adapter.CommandObserver.ClearCommands();
+            adapter.ClearStructuredEvidence();
+            var page = await scopes.Primary.StructuredLogs.ReadAfterAsync(
+                afterCursor: null,
+                filter: StructuredLogFilter.None,
+                maxCount: 127,
+                cancellationToken: CancellationToken.None);
+
+            var evidence = Assert.Single(adapter.StructuredEvidence);
+            Assert.Single(page.Entries);
+            Assert.Single(adapter.CommandObserver.Commands);
+            Assert.Equal("SQLite", evidence.Provider);
+            Assert.Equal("BoundedQuery", evidence.Operation);
+            Assert.Equal("Read", evidence.CommandKind);
+            Assert.Equal("Succeeded", evidence.Outcome);
+            Assert.Equal("Collected", evidence.ShapeAvailability);
+            Assert.Equal("elsa-structured-logs", evidence.Target.LogicalUnitId);
+            Assert.Equal("Predicate", evidence.Target.ScopeBinding);
+            var predicateFacts = evidence.BoundedQuery!.Predicate.Facts;
+            Assert.Equal(3, predicateFacts.Count);
+            Assert.Contains(predicateFacts, fact =>
+                fact.LogicalColumn == "__groundwork_scope" &&
+                fact.Operator == "Equal" &&
+                fact.ValueType == "String" &&
+                fact.Comparison == "Ordinal" &&
+                fact.BoundInclusivity == "NotApplicable" &&
+                fact.BindingRole == "Scope");
+            Assert.Contains(predicateFacts, fact =>
+                fact.LogicalColumn == "sequence" &&
+                fact.Operator == "LowerBound" &&
+                fact.ValueType == "Int64" &&
+                fact.Comparison == "Exact" &&
+                fact.BoundInclusivity == "Exclusive" &&
+                fact.BindingRole == "Caller");
+            Assert.Contains(predicateFacts, fact =>
+                fact.LogicalColumn == "sequence" &&
+                fact.Operator == "UpperBound" &&
+                fact.ValueType == "Int64" &&
+                fact.Comparison == "Exact" &&
+                fact.BoundInclusivity == "Inclusive" &&
+                fact.BindingRole == "Caller");
+            Assert.Equal("Explicit", evidence.BoundedQuery.NativeLimit.Kind);
+            Assert.Equal(128, evidence.BoundedQuery.NativeLimit.Value);
+            Assert.True(evidence.BoundedQuery.HasLookahead);
+            Assert.False(evidence.BoundedQuery.HasContinuation);
+            Assert.Equal("sequence", Assert.Single(evidence.BoundedQuery.Ordering).LogicalColumn);
+            Assert.Equal("Ascending", evidence.BoundedQuery.Ordering[0].Direction);
+            Assert.Null(evidence.BoundedQuery.Ordering[0].NullPlacement);
+            Assert.True(evidence.BoundedQuery.Projection.AllColumns);
+            Assert.Empty(evidence.BoundedQuery.Projection.LogicalColumns);
+            Assert.Equal("Collected", evidence.Plan.Availability);
+            Assert.Equal("EstimatedExplain", evidence.Plan.Provenance);
+            Assert.True(evidence.Plan.ChoseExpectedIndex);
+            Assert.NotNull(evidence.Plan.ChosenPhysicalIndexId);
+            var node = Assert.Single(evidence.Plan.Nodes!);
+            Assert.Equal("IndexSearch", node.Operation);
+            Assert.Equal("elsa_structured_logs_sequence_order", node.LogicalIndexName);
+            Assert.Equal(evidence.Plan.ChosenPhysicalIndexId, node.IndexId);
+        }
+        finally
+        {
+            root.Delete(true);
+        }
+    }
+
+    [Fact]
+    public async Task SQLite_ReadAfter_callback_evidence_survives_file_reload_and_typed_admission()
+    {
+        var root = Directory.CreateTempSubdirectory("structured-evidence-capture-");
+        var connectionString = $"Data Source={Path.Combine(root.FullName, "diagnostics.db")};Mode=ReadWriteCreate;Cache=Shared";
+        try
+        {
+            var observed = await ProviderProbe.ReadAsync("sqlite", connectionString, CancellationToken.None);
+            var repositoryRoot = SourceProvenance.FindRepositoryRoot();
+            var request = Request() with
+            {
+                MeasurementSetId = "structured-evidence-capture",
+                CommitSha = SourceProvenance.CurrentHead(repositoryRoot),
+                HarnessAssemblySha256 = SourceProvenance.HarnessAssemblySha256(),
+                PackageVersions = ProviderPackageProvenance.CurrentVersions(
+                    repositoryRoot, DiagnosticsDurableHistoryAdapter.AdapterId, "sqlite"),
+                NativePlanEvidenceReference = NativePlanEvidenceStaging.ReferenceFor(
+                    DiagnosticsDurableHistoryWorkload.WorkloadId,
+                    "sqlite",
+                    "structured-evidence-capture"),
+                ProviderVersion = observed.Version,
+                ProviderTopology = observed.Topology,
+                ProviderConfiguration = observed.Configuration
+            };
+            request = request with { CompositionFingerprint = BenchmarkCompositionFingerprint.Describe(request).Fingerprint };
+            ArtifactSafety.ValidateRequest(request);
+
+            await using var adapter = new DiagnosticsDurableHistoryAdapter(
+                request,
+                connectionString,
+                root.FullName,
+                captureStructuredEvidence: true);
+            await adapter.PrepareAsync(CancellationToken.None);
+            var scopes = await adapter.OpenScopedClientsAsync(CancellationToken.None);
+            var maximumCommittedSequence = 0L;
+            const int acknowledgementWindow = 1_000;
+            var acknowledgements = new List<Task<StructuredLogEntry>>(acknowledgementWindow);
+            for (var index = 0; index < DiagnosticsDurableHistoryWorkload.AppendedRecordsPerStream; index++)
+            {
+                acknowledgements.Add(scopes.Primary.StructuredLogs.AppendAsync(
+                    new StructuredLogEntry
+                    {
+                        Sequence = index + 1,
+                        Message = $"scope-secret-{index}",
+                        Category = "structured-evidence",
+                        SourceId = "scope-secret"
+                    },
+                    CancellationToken.None).AsTask());
+                if (acknowledgements.Count != acknowledgementWindow)
+                    continue;
+
+                maximumCommittedSequence = Math.Max(
+                    maximumCommittedSequence,
+                    (await Task.WhenAll(acknowledgements)).Max(entry => entry.Sequence));
+                acknowledgements.Clear();
+            }
+            if (acknowledgements.Count != 0)
+                maximumCommittedSequence = Math.Max(
+                    maximumCommittedSequence,
+                    (await Task.WhenAll(acknowledgements)).Max(entry => entry.Sequence));
+            await adapter.FlushAsync(CancellationToken.None);
+            var highWater = await scopes.Primary.StructuredLogs.GetHighWaterMarkAsync(CancellationToken.None);
+            Assert.Equal(DiagnosticsDurableHistoryWorkload.AppendedRecordsPerStream, highWater);
+            Assert.Equal(highWater, maximumCommittedSequence);
+
+            adapter.CommandObserver.ClearCommands();
+            adapter.ClearStructuredEvidence();
+            var page = await scopes.Primary.StructuredLogs.ReadAfterAsync(
+                afterCursor: null,
+                filter: StructuredLogFilter.None,
+                maxCount: DiagnosticsDurableHistoryWorkload.QueryLimit,
+                cancellationToken: CancellationToken.None);
+            var callbackEvidence = Assert.Single(adapter.StructuredEvidence);
+            Assert.Equal("SQLite", callbackEvidence.Provider);
+            Assert.Equal(observed.Version, callbackEvidence.ProviderVersion);
+            Assert.Equal(request.ProviderVersion, callbackEvidence.ProviderVersion);
+            Assert.Equal(DiagnosticsDurableHistoryWorkload.QueryLimit, page.Entries.Count);
+            Assert.All(page.Entries, entry =>
+            {
+                Assert.StartsWith("scope-secret-", entry.Message, StringComparison.Ordinal);
+                Assert.Equal("scope-secret", entry.SourceId);
+            });
+            Assert.Single(adapter.CommandObserver.Commands);
+
+            var specification = DiagnosticsNativePlanContract.For(
+                DiagnosticsNativePlanContract.GroundworkAdapter,
+                "structured-log-replay");
+            var route = new NativeRouteEvidence(
+                "structured-log-replay",
+                string.Empty,
+                string.Empty,
+                DiagnosticsNativePlanContract.IndexSearchPlanClassification,
+                DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("sqlite", specification),
+                checked((int)highWater),
+                true,
+                false,
+                DiagnosticsDurableHistoryWorkload.QueryLimit,
+                page.Entries.Count)
+            {
+                NativeFetchLimit = callbackEvidence.BoundedQuery?.NativeLimit.Value ?? 0,
+                StructuredEvidence = callbackEvidence
+            };
+
+            var routeIdentities = DiagnosticsDurableHistoryWorkload.NativeRouteCardinalities.Keys
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            var blockedRoutes = routeIdentities
+                .Where(identity => !string.Equals(identity, route.RouteIdentity, StringComparison.Ordinal))
+                .ToArray();
+            Assert.Equal(
+                routeIdentities,
+                new[] { route.RouteIdentity }
+                    .Concat(blockedRoutes)
+                    .Order(StringComparer.Ordinal)
+                    .ToArray());
+
+            var artifactDirectory = Path.Combine(root.FullName, "artifacts");
+            Directory.CreateDirectory(artifactDirectory);
+            var evidenceDocument = new NativePlanEvidenceDocument(
+                2,
+                request.ComparisonCohortId,
+                request.MeasurementSetId,
+                request.WorkloadId,
+                request.WorkloadVersion,
+                request.Provider,
+                request.Adapter,
+                request.PhysicalForm,
+                request.Scale,
+                request.CommitSha,
+                request.HarnessAssemblySha256,
+                request.CompositionFingerprint,
+                request.HostFingerprintSha256,
+                request.ProviderVersion,
+                request.ProviderTopology,
+                request.ProviderConfiguration,
+                request.Seed,
+                request.InputFingerprintSha256,
+                request.NativePlanIdentity,
+                [route],
+                DiagnosticsNativePlanContract.BlockedRouteContract,
+                blockedRoutes);
+            var evidenceBytes = JsonSerializer.SerializeToUtf8Bytes(evidenceDocument, ArtifactStore.JsonOptions);
+            var evidenceDigest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(evidenceBytes)).ToLowerInvariant();
+            var evidencePath = ArtifactStore.EvidencePath(artifactDirectory, request.NativePlanEvidenceReference);
+            await File.WriteAllBytesAsync(evidencePath, evidenceBytes);
+
+            var artifactRequest = request with
+            {
+                NativePlanContentSha256 = evidenceDigest,
+                ProcessKind = ProcessKind.Warmup,
+                ProcessIndex = 0
+            };
+            var correctness = new CorrectnessEvidence(
+                DiagnosticsDurableHistoryWorkload.ExpectedResultDigest,
+                observed.Version,
+                observed.Topology,
+                observed.Configuration,
+                new NativePlanEvidence(
+                    artifactRequest.NativePlanIdentity,
+                    artifactRequest.NativePlanEvidenceReference,
+                    evidenceDigest,
+                    [route])
+                {
+                    RouteContract = DiagnosticsNativePlanContract.BlockedRouteContract,
+                    BlockedRoutes = blockedRoutes
+                });
+
+            // This envelope proves persistence and correctness admission only. Route cardinality,
+            // page count, native bound, and plan facts come from the actual callback/read above; no
+            // timing or comparison verdict is claimed here.
+            var processArtifact = new ProcessArtifact(
+                2,
+                artifactRequest,
+                BenchmarkProtocol.Acceptance,
+                true,
+                correctness,
+                [],
+                new MachineMetadata(
+                    "test-os",
+                    "test-runtime",
+                    "X64",
+                    "X64",
+                    1,
+                    artifactRequest.HostFingerprintSha256,
+                    "2026-09-06T00:00:00Z"));
+            ArtifactStore.Write(artifactDirectory, processArtifact);
+            ArtifactStore.WriteManifest(artifactDirectory);
+            var artifactSet = ArtifactStore.ReadAll(artifactDirectory);
+            var reloadedArtifact = Assert.Single(artifactSet.Artifacts);
+            ArtifactAdmission.ValidateCorrectness(
+                WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()).Workloads[
+                    DiagnosticsDurableHistoryWorkload.WorkloadId],
+                reloadedArtifact.Request,
+                reloadedArtifact.Correctness,
+                artifactDirectory);
+
+            var reloadedRoute = Assert.Single(reloadedArtifact.Correctness.NativePlan.Routes);
+            Assert.Empty(reloadedRoute.RawPlanReference);
+            Assert.Empty(reloadedRoute.RawPlanSha256);
+            Assert.Equal(callbackEvidence.Identity, reloadedRoute.StructuredEvidence!.Identity);
+            Assert.Equal(callbackEvidence.Target, reloadedRoute.StructuredEvidence.Target);
+            var structuredJson = JsonSerializer.Serialize(reloadedRoute.StructuredEvidence, ArtifactStore.JsonOptions);
+            Assert.DoesNotContain("spec094-primary", structuredJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("spec094-diagnostics", structuredJson, StringComparison.Ordinal);
+            var persistedEvidence = await File.ReadAllTextAsync(evidencePath);
+            Assert.DoesNotContain("scope-secret", persistedEvidence, StringComparison.Ordinal);
+            Assert.DoesNotContain(root.FullName, persistedEvidence, StringComparison.Ordinal);
+            Assert.DoesNotContain(connectionString, persistedEvidence, StringComparison.Ordinal);
+            Assert.DoesNotContain("SELECT", persistedEvidence, StringComparison.OrdinalIgnoreCase);
+
+            var tamperedCorrectness = reloadedArtifact.Correctness with
+            {
+                NativePlan = reloadedArtifact.Correctness.NativePlan with
+                {
+                    Routes = reloadedArtifact.Correctness.NativePlan.Routes.Select(item =>
+                        item with
+                        {
+                            StructuredEvidence = item.StructuredEvidence! with
+                            {
+                                Identity = item.StructuredEvidence.Identity with { CaptureId = Guid.NewGuid() }
+                            }
+                        }).ToArray()
+                }
+            };
+            var tamper = Assert.Throws<PerformanceContractException>(() => ArtifactAdmission.ValidateCorrectness(
+                WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()).Workloads[
+                    DiagnosticsDurableHistoryWorkload.WorkloadId],
+                reloadedArtifact.Request,
+                tamperedCorrectness,
+                artifactDirectory));
+            Assert.Contains("does not match", tamper.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            root.Delete(true);
+        }
+    }
+
+    [Fact]
+    public async Task SQLite_native_capture_helper_uses_typed_callbacks_for_recent_and_replay_without_raw_plan_references()
+    {
+        var root = Directory.CreateTempSubdirectory("structured-evidence-native-capture-");
+        var connectionString = $"Data Source={Path.Combine(root.FullName, "diagnostics.db")};Mode=ReadWriteCreate;Cache=Shared";
+        try
+        {
+            var observed = await ProviderProbe.ReadAsync("sqlite", connectionString, CancellationToken.None);
+            var request = Request() with
+            {
+                MeasurementSetId = "structured-evidence-native-capture",
+                NativePlanEvidenceReference = NativePlanEvidenceStaging.ReferenceFor(
+                    DiagnosticsDurableHistoryWorkload.WorkloadId,
+                    "sqlite",
+                    "structured-evidence-native-capture"),
+                ProviderVersion = observed.Version,
+                ProviderTopology = observed.Topology,
+                ProviderConfiguration = observed.Configuration
+            };
+            await using var adapter = new DiagnosticsDurableHistoryAdapter(
+                request,
+                connectionString,
+                root.FullName,
+                captureStructuredEvidence: true);
+            await adapter.PrepareAsync(CancellationToken.None);
+            var scopes = await adapter.OpenScopedClientsAsync(CancellationToken.None);
+            await DiagnosticsNativePlanCapture.SeedStructuredLogFixtureAsync(
+                scopes.Primary.StructuredLogs,
+                CancellationToken.None);
+            await adapter.FlushAsync(CancellationToken.None);
+
+            var routes = new List<NativeRouteEvidence>(2);
+            foreach (var route in new[] { "structured-log-recent", "structured-log-replay" })
+            {
+                var captured = await DiagnosticsNativePlanCapture.CaptureStructuredEvidenceRouteAsync(
+                    adapter,
+                    scopes.Primary,
+                    request,
+                    observed,
+                    route,
+                    DiagnosticsDurableHistoryWorkload.QueryLimit,
+                    CancellationToken.None);
+                routes.Add(captured);
+
+                Assert.Empty(captured.RawPlanReference);
+                Assert.Empty(captured.RawPlanSha256);
+                Assert.Equal(127, captured.FiniteLimit);
+                Assert.Equal(127, captured.MaterializedCandidateCount);
+                Assert.Equal(128, captured.NativeFetchLimit);
+                Assert.NotNull(captured.StructuredEvidence);
+                Assert.Equal(observed.Version, captured.StructuredEvidence!.ProviderVersion);
+                Assert.Equal("Succeeded", captured.StructuredEvidence.Outcome);
+                Assert.Equal("Collected", captured.StructuredEvidence.ShapeAvailability);
+                Assert.Equal("Collected", captured.StructuredEvidence.Plan.Availability);
+                Assert.Equal("EstimatedExplain", captured.StructuredEvidence.Plan.Provenance);
+            }
+
+            var outputDirectory = Directory.CreateDirectory(Path.Combine(root.FullName, "capture")).FullName;
+            var digest = NativePlanEvidenceStaging.Write(
+                outputDirectory,
+                DiagnosticsNativePlanCapture.CreateDocument(request, observed, routes));
+
+            Assert.Matches("^[0-9a-f]{64}$", digest);
+            var document = NativePlanEvidenceStaging.Read(
+                Path.Combine(outputDirectory, request.NativePlanEvidenceReference));
+            Assert.Equal(
+                new[] { "structured-log-recent", "structured-log-replay" },
+                document.Routes.Select(route => route.RouteIdentity).Order(StringComparer.Ordinal));
+            Assert.All(document.Routes, route =>
+            {
+                Assert.Empty(route.RawPlanReference);
+                Assert.Empty(route.RawPlanSha256);
+                Assert.Equal(127, route.FiniteLimit);
+                Assert.Equal(127, route.MaterializedCandidateCount);
+                Assert.Equal(128, route.NativeFetchLimit);
+                Assert.Equal(observed.Version, route.StructuredEvidence!.ProviderVersion);
+            });
+        }
+        finally
+        {
+            root.Delete(true);
+        }
+    }
+
+    [Fact]
     public async Task SQLite_reopen_samples_release_prior_restart_compositions_outside_timing()
     {
         var root = Directory.CreateTempSubdirectory("diagnostics-reopen-reset-sqlite-");

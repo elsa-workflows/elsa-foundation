@@ -21,7 +21,8 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 internal sealed class DiagnosticsDurableHistoryAdapter(
     RunRequest request,
     string connectionString,
-    string outputDirectory)
+    string outputDirectory,
+    bool captureStructuredEvidence = false)
     : IBenchmarkAdapter, IDiagnosticsDurableHistoryWorkloadAdapter
 {
     internal const string AdapterId = "groundwork-v2";
@@ -32,6 +33,8 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
     private readonly string outputDirectory = outputDirectory;
     private readonly string persistenceScope = PersistenceScopeFor(request);
     private readonly WritePathRoundTripObserver observer = new(request.Provider, captureCommands: true);
+    private readonly bool captureStructuredEvidenceRequested = captureStructuredEvidence;
+    private StructuredEvidenceObserver? structuredEvidenceObserver;
     private readonly List<RuntimeStoreComposition> compositions = [];
     private readonly List<DiagnosticsDurableHistoryClient> clients = [];
     private IReadOnlyList<IBenchmarkOperation>? operations;
@@ -41,7 +44,16 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
     public IProviderRoundTripObserver? RoundTripObserver => observer;
 
     internal WritePathRoundTripObserver CommandObserver => observer;
+    internal IReadOnlyList<StructuredExecutionEvidence> StructuredEvidence =>
+        StructuredEvidenceObserver?.SnapshotEvidence() ?? [];
+
+    internal void ClearStructuredEvidence() => StructuredEvidenceObserver?.ClearEvidence();
     internal int ActiveCompositionCount => compositions.Count;
+
+    private StructuredEvidenceObserver? StructuredEvidenceObserver =>
+        captureStructuredEvidenceRequested
+            ? structuredEvidenceObserver ??= new StructuredEvidenceObserver(observer)
+            : null;
 
     public IReadOnlyList<IBenchmarkOperation> Operations =>
         operations ?? throw new PerformanceContractException(
@@ -211,7 +223,8 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
                 ScopeFor(bindingScope),
                 "open-telemetry"),
             structuredLogsOptions: FrozenStructuredLogsOptions(),
-            openTelemetryOptions: FrozenOpenTelemetryOptions());
+            openTelemetryOptions: FrozenOpenTelemetryOptions(),
+            executionObserver: StructuredEvidenceObserver);
 
         compositions.Add(composition);
         var stores = composition.CreateDiagnosticsClient();
