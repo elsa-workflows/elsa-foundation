@@ -47,7 +47,7 @@ Implementations:
 
 - `Elsa.Workflows.Design.Persistence.Groundwork` - Groundwork implementation of the design-persistence sub-sub-domain (the only shipped design-persistence provider; the former EF Core implementation was removed by spec 093).
 
-Impl-to-impl carve-out: implementations across unrelated sub-domains never reference each other. Implementations within the same provider family may reference each other — for example a provider-specific package extending a shared base implementation within the same persistence family (`Elsa.Persistence.EFCore.Sqlite` extending `Elsa.Persistence.EFCore`).
+Impl-to-impl carve-out: implementations across unrelated sub-domains never reference each other. Implementations within the same provider family may reference each other — for example a provider-specific package extending a shared base implementation within the same persistence family. The former `Elsa.Persistence.EFCore.Sqlite` / `Elsa.Persistence.EFCore` pair illustrated this rule but is no longer shipped.
 
 ## Adapter pattern: Elsa.Locking
 
@@ -196,6 +196,8 @@ The model-owning domain wins the prefix: HTTP owns the models and JavaScript is 
 The reverse form would force `Elsa.JavaScript` to grow one sub-branch per model-owning domain it exposes to JavaScript. That is the junk-drawer anti-pattern framework §2.2 prevents.
 
 ## Sync contributor pattern: IEntityModelCreatingHandler
+
+Historical example: the first-party EF implementation and these interfaces have been removed. This section explains the original rationale, not currently available APIs; see the [current persistence scope](../program-goals/zero-ef-persistence.md).
 
 Instantiates framework §2.6.5.
 

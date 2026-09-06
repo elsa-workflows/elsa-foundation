@@ -1,5 +1,7 @@
 # Zero-EF Persistence
 
+Constitution reconciliation: ratified constitution v4.0.0 retains historical EF implementation examples in §E2.2.1, §E2.5 and §E5. Those examples do not enumerate current shipped APIs after this program's owner-approved deletion. Normative provider-neutrality rules remain unchanged. Updating the constitutional text itself is deferred to its proposal/discussion/ratification process; this program does not claim a new ratification. Current implementation inventory is the generated maps and this program's scope.
+
 Status: active.
 
 Area: Elsa persistence-provider consolidation / Groundwork adoption.
