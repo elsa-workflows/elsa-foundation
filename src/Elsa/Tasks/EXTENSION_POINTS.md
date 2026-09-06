@@ -45,7 +45,6 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Tasks` — the co
 - **Attributes:** `[TaskDependency(typeof(OtherTask))]` — runs after `OtherTask`; `[Order(float)]` — relative priority; `[SingleNodeTask]` — only one instance runs in a multi-node deployment.
 
 **Known implementations (shipped — cross-domain IStartupTask consumers):**
-- `Elsa.Persistence.EFCore` — `RunMigrationsStartupTask` *(cross-domain — runs EF Core migrations)*
 - `Elsa.Serialization` — `JsonPayloadConvertersInitializingStartupTask` *(cross-domain — initialises JSON converters)*
 - `Elsa.Activities.Runtime` — `RegisterActivityTypesStartupTask` *(seeds the well-known-type registry with activity and I/O aliases)*
 - `Elsa.Activities.Design.Reconciliation` — `ActivityVersionReconcilerStartupTask` *(cross-domain)*
