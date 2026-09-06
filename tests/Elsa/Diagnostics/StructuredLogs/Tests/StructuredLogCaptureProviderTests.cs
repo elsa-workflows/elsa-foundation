@@ -126,7 +126,7 @@ public sealed class StructuredLogCaptureProviderTests
             new FixedSourceProvider(),
             TestOptions.Create());
 
-        var logger = provider.CreateLogger("Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Storage.EfCoreStructuredLogStore");
+        var logger = provider.CreateLogger("Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.GroundworkStructuredLogStore");
         logger.LogError("should be ignored");
 
         Assert.False(sinkResolved);

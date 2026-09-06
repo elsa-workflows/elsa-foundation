@@ -194,26 +194,6 @@ public sealed class CapturePlanAdmissionTests
         Assert.True(runResolved);
     }
 
-    [Fact]
-    public void Evidence_bypass_does_not_admit_the_temporary_ef_comparator_on_non_sqlite()
-    {
-        var request = DiagnosticsRequest() with
-        {
-            Provider = "postgresql",
-            ProviderVersion = "16.0",
-            ProviderTopology = "real-postgresql-container",
-            Adapter = BenchmarkAdapterRegistry.EfDiagnosticsAdapterId,
-            PhysicalForm = EfDiagnosticsDurableHistoryAdapter.PhysicalForm
-        };
-
-        var exception = Assert.Throws<PerformanceContractException>(() =>
-            ArtifactAdmission.ValidateEvidenceRequest(
-                WorkloadCatalog.Load(SourceProvenance.FindRepositoryRoot()).Workloads[DiagnosticsDurableHistoryWorkload.WorkloadId],
-                request));
-
-        Assert.Contains(BenchmarkAdapterAdmission.DiagnosticsEfProviderRequiredReason, exception.Message, StringComparison.Ordinal);
-    }
-
     [Theory]
     [InlineData("sqlserver", "real-sqlserver-container")]
     [InlineData("postgresql", "real-postgresql-container")]

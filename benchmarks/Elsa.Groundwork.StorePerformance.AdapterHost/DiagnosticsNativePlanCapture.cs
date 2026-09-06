@@ -5,7 +5,6 @@ using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using Groundwork.Diagnostics;
 using Groundwork.Kernel;
-using Microsoft.Data.Sqlite;
 using Npgsql;
 
 namespace Elsa.Groundwork.StorePerformance.AdapterHost;
@@ -26,7 +25,6 @@ internal static class DiagnosticsNativePlanCapture
         request.Adapter switch
         {
             DiagnosticsDurableHistoryAdapter.AdapterId => CaptureGroundworkAsync(request, connectionString, outputDirectory, observed, cancellationToken),
-            EfDiagnosticsDurableHistoryAdapter.AdapterId => CaptureEfAsync(request, connectionString, outputDirectory, observed, cancellationToken),
             _ => throw new PerformanceContractException($"Diagnostics native-plan capture does not support adapter '{request.Adapter}'.")
         };
 
@@ -421,56 +419,6 @@ internal static class DiagnosticsNativePlanCapture
         if (evidence.BoundedQuery?.NativeLimit is null)
             throw new PerformanceContractException("SQLite structured evidence did not retain the bounded-query native limit.");
         return evidence;
-    }
-
-    private static async Task<string> CaptureEfAsync(
-        RunRequest request,
-        string connectionString,
-        string outputDirectory,
-        ProviderProbe.Result observed,
-        CancellationToken cancellationToken)
-    {
-        if (!string.Equals(request.Provider, "sqlite", StringComparison.Ordinal))
-            throw new PerformanceContractException("The temporary EF diagnostics native-plan capture only supports sqlite.");
-
-        await using var adapter = new EfDiagnosticsDurableHistoryAdapter(request, connectionString, outputDirectory);
-        await adapter.PrepareAsync(cancellationToken);
-        var scopes = await adapter.OpenScopedClientsAsync(cancellationToken);
-        await SeedStructuredLogFixtureAsync(scopes.Primary.StructuredLogs, cancellationToken);
-        foreach (var batch in DiagnosticsDurableHistoryWorkload.NativePlanFixtureBatches())
-            await scopes.Primary.OpenTelemetry.WriteAsync(batch, cancellationToken);
-        await adapter.FlushAsync(cancellationToken);
-        var observations = new List<DiagnosticsOracleRouteObservation>(DiagnosticsDurableHistoryWorkload.NativeRouteLimits.Count);
-        foreach (var (route, limit) in DiagnosticsDurableHistoryWorkload.NativeRouteLimits)
-        {
-            var specification = DiagnosticsNativePlanContract.For(request.Adapter, route);
-            adapter.CommandObserver.ClearCommands();
-            var materialized = await InvokeRouteAsync(scopes.Primary, route, limit, cancellationToken);
-            if (materialized != limit)
-                throw new PerformanceContractException($"EF diagnostics route '{route}' returned {materialized} rows; expected {limit}.");
-            var commands = adapter.CommandObserver.Commands
-                .Where(command => command.CommandText.Contains(specification.TableName, StringComparison.OrdinalIgnoreCase) &&
-                                  command.CommandText.Contains("SELECT", StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-            if (commands.Length == 0)
-                throw new PerformanceContractException($"EF diagnostics route '{route}' emitted no retained command against '{specification.TableName}'.");
-            var plans = new List<string>(commands.Length);
-            foreach (var command in commands)
-                plans.Add(await CaptureSqlitePlanAsync(adapter.PrimaryDatabaseConnectionString, command, cancellationToken));
-            observations.Add(new DiagnosticsOracleRouteObservation(
-                route,
-                commands.Select(command => command.CommandText).ToArray(),
-                string.Join(Environment.NewLine, plans)));
-        }
-        return NativePlanEvidenceStaging.Write(
-            outputDirectory,
-            CreateDocument(
-                request,
-                observed,
-                [],
-                DiagnosticsNativePlanContract.EfCorrectnessOnlyRouteContract,
-                DiagnosticsDurableHistoryWorkload.NativeRouteLimits.Keys.ToArray(),
-                observations));
     }
 
     private static async Task<int> InvokeRouteAsync(
@@ -1220,42 +1168,4 @@ internal static class DiagnosticsNativePlanCapture
         IReadOnlyList<DiagnosticsTraceDetailConstituentEvidence>? traceDetailConstituents = null) =>
         new(2, request.ComparisonCohortId, request.MeasurementSetId, request.WorkloadId, request.WorkloadVersion, request.Provider, request.Adapter, request.PhysicalForm, request.Scale, request.CommitSha, request.HarnessAssemblySha256, request.CompositionFingerprint, request.HostFingerprintSha256, observed.Version, observed.Topology, observed.Configuration, request.Seed, request.InputFingerprintSha256, request.NativePlanIdentity, routes, routeContract, blockedRoutes, oracleObservations, traceDetailConstituents);
 
-    internal static EfCommandSnapshot RequireEfRouteCommand(
-        IReadOnlyList<EfCommandSnapshot> commands,
-        DiagnosticsNativeRouteSpec specification)
-    {
-        var matches = commands.Where(command =>
-                command.CommandText.Contains(specification.TableName, StringComparison.OrdinalIgnoreCase) &&
-                command.CommandText.Contains("SELECT", StringComparison.OrdinalIgnoreCase))
-            .ToArray();
-        if (matches.Length != 1)
-            throw new PerformanceContractException(
-                $"EF diagnostics route '{specification.RouteIdentity}' must retain exactly one intercepted provider query against '{specification.TableName}'; observed {matches.Length}.");
-        return matches[0];
-    }
-
-    internal static async Task<string> CaptureSqlitePlanAsync(
-        string connectionString,
-        EfCommandSnapshot command,
-        CancellationToken cancellationToken)
-    {
-        await using var connection = new SqliteConnection(connectionString);
-        await connection.OpenAsync(cancellationToken);
-        await using var explain = connection.CreateCommand();
-        explain.CommandText = "EXPLAIN QUERY PLAN " + command.CommandText;
-        foreach (var parameter in command.Parameters)
-        {
-            var copy = explain.CreateParameter();
-            copy.ParameterName = parameter.Name;
-            copy.DbType = parameter.DbType;
-            copy.Size = parameter.Size;
-            copy.Value = parameter.Value ?? DBNull.Value;
-            explain.Parameters.Add(copy);
-        }
-        await using var reader = await explain.ExecuteReaderAsync(cancellationToken);
-        var lines = new List<string>();
-        while (await reader.ReadAsync(cancellationToken))
-            lines.Add(reader.GetString(reader.GetOrdinal("detail")));
-        return string.Join(Environment.NewLine, lines);
-    }
 }

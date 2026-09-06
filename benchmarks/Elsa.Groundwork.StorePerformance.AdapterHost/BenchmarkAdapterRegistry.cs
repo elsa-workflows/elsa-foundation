@@ -12,7 +12,6 @@ internal static class BenchmarkAdapterRegistry
     internal const string GroundworkV2Adapter = "groundwork-v2";
     internal const string GroundworkAspNetCoreIdentityAdapter = "groundwork-aspnetcore-identity";
     internal const string EfSecretRepositoryAdapterId = "ef-secret-repository";
-    internal const string EfDiagnosticsAdapterId = "ef-diagnostics-oracle";
     internal const string GroundworkSecretRepositoryAdapterId = "groundwork-secret-repository";
     internal const string WorkloadVersion = "1.1.0";
     internal const string RecoveryWorkloadVersion = "1.2.0";
@@ -75,9 +74,6 @@ internal static class BenchmarkAdapterRegistry
         Registration(DiagnosticsDurableHistoryWorkload.WorkloadId, "1.3.0", DiagnosticsDurableHistoryAdapter.AdapterId, DiagnosticsDurableHistoryAdapter.PhysicalForm,
             GroundworkProviders, NativePlanCaptureKind.PartialBlocked,
             static (request, connection, output) => new DiagnosticsDurableHistoryAdapter(request, connection, output)),
-        Registration(DiagnosticsDurableHistoryWorkload.WorkloadId, "1.3.0", EfDiagnosticsAdapterId, EfDiagnosticsDurableHistoryAdapter.PhysicalForm,
-            SqliteOnly, NativePlanCaptureKind.CorrectnessOnly,
-            static (request, connection, output) => new EfDiagnosticsDurableHistoryAdapter(request, connection, output))
     ];
 
     internal static IReadOnlyList<AdapterRegistrationDescriptor> Describe() =>
