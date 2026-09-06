@@ -1,5 +1,7 @@
 # Quickstart: Zero-EF Final Removal
 
+> **Current execution scope — 2026-09-07:** Follow [the current governing scope](spec.md#current-governing-scope--2026-09-07). This checklist and its receipts are retained history. Do not launch its broad provider, concurrency or performance commands as part of implementation delivery: those belong to the separate #646 harness. Vendor-host OpenIddict EF remains allowed; missing final validation remains unverified.
+
 This guide is the execution and evidence checklist for issue #647. Commands that start provider containers or performance runs are intentionally deferred until the program owner releases the resource hold and the machine is otherwise idle.
 
 ## 1. Freeze authoritative inputs

@@ -1,5 +1,7 @@
 # Contract: Groundwork-Only Reference-Host Matrix
 
+> **Current scope — 2026-09-07:** Apply [the amended first-party boundary](../spec.md#current-governing-scope--2026-09-07). Groundwork covers Elsa-owned durable lanes; the Workbench vendor OpenIddict store is a permitted exception and requires no Groundwork adapter. This historical full-provider matrix belongs to the separate #646 validation harness, not the current implementation gate.
+
 ## Purpose
 
 Prove that one host-level provider choice backs every enabled durable Elsa lane without EF fallback or feature omission.
