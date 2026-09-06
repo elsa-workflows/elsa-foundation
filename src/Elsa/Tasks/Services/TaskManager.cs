@@ -74,8 +74,16 @@ public sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider s
         if (taskStateManager is not null)
             return taskStateManager;
 
-        var activationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(token, _shutdownCancellationTokenSource.Token);
-        taskStateManager = new TaskStateManager(loggerFactory.CreateLogger<TaskStateManager>(), activationTokenSource);
+        // Double-checked locking: two concurrent first callers must not each construct a TaskStateManager
+        // (and its CancellationTokenSource) and race to publish theirs, orphaning the loser's.
+        lock (_stopLock)
+        {
+            if (taskStateManager is not null)
+                return taskStateManager;
+
+            var activationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(token, _shutdownCancellationTokenSource.Token);
+            taskStateManager = new TaskStateManager(loggerFactory.CreateLogger<TaskStateManager>(), activationTokenSource);
+        }
 
         return taskStateManager;
     }
