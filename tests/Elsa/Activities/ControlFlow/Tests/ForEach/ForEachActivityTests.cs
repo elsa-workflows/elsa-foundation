@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.ForEach.Exceptions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Runtime.Services;
 using Elsa.Expressions.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -198,6 +199,42 @@ public sealed class ForEachActivityTests : IDisposable
         await Assert.ThrowsAsync<ForEachExecutionException>(() => new ForEachActivity()
             .OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-body", BodyNodeId, [ActivityOutcomes.Done]))
             .AsTask());
+    }
+
+    // Regression test for the missing [ActivityInput] on ExposeIndex: without it,
+    // ActivityInputHydrator.DiscoverProperties never finds the property, so a pinned "false" value from a
+    // committed workflow snapshot would silently never reach the CLR instance and ExposeIndex would keep
+    // its C# default (true) forever.
+    [Fact]
+    public void Hydration_SetsExposeIndex_FromPinnedSnapshot()
+    {
+        var type = new ValueTypeDescriptor("Boolean");
+        var contract = new ActivityContract(
+            typeof(ForEachActivity).FullName!,
+            "1.0.0",
+            "test",
+            JsonSerializer.SerializeToElement(new { }),
+            [new ActivityInputContract(nameof(ForEachActivity.ExposeIndex), nameof(ForEachActivity.ExposeIndex), type, false, false, false, null, ActivityValuePolicy.Default)],
+            new ActivityResultContract(new ValueTypeDescriptor("Unit"), false, ActivityValuePolicy.Default, []),
+            [ActivityOutcomes.Done],
+            new ActivityActivationRequirement("test", typeof(ForEachActivity).FullName!));
+        var snapshot = new ActivityInputSnapshot(
+            "invocation-1",
+            contract.SchemaFingerprint,
+            "bindings",
+            new Dictionary<string, ValueEnvelope>
+            {
+                [nameof(ForEachActivity.ExposeIndex)] = ValueEnvelope.Inline(
+                    type,
+                    JsonSerializer.SerializeToElement(false),
+                    ValueProtectionPolicy.InstanceInline)
+            },
+            DateTimeOffset.UtcNow);
+        var activity = new ForEachActivity();
+
+        new ActivityInputHydrator().Hydrate(activity, contract, snapshot);
+
+        Assert.False(activity.ExposeIndex);
     }
 
     private static ValueTask<RuntimeStructuralContinuation> ExecuteAsync(SimpleActivityExecutionContext context) =>
