@@ -1,7 +1,7 @@
 # Diagnostics EF test-removal ledger
 
 **Work unit:** `139-groundwork-diagnostics-persistence`
-**Scope:** pending T053/T054 only; no EF project or test deletion is authorized by this intake.
+**Scope:** historical T053/T054 inventory plus the reviewed 2026-09-06 deletion disposition below.
 **Captured:** 2026-09-01 on `codex/642-diagnostics-03-recertification`, against Elsa `main` `8b92d34b7`.
 **Groundwork baseline:** exact `0.4.0-preview.3` (tag `v0.4.0-preview.3`, release SHA `9de7aa0e6271c311536d2a78a1e6c1f0260e1fda`).
 
@@ -124,7 +124,7 @@ The added shared-host lifecycle test is the resulting non-token-scan coverage. T
 Groundwork conformance row is covered on the current adapter head; the former Groundwork #130
 blocker is historical and is not a reason to delete or retain a test by itself.
 
-Before T053/T054 can be approved and performed:
+Historical pre-deletion exit conditions (superseded by the current disposition below):
 
 1. The 39 covered rows and four superseded-contract replacement proofs must remain green in the exact
    current-family certification and preserved provider-neutral suites; the three EF-mechanism-only rows are explicitly retired at the
@@ -132,3 +132,22 @@ Before T053/T054 can be approved and performed:
 2. Satisfy the existing T050-T052 performance/remediation gates and the uncompleted T047/T057 final
    architecture and zero-EF checks. #646 owns the accepted diagnostics verdict and #642/#1472 own the
    dependency-ordered diagnostics deletion. This ledger does not authorize or mark either deletion task complete.
+
+## Current deletion disposition — 2026-09-06
+
+The pre-deletion checkpoints and the 46 row-level dispositions above are retained as historical evidence;
+they are not rewritten as new test receipts. On the owner-approved #642 deletion branch, T053 and T054
+are now staged: the first-party Structured Logs and OpenTelemetry EF implementation projects, SQLite
+variants, migrations, and their obsolete EF test projects have been removed from the active source and
+solution composition. The provider-neutral Groundwork replacements named by the ledger remain intact.
+
+The ledger still contains all 46 original objectives: 39 covered rows, four superseded contracts, and
+three EF-mechanism-only facts retired at the Groundwork boundary. The 43 non-retired rows remain the
+behavior-retention disposition for this deletion; this entry does not claim a new provider, performance,
+native-plan, or zero-EF certification. The shared EF kernel, EF Secret comparator, vendor OpenIddict EF
+integration, and unrelated database support remain intentionally outside this slice. Remaining benchmark
+harness contract cleanup is deferred to its owning follow-up rather than represented as deleted evidence here.
+
+### Shared-kernel follow-up — 2026-09-07
+
+The subsequent #1484 candidate removes the shared EF kernel and executable EF Secret comparator that were outside the diagnostics-only slice above. Its disposition is recorded in [the spec 144 ledger](../144-zero-ef-final-removal/test-retention-ledger.md#shared-ef-kernel-disposition--2026-09-07). Vendor-host OpenIddict EF remains. These staged implementation changes are not a final merge or broad validation receipt.

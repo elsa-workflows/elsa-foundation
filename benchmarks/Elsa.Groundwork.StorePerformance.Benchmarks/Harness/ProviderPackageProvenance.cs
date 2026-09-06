@@ -5,10 +5,10 @@ namespace Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 /// <summary>Owns the exact provider-package identity retained by every #646 request and artifact.</summary>
 public static class ProviderPackageProvenance
 {
-    private static readonly string[] EfAdapters = ["ef-secret-repository", "ef-diagnostics-oracle"];
+    private static readonly string[] RetainedEfAdapters = ["ef-diagnostics-oracle"];
 
     public static IReadOnlyList<string> RequiredPackageNames(string adapter, string provider) =>
-        EfAdapters.Contains(adapter, StringComparer.Ordinal)
+        RetainedEfAdapters.Contains(adapter, StringComparer.Ordinal)
             ? ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Sqlite"]
             : [provider switch
             {

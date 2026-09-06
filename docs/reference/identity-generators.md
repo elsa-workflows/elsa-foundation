@@ -18,7 +18,7 @@ Ids are stored as strings and used as primary keys, so two properties matter for
 - **Sortability** — a time-ordered id keeps inserts at the "end" of the index B-tree, avoiding page splits and fragmentation. Random ids (plain GUIDs) scatter inserts across the index and fragment it.
 - **Length** — shorter ids mean smaller indexes, smaller rows, and friendlier URLs.
 
-**Default:** both the EF Core and Groundwork persistence features default to `Short` — a short (~11 char), time-ordered, Base62 id requiring no coordination. This replaced the previous defaults (ULID, 26 chars, on EF Core; a random non-sortable GUID, 32 chars, on Groundwork). The generators below let you opt into different guarantees (for example `UuidV7` for collision-free 128-bit ids, or `Snowflake` for high-throughput / multi-node uniqueness).
+**Default:** the Groundwork-backed design persistence features default to `Short` — a short (~11 char), time-ordered, Base62 id requiring no coordination. This replaced the previous provider-specific defaults (ULID and a random non-sortable GUID). The generators below let you opt into different guarantees (for example `UuidV7` for collision-free 128-bit ids, or `Snowflake` for high-throughput / multi-node uniqueness).
 
 ## Built-in generators
 
@@ -30,8 +30,6 @@ All generators return strings whose **ordinal** comparison reflects creation ord
 | `UuidV7` | `UuidV7IdentityGenerator` | 128 | hex | 32 | yes | none | RFC 9562 v7. Collision-free, drop-in replacement for ULID. |
 | `Snowflake` | `SnowflakeIdentityGenerator` | 64 | Base62 | 11 | yes (strictly increasing per worker) | per-node worker id | 41-bit ms + 10-bit worker id + 12-bit sequence. Safe at high throughput / multi-node. |
 | `Guid` | `GuidIdentityGenerator` | 128 | hex | 32 | **no** | none | Random GUID. Provided for parity; not recommended for indexed keys. |
-| ULID | `EFCoreIdentityGenerator` | 128 | base32 | 26 | yes | none | The previous EF Core default. Still available where the `Ulid` package is referenced (the EF Core persistence project). |
-
 The catalog generators live in `Elsa.Primitives` under the `Elsa.Primitives.Identity` namespace (so every persistence layer can register them), while the `AddIdentityGenerator` selection helper lives in `Elsa.Primitives.Hosting`.
 
 ### Choosing one

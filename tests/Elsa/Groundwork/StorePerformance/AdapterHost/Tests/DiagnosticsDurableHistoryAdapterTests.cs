@@ -25,38 +25,6 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
     }
 
     [Fact]
-    public async Task Dispatches_to_the_temporary_sqlite_ef_diagnostics_form()
-    {
-        await using var adapter = BenchmarkAdapterRegistry.Create(
-            Request(
-                adapter: EfDiagnosticsDurableHistoryAdapter.AdapterId,
-                physicalForm: EfDiagnosticsDurableHistoryAdapter.PhysicalForm),
-            "unused",
-            "unused");
-
-        Assert.IsType<EfDiagnosticsDurableHistoryAdapter>(adapter);
-    }
-
-    [Theory]
-    [InlineData("sqlserver")]
-    [InlineData("postgresql")]
-    [InlineData("mongodb")]
-    public async Task Temporary_ef_diagnostics_comparator_refuses_non_sqlite_before_provider_open(string provider)
-    {
-        await using var adapter = new EfDiagnosticsDurableHistoryAdapter(
-            Request(
-                provider,
-                adapter: EfDiagnosticsDurableHistoryAdapter.AdapterId,
-                physicalForm: EfDiagnosticsDurableHistoryAdapter.PhysicalForm),
-            "unused",
-            "unused");
-
-        var exception = await Assert.ThrowsAsync<PerformanceContractException>(() => adapter.PrepareAsync(CancellationToken.None));
-
-        Assert.Contains("only supports sqlite", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public async Task Timed_operations_remain_closed_before_correctness_preparation()
     {
         await using var adapter = BenchmarkAdapterRegistry.Create(Request(), "unused", "unused");

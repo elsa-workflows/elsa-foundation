@@ -11,6 +11,21 @@ namespace Elsa.Groundwork.StorePerformance.Benchmarks.Tests;
 public sealed class SecretNativeEvidenceAdmissionTests
 {
     [Fact]
+    public void Secret_retained_plan_rejects_the_retired_ef_adapter()
+    {
+        var retained = SecretRetainedNativePlan.Create(
+            "sqlite", 68, SecretCreateReadListWorkload.PageSize, SecretCreateReadListWorkload.PageSize,
+            "2\t0\tSEARCH elsa_secrets USING INDEX elsa_secrets_filtered_list (__groundwork_scope=? AND tenantId=? AND status=?)");
+        var route = EvidenceFixture.Route("elsa_secrets_filtered_list");
+        SecretRetainedNativePlan.Validate("sqlite", "groundwork-secret-repository", route, retained);
+
+        var error = Assert.Throws<PerformanceContractException>(() =>
+            SecretRetainedNativePlan.Validate("sqlite", "ef-secret-repository", route, retained));
+
+        Assert.Equal("Secret retained native-plan admission only supports the Groundwork Secret adapter.", error.Message);
+    }
+
+    [Fact]
     public void Exact_secret_native_route_evidence_is_admitted()
     {
         using var fixture = EvidenceFixture.Create();
@@ -187,7 +202,7 @@ public sealed class SecretNativeEvidenceAdmissionTests
 
         Assert.Throws<PerformanceContractException>(() => SecretRetainedNativePlan.Validate(
             "postgresql",
-            "ef-secret-repository",
+            "groundwork-secret-repository",
             EvidenceFixture.Route("elsa_secrets_filtered_list"),
             retained));
     }
@@ -225,7 +240,7 @@ public sealed class SecretNativeEvidenceAdmissionTests
 
         Assert.Throws<PerformanceContractException>(() => SecretRetainedNativePlan.Validate(
             "sqlserver",
-            "ef-secret-repository",
+            "groundwork-secret-repository",
             EvidenceFixture.Route("elsa_secrets_filtered_list"),
             retained));
     }

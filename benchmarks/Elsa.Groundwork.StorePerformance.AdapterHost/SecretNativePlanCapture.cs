@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
@@ -6,14 +5,12 @@ using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Persistence.Groundwork;
 using Groundwork.Kernel;
-using Microsoft.Data.Sqlite;
 
 namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 
 /// <summary>
 /// Captures the required Secret list route from a freshly executed public-repository fixture.
-/// Groundwork routes use the provider's opt-in explain assertion artifact; the temporary EF oracle
-/// obtains the equivalent SQLite plan from the same bounded query shape after invoking its public route.
+/// Groundwork routes use the provider's opt-in explain assertion artifact after invoking the public route.
 /// </summary>
 internal static class SecretNativePlanCapture
 {
@@ -33,85 +30,11 @@ internal static class SecretNativePlanCapture
 
         return request.Adapter switch
         {
-            BenchmarkAdapterRegistry.EfSecretRepositoryAdapterId =>
-                await CaptureEfAsync(request, connectionString, outputDirectory, observed, cancellationToken),
             BenchmarkAdapterRegistry.GroundworkSecretRepositoryAdapterId =>
                 await CaptureGroundworkAsync(request, connectionString, outputDirectory, observed, cancellationToken),
             _ => throw new PerformanceContractException(
                 $"Secret native-plan capture does not support adapter '{request.Adapter}'.")
         };
-    }
-
-    private static async Task<string> CaptureEfAsync(
-        RunRequest request,
-        string connectionString,
-        string outputDirectory,
-        ProviderProbe.Result observed,
-        CancellationToken cancellationToken)
-    {
-        if (!string.Equals(request.Provider, "sqlite", StringComparison.Ordinal))
-            throw new PerformanceContractException("The temporary EF Secret native-plan capture only supports sqlite.");
-
-        await using var adapter = new EfSecretRepositoryAdapter(request, connectionString, outputDirectory);
-        await adapter.PrepareAsync(cancellationToken);
-        await new SecretCreateReadListWorkload().ExecuteAsync(adapter, cancellationToken);
-        var concurrency = adapter.RequireConcurrencyEvidence();
-
-        adapter.CommandObserver.ClearCommands();
-        var scopes = await adapter.OpenIsolatedScopesAsync(cancellationToken);
-        var page = await scopes.Primary.ListPageAsync(
-            SecretCreateReadListWorkload.PrimaryTenantId,
-            FilteredPage(),
-            cancellationToken);
-        var command = adapter.CommandObserver.Commands.FirstOrDefault(snapshot =>
-            SecretRoutePredicateInspector.TryInspectSql(
-                snapshot.CommandText,
-                "TenantId",
-                "Status",
-                out _) &&
-            SecretRoutePredicateInspector.HasBoundedPageShape(snapshot.CommandText));
-        if (command is null)
-            throw new PerformanceContractException(
-                "EF Secret native route 'list-filtered' did not emit a bounded SQL query whose WHERE clause contains parameterized tenant and status equality predicates.");
-        var predicateProof = SecretRoutePredicateInspector.InspectSql(
-            command.CommandText,
-            "TenantId",
-            "Status");
-
-        var (rawPlan, physicalCardinality) = await CaptureSqlitePlanAsync(
-            connectionString,
-            adapter.PhysicalTenantId(SecretCreateReadListWorkload.PrimaryTenantId),
-            command,
-            page,
-            cancellationToken);
-        var parsed = IamNativePlanParser.ParseSecret("sqlite", rawPlan);
-        var rawPlanReference = ArtifactStore.RawPlanName(
-            $"secret.{request.Provider}.{request.MeasurementSetId}.{RouteIdentity}.raw.txt");
-        var rawPlanPath = Path.Combine(outputDirectory, rawPlanReference);
-        WriteRawPlan(
-            rawPlanPath,
-            request.Provider,
-            physicalCardinality,
-            SecretCreateReadListWorkload.PageSize,
-            page.Items.Count,
-            parsed.Content);
-        return NativePlanEvidenceStaging.Write(
-            outputDirectory,
-            CreateDocument(
-                request,
-                observed,
-                concurrency,
-                new NativeRouteEvidence(
-                    RouteIdentity,
-                    rawPlanReference,
-                    NativePlanEvidenceStaging.Sha256(rawPlanPath),
-                    parsed.PlanClassification,
-                    parsed.PhysicalIndexName,
-                    physicalCardinality,
-                    predicateProof.HasStorageScopePredicate,
-                    predicateProof.HasRoutePredicate,
-                    SecretCreateReadListWorkload.PageSize,
-                    page.Items.Count)));
     }
 
     private static async Task<string> CaptureGroundworkAsync(
@@ -226,45 +149,6 @@ internal static class SecretNativePlanCapture
     private static Elsa.Secrets.Core.Contracts.SecretRepositoryListRequest FilteredPage() =>
         new(status: SecretStatus.Active, skip: 0, take: SecretCreateReadListWorkload.PageSize);
 
-    private static async Task<(string RawPlan, int PhysicalCardinality)> CaptureSqlitePlanAsync(
-        string connectionString,
-        string physicalTenantId,
-        EfCommandSnapshot observedCommand,
-        Elsa.Secrets.Core.Contracts.SecretRepositoryPage page,
-        CancellationToken cancellationToken)
-    {
-        await using var connection = new SqliteConnection(connectionString);
-        await connection.OpenAsync(cancellationToken);
-        await using var command = connection.CreateCommand();
-        // The observer captured this exact command before EF disposed its context. Reusing its SQL and
-        // cloned parameter values keeps the native plan bound to the public repository's actual route,
-        // including its projection, ordering, limit, and offset shape.
-        command.CommandText = $"EXPLAIN QUERY PLAN {observedCommand.CommandText.Trim().TrimEnd(';')}";
-        foreach (var parameter in observedCommand.Parameters)
-        {
-            var copy = command.CreateParameter();
-            copy.ParameterName = parameter.Name;
-            copy.DbType = parameter.DbType;
-            copy.Size = parameter.Size;
-            copy.Value = parameter.Value ?? DBNull.Value;
-            command.Parameters.Add(copy);
-        }
-        var lines = new List<string>();
-        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
-        {
-            while (await reader.ReadAsync(cancellationToken))
-                lines.Add(string.Join('\t', Enumerable.Range(0, reader.FieldCount).Select(index => Convert.ToString(reader.GetValue(index), CultureInfo.InvariantCulture))));
-        }
-
-        await using var count = connection.CreateCommand();
-        count.CommandText = "SELECT COUNT(*) FROM \"Secrets\" WHERE \"TenantId\" = $tenant;";
-        count.Parameters.AddWithValue("$tenant", physicalTenantId);
-        var physicalCardinality = Convert.ToInt32(await count.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
-        if (page.Items.Count != SecretCreateReadListWorkload.PageSize || lines.Count == 0 || physicalCardinality <= 0)
-            throw new PerformanceContractException("EF Secret native route did not materialize a finite filtered page and physical cardinality.");
-        return (string.Join(Environment.NewLine, lines), physicalCardinality);
-    }
-
     private static NativePlanEvidenceDocument CreateDocument(
         RunRequest request,
         ProviderProbe.Result observed,
@@ -357,9 +241,9 @@ internal static class SecretNativePlanCapture
         if (!string.Equals(request.WorkloadId, SecretCreateReadListWorkload.WorkloadId, StringComparison.Ordinal) ||
             !string.Equals(request.WorkloadVersion, SecretCreateReadListWorkload.Version, StringComparison.Ordinal))
             throw new PerformanceContractException("Secret native-plan capture requires the executable secret-create-read-list v1.1 workload.");
-        if (!string.Equals(request.PhysicalForm, EfSecretRepositoryAdapter.PhysicalForm, StringComparison.Ordinal))
+        if (!string.Equals(request.PhysicalForm, GroundworkSecretRepositoryAdapter.PhysicalForm, StringComparison.Ordinal))
             throw new PerformanceContractException(
-                $"Secret native-plan capture requires physical form '{EfSecretRepositoryAdapter.PhysicalForm}'.");
+                $"Secret native-plan capture requires physical form '{GroundworkSecretRepositoryAdapter.PhysicalForm}'.");
         if (!string.Equals(request.NativePlanEvidenceReference,
                            NativePlanEvidenceStaging.ReferenceFor(request.WorkloadId, request.Provider, request.MeasurementSetId),
                            StringComparison.Ordinal))

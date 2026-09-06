@@ -250,29 +250,14 @@ internal static class BenchmarkCompositionFingerprint
     {
         public static CompositionSelection For(RunRequest request)
         {
-            var groundwork = request.Adapter switch
+            _ = request.Adapter switch
             {
                 BenchmarkAdapterRegistry.GroundworkV2Adapter => true,
                 BenchmarkAdapterRegistry.GroundworkAspNetCoreIdentityAdapter => true,
                 BenchmarkAdapterRegistry.GroundworkSecretRepositoryAdapterId => true,
-                BenchmarkAdapterRegistry.EfSecretRepositoryAdapterId => false,
-                BenchmarkAdapterRegistry.EfDiagnosticsAdapterId => false,
                 _ => throw new PerformanceContractException(
                     $"No composition descriptor is registered for adapter '{request.Adapter}'.")
             };
-
-            if (!groundwork)
-            {
-                var feature = request.Adapter switch
-                {
-                    BenchmarkAdapterRegistry.EfSecretRepositoryAdapterId =>
-                        new BenchmarkFeatureDescriptor("ef-secret-repository", "efcore-secret-model-v1", ["ef.Secret"]),
-                    BenchmarkAdapterRegistry.EfDiagnosticsAdapterId =>
-                        new BenchmarkFeatureDescriptor("ef-diagnostics-oracle", "efcore-diagnostics-model-v1", ["ef.StructuredLogs", "ef.OpenTelemetry"]),
-                    _ => throw new PerformanceContractException($"No EF composition descriptor is registered for adapter '{request.Adapter}'.")
-                };
-                return new(false, false, false, false, false, [feature]);
-            }
 
             var includeDistributed = request.WorkloadId is
                 "placement-takeover" or "command-send-lease-ack";

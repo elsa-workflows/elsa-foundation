@@ -17,7 +17,7 @@ public sealed class MatrixCatalogTests
         var currentRevision = SourceProvenance.AssemblyRevision(typeof(SourceProvenance).Assembly);
         Assert.Equal(currentRevision, document.Build.AdapterHostRevision);
         Assert.Equal(currentRevision, document.Build.HarnessRevision);
-        Assert.Equal(17, document.Registrations.Count);
+        Assert.Equal(15, document.Registrations.Count);
         Assert.Equal(13, document.Registrations.Select(item => item.WorkloadId).Distinct(StringComparer.Ordinal).Count());
         Assert.DoesNotContain(document.Registrations, item => item.WorkloadVersion == "1.0.0");
         Assert.All(document.Registrations, item => Assert.NotEmpty(item.Providers));
@@ -87,15 +87,6 @@ public sealed class MatrixCatalogTests
         Assert.Equal("blocked", diagnostics.TimingStatus);
         Assert.Equal(ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode, diagnostics.TimingReason);
 
-        var diagnosticsEf = Single(registrations, "diagnostics-durable-history", "ef-diagnostics-oracle");
-        Assert.Equal(["sqlite"], diagnosticsEf.Providers);
-        Assert.Equal(
-            ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Sqlite"],
-            diagnosticsEf.ProviderPackages["sqlite"]);
-        Assert.Equal("correctness-only", diagnosticsEf.CapturePlanStatus);
-        Assert.Equal("blocked", diagnosticsEf.MeasurementStatus);
-        Assert.Equal(DiagnosticsAdmission.EfCorrectnessOnlyMeasurementReasonCode, diagnosticsEf.MeasurementReason);
-        Assert.Equal("blocked", diagnosticsEf.TimingStatus);
     }
 
     [Fact]
@@ -109,7 +100,7 @@ public sealed class MatrixCatalogTests
         Assert.Equal(
             SourceProvenance.AssemblyRevision(typeof(SourceProvenance).Assembly),
             parsed.RootElement.GetProperty("Build").GetProperty("AdapterHostRevision").GetString());
-        Assert.Equal(17, parsed.RootElement.GetProperty("Registrations").GetArrayLength());
+        Assert.Equal(15, parsed.RootElement.GetProperty("Registrations").GetArrayLength());
     }
 
     private static MatrixRegistrationDocument Single(

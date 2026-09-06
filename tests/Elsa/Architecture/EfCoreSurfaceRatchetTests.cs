@@ -956,7 +956,7 @@ public sealed class EfCoreSurfaceRatchetTests
     }
 
     [Fact]
-    public void Scanner_excludes_the_intentional_benchmark_oracle_but_keeps_production_groundwork_guarded()
+    public void Scanner_reports_benchmark_ef_and_keeps_production_groundwork_guarded()
     {
         using var fixture = new TemporaryRepository();
         fixture.Write("benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/Elsa.Groundwork.StorePerformance.AdapterHost.csproj", """
@@ -964,7 +964,7 @@ public sealed class EfCoreSurfaceRatchetTests
               <ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore" /></ItemGroup>
             </Project>
             """);
-        fixture.Write("benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/EfSecretRepositoryAdapter.cs", """
+        fixture.Write("benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/BenchmarkEfSurface.cs", """
             using Microsoft.EntityFrameworkCore;
             public sealed class BenchmarkDbContext : DbContext;
             public static class BenchmarkSetup { public static void Configure() => new DbContextOptionsBuilder().UseSqlite("unused"); }
@@ -987,13 +987,28 @@ public sealed class EfCoreSurfaceRatchetTests
         Assert.Contains(
             "src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj reaches EF package Microsoft.EntityFrameworkCore",
             snapshot.EfFreeBoundaryViolations);
-        Assert.DoesNotContain(
-            snapshot.Categories().SelectMany(category => category.Value),
-            entry => entry.Contains("StorePerformance/AdapterHost", StringComparison.Ordinal));
-        Assert.DoesNotContain(
+        Assert.Contains(
+            "benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/Elsa.Groundwork.StorePerformance.AdapterHost.csproj -> Microsoft.EntityFrameworkCore",
+            snapshot.DirectPackageReferences);
+        Assert.Contains(
+            "tests/Elsa/Groundwork/StorePerformance/AdapterHost/Tests/Elsa.Groundwork.StorePerformance.AdapterHost.Tests.csproj -> Microsoft.EntityFrameworkCore",
+            snapshot.TransitiveEfPackageConsumers);
+        Assert.Contains(
+            "benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/BenchmarkEfSurface.cs",
+            snapshot.DbContextFiles);
+        Assert.Contains(
+            "benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/BenchmarkEfSurface.cs -> UseSqlite x 1",
+            snapshot.RegistrationFiles);
+        Assert.Contains(
+            "benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/Elsa.Groundwork.StorePerformance.AdapterHost.csproj reaches EF package Microsoft.EntityFrameworkCore",
+            snapshot.EfFreeBoundaryViolations);
+        Assert.Contains(
+            "tests/Elsa/Groundwork/StorePerformance/AdapterHost/Tests/Elsa.Groundwork.StorePerformance.AdapterHost.Tests.csproj reaches EF package Microsoft.EntityFrameworkCore",
+            snapshot.EfFreeBoundaryViolations);
+        Assert.Contains(
             "Elsa.Groundwork.StorePerformance.AdapterHost",
             scanner.EfFreeBoundaryProjectNames());
-        Assert.DoesNotContain(
+        Assert.Contains(
             "Elsa.Groundwork.StorePerformance.AdapterHost.Tests",
             scanner.EfFreeBoundaryProjectNames());
     }
