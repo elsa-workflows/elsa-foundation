@@ -17,7 +17,7 @@ public sealed class MatrixCatalogTests
         var currentRevision = SourceProvenance.AssemblyRevision(typeof(SourceProvenance).Assembly);
         Assert.Equal(currentRevision, document.Build.AdapterHostRevision);
         Assert.Equal(currentRevision, document.Build.HarnessRevision);
-        Assert.Equal(16, document.Registrations.Count);
+        Assert.Equal(15, document.Registrations.Count);
         Assert.Equal(13, document.Registrations.Select(item => item.WorkloadId).Distinct(StringComparer.Ordinal).Count());
         Assert.DoesNotContain(document.Registrations, item => item.WorkloadVersion == "1.0.0");
         Assert.All(document.Registrations, item => Assert.NotEmpty(item.Providers));
@@ -100,7 +100,7 @@ public sealed class MatrixCatalogTests
         Assert.Equal(
             SourceProvenance.AssemblyRevision(typeof(SourceProvenance).Assembly),
             parsed.RootElement.GetProperty("Build").GetProperty("AdapterHostRevision").GetString());
-        Assert.Equal(16, parsed.RootElement.GetProperty("Registrations").GetArrayLength());
+        Assert.Equal(15, parsed.RootElement.GetProperty("Registrations").GetArrayLength());
     }
 
     private static MatrixRegistrationDocument Single(

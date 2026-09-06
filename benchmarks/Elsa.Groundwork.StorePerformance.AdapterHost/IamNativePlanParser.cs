@@ -64,7 +64,7 @@ internal static class IamNativePlanParser
                 $"SQLite native plan contains a physical SCAN operation: {string.Join(" | ", scanLines)}");
 
         var matches = SqliteIndexSearch.Matches(rawPlan)
-            // The public Secret route materializes versions through EF's split include. That
+            // Historical EF Secret evidence materialized versions through a split include. That
             // child lookup has its own primary-key index; it is not the list route's access path.
             // Retain only the route index while still parsing the exact observed SQL plan.
             .Where(match => !match.Groups["index"].Value.Contains("SecretVersion", StringComparison.OrdinalIgnoreCase))

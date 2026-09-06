@@ -1,5 +1,9 @@
 # Quickstart: Zero-EF Final Removal
 
+## Shared-kernel implementation checkpoint — 2026-09-07
+
+The #1484 candidate removes the shared EF kernel and Secret comparator after the diagnostics-removal parent commit. The [current shared-kernel ledger disposition](test-retention-ledger.md#shared-ef-kernel-disposition--2026-09-07) approves the 16 EF-mechanism test removals; older intake statements below about unclassified rows are historical, not the current disposition. This is not final promotion or broad validation evidence. Owner-approved broad validation/performance remains handed to #646, not a deletion prerequisite. Final integration must also apply #1489's governing-scope restatement and #1490's guard cleanup.
+
 This guide is the execution and evidence checklist for issue #647. Commands that start provider containers or performance runs are intentionally deferred until the program owner releases the resource hold and the machine is otherwise idle.
 
 ## 1. Freeze authoritative inputs

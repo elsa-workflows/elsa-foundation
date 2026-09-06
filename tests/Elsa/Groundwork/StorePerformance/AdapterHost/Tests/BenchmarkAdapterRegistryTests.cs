@@ -102,15 +102,8 @@ public sealed class BenchmarkAdapterRegistryTests
     }
 
     [Fact]
-    public async Task Dispatches_secret_workload_to_both_exact_comparator_adapters()
+    public async Task Dispatches_secret_workload_to_the_exact_groundwork_physical_form()
     {
-        await using var ef = BenchmarkAdapterRegistry.Create(
-            Request(
-                SecretCreateReadListWorkload.WorkloadId,
-                EfSecretRepositoryAdapter.PhysicalForm,
-                adapter: BenchmarkAdapterRegistry.EfSecretRepositoryAdapterId),
-            "unused",
-            "unused");
         await using var groundwork = BenchmarkAdapterRegistry.Create(
             Request(
                 SecretCreateReadListWorkload.WorkloadId,
@@ -119,7 +112,6 @@ public sealed class BenchmarkAdapterRegistryTests
             "unused",
             "unused");
 
-        Assert.IsType<EfSecretRepositoryAdapter>(ef);
         Assert.IsType<GroundworkSecretRepositoryAdapter>(groundwork);
     }
 
@@ -396,7 +388,7 @@ public sealed class BenchmarkAdapterRegistryTests
     [InlineData("iam-normalized-lookup-update", "entity-type-specific-physical-tables-current-identity-shape", "groundwork-v2", "9.9.9")]
     [InlineData("secret-create-read-list", "entity-type-specific-physical-tables", "groundwork-v2")]
     [InlineData("secret-create-read-list", "entity-type-specific-physical-tables", "other-adapter")]
-    [InlineData("secret-create-read-list", "entity-type-specific-physical-tables", "ef-secret-repository", "9.9.9")]
+    [InlineData("secret-create-read-list", "entity-type-specific-physical-tables", "ef-secret-repository", "1.1.0")]
     [InlineData("placement-takeover", "shared-documents-with-linked-index-tables", "groundwork-v2")]
     [InlineData("placement-takeover", "dedicated-placement-lease-documents", "other-adapter")]
     [InlineData("placement-takeover", "dedicated-placement-lease-documents", "groundwork-v2", "9.9.9")]

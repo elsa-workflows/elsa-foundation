@@ -147,3 +147,7 @@ behavior-retention disposition for this deletion; this entry does not claim a ne
 native-plan, or zero-EF certification. The shared EF kernel, EF Secret comparator, vendor OpenIddict EF
 integration, and unrelated database support remain intentionally outside this slice. Remaining benchmark
 harness contract cleanup is deferred to its owning follow-up rather than represented as deleted evidence here.
+
+### Shared-kernel follow-up — 2026-09-07
+
+The subsequent #1484 candidate removes the shared EF kernel and executable EF Secret comparator that were outside the diagnostics-only slice above. Its disposition is recorded in [the spec 144 ledger](../144-zero-ef-final-removal/test-retention-ledger.md#shared-ef-kernel-disposition--2026-09-07). Vendor-host OpenIddict EF remains. These staged implementation changes are not a final merge or broad validation receipt.

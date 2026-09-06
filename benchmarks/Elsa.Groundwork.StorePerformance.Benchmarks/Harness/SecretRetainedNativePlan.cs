@@ -43,6 +43,8 @@ public static class SecretRetainedNativePlan
 
     public static void Validate(string provider, string adapter, NativeRouteEvidence route, string retained)
     {
+        if (!string.Equals(adapter, "groundwork-secret-repository", StringComparison.Ordinal))
+            throw new PerformanceContractException("Secret retained native-plan admission only supports the Groundwork Secret adapter.");
         var envelope = Parse(retained);
         if (!string.Equals(envelope.Provider, provider, StringComparison.Ordinal) ||
             envelope.PhysicalCardinality != route.PhysicalCardinality ||
@@ -53,9 +55,9 @@ public static class SecretRetainedNativePlan
 
         var proof = provider switch
         {
-            "sqlite" => ParseSqlite(envelope.ProviderPlan, adapter),
-            "postgresql" => ParsePostgreSql(envelope.ProviderPlan, adapter),
-            "sqlserver" => ParseSqlServer(envelope.ProviderPlan, adapter),
+            "sqlite" => ParseSqlite(envelope.ProviderPlan),
+            "postgresql" => ParsePostgreSql(envelope.ProviderPlan),
+            "sqlserver" => ParseSqlServer(envelope.ProviderPlan),
             "mongodb" => ParseMongo(envelope.ProviderPlan),
             _ => throw new PerformanceContractException(
                 $"Secret retained native-plan admission does not support provider '{provider}'.")
@@ -105,7 +107,7 @@ public static class SecretRetainedNativePlan
             ? value
             : throw new PerformanceContractException($"Secret retained native plan has an invalid '{name}'.");
 
-    private static PlanProof ParseSqlite(string plan, string adapter)
+    private static PlanProof ParseSqlite(string plan)
     {
         var scan = plan.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .FirstOrDefault(line => ContainsToken(line, "SCAN") && !IsGroundworkMaterializedResultScan(line));
@@ -120,13 +122,11 @@ public static class SecretRetainedNativePlan
             throw new PerformanceContractException("Secret retained SQLite plan must contain exactly one route index SEARCH.");
         return new PlanProof(
             matches[0],
-            IsEf(adapter)
-                ? SqliteRequiresEquality(plan, "TenantId")
-                : SqliteRequiresEquality(plan, "__groundwork_scope") && SqliteRequiresEquality(plan, "tenantId"),
+            SqliteRequiresEquality(plan, "__groundwork_scope") && SqliteRequiresEquality(plan, "tenantId"),
             SqliteRequiresEquality(plan, "Status"));
     }
 
-    private static PlanProof ParsePostgreSql(string plan, string adapter)
+    private static PlanProof ParsePostgreSql(string plan)
     {
         try
         {
@@ -139,10 +139,8 @@ public static class SecretRetainedNativePlan
                 throw new PerformanceContractException("Secret retained PostgreSQL plan must prove one index scan and no physical table scan.");
             return new PlanProof(
                 indexes.Single(),
-                IsEf(adapter)
-                    ? predicates.Any(predicate => RequiredEqualityParser.Requires(PredicateTokens(predicate), "TenantId"))
-                    : predicates.Any(predicate => RequiredEqualityParser.Requires(PredicateTokens(predicate), "__groundwork_scope")) &&
-                      predicates.Any(predicate => RequiredEqualityParser.Requires(PredicateTokens(predicate), "tenantId")),
+                predicates.Any(predicate => RequiredEqualityParser.Requires(PredicateTokens(predicate), "__groundwork_scope")) &&
+                predicates.Any(predicate => RequiredEqualityParser.Requires(PredicateTokens(predicate), "tenantId")),
                 predicates.Any(predicate => RequiredEqualityParser.Requires(PredicateTokens(predicate), "status")));
         }
         catch (JsonException exception)
@@ -180,7 +178,7 @@ public static class SecretRetainedNativePlan
                 VisitPostgreSql(item, indexes, predicates, ref rejectedScan);
     }
 
-    private static PlanProof ParseSqlServer(string plan, string adapter)
+    private static PlanProof ParseSqlServer(string plan)
     {
         XDocument document;
         try
@@ -213,10 +211,8 @@ public static class SecretRetainedNativePlan
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         return new PlanProof(
             indexes[0],
-            IsEf(adapter)
-                ? predicateColumns.Contains("TenantId") && SqlServerRequiresEquality(document, "TenantId")
-                : predicateColumns.Contains("__groundwork_scope") && SqlServerRequiresEquality(document, "__groundwork_scope") &&
-                  predicateColumns.Contains("tenantId") && SqlServerRequiresEquality(document, "tenantId"),
+            predicateColumns.Contains("__groundwork_scope") && SqlServerRequiresEquality(document, "__groundwork_scope") &&
+            predicateColumns.Contains("tenantId") && SqlServerRequiresEquality(document, "tenantId"),
             predicateColumns.Contains("status") && SqlServerRequiresEquality(document, "status"));
     }
 
@@ -475,9 +471,6 @@ public static class SecretRetainedNativePlan
         }
         return tokens;
     }
-
-    private static bool IsEf(string adapter) =>
-        string.Equals(adapter, "ef-secret-repository", StringComparison.Ordinal);
 
     private sealed record Envelope(
         string Provider,

@@ -11,7 +11,6 @@ internal static class BenchmarkAdapterRegistry
 {
     internal const string GroundworkV2Adapter = "groundwork-v2";
     internal const string GroundworkAspNetCoreIdentityAdapter = "groundwork-aspnetcore-identity";
-    internal const string EfSecretRepositoryAdapterId = "ef-secret-repository";
     internal const string GroundworkSecretRepositoryAdapterId = "groundwork-secret-repository";
     internal const string WorkloadVersion = "1.1.0";
     internal const string RecoveryWorkloadVersion = "1.2.0";
@@ -22,7 +21,6 @@ internal static class BenchmarkAdapterRegistry
     private static readonly string[] GroundworkProviders = ["sqlite", "sqlserver", "postgresql", "mongodb"];
     private static readonly string[] GroundworkRelationalProviders = ["sqlite", "sqlserver", "postgresql"];
     private static readonly string[] MongoOnly = ["mongodb"];
-    private static readonly string[] SqliteOnly = ["sqlite"];
 
     private static readonly IReadOnlyList<AdapterRegistration> Registrations =
     [
@@ -65,9 +63,6 @@ internal static class BenchmarkAdapterRegistry
         Registration(RuntimeDueTimerSelectionWorkload.WorkloadId, WorkloadVersion, GroundworkV2Adapter, DueTimerSelectionAdapter.PhysicalForm,
             GroundworkProviders, NativePlanCaptureKind.Complete,
             static (request, connection, output) => new DueTimerSelectionAdapter(request, connection, output)),
-        Registration(SecretCreateReadListWorkload.WorkloadId, WorkloadVersion, EfSecretRepositoryAdapterId, EfSecretRepositoryAdapter.PhysicalForm,
-            SqliteOnly, NativePlanCaptureKind.Complete,
-            static (request, connection, output) => new EfSecretRepositoryAdapter(request, connection, output)),
         Registration(SecretCreateReadListWorkload.WorkloadId, WorkloadVersion, GroundworkSecretRepositoryAdapterId, GroundworkSecretRepositoryAdapter.PhysicalForm,
             GroundworkProviders, NativePlanCaptureKind.Complete,
             static (request, connection, output) => new GroundworkSecretRepositoryAdapter(request, connection, output)),

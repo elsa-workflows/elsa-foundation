@@ -1,5 +1,19 @@
 # Test-retention ledger — zero-EF final removal
 
+## Shared EF kernel disposition — 2026-09-07
+
+Decision: `RemoveApproved`. Architect/reviewer: root program integration lead. Date: 2026-09-07. Authority: owner-approved #1484 first-party EF deletion. The original intake below remains historical; this section supersedes `RemovePending` only for the 16 named methods in the five shared EF test classes listed here. It does not certify broad provider behavior or dispose unrelated ledger rows.
+
+| Original class | Methods | Disposition and rationale |
+|---|---:|---|
+| `RunMigrationsStartupTaskTests` | 7 | Retire EF mechanism checks: the deleted EF startup task, DbContext ownership and EF migration-lock reclamation are no longer shipped. Groundwork schema lifecycle is provider-owned; no custom Elsa migration mechanism replaces them. |
+| `SqliteWalConnectionInterceptorTests` | 3 | Retire the deleted Elsa EF connection defaults/interceptor contract. This is not permission to remove Groundwork SQLite connection or durability coverage; the vendor OpenIddict host retains its own required support. |
+| `UpsertCommandGeneratorPostgresTests` | 2 | Retire frozen SQL/parameter assertions for the deleted Elsa EF SQL generator. Elsa production must not reproduce provider SQL. |
+| `UpsertCommandGeneratorSqlServerTests` | 2 | Retire frozen EF SQL/parameter and varbinary-cast assertions for that deleted generator, not the generic storage behavior owned by Groundwork. |
+| `UpsertCommandGeneratorTests` | 2 | Retire frozen SQLite EF SQL/parameter assertions for that deleted generator. Groundwork store contracts remain intact. |
+
+The exact method names remain in their original class sections below. Removed sources are recoverable from the parent commit `a23eb7476`. The EF Secret benchmark comparator is also removed from active composition; historical input/output contracts and independent evidence serialization checks remain. Broad comparison evidence is deferred to #646 and may use the historical checkout without restoring EF to the product.
+
 Work unit: 144-zero-ef-final-removal
 Intake head: origin/main at f769b516598eb807c9528e7c2e72085b346603e8
 Status: T003/T004 intake draft. Every disposition below is preliminary; RemovePending is not architect approval and authorizes no deletion.

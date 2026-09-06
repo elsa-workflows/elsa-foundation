@@ -75,21 +75,6 @@ public sealed class BenchmarkCompositionFingerprintTests
     }
 
     [Fact]
-    public void Ef_descriptor_is_explicit_and_distinct_from_groundwork()
-    {
-        var groundwork = BenchmarkCompositionFingerprint.Describe(Request());
-        var ef = BenchmarkCompositionFingerprint.Describe(Request(
-            workload: "secret-create-read-list",
-            workloadVersion: "1.1.0",
-            adapter: "ef-secret-repository",
-            physicalForm: "entity-type-specific-physical-tables"));
-
-        Assert.NotEqual(groundwork.Fingerprint, ef.Fingerprint);
-        Assert.Contains(ef.Features, feature => feature.Id == "ef-secret-repository");
-        Assert.Empty(ef.StorageUnits);
-    }
-
-    [Fact]
     public void Diagnostics_descriptor_covers_the_direct_diagnostics_registry_units()
     {
         var descriptor = BenchmarkCompositionFingerprint.Describe(Request(

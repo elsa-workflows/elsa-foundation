@@ -12,7 +12,6 @@ public static class BenchmarkAdapterAdmission
     public const string IamMappingRequiredReason = "iam.adapter-form.ratification-required";
     public const string SecretWorkloadId = "secret-create-read-list";
     public const string SecretMappingRequiredReason = "secret.adapter-form.ratification-required";
-    public const string SecretEfProviderRequiredReason = "secret.ef.provider.sqlite-required";
     public const string DiagnosticsWorkloadId = "diagnostics-durable-history";
     public const string DiagnosticsMappingRequiredReason = "diagnostics.adapter-form.ratification-required";
     public const string DiagnosticsEfProviderRequiredReason = "diagnostics.ef.provider.sqlite-required";
@@ -27,7 +26,6 @@ public static class BenchmarkAdapterAdmission
     private static readonly IReadOnlySet<AdapterFormMapping> RatifiedSecretProductionMappings =
         new HashSet<AdapterFormMapping>
         {
-            new(SecretWorkloadId, "1.1.0", "ef-secret-repository", "entity-type-specific-physical-tables"),
             new(SecretWorkloadId, "1.1.0", "groundwork-secret-repository", "entity-type-specific-physical-tables")
         };
 
@@ -84,14 +82,6 @@ public static class BenchmarkAdapterAdmission
             !string.Equals(provider, "sqlite", StringComparison.Ordinal))
         {
             reason = DiagnosticsEfProviderRequiredReason;
-            return true;
-        }
-
-        if (string.Equals(workloadId, SecretWorkloadId, StringComparison.Ordinal) &&
-            string.Equals(adapter, "ef-secret-repository", StringComparison.Ordinal) &&
-            !string.Equals(provider, "sqlite", StringComparison.Ordinal))
-        {
-            reason = SecretEfProviderRequiredReason;
             return true;
         }
 

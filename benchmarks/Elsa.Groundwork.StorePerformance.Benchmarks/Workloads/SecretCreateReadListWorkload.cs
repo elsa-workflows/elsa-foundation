@@ -8,7 +8,7 @@ namespace Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 
 /// <summary>
 /// The provider-neutral correctness contract for the frozen Secret workload.  This type only knows
-/// the public Secret repository contract; provider-specific EF entities and connections belong to the
+/// the public Secret repository contract; provider-specific entities and connections belong to the
 /// adapter host.
 /// </summary>
 public sealed class SecretCreateReadListWorkload

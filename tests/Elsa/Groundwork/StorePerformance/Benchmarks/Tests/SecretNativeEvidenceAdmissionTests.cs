@@ -187,7 +187,7 @@ public sealed class SecretNativeEvidenceAdmissionTests
 
         Assert.Throws<PerformanceContractException>(() => SecretRetainedNativePlan.Validate(
             "postgresql",
-            "ef-secret-repository",
+            "groundwork-secret-repository",
             EvidenceFixture.Route("elsa_secrets_filtered_list"),
             retained));
     }
@@ -225,7 +225,7 @@ public sealed class SecretNativeEvidenceAdmissionTests
 
         Assert.Throws<PerformanceContractException>(() => SecretRetainedNativePlan.Validate(
             "sqlserver",
-            "ef-secret-repository",
+            "groundwork-secret-repository",
             EvidenceFixture.Route("elsa_secrets_filtered_list"),
             retained));
     }

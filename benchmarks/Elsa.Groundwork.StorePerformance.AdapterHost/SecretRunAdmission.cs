@@ -12,8 +12,8 @@ internal sealed record AdmittedAdapterRun(
 
 /// <summary>
 /// Admits direct run and correctness commands before resolving provider connection settings. This is
-/// especially important for the SQLite-only EF Secret comparator: a rejected non-SQLite request must
-/// not require, probe, or reveal that provider's environment-backed connection string.
+/// especially important for provider-backed Secret runs: a rejected request must not require, probe, or
+/// reveal that provider's environment-backed connection string.
 /// </summary>
 internal static class SecretRunAdmission
 {
