@@ -11,8 +11,8 @@ using Npgsql;
 namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 
 /// <summary>Official capture-plan dispatcher for the diagnostics successor contract. It invokes each
-/// declared public resource route and retains the provider's own explain artifact; a checkpoint document
-/// is never used as a fallback for diagnostics.</summary>
+/// declared public resource route and retains provider-owned typed evidence for migrated routes or
+/// explain artifacts for other routes. A checkpoint document is never a fallback for diagnostics.</summary>
 internal static class DiagnosticsNativePlanCapture
 {
     private static readonly SemaphoreSlim ExplainCaptureLock = new(1, 1);
@@ -37,7 +37,11 @@ internal static class DiagnosticsNativePlanCapture
         ProviderProbe.Result observed,
         CancellationToken cancellationToken)
     {
-        await using var adapter = new DiagnosticsDurableHistoryAdapter(request, connectionString, outputDirectory);
+        await using var adapter = new DiagnosticsDurableHistoryAdapter(
+            request,
+            connectionString,
+            outputDirectory,
+            captureStructuredEvidence: true);
         await adapter.PrepareAsync(cancellationToken);
         var scopes = await adapter.OpenScopedClientsAsync(cancellationToken);
         await SeedStructuredLogFixtureAsync(scopes.Primary.StructuredLogs, cancellationToken);
@@ -133,7 +137,23 @@ internal static class DiagnosticsNativePlanCapture
                         continue;
                     }
 
+                    var migratedStructuredRoute = request.Provider == "sqlite" &&
+                                                  route is ("structured-log-replay" or "structured-log-recent");
+                    if (migratedStructuredRoute)
+                    {
+                        routes.Add(await CaptureStructuredEvidenceRouteAsync(
+                            adapter,
+                            scopes.Primary,
+                            request,
+                            observed,
+                            route,
+                            limit,
+                            cancellationToken));
+                        continue;
+                    }
+
                     adapter.CommandObserver.ClearCommands();
+                    adapter.ClearStructuredEvidence();
                     var before = Directory.EnumerateFiles(explainDirectory).ToHashSet(StringComparer.Ordinal);
                     string nativePath;
                     string rawPlan;
@@ -240,7 +260,10 @@ internal static class DiagnosticsNativePlanCapture
                         DiagnosticsNativePlanContract.ExpectedStorageScopePredicate(request.Provider, specification),
                         specification.PredicateColumn is not null,
                         limit,
-                        limit);
+                        limit)
+                    {
+                        NativeFetchLimit = 0
+                    };
 
                     // Validate the provider-owned plan before publishing the retained envelope. A
                     // provider may still choose a sort/spill/scan for a route whose declaration has an
@@ -301,6 +324,103 @@ internal static class DiagnosticsNativePlanCapture
         {
             ExplainCaptureLock.Release();
         }
+    }
+
+    /// <summary>
+    /// Captures a structured-log route through the same public store call and callback boundary used by
+    /// native-plan capture. The route is deliberately parameterized because recent and replay are the
+    /// same bounded Groundwork query family with different ordering; admission can widen per route
+    /// without duplicating a request projection or falling back to raw command parsing.
+    /// </summary>
+    internal static async Task<NativeRouteEvidence> CaptureStructuredEvidenceRouteAsync(
+        DiagnosticsDurableHistoryAdapter adapter,
+        DiagnosticsDurableHistoryClient client,
+        RunRequest request,
+        ProviderProbe.Result observed,
+        string route,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(adapter);
+        ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(observed);
+        ArgumentException.ThrowIfNullOrWhiteSpace(route);
+        if (!string.Equals(request.Provider, "sqlite", StringComparison.Ordinal) ||
+            !string.Equals(request.Adapter, DiagnosticsDurableHistoryAdapter.AdapterId, StringComparison.Ordinal) ||
+            route is not ("structured-log-recent" or "structured-log-replay"))
+        {
+            throw new PerformanceContractException(
+                "Structured callback capture is limited to the SQLite Groundwork structured-log recent and replay routes.");
+        }
+
+        var specification = DiagnosticsNativePlanContract.For(request.Adapter, route);
+        if (limit != specification.FiniteLimit)
+            throw new PerformanceContractException(
+                $"Structured diagnostics route '{route}' must use its declared finite limit {specification.FiniteLimit}.");
+
+        // Establish the exact one-command/one-callback window immediately before the public route call.
+        // This is the producer-owned observation, not a reconstruction from RunRequest or SQL text.
+        adapter.CommandObserver.ClearCommands();
+        adapter.ClearStructuredEvidence();
+        var result = await InvokeRouteAsync(client, route, limit, cancellationToken);
+        if (result != limit)
+            throw new PerformanceContractException($"Diagnostics native route '{route}' returned {result} rows; expected {limit}.");
+
+        var structuredEvidence = RequireStructuredEvidence(adapter, route, observed.Version);
+        var nativeFetchLimit = structuredEvidence.BoundedQuery?.NativeLimit.Value;
+        if (nativeFetchLimit != checked(limit + 1))
+            throw new PerformanceContractException(
+                $"SQLite diagnostics route '{route}' emitted native fetch limit {nativeFetchLimit?.ToString() ?? "unknown"}; expected {limit + 1}.");
+
+        var routeEvidence = new NativeRouteEvidence(
+            route,
+            string.Empty,
+            string.Empty,
+            DiagnosticsNativePlanContract.IndexSearchPlanClassification,
+            DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(request.Provider, specification),
+            specification.PhysicalCardinality,
+            DiagnosticsNativePlanContract.ExpectedStorageScopePredicate(request.Provider, specification),
+            specification.PredicateColumn is not null,
+            limit,
+            limit)
+        {
+            NativeFetchLimit = nativeFetchLimit.Value,
+            StructuredEvidence = structuredEvidence
+        };
+
+        DiagnosticsNativePlanContract.ValidateStructuredEvidence(
+            request.Provider,
+            request.Adapter,
+            routeEvidence,
+            observed.Version);
+
+        return routeEvidence;
+    }
+
+    private static StructuredExecutionEvidence RequireStructuredEvidence(
+        DiagnosticsDurableHistoryAdapter adapter,
+        string route,
+        string expectedProviderVersion)
+    {
+        var observations = adapter.StructuredEvidence;
+        if (observations.Count != 1)
+            throw new PerformanceContractException(
+                $"SQLite diagnostics route '{route}' emitted {observations.Count} structured execution observations; expected exactly one terminal read.");
+
+        var commands = adapter.CommandObserver.Commands;
+        if (commands.Count != 1)
+            throw new PerformanceContractException(
+                $"SQLite diagnostics route '{route}' retained {commands.Count} legacy command observations; expected exactly one read command.");
+
+        var evidence = observations[0];
+        if (!string.Equals(evidence.Provider, "SQLite", StringComparison.OrdinalIgnoreCase))
+            throw new PerformanceContractException("SQLite structured evidence did not identify the SQLite provider.");
+        if (!string.Equals(evidence.ProviderVersion, expectedProviderVersion, StringComparison.Ordinal))
+            throw new PerformanceContractException("SQLite structured evidence did not identify the observed provider version.");
+        if (evidence.BoundedQuery?.NativeLimit is null)
+            throw new PerformanceContractException("SQLite structured evidence did not retain the bounded-query native limit.");
+        return evidence;
     }
 
     private static async Task<string> CaptureEfAsync(
@@ -384,7 +504,7 @@ internal static class DiagnosticsNativePlanCapture
         }
     }
 
-    private static async Task SeedStructuredLogFixtureAsync(
+    internal static async Task SeedStructuredLogFixtureAsync(
         Elsa.Diagnostics.StructuredLogs.Core.Contracts.IStructuredLogStore store,
         CancellationToken cancellationToken)
     {
@@ -1090,7 +1210,7 @@ internal static class DiagnosticsNativePlanCapture
         ArtifactStore.ValidateRawPlanFile(path);
     }
 
-    private static NativePlanEvidenceDocument CreateDocument(
+    internal static NativePlanEvidenceDocument CreateDocument(
         RunRequest request,
         ProviderProbe.Result observed,
         IReadOnlyList<NativeRouteEvidence> routes,

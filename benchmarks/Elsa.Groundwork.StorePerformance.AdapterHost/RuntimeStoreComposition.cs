@@ -108,7 +108,8 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
         StructuredLogStoreBinding? structuredLogBinding = null,
         GroundworkOpenTelemetryBinding? openTelemetryBinding = null,
         StructuredLogsOptions? structuredLogsOptions = null,
-        OpenTelemetryDiagnosticsOptions? openTelemetryOptions = null)
+        OpenTelemetryDiagnosticsOptions? openTelemetryOptions = null,
+        IProviderExecutionObserver? executionObserver = null)
     {
         observer ??= new WritePathRoundTripObserver(providerName);
         var ownsConnection = existingConnection is null;
@@ -151,7 +152,10 @@ internal sealed class RuntimeStoreComposition : IAsyncDisposable
             // Runtime's session source and diagnostics' direct-session features both resolve and forward
             // this observer. Singleton because the harness snapshots one cumulative count for the process,
             // and both clients must contribute to the same total.
-            services.AddSingleton<IProviderCommandObserver>(observer);
+            // The execution-capable observer is still registered through the existing command seam.
+            // It forwards the legacy event itself, so ordinary command counts and callbacks remain
+            // unchanged while only an explicitly opted-in capture receives terminal evidence.
+            services.AddSingleton<IProviderCommandObserver>((IProviderCommandObserver?)executionObserver ?? observer);
 
             // Recovery continuations must be authenticated even though the key is only a local composition
             // fixture and never crosses the artifact boundary. A fresh cryptographic key per composition is

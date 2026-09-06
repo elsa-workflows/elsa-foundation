@@ -191,14 +191,22 @@ internal static class NativePlanEvidenceStaging
         // document that arrived without its raw plans is a reachable state; leaving them uncopied would
         // fail correctness with a message pointing at the raw plan rather than at the real gap.
         var document = Read(destination);
-        foreach (var route in document.Routes)
-            EnsureRawPlan(outputDirectory, route.RawPlanReference);
+        var routes = document.Routes ?? throw new PerformanceContractException(
+            "Native-plan evidence must contain a route list; a null route list is malformed.");
+        foreach (var route in routes)
+            EnsureRouteRawPlan(outputDirectory, request, route);
         foreach (var constituent in document.TraceDetailConstituents ?? [])
         {
+            if (constituent is null)
+                throw new PerformanceContractException("Native-plan evidence contains a null trace-detail constituent.");
             if (!string.IsNullOrWhiteSpace(constituent.RawPlanReference))
                 EnsureRawPlan(outputDirectory, constituent.RawPlanReference);
             foreach (var page in constituent.Pages ?? [])
+            {
+                if (page is null)
+                    throw new PerformanceContractException("Native-plan evidence contains a null trace-detail page.");
                 EnsureRawPlan(outputDirectory, page.RawPlanReference);
+            }
         }
         return document;
     }
@@ -242,6 +250,39 @@ internal static class NativePlanEvidenceStaging
         var admitted = ArtifactStore.RawPlanName(reference);
         if (File.Exists(Path.Combine(outputDirectory, admitted))) return;
         CopyFromStaging(outputDirectory, admitted);
+    }
+
+    private static void EnsureRouteRawPlan(
+        string outputDirectory,
+        RunRequest request,
+        NativeRouteEvidence? route)
+    {
+        if (route is null)
+            throw new PerformanceContractException("Native-plan evidence contains a null route.");
+        if (route.RawPlanReference is null || route.RawPlanSha256 is null)
+            throw new PerformanceContractException(
+                $"Native-plan route '{route.RouteIdentity}' must contain non-null raw-plan reference and digest fields.");
+
+        if (!ArtifactAdmission.IsStructuredEvidenceRoute(request, route))
+        {
+            EnsureRawPlan(outputDirectory, route.RawPlanReference);
+            return;
+        }
+
+        var hasReference = route.RawPlanReference.Length != 0;
+        var hasDigest = route.RawPlanSha256.Length != 0;
+        if (hasReference != hasDigest)
+            throw new PerformanceContractException(
+                $"Structured route '{route.RouteIdentity}' must provide both optional raw-plan reference and digest, or neither.");
+        if (!hasReference)
+        {
+            if (route.StructuredEvidence is null)
+                throw new PerformanceContractException(
+                    $"Structured route '{route.RouteIdentity}' cannot omit its raw plan without structured execution evidence.");
+            return;
+        }
+
+        EnsureRawPlan(outputDirectory, route.RawPlanReference);
     }
 
     /// <summary>

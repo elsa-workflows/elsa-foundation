@@ -180,7 +180,7 @@ public sealed class DiagnosticsMeasurementAdmissionTests
         "100k",
         new string('a', 40),
         new string('b', 64),
-        packageVersions ?? new Dictionary<string, string> { ["Groundwork.Sqlite"] = "0.4.0-preview.16" },
+        packageVersions ?? new Dictionary<string, string> { ["Groundwork.Sqlite"] = "0.4.0-preview.17" },
         new string('c', 64),
         new string('d', 64),
         "3.46.0",
@@ -256,7 +256,7 @@ public sealed class DiagnosticsMeasurementAdmissionTests
                 ArtifactStore.EvidencePath(source.Directory, run.NativePlanEvidenceReference),
                 ArtifactStore.EvidencePath(outputDirectory, run.NativePlanEvidenceReference),
                 overwrite: true);
-            foreach (var rawPlan in ArtifactStore.ReferencedRawPlanNames(sourceArtifact.Correctness.NativePlan))
+            foreach (var rawPlan in ArtifactStore.ReferencedRawPlanNames(sourceArtifact.Correctness.NativePlan, sourceArtifact.Request))
                 File.Copy(ArtifactStore.RawPlanPath(source.Directory, rawPlan), ArtifactStore.RawPlanPath(outputDirectory, rawPlan), overwrite: true);
             ArtifactStore.Write(outputDirectory, sourceArtifact with { Request = run });
             return Task.FromResult(0);

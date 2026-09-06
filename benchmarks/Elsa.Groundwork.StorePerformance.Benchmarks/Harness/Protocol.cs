@@ -60,6 +60,13 @@ public sealed record NativeRouteEvidence(
     /// <summary>The actual provider row bound, including any continuation lookahead.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public int NativeFetchLimit { get; init; }
+
+    /// <summary>
+    /// Value-free structured execution facts captured from the actual provider callback. The field is
+    /// optional while providers are migrated one route at a time; migrated routes must validate it.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StructuredExecutionEvidence? StructuredEvidence { get; init; }
 }
 
 /// <summary>
@@ -514,7 +521,7 @@ public static class ArtifactAdmission
             throw new PerformanceContractException("Native-plan evidence file is missing or does not match the requested content digest.");
 
         var routes = nativePlan.Routes;
-        if (routes is null)
+        if (routes is null || routes.Any(route => route is null))
             throw new PerformanceContractException("Native-plan evidence must admit every required route with a retained raw-plan digest, bounded cardinality, predicates, finite limit, and materialized-count facts.");
         var diagnosticsWorkload = string.Equals(workload.Id, DiagnosticsDurableHistoryWorkload.WorkloadId, StringComparison.Ordinal);
         var efCorrectnessOnly = diagnosticsWorkload &&
@@ -525,6 +532,9 @@ public static class ArtifactAdmission
         var blockedRoutes = nativePlan.BlockedRoutes ?? [];
         if (nativePlan.RouteContract == "provider-native-routes" && blockedRoutes.Count != 0)
             throw new PerformanceContractException("Complete provider-native evidence cannot declare blocked routes.");
+        if (routes.Any(route => IsStructuredEvidenceRoute(workload, request, route) && InvalidOptionalRawPlanPair(route)))
+            throw new PerformanceContractException(
+                "The migrated structured-evidence route must provide both optional raw-plan reference and digest, or neither.");
         var traceDetailConstituents = nativePlan.TraceDetailConstituents ?? [];
         if (!diagnosticsWorkload && traceDetailConstituents.Count != 0)
             throw new PerformanceContractException("Trace-detail constituent evidence is valid only for the diagnostics workload.");
@@ -561,8 +571,9 @@ public static class ArtifactAdmission
             !diagnosticsAdmittedIdentities.Order(StringComparer.Ordinal).SequenceEqual(workload.RequiredNativeRoutes.Order(StringComparer.Ordinal), StringComparer.Ordinal) ||
             routes.Select(route => route.RouteIdentity).Distinct(StringComparer.Ordinal).Count() != routes.Count ||
             routes.Any(route =>
-                !ArtifactStore.SafeRawPlanReference(route.RawPlanReference) ||
-                !IsSha256(route.RawPlanSha256) ||
+                (IsStructuredEvidenceRoute(workload, request, route)
+                    ? InvalidOptionalRawPlanPair(route)
+                    : !ArtifactStore.SafeRawPlanReference(route.RawPlanReference) || !IsSha256(route.RawPlanSha256)) ||
                 string.IsNullOrWhiteSpace(route.PlanClassification) ||
                 string.IsNullOrWhiteSpace(route.IndexName) ||
                 route.PhysicalCardinality <= 0 ||
@@ -579,8 +590,9 @@ public static class ArtifactAdmission
                                                             route.ScalarResultCount is not > 0,
                     _ => true
                 })))
-            throw new PerformanceContractException("Native-plan evidence must admit every required route with a retained raw-plan digest, bounded cardinality, predicates, finite page or scalar-count, and materialized-result facts.");
+            throw new PerformanceContractException("Native-plan evidence must admit every required route with a safe raw-plan pair or the exact migrated typed route, bounded cardinality, predicates, finite page or scalar-count, and materialized-result facts.");
         var rawReferences = routes.Select(route => route.RawPlanReference)
+            .Where(reference => !string.IsNullOrEmpty(reference))
             .Concat(traceDetailConstituents.Where(item => !string.IsNullOrWhiteSpace(item.RawPlanReference)).Select(item => item.RawPlanReference))
             .Concat(traceDetailConstituents.SelectMany(item => item.Pages ?? []).Select(page => page.RawPlanReference))
             .ToArray();
@@ -589,12 +601,20 @@ public static class ArtifactAdmission
         ValidateDiagnosticsNativeRoutes(workload, routes, traceDetailConstituents);
         foreach (var route in routes)
         {
-            var rawPlanPath = ArtifactStore.RawPlanPath(outputDirectory, route.RawPlanReference);
-            if (!File.Exists(rawPlanPath) || ArtifactStore.HashFile(rawPlanPath) != route.RawPlanSha256)
-                throw new PerformanceContractException($"Raw provider-plan evidence is missing or does not match its digest for route {route.RouteIdentity}.");
-            ArtifactStore.ValidateRawPlanFile(rawPlanPath);
-            if (diagnosticsWorkload)
-                DiagnosticsNativePlanContract.ValidateEnvelope(request.Provider, request.Adapter, route, rawPlanPath);
+            var typedRoute = IsStructuredEvidenceRoute(workload, request, route);
+            if (typedRoute)
+                DiagnosticsNativePlanContract.ValidateStructuredEvidence(request.Provider, request.Adapter, route, request.ProviderVersion);
+
+            string? rawPlanPath = null;
+            if (!string.IsNullOrEmpty(route.RawPlanReference))
+            {
+                rawPlanPath = ArtifactStore.RawPlanPath(outputDirectory, route.RawPlanReference);
+                if (!File.Exists(rawPlanPath) || ArtifactStore.HashFile(rawPlanPath) != route.RawPlanSha256)
+                    throw new PerformanceContractException($"Raw provider-plan evidence is missing or does not match its digest for route {route.RouteIdentity}.");
+                ArtifactStore.ValidateRawPlanFile(rawPlanPath);
+            }
+            if (diagnosticsWorkload && !typedRoute)
+                DiagnosticsNativePlanContract.ValidateEnvelope(request.Provider, request.Adapter, route, rawPlanPath!);
             if (string.Equals(request.Adapter, RuntimeNativePlanContract.GroundworkAdapter, StringComparison.Ordinal) &&
                 workload.Id is (RuntimeBookmarkLookupWorkload.WorkloadId or
                     RuntimeTriggerBindingStimulusLookupWorkload.WorkloadId or
@@ -603,18 +623,18 @@ public static class ArtifactAdmission
                     RuntimeRecurringScheduleSelectionWorkload.WorkloadId or
                     RuntimeQueueDrainWorkload.WorkloadId or
                     DistributedCommandSendLeaseAckWorkload.WorkloadId))
-                RuntimeNativePlanContract.ValidateEnvelope(request.WorkloadId, request.Provider, request.Adapter, route, rawPlanPath);
+                RuntimeNativePlanContract.ValidateEnvelope(request.WorkloadId, request.Provider, request.Adapter, route, rawPlanPath!);
             if (string.Equals(workload.Id, SecretCreateReadListWorkload.WorkloadId, StringComparison.Ordinal))
                 SecretRetainedNativePlan.Validate(
                     request.Provider,
                     request.Adapter,
                     route,
-                    File.ReadAllText(rawPlanPath));
+                    File.ReadAllText(rawPlanPath!));
             if (string.Equals(workload.Id, RuntimeRecoveryScanWorkload.WorkloadId, StringComparison.Ordinal))
                 RecoveryRetainedNativePlan.Validate(
                     request.Provider,
                     route,
-                    File.ReadAllText(rawPlanPath));
+                    File.ReadAllText(rawPlanPath!));
         }
         if (diagnosticsWorkload && traceDetailConstituents.Count != 0)
             ValidateDiagnosticsTraceDetailConstituents(request, traceDetailConstituents, outputDirectory);
@@ -660,7 +680,7 @@ public static class ArtifactAdmission
                     : "provider-native-routes") ||
             document.ProviderConcurrency != nativePlan.ProviderConcurrency ||
             document.Routes is null ||
-            !document.Routes.SequenceEqual(routes) ||
+            !SameStructuredEvidence(document.Routes, routes) ||
             !(document.BlockedRoutes ?? []).SequenceEqual(blockedRoutes) ||
             !SameStructuredEvidence(document.TraceDetailConstituents ?? [], traceDetailConstituents))
             throw new PerformanceContractException("Native-plan evidence file does not match the admitted target, provenance, or structured route evidence.");
@@ -676,6 +696,29 @@ public static class ArtifactAdmission
     private static bool SameStructuredEvidence<T>(IReadOnlyList<T> first, IReadOnlyList<T> second) =>
         System.Text.Json.JsonSerializer.Serialize(first, ArtifactStore.JsonOptions) ==
         System.Text.Json.JsonSerializer.Serialize(second, ArtifactStore.JsonOptions);
+
+    internal static bool IsStructuredEvidenceRoute(
+        RunRequest request,
+        NativeRouteEvidence route) =>
+        string.Equals(request.WorkloadId, DiagnosticsDurableHistoryWorkload.WorkloadId, StringComparison.Ordinal) &&
+        string.Equals(request.Provider, "sqlite", StringComparison.Ordinal) &&
+        string.Equals(request.Adapter, DiagnosticsNativePlanContract.GroundworkAdapter, StringComparison.Ordinal) &&
+        route.RouteIdentity is "structured-log-replay" or "structured-log-recent";
+
+    private static bool IsStructuredEvidenceRoute(
+        PerformanceWorkload workload,
+        RunRequest request,
+        NativeRouteEvidence route) =>
+        string.Equals(workload.Id, request.WorkloadId, StringComparison.Ordinal) &&
+        IsStructuredEvidenceRoute(request, route);
+
+    internal static bool InvalidOptionalRawPlanPair(NativeRouteEvidence route)
+    {
+        var hasReference = !string.IsNullOrEmpty(route.RawPlanReference);
+        var hasDigest = !string.IsNullOrEmpty(route.RawPlanSha256);
+        return hasReference != hasDigest ||
+               hasReference && (!ArtifactStore.SafeRawPlanReference(route.RawPlanReference) || !IsSha256(route.RawPlanSha256));
+    }
 
     private static void ValidateIamNativeRoutes(
         PerformanceWorkload workload,
