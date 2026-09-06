@@ -90,20 +90,6 @@ The live SSE feed remains in-process (`IOpenTelemetryLiveFeed`) for every storag
 query/history endpoints, not the one-way live tail. Stream frames still carry no monotonic event id, so the
 OTEL SSE stream still has no `Last-Event-ID` resume.
 
-`Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore` and
-`DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` remain only as the frozen before-side benchmark/oracle until
-the measured cutover deletes them. They are not a migration path, compatibility bridge, fallback, or component
-of a v2 host.
-
-The frozen benchmark host enables
-`DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` alongside `DiagnosticsOpenTelemetry`. It replaces
-`IOpenTelemetryStore` with `EfCoreOpenTelemetryStore`, disables generic EF command/query machinery, routes
-the diagnostics DbContext's logging to `NullLoggerFactory` to prevent capture feedback, and uses a singleton
-`IDbContextFactory<OpenTelemetryDbContext>`. The SQLite provider runs migrations before starting the bounded
-drain; graceful shell termination flushes that drain before the DbContext factory is disposed, with async
-store disposal as the fallback when shell terminators do not run. This retained path is not selected by the
-v2 composition.
-
 ## Deferred (kept behind contracts/options)
 
 - **gRPC ingestion** — `EnableGrpc` defaults to `false` and no gRPC route is mapped; the binding is host-specific. The option, `GrpcEndpointPath`, and `GrpcDisabledReason` are kept so a host can light it up later. (Source parity: elsa-core also ships gRPC disabled.)

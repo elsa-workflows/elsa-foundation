@@ -74,8 +74,6 @@ replay cursors, and its first durable page before starting the SSE response.
 
 `GroundworkStructuredLogStore` uses Groundwork diagnostic records for durable committed cursors, bounded read-after pages, and lifetime logical high-water independent of retention. Its bounded drain completes accepted appends only after durable acknowledgement.
 
-`Elsa.Diagnostics.StructuredLogs.Persistence.EFCore` and `DiagnosticsStructuredLogsPersistenceEFCoreSqlite` are still present as temporary comparison, oracle, and compatibility implementations. They have not been removed: #646 must finish the retained performance measurement and #647 owns their eventual deletion. They are not the reference-host durable composition.
-
 ## Replacing the defaults
 
 All store/source contracts are overridable — see [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md). The shipped durable replacement is Groundwork; custom hosts can replace `IStructuredLogStore` while leaving capture and transport unchanged.

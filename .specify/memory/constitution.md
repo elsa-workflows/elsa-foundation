@@ -137,7 +137,7 @@ owns always-fresh enumeration and project counts)*:
 | `Elsa.Locking` | Provides distributed locking. | `Elsa.Locking.Core`, `Elsa.Locking.FileSystem`, `Elsa.Locking.<Provider>` |
 | `Elsa.Mediator` | Routes commands and requests in-process. | `Elsa.Mediator.Core`, `Elsa.Mediator` |
 | `Elsa.Modularity` | Discovers, describes, enables, validates, and composes modules and features. | `Elsa.Modularity.Core`, `Elsa.Modularity.Api`, `Elsa.Modularity.Nuplane` |
-| `Elsa.Persistence` | Persists application state through domain-specific ports and provider adapters. | `Elsa.Persistence.EFCore{,.Sqlite}`, `Elsa.Persistence.Groundwork.*` |
+| `Elsa.Persistence` | Persists application state through domain-specific ports and provider adapters. | `Elsa.Persistence.Groundwork.*` |
 | `Elsa.Pipelines` | Defines pipeline contracts for composable middleware. | `Elsa.Pipelines.Core` |
 | `Elsa.Primitives` | Provides dependency-free base primitives and hosting seams (charter in §E2.3). | `Elsa.Primitives`, `Elsa.Primitives.Hosting` |
 | `Elsa.Secrets` | Stores and resolves secrets. | `Elsa.Secrets.Core`, `Elsa.Secrets`, `Elsa.Secrets.Api`, `Elsa.Secrets.Persistence.Groundwork` |
@@ -222,6 +222,8 @@ surface identified by §E1.
 The current composition remains revisable as evidence accrues.
 
 ### §E2.5 `ElsaDbContextBase` — opt-in capability, not requirement
+
+**Implementation status — 2026-09-07:** The first-party EF infrastructure described below has been removed under the owner-approved [zero-EF scope](../../docs/program-goals/zero-ef-persistence.md). This section records the historical integration pattern, not currently shipped APIs. Its provider-neutrality constraints remain applicable; no new constitutional requirement or ratification is implied. Groundwork supplies first-party durable persistence, while the narrow OpenIddict vendor-host exception is governed by ADR 0042. The historical `Elsa.Persistence.EFCore.Sqlite` example in §E5 likewise refers to the dated audit, not a current project.
 
 **framework §2.9 — Elsa specialization.** Framework §2.9 forbids the constitution from mandating a base `DbContext` type. Elsa documents an **opt-in** `ElsaDbContextBase` pattern that consumers may inherit from to receive Elsa's global entity save/load hooks (`IEntitySavingHandler`, `IEntityLoadingHandler`). The save hooks are invoked before `SaveChangesAsync` reaches EF Core; provider-specific adapters may publish the loading hook after materialisation. Both are useful for shadow properties, custom deserializers, and similar cross-cutting concerns. Each hook has a `§2.6.1` domain event mirror — `EntitySaving` (from `ElsaDbContextBase`) and `EntityLoading` (from provider-specific read paths) — that features may use.
 

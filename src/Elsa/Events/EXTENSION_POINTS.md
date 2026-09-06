@@ -14,7 +14,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Events` — the c
 
 **The single-aggregating-handler convention** (framework §2.24.2): by convention, for every contributor-interface fan-in event (e.g. `DraftValidating`, `JsonPayloadConvertersInitializing`), exactly ONE `IEventHandler<T>` is registered — the aggregator that loops the typed contributor implementations. Feature code never registers its own `IEventHandler` for these events; it registers a typed contributor (e.g. `IDraftValidator`, `IJsonConverterSource`). This makes the contributor count visible at a glance.
 
-**Known implementations (shipped):** aggregating handlers such as `ExecuteValidations`, `RegisterJsonConverters`, `PreProcessScript`, `PostProcessScript`, `BuildDeclarationsDocument`, `ApplyEntitySavingHandlers`, `ApplyEntityLoadingHandlers`, `CollectActivityVersions`, and `WorkflowVersionsReconcilingHandler`. See each domain's feature catalog for detail.
+**Known implementations (shipped):** aggregating handlers such as `ExecuteValidations`, `RegisterJsonConverters`, `PreProcessScript`, `PostProcessScript`, `BuildDeclarationsDocument`, `CollectActivityVersions`, and `WorkflowVersionsReconcilingHandler`. See each domain's feature catalog for detail.
 
 ### `IEvent` *(Core — `Elsa.Events.Core`)*
 - **Kind:** Marker interface — implement to define an event type. Typically a `sealed record`.
@@ -33,7 +33,7 @@ Defined in `Elsa.Events.Strategies`. Each strategy determines how the published 
 
 | Strategy | Behaviour | Use when |
 |---|---|---|
-| **Sequential** (default) | Publisher awaits the full dispatch chain synchronously. Handler exceptions propagate to the publisher. | The publisher needs to read back contributions (`DraftValidating`, `EntitySaving`). |
+| **Sequential** (default) | Publisher awaits the full dispatch chain synchronously. Handler exceptions propagate to the publisher. | The publisher needs to read back contributions (`DraftValidating`). |
 | **Background** | Event is enqueued on `IEventChannel`; `BackgroundEventPublisher` drains asynchronously. Publisher returns before handlers run. Handler exceptions are caught + logged. | Notification / observation (`DraftCreated`, `DraftValidated`). One subscriber failure must not break others. |
 
 ---

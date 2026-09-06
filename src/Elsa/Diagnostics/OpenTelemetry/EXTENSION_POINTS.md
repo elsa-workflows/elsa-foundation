@@ -77,15 +77,6 @@ Data-pipeline contracts live in `Elsa.Diagnostics.OpenTelemetry.Core`; the HTTP-
 
 - **gRPC ingestion** — kept behind `OpenTelemetryDiagnosticsOptions.EnableGrpc` (default `false`); no gRPC route is mapped. The binding is host-specific.
 
-## Frozen EF Core benchmark baseline
-
-`Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore` and the
-`DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` feature remain only long enough to provide the immutable
-before-side correctness/performance evidence. They are not a compatibility mode, migration surface, fallback,
-or supported companion to the Groundwork v2 host. The measured cutover deletes them.
-
----
-
 ## Notes
 
 - Live stream items (`OpenTelemetryStreamItem`) carry **no monotonic sequence/id**, so the SSE stream offers **no `Last-Event-ID` resume** (unlike Structured Logs, which resumes from bounded `ReadAfterAsync` pages using an opaque committed cursor). SSE frames use typed `event:` names (`resource`/`trace`/`metric`/`log`/`dropped`) with no `id:`.
