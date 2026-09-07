@@ -23,7 +23,7 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
     private Task<DiagnosticsDrainStopResult>? _stopTask;
     private Task? _asyncDisposeTask;
     private Task? _shutdownCancellationTask;
-    private readonly SemaphoreSlim _retentionLock = new(1, 1);
+    private readonly SemaphoreSlim _targetLock = new(1, 1);
     private long _retentionUnits;
     private long _queueDepth;
     private long _queueSequence;
@@ -216,11 +216,29 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
                 if (batch.Count == 0)
                     continue;
 
-                var committedUnits = await CommitWithRetryAsync(batch.ToArray(), cancellationToken);
-                await ApplyPeriodicRetentionAsync(committedUnits, cancellationToken);
+                // The target's commit and retention share one lock so the pending-retention barrier can
+                // never touch the target while a batch is mid-commit.
+                await _targetLock.WaitAsync(cancellationToken);
+                try
+                {
+                    var committedUnits = await CommitWithRetryAsync(batch.ToArray(), cancellationToken);
+                    await ApplyPeriodicRetentionAsync(committedUnits, cancellationToken);
+                }
+                finally
+                {
+                    _targetLock.Release();
+                }
             }
 
-            await ApplyRetentionWithRetryAsync(cancellationToken);
+            await _targetLock.WaitAsync(cancellationToken);
+            try
+            {
+                await ApplyRetentionWithRetryAsync(cancellationToken);
+            }
+            finally
+            {
+                _targetLock.Release();
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -290,44 +308,47 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
     {
         if (State != DiagnosticsDrainState.Running)
             return;
-        await ApplyRetentionWithRetryAsync(cancellationToken);
-    }
-
-    private async Task ApplyRetentionWithRetryAsync(CancellationToken cancellationToken)
-    {
-        await _retentionLock.WaitAsync(cancellationToken);
+        await _targetLock.WaitAsync(cancellationToken);
         try
         {
-            for (var attempt = 1; attempt <= _options.MaxAttempts; attempt++)
-            {
-                try
-                {
-                    var deleted = await _target.ApplyRetentionAsync(cancellationToken);
-                    ArgumentOutOfRangeException.ThrowIfNegative(deleted);
-                    Interlocked.Exchange(ref _retentionUnits, 0);
-                    if (deleted > 0)
-                        Observe(observer => observer.RecordLoss(DiagnosticsPersistenceLossReason.DurableRetentionDeletion, deleted));
-                    return;
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch when (attempt < _options.MaxAttempts)
-                {
-                    Observe(observer => observer.RecordRetry(DiagnosticsPersistenceOperation.Retention, attempt, _options.MaxAttempts));
-                    await Task.Delay(RetryDelay(attempt), cancellationToken);
-                }
-                catch
-                {
-                    Observe(observer => observer.RecordOperationFailure(DiagnosticsPersistenceOperation.Retention));
-                    return;
-                }
-            }
+            if (State != DiagnosticsDrainState.Running)
+                return;
+            await ApplyRetentionWithRetryAsync(cancellationToken);
         }
         finally
         {
-            _retentionLock.Release();
+            _targetLock.Release();
+        }
+    }
+
+    /// <summary>Callers hold <see cref="_targetLock"/>; the loop and the barrier never overlap on the target.</summary>
+    private async Task ApplyRetentionWithRetryAsync(CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; attempt <= _options.MaxAttempts; attempt++)
+        {
+            try
+            {
+                var deleted = await _target.ApplyRetentionAsync(cancellationToken);
+                ArgumentOutOfRangeException.ThrowIfNegative(deleted);
+                Interlocked.Exchange(ref _retentionUnits, 0);
+                if (deleted > 0)
+                    Observe(observer => observer.RecordLoss(DiagnosticsPersistenceLossReason.DurableRetentionDeletion, deleted));
+                return;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch when (attempt < _options.MaxAttempts)
+            {
+                Observe(observer => observer.RecordRetry(DiagnosticsPersistenceOperation.Retention, attempt, _options.MaxAttempts));
+                await Task.Delay(RetryDelay(attempt), cancellationToken);
+            }
+            catch
+            {
+                Observe(observer => observer.RecordOperationFailure(DiagnosticsPersistenceOperation.Retention));
+                return;
+            }
         }
     }
 
