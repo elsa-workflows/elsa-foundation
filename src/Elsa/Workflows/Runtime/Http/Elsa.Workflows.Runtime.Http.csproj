@@ -1,9 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.Abstractions" />
-    <PackageReference Include="Microsoft.AspNetCore.Authorization" />
-    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" />
+    <!-- LOCAL WORKAROUND for elsa-foundation#1406 (open). NOT a committed change - revert with
+         `git checkout <this file>`. The standalone Microsoft.AspNetCore.* packages and the shared
+         framework declare THE SAME TYPE NAMES, so a project taking one while its collaborator takes
+         the other fails at run time with MissingMethodException naming a member that plainly exists.
+         Measured on the Foundation.Host feed model 2026-09-06:
+           Method not found: 'Microsoft.AspNetCore.Http.HttpContext
+            Elsa.Http.Core.Models.HttpEndpointFaultContext.get_HttpContext()'
+         Elsa.Http.Core was moved to the framework reference first; this file is its collaborator, and
+         fixing one without the other just moves the mismatch to the next shared type. 23 projects in
+         this tree already use the framework reference - these were the stragglers. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
 	  <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>

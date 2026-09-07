@@ -1,11 +1,28 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <!-- HttpContext (AuthorizeHttpEndpointContext / HttpEndpointFaultContext / fault mapping) comes from
-         Http.Abstractions; declare it explicitly rather than relying on the transitive edge from
-         Routing.Abstractions (#592 item 15). Versions are centrally managed in Directory.Packages.props. -->
-    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" />
-    <PackageReference Include="Microsoft.AspNetCore.Routing.Abstractions" />
+    <!-- LOCAL WORKAROUND for elsa-foundation#1406 (open, unpicked). NOT a committed change - revert with
+         `git checkout src/Elsa/Http/Core/Elsa.Http.Core.csproj`.
+
+         THE STANDALONE PACKAGES AND THE SHARED FRAMEWORK DECLARE THE SAME TYPE NAMES. This project took
+         Microsoft.AspNetCore.Routing.Abstractions as a PackageReference, so IRouteMatcher's signature is
+         typed against THAT package's RouteValueDictionary - while Elsa.Http, which implements it, uses
+         FrameworkReference Microsoft.AspNetCore.App and is typed against the SHARED FRAMEWORK's
+         RouteValueDictionary. Two different types, one name.
+
+         On the Foundation.Host FEED MODEL that is fatal at composition:
+
+             TypeLoadException: Method 'Match' in type 'Elsa.Http.Services.RouteMatcher' from assembly
+             'Elsa.Http, Version=1.0.0.0' does not have an implementation.
+
+         SharedAssemblies cannot paper over it: Microsoft.AspNetCore.Http.Abstractions is on that list,
+         Microsoft.AspNetCore.Routing.Abstractions is not - and adding it would only pick one copy of a
+         type that two assemblies each believe they own.
+
+         The framework reference is what Elsa.Http already uses, so this makes the two agree. It also still
+         supplies HttpContext, which is why the original Http.Abstractions reference (#592 item 15) is not
+         separately needed. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
 </Project>

@@ -51,11 +51,20 @@ public sealed class PublishWorkflowRequestHandler(
     public async Task<PublishedWorkflowView> Handle(PublishWorkflow request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+        // ONE GUARD, TWO CAUSES, AND ONE MESSAGE THAT NAMED ONLY THE FIRST. A null version store reported
+        // itself as "expression validation unavailable", which sends the reader to the validator, the
+        // Expressions module and the JavaScript engine - none of which are involved. Say which is missing.
         if (expressionValidator is null || workflowVersionStore is null)
+        {
+            var missing = new List<string>();
+            if (expressionValidator is null) missing.Add(nameof(IExpressionDraftSemanticValidator) + " (composed by WorkflowDesignValidations)");
+            if (workflowVersionStore is null) missing.Add(nameof(IWorkflowDefinitionVersionStore) + " (composed by the design persistence feature)");
+
             throw new ExpressionPublicationValidationException(new(
                 ExpressionDraftValidationState.Unavailable,
                 [],
-                "expression-validation-unavailable"));
+                "expression-validation-unavailable: publishing could not resolve " + string.Join(" and ", missing)));
+        }
         Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinitionVersion version;
         try
         {
