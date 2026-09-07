@@ -336,7 +336,17 @@ public sealed class GroundworkOpenTelemetryStore :
             Interlocked.Read(ref droppedLogs)));
     }
 
-    public ValueTask DisposeAsync() => drain.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await drain.DisposeAsync();
+        }
+        finally
+        {
+            sessions.Release();
+        }
+    }
 
     private async ValueTask WriteDurablyAsync(
         DiagnosticsDrainBatchId batchId,
@@ -1181,6 +1191,10 @@ public sealed class GroundworkOpenTelemetryStore :
         internal IStorageSession Ledger { get; private set; } = null!;
         internal IStorageSession TraceSummaries { get; private set; } = null!;
 
+        // Only sessions this holder opened on a provider connection are released here. Sessions bound from
+        // a unit of work belong to that unit of work, which disposes them itself.
+        private IOwnedStorageSession[]? owned;
+
         internal V2Sessions() { }
 
         internal static V2Sessions Open(IUnitOfWork work, IReadOnlyList<StorageUnit> units)
@@ -1199,7 +1213,22 @@ public sealed class GroundworkOpenTelemetryStore :
         {
             var access = StorageAccess.Scoped(binding.StorageScope);
             var units = new V2OpenTelemetryStorageSchemaSet().Units;
-            Bind(units.Select(unit => connection.OpenSession(unit, access, observer)).ToArray());
+            // Owned sessions return their provider connection to the pool on disposal. A plain OpenSession
+            // view stays pinned until the provider connection itself is disposed, which leaked a pooled
+            // connection per unit for every store instance a process created (#1597).
+            var opened = new List<IOwnedStorageSession>(units.Count);
+            try
+            {
+                foreach (var unit in units)
+                    opened.Add(connection.OpenOwnedSession(unit, access, observer));
+                Bind(opened);
+                owned = opened.ToArray();
+            }
+            catch
+            {
+                Dispose(opened);
+                throw;
+            }
         }
 
         private void Bind(IReadOnlyList<IStorageSession> opened)
@@ -1220,6 +1249,27 @@ public sealed class GroundworkOpenTelemetryStore :
         internal void Release()
         {
             Traces = Spans = MetricPoints = Logs = Resources = Instruments = Ledger = TraceSummaries = null!;
+            var releasing = Interlocked.Exchange(ref owned, null);
+            if (releasing is not null)
+                Dispose(releasing);
+        }
+
+        private static void Dispose(IReadOnlyList<IOwnedStorageSession> sessions)
+        {
+            List<Exception>? failures = null;
+            foreach (var session in sessions)
+            {
+                try
+                {
+                    session.Dispose();
+                }
+                catch (Exception exception)
+                {
+                    (failures ??= []).Add(exception);
+                }
+            }
+            if (failures is not null)
+                throw new AggregateException("Releasing the OpenTelemetry v2 storage sessions failed.", failures);
         }
 
         private void Validate()

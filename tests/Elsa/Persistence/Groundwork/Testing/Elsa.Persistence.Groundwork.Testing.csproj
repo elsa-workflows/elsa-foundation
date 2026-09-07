@@ -4,6 +4,7 @@
        The v1 document-store doubles it used to carry went with the document substrate itself. -->
 
   <ItemGroup>
+    <PackageReference Include="Groundwork.Sqlite" />
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Groundwork.Kernel" />
     <PackageReference Include="Groundwork.Query.Model" />

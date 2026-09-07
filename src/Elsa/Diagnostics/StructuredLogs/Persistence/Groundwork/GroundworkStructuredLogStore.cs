@@ -235,7 +235,17 @@ public sealed class GroundworkStructuredLogStore :
         startupResource?.AcquireAsync(cancellationToken)
         ?? ValueTask.FromResult<IDiagnosticsPersistenceResourceLease>(DirectResourceLease.Instance);
 
-    public ValueTask DisposeAsync() => new(StopAsync());
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await StopAsync();
+        }
+        finally
+        {
+            ReleaseSession();
+        }
+    }
 
     private StructuredLogEntry ToEntry(IReadOnlyDictionary<string, object?> row)
     {
@@ -355,8 +365,10 @@ public sealed class GroundworkStructuredLogStore :
 
     private void ReleaseSession()
     {
+        // The gate exists only when this store opened its own (owned) session; a session handed in by the
+        // caller stays theirs to dispose.
         if (sessionGate is { } gate)
-            gate.Release();
+            (gate.Release() as IDisposable)?.Dispose();
         else
             session = null;
     }
@@ -575,7 +587,9 @@ public sealed class GroundworkStructuredLogStore :
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 connection.Schema.Apply(owner.unit);
-                var opened = connection.OpenSession(
+                // Owned: the session's provider connection returns to the pool when the store releases it
+                // (#1597); a plain OpenSession view would stay pinned for the provider connection's lifetime.
+                var opened = connection.OpenOwnedSession(
                     owner.unit,
                     StorageAccess.Scoped(StructuredLogsGroundworkStorageSchema.ScopeFor(owner.binding)),
                     owner.commandObserver);

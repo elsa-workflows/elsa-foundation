@@ -55,12 +55,18 @@ public sealed class GroundworkStorageSessionGate :
         }
     }
 
-    public void Release()
+    /// <summary>
+    /// Closes the gate and hands back the session it held, if any, so the owner can dispose it.
+    /// Releasing an unpublished or already released gate returns <see langword="null"/>.
+    /// </summary>
+    public IStorageSession? Release()
     {
         lock (gate)
         {
+            var held = session;
             session = null;
             released = true;
+            return held;
         }
     }
 
