@@ -3000,9 +3000,11 @@ public static partial class DiagnosticsNativePlanContract
         // same index, which MongoDB executes as SORT_MERGE: a streaming merge of already-ordered IXSCAN
         // branches under the LIMIT, never a blocking sort or a materialization. Admit exactly that shape
         // for trace-detail constituents; every other sort-like stage stays blocked.
-        var keysetMerge = sortLikeStages.Length == 1 &&
+        // MongoDB may merge merges: a branch of the keyset SORT_MERGE can itself be a SORT_MERGE over the
+        // same index with the same sort pattern. Every sort-like stage must be such a merge.
+        var keysetMerge = sortLikeStages.Length != 0 &&
                           specification.RouteIdentity.StartsWith("trace-detail/", StringComparison.Ordinal) &&
-                          IsMongoKeysetSortMerge(sortLikeStages[0], specification);
+                          sortLikeStages.All(stage => IsMongoKeysetSortMerge(stage, specification));
         if ((sortLikeStages.Length != 0 && !keysetMerge) || HasSpillMarker(document.RootElement))
             throw BlockedPlan(specification, "MongoDB sort or materialization spill");
         if (stages.Any(stage => stage.TryGetProperty("stage", out var value) && value.ValueKind == JsonValueKind.String &&
@@ -3053,7 +3055,9 @@ public static partial class DiagnosticsNativePlanContract
             if (string.Equals(MongoStageName(leaf), "FETCH", StringComparison.Ordinal) &&
                 leaf.TryGetProperty("inputStage", out var inner))
                 leaf = inner;
-            return string.Equals(MongoStageName(leaf), "IXSCAN", StringComparison.Ordinal);
+            return string.Equals(MongoStageName(leaf), "IXSCAN", StringComparison.Ordinal) ||
+                   (string.Equals(MongoStageName(leaf), "SORT_MERGE", StringComparison.Ordinal) &&
+                    IsMongoKeysetSortMerge(leaf, specification));
         });
     }
 
