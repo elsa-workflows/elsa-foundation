@@ -2894,6 +2894,34 @@ public sealed class DiagnosticsNativePlanAdmissionTests
     }
 
     [Fact]
+    public void Mongo_trace_detail_continuation_admits_a_nested_keyset_sort_merge()
+    {
+        // Cohort run 34112516234: 787 of 1576 blocked pages were SORT_MERGE(FETCH(IXSCAN), IXSCAN,
+        // SORT_MERGE(FETCH(IXSCAN), IXSCAN), SORT_MERGE(FETCH(IXSCAN), IXSCAN)) on the trace-detail index.
+        var (_, command, physicalIndex) = MongoSpansContinuation();
+        var plan = JsonNode.Parse(MongoKeysetSortMergePlan(physicalIndex, command, physicalIndex))!.AsObject();
+        var merge = plan["queryPlanner"]!["winningPlan"]!["inputStage"]!["inputStage"]!.AsObject();
+        var nested = JsonNode.Parse(merge.ToJsonString())!.AsObject();
+        merge["inputStages"]!.AsArray().Add(nested);
+        merge["inputStages"]!.AsArray().Add(JsonNode.Parse(nested.ToJsonString()));
+
+        ValidateMongoSpansContinuation(plan.ToJsonString());
+    }
+
+    [Fact]
+    public void Mongo_trace_detail_continuation_rejects_a_nested_merge_with_a_different_sort_pattern()
+    {
+        var (_, command, physicalIndex) = MongoSpansContinuation();
+        var plan = JsonNode.Parse(MongoKeysetSortMergePlan(physicalIndex, command, physicalIndex))!.AsObject();
+        var merge = plan["queryPlanner"]!["winningPlan"]!["inputStage"]!["inputStage"]!.AsObject();
+        var nested = JsonNode.Parse(merge.ToJsonString())!.AsObject();
+        nested["sortPattern"] = JsonNode.Parse("{\"startTime\":-1,\"__groundwork_ordinal_spanId\":1,\"sequence\":1}");
+        merge["inputStages"]!.AsArray().Add(nested);
+
+        Assert.Throws<PerformanceContractException>(() => ValidateMongoSpansContinuation(plan.ToJsonString()));
+    }
+
+    [Fact]
     public void Mongo_trace_detail_continuation_rejects_a_sort_merge_whose_branch_leaves_the_index()
     {
         var (_, command, physicalIndex) = MongoSpansContinuation();
