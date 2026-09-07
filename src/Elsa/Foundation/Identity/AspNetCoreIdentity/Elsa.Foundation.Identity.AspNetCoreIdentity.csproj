@@ -18,7 +18,10 @@
 
 	<ItemGroup>
 		<!-- Provider implementations live in their own nested projects under this domain root; keep the
-		     base SDK globs from swallowing them. -->
+		     base SDK globs from swallowing them.
+		     EntityFrameworkCore/ is the frozen EF oracle for specs/144-zero-ef-final-removal (see
+		     Directory.Build.props and FrozenAspNetCoreIdentityEfOracleRatchetTests); its globs go away
+		     with that directory in the approved removal work unit, not before. -->
 		<Compile Remove="EntityFrameworkCore/**/*" />
 		<EmbeddedResource Remove="EntityFrameworkCore/**/*" />
 		<None Remove="EntityFrameworkCore/**/*" />
