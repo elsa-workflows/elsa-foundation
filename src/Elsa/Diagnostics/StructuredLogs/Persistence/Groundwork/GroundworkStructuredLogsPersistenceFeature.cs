@@ -4,6 +4,7 @@ using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Core.Options;
 using Elsa.Diagnostics.StructuredLogs.Storage;
+using Elsa.Persistence.Groundwork.Targets;
 using Groundwork.Kernel;
 using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,8 +25,14 @@ public class GroundworkStructuredLogsPersistenceFeature :
 
     public string FeatureIdentity => FeatureName;
 
+    /// <summary>
+    /// Optional Groundwork target for this store's provider connection; null shares the default connection.
+    /// </summary>
+    public string? Target { get; set; }
+
     public virtual void ConfigureServices(IServiceCollection services)
     {
+        var target = Target;
         ArgumentNullException.ThrowIfNull(services);
         services.TryAddSingleton(StructuredLogStoreBinding.Default);
         services.RemoveAll<InMemoryStructuredLogStore>();
@@ -34,7 +41,7 @@ public class GroundworkStructuredLogsPersistenceFeature :
             services.ReplaceDiagnosticsStore<IStructuredLogStore, GroundworkStructuredLogStore>(ServiceLifetime.Singleton);
             services.Replace(ServiceDescriptor.Singleton<GroundworkStructuredLogStore>(serviceProvider =>
                 new GroundworkStructuredLogStore(
-                    serviceProvider.GetRequiredService<IStorageProviderConnection>(),
+                    GroundworkProviderConnections.Resolve(serviceProvider, target, "Diagnostics structured-log persistence"),
                     serviceProvider.GetRequiredService<IOptions<StructuredLogsOptions>>(),
                     serviceProvider.GetRequiredService<StructuredLogStoreBinding>(),
                     observer: serviceProvider.GetService<Elsa.Diagnostics.Persistence.Observability.IDiagnosticsPersistenceObserver>(),

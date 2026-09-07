@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 101
+- Discovered feature classes: 102
 
 ## Features
 
@@ -81,6 +81,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | GroundworkPostgreSqlProviderFeature | feature-base-derived | Elsa.Workbench | GroundworkProviderFeatureBase | [GroundworkPostgreSqlProviderFeature.cs](../../src/Apps/Elsa.Workbench/Groundwork/GroundworkPostgreSqlProviderFeature.cs) |
 | GroundworkProviderFeatureBase | direct IShellFeature | Elsa.Workbench | IShellFeature | [GroundworkSqliteProviderFeature.cs](../../src/Apps/Elsa.Workbench/Groundwork/GroundworkSqliteProviderFeature.cs) |
 | GroundworkSqlServerProviderFeature | feature-base-derived | Elsa.Workbench | GroundworkProviderFeatureBase | [GroundworkSqlServerProviderFeature.cs](../../src/Apps/Elsa.Workbench/Groundwork/GroundworkSqlServerProviderFeature.cs) |
+| GroundworkSqliteDiagnosticsProviderFeature | feature-base-derived | Elsa.Workbench | GroundworkProviderFeatureBase | [GroundworkSqliteDiagnosticsProviderFeature.cs](../../src/Apps/Elsa.Workbench/Groundwork/GroundworkSqliteDiagnosticsProviderFeature.cs) |
 | GroundworkSqliteProviderFeature | feature-base-derived | Elsa.Workbench | GroundworkProviderFeatureBase | [GroundworkSqliteProviderFeature.cs](../../src/Apps/Elsa.Workbench/Groundwork/GroundworkSqliteProviderFeature.cs) |
 | OpenTelemetryEngineTracingBridgeFeature | direct IShellFeature | Elsa.Workbench | IShellFeature | [OpenTelemetryEngineTracingBridge.cs](../../src/Apps/Elsa.Workbench/OpenTelemetryEngineTracingBridge.cs) |
 | RuntimeFaultStackTraceFeature | direct IShellFeature | Elsa.Workbench | IShellFeature | [RuntimeFaultStackTraceFeature.cs](../../src/Apps/Elsa.Workbench/RuntimeFaultStackTraceFeature.cs) |

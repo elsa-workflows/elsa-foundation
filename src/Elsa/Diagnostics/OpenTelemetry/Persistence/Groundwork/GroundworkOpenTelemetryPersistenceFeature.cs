@@ -2,6 +2,7 @@ using CShells.Features;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.Persistence.Extensions;
+using Elsa.Persistence.Groundwork.Targets;
 using Groundwork.Kernel;
 using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,8 +21,14 @@ public class GroundworkOpenTelemetryPersistenceFeature : IShellFeature
 
     public string FeatureIdentity => FeatureName;
 
+    /// <summary>
+    /// Optional Groundwork target for this store's provider connection; null shares the default connection.
+    /// </summary>
+    public string? Target { get; set; }
+
     public virtual void ConfigureServices(IServiceCollection services)
     {
+        var target = Target;
         ArgumentNullException.ThrowIfNull(services);
         services.TryAddSingleton(GroundworkOpenTelemetryBinding.Default);
         services.TryAddSingleton<V2OpenTelemetryBinding>(serviceProvider =>
@@ -36,7 +43,7 @@ public class GroundworkOpenTelemetryPersistenceFeature : IShellFeature
             services.ReplaceDiagnosticsStore<IOpenTelemetryStore, GroundworkOpenTelemetryStore>(ServiceLifetime.Singleton);
             services.Replace(ServiceDescriptor.Singleton<GroundworkOpenTelemetryStore>(serviceProvider =>
                 new GroundworkOpenTelemetryStore(
-                    serviceProvider.GetRequiredService<IStorageProviderConnection>(),
+                    GroundworkProviderConnections.Resolve(serviceProvider, target, "Diagnostics OpenTelemetry persistence"),
                     serviceProvider.GetRequiredService<IOptions<OpenTelemetryDiagnosticsOptions>>(),
                     serviceProvider.GetRequiredService<V2OpenTelemetryBinding>(),
                     sourceRegistry: serviceProvider.GetService<IOpenTelemetrySourceRegistry>(),

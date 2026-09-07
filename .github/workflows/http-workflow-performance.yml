@@ -100,7 +100,7 @@ jobs:
 
       # The server admits its own schema at startup; this only guarantees it starts from an empty database.
       - name: Discard the previous SQLite database
-        run: rm -f src/Apps/Elsa.Workbench/elsa-groundwork.db*
+        run: rm -f src/Apps/Elsa.Workbench/elsa-groundwork.db* src/Apps/Elsa.Workbench/elsa-groundwork-diagnostics.db*
 
       - name: Start server
         run: |

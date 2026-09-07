@@ -13,6 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\..\Persistence\Groundwork\V2\Elsa.Persistence.Groundwork.V2.csproj" />
     <ProjectReference Include="..\..\Core\Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
     <ProjectReference Include="..\..\..\Persistence\Elsa.Diagnostics.Persistence.csproj" />
   </ItemGroup>

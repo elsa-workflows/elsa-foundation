@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 135
 - Test projects: 104
-- Direct project references: 1192
+- Direct project references: 1193
 
 ## Projects
 
@@ -53,7 +53,7 @@ Records direct project references only.
 | [Elsa.Diagnostics.ConsoleLogStreaming](../../src/Elsa/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj) | source | Elsa.Diagnostics | - | default | - |
 | [Elsa.Diagnostics.OpenTelemetry.Core](../../src/Elsa/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj) | source | Elsa.Diagnostics | - | default | - |
 | [Elsa.Diagnostics.OpenTelemetry](../../src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Api.AspNetCore<br>Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Primitives |
-| [Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Diagnostics.Persistence |
+| [Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Diagnostics.Persistence<br>Elsa.Persistence.Groundwork.V2 |
 | [Elsa.Diagnostics.Persistence](../../src/Elsa/Diagnostics/Persistence/Elsa.Diagnostics.Persistence.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Diagnostics.StructuredLogs.Core |
 | [Elsa.Diagnostics.Persistence.Groundwork](../../src/Elsa/Diagnostics/Persistence/Groundwork/Elsa.Diagnostics.Persistence.Groundwork.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork<br>Elsa.Diagnostics.Persistence<br>Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork |
 | [Elsa.Diagnostics.StructuredLogs.Core](../../src/Elsa/Diagnostics/StructuredLogs/Core/Elsa.Diagnostics.StructuredLogs.Core.csproj) | source | Elsa.Diagnostics | - | default | - |

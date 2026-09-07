@@ -25,7 +25,9 @@
             }
           },
           "DiagnosticsOpenTelemetry": {},
-          "DiagnosticsGroundworkPersistence": {},
+          "DiagnosticsGroundworkPersistence": {
+            "Target": "diagnostics"
+          },
           "DiagnosticsOpenTelemetryEngineBridge": {},
           "DiagnosticsStructuredLogs": {},
           "Events": {},
@@ -65,6 +67,7 @@
             "BaseDirectory": ".elsa/copilot"
           },
           "GroundworkProviderSqlite": {},
+          "GroundworkProviderSqliteDiagnostics": {},
           "GroundworkWorkflowRuntime": {
             "CacheWorkflowExecutables": true,
             "WorkflowExecutableCacheCapacity": 256

@@ -24,13 +24,26 @@ namespace Elsa.Diagnostics.Persistence.Groundwork;
     DependsOn = new object[] { "DiagnosticsOpenTelemetry", "DiagnosticsStructuredLogs" })]
 public class DiagnosticsGroundworkPersistenceFeature : IShellFeature
 {
+    /// <summary>
+    /// Groundwork target whose provider connection both diagnostics stores use. Leave unset to share
+    /// the shell's default connection. On SQLite, point this at a second provider feature on its own
+    /// database file: Groundwork serializes every session open and unit of work of one SQLite connection
+    /// on one gate, so a diagnostics drain that shares the runtime's connection stalls every request
+    /// behind its batch commits (issue #1569).
+    /// </summary>
+    [ManifestSetting(
+        DisplayName = "Target",
+        Description = "Optional Groundwork target for the diagnostics stores. Defaults to the shell's default connection.",
+        Category = "Persistence")]
+    public string? Target { get; set; }
+
     public virtual void ConfigureServices(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
         // The concrete features deliberately remain ordinary composition classes rather than separately
         // cataloged shell features: selecting this one feature makes the two diagnostics replacements atomic.
-        new GroundworkOpenTelemetryPersistenceFeature().ConfigureServices(services);
-        new GroundworkStructuredLogsPersistenceFeature().ConfigureServices(services);
+        new GroundworkOpenTelemetryPersistenceFeature { Target = Target }.ConfigureServices(services);
+        new GroundworkStructuredLogsPersistenceFeature { Target = Target }.ConfigureServices(services);
     }
 }
