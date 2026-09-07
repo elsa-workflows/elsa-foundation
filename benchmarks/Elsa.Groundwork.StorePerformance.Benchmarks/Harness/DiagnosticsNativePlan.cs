@@ -2883,10 +2883,19 @@ public static partial class DiagnosticsNativePlanContract
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' retained plan does not contain exactly one winning MongoDB plan.");
 
         var stages = FindObjects(winningPlan, "stage").ToArray();
-        if (stages.Any(stage => stage.TryGetProperty("stage", out var value) && value.ValueKind == JsonValueKind.String &&
-                                (value.GetString()?.Contains("SORT", StringComparison.OrdinalIgnoreCase) == true ||
-                                 value.GetString()?.Contains("MATERIAL", StringComparison.OrdinalIgnoreCase) == true)) ||
-            HasSpillMarker(document.RootElement))
+        var sortLikeStages = stages
+            .Where(stage => stage.TryGetProperty("stage", out var value) && value.ValueKind == JsonValueKind.String &&
+                            (value.GetString()?.Contains("SORT", StringComparison.OrdinalIgnoreCase) == true ||
+                             value.GetString()?.Contains("MATERIAL", StringComparison.OrdinalIgnoreCase) == true))
+            .ToArray();
+        // A keyset continuation page on a nullable-aware trace-detail ordering renders as an $or over the
+        // same index, which MongoDB executes as SORT_MERGE: a streaming merge of already-ordered IXSCAN
+        // branches under the LIMIT, never a blocking sort or a materialization. Admit exactly that shape
+        // for trace-detail constituents; every other sort-like stage stays blocked.
+        var keysetMerge = sortLikeStages.Length == 1 &&
+                          specification.RouteIdentity.StartsWith("trace-detail/", StringComparison.Ordinal) &&
+                          IsMongoKeysetSortMerge(sortLikeStages[0], specification);
+        if ((sortLikeStages.Length != 0 && !keysetMerge) || HasSpillMarker(document.RootElement))
             throw BlockedPlan(specification, "MongoDB sort or materialization spill");
         if (stages.Any(stage => stage.TryGetProperty("stage", out var value) && value.ValueKind == JsonValueKind.String &&
                                 string.Equals(value.GetString(), "COLLSCAN", StringComparison.OrdinalIgnoreCase)))
@@ -2898,13 +2907,46 @@ public static partial class DiagnosticsNativePlanContract
                             value.ValueKind == JsonValueKind.String &&
                             string.Equals(value.GetString(), "IXSCAN", StringComparison.Ordinal))
             .ToArray();
-        if (indexScans.Length != 1 ||
-            !indexScans[0].TryGetProperty("indexName", out var index) ||
-            index.ValueKind != JsonValueKind.String ||
-            !string.Equals(index.GetString(), physicalIndexName, StringComparison.Ordinal))
+        var expectedIndexScans = keysetMerge ? Math.Max(indexScans.Length, 2) : 1;
+        if (indexScans.Length != expectedIndexScans ||
+            indexScans.Any(scan =>
+                !scan.TryGetProperty("indexName", out var index) ||
+                index.ValueKind != JsonValueKind.String ||
+                !string.Equals(index.GetString(), physicalIndexName, StringComparison.Ordinal)))
             throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' retained plan is not the exact MongoDB index scan.");
         if (ContainsMongoPipelineSort(document.RootElement))
             throw BlockedPlan(specification, "MongoDB sort or materialization spill");
+    }
+
+    /// <summary>
+    /// SORT_MERGE is admitted only when its sort pattern is exactly the constituent's physical ordering
+    /// (column and direction, in order) and every input branch is an index scan, optionally under a FETCH.
+    /// The caller still requires the shared physical index name on each scan.
+    /// </summary>
+    private static bool IsMongoKeysetSortMerge(JsonElement stage, DiagnosticsNativeRouteSpec specification)
+    {
+        if (!string.Equals(MongoStageName(stage), "SORT_MERGE", StringComparison.Ordinal) ||
+            !stage.TryGetProperty("sortPattern", out var sortPattern) || sortPattern.ValueKind != JsonValueKind.Object ||
+            !stage.TryGetProperty("inputStages", out var inputs) || inputs.ValueKind != JsonValueKind.Array)
+            return false;
+        var expected = PhysicalCommandSpecification(specification).EffectiveOrdering;
+        var actual = sortPattern.EnumerateObject().ToArray();
+        if (actual.Length != expected.Count ||
+            actual.Where((property, index) =>
+                !string.Equals(property.Name, expected[index].Column, StringComparison.Ordinal) ||
+                property.Value.ValueKind != JsonValueKind.Number ||
+                !property.Value.TryGetInt32(out var direction) ||
+                direction != (expected[index].Direction == RuntimeNativeOrderDirection.Descending ? -1 : 1)).Any())
+            return false;
+        var branches = inputs.EnumerateArray().ToArray();
+        return branches.Length >= 2 && branches.All(branch =>
+        {
+            var leaf = branch;
+            if (string.Equals(MongoStageName(leaf), "FETCH", StringComparison.Ordinal) &&
+                leaf.TryGetProperty("inputStage", out var inner))
+                leaf = inner;
+            return string.Equals(MongoStageName(leaf), "IXSCAN", StringComparison.Ordinal);
+        });
     }
 
     private static bool ContainsMongoPipelineSort(JsonElement root) =>
