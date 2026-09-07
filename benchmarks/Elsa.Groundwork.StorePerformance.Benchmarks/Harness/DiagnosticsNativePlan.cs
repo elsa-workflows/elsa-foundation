@@ -1911,7 +1911,15 @@ public static partial class DiagnosticsNativePlanContract
                 expected.Add((SqlServerSortKeyKind.ByteLength, term.Column, term.Direction));
         }
 
-        if (columns.Length != expected.Count)
+        if (columns.Length > expected.Count)
+            return false;
+        // The optimizer drops sort keys that follow a unique key because they cannot change the order.
+        // Only the resource catalog's primary key qualifies, and only keys on that same column may go.
+        if (columns.Length < expected.Count &&
+            (columns.Length == 0 ||
+             expected[columns.Length - 1].Kind != SqlServerSortKeyKind.Value ||
+             !string.Equals(expected[columns.Length - 1].Column, SqlServerUniqueOrderColumn(specification), StringComparison.Ordinal) ||
+             expected.Skip(columns.Length).Any(term => !string.Equals(term.Column, expected[columns.Length - 1].Column, StringComparison.Ordinal))))
             return false;
 
         foreach (var (column, index) in columns.Select((column, index) => (column, index)))
@@ -1956,7 +1964,10 @@ public static partial class DiagnosticsNativePlanContract
             if (!specification.EffectiveOrdering.Any(term =>
                     string.Equals(term.Column, reference, StringComparison.OrdinalIgnoreCase)))
                 return false;
-            if (IsOrdinalStringOrderColumn(reference))
+            // A bare ordinal column is only admitted when the retained statement itself orders that
+            // column under the ordinal collation; the optimizer folds the COLLATE into the column
+            // reference when the physical collation already matches, so the plan alone cannot prove it.
+            if (IsOrdinalStringOrderColumn(reference) && !SqlServerStatementOrdersOrdinally(document, reference))
                 return false;
             key = (SqlServerSortKeyKind.Value, reference);
             return true;
@@ -1971,7 +1982,7 @@ public static partial class DiagnosticsNativePlanContract
         var expressions = definitions
             .SelectMany(definition => definition.Elements()
                 .Where(element => element.Name.LocalName == "ScalarOperator")
-                .Select(element => element.Attribute("ScalarString")?.Value))
+                .Select(element => element.Attribute("ScalarString")?.Value ?? RenderSqlServerScalar(element)))
             .Where(expression => !string.IsNullOrWhiteSpace(expression))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
@@ -1984,7 +1995,8 @@ public static partial class DiagnosticsNativePlanContract
             key = (SqlServerSortKeyKind.NullRank, sourceColumn);
             return true;
         }
-        if (TryParseSqlServerByteLengthExpression(expression, specification, out sourceColumn))
+        if (TryParseSqlServerByteLengthExpression(expression, specification, out sourceColumn) ||
+            TryParseSqlServerBareByteLengthExpression(expression, specification, document, out sourceColumn))
         {
             key = (SqlServerSortKeyKind.ByteLength, sourceColumn);
             return true;
@@ -1995,6 +2007,77 @@ public static partial class DiagnosticsNativePlanContract
             return true;
         }
         return false;
+    }
+
+    private static string? SqlServerUniqueOrderColumn(DiagnosticsNativeRouteSpec specification) =>
+        specification.TableName == "elsa_otel_resources_v2" ? "id" : null;
+
+    /// <summary>
+    /// Proves an ordinal ordering from the retained statement when the plan shows a bare column: the
+    /// ORDER BY must name the column under <see cref="SqlServerOrdinalCollation"/>.
+    /// </summary>
+    private static bool SqlServerStatementOrdersOrdinally(System.Xml.Linq.XDocument document, string column)
+    {
+        var statements = document.Descendants()
+            .Where(element => element.Name.LocalName == "StmtSimple")
+            .Select(element => element.Attribute("StatementText")?.Value)
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .ToArray();
+        if (statements.Length != 1)
+            return false;
+        var orderBy = statements[0]!.IndexOf("ORDER BY", StringComparison.OrdinalIgnoreCase);
+        return orderBy >= 0 && Regex.IsMatch(
+            statements[0]![orderBy..],
+            @"\[" + Regex.Escape(column) + @"\]\s+COLLATE\s+" + SqlServerOrdinalCollation + @"\s+(ASC|DESC)\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+
+    /// <summary>
+    /// Renders the structured ShowPlan scalar tree into the same text the parsers expect from
+    /// <c>ScalarString</c>, which recent SQL Server builds omit on Compute Scalar definitions. Only the
+    /// operators the diagnostics renderer can produce are rendered; anything else yields null.
+    /// </summary>
+    private static string? RenderSqlServerScalar(System.Xml.Linq.XElement scalarOperator)
+    {
+        var node = scalarOperator.Elements().SingleOrDefault();
+        if (node is null)
+            return null;
+        switch (node.Name.LocalName)
+        {
+            case "Identifier":
+                var reference = node.Elements().SingleOrDefault(element => element.Name.LocalName == "ColumnReference")
+                    ?.Attribute("Column")?.Value;
+                return string.IsNullOrWhiteSpace(reference) ? null : "[" + reference.Trim('[', ']') + "]";
+            case "Const":
+                return node.Attribute("ConstValue")?.Value;
+            case "Intrinsic":
+                var function = node.Attribute("FunctionName")?.Value;
+                var arguments = node.Elements().Where(element => element.Name.LocalName == "ScalarOperator")
+                    .Select(RenderSqlServerScalar).ToArray();
+                return string.IsNullOrWhiteSpace(function) || arguments.Length != 1 || arguments[0] is null
+                    ? null
+                    : $"{function.ToUpperInvariant()}({arguments[0]})";
+            case "Compare":
+                var operands = node.Elements().Where(element => element.Name.LocalName == "ScalarOperator")
+                    .Select(RenderSqlServerScalar).ToArray();
+                return node.Attribute("CompareOp")?.Value == "IS" && operands.Length == 2 && operands[0] is not null &&
+                       string.Equals(operands[1], "NULL", StringComparison.OrdinalIgnoreCase)
+                    ? $"{operands[0]} IS NULL"
+                    : null;
+            case "IF":
+                var condition = node.Elements().SingleOrDefault(element => element.Name.LocalName == "Condition")
+                    ?.Elements().SingleOrDefault(element => element.Name.LocalName == "ScalarOperator");
+                var then = node.Elements().SingleOrDefault(element => element.Name.LocalName == "Then")
+                    ?.Elements().SingleOrDefault(element => element.Name.LocalName == "ScalarOperator");
+                var otherwise = node.Elements().SingleOrDefault(element => element.Name.LocalName == "Else")
+                    ?.Elements().SingleOrDefault(element => element.Name.LocalName == "ScalarOperator");
+                if (condition is null || then is null || otherwise is null)
+                    return null;
+                var parts = new[] { RenderSqlServerScalar(condition), RenderSqlServerScalar(then), RenderSqlServerScalar(otherwise) };
+                return parts.Any(part => part is null) ? null : $"CASE WHEN {parts[0]} THEN {parts[1]} ELSE {parts[2]} END";
+            default:
+                return null;
+        }
     }
 
     private static bool TryParseSqlServerNullRankExpression(
@@ -2032,6 +2115,31 @@ public static partial class DiagnosticsNativePlanContract
                    requireOrdinalCollation: true,
                    out column) &&
                IsOrdinalStringOrderColumn(column);
+    }
+
+    /// <summary>
+    /// <c>DATALENGTH([column])</c> without the COLLATE the renderer emitted: the optimizer folds the
+    /// collation away when it matches the physical column collation, so the retained statement, not the
+    /// plan expression, must prove the ordinal ordering of that column.
+    /// </summary>
+    private static bool TryParseSqlServerBareByteLengthExpression(
+        string expression,
+        DiagnosticsNativeRouteSpec specification,
+        System.Xml.Linq.XDocument document,
+        out string column)
+    {
+        column = string.Empty;
+        var match = Regex.Match(
+            expression,
+            @"^DATALENGTH\(\s*(?:(?:\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\.)*(?<column>\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\s*\)$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (!match.Success)
+            return false;
+        var parsed = match.Groups["column"].Value.Trim('[', ']');
+        column = parsed;
+        return IsOrdinalStringOrderColumn(parsed) &&
+               specification.EffectiveOrdering.Any(term => string.Equals(term.Column, parsed, StringComparison.OrdinalIgnoreCase)) &&
+               SqlServerStatementOrdersOrdinally(document, parsed);
     }
 
     private static bool TryParseSqlServerValueExpression(
