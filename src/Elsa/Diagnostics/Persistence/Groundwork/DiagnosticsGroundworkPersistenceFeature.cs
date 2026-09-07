@@ -26,10 +26,10 @@ public class DiagnosticsGroundworkPersistenceFeature : IShellFeature
 {
     /// <summary>
     /// Groundwork target whose provider connection both diagnostics stores use. Leave unset to share
-    /// the shell's default connection. On SQLite, point this at a second provider feature on its own
-    /// database file: Groundwork serializes every session open and unit of work of one SQLite connection
-    /// on one gate, so a diagnostics drain that shares the runtime's connection stalls every request
-    /// behind its batch commits (issue #1569).
+    /// the shell's default connection. Opt-in: on Groundwork SQLite 0.4.0-preview.9 through preview.17 a
+    /// drain that shares the runtime's connection stalls every request behind its batch commits (issue
+    /// #1569, upstream valence-works/groundwork-v2#424); a host can point this at a second provider
+    /// feature on its own database file until that is fixed upstream.
     /// </summary>
     [ManifestSetting(
         DisplayName = "Target",

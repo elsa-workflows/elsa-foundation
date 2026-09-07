@@ -208,20 +208,20 @@ public sealed class ArchitectureGuardTests
     [Theory]
     [InlineData("shells.json")]
     [InlineData("shells.baseline.json")]
-    public void Server_default_shell_keeps_sqlite_diagnostics_off_the_runtime_connection(string fileName)
+    public void Server_default_shell_diagnostics_target_names_an_enabled_provider(string fileName)
     {
-        // #1569: a Groundwork SQLite connection serializes every session open on one gate, so the
-        // diagnostics drain must run on its own connection and file whenever the SQLite provider is selected.
+        // The Workbench keeps one SQLite file by owner decision; a separate diagnostics connection stays an
+        // opt-in (#1569, pending valence-works/groundwork-v2#424). When a shell does opt in, the target it
+        // names must be provided by an enabled provider feature.
         var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
-        if (!features.ContainsKey("GroundworkProviderSqlite") || !features.ContainsKey("DiagnosticsGroundworkPersistence"))
+        if (features["DiagnosticsGroundworkPersistence"] is not JsonObject diagnostics ||
+            diagnostics["Target"]?.GetValue<string>() is not { } target)
             return;
 
+        Assert.Equal("diagnostics", target);
         Assert.True(
             features.ContainsKey("GroundworkProviderSqliteDiagnostics"),
-            $"{fileName} selects the SQLite provider with Groundwork diagnostics, so it must also enable GroundworkProviderSqliteDiagnostics.");
-        Assert.Equal(
-            "diagnostics",
-            Assert.IsType<JsonObject>(features["DiagnosticsGroundworkPersistence"])["Target"]?.GetValue<string>());
+            $"{fileName} targets '{target}' for diagnostics persistence, so it must enable GroundworkProviderSqliteDiagnostics.");
     }
 
     [Theory]

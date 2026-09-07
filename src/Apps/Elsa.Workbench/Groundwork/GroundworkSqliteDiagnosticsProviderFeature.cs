@@ -5,11 +5,12 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Workbench;
 
 /// <summary>
-/// Provides a second Groundwork SQLite connection, on its own database file, for the diagnostics stores.
-/// A Groundwork SQLite connection serializes every session open and unit of work on one gate, so the
-/// diagnostics drain must not share the runtime's connection: with one shared file every HTTP request
-/// waited behind the drain's batch commits and the HTTP workflow p95 doubled (issue #1569). Pair this
-/// feature with <c>DiagnosticsGroundworkPersistence</c> targeting <see cref="DefaultTarget"/>.
+/// Opt-in second Groundwork SQLite connection, on its own database file, for the diagnostics stores.
+/// A Groundwork SQLite connection (0.4.0-preview.9 through preview.17) serializes every session open behind
+/// any open unit of work on the same connection, so a diagnostics drain sharing the runtime's connection
+/// doubles HTTP latency (issue #1569; upstream valence-works/groundwork-v2#424). The default shell keeps one
+/// SQLite file by owner decision; hosts that need the separation before the upstream fix enable this feature
+/// and set <c>DiagnosticsGroundworkPersistence.Target</c> to <see cref="DefaultTarget"/>.
 /// </summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Persistence")]
