@@ -26,25 +26,7 @@ from typing import Any
 PROVIDERS = ("sqlite", "postgresql", "sqlserver", "mongodb")
 SAFE_IDENTIFIER = re.compile(r"^[A-Za-z0-9._-]+$")
 LOWER_SHA256 = re.compile(r"^[0-9a-f]{64}$")
-SAFE_RAW_PLAN_REFERENCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.(json|txt|xml)$", re.IGNORECASE)
 TASKLIST_CSV_ROW = re.compile(r'^"(?:[^"]|"")*"(?:,"(?:[^"]|"")*"){4}$')
-TRACE_DETAIL_CONSTITUENT_ROUTES = (
-    "trace-detail/summary-by-trace-key",
-    "trace-detail/spans-by-trace-key-start-id",
-    "trace-detail/logs-by-trace-key-timestamp-id",
-    "trace-detail/resources-by-id",
-)
-TRACE_DETAIL_POINT_READ_ROUTES = {
-    "trace-detail/summary-by-trace-key",
-    "trace-detail/resources-by-id",
-}
-ALLOWED_RESULT_FILES = {
-    "comparison.v1.json",
-    "comparison.from-gate.v1.json",
-    "gate.v1.json",
-    "measurement.v1.json",
-    "budget-gate.v1.json",
-}
 CAPTURE_MARKER_PREFIX = ".groundwork-capture-in-progress-"
 
 
@@ -59,18 +41,6 @@ def fail(message: str) -> int:
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def safe_raw_plan_reference(value: Any) -> bool:
-    if not isinstance(value, str) or not value or "/" in value or "\\" in value:
-        return False
-    lowered = value.lower()
-    return (
-        SAFE_RAW_PLAN_REFERENCE.fullmatch(value) is not None
-        and not lowered.endswith((".process.json", ".native-plan.json"))
-        and not lowered.startswith("artifact-manifest.")
-        and lowered not in ALLOWED_RESULT_FILES
-    )
 
 
 def structured_evidence_route(request: dict[str, Any], route: dict[str, Any]) -> bool:
@@ -374,206 +344,33 @@ def validate_evidence(
     timing: bool,
     require_complete: bool = False,
 ) -> dict[str, Any]:
-    try:
-        document = strict_json(path.read_text(encoding="utf-8"), path.name)
-    except OSError as error:
-        raise ValueError(f"cannot read native-plan evidence {path}: {error}") from error
-    expected = {
-        "SchemaVersion": 2,
-        "ComparisonCohortId": request["ComparisonCohortId"],
-        "MeasurementSetId": request["MeasurementSetId"],
-        "WorkloadId": request["WorkloadId"],
-        "WorkloadVersion": request["WorkloadVersion"],
-        "Provider": request["Provider"],
-        "Adapter": request["Adapter"],
-        "PhysicalForm": request["PhysicalForm"],
-        "Scale": request["Scale"],
-        "CommitSha": request["CommitSha"],
-        "HarnessAssemblySha256": request["HarnessAssemblySha256"],
-        "CompositionFingerprint": request["CompositionFingerprint"],
-        "HostFingerprintSha256": request["HostFingerprintSha256"],
-        "ProviderVersion": request["ProviderVersion"],
-        "ProviderTopology": request["ProviderTopology"],
-        "ProviderConfiguration": request["ProviderConfiguration"],
-        "Seed": request["Seed"],
-        "InputFingerprintSha256": request["InputFingerprintSha256"],
-        "Identity": request["NativePlanIdentity"],
-    }
-    mismatches = [name for name, value in expected.items() if document.get(name) != value]
-    if mismatches:
-        raise ValueError(f"{path.name} does not match current request provenance: {', '.join(mismatches)}")
+    """Admit a captured evidence directory for the next phase.
 
-    routes = document.get("Routes")
-    blocked = document.get("BlockedRoutes")
-    trace_detail = document.get("TraceDetailConstituents")
-    if blocked is None:
-        blocked = []
-    if trace_detail is None:
-        trace_detail = []
-    if not isinstance(routes, list) or not isinstance(blocked, list) or not isinstance(trace_detail, list):
-        raise ValueError(f"{path.name} must contain Routes, BlockedRoutes, and TraceDetailConstituents arrays")
-    if any(not isinstance(route, dict) or not isinstance(route.get("RouteIdentity"), str) for route in routes):
-        raise ValueError(f"{path.name} contains an invalid native route entry")
-    if any(not isinstance(route, str) or not route for route in blocked):
-        raise ValueError(f"{path.name} contains an invalid blocked route identity")
-    if document.get("RouteContract") == "provider-native-routes" and blocked:
-        raise ValueError(f"{path.name} claims complete provider-native evidence but declares blocked routes")
-    if request["WorkloadId"] == "diagnostics-durable-history" and request["Adapter"] == "groundwork-v2":
-        contract = document.get("RouteContract")
-        if contract not in ("provider-native-routes", "provider-native-routes-blocked"):
-            raise ValueError(f"{path.name} has an unknown diagnostics route contract")
-        if contract == "provider-native-routes-blocked" and not blocked:
-            raise ValueError(f"{path.name} claims a blocked route contract without blocked routes")
-    route_names = [route["RouteIdentity"] for route in routes]
-    admitted_route_names = route_names + (["trace-detail"] if trace_detail else [])
-    required = registration["RequiredNativeRoutes"]
-    if timing and sorted(admitted_route_names) != sorted(required):
-        raise ValueError(f"{path.name} does not capture every required native route for timing")
-    if sorted(admitted_route_names + blocked) != sorted(required):
-        raise ValueError(f"{path.name} does not account for every required route as captured or blocked")
-    if len(admitted_route_names + blocked) != len(set(admitted_route_names + blocked)):
-        raise ValueError(f"{path.name} contains duplicate captured/blocked route identities")
-    if (timing or require_complete) and (
-        request["WorkloadId"] == "diagnostics-durable-history"
-        and request["Adapter"] == "groundwork-v2"
-        and (
-            document.get("RouteContract") != "provider-native-routes"
-            or blocked
-        )
-    ):
-        raise ValueError(
-            f"{path.name} contains blocked or incomplete provider-native diagnostics evidence; "
-            "the workflow cannot promote it to correctness or measurement"
-        )
-    raw_references = []
-    for route in routes:
-        reference = route.get("RawPlanReference")
-        expected_digest = route.get("RawPlanSha256")
-        if structured_evidence_route(request, route):
-            # Mirrors ArtifactAdmission.IsStructuredEvidenceRoute / InvalidOptionalRawPlanPair: the migrated
-            # SQLite structured-log routes may omit the raw plan, but only as a paired-empty reference and
-            # digest backed by typed structured execution evidence.
-            if not isinstance(reference, str) or not isinstance(expected_digest, str):
-                raise ValueError(f"{path.name} route {route['RouteIdentity']} must carry raw-plan reference and digest fields")
-            if bool(reference) != bool(expected_digest):
-                raise ValueError(
-                    f"{path.name} route {route['RouteIdentity']} must provide both optional raw-plan reference and digest, or neither"
-                )
-            if not reference:
-                if not isinstance(route.get("StructuredEvidence"), dict) or not route["StructuredEvidence"]:
-                    raise ValueError(
-                        f"{path.name} route {route['RouteIdentity']} cannot omit its raw plan without structured execution evidence"
-                    )
-                continue
-        if not safe_raw_plan_reference(reference) or not isinstance(expected_digest, str) or not LOWER_SHA256.fullmatch(expected_digest):
-            raise ValueError(f"{path.name} contains an unsafe raw-plan reference")
-        raw = path.parent / reference
-        if not raw.is_file() or sha256(raw) != expected_digest:
-            raise ValueError(f"raw native plan {reference} is missing or does not match its digest")
-        raw_references.append(reference)
-
-    constituent_names = []
-    for constituent in trace_detail:
-        if (
-            not isinstance(constituent, dict)
-            or not isinstance(constituent.get("RouteIdentity"), str)
-            or not constituent["RouteIdentity"]
-            or not isinstance(constituent.get("RawPlanReference"), str)
-            or not isinstance(constituent.get("RawPlanSha256"), str)
-            or not isinstance(constituent.get("PlanClassification"), str)
-            or not constituent["PlanClassification"].strip()
-            or not isinstance(constituent.get("PhysicalIndexName"), str)
-            or not isinstance(constituent.get("CommandText"), str)
-            or not constituent["CommandText"].strip()
-        ):
-            raise ValueError(f"{path.name} contains an invalid trace-detail constituent entry")
-
-        constituent_names.append(constituent["RouteIdentity"])
-        reference = constituent["RawPlanReference"]
-        digest = constituent["RawPlanSha256"]
-        pages = constituent.get("Pages")
-        is_point_read = constituent["RouteIdentity"] in TRACE_DETAIL_POINT_READ_ROUTES
-        integer_fields = (
-            "PhysicalCardinality",
-            "FiniteLimit",
-            "PublicRowBound",
-            "MaterializedCandidateCount",
-            "ObservedCommandCount",
-            "MaxInvocationCount",
-        )
-        if any(
-            isinstance(constituent.get(name), bool)
-            or not isinstance(constituent.get(name), int)
-            or constituent[name] <= 0
-            for name in integer_fields
-        ) or any(not isinstance(constituent.get(name), bool) for name in ("HasStorageScopePredicate", "HasRoutePredicate")):
-            raise ValueError(f"{path.name} contains invalid trace-detail constituent bounds or predicates")
-        # Mirrors ArtifactAdmission.ExpectedStorageScopePredicate: relational providers inject a synthetic
-        # __groundwork_scope equality, MongoDB isolates scopes with a provider-owned physical collection
-        # and therefore must not expose one.
-        expected_scope_predicate = request["Provider"] != "mongodb"
-        if constituent["HasStorageScopePredicate"] != expected_scope_predicate or not constituent["HasRoutePredicate"]:
-            raise ValueError(f"{path.name} contains a trace-detail constituent without required predicates")
-        if pages is not None and not isinstance(pages, list):
-            raise ValueError(f"{path.name} contains invalid trace-detail continuation pages")
-        if is_point_read:
-            if constituent["PlanClassification"] != "primary-key-read" or constituent["PhysicalIndexName"]:
-                raise ValueError(f"{path.name} contains an invalid trace-detail point-read classification")
-            if reference or digest or pages:
-                raise ValueError(
-                    f"{path.name} contains a trace-detail point read with an explain artifact or continuation page"
-                )
-        else:
-            if (
-                constituent["PlanClassification"] != "index-search"
-                or not constituent["PhysicalIndexName"].strip()
-                or not safe_raw_plan_reference(reference)
-                or not LOWER_SHA256.fullmatch(digest)
-            ):
-                raise ValueError(f"{path.name} contains an unsafe or undigested trace-detail raw-plan reference")
-            raw = path.parent / reference
-            if not raw.is_file() or sha256(raw) != digest:
-                raise ValueError(f"trace-detail raw native plan {reference} is missing or does not match its digest")
-            raw_references.append(reference)
-
-        page_entries = [] if pages is None else pages
-        page_indices = []
-        for page in page_entries:
-            if not isinstance(page, dict):
-                raise ValueError(f"{path.name} contains an invalid trace-detail continuation page entry")
-            page_index = page.get("PageIndex")
-            page_reference = page.get("RawPlanReference")
-            page_digest = page.get("RawPlanSha256")
-            command_text = page.get("CommandText")
-            if (
-                isinstance(page_index, bool)
-                or not isinstance(page_index, int)
-                or page_index <= 0
-                or not safe_raw_plan_reference(page_reference)
-                or not isinstance(page_digest, str)
-                or not LOWER_SHA256.fullmatch(page_digest)
-                or not isinstance(command_text, str)
-                or not command_text.strip()
-            ):
-                raise ValueError(f"{path.name} contains an invalid trace-detail continuation page entry")
-            page_indices.append(page_index)
-            raw = path.parent / page_reference
-            if not raw.is_file() or sha256(raw) != page_digest:
-                raise ValueError(
-                    f"trace-detail page {page_index} raw native plan {page_reference} is missing or does not match its digest"
-                )
-            raw_references.append(page_reference)
-        expected_page_count = 1 if is_point_read else (
-            constituent["PublicRowBound"] + constituent["FiniteLimit"] - 1
-        ) // constituent["FiniteLimit"]
-        if page_indices != list(range(1, expected_page_count)):
-            raise ValueError(f"{path.name} contains non-sequential trace-detail continuation page indexes")
-
-    if trace_detail and sorted(constituent_names) != sorted(TRACE_DETAIL_CONSTITUENT_ROUTES):
-        raise ValueError(f"{path.name} does not account for every trace-detail constituent exactly once")
-    if len(raw_references) != len(set(raw_references)):
-        raise ValueError(f"{path.name} contains duplicate raw provider-plan references")
-    return document
+    The admission rules live in the C# harness (NativePlanEvidenceAdmission, issue #1593); this runner
+    only orchestrates. The AdapterHost `admit-evidence` command binds the document to the current
+    request provenance, accounts for every required route, refuses blocked or incomplete diagnostics
+    evidence when the phase needs complete provider-native routes, and checks every raw plan digest.
+    """
+    del registration  # the harness resolves the workload from the request
+    root = repository_root()
+    child, _ = release_binaries(root)
+    command = [
+        str(child), "admit-evidence",
+        "--request", json.dumps(request, separators=(",", ":")),
+        "--evidence-dir", str(path.parent),
+        "--phase", "measurement" if timing else "correctness",
+    ]
+    if require_complete:
+        command.append("--require-complete")
+    result = subprocess.run(command, cwd=root, check=False, capture_output=True, text=True)
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip().splitlines()
+        raise ValueError(detail[-1] if detail else f"admit-evidence failed with exit code {result.returncode}")
+    values = dict(line.split("=", 1) for line in result.stdout.strip().splitlines() if "=" in line)
+    identity = values.get("native-plan-identity")
+    if not identity:
+        raise ValueError("admit-evidence did not report the native-plan identity")
+    return {"Identity": identity, "RouteContract": values.get("native-plan-route-contract", "")}
 
 
 def require_phase(registration: dict[str, Any], phase: str) -> None:

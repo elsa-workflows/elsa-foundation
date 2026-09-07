@@ -6,7 +6,7 @@
     "benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Harness/DiagnosticsNativePlan.cs": 3169,
     "benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Harness/MongoExplainCommandInspector.cs": 141,
     "benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Harness/RuntimeNativePlan.cs": 939,
-    "tools/groundwork/run-e3-medium-baseline.py": 870
+    "tools/groundwork/run-e3-medium-baseline.py": 667
   },
   "markerOccurrences": {
     "explain-json": 35,

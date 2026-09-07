@@ -16,6 +16,7 @@ try
         "describe-matrix" => DescribeMatrix(),
         "describe-composition" => DescribeComposition(args),
         "capture-plan" => await CapturePlan(args),
+        "admit-evidence" => AdmitEvidence(args),
         "verify-correctness" => await VerifyCorrectness(args),
         "run" => await Run(args),
         _ => throw new PerformanceContractException(
@@ -86,6 +87,34 @@ static async Task<int> ProbeProvider(string[] args)
     Console.WriteLine($"provider-topology={probe.Topology}");
     foreach (var (key, value) in probe.Configuration.OrderBy(pair => pair.Key, StringComparer.Ordinal))
         Console.WriteLine($"provider-setting={key}={value}");
+    return 0;
+}
+
+// Pre-flight admission of a captured evidence directory for the next phase (#1593). The operator runner
+// calls this instead of carrying its own copy of the admission rules; the actual phase commands still
+// re-admit everything they consume.
+static int AdmitEvidence(string[] args)
+{
+    var request = AdmitCurrentInvocation(args, "admit-evidence");
+    var repositoryRoot = SourceProvenance.FindRepositoryRoot();
+    var evidenceDirectory = ArtifactOutputAdmission.RequireExternal(
+        HostArguments.Require(args, "admit-evidence", "--evidence-dir"),
+        repositoryRoot);
+    var phase = HostArguments.Require(args, "admit-evidence", "--phase") switch
+    {
+        "correctness" => BenchmarkPhase.Correctness,
+        "measurement" => BenchmarkPhase.Measurement,
+        var other => throw new PerformanceContractException($"Unknown admission phase '{other}'; expected correctness or measurement.")
+    };
+    var requireComplete = args.Contains("--require-complete", StringComparer.Ordinal);
+    var catalog = WorkloadCatalog.Load(repositoryRoot);
+    var workload = catalog.Workloads.TryGetValue(request.WorkloadId, out var candidate)
+        ? candidate
+        : throw new PerformanceContractException($"Workload '{request.WorkloadId}' is not in the frozen catalog.");
+    var document = NativePlanEvidenceAdmission.ValidateCaptured(workload, request, evidenceDirectory, phase, requireComplete);
+    Console.WriteLine($"native-plan-identity={document.Identity}");
+    Console.WriteLine($"native-plan-route-contract={document.RouteContract}");
+    Console.WriteLine($"native-plan-routes={document.Routes.Count}");
     return 0;
 }
 
