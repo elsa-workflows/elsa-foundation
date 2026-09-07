@@ -508,7 +508,11 @@ def validate_evidence(
             for name in integer_fields
         ) or any(not isinstance(constituent.get(name), bool) for name in ("HasStorageScopePredicate", "HasRoutePredicate")):
             raise ValueError(f"{path.name} contains invalid trace-detail constituent bounds or predicates")
-        if not constituent["HasStorageScopePredicate"] or not constituent["HasRoutePredicate"]:
+        # Mirrors ArtifactAdmission.ExpectedStorageScopePredicate: relational providers inject a synthetic
+        # __groundwork_scope equality, MongoDB isolates scopes with a provider-owned physical collection
+        # and therefore must not expose one.
+        expected_scope_predicate = request["Provider"] != "mongodb"
+        if constituent["HasStorageScopePredicate"] != expected_scope_predicate or not constituent["HasRoutePredicate"]:
             raise ValueError(f"{path.name} contains a trace-detail constituent without required predicates")
         if pages is not None and not isinstance(pages, list):
             raise ValueError(f"{path.name} contains invalid trace-detail continuation pages")
