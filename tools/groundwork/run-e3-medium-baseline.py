@@ -73,6 +73,19 @@ def safe_raw_plan_reference(value: Any) -> bool:
     )
 
 
+def structured_evidence_route(request: dict[str, Any], route: dict[str, Any]) -> bool:
+    """Routes whose native evidence is typed structured execution evidence rather than a raw plan.
+
+    Keep in step with ArtifactAdmission.IsStructuredEvidenceRoute in the benchmark harness.
+    """
+    return (
+        request.get("WorkloadId") == "diagnostics-durable-history"
+        and request.get("Provider") == "sqlite"
+        and request.get("Adapter") == "groundwork-v2"
+        and route.get("RouteIdentity") in ("structured-log-recent", "structured-log-replay")
+    )
+
+
 def ensure_external(path: Path, root: Path, name: str) -> Path:
     resolved = path.expanduser().resolve()
     if resolved == root or root in resolved.parents or resolved in root.parents:
@@ -436,6 +449,22 @@ def validate_evidence(
     for route in routes:
         reference = route.get("RawPlanReference")
         expected_digest = route.get("RawPlanSha256")
+        if structured_evidence_route(request, route):
+            # Mirrors ArtifactAdmission.IsStructuredEvidenceRoute / InvalidOptionalRawPlanPair: the migrated
+            # SQLite structured-log routes may omit the raw plan, but only as a paired-empty reference and
+            # digest backed by typed structured execution evidence.
+            if not isinstance(reference, str) or not isinstance(expected_digest, str):
+                raise ValueError(f"{path.name} route {route['RouteIdentity']} must carry raw-plan reference and digest fields")
+            if bool(reference) != bool(expected_digest):
+                raise ValueError(
+                    f"{path.name} route {route['RouteIdentity']} must provide both optional raw-plan reference and digest, or neither"
+                )
+            if not reference:
+                if not isinstance(route.get("StructuredEvidence"), dict) or not route["StructuredEvidence"]:
+                    raise ValueError(
+                        f"{path.name} route {route['RouteIdentity']} cannot omit its raw plan without structured execution evidence"
+                    )
+                continue
         if not safe_raw_plan_reference(reference) or not isinstance(expected_digest, str) or not LOWER_SHA256.fullmatch(expected_digest):
             raise ValueError(f"{path.name} contains an unsafe raw-plan reference")
         raw = path.parent / reference
