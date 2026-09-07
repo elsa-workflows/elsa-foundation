@@ -114,7 +114,7 @@ public sealed class SecretCreateReadListWorkload
             throw new InvalidOperationException("The Secret workload point read did not return the exact create winner value and version.");
 
         observableResults["read-winner-id"] = winner.Id;
-        observableResults["read-winner-value"] = version.Payload.Value ?? string.Empty;
+        observableResults["read-winner-value"] = version.Payload.Value;
         observableResults["read-winner-version"] = version.Version.ToString();
         operations.Add(OperationSequence[3]);
 

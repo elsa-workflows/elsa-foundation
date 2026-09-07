@@ -242,6 +242,7 @@ internal sealed class RecurringScheduleSelectionAdapter(
 
     private sealed class ScheduleIdentityMap
     {
+        private readonly Lock syncRoot = new();
         private readonly Dictionary<string, string> workloadToStorage = new(StringComparer.Ordinal);
         private readonly Dictionary<string, string> storageToWorkload = new(StringComparer.Ordinal);
 
@@ -253,7 +254,7 @@ internal sealed class RecurringScheduleSelectionAdapter(
                     schedule.ActivationId,
                     schedule.ArtifactId,
                     schedule.ExecutableNodeId);
-            lock (this)
+            lock (syncRoot)
             {
                 if (workloadToStorage.TryGetValue(schedule.ScheduleId, out var existingStorageId) &&
                     !StringComparer.Ordinal.Equals(existingStorageId, storageId))
@@ -278,13 +279,13 @@ internal sealed class RecurringScheduleSelectionAdapter(
 
         public string ToStorageId(string workloadId)
         {
-            lock (this)
+            lock (syncRoot)
                 return workloadToStorage.TryGetValue(workloadId, out var storageId) ? storageId : workloadId;
         }
 
         public RecurringTriggerSchedule ToWorkload(RecurringTriggerSchedule schedule)
         {
-            lock (this)
+            lock (syncRoot)
             {
                 return storageToWorkload.TryGetValue(schedule.ScheduleId, out var workloadId)
                     ? schedule with { ScheduleId = workloadId }
@@ -302,7 +303,7 @@ internal sealed class RecurringScheduleSelectionAdapter(
 
         public void Clear()
         {
-            lock (this)
+            lock (syncRoot)
             {
                 workloadToStorage.Clear();
                 storageToWorkload.Clear();
