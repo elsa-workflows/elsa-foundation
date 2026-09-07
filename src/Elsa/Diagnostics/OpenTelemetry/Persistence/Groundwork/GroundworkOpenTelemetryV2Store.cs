@@ -394,27 +394,32 @@ public sealed class GroundworkOpenTelemetryStore :
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
+                // Reads run on the store's own sessions before the write transaction begins. The drain is
+                // the only writer of the ledger and the trace summaries, and every summary write below still
+                // carries the version it was read at, so a concurrent change fails the commit and this loop
+                // retries with fresh reads. Keeping reads outside the transaction matters on SQLite, whose
+                // single writer lock is held from the moment a unit of work begins: request-path commits
+                // otherwise queue behind this batch's reads as well as its writes (#1569).
+                var ledgerKey = new StorageKey(new Dictionary<string, object?>
+                {
+                    [V2OpenTelemetryStorageSchema.BatchId] = batchId.ToString()
+                });
+                var existingLedger = Read(sessions.Ledger, ledgerKey);
+                if (existingLedger is not null)
+                {
+                    EnsureLedgerMatches(existingLedger, fingerprint);
+                    return;
+                }
+                var existingTraceSummaries = await ReadExistingTraceSummariesAsync(
+                    traceGroups.Select(group => group.Key).ToArray(),
+                    cancellationToken);
+
                 using var work = connection.BeginUnitOfWork(
                     StorageAccess.Scoped(binding.StorageScope),
                     BatchWriteOptions.Exact,
                     commandObserver,
                     schema.Units.ToArray());
                 var transaction = V2Sessions.Open(work, schema.Units);
-                var ledgerKey = new StorageKey(new Dictionary<string, object?>
-                {
-                    [V2OpenTelemetryStorageSchema.BatchId] = batchId.ToString()
-                });
-                var existingLedger = transaction.Ledger.Read(ledgerKey);
-                if (existingLedger is not null)
-                {
-                    EnsureLedgerMatches(existingLedger, fingerprint);
-                    work.Rollback();
-                    return;
-                }
-                var existingTraceSummaryKeys = await ReadExistingTraceSummaryKeysAsync(
-                    transaction.TraceSummaries,
-                    traceGroups.Select(group => group.Key).ToArray(),
-                    cancellationToken);
 
                 foreach (var resource in resources)
                     work.Stage(RowWrite.Upsert(resourceUnit, resource));
@@ -432,12 +437,7 @@ public sealed class GroundworkOpenTelemetryStore :
                     {
                         [V2OpenTelemetryStorageSchema.TraceKey] = group.Key
                     });
-                    // The provider-neutral keyed batch read proves which summaries exist without one
-                    // point read per new trace. Existing rows are still read individually so their
-                    // optimistic-concurrency versions remain authoritative inside this transaction.
-                    var existing = existingTraceSummaryKeys.Contains(group.Key)
-                        ? transaction.TraceSummaries.Read(key)
-                        : null;
+                    var existing = existingTraceSummaries.GetValueOrDefault(group.Key);
                     var records = existing is null
                         ? group.Select(item => item.Trace).ToArray()
                         : new[] { V2OpenTelemetryCodec.DeserializeTraceSummary(existing.Values.Values) }
@@ -548,26 +548,44 @@ public sealed class GroundworkOpenTelemetryStore :
         return services;
     }
 
-    private async ValueTask<HashSet<string>> ReadExistingTraceSummaryKeysAsync(
-        IStorageSession session,
+    /// <summary>
+    /// The provider-neutral keyed batch read proves which summaries exist without one point read per new
+    /// trace; the rows that do exist are then read individually, because only a point read carries the
+    /// optimistic-concurrency version the conditional upsert is written against.
+    /// </summary>
+    private async ValueTask<IReadOnlyDictionary<string, StoredEntry>> ReadExistingTraceSummariesAsync(
         IReadOnlyList<string> traceKeys,
         CancellationToken cancellationToken)
     {
+        var existing = new Dictionary<string, StoredEntry>(StringComparer.Ordinal);
         if (traceKeys.Count == 0)
-            return new(StringComparer.Ordinal);
+            return existing;
 
-        var result = await session.BatchReadAsync(
-            new KeyedBatchReadRequest(
-                new TableId(session.Unit.Name),
-                TraceSummaryColumns.TraceKey,
-                traceKeys.Cast<object?>().ToArray(),
-                Projection.ColumnsOnly(TraceSummaryColumns.TraceKey)),
-            connection,
+        var session = sessions.TraceSummaries;
+        var result = await sessions.SerializedAsync(
+            session,
+            owned => owned.BatchReadAsync(
+                new KeyedBatchReadRequest(
+                    new TableId(owned.Unit.Name),
+                    TraceSummaryColumns.TraceKey,
+                    traceKeys.Cast<object?>().ToArray(),
+                    Projection.ColumnsOnly(TraceSummaryColumns.TraceKey)),
+                connection,
+                cancellationToken),
             cancellationToken);
-        return result.Rows.Select(row => row.Values.TryGetValue(V2OpenTelemetryStorageSchema.TraceKey, out var value) && value is string key
-                ? key
-                : throw new InvalidDataException("The OpenTelemetry trace-summary batch read omitted its trace key."))
-            .ToHashSet(StringComparer.Ordinal);
+        foreach (var row in result.Rows)
+        {
+            if (!row.Values.TryGetValue(V2OpenTelemetryStorageSchema.TraceKey, out var value) || value is not string key)
+                throw new InvalidDataException("The OpenTelemetry trace-summary batch read omitted its trace key.");
+            cancellationToken.ThrowIfCancellationRequested();
+            var entry = Read(session, new StorageKey(new Dictionary<string, object?>
+            {
+                [V2OpenTelemetryStorageSchema.TraceKey] = key
+            }));
+            if (entry is not null)
+                existing[key] = entry;
+        }
+        return existing;
     }
 
     private static async ValueTask AppendExactAsync(
