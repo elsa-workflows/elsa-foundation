@@ -274,6 +274,15 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
                     throw new PerformanceContractException(timeoutMessage());
                 await Task.Delay(50, cancellationToken);
             }
+            catch (Microsoft.Data.SqlClient.SqlException exception) when (exception.Number == 1205)
+            {
+                // A durability probe is a plain count racing the drain's inserts and retention deletes; SQL
+                // Server may pick it as the deadlock victim (cohort run 34118578773). Like SQLite's busy
+                // and locked codes above, that is a retry signal for the probe, not a verdict on the data.
+                if (DateTime.UtcNow >= deadline)
+                    throw new PerformanceContractException(timeoutMessage());
+                await Task.Delay(50, cancellationToken);
+            }
             catch (TimeoutException)
             {
                 throw new PerformanceContractException(timeoutMessage());
