@@ -44,6 +44,7 @@ This is the successor to the completed [Groundwork Persistence Readiness](ground
 ## Linked Surfaces
 
 - [Zero-EF Persistence PRD](https://github.com/elsa-workflows/elsa-foundation/issues/629)
+- [Broad-validation handoff to the harness program](https://github.com/elsa-workflows/elsa-foundation/issues/646#issuecomment-5564064253) (Active Objective 5, delivered 2026-09-07; harness program [#1576](https://github.com/elsa-workflows/elsa-foundation/issues/1576))
 - [Groundwork upstream PRD](https://github.com/valence-works/Groundwork/issues/25)
 - [Delivery project](https://github.com/orgs/elsa-workflows/projects/33) (private organization board)
 - [Zero-EF provider-boundary ADR](../adr/0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md)
