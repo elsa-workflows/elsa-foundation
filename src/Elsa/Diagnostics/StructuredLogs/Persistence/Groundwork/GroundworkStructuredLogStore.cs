@@ -48,6 +48,10 @@ public sealed class GroundworkStructuredLogStore :
     private readonly DiagnosticsDrain<PendingAppend, StructuredLogEntry> drain;
     private readonly V2StartupResource? startupResource;
     private int disposed;
+    // Groundwork serializes commands on shared OpenSession views; an owned session is single-owner, and this
+    // store is that owner. Readers and the drain use the session concurrently, so every command goes through
+    // one gate.
+    private readonly SemaphoreSlim sessionLock = new(1, 1);
 
     public GroundworkStructuredLogStore(
         IStorageSession session,
@@ -132,7 +136,7 @@ public sealed class GroundworkStructuredLogStore :
     public Task<long> GetHighWaterMarkAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var inspection = GetSession().Inspect();
+        var inspection = WithSession(session => session.Inspect());
         return Task.FromResult(inspection.LifetimeCommittedSequenceHighWater ?? 0L);
     }
 
@@ -181,7 +185,7 @@ public sealed class GroundworkStructuredLogStore :
         ArgumentOutOfRangeException.ThrowIfLessThan(maxCount, 1);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var snapshot = GetSession().Inspect().LifetimeCommittedSequenceHighWater ?? 0L;
+        var snapshot = WithSession(session => session.Inspect()).LifetimeCommittedSequenceHighWater ?? 0L;
         var lower = 0L;
         if (afterCursor is { } cursor)
         {
@@ -235,7 +239,17 @@ public sealed class GroundworkStructuredLogStore :
         startupResource?.AcquireAsync(cancellationToken)
         ?? ValueTask.FromResult<IDiagnosticsPersistenceResourceLease>(DirectResourceLease.Instance);
 
-    public ValueTask DisposeAsync() => new(StopAsync());
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await StopAsync();
+        }
+        finally
+        {
+            ReleaseSession();
+        }
+    }
 
     private StructuredLogEntry ToEntry(IReadOnlyDictionary<string, object?> row)
     {
@@ -299,14 +313,14 @@ public sealed class GroundworkStructuredLogStore :
             Columns.Sequence,
             descending ? OrderDirection.Descending : OrderDirection.Ascending,
             descending ? NullOrder.First : NullOrder.Last));
-        return GetSession().Query(
+        return WithSession(session => session.Query(
             new QueryRequest(
                 new TableId(unit.Name),
                 predicate ?? new Predicate.AlwaysTrue(),
                 order,
                 Projection.All,
                 Paging.Keyset(limit)),
-            unit.CreateQueryRenderOptions(selectedIndex));
+            unit.CreateQueryRenderOptions(selectedIndex)));
     }
 
     private Predicate? BuildFilter(StructuredLogFilter filter)
@@ -335,6 +349,20 @@ public sealed class GroundworkStructuredLogStore :
         };
     }
 
+    private T WithSession<T>(Func<IStorageSession, T> operation)
+    {
+        var session = GetSession();
+        sessionLock.Wait();
+        try
+        {
+            return operation(session);
+        }
+        finally
+        {
+            sessionLock.Release();
+        }
+    }
+
     private IStorageSession GetSession() =>
         sessionGate?.Current ?? session ?? throw new InvalidOperationException(
             "The Groundwork v2 storage session has not completed startup admission.");
@@ -355,8 +383,10 @@ public sealed class GroundworkStructuredLogStore :
 
     private void ReleaseSession()
     {
+        // The gate exists only when this store opened its own (owned) session; a session handed in by the
+        // caller stays theirs to dispose.
         if (sessionGate is { } gate)
-            gate.Release();
+            (gate.Release() as IDisposable)?.Dispose();
         else
             session = null;
     }
@@ -394,7 +424,7 @@ public sealed class GroundworkStructuredLogStore :
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                report = GetSession().AppendWithOutcomes(operation, values);
+                report = WithSession(session => session.AppendWithOutcomes(operation, values));
                 break;
             }
             catch (OperationCanceledException)
@@ -452,13 +482,13 @@ public sealed class GroundworkStructuredLogStore :
         var operationId = operation ?? new OperationId(
             DateTimeOffset.UtcNow,
             $"structured_logs_v2_retention_{Guid.NewGuid():N}");
-        var result = GetSession().ApplyRetention(
+        var result = WithSession(session => session.ApplyRetention(
             operationId,
             new RetentionExecutionOptions
             {
                 KeepNewestOverride = keepNewest,
                 CancellationToken = cancellationToken
-            });
+            }));
         return result.DeletedRows;
     }
 
@@ -575,7 +605,9 @@ public sealed class GroundworkStructuredLogStore :
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 connection.Schema.Apply(owner.unit);
-                var opened = connection.OpenSession(
+                // Owned: the session's provider connection returns to the pool when the store releases it
+                // (#1597); a plain OpenSession view would stay pinned for the provider connection's lifetime.
+                var opened = connection.OpenOwnedSession(
                     owner.unit,
                     StorageAccess.Scoped(StructuredLogsGroundworkStorageSchema.ScopeFor(owner.binding)),
                     owner.commandObserver);

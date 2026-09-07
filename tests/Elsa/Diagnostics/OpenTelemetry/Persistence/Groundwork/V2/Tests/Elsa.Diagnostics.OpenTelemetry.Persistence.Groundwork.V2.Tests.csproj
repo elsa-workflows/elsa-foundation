@@ -30,5 +30,6 @@
   <ItemGroup>
     <ProjectReference Include="../../../../../../../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.csproj" />
     <ProjectReference Include="../../../../../../../../src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\Persistence\Groundwork\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
   </ItemGroup>
 </Project>

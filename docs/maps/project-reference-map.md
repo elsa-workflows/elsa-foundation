@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 135
 - Test projects: 104
-- Direct project references: 1193
+- Direct project references: 1194
 
 ## Projects
 
@@ -181,7 +181,7 @@ Records direct project references only.
 | [Elsa.Attention.Core.Tests](../../tests/Elsa/Attention/Core/Tests/Elsa.Attention.Core.Tests.csproj) | test | Elsa.Attention | - | default | Elsa.Attention.Core |
 | [Elsa.Caching.Tests](../../tests/Elsa/Caching/Tests/Elsa.Caching.Tests.csproj) | test | Elsa.Caching | - | default | Elsa.Caching.Core<br>Elsa.Caching.Memory |
 | [Elsa.Diagnostics.ConsoleLogStreaming.Tests](../../tests/Elsa/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj) | test | Elsa.Diagnostics | - | default | Elsa.Diagnostics.ConsoleLogStreaming |
-| [Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork |
+| [Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing |
 | [Elsa.Diagnostics.OpenTelemetry.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj) | test | Elsa.Diagnostics | - | default | Elsa.Api.Compatibility.Testing<br>Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Core |
 | [Elsa.Diagnostics.Persistence.Groundwork.Tests](../../tests/Elsa/Diagnostics/Persistence/Groundwork/Tests/Elsa.Diagnostics.Persistence.Groundwork.Tests.csproj) | test | Elsa.Diagnostics | - | default | Elsa.Diagnostics.Persistence.Groundwork |
 | [Elsa.Diagnostics.Persistence.Groundwork.V2.Consumer](../../tests/Elsa/Diagnostics/Persistence/Groundwork/V2/Consumer/Elsa.Diagnostics.Persistence.Groundwork.V2.Consumer.csproj) | test | Elsa.Diagnostics | net10.0 | false | - |

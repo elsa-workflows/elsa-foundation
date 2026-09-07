@@ -9,7 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 135
 - Test projects: 104
 - Domains: 27
-- Direct cross-domain references: 705
+- Direct cross-domain references: 706
 
 ## Domains
 
@@ -214,7 +214,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Attention.Core.Tests](../../tests/Elsa/Attention/Core/Tests/Elsa.Attention.Core.Tests.csproj) | test | Elsa.Attention | Core.Tests | test | Elsa.Attention.Core |
 | [Elsa.Caching.Tests](../../tests/Elsa/Caching/Tests/Elsa.Caching.Tests.csproj) | test | Elsa.Caching | Tests | test | Elsa.Caching.Core<br>Elsa.Caching.Memory |
 | [Elsa.Diagnostics.ConsoleLogStreaming.Tests](../../tests/Elsa/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj) | test | Elsa.Diagnostics | ConsoleLogStreaming.Tests | test | Elsa.Diagnostics.ConsoleLogStreaming |
-| [Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests.csproj) | test | Elsa.Diagnostics | OpenTelemetry.Persistence.Groundwork.V2.Tests | test | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork |
+| [Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests.csproj) | test | Elsa.Diagnostics | OpenTelemetry.Persistence.Groundwork.V2.Tests | test | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing |
 | [Elsa.Diagnostics.OpenTelemetry.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj) | test | Elsa.Diagnostics | OpenTelemetry.Tests | test | Elsa.Api.Compatibility.Testing<br>Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Core |
 | [Elsa.Diagnostics.Persistence.Groundwork.Tests](../../tests/Elsa/Diagnostics/Persistence/Groundwork/Tests/Elsa.Diagnostics.Persistence.Groundwork.Tests.csproj) | test | Elsa.Diagnostics | Persistence.Groundwork.Tests | test | Elsa.Diagnostics.Persistence.Groundwork |
 | [Elsa.Diagnostics.Persistence.Groundwork.V2.Consumer](../../tests/Elsa/Diagnostics/Persistence/Groundwork/V2/Consumer/Elsa.Diagnostics.Persistence.Groundwork.V2.Consumer.csproj) | test | Elsa.Diagnostics | Persistence.Groundwork.V2.Consumer | test | - |
@@ -513,6 +513,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Diagnostics.OpenTelemetry](../../src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | Elsa.Diagnostics | [Elsa.Foundation.Identity.Abstractions](../../src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj) | Elsa.Foundation |
 | [Elsa.Diagnostics.OpenTelemetry](../../src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj) | Elsa.Diagnostics | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.csproj) | Elsa.Diagnostics | [Elsa.Persistence.Groundwork.V2](../../src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj) | Elsa.Persistence |
+| [Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests.csproj) | Elsa.Diagnostics | [Elsa.Persistence.Groundwork.Testing](../../tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj) | Elsa.Persistence |
 | [Elsa.Diagnostics.OpenTelemetry.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj) | Elsa.Diagnostics | [Elsa.Api.Compatibility.Testing](../../tests/Elsa/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj) | Elsa.Api |
 | [Elsa.Diagnostics.Persistence.Tests](../../tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj) | Elsa.Diagnostics | [Elsa.Persistence.Groundwork.V2](../../src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj) | Elsa.Persistence |
 | [Elsa.Diagnostics.StructuredLogs](../../src/Elsa/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs.csproj) | Elsa.Diagnostics | [Elsa.Api.AspNetCore](../../src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | Elsa.Api |
