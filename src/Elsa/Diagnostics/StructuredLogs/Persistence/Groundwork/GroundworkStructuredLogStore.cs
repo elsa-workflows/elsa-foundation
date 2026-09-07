@@ -220,6 +220,10 @@ public sealed class GroundworkStructuredLogStore :
 
     public void Start() => drain.Start();
 
+    /// <summary>Applies the drain's capacity retention now; see the OpenTelemetry store's counterpart.</summary>
+    public Task ApplyPendingRetentionAsync(CancellationToken cancellationToken = default) =>
+        drain.ApplyPendingRetentionAsync(cancellationToken);
+
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
         Interlocked.Exchange(ref disposed, 1);

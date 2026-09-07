@@ -77,6 +77,14 @@ public sealed class GroundworkOpenTelemetryStore :
 
     public void Start() => drain.Start();
 
+    /// <summary>
+    /// Applies capacity retention for everything committed so far. Awaiting write acknowledgements only
+    /// proves the records are durable; the periodic retention pass that evicts overflow may not have
+    /// run yet. Callers that need exact retained counts call this after their durability wait.
+    /// </summary>
+    public Task ApplyPendingRetentionAsync(CancellationToken cancellationToken = default) =>
+        drain.ApplyPendingRetentionAsync(cancellationToken);
+
     public ValueTask WriteAsync(OpenTelemetryBatch batch, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(batch);
