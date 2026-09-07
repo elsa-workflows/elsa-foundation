@@ -2739,6 +2739,117 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             path);
     }
 
+    private static string MongoKeysetSortMergePlan(string index, string command, string secondBranchIndex, string sortPattern = "{\"startTime\":1,\"__groundwork_ordinal_spanId\":1,\"sequence\":1}") =>
+        new JsonObject
+        {
+            ["queryPlanner"] = new JsonObject
+            {
+                ["winningPlan"] = new JsonObject
+                {
+                    ["stage"] = "LIMIT",
+                    ["limitAmount"] = 128,
+                    ["inputStage"] = new JsonObject
+                    {
+                        ["stage"] = "FETCH",
+                        ["inputStage"] = new JsonObject
+                        {
+                            ["stage"] = "SORT_MERGE",
+                            ["sortPattern"] = JsonNode.Parse(sortPattern),
+                            ["inputStages"] = new JsonArray(
+                                new JsonObject { ["stage"] = "FETCH", ["inputStage"] = new JsonObject { ["stage"] = "IXSCAN", ["indexName"] = index } },
+                                new JsonObject { ["stage"] = "IXSCAN", ["indexName"] = secondBranchIndex })
+                        }
+                    }
+                }
+            },
+            ["command"] = JsonNode.Parse(command)
+        }.ToJsonString();
+
+    private static (DiagnosticsTraceDetailConstituentSpec Constituent, string Command, string PhysicalIndex) MongoSpansContinuation()
+    {
+        var constituent = DiagnosticsNativePlanContract.TraceDetailConstituents(
+                DiagnosticsNativePlanContract.GroundworkAdapter)
+            .Single(item => item.RouteIdentity == "trace-detail/spans-by-trace-key-start-id");
+        var routeSpecification = new DiagnosticsNativeRouteSpec(
+            constituent.RouteIdentity,
+            constituent.TableName,
+            constituent.IndexName,
+            constituent.Ordering[0].Column,
+            constituent.PredicateColumn,
+            constituent.PhysicalCardinality,
+            constituent.FiniteLimit,
+            constituent.StorageScopeRequired,
+            false,
+            constituent.Ordering);
+        var physicalIndex = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("mongodb", routeSpecification);
+        var commandDocument = JsonNode.Parse(Fixture.MongoAggregateCommand(
+            routeSpecification,
+            match: "{\"traceKey\":\"trace\"}"))!.AsObject();
+        commandDocument["pipeline"]!.AsArray().Insert(1, JsonNode.Parse("""
+            {
+              "$match": {
+                "$or": [
+                  { "$or": [ { "startTime": { "$gt": 1 } }, { "startTime": null } ] },
+                  { "$and": [ { "startTime": 1 }, { "$or": [ { "__groundwork_ordinal_spanId": { "$gt": "span" } }, { "__groundwork_ordinal_spanId": null } ] } ] },
+                  { "$and": [ { "startTime": 1 }, { "__groundwork_ordinal_spanId": "span" }, { "sequence": { "$gt": 1 } } ] }
+                ]
+              }
+            }
+            """));
+        return (constituent, commandDocument.ToJsonString(), physicalIndex);
+    }
+
+    private static void ValidateMongoSpansContinuation(string nativePlan)
+    {
+        var (constituent, command, physicalIndex) = MongoSpansContinuation();
+        using var directory = new TemporaryDirectory();
+        var path = System.IO.Path.Combine(directory.FullName, "spans-mongo.raw.json");
+        File.WriteAllText(path, JsonSerializer.Serialize(new DiagnosticsNativePlanArtifact(
+            1, "mongodb", DiagnosticsNativePlanContract.GroundworkAdapter, constituent.RouteIdentity,
+            constituent.TableName, constituent.IndexName, physicalIndex, command, nativePlan)));
+        var evidence = new DiagnosticsTraceDetailConstituentEvidence(
+            constituent.RouteIdentity, "spans-mongo.raw.json", new string('a', 64), "index-search", physicalIndex, command,
+            constituent.PhysicalCardinality, false, true, constituent.FiniteLimit, constituent.PublicRowBound,
+            constituent.PublicRowBound, constituent.MaxInvocationCount, constituent.MaxInvocationCount);
+        DiagnosticsNativePlanContract.ValidateTraceDetailConstituent("mongodb", DiagnosticsNativePlanContract.GroundworkAdapter, evidence, path);
+    }
+
+    [Fact]
+    public void Mongo_trace_detail_continuation_admits_a_keyset_sort_merge_over_the_same_index()
+    {
+        // Cohort run 34092269041: nullable-aware keyset pages render as an $or that MongoDB executes as
+        // SORT_MERGE over ordered IXSCAN branches of the trace-detail index under the LIMIT.
+        var (_, command, physicalIndex) = MongoSpansContinuation();
+        ValidateMongoSpansContinuation(MongoKeysetSortMergePlan(physicalIndex, command, physicalIndex));
+    }
+
+    [Fact]
+    public void Mongo_trace_detail_continuation_rejects_a_sort_merge_whose_branch_leaves_the_index()
+    {
+        var (_, command, physicalIndex) = MongoSpansContinuation();
+        Assert.Throws<PerformanceContractException>(() =>
+            ValidateMongoSpansContinuation(MongoKeysetSortMergePlan(physicalIndex, command, "elsa_otel_spans_other")));
+    }
+
+    [Fact]
+    public void Mongo_trace_detail_continuation_rejects_a_sort_merge_with_a_different_sort_pattern()
+    {
+        var (_, command, physicalIndex) = MongoSpansContinuation();
+        Assert.Throws<PerformanceContractException>(() =>
+            ValidateMongoSpansContinuation(MongoKeysetSortMergePlan(
+                physicalIndex, command, physicalIndex, "{\"startTime\":-1,\"__groundwork_ordinal_spanId\":1,\"sequence\":1}")));
+    }
+
+    [Fact]
+    public void Mongo_scale_bearing_route_still_rejects_a_sort_merge()
+    {
+        var plan = "{\"winningPlan\":{\"stage\":\"SORT_MERGE\",\"sortPattern\":{\"lastSeen\":-1},\"inputStages\":[{\"stage\":\"IXSCAN\",\"indexName\":\"elsa_otel_resources_last_seen\"},{\"stage\":\"IXSCAN\",\"indexName\":\"elsa_otel_resources_last_seen\"}]}}";
+        using var fixture = Fixture.Create("mongodb", "resources-by-last-seen", nativePlan: plan);
+
+        Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateEnvelope(
+            "mongodb", fixture.Adapter, fixture.Route, fixture.Path));
+    }
+
     [Theory]
     [InlineData("sqlite", "2 0 SEARCH elsa_otel_resources_v2 USING INDEX elsa_otel_resources_last_seen (__groundwork_scope=?)\n3 0 USE TEMP B-TREE FOR ORDER BY")]
     [InlineData("sqlite", "2 0 SEARCH elsa_otel_resources_v2 USING INDEX elsa_otel_resources_last_seen (__groundwork_scope=?)\n3 0 MATERIALIZE page")]
