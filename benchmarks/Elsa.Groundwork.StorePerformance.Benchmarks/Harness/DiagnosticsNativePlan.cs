@@ -2240,16 +2240,28 @@ public static partial class DiagnosticsNativePlanContract
                properties.All(property => IsMongoEqualityValue(property.Value));
     }
 
+    /// <summary>
+    /// The replay window is one bounded range on <c>sequence</c>. Groundwork has rendered it both as a
+    /// single-term <c>$and</c> conjunction (preview.16) and as the flat <c>{ sequence: { $gt, $lte } }</c>
+    /// filter (preview.17); MongoDB evaluates both identically, so both are admitted. A second term, a second
+    /// column, or a missing bound is still rejected.
+    /// </summary>
     private static bool ValidateMongoReplayRangePredicate(JsonElement filter)
     {
         var properties = filter.EnumerateObject().ToArray();
-        if (properties.Length != 1 || !string.Equals(properties[0].Name, "$and", StringComparison.Ordinal) ||
-            properties[0].Value.ValueKind != JsonValueKind.Array)
+        if (properties.Length != 1)
             return false;
-        var terms = properties[0].Value.EnumerateArray().ToArray();
-        if (terms.Length != 1 || terms[0].ValueKind != JsonValueKind.Object)
-            return false;
-        var rangeProperties = terms[0].EnumerateObject().ToArray();
+        var range = filter;
+        if (string.Equals(properties[0].Name, "$and", StringComparison.Ordinal))
+        {
+            if (properties[0].Value.ValueKind != JsonValueKind.Array)
+                return false;
+            var terms = properties[0].Value.EnumerateArray().ToArray();
+            if (terms.Length != 1 || terms[0].ValueKind != JsonValueKind.Object)
+                return false;
+            range = terms[0];
+        }
+        var rangeProperties = range.EnumerateObject().ToArray();
         if (rangeProperties.Length != 1 || !string.Equals(rangeProperties[0].Name, "sequence", StringComparison.Ordinal) ||
             rangeProperties[0].Value.ValueKind != JsonValueKind.Object)
             return false;

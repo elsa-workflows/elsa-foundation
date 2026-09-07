@@ -2940,6 +2940,43 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             DiagnosticsNativePlanContract.ValidateEnvelope("mongodb", fixture.Adapter, fixture.Route, fixture.Path));
     }
 
+    [Theory]
+    [InlineData("{\"sequence\":{\"$gt\":0,\"$lte\":101000}}")]
+    [InlineData("{\"sequence\":{\"$lte\":101000,\"$gt\":0}}")]
+    public void Groundwork_mongodb_replay_admits_the_flat_bounded_snapshot_window(string match)
+    {
+        // Groundwork 0.4.0-preview.17 renders the replay range without the single-term $and wrapper that
+        // preview.16 emitted (cohort run 34088499054, MongoDB capture). Same predicate, both shapes admitted.
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "structured-log-replay");
+        using var fixture = Fixture.Create(
+            "mongodb",
+            "structured-log-replay",
+            command: Fixture.MongoAggregateCommand(specification, match: match));
+
+        DiagnosticsNativePlanContract.ValidateEnvelope("mongodb", fixture.Adapter, fixture.Route, fixture.Path);
+    }
+
+    [Theory]
+    [InlineData("{\"sequence\":{\"$gt\":0}}")]
+    [InlineData("{\"sequence\":{\"$gt\":0,\"$lte\":101000},\"level\":\"Error\"}")]
+    [InlineData("{\"$and\":[{\"sequence\":{\"$gt\":0,\"$lte\":101000}},{\"level\":\"Error\"}]}")]
+    [InlineData("{\"$and\":[{\"sequence\":{\"$gt\":0,\"$lte\":101000},\"level\":\"Error\"}]}")]
+    public void Groundwork_mongodb_replay_rejects_flat_or_conjoined_windows_that_are_not_the_exact_range(string match)
+    {
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "structured-log-replay");
+        using var fixture = Fixture.Create(
+            "mongodb",
+            "structured-log-replay",
+            command: Fixture.MongoAggregateCommand(specification, match: match));
+
+        Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateEnvelope("mongodb", fixture.Adapter, fixture.Route, fixture.Path));
+    }
+
     [Fact]
     public void Groundwork_route_requires_the_storage_scope_equality_even_when_route_flags_claim_it()
     {
