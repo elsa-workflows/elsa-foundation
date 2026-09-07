@@ -400,6 +400,68 @@ with tempfile.TemporaryDirectory() as directory:
     }
 
     [Fact]
+    public void Operator_runner_expects_no_storage_scope_predicate_on_mongodb_trace_detail_constituents()
+    {
+        // Cohort run 34116733178: MongoDB capture passed with zero blocked routes and correctness refused
+        // the evidence because the runner demanded a __groundwork_scope predicate MongoDB never renders.
+        var runnerPath = Path.Combine(RepoRoot, "tools", "groundwork", "run-e3-medium-baseline.py");
+        const string assertions = """
+import copy
+import hashlib
+import json
+import runpy
+import sys
+import tempfile
+from pathlib import Path
+
+module = runpy.run_path(sys.argv[1])
+validate_evidence = module["validate_evidence"]
+
+def provenance(provider):
+    return {
+        "ComparisonCohortId": "cohort", "MeasurementSetId": "set", "WorkloadId": "diagnostics-durable-history",
+        "WorkloadVersion": "1.3", "Provider": provider, "Adapter": "groundwork-v2", "PhysicalForm": "form",
+        "Scale": "medium", "CommitSha": "c" * 40, "HarnessAssemblySha256": "a" * 64, "CompositionFingerprint": "f",
+        "HostFingerprintSha256": "h" * 64, "ProviderVersion": "7.0", "ProviderTopology": "single",
+        "ProviderConfiguration": "default", "Seed": 1, "InputFingerprintSha256": "i" * 64,
+    }
+
+def run(provider, scope_predicate):
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        raw = root / "detail.raw.json"
+        raw.write_text("{}", encoding="utf-8")
+        digest = hashlib.sha256(raw.read_bytes()).hexdigest()
+        constituent = {
+            "RouteIdentity": "trace-detail/resources-by-id", "RawPlanReference": "", "RawPlanSha256": "",
+            "PlanClassification": "primary-key-read", "PhysicalIndexName": "", "CommandText": "find",
+            "PhysicalCardinality": 1, "FiniteLimit": 1, "PublicRowBound": 1, "MaterializedCandidateCount": 1,
+            "ObservedCommandCount": 1, "MaxInvocationCount": 1,
+            "HasStorageScopePredicate": scope_predicate, "HasRoutePredicate": True,
+        }
+        document = dict(provenance(provider), SchemaVersion=2, Identity="identity", RouteContract="provider-native-routes",
+                        BlockedRoutes=[], Routes=[], TraceDetailConstituents=[constituent])
+        path = root / "x.native-plan.json"
+        path.write_text(json.dumps(document), encoding="utf-8")
+        request = dict(provenance(provider), NativePlanIdentity="identity")
+        registration = {"RequiredNativeRoutes": ["trace-detail"]}
+        try:
+            validate_evidence(path, request, registration, timing=False, require_complete=True)
+            return None
+        except ValueError as exception:
+            return str(exception)
+
+assert run("mongodb", False) is None or "required predicates" not in run("mongodb", False), run("mongodb", False)
+assert "required predicates" in (run("mongodb", True) or ""), "mongodb constituent with a scope predicate was accepted"
+assert "required predicates" in (run("postgresql", False) or ""), "postgresql constituent without a scope predicate was accepted"
+""";
+
+        var result = RunPython(assertions, runnerPath);
+
+        Assert.True(result.ExitCode == 0, result.Error);
+    }
+
+    [Fact]
     public void Operator_runner_admits_typed_sqlite_structured_log_routes_without_raw_plans()
     {
         var runnerPath = Path.Combine(RepoRoot, "tools", "groundwork", "run-e3-medium-baseline.py");
