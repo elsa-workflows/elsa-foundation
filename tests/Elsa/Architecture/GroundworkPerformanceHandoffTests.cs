@@ -400,6 +400,76 @@ with tempfile.TemporaryDirectory() as directory:
     }
 
     [Fact]
+    public void Operator_runner_admits_typed_sqlite_structured_log_routes_without_raw_plans()
+    {
+        var runnerPath = Path.Combine(RepoRoot, "tools", "groundwork", "run-e3-medium-baseline.py");
+        const string assertions = """
+import copy
+import json
+import runpy
+import sys
+import tempfile
+from pathlib import Path
+
+module = runpy.run_path(sys.argv[1])
+validate_evidence = module["validate_evidence"]
+
+provenance = {
+    "ComparisonCohortId": "cohort", "MeasurementSetId": "set", "WorkloadId": "diagnostics-durable-history",
+    "WorkloadVersion": "1.3", "Provider": "sqlite", "Adapter": "groundwork-v2", "PhysicalForm": "form",
+    "Scale": "medium", "CommitSha": "c" * 40, "HarnessAssemblySha256": "a" * 64, "CompositionFingerprint": "f",
+    "HostFingerprintSha256": "h" * 64, "ProviderVersion": "3.50.4", "ProviderTopology": "single",
+    "ProviderConfiguration": "default", "Seed": 1, "InputFingerprintSha256": "i" * 64,
+}
+request = dict(provenance, NativePlanIdentity="identity")
+registration = {"RequiredNativeRoutes": ["structured-log-recent"]}
+document = dict(provenance, SchemaVersion=2, Identity="identity", RouteContract="provider-native-routes", BlockedRoutes=[])
+typed_route = {
+    "RouteIdentity": "structured-log-recent", "RawPlanReference": "", "RawPlanSha256": "",
+    "PlanClassification": "index-search", "IndexName": "ix", "PhysicalCardinality": 1,
+    "HasStorageScopePredicate": True, "HasRoutePredicate": False, "FiniteLimit": 127,
+    "MaterializedCandidateCount": 127, "ResultShape": 0, "StructuredEvidence": {"SchemaVersion": 1},
+}
+
+def check(route, expect=None):
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "x.native-plan.json"
+        path.write_text(json.dumps(dict(document, Routes=[route])), encoding="utf-8")
+        try:
+            validate_evidence(path, request, registration, timing=False, require_complete=True)
+        except ValueError as exception:
+            assert expect is not None and expect in str(exception), exception
+        else:
+            assert expect is None, f"accepted a route that should have been rejected: {expect}"
+
+check(typed_route)
+
+no_evidence = copy.deepcopy(typed_route)
+del no_evidence["StructuredEvidence"]
+check(no_evidence, "without structured execution evidence")
+
+half_pair = copy.deepcopy(typed_route)
+half_pair["RawPlanSha256"] = "0" * 64
+check(half_pair, "both optional raw-plan reference and digest, or neither")
+
+other_provider = dict(request, Provider="postgresql")
+with tempfile.TemporaryDirectory() as directory:
+    path = Path(directory) / "x.native-plan.json"
+    path.write_text(json.dumps(dict(document, Provider="postgresql", Routes=[typed_route])), encoding="utf-8")
+    try:
+        validate_evidence(path, other_provider, registration, timing=False, require_complete=True)
+    except ValueError as exception:
+        assert "unsafe raw-plan reference" in str(exception), exception
+    else:
+        raise AssertionError("a non-SQLite route omitted its raw plan and was accepted")
+""";
+
+        var result = RunPython(assertions, runnerPath);
+
+        Assert.True(result.ExitCode == 0, result.Error);
+    }
+
+    [Fact]
     public void Operator_runner_invalidates_evidence_when_capture_does_not_complete()
     {
         var runnerPath = Path.Combine(RepoRoot, "tools", "groundwork", "run-e3-medium-baseline.py");
