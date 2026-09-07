@@ -1967,6 +1967,76 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             fixture.Path);
     }
 
+    private static string RealSqlServerBoundedCatalogPlan() =>
+        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "sqlserver-resources-by-last-seen-showplan.xml"));
+
+    private static string RealSqlServerStatementText(string plan) =>
+        System.Xml.Linq.XDocument.Parse(plan).Descendants()
+            .Single(element => element.Name.LocalName == "StmtSimple")
+            .Attribute("StatementText")!.Value;
+
+    [Fact]
+    public void SqlServer_real_bounded_catalog_plan_from_cohort_34088499054_is_admitted()
+    {
+        // SQL Server 16.0.4215 retained plan: Top → Sort → Filter → Compute Scalar → Table Scan, 128 rows, no
+        // spill. Its DefinedValues carry structured datalength() trees without ScalarString, the collated
+        // idOrderKey/id keys appear as bare column references, and the trailing DATALENGTH([id]) key was
+        // pruned after the unique id key.
+        var specification = DiagnosticsNativePlanContract.For(
+            DiagnosticsNativePlanContract.GroundworkAdapter,
+            "resources-by-last-seen");
+        var plan = RealSqlServerBoundedCatalogPlan();
+
+        Assert.Equal(
+            DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+            DiagnosticsNativePlanContract.ClassifyPlan("sqlserver", DiagnosticsNativePlanContract.GroundworkAdapter, specification, plan));
+
+        using var fixture = Fixture.Create(
+            "sqlserver",
+            "resources-by-last-seen",
+            command: RealSqlServerStatementText(plan),
+            planClassification: DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+            nativePlan: plan);
+        DiagnosticsNativePlanContract.ValidateEnvelope("sqlserver", fixture.Adapter, fixture.Route, fixture.Path);
+    }
+
+    [Fact]
+    public void SqlServer_real_bounded_catalog_plan_rejects_a_bare_ordinal_key_the_statement_does_not_collate()
+    {
+        var plan = RealSqlServerBoundedCatalogPlan();
+        var statement = RealSqlServerStatementText(plan);
+        var uncollated = plan.Replace(
+            "[idOrderKey] COLLATE Latin1_General_100_BIN2 ASC",
+            "[idOrderKey] ASC",
+            StringComparison.Ordinal);
+        Assert.NotEqual(plan, uncollated);
+
+        AssertBoundedCatalogRejected("sqlserver", uncollated, command: statement.Replace(
+            "[idOrderKey] COLLATE Latin1_General_100_BIN2 ASC", "[idOrderKey] ASC", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void SqlServer_real_bounded_catalog_plan_rejects_keys_pruned_after_a_non_unique_column()
+    {
+        var document = System.Xml.Linq.XDocument.Parse(RealSqlServerBoundedCatalogPlan(), System.Xml.Linq.LoadOptions.PreserveWhitespace);
+        var orderBy = document.Descendants().Single(element => element.Name.LocalName == "OrderBy");
+        orderBy.Elements().Last().Remove(); // drop the [id] key: the sort now ends after DATALENGTH([idOrderKey])
+        var plan = document.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+
+        AssertBoundedCatalogRejected("sqlserver", plan, command: RealSqlServerStatementText(plan));
+    }
+
+    [Fact]
+    public void SqlServer_real_bounded_catalog_plan_rejects_a_structured_expression_that_is_not_datalength()
+    {
+        var plan = RealSqlServerBoundedCatalogPlan().Replace(
+            "<Intrinsic FunctionName=\"datalength\">",
+            "<Intrinsic FunctionName=\"len\">",
+            StringComparison.Ordinal);
+
+        AssertBoundedCatalogRejected("sqlserver", plan, command: RealSqlServerStatementText(plan));
+    }
+
     [Fact]
     public void SqlServer_renderer_scope_equality_requires_its_exact_length_companion()
     {
