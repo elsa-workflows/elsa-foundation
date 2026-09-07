@@ -51,6 +51,7 @@
           },
           "WorkflowsRuntimeTriggers": {},
           "GroundworkProviderSqlite": {},
+          "GroundworkProviderSqliteDiagnostics": {},
           "GroundworkWorkflowRuntime": {
             "CacheWorkflowExecutables": true,
             "WorkflowExecutableCacheCapacity": 256

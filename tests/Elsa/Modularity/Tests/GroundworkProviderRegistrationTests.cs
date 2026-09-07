@@ -19,6 +19,7 @@ public sealed class GroundworkProviderRegistrationTests
     [InlineData(typeof(GroundworkPostgreSqlProviderFeature), "GroundworkProviderPostgreSql")]
     [InlineData(typeof(GroundworkSqlServerProviderFeature), "GroundworkProviderSqlServer")]
     [InlineData(typeof(GroundworkMongoDbProviderFeature), "GroundworkProviderMongoDb")]
+    [InlineData(typeof(GroundworkSqliteDiagnosticsProviderFeature), "GroundworkProviderSqliteDiagnostics")]
     public void Provider_shell_features_expose_the_complete_clean_break_provider_set(
         Type featureType,
         string expectedName)
@@ -38,6 +39,22 @@ public sealed class GroundworkProviderRegistrationTests
         Assert.False(featureType.IsSealed);
         Assert.Null(provider.GetService<IStorageProviderConnection>());
         Assert.NotNull(provider.GetRequiredKeyedService<IStorageProviderConnection>("runtime"));
+    }
+
+    [Fact]
+    public void Sqlite_diagnostics_shell_feature_defaults_to_its_own_file_and_the_diagnostics_target()
+    {
+        // #1569: the diagnostics drain must not share the runtime's SQLite connection, whose provider gate
+        // serializes every session open behind the drain's batch commits.
+        var services = new ServiceCollection();
+
+        new GroundworkSqliteDiagnosticsProviderFeature().ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Null(provider.GetService<IStorageProviderConnection>());
+        Assert.NotNull(provider.GetRequiredKeyedService<IStorageProviderConnection>("diagnostics"));
+        Assert.Equal("Data Source=elsa-groundwork-diagnostics.db", GroundworkSqliteDiagnosticsProviderFeature.DefaultConnectionString);
+        Assert.NotEqual(GroundworkSqliteProviderFeature.DefaultConnectionString, GroundworkSqliteDiagnosticsProviderFeature.DefaultConnectionString);
     }
 
     [Fact]

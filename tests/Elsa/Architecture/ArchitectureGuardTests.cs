@@ -208,6 +208,25 @@ public sealed class ArchitectureGuardTests
     [Theory]
     [InlineData("shells.json")]
     [InlineData("shells.baseline.json")]
+    public void Server_default_shell_keeps_sqlite_diagnostics_off_the_runtime_connection(string fileName)
+    {
+        // #1569: a Groundwork SQLite connection serializes every session open on one gate, so the
+        // diagnostics drain must run on its own connection and file whenever the SQLite provider is selected.
+        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
+        if (!features.ContainsKey("GroundworkProviderSqlite") || !features.ContainsKey("DiagnosticsGroundworkPersistence"))
+            return;
+
+        Assert.True(
+            features.ContainsKey("GroundworkProviderSqliteDiagnostics"),
+            $"{fileName} selects the SQLite provider with Groundwork diagnostics, so it must also enable GroundworkProviderSqliteDiagnostics.");
+        Assert.Equal(
+            "diagnostics",
+            Assert.IsType<JsonObject>(features["DiagnosticsGroundworkPersistence"])["Target"]?.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData("shells.json")]
+    [InlineData("shells.baseline.json")]
     public void Server_default_shell_enables_flowchart_runtime_feature(string fileName)
     {
         var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
