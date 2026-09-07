@@ -7,6 +7,9 @@ using Elsa.Activities.Runtime.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services;
+using Elsa.Serialization.Core;
+using Elsa.Serialization.SystemText.Services;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
@@ -47,7 +50,12 @@ public sealed class RuntimeRequirementPreflightTests
         });
         await references.SaveAsync(Reference("ref-retired", "artifact-retired") with { DeletedAt = Now.AddMinutes(-1), DeletedReason = "retired" });
         await references.SaveAsync(Reference("ref-missing", "artifact-missing"));
-        var service = new RuntimeRequirementPreflight(references, executables, templates, consumers, drivers, new FixedTimeProvider(Now));
+        var service = new RuntimeRequirementPreflight(
+            references,
+            executables,
+            templates,
+            new RuntimeRequirementChecker(consumers, drivers, TestWellKnownTypeRegistry.Create(), new JsonPayloadSerializer(new JsonPayloadConverterRegistry())),
+            new FixedTimeProvider(Now));
 
         var result = await service.RunAsync(RuntimeRequirementPreflight.ActiveRetainedArtifactsScope, null);
 
@@ -62,6 +70,8 @@ public sealed class RuntimeRequirementPreflightTests
             requirement => Assert.Equal(("sample.schema", "2", "UnsupportedSchema", 1),
                 (requirement.ConsumerKey, requirement.SchemaVersion, requirement.Status, requirement.AffectedArtifactCount)));
         Assert.Contains(result.Diagnostics, x => x.Code == "activity.preflight.artifact-missing" && x.Subject.Id == "artifact-missing");
+        Assert.Contains(result.Diagnostics, x => x.Code == "activity.runtime.consumer-missing" && x.Subject.Id == "artifact-1");
+        Assert.Contains(result.Diagnostics, x => x.Code == "activity.runtime.consumer-schema-unsupported" && x.Subject.Id == "artifact-1");
         Assert.Contains(result.Diagnostics, x => x.Code == "activity.runtime.storage-driver-missing" && x.Subject.Id == "artifact-1");
         Assert.DoesNotContain(result.Diagnostics, x => x.Subject.Id == "artifact-retired");
     }
@@ -82,8 +92,11 @@ public sealed class RuntimeRequirementPreflightTests
             references,
             executables,
             templates,
-            consumers,
-            new RuntimeDurableValueStorageDriverRegistry([]),
+            new RuntimeRequirementChecker(
+                consumers,
+                new RuntimeDurableValueStorageDriverRegistry([]),
+                TestWellKnownTypeRegistry.Create(),
+                new JsonPayloadSerializer(new JsonPayloadConverterRegistry())),
             new FixedTimeProvider(Now));
 
         var selected = await service.RunAsync(

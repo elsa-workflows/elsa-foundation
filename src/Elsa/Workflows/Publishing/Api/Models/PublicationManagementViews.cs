@@ -1,4 +1,5 @@
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Models;
 
@@ -40,19 +41,17 @@ public sealed record PublicationSlotView(
     PublicationStatusView? Status,
     PublicationView? Publication)
 {
-    public static PublicationSlotView From(PublicationSlot slot, PublicationRecord? publication) =>
+    public static PublicationSlotView From(WorkflowActivationSlot slot, PublicationRecord? publication) =>
         new(
             slot.SlotId,
             slot.WorkflowDefinitionId,
             slot.SlotName,
-            slot.ActivePublicationId,
+            slot.ActiveActivationId,
             slot.Revision,
             slot.UpdatedAt,
             publication is null ? null : PublicationContract.ToView(publication.Status),
             publication is null ? null : PublicationView.From(publication));
 }
-
-public sealed record PublicationSlotListResponse(IReadOnlyCollection<PublicationSlotView> Items);
 
 public sealed record PublicationPolicyView(
     string DefinitionId,

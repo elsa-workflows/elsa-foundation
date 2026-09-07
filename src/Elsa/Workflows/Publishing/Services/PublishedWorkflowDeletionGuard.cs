@@ -16,15 +16,15 @@ namespace Elsa.Workflows.Publishing.Services;
 /// question and refuses.
 /// </summary>
 public sealed class PublishedWorkflowDeletionGuard(
-    IPublicationSlotStore slotStore,
+    IWorkflowActivationAuthority activationAuthority,
     IWorkflowExecutableSourceReferenceReader sourceReferenceReader,
     TimeProvider timeProvider) : IWorkflowDefinitionPublicationDeletionGuard
 {
     public async Task EnsureCanDeleteAsync(string definitionId, CancellationToken cancellationToken = default)
     {
-        var slots = await slotStore.ListByDefinitionAsync(definitionId, cancellationToken);
+        var slots = await activationAuthority.ListByDefinitionAsync(definitionId, cancellationToken);
         var activeSlotNames = slots
-            .Where(slot => slot.ActivePublicationId is not null)
+            .Where(slot => slot.ActiveActivationId is not null)
             .Select(slot => slot.SlotName)
             .ToArray();
         if (activeSlotNames.Length > 0)

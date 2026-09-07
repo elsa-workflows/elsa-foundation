@@ -15,6 +15,7 @@
     <!-- Referencing Testcontainers routes this leaf out of the fast PR gate into integration CI. -->
     <PackageReference Include="Testcontainers.MsSql" />
     <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="Groundwork.SqlServer" />
   </ItemGroup>
 
   <ItemGroup>
@@ -25,8 +26,9 @@
     <ProjectReference Include="../../../../../../../src/Elsa/Events/Elsa.Events.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Events/Core/Elsa.Events.Core.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Locking/Core/Elsa.Locking.Core.csproj" />
-    <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/ReferenceComposition/Elsa.Persistence.Groundwork.ReferenceComposition.csproj" />
-    <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/SqlServer/Unified/Elsa.Persistence.Groundwork.SqlServer.Unified.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Publishing/Persistence/Groundwork/Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
     <!-- A second real provider leaf, composed only to prove the one-provider-per-host guard (registration-time; no connection). -->
     <ProjectReference Include="../../../../../../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Design/Persistence/Groundwork/Elsa.Workflows.Design.Persistence.Groundwork.csproj" />

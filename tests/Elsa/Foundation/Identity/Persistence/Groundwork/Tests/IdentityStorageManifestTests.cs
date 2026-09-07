@@ -82,6 +82,21 @@ public sealed class IdentityStorageManifestTests
         AssertIndexed(unit, IdentityStorageManifest.MutationReceiptExpiresAtField);
     }
 
+    [Fact]
+    public void Scale_bearing_route_catalog_is_exhaustive_and_each_route_has_one_driving_index()
+    {
+        var routes = IdentityV2StorageManifest.ScaleBearingQueries;
+
+        Assert.Equal(12, routes.Count);
+        Assert.Equal(12, routes.Select(route => route.QueryIdentity).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(routes, route =>
+        {
+            var unit = IdentityV2StorageManifest.Require(route.UnitId);
+            Assert.Equal(route.IndexName, IdentityV2StorageManifest.IndexForQuery(route.QueryIdentity));
+            Assert.Contains(unit.Indexes, index => index.Name == route.IndexName);
+        });
+    }
+
     [Theory]
     [InlineData(IdentityStorageManifest.FindUserByNormalizedNameQuery, IdentityStorageManifest.IdentityUserDocumentKind)]
     [InlineData(IdentityStorageManifest.FindUserByNormalizedEmailQuery, IdentityStorageManifest.IdentityUserDocumentKind)]
@@ -114,6 +129,25 @@ public sealed class IdentityStorageManifestTests
         Assert.All(columns, column => Assert.True(
             column.MaxLength * IdentityStorageManifest.SqlServerUnicodeBytesPerCodeUnit <=
             IdentityStorageManifest.SqlServerMaxNonclusteredIndexKeyBytes));
+    }
+
+    [Fact]
+    public void Every_scale_bearing_index_has_the_identity_tail_and_fits_as_a_composite_sql_server_key()
+    {
+        foreach (var route in IdentityV2StorageManifest.ScaleBearingQueries)
+        {
+            var unit = IdentityV2StorageManifest.Require(route.UnitId);
+            var index = Assert.Single(unit.Indexes, candidate => candidate.Name == route.IndexName);
+
+            Assert.Equal(IdentityV2StorageManifest.IdField, index.Columns[^1].Column);
+            var keyBytes = index.Columns.Sum(column =>
+                column.Column == IdentityV2StorageManifest.IdField
+                    ? IdentityStorageManifest.SqlServerDocumentIdentityLookupKeyBytes
+                    : SqlServerKeyBytes(Column(unit, column.Column)));
+            Assert.True(
+                keyBytes <= IdentityStorageManifest.SqlServerMaxNonclusteredIndexKeyBytes,
+                $"{route.QueryIdentity} index {route.IndexName} uses {keyBytes} SQL Server key bytes.");
+        }
     }
 
     [Theory]
@@ -157,6 +191,16 @@ public sealed class IdentityStorageManifestTests
         Assert.NotEqual(IdentityRequestFingerprint.FromParts("alpha\u001ebeta", "gamma"), IdentityRequestFingerprint.FromParts("alpha", "beta\u001egamma"));
 
     private static ColumnDefinition Column(StorageUnit unit, string name) => unit.Columns.Single(column => column.Name == name);
+
+    private static int SqlServerKeyBytes(ColumnDefinition column) => column.Type switch
+    {
+        PortableType.String => column.MaxLength!.Value * IdentityStorageManifest.SqlServerUnicodeBytesPerCodeUnit,
+        PortableType.DateTimeOffset => IdentityStorageManifest.SqlServerDateTime2KeyBytes,
+        PortableType.Int32 => sizeof(int),
+        PortableType.Int64 => sizeof(long),
+        PortableType.Boolean => sizeof(bool),
+        _ => 0
+    };
 
     private static void AssertNullableIndexed(StorageUnit unit, string column)
     {

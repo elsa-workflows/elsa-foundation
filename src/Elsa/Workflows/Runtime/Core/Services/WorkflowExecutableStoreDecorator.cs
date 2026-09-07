@@ -20,6 +20,11 @@ public abstract class WorkflowExecutableStoreDecorator : IWorkflowExecutableStor
     public virtual ValueTask SaveAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default) =>
         Inner.SaveAsync(executable, cancellationToken);
 
+    public virtual ValueTask SaveBatchAsync(
+        IReadOnlyList<WorkflowExecutable> executables,
+        CancellationToken cancellationToken = default) =>
+        Inner.SaveBatchAsync(executables, cancellationToken);
+
     public virtual ValueTask<bool> DeleteAsync(string artifactId, CancellationToken cancellationToken = default) =>
         Inner.DeleteAsync(artifactId, cancellationToken);
 

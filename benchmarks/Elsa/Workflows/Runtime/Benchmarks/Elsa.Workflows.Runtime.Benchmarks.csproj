@@ -34,7 +34,6 @@
     <!-- Flowchart activity + feature + structure models for the root composite. -->
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
     <!-- Durable Groundwork runtime store bridges + SQLite document store + storage manifest. -->
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
     <!-- Public test-support: RuntimeTestBoundedDocumentStore + GroundworkTestAccess (bounded-query
          adapter + access bindings for driving the runtime stores over a raw SQLite document store). -->
     <ProjectReference Include="..\..\..\..\..\tests\Elsa\Persistence\Groundwork\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />

@@ -22,28 +22,148 @@ namespace Elsa.Groundwork.StorePerformance.AdapterHost;
 internal static class NativePlanEvidenceStaging
 {
     public const string StagingDirectoryVariable = "ELSA_BENCH_NATIVE_PLAN_STAGING";
+    public const string NoNativeRoutesContract = "no-native-routes-declared";
+    private static readonly IReadOnlyDictionary<string, string> CheckpointTopologies =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["sqlite"] = "file-backed-distinct-connections",
+            ["sqlserver"] = "real-sqlserver-container",
+            ["postgresql"] = "real-postgresql-container",
+            ["mongodb"] = "transaction-capable-replica-set"
+        };
 
     /// <summary>
     /// The <c>.native-plan.json</c> suffix is load-bearing: <c>SafeRawPlanReference</c> rejects it, so an
     /// evidence document can never be mistaken for — or cross-registered as — a raw provider plan.
+    /// The composed name is admitted rather than trusting its parts. <c>workloadId</c>, <c>provider</c>, and
+    /// <c>measurementSetId</c> reach here from a document, so a value like <c>../evil</c> would compose into
+    /// a reference that escapes the directory it is about to be written into. <c>EvidenceName</c> rejects
+    /// anything that is not a safe top-level name, which is what makes every <c>Path.Combine</c> on the result
+    /// sound.
     /// </summary>
-    /// <summary>
-    /// Admits the composed name rather than trusting its parts. <c>workloadId</c> and <c>provider</c> reach
-    /// here from a document, so a value like <c>../evil</c> would compose into a reference that escapes the
-    /// directory it is about to be written into. <c>EvidenceName</c> rejects anything that is not a safe
-    /// top-level name, which is what makes every <c>Path.Combine</c> on the result sound.
-    /// </summary>
-    public static string ReferenceFor(string workloadId, string provider) =>
-        ArtifactStore.EvidenceName($"{workloadId}.{provider}.native-plan.json");
+    public static string ReferenceFor(string workloadId, string provider, string measurementSetId) =>
+        ArtifactStore.EvidenceName($"{workloadId}.{provider}.{measurementSetId}.native-plan.json");
 
     public static string Write(string directory, NativePlanEvidenceDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
         Directory.CreateDirectory(directory);
-        var path = Path.Combine(directory, ReferenceFor(document.WorkloadId, document.Provider));
+        var path = Path.Combine(directory, ReferenceFor(document.WorkloadId, document.Provider, document.MeasurementSetId));
         File.WriteAllText(path, JsonSerializer.Serialize(document, ArtifactStore.JsonOptions));
         return Sha256(path);
     }
+
+    /// <summary>
+    /// Retains a value-free explanation of a blocked diagnostics capture beside its incomplete native-plan
+    /// envelope. It is intentionally a separate artifact: blocked routes must remain visible to operators
+    /// without becoming part of the accepted evidence contract consumed by correctness or measurement.
+    /// </summary>
+    public static string WriteBlockedCapture(
+        string directory,
+        RunRequest request,
+        IReadOnlyList<DiagnosticsBlockedRouteEvidence> routes)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(routes);
+        if (routes.Count == 0)
+            throw new ArgumentException("At least one blocked route is required.", nameof(routes));
+
+        foreach (var route in routes)
+        {
+            if (string.IsNullOrWhiteSpace(route.RouteIdentity) ||
+                string.IsNullOrWhiteSpace(route.FailurePhase) ||
+                string.IsNullOrWhiteSpace(route.ReasonCode) ||
+                route.RawPlans is null)
+                throw new PerformanceContractException("Blocked diagnostics evidence requires a route identity, failure phase, reason code, and raw-plan list.");
+            foreach (var rawPlan in route.RawPlans)
+            {
+                var rawReference = ArtifactStore.RawPlanName(rawPlan.Reference);
+                var path = Path.Combine(directory, rawReference);
+                if (!File.Exists(path) || Sha256(path) != rawPlan.Sha256)
+                    throw new PerformanceContractException(
+                        $"Blocked diagnostics raw-plan artifact '{rawReference}' is missing or does not match its digest.");
+                ArtifactStore.ValidateRawPlanFile(path);
+            }
+        }
+
+        var document = new DiagnosticsBlockedCaptureDocument(
+            SchemaVersion: 1,
+            Provider: request.Provider,
+            Adapter: request.Adapter,
+            WorkloadId: request.WorkloadId,
+            WorkloadVersion: request.WorkloadVersion,
+            MeasurementSetId: request.MeasurementSetId,
+            Routes: routes);
+        ArtifactSafety.Validate(document);
+        Directory.CreateDirectory(directory);
+        var reference = ArtifactStore.EvidenceName(
+            $"diagnostics.{request.Provider}.{request.MeasurementSetId}.blocked-capture.json");
+        var pathToWrite = Path.Combine(directory, reference);
+        File.WriteAllText(pathToWrite, JsonSerializer.Serialize(document, ArtifactStore.JsonOptions));
+        return Sha256(pathToWrite);
+    }
+
+    /// <summary>
+    /// Creates the checkpoint contract's provenance document after a live provider probe. The empty route
+    /// list is not an omitted capture: the frozen workload declares no native routes, so this document
+    /// records that contract explicitly and still binds provider identity, topology, configuration and
+    /// source provenance. No provider plan is claimed by this method.
+    /// </summary>
+    public static NativePlanEvidenceDocument CreateCheckpointDocument(
+        RunRequest request,
+        ProviderProbe.Result observed)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(observed);
+        if (!string.Equals(request.WorkloadId, "checkpoint-commit", StringComparison.Ordinal))
+            throw new PerformanceContractException(
+                "The zero-route native-plan document is only valid for checkpoint-commit.");
+        var expectedReference = ReferenceFor(request.WorkloadId, request.Provider, request.MeasurementSetId);
+        if (!string.Equals(request.NativePlanEvidenceReference, expectedReference, StringComparison.Ordinal))
+            throw new PerformanceContractException(
+                $"Checkpoint evidence must use '{expectedReference}' as --native-plan-evidence; received '{request.NativePlanEvidenceReference}'.");
+        if (!CheckpointTopologies.TryGetValue(request.Provider, out var expectedTopology) ||
+            !string.Equals(observed.Topology, expectedTopology, StringComparison.Ordinal))
+            throw new PerformanceContractException(
+                $"Provider '{request.Provider}' did not prove the checkpoint-commit topology '{expectedTopology}'.");
+        if (!string.Equals(observed.Provider, request.Provider, StringComparison.Ordinal) ||
+            !string.Equals(observed.Version, request.ProviderVersion, StringComparison.Ordinal) ||
+            !string.Equals(observed.Topology, request.ProviderTopology, StringComparison.Ordinal) ||
+            !observed.Configuration.OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                .SequenceEqual(request.ProviderConfiguration.OrderBy(pair => pair.Key, StringComparer.Ordinal)))
+            throw new PerformanceContractException(
+                "The live provider probe does not match the requested provider version, topology, or sanitized configuration.");
+
+        _ = ArtifactStore.EvidenceName(request.NativePlanEvidenceReference);
+        return new NativePlanEvidenceDocument(
+            SchemaVersion: 2,
+            ComparisonCohortId: request.ComparisonCohortId,
+            MeasurementSetId: request.MeasurementSetId,
+            WorkloadId: request.WorkloadId,
+            WorkloadVersion: request.WorkloadVersion,
+            Provider: request.Provider,
+            Adapter: request.Adapter,
+            PhysicalForm: request.PhysicalForm,
+            Scale: request.Scale,
+            CommitSha: request.CommitSha,
+            HarnessAssemblySha256: request.HarnessAssemblySha256,
+            CompositionFingerprint: request.CompositionFingerprint,
+            HostFingerprintSha256: request.HostFingerprintSha256,
+            ProviderVersion: observed.Version,
+            ProviderTopology: observed.Topology,
+            ProviderConfiguration: observed.Configuration,
+            Seed: request.Seed,
+            InputFingerprintSha256: request.InputFingerprintSha256,
+            Identity: request.NativePlanIdentity,
+            Routes: [],
+            RouteContract: NoNativeRoutesContract);
+    }
+
+    public static string WriteCheckpoint(
+        string directory,
+        RunRequest request,
+        ProviderProbe.Result observed) =>
+        Write(directory, CreateCheckpointDocument(request, observed));
 
     /// <summary>
     /// Copies the staged evidence (and any raw provider plans it references) into the artifact directory.
@@ -71,8 +191,23 @@ internal static class NativePlanEvidenceStaging
         // document that arrived without its raw plans is a reachable state; leaving them uncopied would
         // fail correctness with a message pointing at the raw plan rather than at the real gap.
         var document = Read(destination);
-        foreach (var route in document.Routes)
-            EnsureRawPlan(outputDirectory, route.RawPlanReference);
+        var routes = document.Routes ?? throw new PerformanceContractException(
+            "Native-plan evidence must contain a route list; a null route list is malformed.");
+        foreach (var route in routes)
+            EnsureRouteRawPlan(outputDirectory, request, route);
+        foreach (var constituent in document.TraceDetailConstituents ?? [])
+        {
+            if (constituent is null)
+                throw new PerformanceContractException("Native-plan evidence contains a null trace-detail constituent.");
+            if (!string.IsNullOrWhiteSpace(constituent.RawPlanReference))
+                EnsureRawPlan(outputDirectory, constituent.RawPlanReference);
+            foreach (var page in constituent.Pages ?? [])
+            {
+                if (page is null)
+                    throw new PerformanceContractException("Native-plan evidence contains a null trace-detail page.");
+                EnsureRawPlan(outputDirectory, page.RawPlanReference);
+            }
+        }
         return document;
     }
 
@@ -115,6 +250,39 @@ internal static class NativePlanEvidenceStaging
         var admitted = ArtifactStore.RawPlanName(reference);
         if (File.Exists(Path.Combine(outputDirectory, admitted))) return;
         CopyFromStaging(outputDirectory, admitted);
+    }
+
+    private static void EnsureRouteRawPlan(
+        string outputDirectory,
+        RunRequest request,
+        NativeRouteEvidence? route)
+    {
+        if (route is null)
+            throw new PerformanceContractException("Native-plan evidence contains a null route.");
+        if (route.RawPlanReference is null || route.RawPlanSha256 is null)
+            throw new PerformanceContractException(
+                $"Native-plan route '{route.RouteIdentity}' must contain non-null raw-plan reference and digest fields.");
+
+        if (!ArtifactAdmission.IsStructuredEvidenceRoute(request, route))
+        {
+            EnsureRawPlan(outputDirectory, route.RawPlanReference);
+            return;
+        }
+
+        var hasReference = route.RawPlanReference.Length != 0;
+        var hasDigest = route.RawPlanSha256.Length != 0;
+        if (hasReference != hasDigest)
+            throw new PerformanceContractException(
+                $"Structured route '{route.RouteIdentity}' must provide both optional raw-plan reference and digest, or neither.");
+        if (!hasReference)
+        {
+            if (route.StructuredEvidence is null)
+                throw new PerformanceContractException(
+                    $"Structured route '{route.RouteIdentity}' cannot omit its raw plan without structured execution evidence.");
+            return;
+        }
+
+        EnsureRawPlan(outputDirectory, route.RawPlanReference);
     }
 
     /// <summary>

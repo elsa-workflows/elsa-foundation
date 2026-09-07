@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../../../.." && pwd)"
 consumer_root="$repo_root/tests/Elsa/Diagnostics/Persistence/Groundwork/V2/Consumer"
 feed="${GROUNDWORK_E2_V2_PACKAGES:-$repo_root/artifacts/packages}"
-groundwork_version="${GROUNDWORK_E2_V2_VERSION:-0.4.0-preview.14}"
+groundwork_version="${GROUNDWORK_E2_V2_VERSION:-0.4.0-preview.17}"
 test -d "$feed" || {
   echo "Missing packed Groundwork packages at '$feed'. Set GROUNDWORK_E2_V2_PACKAGES or pack Groundwork first." >&2
   exit 1
@@ -17,7 +17,8 @@ for required in Groundwork.Kernel Groundwork.Query.Model Groundwork.Store Ground
   }
 done
 
-if grep -REn '<ProjectReference|Groundwork\.Testing|TestingAdapter|InternalsVisibleTo|System\.Reflection|\.\./.*src' "$consumer_root" --include='*.cs' --include='*.csproj'; then
+if grep -REn '<ProjectReference|Groundwork\.Testing|TestingAdapter|InternalsVisibleTo|System\.Reflection|\.\./.*src' "$consumer_root" \
+  --include='*.cs' --include='*.csproj' --exclude-dir=bin --exclude-dir=obj; then
   echo "The E2 v2 consumer contains a forbidden internal, test, or source dependency." >&2
   exit 1
 fi

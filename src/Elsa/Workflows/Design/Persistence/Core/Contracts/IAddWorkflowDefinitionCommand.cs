@@ -1,4 +1,4 @@
-﻿using Elsa.Persistence.Core.Design;
+﻿using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Core.Models;
 

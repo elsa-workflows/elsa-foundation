@@ -21,7 +21,8 @@ along with the `GroundworkAllFeaturesWithDiagnosticsDeploymentSchema` it deploye
 substrate.
 
 It listens on `http://localhost:5095`. The default `appsettings.json` + `shells.json` already enable
-everything the core flow needs (design + publishing + runtime APIs, identity, `GroundworkUnifiedPersistenceSqlite`).
+everything the core flow needs (design + publishing + runtime APIs, identity, the explicit Groundwork SQLite provider and
+its runtime/design/publishing lanes).
 
 ## Running these tests — READ THIS (agents included)
 

@@ -205,6 +205,33 @@
     applier and the shared Prepare-order-1 initializer, so startup auto-apply includes missing
     diagnostic streams while runtime session opening stays read-only. Focused diagnostics,
     adapter, composition, and unified-host gates passed as summarized in `quickstart.md`.
+
+### Groundwork 0.4.0-preview.9 consumption checkpoint
+
+- Central props and explicit project/script overrides consume the published
+  [`v0.4.0-preview.9`](https://github.com/valence-works/groundwork-v2/releases/tag/v0.4.0-preview.9)
+  family at Groundwork commit `408210729ec054368b0cf959274fdc26e04a8393`. Its Feedz publication
+  and verification workflow passed, and Elsa's isolated package-only consumer passed against the
+  exact release artifact.
+  The preview.9 observer contract supplies the structured, redacted MongoDB point-read identity
+  required by the trace-detail evidence; the earlier ordinal-identity query and index-shape fixes
+  remain part of the published family. Existing NU1903 SSH.NET warnings remain. This is
+  published-package compatibility evidence only, not four-provider promotion, #646 performance
+  evidence, EF deletion, or #642 completion.
+
+### Historical exact 0.4.0-preview.3 recertification checkpoint (immutable)
+
+- Evidence: [`evidence/preview0403-recertification-results.json`](evidence/preview0403-recertification-results.json)
+  records current package currency, 97/97 shared diagnostics correctness and architecture tests,
+  29/32 Structured Logs v2 tests with SQLite executed and three unavailable-provider skips, 8/11
+  OpenTelemetry v2 tests with SQLite executed and three unavailable-provider skips, and 3/3
+  Groundwork aggregate composition tests. Hosted CI run 33498592159 additionally passes both v2
+  provider matrices on SQLite, PostgreSQL, SQL Server, and transaction-capable MongoDB at exact head
+  `ebce7a70e`. It explicitly retires the three EF-mechanism-only facts
+  at the Groundwork boundary while retaining the EF oracle source. This is focused correctness
+  evidence only: it is not a #646 performance verdict, grouped/native-plan
+  promotion, EF deletion, or completion of T050/T051/T052/T053/T054/T055/T057.
+
 - [ ] T050 [P] [US4] Consume the #646-owned diagnostics workload and retained-artifact contract; do not create a lane-local benchmark harness
   - Evidence note: premature lane-local performance tests were removed in `5538d8414`; the program owner ratified `diagnostics-durable-history` as the 13th spec-094 workload on 2026-07-25, but this task remains owned by the #646 handoff and has no retained passing verdict yet.
 - [ ] T051 [US4] Import the ratified #646 performance verdict for the diagnostics workload into `specs/139-groundwork-diagnostics-persistence/evidence/performance-decision.json`

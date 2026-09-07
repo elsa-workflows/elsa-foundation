@@ -16,7 +16,7 @@ internal static class GroundworkV2WorkflowTriggerBindingStorageConventions
             {
                 [ElsaRuntimeV2StorageManifest.TriggerBindingIdField] = binding.TriggerBindingId,
                 [ElsaRuntimeV2StorageManifest.ArtifactIdField] = binding.ArtifactId,
-                [ElsaRuntimeV2StorageManifest.PublicationIdField] = binding.PublicationId,
+                [ElsaRuntimeV2StorageManifest.ActivationIdField] = binding.ActivationId,
                 [ElsaRuntimeV2StorageManifest.StimulusHashField] = binding.StimulusHash,
                 [ElsaRuntimeV2StorageManifest.StimulusTypeField] = binding.StimulusType,
                 [ElsaRuntimeV2StorageManifest.StimulusLookupKeyField] =
@@ -62,7 +62,7 @@ internal static class GroundworkV2WorkflowTriggerBindingStorageConventions
         EnsureProjection(values, ElsaRuntimeV2StorageManifest.IdField, binding.TriggerBindingId);
         EnsureProjection(values, ElsaRuntimeV2StorageManifest.TriggerBindingIdField, binding.TriggerBindingId);
         EnsureProjection(values, ElsaRuntimeV2StorageManifest.ArtifactIdField, binding.ArtifactId);
-        EnsureOptionalProjection(values, ElsaRuntimeV2StorageManifest.PublicationIdField, binding.PublicationId);
+        EnsureOptionalProjection(values, ElsaRuntimeV2StorageManifest.ActivationIdField, binding.ActivationId);
         EnsureProjection(values, ElsaRuntimeV2StorageManifest.StimulusHashField, binding.StimulusHash);
         EnsureProjection(values, ElsaRuntimeV2StorageManifest.StimulusTypeField, binding.StimulusType);
         EnsureProjection(
@@ -96,12 +96,12 @@ internal static class GroundworkV2WorkflowTriggerBindingStorageConventions
                 "The trigger-binding cardinality is not defined.");
         }
         ArgumentNullException.ThrowIfNull(binding.Metadata);
-        if (binding.PublicationId is not null)
-            ArgumentException.ThrowIfNullOrWhiteSpace(binding.PublicationId);
+        if (binding.ActivationId is not null)
+            ArgumentException.ThrowIfNullOrWhiteSpace(binding.ActivationId);
         if (binding.SlotId is not null)
             ArgumentException.ThrowIfNullOrWhiteSpace(binding.SlotId);
-        if (binding.PublicationId is null && binding.SlotId is not null)
-            throw new ArgumentException("A trigger binding slot requires a publication.", nameof(binding));
+        if (binding.ActivationId is null && binding.SlotId is not null)
+            throw new ArgumentException("A trigger binding slot requires an activation.", nameof(binding));
     }
 
     private static void EnsureProjection(
@@ -163,7 +163,7 @@ internal static class GroundworkV2WorkflowTriggerBindingStorageConventions
 
 internal sealed record GroundworkV2WorkflowTriggerBindingProjectionState(
     string ProjectionKind,
-    string PublicationId,
+    string ActivationId,
     bool IsActive,
     int BindingCount,
     string ProjectionFingerprint);

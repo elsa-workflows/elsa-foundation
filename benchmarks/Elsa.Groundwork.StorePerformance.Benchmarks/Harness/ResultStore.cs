@@ -5,6 +5,7 @@ namespace Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 
 public sealed record ResultEnvelope<T>(int SchemaVersion, T Payload, string PayloadSha256);
 public sealed record GateReport(GateResult Verdict, string? ReviewedReplacementSha256);
+public sealed record AbsoluteBudgetReport(AbsoluteBudgetResult Verdict, string? PolicySha256);
 
 public static class ResultStore
 {

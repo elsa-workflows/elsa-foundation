@@ -1,8 +1,8 @@
 {
-  "slotId": "publication-slot:12:definition-1:7:default",
+  "slotId": "activation-slot:12:definition-1:7:default",
   "publication": {
     "publicationId": "publication-1",
-    "slotId": "publication-slot:12:definition-1:7:default",
+    "slotId": "activation-slot:12:definition-1:7:default",
     "workflowDefinitionId": "definition-1",
     "workflowDefinitionVersionId": "version-1",
     "artifactId": "artifact-1",

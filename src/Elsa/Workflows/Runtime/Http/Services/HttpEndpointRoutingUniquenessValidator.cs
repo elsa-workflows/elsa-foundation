@@ -76,9 +76,9 @@ public sealed class HttpEndpointRoutingUniquenessValidator(IWorkflowTriggerBindi
     {
         // Publication-scoped replacement excludes only the authority in the candidate's own slot. Sharing an
         // artifact or definition across two explicit slots is not an Exclusive-claim exemption (ADR 0043).
-        if (candidate.PublicationId is not null)
+        if (candidate.ActivationId is not null)
         {
-            if (StringComparer.Ordinal.Equals(existing.PublicationId, candidate.PublicationId))
+            if (StringComparer.Ordinal.Equals(existing.ActivationId, candidate.ActivationId))
                 return false;
             return !StringComparer.Ordinal.Equals(existing.SlotId, candidate.SlotId);
         }

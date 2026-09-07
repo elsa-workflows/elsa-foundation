@@ -25,7 +25,7 @@ round-trip that doesn't change global state. Runs against a from-source server (
 ## Contract notes (real behaviour, not bugs)
 
 - `POST executables/{bogus}/execute` and malformed `versionId` publish/preflight -> **400** (route/id validation), not 404.
-- `dispatches/{bogus}/redrive` and `publishing/workflows/{bogus}/slots` are **lenient** (200), not 404.
+- `dispatches/{bogus}/redrive` and `runtime/workflows/activation-slots/{bogus}` are **lenient** (200), not 404.
 - Retiring/revoking the **recommended** activity version is **409** (`activity-definition-recommendation-required`) — a deliberate gate; the happy-path transition needs a multi-version + recommendation-decision flow (advanced, not covered here).
 
 ## Scope

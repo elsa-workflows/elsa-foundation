@@ -2,7 +2,8 @@ using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
-using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Composition;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
@@ -193,6 +194,24 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
         var result = await store.ListAsync(new WorkflowDefinitionFilter { SearchTerm = "invoice" });
 
         Assert.Equal(["b-valid"], result.Select(definition => definition.Id));
+    }
+
+    [Theory]
+    [InlineData("ids")]
+    [InlineData("names")]
+    public async Task Search_term_preserves_empty_exact_filter_set_semantics(string route)
+    {
+        var (store, raw) = Seeded(Sample());
+        using (raw)
+        {
+            var filter = new WorkflowDefinitionFilter { SearchTerm = "order" };
+            if (route == "ids")
+                filter.Ids = [];
+            else
+                filter.Names = [];
+
+            Assert.Empty(await store.ListAsync(filter));
+        }
     }
 
     [Theory]

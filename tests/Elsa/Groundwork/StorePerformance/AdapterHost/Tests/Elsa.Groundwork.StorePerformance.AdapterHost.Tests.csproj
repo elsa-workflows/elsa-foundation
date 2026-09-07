@@ -11,4 +11,7 @@
   <ItemGroup>
     <ProjectReference Include="../../../../../../benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/Elsa.Groundwork.StorePerformance.AdapterHost.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="../../Fixtures/*.json;../../Fixtures/*.xml" Link="Fixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+  </ItemGroup>
 </Project>

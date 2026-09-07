@@ -59,8 +59,8 @@ for the owner breakdown, per-owner security/catalog/unloadability dispositions, 
 dispositions, and migration-wave links. The architecture test also pins each owner's `followUp` to
 its executable wave issue (#1367–#1375), so the closed planning issue cannot silently return.
 
-`frozen-aspnetcore-identity-ef-oracle.json` is stricter than the repository-wide surface inventory:
-it fingerprints every source, project, and migration file in the temporary ASP.NET Core Identity EF
-oracle. The fingerprint is immutable until issue #647 removes that oracle; there is intentionally no
-environment-variable update path. Paths and line endings are normalized before hashing so the same
-reviewed tree produces the same SHA-256 values on every supported checkout platform.
+The frozen ASP.NET Core Identity EF oracle and its ratchet were retired with issue #1482. There is no
+Identity EF baseline to update or restore; the remaining `ef-core-surface.json` entries are the
+temporary repository-wide shrink-only inventory for the diagnostics, OpenIddict vendor, and shared EF
+families that are outside this slice. The baseline's Identity entries were removed only after the
+Groundwork-backed Identity/API tests and the OpenIddict vendor boundary were verified together.

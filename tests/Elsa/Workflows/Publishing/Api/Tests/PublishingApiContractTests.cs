@@ -51,7 +51,7 @@ public sealed class PublishingApiContractTests
     private const string Owner = "Elsa.Workflows.Publishing.Api";
 
     [Fact]
-    public void Publishing_mapper_exposes_exactly_the_frozen_23_operation_manifest()
+    public void Publishing_mapper_exposes_exactly_the_current_22_operation_manifest()
     {
         using var provider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(provider);
@@ -59,9 +59,9 @@ public sealed class PublishingApiContractTests
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
 
         var manifest = EndpointManifestBuilder.Capture(routes.DataSources);
-        Assert.Equal(23, manifest.Entries.Count);
+        Assert.Equal(22, manifest.Entries.Count);
         Assert.Equal(
-            PublishingCompatibilityCases.Manifest
+            PublishingCurrentSurface.Manifest
                 .Select(route => route.Endpoint.ToString())
                 .Order(StringComparer.Ordinal),
             manifest.Entries
@@ -87,15 +87,15 @@ public sealed class PublishingApiContractTests
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
 
         var endpoints = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
-        Assert.Equal(23, endpoints.Length);
-        Assert.Equal(23, endpoints.Select(endpoint => endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName)
+        Assert.Equal(22, endpoints.Length);
+        Assert.Equal(22, endpoints.Select(endpoint => endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName)
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Distinct(StringComparer.Ordinal)
             .Count());
 
         foreach (var endpoint in endpoints)
         {
-            var route = PublishingCompatibilityCases.Manifest.Single(candidate =>
+            var route = PublishingCurrentSurface.Manifest.Single(candidate =>
                 candidate.Endpoint.Method.Value == endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()!.HttpMethods.Single() &&
                 RouteMatches(candidate.Endpoint.Route.Value, endpoint.RoutePattern.RawText!));
             var name = endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName;
@@ -122,9 +122,10 @@ public sealed class PublishingApiContractTests
             var success = endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>()
                 .Single(response => response.StatusCode == StatusCodes.Status200OK);
             var responseType = success.Type?.FullName ?? success.Type?.Name ?? string.Empty;
-            var responseLeaf = route.Response.Contains('<', StringComparison.Ordinal)
-                ? route.Response[(route.Response.LastIndexOf('<') + 1)..^1]
-                : route.Response;
+            var declaredResponse = PublishingCurrentSurface.ResponseFor(route);
+            var responseLeaf = declaredResponse.Contains('<', StringComparison.Ordinal)
+                ? declaredResponse[(declaredResponse.LastIndexOf('<') + 1)..^1]
+                : declaredResponse;
             Assert.Contains(responseLeaf, responseType, StringComparison.Ordinal);
             Assert.Contains(endpoint.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>(), response =>
                 response.StatusCode == StatusCodes.Status401Unauthorized);
@@ -158,12 +159,17 @@ public sealed class PublishingApiContractTests
             .Where(operation => operation.Endpoint.Route.Value.StartsWith("/publishing/", StringComparison.Ordinal) ||
                                 operation.Endpoint.Route.Value.StartsWith("/design/activities/", StringComparison.Ordinal))
             .ToArray();
-        Assert.Equal(23, publishingOperations.Length);
+        Assert.Equal(22, publishingOperations.Length);
 
+        var beforeHttp = BaselineFile.Load<HttpCompatibilityObservation[]>(Path.Join(BaselineDirectory, "publishing-http-fastendpoints.json"));
+        var beforeOpenApi = BaselineFile.Load<OpenApiEvidenceDocument>(Path.Join(BaselineDirectory, "publishing-openapi-fastendpoints.json"));
+        // The immutable-before capture predates T117 and contains the two publishing GETs that
+        // were intentionally retired. Compare the preserved publishing contract only; their
+        // replacement runtime reads are covered by Runtime API contract and HTTP tests.
         var before = new CompatibilityEvidenceSet
         {
-            Http = BaselineFile.Load<HttpCompatibilityObservation[]>(Path.Join(BaselineDirectory, "publishing-http-fastendpoints.json")),
-            OpenApi = BaselineFile.Load<OpenApiEvidenceDocument>(Path.Join(BaselineDirectory, "publishing-openapi-fastendpoints.json"))
+            Http = beforeHttp.Where(observation => !IsRetiredSlotRead(observation.Endpoint)).ToArray(),
+            OpenApi = new OpenApiEvidenceDocument(beforeOpenApi.Operations.Where(operation => !IsRetiredSlotRead(operation.Endpoint)).ToArray())
         };
         var after = new CompatibilityEvidenceSet
         {
@@ -174,7 +180,9 @@ public sealed class PublishingApiContractTests
         var approvalsPath = Path.Join(BaselineDirectory, "publishing-approved-differences.json");
         if (!File.Exists(approvalsPath))
             approvalsPath = Path.Join(BaselineDirectory, "publishing-approved-differences.initial.json");
-        var approvals = PublishingApprovalRegistry.Load(approvalsPath);
+        var approvals = PublishingApprovalRegistry.Load(approvalsPath)
+            .Where(approval => !IsRetiredSlotRead(new EndpointIdentity(approval.Endpoint, approval.Method)))
+            .ToArray();
         var httpComparison = CompatibilityComparer.CompareBidirectional(
             before with { OpenApi = null },
             after with { OpenApi = null },
@@ -196,9 +204,9 @@ public sealed class PublishingApiContractTests
 
         // The FastEndpoints-to-Minimal-API migration reviewed one OpenAPI difference per operation.
         var approvals = allApprovals.Where(approval => approval.Case == "openapi").ToArray();
-        Assert.Equal(46, approvals.Length);
-        Assert.Equal(23, approvals.Count(approval => !approval.Reverse));
-        Assert.Equal(23, approvals.Count(approval => approval.Reverse));
+        Assert.Equal(48, approvals.Length);
+        Assert.Equal(24, approvals.Count(approval => !approval.Reverse));
+        Assert.Equal(24, approvals.Count(approval => approval.Reverse));
         Assert.All(approvals, approval => Assert.Equal(CompatibilityFacet.OpenApi, approval.Facet));
 
         // Handler absorption reviewed the cases whose frozen rows only ever described the capture
@@ -251,6 +259,10 @@ public sealed class PublishingApiContractTests
         ApprovedDifference[] approvals) =>
         string.Join(Environment.NewLine,
             CompatibilityComparer.CompareBidirectional(before, after, approvals).Failures);
+
+    private static bool IsRetiredSlotRead(EndpointIdentity endpoint) =>
+        endpoint.Method.Value == "GET" &&
+        endpoint.Route.Value is "/publishing/workflows/{param}/slots" or "/publishing/workflows/{param}/slots/{param}";
 
     private static CompatibilityEvidenceSet Evidence(string canonical)
     {
@@ -345,6 +357,7 @@ public sealed class PublishingApiContractTests
     private static bool HasRequestMetadata(PublishingRoute route) => route.Id is not
         ("IncidentStrategies.List" or
         "ValueConversionProfiles.List" or
+        "WorkflowExecutable.Export" or
         "ActivityPublications.GetReceipt" or
         "ActivityTestRuns.Get" or
         "ActivityTestRuns.GetByIdempotencyKey" or
@@ -436,13 +449,14 @@ internal sealed class PublishingMinimalApiHost(WebApplication app) : IAsyncDispo
         app.MapOpenApi();
         await app.StartAsync();
 
-        var slotStore = app.Services.GetRequiredService<IPublicationSlotStore>();
-        await slotStore.TryActivateAsync(
+        var activationAuthority = app.Services.GetRequiredService<IWorkflowActivationAuthority>();
+        await activationAuthority.TryActivateAsync(new WorkflowActivationSlotRequest(
             "definition-route",
             "default",
             "publication-capture",
-            expectedRevision: 0,
-            new DateTimeOffset(2026, 8, 17, 12, 0, 0, TimeSpan.Zero));
+            WorkflowActivationSource.Publishing,
+            ExpectedRevision: 0,
+            new DateTimeOffset(2026, 8, 17, 12, 0, 0, TimeSpan.Zero)));
         return new PublishingMinimalApiHost(app);
     }
 

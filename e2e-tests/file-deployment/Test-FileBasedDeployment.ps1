@@ -7,7 +7,7 @@
     actver_* id and authors a definition file (pinned definitionId) into a temp folder.
     Phase B: restarts the server with JsonWorkflowReconciliation composed via env vars
     (SourceId + FolderPath + PublishOnReconcile=true), waits on /health/ready, then asserts:
-    definition imported, active publication in the slot, executable executes to completion.
+    definition imported, active activation in the runtime slot, executable executes to completion.
     Phase C (idempotency, SC-002): restarts again with the folder unchanged and asserts the same
     active publication (no republish) and no duplicate definition.
     Cleanup restarts the server without the feature. Requires the server running from source
@@ -58,20 +58,28 @@ try {
     }
     Assert-That "definition '$workflowName' exists with the pinned id" ($null -ne $script:definition) "expected id $definitionId in the list response"
 
+    # T117: activation slots are runtime-owned. The executable to execute comes from the runtime
+    # listing instead of a publishing-owned publication join.
     $slots = $null
-    Invoke-Step "publication slots (GET /publishing/workflows/{definitionId}/slots)" {
-        $script:slots = Invoke-RestMethod "$BaseUrl/publishing/workflows/$definitionId/slots" -WebSession $ctx.Session
+    Invoke-Step "activation slots (GET /runtime/workflows/activation-slots/{definitionId})" {
+        $script:slots = Invoke-RestMethod "$BaseUrl/runtime/workflows/activation-slots/$definitionId" -WebSession $ctx.Session
     }
     $slot = $script:slots.items | Select-Object -First 1
-    Assert-That "slot exists with an active publication" ($null -ne $slot -and $null -ne $slot.activePublicationId) ("slots: " + ($script:slots | ConvertTo-Json -Compress -Depth 5))
-    $publication = $slot.publication
-    Assert-That "publication is Active with an artifactId" ($null -ne $publication -and "$($publication.status)" -eq "Active" -and $publication.artifactId) ("publication: " + ($publication | ConvertTo-Json -Compress -Depth 5))
-    $firstPublicationId = $slot.activePublicationId
+    Assert-That "slot exists with a live activation" ($null -ne $slot -and $null -ne $slot.activeActivationId) ("slots: " + ($script:slots | ConvertTo-Json -Compress -Depth 5))
+    $firstActivationId = $slot.activeActivationId
 
-    if ($publication -and $publication.artifactId) {
+    $executable = $null
+    Invoke-Step "executable for the definition (GET /runtime/workflows/executables)" {
+        $list = Invoke-RestMethod "$BaseUrl/runtime/workflows/executables" -WebSession $ctx.Session
+        $script:executable = $list.items | Where-Object { $_.definitionId -eq $definitionId } | Select-Object -First 1
+    }
+    Assert-That "a published executable exists for the definition" ($null -ne $script:executable -and $script:executable.artifactId) ("executables: " + ($script:executable | ConvertTo-Json -Compress -Depth 5))
+    $sourceReferenceId = ($script:executable.references | Where-Object { $_.live } | Select-Object -First 1).sourceReferenceId
+
+    if ($script:executable -and $script:executable.artifactId) {
         $run = $null
         Invoke-Step "execute (POST /runtime/workflows/executables/{artifactId}/execute)" {
-            $script:run = Invoke-Artifact -Ctx $ctx -ArtifactId $publication.artifactId -SourceReferenceId $publication.sourceReferenceId
+            $script:run = Invoke-Artifact -Ctx $ctx -ArtifactId $script:executable.artifactId -SourceReferenceId $sourceReferenceId
         }
         $inst = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $script:run.workflowExecutionId
         Show-WorkflowInstance -Instance $inst
@@ -87,10 +95,10 @@ try {
     $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
 
     Invoke-Step "slots after restart" {
-        $script:slots = Invoke-RestMethod "$BaseUrl/publishing/workflows/$definitionId/slots" -WebSession $ctx.Session
+        $script:slots = Invoke-RestMethod "$BaseUrl/runtime/workflows/activation-slots/$definitionId" -WebSession $ctx.Session
     }
     $slotAfter = $script:slots.items | Select-Object -First 1
-    Assert-That "restart did not republish (same activePublicationId)" ($null -ne $slotAfter -and $slotAfter.activePublicationId -eq $firstPublicationId) "before=$firstPublicationId after=$($slotAfter.activePublicationId)"
+    Assert-That "restart did not republish (same activeActivationId)" ($null -ne $slotAfter -and $slotAfter.activeActivationId -eq $firstActivationId) "before=$firstActivationId after=$($slotAfter.activeActivationId)"
 
     Invoke-Step "definitions after restart" {
         $list = Invoke-RestMethod "$BaseUrl/design/workflows/definitions?name=$workflowName" -WebSession $ctx.Session

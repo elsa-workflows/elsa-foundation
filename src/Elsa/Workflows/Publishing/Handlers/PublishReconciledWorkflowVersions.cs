@@ -5,6 +5,7 @@ using Elsa.Workflows.Design.Reconciliation.Core;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.Logging;
 using System.Linq;
 
@@ -33,7 +34,7 @@ public sealed class PublishReconciledWorkflowVersions(
     IWorkflowDefinitionVersionStore versionStore,
     IPublicationPolicyStore policyStore,
     IPublicationPolicyResolver policyResolver,
-    IPublicationSlotStore slotStore,
+    IWorkflowActivationAuthority activationAuthority,
     IPublicationRecordStore recordStore,
     IRequestSender requestSender,
     TimeProvider timeProvider) : IEventHandler<WorkflowVersionsReconciled>
@@ -122,8 +123,8 @@ public sealed class PublishReconciledWorkflowVersions(
         if (await ResolveTargetSlotName(definitionId, versionId, cancellationToken) is not { } slotName)
             return false;
 
-        var slot = await slotStore.FindAsync(definitionId, slotName, cancellationToken);
-        if (slot?.ActivePublicationId is not { } publicationId)
+        var slot = await activationAuthority.FindAsync(definitionId, slotName, cancellationToken);
+        if (slot?.ActiveActivationId is not { } publicationId)
             return false;
 
         var record = await recordStore.FindAsync(publicationId, cancellationToken);

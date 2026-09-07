@@ -1,7 +1,6 @@
 using CShells.Features;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
-using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
@@ -109,6 +108,37 @@ public sealed class GroundworkV2RuntimeRegistrationTests
         AssertScopedAlias<IDurableTimerStore, GroundworkV2DurableTimerStateStore>(services);
         AssertScopedAlias<IWorkflowTriggerBindingStore, GroundworkV2WorkflowTriggerBindingStore>(services);
         AssertScopedAlias<IRecurringTriggerScheduleStore, GroundworkV2RecurringTriggerScheduleStore>(services);
+        AssertScopedAlias<IWorkflowActivationAuthority, GroundworkV2WorkflowActivationAuthority>(services);
+    }
+
+    [Fact]
+    public void Groundwork_registration_resolves_recovery_protector_from_a_stable_configured_key()
+    {
+        var services = new ServiceCollection();
+        services.Configure<RuntimeRecoveryContinuationOptions>(options =>
+            options.SigningKey = "stable-groundwork-recovery-signing-key-32-bytes");
+        services.AddGroundworkV2RuntimeStores();
+
+        using var provider = services.BuildServiceProvider();
+        var codec = provider.GetRequiredService<IRuntimeRecoveryContinuationCodec>();
+        var token = codec.Encode("recovery-page", [1, 2, 3]);
+
+        Assert.Equal([1, 2, 3], codec.Decode("recovery-page", token));
+    }
+
+    [Fact]
+    public void Groundwork_registration_refuses_recovery_protector_without_a_stable_key()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkV2RuntimeStores();
+
+        using var provider = services.BuildServiceProvider();
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            provider.GetRequiredService<IRuntimeRecoveryContinuationCodec>());
+
+        Assert.Equal(
+            "Runtime recovery continuation signing key must be configured for durable recovery paging.",
+            exception.Message);
     }
 
     [Fact]

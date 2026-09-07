@@ -1,4 +1,3 @@
-using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -13,7 +12,9 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// Scheduler work is scoped to one persistence scope and uses the public Groundwork row/session APIs.
 /// Create-only enqueue, keyset FIFO reads, and optimistic claim transitions preserve the durable queue
 /// contract without importing the v1 document-store bridge. Long logical work-item identities use the
-/// shared hashed physical alias and are validated against the complete JSON envelope on every access.
+/// shared hashed physical alias and are validated against the complete JSON envelope on every full-row access.
+/// The projection-only pending-workflow discovery route returns candidates; the subsequent queue read performs
+/// the full identity validation before any work item is used.
 /// </remarks>
 public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
     IWorkflowSchedulerWorkQueue,
@@ -93,7 +94,8 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
             Equal(workflow, query.WorkflowExecutionId),
             [new OrderTerm(order, OrderDirection.Ascending, NullOrder.Last)],
             Projection.All,
-            PagingFor(query.Limit, query.ContinuationToken)));
+            PagingFor(query.Limit, query.ContinuationToken)),
+            unit.CreateQueryRenderOptions(ElsaRuntimeV2StorageManifest.BySchedulerWorkOrderIndex));
 
         return ValueTask.FromResult(new RuntimeStorePage<RuntimeSchedulerWorkItem>(
             query,
@@ -176,23 +178,29 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
 
         var table = new TableId(unit.Name);
         var workflow = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField);
-        var recordedAt = Column(table, ElsaRuntimeV2StorageManifest.SchedulerWorkRecordedAtField);
-        var order = Column(table, ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField);
+        var collection = Column(table, ElsaRuntimeV2StorageManifest.CollectionField);
+        var options = unit.CreateQueryRenderOptions(
+            ElsaRuntimeV2StorageManifest.SchedulerWorkPendingExecutionIdentityIndex);
         var result = Open().Query(new QueryRequest(
             table,
-            Predicate.AlwaysTrue.Instance,
-            [
-                new OrderTerm(workflow, OrderDirection.Ascending, NullOrder.Last),
-                new OrderTerm(recordedAt, OrderDirection.Descending, NullOrder.First),
-                new OrderTerm(order, OrderDirection.Ascending, NullOrder.Last)
-            ],
-            Projection.All,
+            Equal(collection, ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind),
+            [new OrderTerm(workflow, OrderDirection.Ascending, NullOrder.Last)],
+            Projection.ColumnsOnly(workflow),
             Paging.Keyset(limit),
-            new LatestPerKey(workflow, recordedAt)));
+            distinct: true),
+            options);
 
         return ValueTask.FromResult<IReadOnlyCollection<string>>(
-            result.Rows.Select(row => Deserialize(row).Item.WorkflowExecutionId).ToArray());
+            result.Rows
+                .Select(row => StringValue(row, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField))
+                .ToArray());
     }
+
+    private static string StringValue(IReadOnlyDictionary<string, object?> row, string field) => row[field] switch
+    {
+        string value => value,
+        _ => throw new InvalidOperationException($"The Groundwork row field '{field}' is not a string.")
+    };
 
     public ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkClaim>> ListActiveClaimsAsync(
         string workflowExecutionId,
@@ -587,7 +595,7 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
             (workItemId is null ? string.Empty : $" and work item '{workItemId}'") +
             $" did not settle after {MaxTransitionAttempts} compare-and-swap attempts.");
 
-    private ColumnRef Column(TableId table, string name)
+    private ColumnRef Column(TableId table, string name, bool nullableOverride = false)
     {
         var definition = unit.Columns.SingleOrDefault(column =>
             StringComparer.Ordinal.Equals(column.Name, name))
@@ -603,7 +611,7 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
             _ => throw new InvalidOperationException(
                 $"Groundwork scheduler-work query column '{name}' has unsupported type '{definition.Type}'.")
         };
-        return new ColumnRef(table, name, type, definition.IsNullable, definition.MaxLength);
+        return new ColumnRef(table, name, type, nullableOverride || definition.IsNullable, definition.MaxLength);
     }
 
     private static Predicate Equal(ColumnRef column, string value) =>

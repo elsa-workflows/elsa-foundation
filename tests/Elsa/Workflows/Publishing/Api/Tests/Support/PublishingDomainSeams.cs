@@ -220,16 +220,16 @@ public sealed class CaptureRuntimeRequirementPreflight(IHttpContextAccessor acce
 
 public sealed class CaptureSlotLifecycle(IHttpContextAccessor accessor) : IPublicationSlotUnpublisher, IPublicationSlotRestorer
 {
-    public Task<PublicationSlot> UnpublishAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken) =>
+    public Task<WorkflowActivationSlot> UnpublishAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken) =>
         CannedAsync(cancellationToken);
 
-    public Task<PublicationSlot> RestoreAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken) =>
+    public Task<WorkflowActivationSlot> RestoreAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken) =>
         CannedAsync(cancellationToken);
 
-    private Task<PublicationSlot> CannedAsync(CancellationToken cancellationToken)
+    private Task<WorkflowActivationSlot> CannedAsync(CancellationToken cancellationToken)
     {
         CaptureScenarios.ThrowIfRequested(accessor, cancellationToken);
-        return Task.FromResult((PublicationSlot)CaptureResponseFactory.Create(typeof(PublicationSlot)));
+        return Task.FromResult((WorkflowActivationSlot)CaptureResponseFactory.Create(typeof(WorkflowActivationSlot)));
     }
 }
 

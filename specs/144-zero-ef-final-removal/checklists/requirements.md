@@ -33,3 +33,4 @@
 
 - The named EF and Groundwork product boundaries are required outcome vocabulary, not an implementation prescription. Implementation mechanisms belong in the plan.
 - No clarification marker is needed because the program owner already ratified the provider boundary, deletion ordering, OpenIddict inclusion, #932 gate, and absolute-zero end state.
+- Issue #1482 reconciliation (2026-09-01) records the current-source Identity EF deletion, test retention, baseline shrink, and generated-map refresh in the inventory, ledger, and quickstart. This slice does not claim the still-open #646 performance verdict or the final absolute-zero gate.

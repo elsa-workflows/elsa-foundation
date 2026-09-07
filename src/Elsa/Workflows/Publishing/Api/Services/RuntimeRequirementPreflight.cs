@@ -1,7 +1,5 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
-using Elsa.Activities.Runtime.Core.Contracts;
-using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -28,8 +26,7 @@ public sealed class RuntimeRequirementPreflight(
     IWorkflowExecutableSourceReferenceReader sourceReferences,
     IWorkflowExecutableStore workflowExecutables,
     IExecutableActivityTemplateReader activityTemplates,
-    IEnumerable<IRuntimeActivityConsumerCapability> activityConsumers,
-    IRuntimeDurableValueStorageDriverRegistry storageDrivers,
+    IRuntimeRequirementChecker requirementChecker,
     TimeProvider timeProvider) : IRuntimeRequirementPreflight
 {
     public const string ActiveRetainedArtifactsScope = "ActiveRetainedArtifacts";
@@ -57,12 +54,12 @@ public sealed class RuntimeRequirementPreflight(
                 continue;
             }
 
-            var (consumers, drivers, found) = await LoadRequirementsAsync(artifactId, cancellationToken);
+            var subject = await LoadRequirementsAsync(artifactId, cancellationToken);
             artifacts.Add(new(
                 artifactId,
                 true,
-                found,
-                found ? CheckCapabilities(consumers, drivers) : []));
+                subject is not null,
+                subject is null ? [] : CheckCapabilities(subject)));
         }
 
         var requirements = artifacts
@@ -97,63 +94,44 @@ public sealed class RuntimeRequirementPreflight(
         return artifactIds.Order(StringComparer.Ordinal).ToArray();
     }
 
-    private async ValueTask<(IReadOnlyCollection<RuntimeRequirement> Consumers,
-        IReadOnlyCollection<RuntimeStorageDriverRequirement> Drivers, bool Found)> LoadRequirementsAsync(
+    private async ValueTask<RuntimeRequirementCheckSubject?> LoadRequirementsAsync(
         string artifactId,
         CancellationToken cancellationToken)
     {
         var executable = await workflowExecutables.FindAsync(artifactId, cancellationToken);
         if (executable is not null)
-            return (executable.RuntimeRequirements, executable.StorageDriverRequirements, true);
+            return RuntimeRequirementCheckSubject.FromExecutable(executable);
 
         var template = await activityTemplates.FindAsync(artifactId, cancellationToken);
-        return template is null
-            ? ([], [], false)
-            : (template.RuntimeRequirements, template.StorageDriverRequirements, true);
+        return template is null ? null : RuntimeRequirementCheckSubject.FromTemplate(template);
     }
 
-    private IReadOnlyList<RuntimeCapabilityPreflight> CheckCapabilities(
-        IReadOnlyCollection<RuntimeRequirement> consumerRequirements,
-        IReadOnlyCollection<RuntimeStorageDriverRequirement> storageDriverRequirements)
+    private IReadOnlyList<RuntimeCapabilityPreflight> CheckCapabilities(RuntimeRequirementCheckSubject subject)
     {
+        var verdict = requirementChecker.Check(subject);
         var result = new List<RuntimeCapabilityPreflight>();
-        var consumersByKey = activityConsumers
-            .GroupBy(capability => capability.ConsumerKey, StringComparer.Ordinal)
-            .ToDictionary(
-                group => group.Key,
-                group => group
-                    .SelectMany(capability => capability.SupportedSchemaVersions)
-                    .Distinct(StringComparer.Ordinal)
-                    .Order(StringComparer.Ordinal)
-                    .ToArray(),
-                StringComparer.Ordinal);
-        foreach (var requirement in consumerRequirements
-                     .Distinct()
-                     .OrderBy(x => x.ConsumerKey, StringComparer.Ordinal)
-                     .ThenBy(x => x.SchemaVersion, StringComparer.Ordinal))
-        {
-            IReadOnlyCollection<string> supported = consumersByKey.GetValueOrDefault(requirement.ConsumerKey) ?? [];
-            var status = supported.Contains(requirement.SchemaVersion, StringComparer.Ordinal)
-                ? RuntimeCapabilityStatus.Available
-                : supported.Count == 0 ? RuntimeCapabilityStatus.Missing : RuntimeCapabilityStatus.UnsupportedSchema;
-            result.Add(new(
-                RuntimeCapabilityKind.ActivityConsumer,
-                requirement.ConsumerKey,
-                requirement.SchemaVersion,
-                status,
-                supported.Order(StringComparer.Ordinal).ToArray()));
-        }
-
-        foreach (var requirement in storageDriverRequirements.Distinct().OrderBy(x => x.DriverKey, StringComparer.Ordinal))
-            result.Add(new(
-                RuntimeCapabilityKind.DurableValueStorageDriver,
-                requirement.DriverKey,
-                null,
-                storageDrivers.Contains(requirement.DriverKey) ? RuntimeCapabilityStatus.Available : RuntimeCapabilityStatus.Missing,
-                []));
-
+        result.AddRange(verdict.Requirements.Select(entry => new RuntimeCapabilityPreflight(
+            RuntimeCapabilityKind.ActivityConsumer,
+            entry.ConsumerKey,
+            entry.SchemaVersion,
+            ToViewStatus(entry.Status),
+            entry.SupportedSchemaVersions)));
+        result.AddRange(verdict.StorageDrivers.Select(entry => new RuntimeCapabilityPreflight(
+            RuntimeCapabilityKind.DurableValueStorageDriver,
+            entry.DriverKey,
+            null,
+            ToViewStatus(entry.Status),
+            [])));
         return result;
     }
+
+    private static RuntimeCapabilityStatus ToViewStatus(RuntimeRequirementStatus status) => status switch
+    {
+        RuntimeRequirementStatus.Available => RuntimeCapabilityStatus.Available,
+        RuntimeRequirementStatus.Missing => RuntimeCapabilityStatus.Missing,
+        RuntimeRequirementStatus.UnsupportedSchema => RuntimeCapabilityStatus.UnsupportedSchema,
+        _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unexpected runtime requirement status on a consumer or storage-driver entry.")
+    };
 
     private static IReadOnlyList<ActivityDiagnostic> BuildDiagnostics(IEnumerable<RuntimeArtifactPreflight> artifacts)
     {
@@ -177,6 +155,23 @@ public sealed class RuntimeRequirementPreflight(
                     subject,
                     Remediation: "Restore or republish the retained artifact before deployment.",
                     Metadata: new Dictionary<string, string>(StringComparer.Ordinal)));
+
+            foreach (var capability in artifact.Capabilities.Where(x =>
+                         x.Kind == RuntimeCapabilityKind.ActivityConsumer &&
+                         x.Status != RuntimeCapabilityStatus.Available))
+                diagnostics.Add(new(
+                    capability.Status == RuntimeCapabilityStatus.UnsupportedSchema
+                        ? "activity.runtime.consumer-schema-unsupported"
+                        : "activity.runtime.consumer-missing",
+                    ActivityDiagnosticSeverity.Error,
+                    $"Required Runtime consumer '{capability.Key}' schema '{capability.SchemaVersion}' is unavailable.",
+                    subject,
+                    Remediation: "Deploy and register a Runtime consumer that supports the exact schema before deployment.",
+                    Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["consumerKey"] = capability.Key,
+                        ["schemaVersion"] = capability.SchemaVersion ?? ""
+                    }));
 
             foreach (var capability in artifact.Capabilities.Where(x =>
                          x.Kind == RuntimeCapabilityKind.DurableValueStorageDriver &&

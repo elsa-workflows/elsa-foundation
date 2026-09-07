@@ -1,7 +1,8 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
-using Elsa.Persistence.Core;
-using Elsa.Persistence.Core.Design;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
@@ -50,7 +51,8 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
         var sp = scope.ServiceProvider;
 
         Assert.IsType<GroundworkWorkflowDefinitionStore>(sp.GetRequiredService<IWorkflowDefinitionStore>());
-        Assert.IsType<GroundworkWorkflowDefinitionVersionStore>(sp.GetRequiredService<IWorkflowDefinitionVersionStore>());
+        var concreteVersionStore = sp.GetRequiredService<GroundworkWorkflowDefinitionVersionStore>();
+        Assert.Same(concreteVersionStore, sp.GetRequiredService<IWorkflowDefinitionVersionStore>());
         Assert.IsType<GroundworkWorkflowDefinitionDraftStore>(sp.GetRequiredService<IWorkflowDefinitionDraftStore>());
         Assert.IsType<GroundworkWorkflowDefinitionListProjectionStore>(sp.GetRequiredService<IWorkflowDefinitionListProjectionStore>());
         Assert.IsType<GroundworkWorkflowDefinitionVersionLayoutStore>(sp.GetRequiredService<IWorkflowDefinitionVersionLayoutStore>());

@@ -2,7 +2,35 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 public sealed class RuntimeRecoveryScanRequest
 {
-    public RuntimeRecoveryScanRequest(DateTimeOffset now, TimeSpan leaseTimeout, TimeSpan heartbeatTimeout, int limit, string? ownerId = null)
+    // Keep the pre-paging constructors as real metadata so already compiled scanners and hosts can continue to
+    // construct requests. The continuation-bearing overload below is additive; optional parameters alone would
+    // preserve source compatibility but would remove the old constructor signatures from the binary surface.
+    public RuntimeRecoveryScanRequest(
+        DateTimeOffset now,
+        TimeSpan leaseTimeout,
+        TimeSpan heartbeatTimeout,
+        int limit)
+        : this(now, leaseTimeout, heartbeatTimeout, limit, null, null)
+    {
+    }
+
+    public RuntimeRecoveryScanRequest(
+        DateTimeOffset now,
+        TimeSpan leaseTimeout,
+        TimeSpan heartbeatTimeout,
+        int limit,
+        string? ownerId)
+        : this(now, leaseTimeout, heartbeatTimeout, limit, ownerId, null)
+    {
+    }
+
+    public RuntimeRecoveryScanRequest(
+        DateTimeOffset now,
+        TimeSpan leaseTimeout,
+        TimeSpan heartbeatTimeout,
+        int limit,
+        string? ownerId = null,
+        string? continuationToken = null)
     {
         if (leaseTimeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(leaseTimeout), "Lease timeout must be greater than zero.");
@@ -10,17 +38,19 @@ public sealed class RuntimeRecoveryScanRequest
         if (heartbeatTimeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(heartbeatTimeout), "Heartbeat timeout must be greater than zero.");
 
-        if (limit <= 0)
-            throw new ArgumentOutOfRangeException(nameof(limit), "Recovery scan limit must be greater than zero.");
+        limit = RuntimeStorePageRequest.ValidateLimit(limit, nameof(limit));
 
         if (ownerId is not null && string.IsNullOrWhiteSpace(ownerId))
             throw new ArgumentException("Recovery scan owner filter cannot be blank.", nameof(ownerId));
+
+        RuntimeStorePageRequest.ValidateContinuationToken(continuationToken, nameof(continuationToken));
 
         Now = now;
         LeaseTimeout = leaseTimeout;
         HeartbeatTimeout = heartbeatTimeout;
         Limit = limit;
         OwnerId = ownerId;
+        ContinuationToken = continuationToken;
     }
 
     public DateTimeOffset Now { get; }
@@ -28,6 +58,48 @@ public sealed class RuntimeRecoveryScanRequest
     public TimeSpan HeartbeatTimeout { get; }
     public int Limit { get; }
     public string? OwnerId { get; }
+
+    /// <summary>
+    /// Opaque continuation returned by <see cref="IRuntimeRecoveryScanner.ScanPageAsync"/>.
+    /// </summary>
+    public string? ContinuationToken { get; }
+}
+
+/// <summary>
+/// One bounded recovery result page.
+/// </summary>
+/// <remarks>
+/// Recovery traversals may need to advance provider cursors past terminal, held, or overlapping rows before
+/// finding another candidate. Unlike a generic store page, an empty recovery page may carry a continuation so the
+/// caller can make bounded progress without forcing the scanner to materialize or drain the whole population.
+/// </remarks>
+public sealed record RuntimeRecoveryPage
+{
+    public RuntimeRecoveryPage(
+        RuntimeRecoveryScanRequest request,
+        IReadOnlyList<RuntimeRecoveryCandidate> items,
+        string? nextContinuationToken = null)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(items);
+        if (items.Count > request.Limit)
+            throw new ArgumentException("A recovery page cannot exceed its requested limit.", nameof(items));
+
+        nextContinuationToken = RuntimeStorePageRequest.ValidateContinuationToken(
+            nextContinuationToken,
+            nameof(nextContinuationToken));
+        if (nextContinuationToken is not null &&
+            StringComparer.Ordinal.Equals(request.ContinuationToken, nextContinuationToken))
+        {
+            throw new ArgumentException("A recovery continuation must advance the traversal.", nameof(nextContinuationToken));
+        }
+
+        Items = items;
+        NextContinuationToken = nextContinuationToken;
+    }
+
+    public IReadOnlyList<RuntimeRecoveryCandidate> Items { get; }
+    public string? NextContinuationToken { get; }
 }
 
 public sealed class RuntimeRecoveryCandidate

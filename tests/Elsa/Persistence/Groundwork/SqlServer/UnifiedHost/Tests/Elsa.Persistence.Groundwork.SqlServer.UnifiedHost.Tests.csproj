@@ -11,11 +11,17 @@
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="Testcontainers.MsSql" />
     <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="Groundwork.SqlServer" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/SqlServer/Unified/Elsa.Persistence.Groundwork.SqlServer.Unified.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Design/Persistence/Groundwork/Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Activities/Design/Persistence/Groundwork/Elsa.Activities.Design.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Publishing/Persistence/Groundwork/Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj" />
     <ProjectReference Include="../../../Testing/Elsa.Persistence.Groundwork.Testing.csproj" />
   </ItemGroup>

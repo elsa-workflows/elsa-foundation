@@ -36,15 +36,13 @@ public sealed class PublishingSerializationContractTests
 
     private static readonly Type[] RouteContractTypes =
     [
-        // Requests accepted by the 23 route registrations.
+        // Requests accepted by the 21 route registrations.
         typeof(ConstructActivity),
         typeof(ListConstructableActivities),
         typeof(ListIncidentStrategies),
         typeof(ListValueConversionProfiles),
         typeof(PreflightActivityDraftPublication),
         typeof(GetActivityPublicationReceipt),
-        typeof(ListPublicationSlots),
-        typeof(GetPublicationSlot),
         typeof(GetWorkflowPublicationPolicy),
         typeof(SetWorkflowPublicationPolicy),
         typeof(PreflightWorkflowPublication),
@@ -69,7 +67,6 @@ public sealed class PublishingSerializationContractTests
         typeof(ValueConversionProfilesResponse),
         typeof(PublicationPreflightView),
         typeof(PublicationSnapshotPreflightView),
-        typeof(PublicationSlotListResponse),
         typeof(PublicationSlotView),
         typeof(PublicationPolicyView),
         typeof(PublishedWorkflowView),

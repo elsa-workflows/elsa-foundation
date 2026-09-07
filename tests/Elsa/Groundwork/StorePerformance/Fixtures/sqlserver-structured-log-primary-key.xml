@@ -1,0 +1,268 @@
+<?xml version="1.0" ?>
+<ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan" Version="1.564" Build="16.0.4215.2">
+  <BatchSequence>
+    <Batch>
+      <Statements>
+        <StmtSimple StatementText="SELECT * FROM [elsa_structured_logs] WHERE ([__groundwork_scope] COLLATE Latin1_General_100_BIN2 IS NOT NULL AND DATALENGTH([__groundwork_scope] COLLATE Latin1_General_100_BIN2) = DATALENGTH(@p0) AND [__groundwork_scope] COLLATE Latin1_General_100_BIN2 = @p0) ORDER BY [sequence] DESC OFFSET 0 ROWS FETCH NEXT @p1 ROWS ONLY option (PLAN PER VALUE(ObjectID = 0, QueryVariantID = 3, predicate_range([groundwork_diagnostics_fixture].[dbo].[elsa_structured_logs].[__groundwork_scope] = @p0, 100.0, 100000.0)))" StatementId="1" StatementCompId="2" StatementType="SELECT" ParentObjectId="0" StatementSqlHandle="0x09007FF2C73BAD5C6B8DAE352B5CA7C5B2090000000000000000000000000000000000000000000000000000" DatabaseContextSettingsId="1" StatementParameterizationType="1" RetrievedFromCache="true" StatementSubTreeCost="0.454123" StatementEstRows="128" SecurityPolicyApplied="false" StatementOptmLevel="FULL" QueryHash="0xD853E308FB82CF86" QueryPlanHash="0x5A9246D3CF0EF52C" StatementOptmEarlyAbortReason="GoodEnoughPlanFound" CardinalityEstimationModelVersion="160">
+          <StatementSetOptions QUOTED_IDENTIFIER="true" ARITHABORT="false" CONCAT_NULL_YIELDS_NULL="true" ANSI_NULLS="true" ANSI_PADDING="true" ANSI_WARNINGS="true" NUMERIC_ROUNDABORT="false"/>
+          <Dispatcher>
+            <ParameterSensitivePredicate LowBoundary="100" HighBoundary="100000">
+              <StatisticsInfo LastUpdate="2026-09-05T00:58:36.67" ModificationCount="1000" SamplingPercent="14.644" Statistics="[__groundwork_pk_elsa_structured_logs]" Table="[elsa_structured_logs]" Schema="[dbo]" Database="[groundwork_diagnostics_fixture]"/>
+              <Predicate>
+                <ScalarOperator ScalarString="[groundwork_diagnostics_fixture].[dbo].[elsa_structured_logs].[__groundwork_scope]=CONVERT_IMPLICIT(nvarchar(108),[@p0],0)">
+                  <Compare CompareOp="EQ">
+                    <ScalarOperator>
+                      <Identifier>
+                        <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="__groundwork_scope"/>
+                      </Identifier>
+                    </ScalarOperator>
+                    <ScalarOperator>
+                      <Identifier>
+                        <ColumnReference Column="ConstExpr1004">
+                          <ScalarOperator>
+                            <Convert DataType="nvarchar" Length="216" Style="0" Implicit="1">
+                              <ScalarOperator>
+                                <Identifier>
+                                  <ColumnReference Column="@p0"/>
+                                </Identifier>
+                              </ScalarOperator>
+                            </Convert>
+                          </ScalarOperator>
+                        </ColumnReference>
+                      </Identifier>
+                    </ScalarOperator>
+                  </Compare>
+                </ScalarOperator>
+              </Predicate>
+            </ParameterSensitivePredicate>
+          </Dispatcher>
+          <QueryPlan DegreeOfParallelism="1" CachedPlanSize="56" CompileTime="1" CompileCPU="1" CompileMemory="408" QueryVariantID="3">
+            <MemoryGrantInfo SerialRequiredMemory="0" SerialDesiredMemory="0" GrantedMemory="0" MaxUsedMemory="0"/>
+            <OptimizerHardwareDependentProperties EstimatedAvailableMemoryGrant="327475" EstimatedPagesCached="81868" EstimatedAvailableDegreeOfParallelism="2" MaxCompileMemory="8371144"/>
+            <OptimizerStatsUsage>
+              <StatisticsInfo LastUpdate="2026-09-05T00:58:36.81" ModificationCount="1000" SamplingPercent="14.644" Statistics="[__groundwork_ix_20_elsa_structured_logs_27_elsa_structured_logs_replay]" Table="[elsa_structured_logs]" Schema="[dbo]" Database="[groundwork_diagnostics_fixture]"/>
+              <StatisticsInfo LastUpdate="2026-09-05T00:58:36.71" ModificationCount="1000" SamplingPercent="14.644" Statistics="[__groundwork_ix_20_elsa_structured_logs_29_elsa_structured_logs_category]" Table="[elsa_structured_logs]" Schema="[dbo]" Database="[groundwork_diagnostics_fixture]"/>
+              <StatisticsInfo LastUpdate="2026-09-05T00:58:36.88" ModificationCount="1000" SamplingPercent="14.644" Statistics="[__groundwork_ix_20_elsa_structured_logs_27_elsa_structured_logs_source]" Table="[elsa_structured_logs]" Schema="[dbo]" Database="[groundwork_diagnostics_fixture]"/>
+              <StatisticsInfo LastUpdate="2026-09-05T00:58:36.74" ModificationCount="1000" SamplingPercent="14.644" Statistics="[__groundwork_ix_20_elsa_structured_logs_26_elsa_structured_logs_level]" Table="[elsa_structured_logs]" Schema="[dbo]" Database="[groundwork_diagnostics_fixture]"/>
+              <StatisticsInfo LastUpdate="2026-09-05T00:58:36.67" ModificationCount="1000" SamplingPercent="14.644" Statistics="[__groundwork_pk_elsa_structured_logs]" Table="[elsa_structured_logs]" Schema="[dbo]" Database="[groundwork_diagnostics_fixture]"/>
+              <StatisticsInfo LastUpdate="2026-09-05T00:58:36.72" ModificationCount="1000" SamplingPercent="14.24" Statistics="[_WA_Sys_00000004_02FC7413]" Table="[elsa_structured_logs]" Schema="[dbo]" Database="[groundwork_diagnostics_fixture]"/>
+              <StatisticsInfo LastUpdate="2026-09-05T00:58:36.68" ModificationCount="1000" SamplingPercent="14.817" Statistics="[_WA_Sys_00000001_02FC7413]" Table="[elsa_structured_logs]" Schema="[dbo]" Database="[groundwork_diagnostics_fixture]"/>
+              <StatisticsInfo LastUpdate="2026-09-05T00:58:36.75" ModificationCount="1000" SamplingPercent="14.438" Statistics="[_WA_Sys_00000003_02FC7413]" Table="[elsa_structured_logs]" Schema="[dbo]" Database="[groundwork_diagnostics_fixture]"/>
+              <StatisticsInfo LastUpdate="2026-09-05T00:58:36.86" ModificationCount="1000" SamplingPercent="14.644" Statistics="[__groundwork_ix_20_elsa_structured_logs_35_elsa_structured_logs_sequence_order]" Table="[elsa_structured_logs]" Schema="[dbo]" Database="[groundwork_diagnostics_fixture]"/>
+              <StatisticsInfo LastUpdate="2026-09-05T00:58:36.90" ModificationCount="1000" SamplingPercent="13.727" Statistics="[_WA_Sys_00000005_02FC7413]" Table="[elsa_structured_logs]" Schema="[dbo]" Database="[groundwork_diagnostics_fixture]"/>
+              <StatisticsInfo LastUpdate="2026-09-05T00:58:36.83" ModificationCount="1000" SamplingPercent="15.326" Statistics="[_WA_Sys_00000006_02FC7413]" Table="[elsa_structured_logs]" Schema="[dbo]" Database="[groundwork_diagnostics_fixture]"/>
+            </OptimizerStatsUsage>
+            <QueryTimeStats ElapsedTime="1" CpuTime="1"/>
+            <RelOp NodeId="0" PhysicalOp="Top" LogicalOp="Top" EstimateRows="128" EstimateIO="0" EstimateCPU="1.28e-05" AvgRowSize="4605" EstimatedTotalSubtreeCost="0.454123" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+              <OutputList>
+                <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="sequence"/>
+                <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="timestamp"/>
+                <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="level"/>
+                <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="categoryKey"/>
+                <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="sourceKey"/>
+                <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="replayToken"/>
+                <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="payload"/>
+                <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="__groundwork_scope"/>
+              </OutputList>
+              <RunTimeInformation>
+                <RunTimeCountersPerThread Thread="0" ActualRows="128" Batches="0" ActualElapsedms="1" ActualCPUms="1" ActualEndOfScans="1" ActualExecutions="1" ActualExecutionMode="Row"/>
+              </RunTimeInformation>
+              <Top RowCount="0" IsPercent="0" WithTies="0">
+                <TopExpression>
+                  <ScalarOperator ScalarString="CONVERT_IMPLICIT(bigint,[@p1],0)">
+                    <Identifier>
+                      <ColumnReference Column="ConstExpr1005">
+                        <ScalarOperator>
+                          <Convert DataType="bigint" Style="0" Implicit="1">
+                            <ScalarOperator>
+                              <Identifier>
+                                <ColumnReference Column="@p1"/>
+                              </Identifier>
+                            </ScalarOperator>
+                          </Convert>
+                        </ScalarOperator>
+                      </ColumnReference>
+                    </Identifier>
+                  </ScalarOperator>
+                </TopExpression>
+                <RelOp NodeId="2" PhysicalOp="Nested Loops" LogicalOp="Inner Join" EstimateRows="128" EstimateRowsWithoutRowGoal="10100" EstimateIO="0" EstimateCPU="0.042218" AvgRowSize="4605" EstimatedTotalSubtreeCost="0.454097" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                  <OutputList>
+                    <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="sequence"/>
+                    <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="timestamp"/>
+                    <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="level"/>
+                    <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="categoryKey"/>
+                    <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="sourceKey"/>
+                    <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="replayToken"/>
+                    <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="payload"/>
+                    <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="__groundwork_scope"/>
+                  </OutputList>
+                  <RunTimeInformation>
+                    <RunTimeCountersPerThread Thread="0" ActualRows="128" Batches="0" ActualElapsedms="1" ActualCPUms="1" ActualEndOfScans="0" ActualExecutions="1" ActualExecutionMode="Row"/>
+                  </RunTimeInformation>
+                  <NestedLoops Optimized="0" WithOrderedPrefetch="1">
+                    <OuterReferences>
+                      <ColumnReference Column="Bmk1000"/>
+                      <ColumnReference Column="Expr1007"/>
+                    </OuterReferences>
+                    <RelOp NodeId="4" PhysicalOp="Filter" LogicalOp="Filter" EstimateRows="128" EstimateRowsWithoutRowGoal="10100" EstimateIO="0" EstimateCPU="0.05858" AvgRowSize="243" EstimatedTotalSubtreeCost="0.0341363" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                      <OutputList>
+                        <ColumnReference Column="Bmk1000"/>
+                        <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="sequence"/>
+                        <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="__groundwork_scope"/>
+                      </OutputList>
+                      <RunTimeInformation>
+                        <RunTimeCountersPerThread Thread="0" ActualRows="128" Batches="0" ActualElapsedms="0" ActualCPUms="0" ActualEndOfScans="0" ActualExecutions="1" ActualExecutionMode="Row"/>
+                      </RunTimeInformation>
+                      <Filter StartupExpression="0">
+                        <RelOp NodeId="5" PhysicalOp="Index Seek" LogicalOp="Index Seek" EstimateRows="1280" EstimateRowsWithoutRowGoal="101000" EstimatedRowsRead="101000" EstimateIO="2.26979" EstimateCPU="0.111257" AvgRowSize="243" EstimatedTotalSubtreeCost="0.0333939" TableCardinality="101000" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                          <OutputList>
+                            <ColumnReference Column="Bmk1000"/>
+                            <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="sequence"/>
+                            <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="__groundwork_scope"/>
+                          </OutputList>
+                          <RunTimeInformation>
+                            <RunTimeCountersPerThread Thread="0" ActualRows="128" Batches="0" ActualElapsedms="0" ActualCPUms="0" ActualScans="1" ActualLogicalReads="199" ActualPhysicalReads="0" ActualReadAheads="0" ActualLobLogicalReads="0" ActualLobPhysicalReads="0" ActualLobReadAheads="0" ActualRowsRead="128" ActualEndOfScans="0" ActualExecutions="1" ActualExecutionMode="Row"/>
+                          </RunTimeInformation>
+                          <IndexScan Ordered="1" ScanDirection="BACKWARD" ForcedIndex="0" ForceSeek="0" ForceScan="0" NoExpandHint="0" Storage="RowStore">
+                            <DefinedValues>
+                              <DefinedValue>
+                                <ColumnReference Column="Bmk1000"/>
+                              </DefinedValue>
+                              <DefinedValue>
+                                <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="sequence"/>
+                              </DefinedValue>
+                              <DefinedValue>
+                                <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="__groundwork_scope"/>
+                              </DefinedValue>
+                            </DefinedValues>
+                            <Object Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Index="[__groundwork_pk_elsa_structured_logs]" IndexKind="NonClustered" Storage="RowStore"/>
+                            <SeekPredicates>
+                              <SeekPredicateNew>
+                                <SeekKeys>
+                                  <Prefix ScanType="EQ">
+                                    <RangeColumns>
+                                      <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="__groundwork_scope"/>
+                                    </RangeColumns>
+                                    <RangeExpressions>
+                                      <ScalarOperator ScalarString="CONVERT_IMPLICIT(nvarchar(108),[@p0],0)">
+                                        <Identifier>
+                                          <ColumnReference Column="ConstExpr1004">
+                                            <ScalarOperator>
+                                              <Convert DataType="nvarchar" Length="216" Style="0" Implicit="1">
+                                                <ScalarOperator>
+                                                  <Identifier>
+                                                    <ColumnReference Column="@p0"/>
+                                                  </Identifier>
+                                                </ScalarOperator>
+                                              </Convert>
+                                            </ScalarOperator>
+                                          </ColumnReference>
+                                        </Identifier>
+                                      </ScalarOperator>
+                                    </RangeExpressions>
+                                  </Prefix>
+                                </SeekKeys>
+                              </SeekPredicateNew>
+                            </SeekPredicates>
+                          </IndexScan>
+                        </RelOp>
+                        <Predicate>
+                          <ScalarOperator ScalarString="datalength([groundwork_diagnostics_fixture].[dbo].[elsa_structured_logs].[__groundwork_scope])=datalength([@p0])">
+                            <Compare CompareOp="EQ">
+                              <ScalarOperator>
+                                <Intrinsic FunctionName="datalength">
+                                  <ScalarOperator>
+                                    <Identifier>
+                                      <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="__groundwork_scope"/>
+                                    </Identifier>
+                                  </ScalarOperator>
+                                </Intrinsic>
+                              </ScalarOperator>
+                              <ScalarOperator>
+                                <Identifier>
+                                  <ColumnReference Column="ConstExpr1003">
+                                    <ScalarOperator>
+                                      <Intrinsic FunctionName="datalength">
+                                        <ScalarOperator>
+                                          <Identifier>
+                                            <ColumnReference Column="@p0"/>
+                                          </Identifier>
+                                        </ScalarOperator>
+                                      </Intrinsic>
+                                    </ScalarOperator>
+                                  </ColumnReference>
+                                </Identifier>
+                              </ScalarOperator>
+                            </Compare>
+                          </ScalarOperator>
+                        </Predicate>
+                      </Filter>
+                    </RelOp>
+                    <RelOp NodeId="7" PhysicalOp="RID Lookup" LogicalOp="RID Lookup" EstimateRows="1" EstimateIO="0.003125" EstimateCPU="0.0001581" AvgRowSize="4379" EstimatedTotalSubtreeCost="0.419467" TableCardinality="101000" Parallel="0" EstimateRebinds="128" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                      <OutputList>
+                        <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="timestamp"/>
+                        <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="level"/>
+                        <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="categoryKey"/>
+                        <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="sourceKey"/>
+                        <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="replayToken"/>
+                        <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="payload"/>
+                      </OutputList>
+                      <RunTimeInformation>
+                        <RunTimeCountersPerThread Thread="0" ActualRows="128" Batches="0" ActualElapsedms="0" ActualCPUms="0" ActualScans="0" ActualLogicalReads="128" ActualPhysicalReads="0" ActualReadAheads="0" ActualLobLogicalReads="0" ActualLobPhysicalReads="0" ActualLobReadAheads="0" ActualRowsRead="128" ActualEndOfScans="0" ActualExecutions="128" ActualExecutionMode="Row"/>
+                      </RunTimeInformation>
+                      <IndexScan Lookup="1" Ordered="1" ScanDirection="FORWARD" ForcedIndex="0" ForceSeek="0" ForceScan="0" NoExpandHint="0" Storage="RowStore">
+                        <DefinedValues>
+                          <DefinedValue>
+                            <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="timestamp"/>
+                          </DefinedValue>
+                          <DefinedValue>
+                            <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="level"/>
+                          </DefinedValue>
+                          <DefinedValue>
+                            <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="categoryKey"/>
+                          </DefinedValue>
+                          <DefinedValue>
+                            <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="sourceKey"/>
+                          </DefinedValue>
+                          <DefinedValue>
+                            <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="replayToken"/>
+                          </DefinedValue>
+                          <DefinedValue>
+                            <ColumnReference Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" Column="payload"/>
+                          </DefinedValue>
+                        </DefinedValues>
+                        <Object Database="[groundwork_diagnostics_fixture]" Schema="[dbo]" Table="[elsa_structured_logs]" TableReferenceId="-1" IndexKind="Heap" Storage="RowStore"/>
+                        <SeekPredicates>
+                          <SeekPredicateNew>
+                            <SeekKeys>
+                              <Prefix ScanType="EQ">
+                                <RangeColumns>
+                                  <ColumnReference Column="Bmk1000"/>
+                                </RangeColumns>
+                                <RangeExpressions>
+                                  <ScalarOperator ScalarString="[Bmk1000]">
+                                    <Identifier>
+                                      <ColumnReference Column="Bmk1000"/>
+                                    </Identifier>
+                                  </ScalarOperator>
+                                </RangeExpressions>
+                              </Prefix>
+                            </SeekKeys>
+                          </SeekPredicateNew>
+                        </SeekPredicates>
+                      </IndexScan>
+                    </RelOp>
+                  </NestedLoops>
+                </RelOp>
+              </Top>
+            </RelOp>
+            <ParameterList>
+              <ColumnReference Column="@p1" ParameterDataType="int" ParameterCompiledValue="(128)" ParameterRuntimeValue="(128)"/>
+              <ColumnReference Column="@p0" ParameterDataType="nvarchar(108)" ParameterCompiledValue="N'&lt;redacted-scope&gt;'" ParameterRuntimeValue="N'&lt;redacted-scope&gt;'"/>
+            </ParameterList>
+          </QueryPlan>
+        </StmtSimple>
+      </Statements>
+    </Batch>
+  </BatchSequence>
+</ShowPlanXML>

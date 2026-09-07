@@ -82,7 +82,7 @@ public sealed class OpenApiLifetimeBoundaryTests
             .Where(endpoint => endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.OwnerId == "Elsa.Workflows.Publishing.Api")
             .ToArray();
 
-        Assert.Equal(23, endpoints.Length);
+        Assert.Equal(22, endpoints.Length);
         Assert.All(endpoints, endpoint =>
         {
             var lifetime = Assert.Single(endpoint.Metadata.OfType<EndpointLifetimeMetadata>());

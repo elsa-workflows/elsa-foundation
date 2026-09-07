@@ -1,0 +1,142 @@
+using Microsoft.Data.Sqlite;
+using MongoDB.Bson;
+using MongoDB.Driver;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
+using Xunit;
+
+namespace Elsa.Groundwork.StorePerformance.AdapterHost.Tests;
+
+public sealed class ProviderProbeTests
+{
+    [Theory]
+    [InlineData(":memory:")]
+    [InlineData("file::memory:?cache=shared")]
+    [InlineData("file:memdb1?mode=memory&cache=shared")]
+    [InlineData("file:memdb1?cache=shared&mode=memory")]
+    [InlineData("file:memdb1?mode=MEMORY;cache=shared")]
+    public void Every_sqlite_memory_uri_form_is_not_admissible_for_checkpoint_evidence(string dataSource)
+    {
+        var settings = new SqliteConnectionStringBuilder($"Data Source={dataSource}");
+
+        Assert.Throws<PerformanceContractException>(() => ProviderProbe.SqliteTopology(settings));
+    }
+
+    [Fact]
+    public void Sqlite_file_connections_use_the_frozen_distinct_connection_topology()
+    {
+        var settings = new SqliteConnectionStringBuilder("Data Source=checkpoint.db;Cache=Shared");
+
+        Assert.Equal("file-backed-distinct-connections", ProviderProbe.SqliteTopology(settings));
+    }
+
+    [Fact]
+    public async Task Sqlite_probe_attests_the_same_connection_policy_as_groundwork()
+    {
+        var root = Directory.CreateTempSubdirectory("sqlite-provider-probe-");
+        var path = Path.Combine(root.FullName, "probe.sqlite");
+        try
+        {
+            var result = await ProviderProbe.ReadAsync(
+                "sqlite",
+                $"Data Source={path};Mode=ReadWriteCreate;Cache=Private;Pooling=False");
+
+            Assert.Equal("wal", result.Configuration["journal_mode"], ignoreCase: true);
+            Assert.Equal("1", result.Configuration["synchronous"]);
+            Assert.Equal("5000", result.Configuration["busy_timeout_ms"]);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            root.Delete(true);
+        }
+    }
+
+    [Fact]
+    public void Mongo_hello_requires_a_replica_set_or_sharded_cluster()
+    {
+        Assert.Throws<PerformanceContractException>(() =>
+            ProviderProbe.MongoTopology(new BsonDocument("isWritablePrimary", true)));
+
+        var replica = new BsonDocument
+        {
+            ["setName"] = "rs0",
+            ["logicalSessionTimeoutMinutes"] = 30,
+            ["isWritablePrimary"] = true,
+            ["maxWireVersion"] = 21
+        };
+        Assert.Equal(
+            "transaction-capable-replica-set",
+            ProviderProbe.MongoTopology(replica));
+
+        var sharded = new BsonDocument
+        {
+            ["msg"] = "isdbgrid",
+            ["logicalSessionTimeoutMinutes"] = 30,
+            ["isWritablePrimary"] = true,
+            ["maxWireVersion"] = 21
+        };
+        Assert.Equal(
+            "transaction-capable-sharded-cluster",
+            ProviderProbe.MongoTopology(sharded));
+    }
+
+    [Fact]
+    public void Mongo_default_concerns_are_recorded_without_dereferencing_absent_nested_values()
+    {
+        const string connectionString =
+            "mongodb://127.0.0.1:27017/diagnostics?replicaSet=groundworkv2&directConnection=true";
+        var settings = MongoClientSettings.FromConnectionString(connectionString);
+
+        var configuration = ProviderProbe.MongoConfiguration(
+            settings,
+            connectionString,
+            "SHA256:" + new string('A', 64));
+
+        Assert.Equal("default", configuration["read_concern"]);
+        Assert.Equal("default", configuration["write_concern"]);
+        Assert.Equal("default", configuration["write_concern_timeout"]);
+        Assert.Equal("True", configuration["direct_mode"]);
+        Assert.Equal("sha256:" + new string('a', 64), configuration["container_image_digest"]);
+        Assert.DoesNotContain(configuration.Keys, key =>
+            key.Contains("connection", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("sha256:not-a-digest")]
+    [InlineData("sha1:0000000000000000000000000000000000000000")]
+    public void Server_provider_attestation_must_be_a_launcher_bound_sha256_digest(string? value)
+    {
+        Assert.Throws<PerformanceContractException>(() =>
+            ProviderProbe.ValidateContainerAttestation("postgresql", value));
+
+        Assert.Throws<PerformanceContractException>(() =>
+            ProviderProbe.ValidateContainerAttestation("sqlserver", value));
+
+        Assert.Throws<PerformanceContractException>(() =>
+            ProviderProbe.ValidateContainerAttestation("mongodb", value));
+    }
+
+    [Fact]
+    public void Server_provider_attestation_is_normalized_without_exposing_connection_material()
+    {
+        var value = ProviderProbe.ValidateContainerAttestation(
+            "postgresql", "SHA256:" + new string('A', 64));
+        var normalizedMongo = ProviderProbe.ValidateContainerAttestation(
+            "mongodb", "SHA256:" + new string('A', 64));
+
+        Assert.Equal("sha256:" + new string('a', 64), value);
+        Assert.Equal("sha256:" + new string('a', 64), normalizedMongo);
+    }
+
+    [Fact]
+    public void Connection_options_digest_keeps_material_configuration_differences_distinct()
+    {
+        var one = ProviderProbe.ConnectionOptionsDigest("Max Pool Size=10;Command Timeout=30");
+        var two = ProviderProbe.ConnectionOptionsDigest("Max Pool Size=20;Command Timeout=30");
+
+        Assert.NotEqual(one, two);
+        Assert.Matches("^[0-9a-f]{64}$", one);
+        Assert.Matches("^[0-9a-f]{64}$", two);
+    }
+}

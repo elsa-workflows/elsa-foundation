@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 108
+- Discovered feature classes: 101
 
 ## Features
 
@@ -40,13 +40,9 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | AttentionApiFeature | direct IWebShellFeature | Elsa.Attention.Api | IWebShellFeature | [AttentionApiFeature.cs](../../src/Elsa/Attention/Api/AttentionApiFeature.cs) |
 | MemoryCacheFeature | direct IShellFeature | Elsa.Caching.Memory | IShellFeature | [MemoryCacheFeature.cs](../../src/Elsa/Caching/Memory/MemoryCacheFeature.cs) |
 | OpenTelemetryFeature | direct IWebShellFeature | Elsa.Diagnostics.OpenTelemetry | IWebShellFeature | [OpenTelemetryFeature.cs](../../src/Elsa/Diagnostics/OpenTelemetry/OpenTelemetryFeature.cs) |
-| EFCoreOpenTelemetryPersistenceFeatureBase | EF Core feature base | Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore | EFCorePersistenceShellFeatureBase | [EFCoreOpenTelemetryPersistenceFeatureBase.cs](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/EFCoreOpenTelemetryPersistenceFeatureBase.cs) |
-| SqliteOpenTelemetryPersistenceShellFeature | EF Core feature base | Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite | EFCoreOpenTelemetryPersistenceFeatureBase | [SqliteOpenTelemetryPersistenceShellFeature.cs](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/SqliteOpenTelemetryPersistenceShellFeature.cs) |
 | GroundworkOpenTelemetryPersistenceFeature | direct IShellFeature | Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork | IShellFeature | [GroundworkOpenTelemetryPersistenceFeature.cs](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryPersistenceFeature.cs) |
 | DiagnosticsGroundworkPersistenceFeature | direct IShellFeature | Elsa.Diagnostics.Persistence.Groundwork | IShellFeature | [DiagnosticsGroundworkPersistenceFeature.cs](../../src/Elsa/Diagnostics/Persistence/Groundwork/DiagnosticsGroundworkPersistenceFeature.cs) |
 | StructuredLogsFeature | direct IWebShellFeature | Elsa.Diagnostics.StructuredLogs | IWebShellFeature | [StructuredLogsFeature.cs](../../src/Elsa/Diagnostics/StructuredLogs/StructuredLogsFeature.cs) |
-| EFCoreStructuredLogsPersistenceFeatureBase | EF Core feature base | Elsa.Diagnostics.StructuredLogs.Persistence.EFCore | EFCorePersistenceShellFeatureBase | [EFCoreStructuredLogsPersistenceFeatureBase.cs](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/EFCoreStructuredLogsPersistenceFeatureBase.cs) |
-| SqliteStructuredLogsPersistenceShellFeature | EF Core feature base | Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite | EFCoreStructuredLogsPersistenceFeatureBase | [SqliteStructuredLogsPersistenceShellFeature.cs](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Sqlite/SqliteStructuredLogsPersistenceShellFeature.cs) |
 | EventsFeature | direct IShellFeature | Elsa.Events | IShellFeature | [EventsFeature.cs](../../src/Elsa/Events/EventsFeature.cs) |
 | ExpressionsFeature | direct IShellFeature | Elsa.Expressions | IShellFeature | [ExpressionsFeature.cs](../../src/Elsa/Expressions/ExpressionsFeature.cs) |
 | ExpressionsApiFeature | direct IWebShellFeature | Elsa.Expressions.Api | IWebShellFeature | [ExpressionsApiFeature.cs](../../src/Elsa/Expressions/Api/ExpressionsApiFeature.cs) |
@@ -58,7 +54,6 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | FoundationIdentityAbstractionsFeature | direct IShellFeature | Elsa.Foundation.Identity.Abstractions | IShellFeature | [FoundationIdentityAbstractionsFeature.cs](../../src/Elsa/Foundation/Identity/Abstractions/FoundationIdentityAbstractionsFeature.cs) |
 | FoundationIdentityApiFeature | direct IWebShellFeature | Elsa.Foundation.Identity.Api | IWebShellFeature | [FoundationIdentityApiFeature.cs](../../src/Elsa/Foundation/Identity/Api/FoundationIdentityApiFeature.cs) |
 | AspNetCoreIdentityFeature | direct IWebShellFeature | Elsa.Foundation.Identity.AspNetCoreIdentity | IWebShellFeature | [AspNetCoreIdentityFeature.cs](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/AspNetCoreIdentityFeature.cs) |
-| AspNetCoreIdentityEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore | IShellFeature | [AspNetCoreIdentityEntityFrameworkCoreFeature.cs](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/AspNetCoreIdentityEntityFrameworkCoreFeature.cs) |
 | AspNetCoreIdentityGroundworkFeature | direct IShellFeature | Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork | IShellFeature | [AspNetCoreIdentityGroundworkFeature.cs](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/AspNetCoreIdentityGroundworkFeature.cs) |
 | OidcAuthenticationFeature | direct IShellFeature | Elsa.Foundation.Identity.Oidc | IShellFeature | [OidcAuthenticationFeature.cs](../../src/Elsa/Foundation/Identity/Oidc/OidcAuthenticationFeature.cs) |
 | OpenIddictIdentityFeature | direct IShellFeature | Elsa.Foundation.Identity.OpenIddict | IShellFeature | [OpenIddictIdentityFeature.cs](../../src/Elsa/Foundation/Identity/OpenIddict/OpenIddictIdentityFeature.cs) |
@@ -69,17 +64,8 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | MediatorFeature | direct IShellFeature | Elsa.Mediator | IShellFeature | [MediatorFeature.cs](../../src/Elsa/Mediator/MediatorFeature.cs) |
 | ModularityApiFeature | direct IWebShellFeature | Elsa.Modularity.Api | IWebShellFeature | [ModularityApiFeature.cs](../../src/Elsa/Modularity/Api/ModularityApiFeature.cs) |
 | ModularityAttentionFeature | direct IShellFeature | Elsa.Modularity.Attention | IShellFeature | [ModularityAttentionFeature.cs](../../src/Elsa/Modularity/Attention/ModularityAttentionFeature.cs) |
-| MongoDbGroundworkUnifiedPersistenceShellFeature | feature-base-derived | Elsa.Persistence.Groundwork.MongoDb.Unified | GroundworkPersistenceShellFeatureBase | [MongoDbGroundworkUnifiedPersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/MongoDb/Unified/MongoDbGroundworkUnifiedPersistenceShellFeature.cs) |
-| PostgreSqlGroundworkUnifiedPersistenceShellFeature | feature-base-derived | Elsa.Persistence.Groundwork.PostgreSql.Unified | GroundworkPersistenceShellFeatureBase | [PostgreSqlGroundworkUnifiedPersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/PostgreSql/Unified/PostgreSqlGroundworkUnifiedPersistenceShellFeature.cs) |
-| SqlServerGroundworkUnifiedPersistenceShellFeature | feature-base-derived | Elsa.Persistence.Groundwork.SqlServer.Unified | GroundworkPersistenceShellFeatureBase | [SqlServerGroundworkUnifiedPersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/SqlServer/Unified/SqlServerGroundworkUnifiedPersistenceShellFeature.cs) |
-| SqliteGroundworkUnifiedPersistenceShellFeature | feature-base-derived | Elsa.Persistence.Groundwork.Sqlite.Unified | GroundworkPersistenceShellFeatureBase | [SqliteGroundworkUnifiedPersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/Sqlite/Unified/SqliteGroundworkUnifiedPersistenceShellFeature.cs) |
 | GroundworkPersistenceShellFeatureBase | direct IShellFeature | Elsa.Persistence.Groundwork.V2 | IShellFeature | [GroundworkPersistenceShellFeatureBase.cs](../../src/Elsa/Persistence/Groundwork/V2/GroundworkPersistenceShellFeatureBase.cs) |
 | GroundworkWorkflowRuntimeFeature | direct IShellFeature | Elsa.Persistence.Groundwork.V2 | IShellFeature | [GroundworkWorkflowRuntimeFeature.cs](../../src/Elsa/Persistence/Groundwork/V2/Runtime/GroundworkWorkflowRuntimeFeature.cs) |
-| GroundworkMongoDbProviderFeature | feature-base-derived | Elsa.Persistence.Groundwork.V2.Providers | GroundworkProviderFeatureBase | [GroundworkMongoDbProviderFeature.cs](../../src/Elsa/Persistence/Groundwork/V2/Providers/GroundworkMongoDbProviderFeature.cs) |
-| GroundworkPostgreSqlProviderFeature | feature-base-derived | Elsa.Persistence.Groundwork.V2.Providers | GroundworkProviderFeatureBase | [GroundworkPostgreSqlProviderFeature.cs](../../src/Elsa/Persistence/Groundwork/V2/Providers/GroundworkPostgreSqlProviderFeature.cs) |
-| GroundworkProviderFeatureBase | direct IShellFeature | Elsa.Persistence.Groundwork.V2.Providers | IShellFeature | [GroundworkSqliteProviderFeature.cs](../../src/Elsa/Persistence/Groundwork/V2/Providers/GroundworkSqliteProviderFeature.cs) |
-| GroundworkSqlServerProviderFeature | feature-base-derived | Elsa.Persistence.Groundwork.V2.Providers | GroundworkProviderFeatureBase | [GroundworkSqlServerProviderFeature.cs](../../src/Elsa/Persistence/Groundwork/V2/Providers/GroundworkSqlServerProviderFeature.cs) |
-| GroundworkSqliteProviderFeature | feature-base-derived | Elsa.Persistence.Groundwork.V2.Providers | GroundworkProviderFeatureBase | [GroundworkSqliteProviderFeature.cs](../../src/Elsa/Persistence/Groundwork/V2/Providers/GroundworkSqliteProviderFeature.cs) |
 | PrimitivesFeature | direct IShellFeature | Elsa.Primitives.Hosting | IShellFeature | [PrimitivesFeature.cs](../../src/Elsa/Primitives/Hosting/PrimitivesFeature.cs) |
 | SecretsFeature | direct IShellFeature | Elsa.Secrets | IShellFeature | [SecretsFeature.cs](../../src/Elsa/Secrets/Features/SecretsFeature.cs) |
 | SecretsApiFeature | direct IWebShellFeature | Elsa.Secrets.Api | IWebShellFeature | [SecretsApiFeature.cs](../../src/Elsa/Secrets/Api/Features/SecretsApiFeature.cs) |
@@ -91,8 +77,14 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | StudioPreferencesFeature | direct IShellFeature | Elsa.Studio.Preferences.Api | IShellFeature | [StudioPreferencesFeature.cs](../../src/Elsa/Studio/Preferences/Api/StudioPreferencesFeature.cs) |
 | StudioPreferencesGroundworkPersistenceFeature | direct IShellFeature | Elsa.Studio.Preferences.Persistence.Groundwork | IShellFeature | [StudioPreferencesGroundworkPersistenceFeature.cs](../../src/Elsa/Studio/Preferences/Persistence/Groundwork/StudioPreferencesGroundworkPersistenceFeature.cs) |
 | TasksFeature | direct IShellFeature | Elsa.Tasks | IShellFeature | [TasksFeature.cs](../../src/Elsa/Tasks/TasksFeature.cs) |
+| GroundworkMongoDbProviderFeature | feature-base-derived | Elsa.Workbench | GroundworkProviderFeatureBase | [GroundworkMongoDbProviderFeature.cs](../../src/Apps/Elsa.Workbench/Groundwork/GroundworkMongoDbProviderFeature.cs) |
+| GroundworkPostgreSqlProviderFeature | feature-base-derived | Elsa.Workbench | GroundworkProviderFeatureBase | [GroundworkPostgreSqlProviderFeature.cs](../../src/Apps/Elsa.Workbench/Groundwork/GroundworkPostgreSqlProviderFeature.cs) |
+| GroundworkProviderFeatureBase | direct IShellFeature | Elsa.Workbench | IShellFeature | [GroundworkSqliteProviderFeature.cs](../../src/Apps/Elsa.Workbench/Groundwork/GroundworkSqliteProviderFeature.cs) |
+| GroundworkSqlServerProviderFeature | feature-base-derived | Elsa.Workbench | GroundworkProviderFeatureBase | [GroundworkSqlServerProviderFeature.cs](../../src/Apps/Elsa.Workbench/Groundwork/GroundworkSqlServerProviderFeature.cs) |
+| GroundworkSqliteProviderFeature | feature-base-derived | Elsa.Workbench | GroundworkProviderFeatureBase | [GroundworkSqliteProviderFeature.cs](../../src/Apps/Elsa.Workbench/Groundwork/GroundworkSqliteProviderFeature.cs) |
 | OpenTelemetryEngineTracingBridgeFeature | direct IShellFeature | Elsa.Workbench | IShellFeature | [OpenTelemetryEngineTracingBridge.cs](../../src/Apps/Elsa.Workbench/OpenTelemetryEngineTracingBridge.cs) |
 | RuntimeFaultStackTraceFeature | direct IShellFeature | Elsa.Workbench | IShellFeature | [RuntimeFaultStackTraceFeature.cs](../../src/Apps/Elsa.Workbench/RuntimeFaultStackTraceFeature.cs) |
+| WorkbenchGroundworkDashboardFeature | direct IShellFeature | Elsa.Workbench | IShellFeature | [WorkbenchGroundworkDashboardFeature.cs](../../src/Apps/Elsa.Workbench/WorkbenchGroundworkDashboardFeature.cs) |
 | WorkflowsDashboardFeature | direct IWebShellFeature | Elsa.Workflows.Dashboard | IWebShellFeature | [WorkflowsDashboardFeature.cs](../../src/Elsa/Workflows/Dashboard/WorkflowsDashboardFeature.cs) |
 | WorkflowsDesignApiFeature | direct IWebShellFeature | Elsa.Workflows.Design.Api | IWebShellFeature | [WorkflowsDesignApiFeature.cs](../../src/Elsa/Workflows/Design/Api/WorkflowsDesignApiFeature.cs) |
 | JavaScriptWorkflowsDesignFeature | direct IShellFeature | Elsa.Workflows.Design.JavaScript | IShellFeature | [JavaScriptWorkflowsDesignFeature.cs](../../src/Elsa/Workflows/Design/JavaScript/JavaScriptWorkflowsDesignFeature.cs) |
@@ -112,6 +104,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | WorkflowsRuntimeHttpFeature | direct IShellFeature | Elsa.Workflows.Runtime.Http | IShellFeature | [WorkflowsRuntimeHttpFeature.cs](../../src/Elsa/Workflows/Runtime/Http/WorkflowsRuntimeHttpFeature.cs) |
 | JavaScriptActivitiesEndpointsFeature | direct IWebShellFeature | Elsa.Workflows.Runtime.JavaScript | IWebShellFeature | [JavaScriptActivitiesEndpointsFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesEndpointsFeature.cs) |
 | JavaScriptActivitiesFeature | direct IShellFeature | Elsa.Workflows.Runtime.JavaScript | IShellFeature | [JavaScriptActivitiesFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesFeature.cs) |
+| WorkflowsArtifactReconciliationFeature | direct IShellFeature | Elsa.Workflows.Runtime.Reconciliation | IShellFeature | [WorkflowsArtifactReconciliationFeature.cs](../../src/Elsa/Workflows/Runtime/Reconciliation/WorkflowsArtifactReconciliationFeature.cs) |
 | WorkflowsRuntimeReferenceGarbageCollectionFeature | direct IShellFeature | Elsa.Workflows.Runtime.ReferenceGarbageCollection | IShellFeature | [WorkflowsRuntimeReferenceGarbageCollectionFeature.cs](../../src/Elsa/Workflows/Runtime/ReferenceGarbageCollection/WorkflowsRuntimeReferenceGarbageCollectionFeature.cs) |
 | WorkflowsRuntimeResumptionFeature | direct IShellFeature | Elsa.Workflows.Runtime.Resumption | IShellFeature | [WorkflowsRuntimeResumptionFeature.cs](../../src/Elsa/Workflows/Runtime/Resumption/WorkflowsRuntimeResumptionFeature.cs) |
 | WorkflowsRuntimeRecurringTriggersFeature | direct IShellFeature | Elsa.Workflows.Runtime.Scheduling | IShellFeature | [WorkflowsRuntimeRecurringTriggersFeature.cs](../../src/Elsa/Workflows/Runtime/Scheduling/WorkflowsRuntimeRecurringTriggersFeature.cs) |

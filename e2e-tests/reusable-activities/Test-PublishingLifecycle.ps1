@@ -78,10 +78,13 @@ Assert-Write -Ctx $ctx -Label "stale workflow policy CAS is rejected" -Method PU
     -Body @{ defaultAction = "replace"; defaultSlotName = "default"; expectedRevision = $policy.Json.revision } `
     -ExpectStatus 409 | Out-Null
 
-# Slot lifecycle. Bodies deliberately carry conflicting identities; route values own the operation.
-$slot = Assert-Write -Ctx $ctx -Label "read active publication slot" -Method GET `
-    -Path "publishing/workflows/$definitionId/slots/default" -ExpectStatus 200 `
-    -Validate { param($response) $response.Json.activePublicationId -eq $published.Json.publicationId }
+# Slot lifecycle. Reads are runtime-owned; publishing keeps only lifecycle commands. Bodies deliberately
+# carry conflicting identities; route values own the operation.
+Assert-Write -Ctx $ctx -Label "retired publishing slot read" -Method GET `
+    -Path "publishing/workflows/$definitionId/slots/default" -ExpectStatus 405 | Out-Null
+$slot = Assert-Write -Ctx $ctx -Label "read active activation slot" -Method GET `
+    -Path "runtime/workflows/activation-slots/$definitionId/default" -ExpectStatus 200 `
+    -Validate { param($response) $null -ne $response.Json.activeActivationId }
 $retired = Assert-Write -Ctx $ctx -Label "unpublish route identity wins over body" -Method DELETE `
     -Path "publishing/workflows/$definitionId/slots/default" `
     -Body @{ definitionId = "body-definition-must-not-win-$tag"; slotName = "body-slot-must-not-win" } `

@@ -7,6 +7,7 @@
 | Contract/service | Role in this API |
 |---|---|
 | `IWorkflowExecutableStore` | Lists and loads immutable executable artifacts for inspection and execution. Persistence providers replace the in-memory implementation. |
+| `IWorkflowActivationAuthority` | Supplies read-only activation-slot projections for the runtime activation-slot GET routes. The API does not expose deactivation. |
 | `IWorkflowExecutableReferenceStore` | Supplies read-only source provenance. Mutation remains with Publishing operations. |
 | `IWorkflowExecutionStateStore` | Supplies instance, activity-execution, and incident projections and retained executable roots. |
 | `IWorkflowDispatchStore` | Supplies exact detached-dispatch lookup while preserving the original #676 store contract. |

@@ -29,6 +29,12 @@ public static class RuntimeRecoveryCandidateSelector
             .ToArray();
     }
 
+    /// <summary>Returns the stable ordering key for an eligible state without allocating a candidate.</summary>
+    public static DateTimeOffset? GetEligibleAt(
+        ExecutionLivenessState state,
+        RuntimeRecoveryScanRequest request) =>
+        TryEvaluate(state, request)?.EligibleAt;
+
     private static RuntimeRecoveryEvaluation? TryEvaluate(
         ExecutionLivenessState state,
         RuntimeRecoveryScanRequest request)

@@ -12,7 +12,7 @@ service and a recurring pump that re-drives interrupted executions. See the work
 ### `WorkflowsRuntimeResumptionFeature : IShellFeature` *(`Elsa.Workflows.Runtime.Resumption`)*
 - **Feature id:** `WorkflowsRuntimeResumption` (`DependsOn` the `Tasks` feature — the pump is an `IRecurringTask`).
 - **Registers:** `IRuntimeResumptionService` → `RuntimeResumptionService` (`TryAddSingleton`), `RuntimeResumptionOptions` (mapped from `[ManifestSetting]`s), and the recurring pump `RuntimeResumptionPumpTask` as `IRecurringTask`.
-- **Composition gate:** the Groundwork persistence features (`SqliteGroundworkRuntimePersistenceShellFeature`, `SqliteGroundworkUnifiedPersistenceShellFeature`) declare `DependsOn = ["WorkflowsRuntimeResumption"]`, so selecting durable stores pulls the pump into the shell — "durable stores ⇒ pump available" is machine-visible in the feature catalog.
+- **Composition gate:** the Groundwork runtime feature (`GroundworkWorkflowRuntime`) declares `DependsOn = ["WorkflowsRuntimeResumption"]`, so selecting durable runtime stores pulls the pump into the shell — "durable stores ⇒ pump available" is machine-visible in the feature catalog.
 
 ## Contributor implementations
 

@@ -2,7 +2,6 @@ using System.Text.Json;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
 using Elsa.Activities.DispatchWorkflow.Runtime.Services;
-using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -896,7 +895,7 @@ public sealed class DispatchWorkflowEndToEndTests
                 CreatedAt: DispatchWorkflowRuntimeTestFixture.Now,
                 PublishedAt: DispatchWorkflowRuntimeTestFixture.Now,
                 Scope: WorkflowExecutableReferenceScope.Published,
-                PublicationId: "publication-child-distractor",
+                ActivationId: "publication-child-distractor",
                 SlotId: "slot-child-distractor"));
 
     private sealed class HandlerIntentDispatcher(ChildStartExecutor handler) : IRuntimePostCommitIntentDispatcher

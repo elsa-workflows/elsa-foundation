@@ -20,12 +20,12 @@ public static class GroundworkDistributedStoresRegistration
         services.RemoveAll<IExecutionPlacementStore>();
         services.AddScoped<IExecutionPlacementStore>(provider => new GroundworkExecutionPlacementStore(
             provider.GetRequiredService<IGroundworkStorageSessionSource>(),
-            provider.GetRequiredService<Elsa.Persistence.Core.IPersistenceAccessContextAccessor>(),
+            provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
             targetName));
         services.RemoveAll<IExecutionCommandTransport>();
         services.AddScoped<IExecutionCommandTransport>(provider => new GroundworkExecutionCommandTransport(
             provider.GetRequiredService<IGroundworkStorageSessionSource>(),
-            provider.GetRequiredService<Elsa.Persistence.Core.IPersistenceAccessContextAccessor>(),
+            provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
             targetName));
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkDistributionDurabilityEvidence>());
         services.Replace(ServiceDescriptor.Singleton<IWorkflowExecutionLeaseFencingCapability>(

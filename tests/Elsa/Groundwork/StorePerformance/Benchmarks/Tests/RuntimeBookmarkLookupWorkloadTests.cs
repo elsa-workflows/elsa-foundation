@@ -49,6 +49,27 @@ public sealed class RuntimeBookmarkLookupWorkloadTests
         Assert.Equal(RuntimeBookmarkLookupWorkload.PageSize, adapter.Primary.Requests[2].Limit);
     }
 
+    [Fact]
+    public async Task Exposes_bounded_public_lookup_phases_with_setup_outside_timing()
+    {
+        var adapter = new DictionaryBookmarkLookupAdapter();
+        var operations = await new RuntimeBookmarkLookupWorkload().PrepareMeasuredOperationsAsync(adapter);
+
+        Assert.Equal(["lookup-by-stimulus-and-type", "read-next-bounded-page"], operations.Select(operation => operation.Id));
+        var setupRequestCount = adapter.Primary.Requests.Count;
+        Assert.True(setupRequestCount > 0);
+
+        foreach (var operation in operations)
+        {
+            await operation.PrepareInvocationAsync(0);
+            var beforeInvoke = adapter.Primary.Requests.Count;
+            await operation.InvokeAsync(0);
+            Assert.Equal(beforeInvoke + 1, adapter.Primary.Requests.Count);
+        }
+
+        Assert.Equal(setupRequestCount + operations.Count, adapter.Primary.Requests.Count);
+    }
+
     [Theory]
     [InlineData(true, false)]
     [InlineData(false, true)]

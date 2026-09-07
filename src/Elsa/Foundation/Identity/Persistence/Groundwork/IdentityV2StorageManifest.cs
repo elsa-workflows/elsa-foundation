@@ -25,6 +25,27 @@ public static class IdentityV2StorageManifest
     public const string UserRoleByRoleIndex = "identity_user_role_by_role";
     public const string MutationReceiptByExpiryIndex = "identity_mutation_receipt_by_expiry";
 
+    /// <summary>
+    /// The complete set of Identity routes whose result set can grow with stored data. Keeping the
+    /// route, unit, and driving index together makes the cursor-paging review exhaustive and keeps
+    /// accidental unindexed additions visible to the manifest tests.
+    /// </summary>
+    public static IReadOnlyList<(string QueryIdentity, string UnitId, string IndexName)> ScaleBearingQueries { get; } =
+    [
+        (IdentityStorageManifest.FindUserByNormalizedNameQuery, IdentityStorageManifest.IdentityUserDocumentKind, UserByNormalizedNameIndex),
+        (IdentityStorageManifest.FindUserByNormalizedEmailQuery, IdentityStorageManifest.IdentityUserDocumentKind, UserByNormalizedEmailIndex),
+        (IdentityStorageManifest.FindRoleByNormalizedNameQuery, IdentityStorageManifest.IdentityRoleDocumentKind, RoleByNormalizedNameIndex),
+        (IdentityStorageManifest.ListRolesByTenantQuery, IdentityStorageManifest.IdentityRoleDocumentKind, RoleByTenantIndex),
+        (IdentityStorageManifest.ListUserClaimsQuery, IdentityStorageManifest.UserClaimDocumentKind, UserClaimByUserIndex),
+        (IdentityStorageManifest.FindUsersByClaimQuery, IdentityStorageManifest.UserClaimDocumentKind, UserClaimByClaimIndex),
+        (IdentityStorageManifest.ListRoleClaimsQuery, IdentityStorageManifest.RoleClaimDocumentKind, RoleClaimByRoleIndex),
+        (IdentityStorageManifest.ListUserRolesQuery, IdentityStorageManifest.UserRoleDocumentKind, UserRoleByUserIndex),
+        (IdentityStorageManifest.ListRoleUsersQuery, IdentityStorageManifest.UserRoleDocumentKind, UserRoleByRoleIndex),
+        (IdentityStorageManifest.ListUserLoginsQuery, IdentityStorageManifest.ExternalLoginDocumentKind, LoginByUserIndex),
+        (IdentityStorageManifest.ListClaimMappingsByProviderQuery, IdentityStorageManifest.IdentityClaimMappingDocumentKind, ClaimMappingByProviderIndex),
+        (IdentityStorageManifest.ListExpiredMutationReceiptsQuery, IdentityStorageManifest.IdentityMutationReceiptDocumentKind, MutationReceiptByExpiryIndex)
+    ];
+
     public static IReadOnlyList<StorageUnit> CreateUnits() =>
     [
         Scoped(
@@ -35,8 +56,8 @@ public static class IdentityV2StorageManifest
                 Lookup(IdentityStorageManifest.NormalizedEmailKeyField, nullable: true)
             ],
             [
-                Index(UserByNormalizedNameIndex, IdentityStorageManifest.NormalizedUserNameKeyField),
-                Index(UserByNormalizedEmailIndex, IdentityStorageManifest.NormalizedEmailKeyField)
+                Index(UserByNormalizedNameIndex, IdentityStorageManifest.NormalizedUserNameKeyField, IdField),
+                Index(UserByNormalizedEmailIndex, IdentityStorageManifest.NormalizedEmailKeyField, IdField)
             ]),
         Scoped(
             IdentityStorageManifest.IdentityRoleDocumentKind,
@@ -46,8 +67,8 @@ public static class IdentityV2StorageManifest
                 Tenant()
             ],
             [
-                Index(RoleByNormalizedNameIndex, IdentityStorageManifest.NormalizedRoleNameKeyField),
-                Index(RoleByTenantIndex, IdentityStorageManifest.TenantIdField)
+                Index(RoleByNormalizedNameIndex, IdentityStorageManifest.NormalizedRoleNameKeyField, IdField),
+                Index(RoleByTenantIndex, IdentityStorageManifest.TenantIdField, IdField)
             ]),
         Scoped(IdentityStorageManifest.IdentityApplicationDocumentKind, "identity_applications"),
         Scoped(IdentityStorageManifest.IdentityCredentialDocumentKind, "identity_credentials"),
@@ -70,26 +91,26 @@ public static class IdentityV2StorageManifest
             "identity_user_claims",
             [Lookup(IdentityStorageManifest.UserLookupKeyField), Lookup(IdentityStorageManifest.ClaimKeyField)],
             [
-                Index(UserClaimByUserIndex, IdentityStorageManifest.UserLookupKeyField),
-                Index(UserClaimByClaimIndex, IdentityStorageManifest.ClaimKeyField)
+                Index(UserClaimByUserIndex, IdentityStorageManifest.UserLookupKeyField, IdField),
+                Index(UserClaimByClaimIndex, IdentityStorageManifest.ClaimKeyField, IdField)
             ]),
         Scoped(
             IdentityStorageManifest.RoleClaimDocumentKind,
             "identity_role_claims",
             [Lookup(IdentityStorageManifest.RoleLookupKeyField)],
-            [Index(RoleClaimByRoleIndex, IdentityStorageManifest.RoleLookupKeyField)]),
+            [Index(RoleClaimByRoleIndex, IdentityStorageManifest.RoleLookupKeyField, IdField)]),
         Scoped(
             IdentityStorageManifest.ExternalLoginDocumentKind,
             "identity_external_logins",
             [Lookup(IdentityStorageManifest.UserLookupKeyField)],
-            [Index(LoginByUserIndex, IdentityStorageManifest.UserLookupKeyField)]),
+            [Index(LoginByUserIndex, IdentityStorageManifest.UserLookupKeyField, IdField)]),
         Scoped(
             IdentityStorageManifest.UserRoleDocumentKind,
             "identity_user_roles",
             [Lookup(IdentityStorageManifest.UserLookupKeyField), Lookup(IdentityStorageManifest.RoleLookupKeyField)],
             [
-                Index(UserRoleByUserIndex, IdentityStorageManifest.UserLookupKeyField),
-                Index(UserRoleByRoleIndex, IdentityStorageManifest.RoleLookupKeyField)
+                Index(UserRoleByUserIndex, IdentityStorageManifest.UserLookupKeyField, IdField),
+                Index(UserRoleByRoleIndex, IdentityStorageManifest.RoleLookupKeyField, IdField)
             ]),
         Scoped(IdentityStorageManifest.UserTokenDocumentKind, "identity_user_tokens"),
         Scoped(IdentityStorageManifest.IdentityTenantMembershipDocumentKind, "identity_tenant_memberships"),
@@ -100,7 +121,7 @@ public static class IdentityV2StorageManifest
             IdentityStorageManifest.IdentityMutationReceiptDocumentKind,
             "identity_mutation_receipts",
             [Timestamp(IdentityStorageManifest.MutationReceiptExpiresAtField)],
-            [Index(MutationReceiptByExpiryIndex, IdentityStorageManifest.MutationReceiptExpiresAtField)])
+            [Index(MutationReceiptByExpiryIndex, IdentityStorageManifest.MutationReceiptExpiresAtField, IdField)])
     ];
 
     public static string IndexForQuery(string queryIdentity) => queryIdentity switch

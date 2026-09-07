@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 
@@ -20,39 +22,35 @@ internal sealed class CheckpointCommitAdapter(
     : IBenchmarkAdapter, IRuntimeCheckpointCommitWorkloadAdapter
 {
     private RuntimeStoreComposition? composition;
+    private readonly string persistenceScope = PersistenceScopeFor(request);
 
     public IProviderRoundTripObserver? RoundTripObserver => composition?.Observer;
 
     /// <summary>
-    /// The measured operation sequence is not implemented, and this refuses rather than substituting
-    /// something adjacent. The five operations the frozen spec names
-    /// (<c>specs/094-harden-groundwork-stores/workloads/runtime.json</c>) are seed-fenced-executions,
-    /// commit-checkpoint-bundle, replay-equivalent-commit, attempt-stale-fence-commit and
-    /// reopen-and-read-committed-bundle.
-    ///
-    /// They cannot be derived from <see cref="RuntimeCheckpointCommitWorkload"/>: it exposes only
-    /// <c>ExecuteAsync</c>, and everything that builds the bundle — execution ids, activity and
-    /// durable-value changes, outbox entries, payload sizing, fencing tokens — is private to it. A leaf that
-    /// guessed at that shape would still emit a digest, a duration and a round-trip count, and the artifact
-    /// would look well-formed while describing a different bundle than the frozen scenario names. Refusing
-    /// is this harness's own rule: a missing adapter is a blocked run, never a simulated result.
+    /// Keeps the four sequential matrix children isolated when they share one configured provider. The
+    /// scope is deterministic for one immutable run identity, so a retry in the same child scope is also
+    /// an equivalent replay rather than a new conflicting fixture.
     /// </summary>
-    public IReadOnlyList<IBenchmarkOperation> Operations =>
-        throw new PerformanceContractException(
-            "The checkpoint-commit measured operation sequence is not implemented on the v2 adapter. " +
-            "Correctness verification is available; measured runs are blocked. See the adapter host README.");
+    public string PersistenceScope => persistenceScope;
+
+    private IReadOnlyList<IBenchmarkOperation>? operations;
 
     /// <summary>
-    /// The frozen scenario stamps every committed state with this tenant, and the checkpoint writer's
-    /// EnsureTenantScope refuses a commit whose ambient scope differs — so this is the only scope the
-    /// correctness baseline can run in. v1 imposed the same requirement; the handover README marked it
-    /// unverified on v2, and the first live correctness run answered it.
+    /// The workload owns the phase definitions and their representative fixtures. The adapter only adapts
+    /// those provider-neutral operations to the process-measurement contract after correctness succeeds.
     /// </summary>
-    private const string ScenarioPersistenceScope = "tenant-checkpoint";
+    public IReadOnlyList<IBenchmarkOperation> Operations =>
+        operations ?? throw new PerformanceContractException(
+            "The checkpoint-commit operations were requested before correctness preparation completed.");
 
+    /// <summary>
+    /// The workload stamps every committed state with this adapter-selected scope, and the checkpoint
+    /// writer's EnsureTenantScope refuses a commit whose ambient scope differs. The scope is therefore
+    /// passed into both the composition and the provider-neutral fixture.
+    /// </summary>
     public async Task PrepareAsync(CancellationToken cancellationToken) =>
         composition ??= await RuntimeStoreComposition.CreateAsync(
-            request.Provider, connectionString, ScenarioPersistenceScope, cancellationToken);
+            request.Provider, connectionString, persistenceScope, cancellationToken);
 
     /// <summary>
     /// Runs the catalog-owned correctness baseline and reports the digest it actually produced.
@@ -61,12 +59,9 @@ internal sealed class CheckpointCommitAdapter(
     /// read back, and <c>ValidateCorrectness</c> compares it against the frozen
     /// <c>workload.Correctness.ResultDigestSha256</c>. A wrong commit path cannot produce it.
     ///
-    /// The provider identity fields are echoed from the request, and that is a real gap rather than a
-    /// design choice: <c>probe-provider</c> does not yet read sanitized provider configuration back off a
-    /// live connection, so the host has nothing independent to report. <c>ValidateCorrectness</c> requires
-    /// observed identity to equal requested identity exactly, so echoing is the only thing that can pass
-    /// today — which means those three fields currently prove the operator was self-consistent, not that
-    /// the provider was what they said. Do not read them as observation until probe-provider is finished.
+    /// Provider identity and sanitized driver configuration are read from a live native handshake. The
+    /// request is compared to that observation by <c>ArtifactAdmission.ValidateCorrectness</c>; a stale or
+    /// hand-edited request therefore blocks rather than becoming provenance.
     /// </summary>
     public async Task<CorrectnessEvidence> VerifyCorrectnessAsync(CancellationToken cancellationToken)
     {
@@ -76,14 +71,18 @@ internal sealed class CheckpointCommitAdapter(
         // not hash to the requested commitment. checkpoint-commit declares no required native routes, so
         // the document's route list is expected to be empty; ValidateCorrectness enforces that count.
         var document = NativePlanEvidenceStaging.PublishInto(outputDirectory, request);
+        var observed = await ProviderProbe.ReadAsync(request.Provider, connectionString, cancellationToken);
 
         var result = await new RuntimeCheckpointCommitWorkload().ExecuteAsync(this, cancellationToken);
+        operations = (await new RuntimeCheckpointCommitWorkload().PrepareMeasuredOperationsAsync(this, cancellationToken))
+            .Select(operation => (IBenchmarkOperation)new BenchmarkOperation(operation))
+            .ToArray();
 
         return new CorrectnessEvidence(
             result.ResultDigest,
-            request.ProviderVersion,
-            request.ProviderTopology,
-            request.ProviderConfiguration,
+            observed.Version,
+            observed.Topology,
+            observed.Configuration,
             new NativePlanEvidence(
                 request.NativePlanIdentity,
                 request.NativePlanEvidenceReference,
@@ -114,4 +113,45 @@ internal sealed class CheckpointCommitAdapter(
     private RuntimeStoreComposition Require() =>
         composition ?? throw new PerformanceContractException(
             "The adapter has no composed backing; PrepareAsync must run first.");
+
+    private static string PersistenceScopeFor(RunRequest request)
+    {
+        var identity = string.Join(
+            '|',
+            request.ComparisonCohortId,
+            request.MeasurementSetId,
+            request.WorkloadId,
+            request.WorkloadVersion,
+            request.Provider,
+            request.ProviderVersion,
+            request.ProviderTopology,
+            string.Join(';', request.ProviderConfiguration.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}={pair.Value}")),
+            request.Adapter,
+            request.PhysicalForm,
+            request.Scale,
+            request.CommitSha,
+            request.HarnessAssemblySha256,
+            request.CompositionFingerprint,
+            request.HostFingerprintSha256,
+            request.Seed,
+            request.InputFingerprintSha256,
+            request.NativePlanIdentity,
+            request.NativePlanEvidenceReference,
+            request.NativePlanContentSha256,
+            request.ProcessKind,
+            request.ProcessIndex);
+        var digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity))).ToLowerInvariant();
+        return $"benchmark-checkpoint-{digest}";
+    }
+
+    private sealed class BenchmarkOperation(IRuntimeCheckpointCommitWorkloadOperation operation) : IBenchmarkOperation
+    {
+        public string Id => operation.Id;
+
+        public Task PrepareInvocationAsync(long invocation, CancellationToken cancellationToken) =>
+            operation.PrepareInvocationAsync(invocation, cancellationToken).AsTask();
+
+        public Task InvokeAsync(long invocation, CancellationToken cancellationToken) =>
+            operation.InvokeAsync(invocation, cancellationToken).AsTask();
+    }
 }

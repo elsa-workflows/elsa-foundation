@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "workUnit": "139-groundwork-diagnostics-persistence",
+  "scope": "exact-groundwork-0.4.0-preview.3-diagnostics-recertification",
+  "outcome": "four-provider-correctness-pass",
+  "evidenceClassification": "current-v2-four-provider-correctness-recertification",
+  "recordedAtUtc": "2026-09-01T10:21:24Z",
+  "elsaSourceCommit": "8b92d34b7832271daa1ef24986311401c5d56e20",
+  "testedSourceState": "The focused local recertification ran from the Elsa source commit above plus the explicitly listed guard, ledger, current-v2 tests, portable diagnostics-count ordering correction, and test-project metadata changes. Hosted workflow run 33498592159 executed exact code-and-workflow head ebce7a70e157ea788f191c48ac68b062b5d6478d and proved the native-provider CI lane before the later correction commit added the current executable ledger evidence. The pull request's exact-head checks remain the integrated authority for that final commit. No diagnostics EF implementation or test source was deleted.",
+  "workingTreeSha256": {
+    "tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsPersistenceArchitectureTests.cs": "0355188152e7c37e28b8e5eafbfd01636910bac34ce23164aebe4ea8b0979034",
+    "tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests.csproj": "4689e6ca4c11d548329fdba2899875d2f70d3da671e94b33e0ca513a9f5227d6",
+    "tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/V2/Tests/GroundworkV2StructuredLogStoreTests.cs": "fa1cb9a51817601bf53896edb6cc465809c65d22b1dc65ff41b8cd1ca1471bd6",
+    "specs/139-groundwork-diagnostics-persistence/ef-test-removal-ledger.md": "98270aa769db5731fdab7dba90278869168567cb0c2c95d84a2c019c4cedd409",
+    "src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryV2Store.cs": "211991f38dbd4fccd8d41c44b611490a27c71fbd7fbeb66348688dd2e0a7034c",
+    "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2/Tests/GroundworkV2OpenTelemetryTests.cs": "8de3fdc7991ea6d85b50a3cd57b19defffdd496f83ee1cbc4d8c251f47c68d3d"
+  },
+  "groundworkTag": "v0.4.0-preview.3",
+  "groundworkReleaseSha": "9de7aa0e6271c311536d2a78a1e6c1f0260e1fda",
+  "groundworkPackageVersion": "0.4.0-preview.3",
+  "packageResolution": {
+    "rootPins": "Directory.Packages.props pins the Groundwork family at 0.4.0-preview.3.",
+    "diagnosticsAssets": "The diagnostics projects resolve their Groundwork package references to 0.4.0-preview.3 in project.assets.json."
+  },
+  "focusedTests": [
+    {
+      "purpose": "Shared diagnostics persistence correctness and architecture suite",
+      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj --no-restore --logger 'console;verbosity=minimal'",
+      "passed": 97,
+      "failed": 0,
+      "skipped": 0,
+      "total": 97,
+      "providerResult": "Provider-neutral and configured local checks passed."
+    },
+    {
+      "purpose": "Structured Logs current v2 SQLite provider matrix",
+      "command": "GROUNDWORK_V2_SQLITE_CONNECTION_STRING='Data Source=<temporary-dir>/diagnostics.db' dotnet test tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests.csproj --no-restore --logger 'console;verbosity=minimal'",
+      "passed": 29,
+      "failed": 0,
+      "skipped": 3,
+      "total": 32,
+      "providerResult": "SQLite passed; PostgreSQL, SQL Server, and MongoDB were skipped because their connection-string environment variables were not configured.",
+      "coverageNote": "Includes the current no-reserved-data-row assertion while preserving the lifetime high-water invariant."
+    },
+    {
+      "purpose": "OpenTelemetry current v2 SQLite provider matrix",
+      "command": "GROUNDWORK_V2_SQLITE_CONNECTION_STRING='Data Source=<temporary-dir>/diagnostics.db' dotnet test tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests.csproj --no-restore --logger 'console;verbosity=minimal'",
+      "passed": 13,
+      "failed": 0,
+      "skipped": 3,
+      "total": 16,
+      "providerResult": "SQLite passed; PostgreSQL, SQL Server, and MongoDB were skipped because their connection-string environment variables were not configured."
+    },
+    {
+      "purpose": "Groundwork aggregate feature composition and architecture tests",
+      "command": "dotnet test tests/Elsa/Diagnostics/Persistence/Groundwork/Tests/Elsa.Diagnostics.Persistence.Groundwork.Tests.csproj --no-restore --logger 'console;verbosity=minimal'",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "total": 3,
+      "providerResult": "Configured local aggregate checks passed."
+    }
+  ],
+  "hostedFourProviderVerification": {
+    "sourceCommit": "ebce7a70e157ea788f191c48ac68b062b5d6478d",
+    "workflowRunId": 33498592159,
+    "workflowUrl": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/33498592159",
+    "jobId": 99826406221,
+    "jobUrl": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/33498592159/job/99826406221",
+    "job": "Groundwork v2 native provider matrix",
+    "step": "Prove diagnostics v2 stores on every native provider",
+    "conclusion": "success",
+    "providers": [
+      "sqlite",
+      "postgresql",
+      "sqlserver",
+      "mongodb"
+    ],
+    "proof": "The Structured Logs and OpenTelemetry v2 provider-matrix test projects executed in the existing transactional native-database job. The step cannot degrade to local unavailable-provider skips because the server-provider connection strings are supplied by the job and the exact step completed successfully."
+  },
+  "testHarnessCorrection": "The Structured Logs v2 test project was missing IsTestProject=true; it was restored before the current 29/32 run so those results represent executed tests rather than a build-only invocation.",
+  "warnings": [
+    "Build output continues to report the existing NU1903 SSH.NET 2025.1.0 vulnerability warning; it is not a recertification failure."
+  ],
+  "efOracleLedger": {
+    "facts": 46,
+    "structuredLogs": 30,
+    "openTelemetry": 16,
+    "covered": 43,
+    "efMechanismOnlyRetiredAtGroundworkBoundary": 3,
+    "disposition": {
+      "reservedHighWaterSentinel": "Retired at the Groundwork boundary: current Groundwork Structured Logs coverage preserves provider-neutral lifetime high-water without a reserved visible data row.",
+      "structuredLogsDbContextFactoryLifetime": "Retired at the Groundwork boundary: Groundwork owns provider connections/sessions directly and has no DbContextFactory or captive-context lifetime to preserve.",
+      "openTelemetryDbContextFactoryLifetime": "Retired at the Groundwork boundary: Groundwork owns provider connections/sessions directly and has no DbContextFactory or captive-context lifetime to preserve."
+    },
+    "deletion": "not-authorized",
+    "owner": "#647"
+  },
+  "groupedReduction": {
+    "status": "not-promoted",
+    "owner": "#646",
+    "reason": "No current four-provider grouped reduction receipt was executed in this slice; historical preview.86/.88 artifacts remain immutable."
+  },
+  "nativePlans": {
+    "status": "not-promoted",
+    "owner": "#646",
+    "reason": "No current four-provider native-plan promotion receipt was executed in this slice."
+  },
+  "providerTopology": {
+    "sqlite": "Executed locally and in hosted run 33498592159.",
+    "postgresql": "Executed against PostgreSQL 17.6 in hosted run 33498592159.",
+    "sqlServer": "Executed against SQL Server 2022 CU21 in hosted run 33498592159.",
+    "mongoDb": "Executed against a transaction-capable MongoDB 7.0.24 replica set in hosted run 33498592159."
+  },
+  "remainingDependencies": [
+    "#646 owns the accepted diagnostics-durable-history timing/physical-form verdict and current grouped/native evidence.",
+    "T050, T051, T052, T053, T054, T055, and T057 remain open.",
+    "#647 owns final EF oracle deletion and the zero-EF architecture guard."
+  ],
+  "evidenceBoundary": "This receipt certifies current Groundwork package currency, provider-neutral behavior, the exact-head four-provider Structured Logs and OpenTelemetry v2 correctness matrix, aggregate composition, and the 46-fact EF-mechanism ledger disposition. It does not claim numeric performance budgets, a #646 verdict, grouped/native-plan promotion, EF deletion, or #642 closure. The preview.1 receipt remains historical and immutable."
+}

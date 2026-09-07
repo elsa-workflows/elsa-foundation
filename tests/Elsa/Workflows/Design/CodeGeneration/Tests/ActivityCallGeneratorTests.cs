@@ -180,7 +180,7 @@ public sealed class ActivityCallGeneratorTests
     }
 
     [Fact]
-    public void Generator_discovers_activity_metadata_from_referenced_assemblies()
+    public void Generator_discovers_activity_metadata_when_contract_name_is_ambiguous_across_references()
     {
         const string activityPackage = """
             namespace Elsa.Activities.Runtime.Core.Contracts
@@ -229,10 +229,19 @@ public sealed class ActivityCallGeneratorTests
                 }
             }
             """;
+        const string duplicateContractPackage = """
+            namespace Elsa.Activities.Runtime.Core.Contracts
+            {
+                public interface IActivity;
+                public interface IActivityResult<TResult>;
+            }
+            """;
         var activityReference = CompileReference("ReferencedActivityPackage", activityPackage);
-        var result = RunGenerator(AuthoringStubs, [activityReference]);
+        var duplicateContractReference = CompileReference("DuplicateActivityContractPackage", duplicateContractPackage);
+        var result = RunGenerator(AuthoringStubs, [activityReference, duplicateContractReference]);
         var generated = GetFacadeSource(result);
 
+        Assert.Null(result.OutputCompilation.GetTypeByMetadataName("Elsa.Activities.Runtime.Core.Contracts.IActivity"));
         Assert.Contains("public static SendEmailCall SendEmail(", generated, StringComparison.Ordinal);
         Assert.Contains("sequence.Add<global::ReferencedActivities.SendEmail, global::ReferencedActivities.SendEmailResult>", generated, StringComparison.Ordinal);
         Assert.DoesNotContain(result.OutputCompilation.GetDiagnostics(), diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);

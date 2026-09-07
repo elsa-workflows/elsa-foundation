@@ -45,7 +45,7 @@ line numbers.
 
 ## Performance baseline status
 
-The proof command currently printed by issue #269 was executed unchanged:
+The original #269 proof command was executed unchanged:
 
 ```bash
 dotnet run --project benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks -- matrix medium
@@ -57,53 +57,49 @@ It exited 2 before measuring anything:
 error: matrix requires --workload.
 ```
 
-The current harness requires one workload, provider, provenance, native-plan evidence, output, and a real
-adapter-host command. `workload-vectors` succeeds and includes `checkpoint-commit`, `bookmark-lookup`,
-`queue-drain`, and `outbox-drain`. The AdapterHost now registers real public-runtime leaves for all four,
-and its SQLite vertical suite executes the full frozen correctness scenarios plus every measured operation.
-The full correctness run passed 3/3 in 10 minutes 9 seconds on this checkout.
-
-The evidence boundary remains intentionally fail-closed. `checkpoint-commit` has no required native routes,
-but the other three workloads require real provider-specific raw plans. The current `capture-plan` command
-captures those routes through the public runtime on SQLite; PostgreSQL, SQL Server, and MongoDB still refuse
-routed capture until equivalent provider leaves exist. No retained medium matrix artifact is committed, so
-no round-trip or timing figures are claimed from this revision:
-
-| Workload | Baseline result |
-|---|---|
-| `checkpoint-commit` | Executable leaf; no retained medium matrix artifact is committed. |
-| `bookmark-lookup` | Executable leaf; SQLite can capture both required routes, while other providers fail closed. |
-| `queue-drain` | Executable leaf; SQLite can capture both required routes, while other providers fail closed. |
-| `outbox-drain` | Executable leaf; SQLite can capture the required `list-claimable` route, while other providers fail closed. |
-
-After building the Release AdapterHost once and capturing all required `medium`-scale plans without
-rebuilding, validate and print the exact per-workload commands with:
+That remains useful historical evidence that the naked harness command is not an executable proof. The
+current #646 catalog contains thirteen workloads and fifteen exact adapter registrations. Its control plane
+is now emitted by the built AdapterHost and consumed by the repository runner:
 
 ```bash
 python3 tools/groundwork/run-e3-medium-baseline.py \
-  --provider sqlite \
-  --evidence-dir "$STAGING" \
-  --out "$ARTIFACTS"
+  status
 ```
 
-The runner requires these exact evidence documents:
+At this checkpoint the machine-readable status reports five timing-ready registrations and ten blocked
+registrations. Timing-ready means only that the workload is admitted and its native-plan path is complete
+or explicitly routeless; it is not a measurement or verdict. The ready registrations are checkpoint,
+IAM, recovery, the SQLite EF Secret oracle, and the Groundwork Secret target. Diagnostics correctness is
+available, but timing remains blocked by `gate.diagnostics.absolute-budget-required`; its Groundwork plan
+capture accounts for captured and explicitly blocked routes separately. The other eight runtime/distributed
+registrations remain blocked by `capture.native-plan.not-implemented`.
+
+The runner deliberately separates the evidence phases:
 
 ```text
-checkpoint-commit.sqlite.native-plan.json
-bookmark-lookup.sqlite.native-plan.json
-queue-drain.sqlite.native-plan.json
-outbox-drain.sqlite.native-plan.json
+status -> capture -> correctness -> measure -> compare -> gate
 ```
 
-Replace `sqlite` consistently with `postgresql`, `sqlserver`, or `mongodb` for another explicitly selected
-driver. The driver owns fresh isolated provider connections; credentials and connection strings never enter
-the command or artifacts. Add `--execute` to launch all four medium matrices after the printed commands and
-provenance have been reviewed.
+Each phase is a dry run until `--execute` is supplied. `capture`, `correctness`, and `measure` require one
+exact workload/provider/adapter/form/measurement-set tuple and derive its current version, topology, seed,
+input fingerprint, and phase readiness from `describe-matrix`. Evidence filenames include the measurement
+set (`<workload>.<provider>.<measurement-set>.native-plan.json`). `measure` revalidates every route and raw
+plan, refuses a blocked registration, and checks for unrelated build/test processes immediately before
+timing. `compare` and `gate` consume retained measurement sets independently; correctness is never inferred
+from timing and timing is never inferred from plan capture.
 
-The precise #269 proof correction is therefore: replace the non-executable single command
-`matrix medium` with the repository-relative runner above, and make real routed native-plan capture for the
-selected provider an explicit prerequisite. Do not treat missing route evidence as zero work or a benchmark
-result.
+`describe-matrix` schema v2 also identifies the source revision embedded into both the AdapterHost and the
+benchmark harness by the .NET SDK. Every runner phase requires those revisions to match a clean current
+HEAD, so an older Release output cannot be presented as current-source evidence. The C# entry points
+canonicalize output directories independently of the Python wrapper and reject repository descendants and
+symlink aliases before provider resolution or writes. Direct execution additionally admits only the canonical
+Release AdapterHost after a schema-v2 handshake, and package provenance must exactly match the provider
+package names and versions in `Directory.Packages.props`. Comparison, gate, and blocked-report result paths
+remain confined to the admitted external output tree.
+
+The precise #269 proof correction is therefore: use the repository runner's explicit phases, select one
+current registry tuple, and make complete routed native-plan evidence an explicit prerequisite for timing.
+Do not treat missing or explicitly blocked route evidence as zero work or a benchmark result.
 
 ## Existing red debt
 

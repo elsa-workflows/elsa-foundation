@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -17,6 +18,34 @@ public sealed class WorkbenchConfigurationTests
         Assert.True(shellEnvironmentOverlay > shellDefaults, "The environment-specific shell overlay must follow shells.json.");
         Assert.True(environmentVariables > shellEnvironmentOverlay, "Environment variables must be re-added after shell configuration.");
         Assert.True(commandLine > environmentVariables, "Command-line arguments must retain precedence over environment variables.");
+    }
+
+    [Fact]
+    public void Production_shell_overlay_clears_the_committed_development_admin_password()
+    {
+        var workbenchDirectory = Path.Join(RepoRoot, "src", "Apps", "Elsa.Workbench");
+        const string passwordPath =
+            "CShells:Shells:default:Features:FoundationIdentityAspNetCoreIdentityGroundwork:SeedAdminPassword";
+
+        var productionConfiguration = new ConfigurationBuilder()
+            .SetBasePath(workbenchDirectory)
+            .AddJsonFile("shells.json")
+            .AddJsonFile("shells.Production.json")
+            .Build();
+
+        Assert.True(string.IsNullOrEmpty(productionConfiguration[passwordPath]));
+
+        var environmentOverride = new ConfigurationBuilder()
+            .SetBasePath(workbenchDirectory)
+            .AddJsonFile("shells.json")
+            .AddJsonFile("shells.Production.json")
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [passwordPath] = "environment-override"
+            })
+            .Build();
+
+        Assert.Equal("environment-override", environmentOverride[passwordPath]);
     }
 
     private static string RepoRoot { get; } = FindRepoRoot();

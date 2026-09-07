@@ -15,6 +15,9 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Services;
+using Elsa.Serialization.Core;
+using Elsa.Serialization.SystemText.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
@@ -351,8 +354,11 @@ public sealed class PublishingHttpContractTests
             new InMemoryWorkflowExecutableSourceReferenceStore(),
             new InMemoryWorkflowExecutableStore(),
             new InMemoryExecutableActivityTemplateStore(),
-            [],
-            new RuntimeDurableValueStorageDriverRegistry([]),
+            new RuntimeRequirementChecker(
+                [],
+                new RuntimeDurableValueStorageDriverRegistry([]),
+                TestWellKnownTypeRegistry.Create(),
+                new JsonPayloadSerializer(new JsonPayloadConverterRegistry())),
             TimeProvider.System);
         var handler = new RuntimePreflightEndpoint(service);
         var result = await handler.HandleAsync(request, CancellationToken.None);

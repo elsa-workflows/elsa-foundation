@@ -34,7 +34,7 @@ public sealed class PublicationProjectionReconciler(
             candidate.PublicationId,
             PublicationProjectionKinds.TriggerBindings,
             PublicationProjectionOperation.Prepare,
-            ct => AsVoid(triggerIndexer.PreparePublicationAsync(executable, candidate.PublicationId, candidate.SlotId, ct)),
+            ct => AsVoid(triggerIndexer.PrepareActivationAsync(executable, candidate.PublicationId, candidate.SlotId, ct)),
             cancellationToken,
             forceReplay);
 
@@ -43,7 +43,7 @@ public sealed class PublicationProjectionReconciler(
             // A host can compose the recurring store without composing any recurring providers. Ensure that even an
             // empty recurring projection is explicitly prepared, while preserving schedules produced by the
             // recurring indexer when providers are present.
-            var schedules = await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(
+            var schedules = await RuntimeOperationalStorePagingExtensions.ListAllByActivationAsync(
                 recurringScheduleStore,
                 candidate.PublicationId,
                 cancellationToken);
@@ -51,7 +51,7 @@ public sealed class PublicationProjectionReconciler(
                 candidate.PublicationId,
                 PublicationProjectionKinds.RecurringSchedules,
                 PublicationProjectionOperation.Prepare,
-                ct => recurringScheduleStore.PreparePublicationAsync(candidate.PublicationId, schedules, ct),
+                ct => recurringScheduleStore.PrepareActivationAsync(candidate.PublicationId, schedules, ct),
                 cancellationToken,
                 forceReplay);
         }
@@ -74,7 +74,7 @@ public sealed class PublicationProjectionReconciler(
             candidate.PublicationId,
             PublicationProjectionKinds.TriggerBindings,
             PublicationProjectionOperation.Activate,
-            ct => triggerBindingStore.ActivatePublicationAsync(candidate.PublicationId, replacedPublicationId, ct),
+            ct => triggerBindingStore.ActivateAsync(candidate.PublicationId, replacedPublicationId, ct),
             cancellationToken,
             forceReplay);
 
@@ -83,7 +83,7 @@ public sealed class PublicationProjectionReconciler(
                 candidate.PublicationId,
                 PublicationProjectionKinds.RecurringSchedules,
                 PublicationProjectionOperation.Activate,
-                ct => recurringScheduleStore.ActivatePublicationAsync(candidate.PublicationId, replacedPublicationId, ct),
+                ct => recurringScheduleStore.ActivateAsync(candidate.PublicationId, replacedPublicationId, ct),
                 cancellationToken,
                 forceReplay);
 
@@ -103,7 +103,7 @@ public sealed class PublicationProjectionReconciler(
                 restoredPublicationId,
                 PublicationProjectionKinds.TriggerBindings,
                 PublicationProjectionOperation.Activate,
-                ct => triggerBindingStore.ActivatePublicationAsync(restoredPublicationId, candidate.PublicationId, ct),
+                ct => triggerBindingStore.ActivateAsync(restoredPublicationId, candidate.PublicationId, ct),
                 cancellationToken,
                 forceReplay: true);
 
@@ -112,7 +112,7 @@ public sealed class PublicationProjectionReconciler(
                     restoredPublicationId,
                     PublicationProjectionKinds.RecurringSchedules,
                     PublicationProjectionOperation.Activate,
-                    ct => recurringScheduleStore.ActivatePublicationAsync(restoredPublicationId, candidate.PublicationId, ct),
+                    ct => recurringScheduleStore.ActivateAsync(restoredPublicationId, candidate.PublicationId, ct),
                     cancellationToken,
                     forceReplay: true);
         }
@@ -151,7 +151,7 @@ public sealed class PublicationProjectionReconciler(
             publication.PublicationId,
             PublicationProjectionKinds.TriggerBindings,
             PublicationProjectionOperation.Remove,
-            ct => triggerBindingStore.DeleteByPublicationAsync(publication.PublicationId, ct),
+            ct => triggerBindingStore.DeleteByActivationAsync(publication.PublicationId, ct),
             cancellationToken);
 
         if (recurringScheduleStore is not null)
@@ -159,7 +159,7 @@ public sealed class PublicationProjectionReconciler(
                 publication.PublicationId,
                 PublicationProjectionKinds.RecurringSchedules,
                 PublicationProjectionOperation.Remove,
-                ct => recurringScheduleStore.DeleteByPublicationAsync(publication.PublicationId, ct),
+                ct => recurringScheduleStore.DeleteByActivationAsync(publication.PublicationId, ct),
                 cancellationToken);
     }
 
@@ -250,7 +250,7 @@ public sealed class PublicationProjectionReconciler(
         if (_triggerObservers.Count == 0)
             return;
 
-        var bindings = await triggerBindingStore.ListAllByPublicationAsync(publication.PublicationId, cancellationToken);
+        var bindings = await triggerBindingStore.ListAllByActivationAsync(publication.PublicationId, cancellationToken);
         var artifactId = bindings.FirstOrDefault()?.ArtifactId ?? publication.ArtifactId;
         // Authority can change while the artifact's extracted bindings remain identical (or empty), so consumers
         // must not apply the ordinary repeated-non-HTTP indexing skip to this notification.

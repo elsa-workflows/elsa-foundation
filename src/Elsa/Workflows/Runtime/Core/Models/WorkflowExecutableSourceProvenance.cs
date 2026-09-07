@@ -24,6 +24,6 @@ public sealed record WorkflowExecutableSourceProvenance(
             reference.DefinitionId,
             reference.DefinitionVersionId,
             reference.ArtifactVersion,
-            reference.PublicationId,
+            reference.ActivationId,
             reference.SlotId);
 }

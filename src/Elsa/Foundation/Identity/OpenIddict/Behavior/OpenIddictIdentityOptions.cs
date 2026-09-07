@@ -39,14 +39,14 @@ public sealed class OpenIddictIdentityOptions
     public string? EncryptionKey { get; set; }
 
     /// <summary>
-    /// Transitional durable-store connection string retained for callers of the frozen store-oracle
-    /// registration. Provider-neutral behavior does not consume this value.
+    /// Host-facing connection string forwarded to an explicitly selected OpenIddict persistence provider.
+    /// Provider-neutral behavior does not consume this value; Workbench's vendor EF registration does.
     /// </summary>
     public string? ConnectionString { get; set; }
 
     /// <summary>
-    /// Transitional startup-schema switch retained for callers of the frozen store-oracle registration.
-    /// Provider-neutral behavior does not consume this value.
+    /// Host-facing schema-lifecycle switch forwarded to an explicitly selected OpenIddict persistence provider.
+    /// Provider-neutral behavior does not consume this value; Workbench's vendor EF registration does.
     /// </summary>
     public bool AutoMigrate { get; set; } = true;
 

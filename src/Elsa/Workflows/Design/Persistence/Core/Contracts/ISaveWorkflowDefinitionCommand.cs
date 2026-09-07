@@ -1,4 +1,4 @@
-using Elsa.Persistence.Core.Design;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Contracts;

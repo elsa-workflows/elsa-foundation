@@ -157,13 +157,19 @@ public sealed class WorkflowExecutableModelTests
     [Fact]
     public void SourceReference_RoundTripsAndRetiresWithoutLosingTenant()
     {
-        var reference = NewSourceReference("tenant-a");
+        var reference = NewSourceReference("tenant-a") with { ActivationId = "activation-a" };
+        var serialized = JsonSerializer.Serialize(reference, SerializerOptions);
+        var json = JsonNode.Parse(serialized)!.AsObject();
+        Assert.Equal("activation-a", json["activationId"]!.GetValue<string>());
+        Assert.Null(json["publicationId"]);
+
         var restored = JsonSerializer.Deserialize<WorkflowExecutableSourceReference>(
-            JsonSerializer.Serialize(reference, SerializerOptions),
+            serialized,
             SerializerOptions)!;
         var retired = restored.Retire(DateTimeOffset.UnixEpoch.AddMinutes(1), "retired");
 
         Assert.Equal("tenant-a", restored.TenantId);
+        Assert.Equal("activation-a", restored.ActivationId);
         Assert.Equal("tenant-a", retired.TenantId);
     }
 

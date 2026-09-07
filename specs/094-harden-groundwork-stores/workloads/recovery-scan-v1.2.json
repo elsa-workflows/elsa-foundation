@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "workloads": [
+    {
+      "id": "recovery-scan",
+      "version": "1.2.0",
+      "scenarioId": "runtime-recovery-scan",
+      "owner": "#645",
+      "handoffTarget": "#646",
+      "publicOperation": "Select a bounded, ordered set of stale or recoverable execution, liveness, incident, scheduler, and hold state through IRuntimeRecoveryScanner and its public state stores.",
+      "coverageRows": [
+        "runtime-execution-liveness",
+        "runtime-incident-state",
+        "runtime-scheduler-state",
+        "runtime-workflow-execution-state",
+        "runtime-workflow-hold-state"
+      ],
+      "input": {
+        "seed": "spec094-recovery-scan-v1.2",
+        "fingerprintSha256": "eb4df814e208fedf12c3f8a995430b1084fac5cf7b7e67bd0464be07d0043eef",
+        "tenantCount": 2,
+        "executionCount": 2048,
+        "recoverableCandidates": 173,
+        "terminalExecutions": 8,
+        "liveExecutions": 1867,
+        "pageSize": 4,
+        "fixedNowUtc": "2026-07-20T10:00:00Z",
+        "timedSetup": "excluded"
+      },
+      "operationSequence": [
+        "seed-live-and-recoverable-state",
+        "scan-recovery-candidates",
+        "reopen-and-rescan",
+        "verify-bounded-order-and-non-candidates"
+      ],
+      "requiredProviders": ["sqlite", "sqlserver", "postgresql", "mongodb"],
+      "requiredNativeRoutes": [
+        "list-recovery-detected",
+        "list-recovery-by-lease-expiry",
+        "list-recovery-by-lease-acquisition",
+        "list-recovery-by-heartbeat"
+      ],
+      "requiredProviderEvidence": {
+        "sqlite": "file-backed-distinct-connections",
+        "sqlserver": "real-sqlserver-container",
+        "postgresql": "real-postgresql-container",
+        "mongodb": "transaction-capable-replica-set"
+      },
+      "correctness": {
+        "resultDigestSha256": "af331fc39ac89be97b601ba9e472fd7872b45ec5e50ccc9bba6b55de53e3aba0",
+        "invariants": [
+          "the exact stale and recoverable candidates are returned across every bounded continuation page",
+          "due ordering is deterministic across reopen",
+          "live and terminal executions are absent",
+          "no route materializes the full candidate population",
+          "the production scanner composes execution, liveness, incident, scheduler, and hold state stores"
+        ],
+        "timingGate": "Run the public recovery correctness baseline and capture native route evidence before #646 times the operation."
+      },
+      "efContractBaseline": {
+        "baselineIdentity": "frozen-runtime-recovery-ef-contract",
+        "executionStatus": "not-executed",
+        "executionOwner": "#646",
+        "purpose": "Expected observable recovery contract only; it is not live EF execution or a performance result."
+      },
+      "benchmarkAdmission": {
+        "status": "ready",
+        "reason": "benchmark.ready"
+      },
+      "physicalFormsFor646": [
+        "shared-documents-with-linked-index-tables",
+        "document-type-specific-tables",
+        "recovery-candidate-index"
+      ],
+      "artifactRetention": [
+        "workload id/version",
+        "commit SHA",
+        "provider package versions",
+        "composition fingerprint",
+        "input fingerprint",
+        "result digest",
+        "native route evidence",
+        "restart metadata"
+      ],
+      "lineage": {
+        "predecessorId": "recovery-scan",
+        "predecessorVersion": "1.1.0",
+        "reason": "production scanner paging is bounded to four native route candidates per page and the fixture preserves explicit terminal/live execution partitions"
+      }
+    }
+  ]
+}

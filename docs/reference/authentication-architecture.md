@@ -80,18 +80,17 @@ The stack is a set of composable CShells features. You enable them per shell in 
 | Feature (shells.json key) | Assembly | What it is | Plane |
 |---|---|---|---|
 | `FoundationIdentityAbstractions` | `…Identity.Abstractions` | Contracts + default implementations: permission catalog, claims normalizer, provider resolver, security guards. **Always on** (every other identity feature registers it). | seam |
-| `FoundationIdentityAspNetCoreIdentity` | `…Identity.AspNetCoreIdentity` | The IAM domain: user/role managers, the Elsa principal factory, the first-party sign-in service, the local provider module, antiforgery. In-memory stores by default. | IAM |
-| `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore` | `…AspNetCoreIdentity.EntityFrameworkCore` | Durable EF Core user/role store, ASP.NET Core Identity core (`SignInManager`, token providers), the **cookie sign-in scheme**, the **backend login page**, and dev seeding. | IAM / protocol |
+| `FoundationIdentityAspNetCoreIdentity` | `…Identity.AspNetCoreIdentity` | The provider-neutral IAM domain: contracts, user/role managers, the Elsa principal factory, the first-party sign-in service, the local provider module, and antiforgery. | IAM |
+| `FoundationIdentityAspNetCoreIdentityGroundwork` | `…AspNetCoreIdentity.Groundwork` | The first-party durable Groundwork user/role store, ASP.NET Core Identity core (`SignInManager`, token providers), the **cookie sign-in scheme**, the **backend login page**, and configured admin seeding. | IAM / protocol |
 | `FoundationIdentityOpenIddict` | `…Identity.OpenIddict` | **Be your own IdP:** first-party JWT issuance (`ITokenService` over the OpenIddict pipeline) + local bearer validation, plus the composite scheme selector. | protocol |
 | `FoundationIdentityOidc` | `…Identity.Oidc` | **Trust an external IdP:** the external OIDC provider module + ASP.NET Core `OpenIdConnect` / `JwtBearer` handler configuration (Keycloak, Entra, Auth0, …). | protocol |
 | `FoundationIdentityApi` | `…Identity.Api` | The `/_elsa/identity/*` HTTP surface (see §6) including the `GET /_elsa/identity/token` cookie→bearer exchange and shared Foundation policy enforcement. | protocol |
-| `IdentityGroundworkPersistence` | `…Identity.Persistence.Groundwork` | Alternative durable substrate: replaces the in-memory IAM stores with Groundwork-backed ones (users/roles/external identities/tenant memberships). Not enabled in the default shell. | IAM |
+| `IdentityGroundworkPersistence` | `…Identity.Persistence.Groundwork` | Lower-level durable substrate: replaces the in-memory IAM stores with Groundwork-backed ones (users/roles/external identities/tenant memberships). The ASP.NET Core Identity Groundwork feature composes this with the framework services. | IAM |
 
 > **Note on ASP.NET Core Identity split.** The domain half (`FoundationIdentityAspNetCoreIdentity`)
-> is provider-neutral and store-agnostic; the durable EF half
-> (`FoundationIdentityAspNetCoreIdentityEntityFrameworkCore`) adds the persistent store, the
-> `SignInManager` cookie scheme, the login page, and seeding. In practice you enable both together —
-> the default shell does.
+> is provider-neutral and store-agnostic; the first-party Groundwork integration
+> (`FoundationIdentityAspNetCoreIdentityGroundwork`) adds the durable store, `SignInManager` cookie scheme,
+> login page, and seeding. In practice you enable both together — the default shell does.
 
 ---
 
@@ -195,7 +194,7 @@ Enable these feature sets per shell. All scenarios also require `FoundationIdent
 "FoundationIdentityAbstractions": {},
 "FoundationIdentityApi": {},
 "FoundationIdentityAspNetCoreIdentity": {},
-"FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": { "IsDevelopmentOrDemo": true },
+"FoundationIdentityAspNetCoreIdentityGroundwork": { "IsDevelopmentOrDemo": true },
 "FoundationIdentityOpenIddict": { "IsDevelopmentOrDemo": true }
 ```
 
@@ -292,7 +291,7 @@ The `/_elsa/identity/*` surface (`FoundationIdentityApi`):
 | `_elsa/identity/token` | GET | **Cookie→bearer exchange.** Mints a JWT for the cookie principal; bare `401` when anonymous. | interactive schemes only |
 | `_elsa/identity/refresh` | POST | Token-based refresh (`ITokenService.RefreshAsync`) for first-party/API clients. | anonymous (validates the refresh token) |
 | `_elsa/identity/logout/{provider}` | POST | Clears the session / provider sign-out. | anonymous |
-| `_elsa/identity/login` | GET / POST | The backend-served login page (GET) and credential post (POST) — from the ASP.NET Core Identity EF feature. | anonymous |
+| `_elsa/identity/login` | GET / POST | The backend-served login page (GET) and credential post (POST) — from the ASP.NET Core Identity Groundwork feature. | anonymous |
 
 The Studio cookie-refresh loop **re-probes `GET /_elsa/identity/session`** and, on a live cookie,
 re-fetches `GET /_elsa/identity/token`; it does not use the token-based `POST /refresh` (that endpoint

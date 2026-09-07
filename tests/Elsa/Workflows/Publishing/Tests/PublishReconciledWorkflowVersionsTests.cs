@@ -9,6 +9,8 @@ using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
 using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Services;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Logging;
 using Xunit;
 
@@ -107,7 +109,7 @@ public sealed class PublishReconciledWorkflowVersionsTests
             sender,
             definitions: [Definition("wf-a")],
             versions: [Version("wf-a", "1.0.0", "ver-1")],
-            slots: [new PublicationSlot("slot-1", "wf-a", "default", "pub-1", 1, DateTimeOffset.UtcNow)],
+            slots: [Slot("slot-1", "wf-a", "default", "pub-1", 1, DateTimeOffset.UtcNow)],
             records: [Record("pub-1", "wf-a", "ver-1", PublicationStatus.Active)]);
 
         await handler.Handle(Reconciled(Claim("wf-a", "1.0.0")), CancellationToken.None);
@@ -123,7 +125,7 @@ public sealed class PublishReconciledWorkflowVersionsTests
             sender,
             definitions: [Definition("wf-a")],
             versions: [Version("wf-a", "1.0.0", "ver-1"), Version("wf-a", "2.0.0", "ver-2")],
-            slots: [new PublicationSlot("slot-1", "wf-a", "default", "pub-1", 1, DateTimeOffset.UtcNow)],
+            slots: [Slot("slot-1", "wf-a", "default", "pub-1", 1, DateTimeOffset.UtcNow)],
             records: [Record("pub-1", "wf-a", "ver-1", PublicationStatus.Active)]);
 
         await handler.Handle(Reconciled(Claim("wf-a", "2.0.0")), CancellationToken.None);
@@ -143,7 +145,7 @@ public sealed class PublishReconciledWorkflowVersionsTests
             sender,
             definitions: [Definition("wf-a")],
             versions: [Version("wf-a", "1.0.0", "ver-1")],
-            slots: [new PublicationSlot("slot-canary", "wf-a", "canary", "pub-canary", 1, DateTimeOffset.UtcNow)],
+            slots: [Slot("slot-canary", "wf-a", "canary", "pub-canary", 1, DateTimeOffset.UtcNow)],
             records: [Record("pub-canary", "wf-a", "ver-1", PublicationStatus.Active)]);
 
         await handler.Handle(Reconciled(Claim("wf-a", "1.0.0")), CancellationToken.None);
@@ -164,8 +166,8 @@ public sealed class PublishReconciledWorkflowVersionsTests
             versions: [Version("wf-a", "1.0.0", "ver-1"), Version("wf-a", "2.0.0", "ver-2")],
             slots:
             [
-                new PublicationSlot("slot-1", "wf-a", "default", "pub-1", 1, DateTimeOffset.UtcNow),
-                new PublicationSlot("slot-canary", "wf-a", "canary", "pub-canary", 1, DateTimeOffset.UtcNow)
+                Slot("slot-1", "wf-a", "default", "pub-1", 1, DateTimeOffset.UtcNow),
+                Slot("slot-canary", "wf-a", "canary", "pub-canary", 1, DateTimeOffset.UtcNow)
             ],
             records:
             [
@@ -191,8 +193,8 @@ public sealed class PublishReconciledWorkflowVersionsTests
             versions: [Version("wf-a", "1.0.0", "ver-1")],
             slots:
             [
-                new PublicationSlot("slot-1", "wf-a", "default", null, 1, DateTimeOffset.UtcNow),
-                new PublicationSlot("slot-canary", "wf-a", "canary", "pub-canary", 1, DateTimeOffset.UtcNow)
+                Slot("slot-1", "wf-a", "default", null, 1, DateTimeOffset.UtcNow),
+                Slot("slot-canary", "wf-a", "canary", "pub-canary", 1, DateTimeOffset.UtcNow)
             ],
             records: [Record("pub-canary", "wf-a", "ver-1", PublicationStatus.Active)],
             policies: [new PublicationPolicy("wf-a", PublicationPolicyDefaultAction.ReplaceDefaultSlot, "canary", 1, DateTimeOffset.UtcNow)]);
@@ -213,7 +215,7 @@ public sealed class PublishReconciledWorkflowVersionsTests
             sender,
             definitions: [Definition("wf-a")],
             versions: [Version("wf-a", "1.0.0", "ver-1")],
-            slots: [new PublicationSlot("slot-1", "wf-a", "default", "pub-1", 1, DateTimeOffset.UtcNow)],
+            slots: [Slot("slot-1", "wf-a", "default", "pub-1", 1, DateTimeOffset.UtcNow)],
             records: [Record("pub-1", "wf-a", "ver-1", PublicationStatus.Active)],
             policies: [new PublicationPolicy("wf-a", PublicationPolicyDefaultAction.RequireExplicitSlot, "default", 1, DateTimeOffset.UtcNow)]);
 
@@ -230,7 +232,7 @@ public sealed class PublishReconciledWorkflowVersionsTests
             sender,
             definitions: [Definition("wf-a")],
             versions: [Version("wf-a", "1.0.0", "ver-1")],
-            slots: [new PublicationSlot("slot-1", "wf-a", "default", "pub-1", 1, DateTimeOffset.UtcNow)],
+            slots: [Slot("slot-1", "wf-a", "default", "pub-1", 1, DateTimeOffset.UtcNow)],
             records: [Record("pub-1", "wf-a", "ver-1", PublicationStatus.Retired)]);
 
         await handler.Handle(Reconciled(Claim("wf-a", "1.0.0")), CancellationToken.None);
@@ -304,7 +306,7 @@ public sealed class PublishReconciledWorkflowVersionsTests
         SpySender sender,
         IReadOnlyList<WorkflowDefinition> definitions,
         IReadOnlyList<WorkflowDefinitionVersion> versions,
-        IReadOnlyList<PublicationSlot>? slots = null,
+        IReadOnlyList<WorkflowActivationSlot>? slots = null,
         IReadOnlyList<PublicationRecord>? records = null,
         IReadOnlyList<PublicationPolicy>? policies = null,
         CapturingLogger<PublishReconciledWorkflowVersions>? logger = null) =>
@@ -314,7 +316,7 @@ public sealed class PublishReconciledWorkflowVersionsTests
             new StubVersionStore(versions),
             new StubPolicyStore(policies ?? []),
             new PublicationPolicyResolver(),
-            new StubSlotStore(slots ?? []),
+            new StubActivationAuthority(slots ?? []),
             new StubRecordStore(records ?? []),
             sender,
             TimeProvider.System);
@@ -328,6 +330,22 @@ public sealed class PublishReconciledWorkflowVersionsTests
 
     private static WorkflowDefinitionVersion Version(string definitionId, string version, string versionId) =>
         new(definitionId, version) { Id = versionId };
+
+    private static WorkflowActivationSlot Slot(
+        string slotId,
+        string definitionId,
+        string slotName,
+        string? activeActivationId,
+        long revision,
+        DateTimeOffset updatedAt) =>
+        new(
+            slotId,
+            definitionId,
+            slotName,
+            activeActivationId,
+            activeActivationId is null ? null : WorkflowActivationSource.Publishing,
+            revision,
+            updatedAt);
 
     private static PublicationRecord Record(string publicationId, string definitionId, string versionId, PublicationStatus status) =>
         new(publicationId, "slot-1", definitionId, versionId, "artifact-x", null, 1, status, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, null);
@@ -402,17 +420,17 @@ public sealed class PublishReconciledWorkflowVersionsTests
             => throw new InvalidOperationException("Not exercised by publish-on-reconcile tests.");
     }
 
-    private sealed class StubSlotStore(IReadOnlyList<PublicationSlot> items) : IPublicationSlotStore
+    private sealed class StubActivationAuthority(IReadOnlyList<WorkflowActivationSlot> items) : IWorkflowActivationAuthority
     {
-        public ValueTask<PublicationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default)
+        public ValueTask<WorkflowActivationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default)
             => ValueTask.FromResult(items.FirstOrDefault(x => x.WorkflowDefinitionId == workflowDefinitionId && x.SlotName == slotName));
 
         // The pre-check is slot-targeted: enumerating every slot of the definition would be the
         // slot-agnostic behaviour this handler must not have.
         private const string Unused = "Not exercised by publish-on-reconcile tests.";
-        public ValueTask<IReadOnlyCollection<PublicationSlot>> ListByDefinitionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public ValueTask<PublicationSlotTransitionResult> TryActivateAsync(string workflowDefinitionId, string slotName, string publicationId, long expectedRevision, DateTimeOffset updatedAt, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-        public ValueTask<PublicationSlotTransitionResult> TryUnpublishAsync(string workflowDefinitionId, string slotName, long expectedRevision, DateTimeOffset updatedAt, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
+        public ValueTask<IReadOnlyCollection<WorkflowActivationSlot>> ListByDefinitionAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
+        public ValueTask<WorkflowActivationTransition> TryActivateAsync(WorkflowActivationSlotRequest request, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
+        public ValueTask<WorkflowActivationTransition> TryDeactivateAsync(string workflowDefinitionId, string slotName, WorkflowActivationSource source, long expectedRevision, DateTimeOffset updatedAt, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
     }
 
     private sealed class StubRecordStore(IReadOnlyList<PublicationRecord> items) : IPublicationRecordStore

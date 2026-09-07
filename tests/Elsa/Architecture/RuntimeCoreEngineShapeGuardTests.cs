@@ -79,6 +79,13 @@ public sealed class RuntimeCoreEngineShapeGuardTests
         Assert.Contains("InMemoryBookmarkStateStore", matches);
     }
 
+    [Fact]
+    public void RuntimeRecoveryCursorStore_LivesInTheRuntimeImplementationAssembly()
+    {
+        Assert.Same(typeof(RuntimeCheckpointCommitter).Assembly, typeof(InMemoryRuntimeRecoverySweepCursorStore).Assembly);
+        Assert.NotSame(typeof(WorkflowExecutable).Assembly, typeof(InMemoryRuntimeRecoverySweepCursorStore).Assembly);
+    }
+
     private static IEnumerable<Type> EngineShapedTypes(Assembly assembly) =>
         assembly.GetTypes().Where(IsEngineShaped);
 

@@ -52,7 +52,8 @@ public sealed class WorkflowsPublishingFeatureTests
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutableCompiler));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutableStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutableSourceReferenceStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IPublicationSlotStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowActivationAuthority));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowActivationCoordinator));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IPublicationRecordStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IPublicationPolicyStore));
     }

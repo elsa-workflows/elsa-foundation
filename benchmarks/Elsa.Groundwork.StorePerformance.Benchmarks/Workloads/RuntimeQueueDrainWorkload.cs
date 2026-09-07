@@ -149,6 +149,197 @@ public sealed class RuntimeQueueDrainWorkload
         return new RuntimeQueueDrainWorkloadResult(scenario.ComputeInputFingerprint(), resultDigest, operations, actualObservations);
     }
 
+    /// <summary>
+    /// Prepares the six catalog-owned public queue and poison-store phases for process measurement.
+    /// Fixture writes and claim setup happen before the timing callback; each returned operation invokes
+    /// only the bounded public runtime-store route named by its frozen phase.
+    /// </summary>
+    public async ValueTask<IReadOnlyList<IRuntimeQueueDrainWorkloadOperation>> PrepareMeasuredOperationsAsync(
+        IRuntimeQueueDrainWorkloadAdapter adapter,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(adapter);
+        var scenario = ValidateScenario();
+        if (scenario.OperationSequence.Count != 6)
+            throw new InvalidOperationException("The queue scenario must expose exactly six timed operation phases.");
+
+        var clients = await adapter.OpenIndependentClientsAsync(cancellationToken);
+        RequireIndependentClients(clients);
+
+        var primary = clients.Primary;
+        var secondary = clients.Secondary;
+        var enqueueItems = new Dictionary<long, RuntimeSchedulerWorkItem>();
+        var claimWorkflowIds = new Dictionary<long, IReadOnlyList<string>>();
+        var completeBatches = new Dictionary<long, IReadOnlyList<RuntimeSchedulerWorkClaim>>();
+        var retryClaims = new Dictionary<long, RuntimeSchedulerWorkClaim>();
+        var poisonClaims = new Dictionary<long, RuntimeSchedulerWorkClaim>();
+        var staleClaims = new Dictionary<long, (RuntimeSchedulerWorkClaim Initial, RuntimeSchedulerWorkClaim Successor)>();
+        IReadOnlyList<RuntimeSchedulerWorkClaim>? previousClaimBatch = null;
+
+        return
+        [
+            new RuntimeQueueDrainWorkloadOperation(
+                scenario.OperationSequence[0],
+                (invocation, _) =>
+                {
+                    var key = OperationIdentity(invocation);
+                    var workflowExecutionId = $"z-queue-enqueue-{key}";
+                    enqueueItems[invocation] = CreateOperationItem(workflowExecutionId, $"{workflowExecutionId}-item");
+                    return ValueTask.CompletedTask;
+                },
+                async (invocation, token) =>
+                {
+                    if (!enqueueItems.TryGetValue(invocation, out var item))
+                        throw new InvalidOperationException("The enqueue-work-items operation was invoked without its prepared item.");
+                    var stored = await primary.Queue.EnqueueAsync(item, token);
+                    if (!SameItem(stored, item))
+                        throw new InvalidOperationException("The measured queue enqueue did not preserve the prepared work identity.");
+                }),
+            new RuntimeQueueDrainWorkloadOperation(
+                scenario.OperationSequence[1],
+                async (invocation, token) =>
+                {
+                    if (previousClaimBatch is not null)
+                    {
+                        foreach (var claim in previousClaimBatch)
+                            RequireApplied(await primary.Queue.CompleteClaimAsync(claim, token), "clean the previous measured claim batch");
+                    }
+
+                    var items = Enumerable.Range(0, BatchSize)
+                        .Select(index =>
+                        {
+                            var workflowExecutionId = $"a-queue-claim-{OperationIdentity(invocation)}-{index:D2}";
+                            return CreateOperationItem(workflowExecutionId, $"{workflowExecutionId}-item");
+                        })
+                        .ToArray();
+                    foreach (var item in items)
+                        RequireSameItem(await primary.Queue.EnqueueAsync(item, token), item, "measured claim fixture");
+                    claimWorkflowIds[invocation] = items.Select(item => item.WorkflowExecutionId).ToArray();
+                },
+                async (invocation, token) =>
+                {
+                    if (!claimWorkflowIds.TryGetValue(invocation, out var expectedIds))
+                        throw new InvalidOperationException("The claim-bounded-batch operation was invoked without its prepared workflow identities.");
+                    var workflowIds = await primary.Queue.ListPendingWorkflowExecutionIdsAsync(BatchSize, token);
+                    if (!workflowIds.SequenceEqual(expectedIds, StringComparer.Ordinal))
+                        throw new InvalidOperationException("The measured claim fixture did not produce the exact bounded workflow-id page.");
+
+                    var claims = new List<RuntimeSchedulerWorkClaim>(BatchSize);
+                    foreach (var workflowExecutionId in workflowIds)
+                    {
+                        var claim = await primary.Queue.ClaimAsync(
+                            new RuntimeSchedulerWorkClaimRequest(workflowExecutionId, "measured-claim", FixedNowUtc, PrimaryVisibility),
+                            token);
+                        if (claim is null)
+                            throw new InvalidOperationException("The measured claim operation could not claim its prepared work item.");
+                        claims.Add(claim);
+                    }
+                    previousClaimBatch = claims;
+                }),
+            new RuntimeQueueDrainWorkloadOperation(
+                scenario.OperationSequence[2],
+                async (invocation, token) =>
+                {
+                    var claims = new List<RuntimeSchedulerWorkClaim>(BatchSize);
+                    foreach (var index in Enumerable.Range(0, BatchSize))
+                    {
+                        var workflowExecutionId = $"b-queue-complete-{OperationIdentity(invocation)}-{index:D2}";
+                        var item = CreateOperationItem(workflowExecutionId, $"{workflowExecutionId}-item");
+                        RequireSameItem(await primary.Queue.EnqueueAsync(item, token), item, "measured completion fixture");
+                        var claim = await primary.Queue.ClaimAsync(
+                            new RuntimeSchedulerWorkClaimRequest(workflowExecutionId, "measured-complete-setup", FixedNowUtc, PrimaryVisibility),
+                            token);
+                        if (claim is null)
+                            throw new InvalidOperationException("The measured completion fixture could not claim its seeded work item.");
+                        claims.Add(claim);
+                    }
+                    completeBatches[invocation] = claims;
+                },
+                async (invocation, token) =>
+                {
+                    if (!completeBatches.TryGetValue(invocation, out var claims))
+                        throw new InvalidOperationException("The complete-current-claims operation was invoked without its prepared claims.");
+                    foreach (var claim in claims)
+                        RequireApplied(await primary.Queue.CompleteClaimAsync(claim, token), "complete the measured scheduler claim");
+                }),
+            new RuntimeQueueDrainWorkloadOperation(
+                scenario.OperationSequence[3],
+                async (invocation, token) =>
+                {
+                    var workflowExecutionId = $"c-queue-retry-{OperationIdentity(invocation)}";
+                    var item = CreateOperationItem(workflowExecutionId, $"{workflowExecutionId}-item");
+                    RequireSameItem(await primary.Queue.EnqueueAsync(item, token), item, "measured retry fixture");
+                    var initial = await primary.Queue.ClaimAsync(
+                        new RuntimeSchedulerWorkClaimRequest(workflowExecutionId, "measured-retry-setup", FixedNowUtc, PrimaryVisibility),
+                        token);
+                    if (initial is null)
+                        throw new InvalidOperationException("The measured retry fixture could not claim its seeded work item.");
+                    retryClaims[invocation] = initial;
+                },
+                async (invocation, token) =>
+                {
+                    if (!retryClaims.TryGetValue(invocation, out var initial))
+                        throw new InvalidOperationException("The retry-expired-claim operation was invoked without its prepared claim.");
+                    var successor = await secondary.Queue.ClaimAsync(
+                        new RuntimeSchedulerWorkClaimRequest(initial.Item.WorkflowExecutionId, "measured-retry", FixedNowUtc.Add(PrimaryVisibility).AddSeconds(1), SuccessorVisibility),
+                        token);
+                    if (successor is null || successor.FencingToken <= initial.FencingToken || successor.Revision <= initial.Revision)
+                        throw new InvalidOperationException("The measured retry did not advance the public scheduler claim.");
+                    await RequireActiveClaimAsync(secondary.Claims, successor, "measured retry", token);
+                }),
+            new RuntimeQueueDrainWorkloadOperation(
+                scenario.OperationSequence[4],
+                async (invocation, token) =>
+                {
+                    var workflowExecutionId = $"d-queue-poison-{OperationIdentity(invocation)}";
+                    var item = CreateOperationItem(workflowExecutionId, $"{workflowExecutionId}-item");
+                    RequireSameItem(await primary.Queue.EnqueueAsync(item, token), item, "measured poison fixture");
+                    var claim = await primary.Queue.ClaimAsync(
+                        new RuntimeSchedulerWorkClaimRequest(workflowExecutionId, "measured-poison-setup", FixedNowUtc, PrimaryVisibility),
+                        token);
+                    if (claim is null)
+                        throw new InvalidOperationException("The measured poison fixture could not claim its seeded work item.");
+                    poisonClaims[invocation] = claim;
+                },
+                async (invocation, token) =>
+                {
+                    if (!poisonClaims.TryGetValue(invocation, out var claim))
+                        throw new InvalidOperationException("The record-and-read-poison-state operation was invoked without its prepared claim.");
+                    RequireApplied(await primary.Queue.CompleteClaimAsync(claim, token), "complete the measured poison claim");
+                    var record = CreatePoisonRecord(claim.Item, FixedNowUtc.AddMinutes(1));
+                    RequirePoisonRecord(await primary.Poison.RecordAsync(record, token), record);
+                    RequirePoisonRecord(await primary.Poison.FindAsync(record.WorkflowExecutionId, record.WorkItemId, token), record);
+                    var records = await primary.Poison.ListAsync(record.WorkflowExecutionId, token);
+                    if (records.Count != 1)
+                        throw new InvalidOperationException("The measured poison operation did not expose exactly one recorded poison state.");
+                    RequirePoisonRecord(records.Single(), record);
+                }),
+            new RuntimeQueueDrainWorkloadOperation(
+                scenario.OperationSequence[5],
+                async (invocation, token) =>
+                {
+                    var workflowExecutionId = $"e-queue-stale-{OperationIdentity(invocation)}";
+                    var item = CreateOperationItem(workflowExecutionId, $"{workflowExecutionId}-item");
+                    RequireSameItem(await primary.Queue.EnqueueAsync(item, token), item, "measured stale-acknowledgement fixture");
+                    var initial = await primary.Queue.ClaimAsync(
+                        new RuntimeSchedulerWorkClaimRequest(workflowExecutionId, "measured-stale-setup", FixedNowUtc, PrimaryVisibility),
+                        token);
+                    if (initial is null)
+                        throw new InvalidOperationException("The measured stale-acknowledgement fixture could not claim its seeded work item.");
+                    staleClaims[invocation] = (initial, await RequireSuccessorAsync(secondary.Queue, initial, token));
+                },
+                async (invocation, token) =>
+                {
+                    if (!staleClaims.TryGetValue(invocation, out var claims))
+                        throw new InvalidOperationException("The stale-acknowledgement operation was invoked without its prepared claims.");
+                    var result = await primary.Queue.CompleteClaimAsync(claims.Initial, token);
+                    if (result.Status != RuntimeSchedulerWorkClaimTransitionStatus.Stale)
+                        throw new InvalidOperationException("The measured queue accepted a stale acknowledgement.");
+                    await RequireActiveClaimAsync(secondary.Claims, claims.Successor, "measured stale acknowledgement", token);
+                })
+        ];
+    }
+
     private static ReproducibleWorkloadScenario ValidateScenario()
     {
         if (Scenario.Version != "1.1.0" || Scenario.ScenarioId != "runtime-scheduler-queue-drain" ||
@@ -330,6 +521,47 @@ public sealed class RuntimeQueueDrainWorkload
             RuntimeSchedulerPoisonDisposition.Poisoned, recordedAt, recordedAt,
             metadata: new Dictionary<string, string> { ["workload"] = WorkloadId, ["retryRelationship"] = "acknowledged-current-claim" });
 
+    private static RuntimeSchedulerWorkItem CreateOperationItem(string workflowExecutionId, string workItemId) =>
+        new(workItemId, workflowExecutionId, $"command-{workItemId}", WorkflowExecutionCommandKind.RunSchedulerWork,
+            $"envelope-{workItemId}", $"{workflowExecutionId}:{workItemId}", FixedNowUtc, FixedNowUtc, 0);
+
+    private static void RequireSameItem(RuntimeSchedulerWorkItem actual, RuntimeSchedulerWorkItem expected, string operation)
+    {
+        if (!SameItem(actual, expected))
+            throw new InvalidOperationException($"The {operation} did not preserve the prepared work identity.");
+    }
+
+    private static async ValueTask<RuntimeSchedulerWorkClaim> RequireSuccessorAsync(
+        IWorkflowSchedulerWorkQueue queue,
+        RuntimeSchedulerWorkClaim initial,
+        CancellationToken cancellationToken)
+    {
+        var successorNow = FixedNowUtc.Add(PrimaryVisibility).AddSeconds(1);
+        var successor = await queue.ClaimAsync(
+            new RuntimeSchedulerWorkClaimRequest(initial.Item.WorkflowExecutionId, "measured-successor-setup", successorNow, SuccessorVisibility),
+            cancellationToken);
+        if (successor is null || successor.FencingToken <= initial.FencingToken || successor.Revision <= initial.Revision)
+            throw new InvalidOperationException("The measured stale-acknowledgement fixture could not create a successor claim.");
+        return successor;
+    }
+
+    private static async ValueTask RequireActiveClaimAsync(
+        IWorkflowSchedulerWorkClaimInspection inspection,
+        RuntimeSchedulerWorkClaim expected,
+        string operation,
+        CancellationToken cancellationToken)
+    {
+        var active = await inspection.ListActiveClaimsAsync(expected.Item.WorkflowExecutionId, expected.ClaimedAt, cancellationToken);
+        var actual = active.Count == 1 ? active.Single() : null;
+        if (actual is null || !SameClaim(actual, expected))
+            throw new InvalidOperationException($"The {operation} did not preserve its current successor claim.");
+    }
+
+    private static bool SameClaim(RuntimeSchedulerWorkClaim first, RuntimeSchedulerWorkClaim second) =>
+        SameItem(first.Item, second.Item) && first.OwnerId == second.OwnerId &&
+        first.FencingToken == second.FencingToken && first.Revision == second.Revision &&
+        first.ClaimedAt == second.ClaimedAt && first.VisibleAfter == second.VisibleAfter;
+
     private static void RequirePoisonRecord(RuntimeSchedulerPoisonRecord? actual, RuntimeSchedulerPoisonRecord expected)
     {
         if (actual is null || actual.WorkflowExecutionId != expected.WorkflowExecutionId || actual.WorkItemId != expected.WorkItemId ||
@@ -379,6 +611,7 @@ public sealed class RuntimeQueueDrainWorkload
     private static string WorkflowId(int index) => $"scheduler-workflow-{index:D4}";
     private static string WorkItemId(int index) => $"scheduler-work-{index:D4}";
     private static string NextWorkItemId(string workflowExecutionId) => $"scheduler-work-next-{workflowExecutionId[^4..]}-01";
+    private static string OperationIdentity(long invocation) => invocation < 0 ? $"w{-invocation}" : $"m{invocation}";
     private static int Int(string name) => (int)Scenario.Parameters[name];
     private static bool ObservationsMatch(IReadOnlyDictionary<string, object> actual, IReadOnlyDictionary<string, object> expected) =>
         actual.Count == expected.Count && actual.All(pair => expected.TryGetValue(pair.Key, out var value) && JsonSerializer.Serialize(pair.Value, CanonicalJson) == JsonSerializer.Serialize(value, CanonicalJson));
@@ -388,6 +621,28 @@ public sealed class RuntimeQueueDrainWorkload
         RuntimeSchedulerWorkClaim Claim,
         RuntimeQueueDrainClient WinningClient,
         RuntimeQueueDrainClient LosingClient);
+}
+
+/// <summary>A benchmark-owned bounded public queue phase.</summary>
+public interface IRuntimeQueueDrainWorkloadOperation
+{
+    string Id { get; }
+    ValueTask PrepareInvocationAsync(long invocation, CancellationToken cancellationToken = default);
+    ValueTask InvokeAsync(long invocation, CancellationToken cancellationToken = default);
+}
+
+internal sealed class RuntimeQueueDrainWorkloadOperation(
+    string id,
+    Func<long, CancellationToken, ValueTask> prepare,
+    Func<long, CancellationToken, ValueTask> invoke) : IRuntimeQueueDrainWorkloadOperation
+{
+    public string Id { get; } = id;
+
+    public ValueTask PrepareInvocationAsync(long invocation, CancellationToken cancellationToken = default) =>
+        prepare(invocation, cancellationToken);
+
+    public ValueTask InvokeAsync(long invocation, CancellationToken cancellationToken = default) =>
+        invoke(invocation, cancellationToken);
 }
 
 /// <summary>Creates distinct public runtime-store clients over one adapter-owned backing.</summary>

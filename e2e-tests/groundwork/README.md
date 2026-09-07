@@ -1,7 +1,7 @@
 # Groundwork release adoption
 
 `Test-GroundworkReleaseLifecycle.ps1` is the black-box acceptance path for a Groundwork package update. It
-uses the real `Elsa.Workbench` HTTP surface and the default `GroundworkUnifiedPersistenceSqlite` composition:
+uses the real `Elsa.Workbench` HTTP surface and the default Groundwork SQLite provider plus explicit persistence lanes:
 
 1. author and save a workflow version;
 2. reload that version from the design API;

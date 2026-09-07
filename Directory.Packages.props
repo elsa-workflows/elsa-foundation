@@ -23,19 +23,19 @@
     <PackageVersion Include="Elsa.Platform.PackageManifest.Generator" Version="0.0.1-preview.79" />
     <PackageVersion Include="Elsa.Platform.PackageManifests" Version="0.0.1-preview.58" />
     <PackageVersion Include="Fluid.Core" Version="2.31.0" />
-    <PackageVersion Include="Groundwork.Kernel" Version="0.4.0-preview.14" />
-    <PackageVersion Include="Groundwork.Query.Model" Version="0.4.0-preview.14" />
-    <PackageVersion Include="Groundwork.Store" Version="0.4.0-preview.14" />
+    <PackageVersion Include="Groundwork.Kernel" Version="0.4.0-preview.17" />
+    <PackageVersion Include="Groundwork.Query.Model" Version="0.4.0-preview.17" />
+    <PackageVersion Include="Groundwork.Store" Version="0.4.0-preview.17" />
     <!--
       The provider drivers share their package ids with the retired Groundwork v1 line, and transitive
       pinning (above) allows a package id only one version across the whole graph. Pulling any of these
       back to a 0.0.1-preview.* version would put two incompatible drivers in one graph, so the whole
       repository moves between driver generations together or not at all.
     -->
-    <PackageVersion Include="Groundwork.MongoDb" Version="0.4.0-preview.14" />
-    <PackageVersion Include="Groundwork.PostgreSql" Version="0.4.0-preview.14" />
-    <PackageVersion Include="Groundwork.Sqlite" Version="0.4.0-preview.14" />
-    <PackageVersion Include="Groundwork.SqlServer" Version="0.4.0-preview.14" />
+    <PackageVersion Include="Groundwork.MongoDb" Version="0.4.0-preview.17" />
+    <PackageVersion Include="Groundwork.PostgreSql" Version="0.4.0-preview.17" />
+    <PackageVersion Include="Groundwork.Sqlite" Version="0.4.0-preview.17" />
+    <PackageVersion Include="Groundwork.SqlServer" Version="0.4.0-preview.17" />
     <PackageVersion Include="GitHub.Copilot.SDK" Version="1.0.4" />
     <PackageVersion Include="Anthropic" Version="12.32.0" />
     <PackageVersion Include="JsonSchema.Net" Version="9.2.0" />
@@ -54,7 +54,6 @@
     <PackageVersion Include="Microsoft.AspNetCore.Authorization.Policy" Version="2.3.10" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.10" />
     <PackageVersion Include="Microsoft.AspNetCore.Http" Version="2.3.10" />
     <PackageVersion Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.10" />
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
@@ -69,7 +68,6 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.10" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.10" />
@@ -114,7 +112,6 @@
     <PackageVersion Include="NativeEndpoints.Testing" Version="1.0.0-preview.6" />
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageVersion Include="Npgsql" Version="10.0.3" />
-    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
     <PackageVersion Include="Nuplane" Version="0.0.9-preview.61" />
     <PackageVersion Include="Nuplane.Admin" Version="0.0.9-preview.61" />
     <PackageVersion Include="Nuplane.Loading" Version="0.0.9-preview.61" />
@@ -136,7 +133,6 @@
     <PackageVersion Include="Testcontainers.MongoDb" Version="4.12.0" />
     <PackageVersion Include="Testcontainers.MsSql" Version="4.12.0" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.12.0" />
-    <PackageVersion Include="Ulid" Version="1.4.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageVersion Include="Xunit.SkippableFact" Version="1.5.23" />

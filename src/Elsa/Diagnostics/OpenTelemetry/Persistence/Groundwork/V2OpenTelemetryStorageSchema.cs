@@ -14,16 +14,26 @@ public static class V2OpenTelemetryStorageSchema
     public const string LogUnitId = "elsa-otel-logs-v2";
     public const string ResourceUnitId = "elsa-otel-resources-v2";
     public const string InstrumentUnitId = "elsa-otel-instruments-v2";
-    public const string CaptureLedgerUnitId = "elsa-otel-capture-ledger-v2";
+    public const string CaptureLedgerUnitId = "elsa-otel-capture-ledger-v3";
+    public const string TraceSummaryUnitId = "elsa-otel-trace-summaries-v3";
 
     public const string TraceProfile = "trace-summary-v2";
     public const string Sequence = "sequence";
     public const string Id = "id";
     public const string TraceId = "traceId";
+    public const string TraceKey = "traceKey";
+    public const string TraceIdSearchKey = "traceIdSearchKey";
+    public const string NameSearchKey = "nameSearchKey";
     public const string SpanId = "spanId";
     public const string ResourceId = "resourceId";
+    public const string ResourceIds = "resourceIds";
+    public const string ResourceKeys = "resourceKeys";
+    public const string ServiceNames = "serviceNames";
     public const string ServiceName = "serviceName";
+    public const string ServiceNameKey = "serviceNameKey";
+    public const string IdOrderKey = "idOrderKey";
     public const string WorkflowInstanceId = "workflowInstanceId";
+    public const string WorkflowInstanceIds = "workflowInstanceIds";
     public const string RootSpanId = "rootSpanId";
     public const string Name = "traceName";
     public const string Status = "status";
@@ -43,6 +53,19 @@ public static class V2OpenTelemetryStorageSchema
     public const string BatchId = "batchId";
     public const string CreatedAt = "createdAt";
 
+    internal const string IdOrdinalIdentity = "__groundwork_ordinal_id";
+    internal const string SpanIdOrdinalIdentity = "__groundwork_ordinal_spanId";
+    internal const string TraceKeyOrdinalIdentity = "__groundwork_ordinal_traceKey";
+
+    internal const string TraceSummaryStartIndex = "elsa_otel_trace_summaries_start";
+    internal const string SpanTraceDetailIndex = "elsa_otel_spans_trace_detail";
+    internal const string MetricPointTimestampIndex = "elsa_otel_metric_points_timestamp";
+    internal const string LogTimestampIndex = "elsa_otel_logs_timestamp";
+    internal const string LogTraceDetailIndex = "elsa_otel_logs_trace_detail";
+    internal const string ResourceLastSeenIndex = "elsa_otel_resources_last_seen";
+    internal const string ResourceStatusLastSeenIndex = "elsa_otel_resources_status_last_seen";
+    internal const string ResourceServiceLastSeenIndex = "elsa_otel_resources_service_last_seen";
+
     public static IReadOnlyList<StorageUnit> CreateUnits() =>
     [
         CreateTraces(),
@@ -51,14 +74,16 @@ public static class V2OpenTelemetryStorageSchema
         CreateLogs(),
         CreateResources(),
         CreateInstruments(),
-        CreateCaptureLedger()
+        CreateCaptureLedger(),
+        CreateTraceSummaries()
     ];
 
     public static StorageUnit CreateTraces() =>
         StorageUnit.Declare(TraceUnitId, "elsa_otel_traces_v2")
             .Int64(Sequence, c => c.Required().ProviderSequence())
             .String(Id, 256, c => c.Required())
-            .String(TraceId, 256, c => c.Required())
+            .String(TraceId, V2OpenTelemetryCodec.MaximumTraceIdCodeUnits, c => c.Required())
+            .String(TraceKey, 64, c => c.Required())
             .String(RootSpanId, 256)
             .String(ResourceId, 512, c => c.Required())
             .String(ServiceName, 512)
@@ -71,6 +96,7 @@ public static class V2OpenTelemetryStorageSchema
             .Json(Payload, c => c.Required())
             .Key(Sequence)
             .Index("elsa_otel_traces_trace", TraceId)
+            .Index("elsa_otel_traces_trace_key", TraceKey)
             .Index("elsa_otel_traces_start", StartTime)
             .Index("elsa_otel_traces_service", ServiceName)
             .Scoped()
@@ -87,19 +113,55 @@ public static class V2OpenTelemetryStorageSchema
                 .SetUnion(WorkflowInstanceId, WorkflowInstanceId, 5_000)
                 .Sum(SpanCount, SpanCount))
             .Retention(0, Sequence)
+            .RetentionIdempotency(TimeSpan.FromHours(1), "elsa_otel_traces_retention")
+            .Build();
+
+    public static StorageUnit CreateTraceSummaries() =>
+        StorageUnit.Declare(TraceSummaryUnitId, "elsa_otel_trace_summaries_v3")
+            .String(TraceKey, 64, c => c.Required().OrdinalIdentity(TraceKeyOrdinalIdentity))
+            .String(TraceId, V2OpenTelemetryCodec.MaximumTraceIdCodeUnits, c => c.Required())
+            .String(TraceIdSearchKey, V2OpenTelemetryCodec.MaximumTraceIdSearchKeyCodeUnits, c => c.Required())
+            .String(RootSpanId, 256)
+            .String(Name, V2OpenTelemetryCodec.MaximumSummaryNameCodeUnits)
+            .String(NameSearchKey, V2OpenTelemetryCodec.MaximumSummaryNameSearchKeyCodeUnits)
+            .Int64(Status, c => c.Required())
+            .Timestamp(StartTime, c => c.Required())
+            .Timestamp(EndTime, c => c.Required())
+            .Int64(SpanCount, c => c.Required())
+            .Json(ResourceIds, c => c.Required())
+            .Json(ResourceKeys, c => c.Required())
+            .Json(ServiceNames, c => c.Required())
+            .Json(WorkflowInstanceIds, c => c.Required()
+                .ElementSearchKey(PortableCollation.UnicodeOrdinalIgnoreCase, 512))
+            .Json(Payload, c => c.Required())
+            .Key(TraceKey)
+            .Index(TraceSummaryStartIndex, index => index
+                .UseOrdinalIdentities()
+                .Descending(StartTime)
+                .Ascending(TraceKey))
+            .OptimisticConcurrency()
+            .Scoped()
             .Build();
 
     public static StorageUnit CreateSpans() => CreateSignal(
         SpanUnitId,
         "elsa_otel_spans_v2",
         (builder) => builder
-            .String(TraceId, 256, c => c.Required())
-            .String(SpanId, 256, c => c.Required())
+            .String(TraceId, V2OpenTelemetryCodec.MaximumTraceIdCodeUnits, c => c.Required())
+            .String(TraceKey, 64, c => c.Required())
+            .String(SpanId, 128, c => c.Required().OrdinalIdentity(SpanIdOrdinalIdentity))
             .String(ResourceId, 512, c => c.Required())
             .String(Name, c => c.Required())
             .Int64(Status, c => c.Required())
             .Timestamp(StartTime, c => c.Required())
-            .Timestamp(EndTime, c => c.Required()));
+            .Timestamp(EndTime, c => c.Required()),
+        index => index
+            .UseOrdinalIdentities()
+            .Ascending(TraceKey)
+            .Ascending(StartTime)
+            .Ascending(SpanId)
+            .Ascending(Sequence),
+        SpanTraceDetailIndex);
 
     public static StorageUnit CreateMetricPoints() => CreateSignal(
         MetricPointUnitId,
@@ -109,7 +171,14 @@ public static class V2OpenTelemetryStorageSchema
             .String(InstrumentName, c => c.Required())
             .String(ResourceId, 512, c => c.Required())
             .String(ServiceName, 512)
-            .Timestamp(Timestamp, c => c.Required()));
+            .Timestamp(Timestamp, c => c.Required()),
+        index => index
+            .UseOrdinalIdentities()
+            .Descending(Timestamp)
+            .Ascending(Id)
+            .Ascending(Sequence),
+        MetricPointTimestampIndex,
+        idOrdinalIdentity: IdOrdinalIdentity);
 
     public static StorageUnit CreateLogs() => CreateSignal(
         LogUnitId,
@@ -117,24 +186,53 @@ public static class V2OpenTelemetryStorageSchema
         (builder) => builder
             .String(ResourceId, 512, c => c.Required())
             .String(ServiceName, 512)
-            .String(TraceId, 256)
+            .String(TraceId, V2OpenTelemetryCodec.MaximumTraceIdCodeUnits)
+            .String(TraceKey, 64)
             .String(SpanId, 256)
             .String(SeverityText, c => c.Required())
             .Int64(SeverityNumber)
             .String(Body, c => c.Required())
-            .Timestamp(Timestamp, c => c.Required()));
+            .Timestamp(Timestamp, c => c.Required()),
+        index => index
+            .UseOrdinalIdentities()
+            .Descending(Timestamp)
+            .Ascending(Id)
+            .Ascending(Sequence),
+        LogTimestampIndex,
+        builder => builder.Index(LogTraceDetailIndex, index => index
+            .UseOrdinalIdentities()
+            .Ascending(TraceKey)
+            .Ascending(Timestamp)
+            .Ascending(Id)
+            .Ascending(Sequence)),
+        IdOrdinalIdentity);
 
     public static StorageUnit CreateResources() =>
         StorageUnit.Declare(ResourceUnitId, "elsa_otel_resources_v2")
             .String(Id, 512, c => c.Required())
             .String(ServiceName, 512, c => c.Required())
+            .String(ServiceNameKey, 64, c => c.Required())
+            .String(IdOrderKey, 64, c => c.Required())
             .Int64(Status, c => c.Required())
             .Timestamp(LastSeen, c => c.Required())
             .Json(Payload, c => c.Required())
             .Key(Id)
-            .Index("elsa_otel_resources_last_seen", LastSeen)
+            .Index(ResourceLastSeenIndex, index => index
+                .Descending(LastSeen)
+                .Ascending(IdOrderKey)
+                .Ascending(Id))
             .Index("elsa_otel_resources_service", ServiceName)
             .Index("elsa_otel_resources_status", Status)
+            .Index(ResourceStatusLastSeenIndex, index => index
+                .Ascending(Status)
+                .Descending(LastSeen)
+                .Ascending(IdOrderKey)
+                .Ascending(Id))
+            .Index(ResourceServiceLastSeenIndex, index => index
+                .Ascending(ServiceNameKey)
+                .Descending(LastSeen)
+                .Ascending(IdOrderKey)
+                .Ascending(Id))
             .Scoped()
             .Retention(0, LastSeen)
             .Build();
@@ -155,7 +253,7 @@ public static class V2OpenTelemetryStorageSchema
             .Build();
 
     public static StorageUnit CreateCaptureLedger() =>
-        StorageUnit.Declare(CaptureLedgerUnitId, "elsa_otel_capture_ledger_v2")
+        StorageUnit.Declare(CaptureLedgerUnitId, "elsa_otel_capture_ledger_v3")
             .String(BatchId, 64, c => c.Required())
             .String(Fingerprint, 128, c => c.Required())
             .Timestamp(CreatedAt, c => c.Required())
@@ -169,14 +267,31 @@ public static class V2OpenTelemetryStorageSchema
     private static StorageUnit CreateSignal(
         string id,
         string name,
-        Func<StorageDeclarationBuilder, StorageDeclarationBuilder> fields) =>
-        fields(StorageUnit.Declare(id, name)
+        Func<StorageDeclarationBuilder, StorageDeclarationBuilder> fields,
+        Action<IndexBuilder>? orderIndex = null,
+        string? orderIndexName = null,
+        Action<StorageDeclarationBuilder>? additionalIndexes = null,
+        string? idOrdinalIdentity = null)
+    {
+        var builder = fields(StorageUnit.Declare(id, name)
                 .Int64(Sequence, c => c.Required().ProviderSequence())
-                .String(Id, 512, c => c.Required())
+                .String(Id, 128, c =>
+                {
+                    c.Required();
+                    if (idOrdinalIdentity is not null)
+                        c.OrdinalIdentity(idOrdinalIdentity);
+                })
                 .Json(Payload, c => c.Required()))
-            .Key(Sequence)
+            .Key(Sequence);
+
+        if (orderIndex is not null)
+            builder.Index(orderIndexName!, orderIndex);
+        additionalIndexes?.Invoke(builder);
+
+        return builder
             .Scoped()
             .AppendIdempotency(TimeSpan.FromHours(1), $"{id.Replace('-', '_')}_append")
             .Retention(0, Sequence)
             .Build();
+    }
 }

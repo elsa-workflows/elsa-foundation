@@ -1,7 +1,7 @@
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
-using Elsa.Persistence.Core;
-using Elsa.Persistence.Core.DependencyInjection;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;

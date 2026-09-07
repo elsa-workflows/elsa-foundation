@@ -1,6 +1,6 @@
 using System.Security.Claims;
 using Elsa.Attention.Core;
-using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Runtime.Attention;

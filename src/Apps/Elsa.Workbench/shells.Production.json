@@ -3,10 +3,11 @@
     "Shells": {
       "default": {
         "Features": {
-          "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
+          "IdentityGroundworkPersistence": {},
+          "FoundationIdentityAspNetCoreIdentityGroundwork": {
             "IsDevelopmentOrDemo": false,
-            "ConnectionString": "Data Source=elsa-identity.db",
             "SeedAdminUserName": "admin",
+            "SeedAdminPassword": "",
             "SeedAdminEmail": "admin@elsa.local",
             "SeedAdminRoleName": "administrator"
           },

@@ -1,9 +1,12 @@
-# Proposal: an absolute-budget basis for the runtime coverage-ledger rows
+# Absolute-budget basis for the runtime coverage-ledger rows
 
-Status: **RATIFIED 2026-08-04.**
-Proposed by the #646 analysis; reviewed and accepted by **Sipke Schoorstra** (maintainer), who set the
-durable-write ceiling at 150 ms. Proposer and reviewer are distinct, satisfying `GatePolicy.Replacement`'s
-independence requirement.
+Status: **RATIFIED 2026-08-04 for the durable-write ceiling; bounded-read adoption is recorded in #1176
+on 2026-09-01, pending explicit acceptance.**
+Proposed by the #646 analysis; the durable-write ceiling was reviewed and accepted by **Sipke Schoorstra**
+(maintainer), who set it at 150 ms. Issue #1176 records the 40 ms bounded-read value as the executable
+backstop; this document does not claim independent reviewer evidence for that adoption. The proposer and
+durable-write reviewer are distinct, satisfying `GatePolicy.Replacement`'s independence requirement; later
+replacements retain that same requirement.
 
 ## The problem
 
@@ -75,7 +78,7 @@ Applied to the eight runtime workloads:
 | `outbox-drain` | 1 | 3 × measured p95 |
 | `due-timer-selection` | 1 | 3 × measured p95 |
 
-### Recommended provisional ceilings
+### Adopted interim ceilings
 
 One number here is derived from measurement; the rest are reasoned bounds, and the difference is stated
 rather than blurred.
@@ -85,12 +88,12 @@ p95 versus 1 commit/request at 38.529 ms p95. The marginal cost of one durable S
 **≈ 35.7 ms p95** (≈ 18.8 ms p50). *Caveat: a p95 of a sum is not a sum of p95s, so treat this as an
 order-of-magnitude anchor, not an exact per-commit figure.*
 
-**Recommendation: two classes, not eight invented numbers.**
+**Policy shape: two classes, not eight invented numbers.**
 
 | class | workloads | ceiling | basis |
 |---|---|---|---|
 | **Durable write path** | `checkpoint-commit`, `queue-drain`, `outbox-drain` | **150 ms p95** | ratified value; ~4× the 35.7 ms measured SQLite commit cost, widened from the proposed 100 ms to absorb slower CI hardware and remote providers |
-| **Bounded read path** | `bookmark-lookup`, `recovery-scan`, `due-timer-selection`, `recurring-schedule-selection`, `trigger-binding-stimulus-lookup` | **40 ms p95** | reads perform no fsync and all non-commit work in the reference trace is single-digit ms. Raised from the proposed 25 ms in the same proportion as the write class, because a **remote** provider adds a network round trip to a read that local SQLite never pays. Flagged as a proposer judgment call, not part of the stated ratification — revert to 25 ms if unwanted |
+| **Bounded read path** | `bookmark-lookup`, `recovery-scan`, `due-timer-selection`, `recurring-schedule-selection`, `trigger-binding-stimulus-lookup` | **40 ms p95** | adopted in #1176 as the executable backstop, pending explicit acceptance; reads perform no fsync and all non-commit work in the reference trace is single-digit ms. Raised from the proposed 25 ms because a **remote** provider adds a network round trip to a read that local SQLite never pays |
 
 Two classes rather than eight per-workload numbers because there is exactly one measurement. Inventing
 eight would dress up a single data point as eight.
@@ -120,16 +123,18 @@ Groundwork's four provider leaves are `sqlite`, `postgresql`, `sqlserver` and `m
 Oracle provider; anything running on Oracle would fall outside both this budget and the conformance
 matrix.
 
-**Original position, retained:** the numbers below were deliberately withheld pending measurement. The
-above supplies them as *provisional with a stated sunset*, which is the weaker claim and the honest one.
+**Historical note:** Earlier drafts deliberately withheld literal values pending measurement. The class
+ceilings above are now adopted executable backstops with a stated sunset; the durable-write value is
+ratified, while the bounded-read value remains pending explicit acceptance under #1176. Production-
+representative measurements may replace them only through an independent ratification.
 
-**Deliberately not stated as literal millisecond numbers here.** The store-performance harness has never
-run a full runtime matrix at the current Groundwork version — `specs/094-harden-groundwork-stores/versions/`
-stops at `preview.88` while the repo consumes `preview.103`. Writing invented millisecond constants into a
-ratified contract would be exactly the failure mode this whole programme exists to avoid. The first
-Tier B action is to **run the matrix once at the current version and populate the ceilings from it**, which
-also resolves the missing-evidence-generation defect recorded in
-[spec 144's quickstart](../../144-zero-ef-final-removal/quickstart.md).
+**Why these are class values rather than measured per-workload values.** The store-performance harness has
+not run a full runtime matrix at the current Groundwork version — `specs/094-harden-groundwork-stores/versions/`
+stops at `preview.88` while the repo consumes `preview.103`. The 150 ms and 40 ms values are therefore
+class backstops (150 ms ratified; 40 ms adopted under #1176 pending acceptance), not invented per-workload
+measurements. The first Tier B action remains to
+**run the matrix once at the current version and populate replacement ceilings from it**, which also
+resolves the missing-evidence-generation defect recorded in [spec 144's quickstart](../../144-zero-ef-final-removal/quickstart.md).
 
 ### Update (2026-08-08): the first measurement exists, for one workload
 
@@ -141,7 +146,8 @@ PostgreSQL at `preview.103`. Per-operation medians and the derived `p95 × 3` ce
 Scope, precisely: **one of the eight runtime workloads**, and no `performanceVerdict` — `compare` and `gate`
 were run and correctly refused, because a verdict needs the two-form comparison the correction below shows
 is unavailable. The class ceilings in this document are therefore **unchanged**; the measured numbers are
-recorded, not ratified, and superseding 150 ms / 40 ms still needs an independent ratifier. Nothing measured
+recorded, not replacement ceilings, and superseding the standing 150 ms / 40 ms values still needs an
+independent ratifier. Nothing measured
 so far breaches either: the durable write path came in at 75 ms (SQLite) and 94 ms (PostgreSQL) p95.
 
 Two observations bear on the reasoning above. Per-provider numbers do diverge, and not uniformly in one
@@ -214,23 +220,27 @@ Consequence for the sunset condition: the first production-provider run can popu
 `performanceVerdict`, because a verdict requires a comparison. Those are separable, and only the first is
 reachable now.
 
-### Correction (2026-08-06): the bounded-read ceiling is not enforced
+### Correction (2026-08-06), resolved 2026-09-01: enforce the bounded-read ceiling
 
-`RatifiedBoundedReadPathP95Milliseconds` (40 ms) is referenced nowhere but its own declaration.
-`GatePolicy.DefaultFor(GateClass.RuntimeHotPath)` applies the 150 ms **durable-write** ceiling to *every*
-runtime workload, including the five bounded-read workloads this document assigns 40 ms. A bounded read
-regressing from 5 ms to 140 ms passes the default gate silently.
+Before this resolution, the adopted bounded-read value (40 ms) was referenced nowhere but its constant
+declaration. `GatePolicy.DefaultFor(GateClass.RuntimeHotPath)` applied the 150 ms **durable-write**
+ceiling to *every* runtime workload, including the five bounded-read workloads this document assigns 40
+ms. A bounded read regressing from 5 ms to 140 ms passed the default gate silently.
 
-Recommended resolution is to **supersede rather than wire**: once per-workload measured ceilings land in
-reviewed policy files, both class constants are dead by design, and making `DefaultFor(GateClass)`
-workload-aware would change its signature and every call site only to enforce a provisional number the
-sunset condition already retires. Recorded here so the gap is not mistaken for a live gate.
+The original recommendation was to supersede rather than wire the provisional value. That left a live
+window in which a bounded read could regress from 5 ms to 140 ms and still pass. Issue #1176 therefore
+made `DefaultFor` workload-aware and applies the #1176-adopted 40 ms backstop to the five bounded-read
+workloads. Durable writes retain 150 ms. Explicit acceptance of #1176 is still the governance record for
+treating 40 ms as ratified. Reviewed per-workload policies still supersede these class
+ceilings under the existing sunset condition; enforcement now protects the interval before those
+measurements exist.
 
-**Interim, 2026-08-07 (#1176).** Gate behavior is unchanged and the wire-or-supersede choice is still
-open. What landed is documentation plus a pin: the constant's XML doc now states that nothing enforces it,
-and `ProtocolAndGateTests.Ratified_bounded_read_ceiling_is_declared_but_enforced_by_no_construction_path`
-fails if any construction path starts applying it or if the harness references it anywhere but its own
-declaration — so whichever option is chosen, the correction has to be made in the same change.
+**Resolution, 2026-09-01 (#1176).** The CLI derives the default gate class from the exact comparison
+workload and rejects an unreviewed `--class` override; all five declared bounded reads are pinned to the
+#1176-adopted 40 ms backstop, durable writes remain pinned to 150 ms, and reviewed replacements inherit
+the correct workload class when they omit an explicit ceiling. The former
+"enforced by nothing" regression test has been replaced by executable coverage for every bounded-read
+workload.
 
 ## Field evidence for the shape: Tier A's own gate flakes
 
@@ -276,10 +286,13 @@ Pure absolute budgets were the obvious answer and I think they are the wrong one
 `GatePolicy.Replacement` hard-rejects self-authored amendments: it throws when
 `ProposedBy == ReviewedBy`. That rule is correct and this proposal does not bypass it.
 
-This document is the **proposal half**. It needs:
+The durable-write decision is ratified above. Issue #1176 records implementation adoption of the 40 ms
+bounded-read backstop, but it is the ratification record only if its acceptance is explicitly recorded;
+this document does not invent independent reviewer evidence. The remaining governance record needs:
 
 - an independent reviewer recorded as `GateReview(ProposedBy, ReviewedBy, ReviewReference, ReviewedAtUtc)`;
 - one runtime matrix run at the current Groundwork version to populate Tier B's ceilings;
-- ratification recorded against #646, then imported into the ledger by spec 144's T011.
+- acceptance recorded against #1176/#646, then imported into the ledger by spec 144's T011.
 
-Until then every runtime row correctly remains without a `performanceVerdict`.
+Until the current-version matrix and the required acceptance are recorded, every affected runtime row
+correctly remains without a `performanceVerdict`.

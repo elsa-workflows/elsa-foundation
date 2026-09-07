@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Elsa.Persistence.Core;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -142,6 +141,7 @@ public sealed class GroundworkV2BookmarkStateStore : IBookmarkStateStore, IBookm
             query,
             ElsaRuntimeV2StorageManifest.StimulusLookupKeyField,
             GroundworkV2BookmarkStorageConventions.StimulusLookupKey(query.StimulusType, query.StimulusHash),
+            ElsaRuntimeV2StorageManifest.BookmarkByStimulusAndTypeAndIdentityIndex,
             Open()));
     }
 
@@ -156,6 +156,7 @@ public sealed class GroundworkV2BookmarkStateStore : IBookmarkStateStore, IBookm
             query,
             ElsaRuntimeV2StorageManifest.StimulusTypeLookupKeyField,
             GroundworkV2BookmarkStorageConventions.StimulusTypeLookupKey(query.StimulusType),
+            ElsaRuntimeV2StorageManifest.BookmarkByStimulusTypeAndIdentityIndex,
             Open()));
     }
 
@@ -163,6 +164,7 @@ public sealed class GroundworkV2BookmarkStateStore : IBookmarkStateStore, IBookm
         RuntimeStorePageRequest query,
         string lookupField,
         string lookupValue,
+        string selectedIndex,
         IStorageSession session)
     {
         var table = new TableId(unit.Name);
@@ -178,7 +180,7 @@ public sealed class GroundworkV2BookmarkStateStore : IBookmarkStateStore, IBookm
             ],
             Projection.All,
             PagingFor(query.Limit, query.ContinuationToken));
-        return ReadPage(query, session.Query(request));
+        return ReadPage(query, session.Query(request, unit.CreateQueryRenderOptions(selectedIndex)));
     }
 
     private static RuntimeStorePage<BookmarkState> ReadPage(

@@ -52,7 +52,7 @@ public sealed class StimulusRouterTests
         await router.RouteAsync(Request(mode: StimulusRoutingMode.StartOnly));
 
         var selection = Assert.Single(startDispatcher.Requests).SourceSelection;
-        Assert.Equal("publication-7", selection!.PublicationId);
+        Assert.Equal("publication-7", selection!.ActivationId);
         Assert.Equal("slot-production", selection.SlotId);
         Assert.Null(selection.SourceReferenceId);
     }
@@ -351,7 +351,7 @@ public sealed class StimulusRouterTests
     private WorkflowTriggerBinding Binding(
         string artifactId,
         string nodeId,
-        string? publicationId = null,
+        string? activationId = null,
         string? slotId = null,
         string? correlationScope = null) =>
         new(
@@ -366,7 +366,7 @@ public sealed class StimulusRouterTests
             CorrelationScope: correlationScope,
             Metadata: new Dictionary<string, string>(),
             CreatedAt: _now,
-            PublicationId: publicationId,
+            ActivationId: activationId,
             SlotId: slotId);
 
     private BookmarkState Bookmark(string bookmarkId, string executionId, string? correlationId = null)

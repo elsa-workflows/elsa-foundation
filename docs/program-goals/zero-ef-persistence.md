@@ -1,5 +1,7 @@
 # Zero-EF Persistence
 
+Constitution reconciliation: ratified constitution v4.0.0 retains historical EF implementation examples in §E2.2.1, §E2.5 and §E5. Those examples do not enumerate current shipped APIs after this program's owner-approved deletion. Normative provider-neutrality rules remain unchanged. Updating the constitutional text itself is deferred to its proposal/discussion/ratification process; this program does not claim a new ratification. Current implementation inventory is the generated maps and this program's scope.
+
 Status: active.
 
 Area: Elsa persistence-provider consolidation / Groundwork adoption.
@@ -8,7 +10,7 @@ Steward(s): Sipke plus active architects/agents.
 
 ## Purpose
 
-Make Groundwork the only concrete persistence implementation family shipped from `elsa-foundation`, while keeping every core module's persistence contracts and invariants independent of Groundwork. Coordinate the Elsa work with the upstream Groundwork capabilities required to remove all direct and transitive EF Core dependencies from this repository.
+Make Groundwork the only first-party Elsa persistence implementation family, while keeping core persistence contracts and invariants independent of Groundwork. Remove Elsa-owned EF dependencies and implementations; retain the narrowly approved Workbench vendor `OpenIddict.EntityFrameworkCore` store and its necessary support. No Groundwork OpenIddict adapter is required.
 
 This is the successor to the completed [Groundwork Persistence Readiness](groundwork-persistence-readiness.md) goal. The earlier goal established and validated the provider-neutral foundation; this goal completes product adoption and removal of the parallel EF Core implementation lane.
 
@@ -17,11 +19,11 @@ This is the successor to the completed [Groundwork Persistence Readiness](ground
 - Ratify the Elsa provider boundary and the narrow constitution amendment it requires.
 - Track upstream Groundwork dependencies through the [Zero-EF Groundwork decision map](../decision-maps/zero-ef-groundwork.md).
 - Replace scale-bearing in-memory query fallbacks with bounded, server-side Groundwork queries.
-- Add Groundwork implementations for structured logs, OpenTelemetry, ASP.NET Core Identity, and OpenIddict persistence.
-- Validate SQLite, SQL Server, PostgreSQL, and MongoDB against the Elsa-used contracts, including tenancy, concurrency, restart, and migration behavior.
-- Compare EF Core with all three Groundwork physical forms using the agreed correctness and performance gates while EF remains available as a temporary oracle, and require physical entity tables to demonstrate a repeatable benefit over the shared and dedicated-document forms for workloads that select them.
-- Switch reference hosts to Groundwork and remove EF projects, migrations, registrations, package references, tests, and transitive dependencies.
-- Add an architecture guard that prevents EF Core from returning to this repository.
+- Use Groundwork for Elsa-owned structured logs, OpenTelemetry and ASP.NET Core Identity persistence; preserve the vendor authorization-server boundary.
+- Complete implementation with build/compile, focused regression and startup/persistence smoke checks.
+- Hand broad provider/concurrency/recovery validation, native-plan evidence completion and controlled performance verdicts to the separate [#646 program](https://github.com/elsa-workflows/elsa-foundation/issues/646). These remain unverified unless exact evidence proves otherwise; they are not deletion prerequisites.
+- Switch Elsa-owned reference-host lanes to Groundwork and remove first-party EF projects, migrations, registrations, dependencies and obsolete EF-only tests with recorded dispositions.
+- Keep an architecture guard that rejects first-party EF and scopes the vendor-host exception narrowly.
 
 ## Out Of Scope
 
@@ -33,11 +35,11 @@ This is the successor to the completed [Groundwork Persistence Readiness](ground
 
 ## Active Objectives
 
-1. Finish Spec 094 current-head provider evidence publication and consume linked diagnostics evidence without advancing incomplete rows.
-2. Preserve ALL32 as the immutable historical floor, consume #646 accepted-shape verdicts for every current ALL32 + DIAGNOSTICS2 lane, and remediate every Redesign or Blocked result.
-3. Complete the production-shaped four-provider host matrix, operational documentation, and generated-map refresh.
-4. Complete diagnostics #642's remaining preview.103 provider-evidence, performance, and EF-removal gates; replay checkpoints #1048 and #1072 are on `main`, and stale PR #660 is closed as historical reference.
-5. Complete #647 only after every correctness, provider, performance, reference-host, and transitive-dependency gate passes.
+1. Integrate diagnostics #642 and shared EF removal #1484, preserving the test-retention dispositions and historical evidence contracts.
+2. Complete the vendor-host scope restatement #1489 and final guard/leftover cleanup #1490.
+3. Verify narrow implementation safety, refresh maps, complete review and promote the combined result to remote `main`.
+4. Reconcile implementation issues and Project 33 from that evidence; do not equate merged implementation with a performance or full-provider certification.
+5. Deliver a harness-neutral #646 handoff containing exact candidate identities, unresolved findings, disabled performance workflows and preserved historical oracle references.
 
 ## Linked Surfaces
 
@@ -55,6 +57,12 @@ This is the successor to the completed [Groundwork Persistence Readiness](ground
 - [Runtime Execution Seam](runtime-execution-seam.md)
 
 ## Current Roadmap Notes
+
+**Current scope (2026-09-07):** The owner separated broad validation from implementation to reduce credit consumption. [Spec 144's governing scope](../../specs/144-zero-ef-final-removal/spec.md#current-governing-scope--2026-09-07) records that decision and the vendor OpenIddict exception. The combined removal candidate is under integration; final main promotion, guard cleanup and closeout are not yet claimed. Existing performance budgets and historical receipts are unchanged.
+
+### Historical roadmap notes — not current scheduling instructions
+
+The dated notes below preserve prior milestones, package identities and failures. Their old active-version claims and performance-before-deletion instructions are superseded by the current scope above; verify issue state before reusing them.
 
 - **Current focus (2026-08-13): RE-ENTERED after the Groundwork structural refactoring.** The 2026-08-12
   hold is lifted by program-owner direction recorded on
@@ -88,4 +96,4 @@ This is the successor to the completed [Groundwork Persistence Readiness](ground
 
 ## Removal or Completion Conditions
 
-Complete this bucket only when `elsa-foundation` main has no direct or transitive `Microsoft.EntityFrameworkCore*` dependency, every Elsa-owned persistence contract has a Groundwork implementation where durability is required, ASP.NET Core Identity and OpenIddict use Groundwork-backed stores, all four mandatory providers pass the Elsa conformance gates, the performance policy passes, reference hosts use Groundwork, and an architecture test prevents EF Core from returning.
+Complete implementation only after remote `main` contains the reviewed first-party EF removal, Elsa-owned durable lanes use Groundwork, vendor OpenIddict remains within its explicit host exception, narrow build/regression/startup/persistence checks pass, the permanent guard reflects that boundary, and issue/board records match delivery. The separate broad-validation handoff must be available with unresolved findings and exact source identities. Do not report #646, the full provider matrix or performance budgets as passed merely because this implementation bucket closes.

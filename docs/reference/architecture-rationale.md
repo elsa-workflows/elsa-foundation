@@ -80,10 +80,10 @@ logic inside the event pipeline. A contributor interface such as
 `IDraftValidator` or `IJsonConverterSource` names what a feature contributes;
 the owning feature's single handler owns iteration, ordering, and aggregation.
 
-The first sync-contributor exception was EF Core's `OnModelCreating` lifecycle
+The first sync-contributor exception was the now-removed EF Core implementation's `OnModelCreating` lifecycle
 hook in `Elsa.Persistence.EFCore`: the dispatch site is intrinsically sync, the
 contribution mutates a `ModelBuilder`, and the target object does not exist at
-startup. Future uses of the exception compare their shape to that case.
+startup. This is historical rationale, not a shipped API. Future uses of the exception compare their shape to that case.
 
 ## Domain-level shadow properties
 

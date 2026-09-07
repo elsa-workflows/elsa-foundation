@@ -18,7 +18,7 @@ public static class PublishingApiCapabilities
             new("activity-publication", "design/activities/drafts/{draftId}/publish", templated: true),
             new("activity-publication-receipt", "design/activities/publications/{idempotencyKey}", templated: true),
             new("workflow-publish", "publishing/workflows/{versionId}/publish", templated: true),
-            new("publication-slots", "publishing/workflows/{definitionId}/slots", templated: true),
+            new("workflow-executable-export", "publishing/workflows/{versionId}/executable-export", templated: true),
             new("publication-policy", "publishing/workflows/{definitionId}/policy", templated: true),
             new("workflow-test-runs", "publishing/workflows/{versionId}/test-runs", templated: true),
             new("workflow-draft-test-runs", "publishing/workflows/drafts/test-runs"),

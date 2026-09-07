@@ -40,6 +40,20 @@ public sealed class InMemoryWorkflowExecutableSourceReferenceStore : IWorkflowEx
                 _references.Values.Where(reference => string.Equals(reference.ArtifactId, query.ArtifactId, StringComparison.Ordinal))));
     }
 
+    public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByDefinitionVersionPageAsync(
+        WorkflowExecutableSourceReferenceDefinitionVersionPageQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        lock (_gate)
+            return ValueTask.FromResult(Page(
+                query,
+                $"source-reference:definition-version:{query.DefinitionVersionId}",
+                _references.Values.Where(reference =>
+                    string.Equals(reference.DefinitionVersionId, query.DefinitionVersionId, StringComparison.Ordinal))));
+    }
+
     public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(
         WorkflowExecutableSourceReferencePageQuery query,
         CancellationToken cancellationToken = default)
@@ -65,6 +79,54 @@ public sealed class InMemoryWorkflowExecutableSourceReferenceStore : IWorkflowEx
                 return ValueTask.FromResult(false);
 
             _references[sourceReferenceId] = reference.Retire(deletedAt, reason);
+            return ValueTask.FromResult(true);
+        }
+    }
+
+    public ValueTask<bool> TryRetireAsync(
+        WorkflowExecutableSourceReference expectedLiveReference,
+        WorkflowExecutableSourceReference retiredReference,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(expectedLiveReference);
+        ArgumentNullException.ThrowIfNull(retiredReference);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (expectedLiveReference.DeletedAt is not null ||
+            retiredReference.DeletedAt is null ||
+            !WorkflowExecutableSourceReferenceComparer.SameIdentity(expectedLiveReference, retiredReference))
+            return ValueTask.FromResult(false);
+
+        lock (_gate)
+        {
+            if (!_references.TryGetValue(expectedLiveReference.SourceReferenceId, out var current) ||
+                !WorkflowExecutableSourceReferenceComparer.SameSnapshot(current, expectedLiveReference))
+                return ValueTask.FromResult(false);
+
+            _references[expectedLiveReference.SourceReferenceId] = retiredReference;
+            return ValueTask.FromResult(true);
+        }
+    }
+
+    public ValueTask<bool> TryRestoreAsync(
+        WorkflowExecutableSourceReference expectedRetiredReference,
+        WorkflowExecutableSourceReference restoredReference,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(expectedRetiredReference);
+        ArgumentNullException.ThrowIfNull(restoredReference);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (expectedRetiredReference.DeletedAt is null ||
+            restoredReference.DeletedAt is not null ||
+            !WorkflowExecutableSourceReferenceComparer.SameIdentity(expectedRetiredReference, restoredReference))
+            return ValueTask.FromResult(false);
+
+        lock (_gate)
+        {
+            if (!_references.TryGetValue(expectedRetiredReference.SourceReferenceId, out var current) ||
+                !WorkflowExecutableSourceReferenceComparer.SameSnapshot(current, expectedRetiredReference))
+                return ValueTask.FromResult(false);
+
+            _references[expectedRetiredReference.SourceReferenceId] = restoredReference;
             return ValueTask.FromResult(true);
         }
     }

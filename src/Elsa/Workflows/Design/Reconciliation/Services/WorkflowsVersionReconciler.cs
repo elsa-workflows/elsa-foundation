@@ -1,5 +1,5 @@
 using Elsa.Events.Core.Contracts;
-using Elsa.Persistence.Core.Design;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Primitives.Enums;
 using Elsa.Primitives.Versioning;
 using Elsa.Serialization.Core;

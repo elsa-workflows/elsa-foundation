@@ -51,6 +51,32 @@ public sealed class DistributedPlacementTakeoverWorkloadTests
             result.ObservableOperations);
     }
 
+    [Fact]
+    public async Task Exposes_bounded_public_operations_with_setup_outside_timing()
+    {
+        var adapter = new AtomicPlacementAdapter();
+        var operations = await new DistributedPlacementTakeoverWorkload().PrepareMeasuredOperationsAsync(adapter);
+
+        Assert.Equal(
+            [
+                "claim-current-placement",
+                "renew-current-placement",
+                "take-over-expired-placement",
+                "attempt-stale-release",
+                "reopen-and-read-current-placement"
+            ],
+            operations.Select(operation => operation.Id));
+
+        foreach (var operation in operations)
+        {
+            await operation.PrepareInvocationAsync(0);
+            await operation.InvokeAsync(0);
+        }
+
+        Assert.True(adapter.Shared.TryClaimCalls > 0);
+        Assert.True(adapter.Shared.FindCalls > 0);
+    }
+
     [Theory]
     [InlineData(PlacementAdapterFault.AliasInitialClients)]
     [InlineData(PlacementAdapterFault.SeparateInitialBacking)]

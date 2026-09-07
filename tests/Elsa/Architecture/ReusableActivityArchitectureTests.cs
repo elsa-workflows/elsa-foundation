@@ -41,7 +41,6 @@ public sealed class ReusableActivityArchitectureTests
             "Elsa.Activities.Design.Core",
             "Elsa.Activities.Design.Persistence.Core",
             "Elsa.Activities.Design.Persistence.Groundwork",
-            "Elsa.Persistence.Core",
             // The lane took the public v2 closure with the clean break: no document store, no v1 composition,
             // no v1 query layer.
             "Elsa.Persistence.Groundwork.V2",
@@ -53,16 +52,16 @@ public sealed class ReusableActivityArchitectureTests
             "Elsa.Workflows.Runtime.Core");
 
     [Fact]
-    public void Elsa3_import_groundwork_bridge_references_design_contracts_and_not_runtime() =>
+    public void Elsa3_import_groundwork_bridge_references_design_and_runtime_core_contracts_only() =>
         AssertProjectReferences(
             "src/Elsa3/Activities/Design/Import/Persistence/Groundwork/Elsa3.Activities.Design.Import.Persistence.Groundwork.csproj",
             "Elsa.Activities.Design.Persistence.Core",
             "Elsa.Activities.Design.Persistence.Groundwork",
-            "Elsa.Persistence.Core",
             "Elsa.Persistence.Groundwork.V2",
             "Elsa.Serialization.Core",
             "Elsa.Workflows.Design.Persistence.Core",
             "Elsa.Workflows.Design.Persistence.Groundwork",
+            "Elsa.Workflows.Runtime.Core",
             "Elsa3.Activities.Design.Import");
 
     [Fact]

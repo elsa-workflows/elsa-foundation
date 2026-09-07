@@ -71,21 +71,21 @@ public sealed record WorkflowTriggerBindingTypePageQuery : WorkflowTriggerBindin
 }
 
 /// <summary>
-/// One finite publication-scoped lookup over prepared or active workflow trigger bindings.
+/// One finite activation-scoped lookup over prepared or active workflow trigger bindings.
 /// </summary>
-public sealed record WorkflowTriggerBindingPublicationPageQuery : WorkflowTriggerBindingPageRequest
+public sealed record WorkflowTriggerBindingActivationPageQuery : WorkflowTriggerBindingPageRequest
 {
-    public WorkflowTriggerBindingPublicationPageQuery(
-        string publicationId,
+    public WorkflowTriggerBindingActivationPageQuery(
+        string activationId,
         int limit = DefaultLimit,
         string? continuationToken = null)
         : base(limit, continuationToken)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
-        PublicationId = publicationId;
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
+        ActivationId = activationId;
     }
 
-    public string PublicationId { get; }
+    public string ActivationId { get; }
 }
 
 /// <summary>

@@ -1,5 +1,7 @@
 # Contract: #647 / #629 Completion Evidence
 
+> **Current completion scope — 2026-09-07:** [The amended scope](../spec.md#current-governing-scope--2026-09-07) separates implementation closure from broad validation. The bundle below is historical: link deferred #646 work and unresolved results instead of claiming they passed or requiring their execution in this implementation program. Remote-main integration, narrow safety checks, retained test dispositions and accurate board reconciliation still require evidence.
+
 ## Purpose
 
 Define the evidence required before the final-removal lane and parent program may close.

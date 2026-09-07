@@ -3,7 +3,8 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
-using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Store;
 using Microsoft.AspNetCore.Identity;
 using System.Text.Json;
@@ -391,7 +392,16 @@ public sealed partial class GroundworkIdentityUserStore(
         string queryIdentity,
         (string Field, string Value) comparison,
         CancellationToken cancellationToken) =>
-        Query(documentKind, queryIdentity, comparison, MaxRelationshipMaterialization, cancellationToken);
+        rows.QueryAllPages(
+            documentKind,
+            new GroundworkIdentityRowQuery(
+                comparison.Field,
+                GroundworkIdentityRowComparison.Equal,
+                comparison.Value,
+                IdentityV2StorageManifest.IdField,
+                ExpectedIndex: IdentityV2StorageManifest.IndexForQuery(queryIdentity)),
+            MaxRelationshipMaterialization,
+            cancellationToken).Rows;
 
     private IReadOnlyList<GroundworkIdentityRow> Query(
         string documentKind,

@@ -11,16 +11,17 @@ public sealed class ElsaRuntimeV2StorageManifestTests
     {
         var units = ElsaRuntimeV2StorageManifest.CreateUnits();
 
-        Assert.Equal(28, units.Count);
+        Assert.Equal(29, units.Count);
         Assert.Equal(
             [
                 "activityExecutionHierarchy", "activityExecutionInspection", "activityExecutionState",
                 "bookmarkState", "checkpointCommit", "controlPlaneState", "durableTimer", "durableValueState",
                 "executableActivityTemplate", "executableActivityTemplateHashClaim", "incidentState", "operationalState",
                 "postCommitOutbox", "publicationProjectionState", "recurringTriggerSchedule", "schedulerPoison",
-                "schedulerState", "schedulerWorkItem", "workflowAlterationJob", "workflowAlterationPlan", "workflowDispatch",
+                "schedulerState", "schedulerWorkItem", "workflowActivationSlot", "workflowAlterationJob", "workflowAlterationPlan", "workflowDispatch",
                 "workflowExecutable", "workflowExecutableCoordination", "workflowExecutableSourceReference",
-                "workflowExecutionState", "workflowRunHealthState", "workflowTestScope", "workflowTriggerBinding"
+                "workflowExecutionState", "workflowRunHealthState", "workflowTestScope",
+                "workflowTriggerBinding"
             ],
             units.Select(unit => unit.Id.Value).OrderBy(id => id, StringComparer.Ordinal));
 
@@ -51,7 +52,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             ["bookmarkState"] = ["by_stimulus", "by_stimulus_and_type_and_bookmark_identity", "by_stimulus_type", "by_stimulus_type_and_bookmark_identity", "by_workflow_execution", "by_workflow_execution_and_bookmark_id"],
             ["checkpointCommit"] = ["by_collection"],
             ["controlPlaneState"] = ["by_collection", "by_workflow_execution"],
-            ["durableTimer"] = ["by_claim_order", "by_collection", "by_due_time", "by_due_time_and_timer_id", "by_timer_id", "by_workflow_execution", "by_workflow_execution_and_timer_id"],
+            ["durableTimer"] = ["by_claim_order", "by_collection", "by_due_time_and_timer_id", "by_timer_id", "by_workflow_execution", "by_workflow_execution_and_timer_id"],
             ["durableValueState"] = ["by_workflow_execution", "by_workflow_execution_and_durable_value_id"],
             ["executableActivityTemplate"] = ["by_collection", "by_collection_and_document_id", "by_template_hash"],
             ["executableActivityTemplateHashClaim"] = [],
@@ -59,20 +60,21 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             ["operationalState"] = ["by_collection", "by_collection_workflow_execution_and_operational_state_id", "by_recovery_detected", "by_recovery_detected_heartbeat_owner", "by_recovery_detected_lease_owner", "by_recovery_detected_ownerless", "by_recovery_heartbeat", "by_recovery_heartbeat_owner", "by_recovery_lease_acquisition", "by_recovery_lease_acquisition_owner", "by_recovery_lease_expiry", "by_recovery_lease_expiry_owner", "by_workflow_execution", "by_workflow_execution_and_operational_state_id"],
             ["postCommitOutbox"] = ["by_claimable_by_intent_kind_time_recorded_id", "by_claimable_by_workflow_and_intent_kind_time_recorded_id", "by_claimable_by_workflow_time_recorded_id", "by_claimable_time_recorded_id", "by_collection", "by_deliverable_by_intent_kind_time_recorded_id", "by_deliverable_by_workflow_and_intent_kind_time_recorded_id", "by_deliverable_by_workflow_time_recorded_id", "by_deliverable_time_recorded_id", "by_outbox_claimable_at", "by_outbox_deliverable_at", "by_outbox_intent_kind", "by_outbox_item_id", "by_outbox_recorded_at", "by_outbox_status", "by_workflow_execution"],
             ["publicationProjectionState"] = ["by_projection_kind_and_artifact_id"],
-            ["recurringTriggerSchedule"] = ["by_active_next_occurrence_and_schedule_id", "by_artifact", "by_artifact_and_schedule_id", "by_collection", "by_next_occurrence", "by_publication", "by_publication_and_schedule_id", "by_recurring_schedule_active", "by_recurring_schedule_id"],
+            ["recurringTriggerSchedule"] = ["by_activation_and_schedule_id", "by_active_next_occurrence_and_schedule_id", "by_artifact_and_schedule_id", "by_collection", "by_next_occurrence", "by_recurring_schedule_active", "by_recurring_schedule_id"],
             ["schedulerPoison"] = ["by_workflow_execution", "by_workflow_execution_and_failure_window"],
             ["schedulerState"] = ["by_collection"],
-            ["schedulerWorkItem"] = ["by_scheduler_work_order", "by_workflow_execution", "by_workflow_execution_and_scheduler_recorded_at_and_order", "by_workflow_execution_and_scheduler_work_order"],
+            ["schedulerWorkItem"] = ["by_scheduler_work_execution_identity", "by_scheduler_work_order"],
             ["workflowAlterationJob"] = ["alteration_job_checkpoint", "alteration_jobs_counts", "by_claimable_at", "by_plan_and_capture_ordinal", "by_plan_and_claimable_at", "by_plan_status_and_claimable_at", "checkpointCommitId", "status"],
             ["workflowAlterationPlan"] = ["by_collection", "by_tenant_and_idempotency_key", "by_tenant_and_status", "status", "unique_tenant_and_idempotency_key"],
             ["workflowDispatch"] = ["by_child_workflow_execution", "by_child_workflow_execution_and_status", "by_collection", "by_created_at", "by_dispatch_id", "by_parent_execution_status_scope_created_at_dispatch_id", "by_parent_workflow_execution", "by_parent_workflow_execution_and_status", "by_parent_workflow_execution_created_at_dispatch_id", "by_parent_workflow_execution_status_created_at_dispatch_id", "by_parent_workflow_execution_test_scope_created_at_dispatch_id", "by_status", "by_status_created_at_dispatch_id", "by_status_test_scope_created_at_dispatch_id", "by_test_scope", "by_test_scope_created_at_dispatch_id"],
             ["workflowExecutable"] = ["by_collection", "by_collection_and_document_id"],
             ["workflowExecutableCoordination"] = [],
-            ["workflowExecutableSourceReference"] = ["by_artifact", "by_artifact_and_document_id", "by_artifact_retired_expiry_and_document_id", "by_collection", "by_collection_and_document_id", "by_collection_retired_expiry_and_document_id", "by_expires_at", "by_expiry_and_document_id", "by_retired", "by_retired_and_document_id", "by_scope", "by_scope_and_document_id", "by_scope_retired_expiry_and_document_id", "by_scope_retired_expiry_definition_and_document_id"],
+            ["workflowExecutableSourceReference"] = ["by_artifact", "by_artifact_and_document_id", "by_artifact_retired_expiry_and_document_id", "by_collection", "by_collection_and_document_id", "by_collection_retired_expiry_and_document_id", "by_definition_version", "by_definition_version_and_document_id", "by_expires_at", "by_expiry_and_document_id", "by_retired", "by_retired_and_document_id", "by_scope", "by_scope_and_document_id", "by_scope_retired_expiry_and_document_id", "by_scope_retired_expiry_definition_and_document_id"],
             ["workflowExecutionState"] = ["by_alteration_capture_tenant_and_execution", "by_attention_fault_history", "by_collection_and_pinned_artifact", "by_collection_and_pinned_artifact_v2", "by_history_order"],
             ["workflowRunHealthState"] = ["by_definition_and_started_at", "by_run_kind_and_started_at", "by_run_kind_status_definition_started_at", "by_run_kind_status_started_at", "by_started_at", "by_status_and_started_at"],
             ["workflowTestScope"] = ["by_collection", "by_expires_at", "by_scope_id", "by_state_and_expires_at", "by_state_and_scope_id", "by_status"],
-            ["workflowTriggerBinding"] = ["by_active", "by_artifact", "by_artifact_and_trigger_binding_id", "by_publication", "by_publication_and_trigger_binding_id", "by_stimulus", "by_stimulus_and_type", "by_stimulus_type", "by_stimulus_type_and_active", "by_trigger_binding_id"]
+            ["workflowTriggerBinding"] = ["by_activation", "by_activation_and_trigger_binding_id", "by_active", "by_artifact", "by_artifact_and_trigger_binding_id", "by_stimulus", "by_stimulus_and_type", "by_stimulus_type", "by_stimulus_type_and_active", "by_trigger_binding_id"],
+            ["workflowActivationSlot"] = ["by_active_activation", "by_active_activation_and_slot_id", "by_definition", "by_definition_and_slot_id"]
         };
         var actualIndexes = units.ToDictionary(
             unit => unit.Id.Value,
@@ -83,9 +85,21 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             Assert.Equal(expected, actualIndexes[unitId]);
 
         var timers = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind);
+        AssertColumn(timers, ElsaRuntimeV2StorageManifest.DurableTimerDueTimeField, PortableType.DateTimeOffset, null, nullable: false);
+        AssertColumn(timers, ElsaRuntimeV2StorageManifest.DurableTimerIdField, PortableType.String, ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength, nullable: false);
         AssertIndex(timers, "by_claim_order", ["claimOrderKey"], included: true);
-        AssertIndex(timers, "by_due_time_and_timer_id", [ElsaRuntimeV2StorageManifest.DurableTimerDueTimeField, ElsaRuntimeV2StorageManifest.DurableTimerIdField], included: true);
+        AssertIndex(timers, "by_due_time_and_timer_id", [ElsaRuntimeV2StorageManifest.DurableTimerDueTimeField, ElsaRuntimeV2StorageManifest.DurableTimerIdField, ElsaRuntimeV2StorageManifest.IdField], included: true);
         AssertIndex(timers, "by_workflow_execution_and_timer_id", [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, ElsaRuntimeV2StorageManifest.DurableTimerIdField], included: true);
+
+        var schedules = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleDocumentKind);
+        AssertColumn(schedules, ElsaRuntimeV2StorageManifest.ArtifactIdField, PortableType.String, 128, nullable: false);
+        AssertColumn(schedules, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleActivationIdField, PortableType.String, 128, nullable: true);
+        AssertColumn(schedules, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIdField, PortableType.String, 128, nullable: false);
+        AssertColumn(schedules, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIsActiveField, PortableType.Boolean, null, nullable: false);
+        AssertColumn(schedules, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleNextOccurrenceField, PortableType.DateTimeOffset, null, nullable: false);
+        AssertIndex(schedules, ElsaRuntimeV2StorageManifest.RecurringScheduleByActiveNextOccurrenceAndScheduleIdIndex, [ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIsActiveField, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleNextOccurrenceField, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIdField, ElsaRuntimeV2StorageManifest.IdField], included: true);
+        AssertIndex(schedules, ElsaRuntimeV2StorageManifest.RecurringScheduleByActivationAndScheduleIdIndex, [ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleActivationIdField, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIdField, ElsaRuntimeV2StorageManifest.IdField], included: true);
+        AssertIndex(schedules, ElsaRuntimeV2StorageManifest.RecurringScheduleByArtifactAndScheduleIdIndex, [ElsaRuntimeV2StorageManifest.ArtifactIdField, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIdField, ElsaRuntimeV2StorageManifest.IdField], included: true);
 
         var incidents = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.IncidentStateDocumentKind);
         AssertIndex(incidents, "by_workflow_execution_and_incident_id", [ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, ElsaRuntimeV2StorageManifest.IncidentIdField], included: true);
@@ -93,6 +107,27 @@ public sealed class ElsaRuntimeV2StorageManifestTests
 
         var triggerBindings = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingDocumentKind);
         AssertIndex(triggerBindings, "by_stimulus_and_type", ["stimulusLookupKey", "isActive", "triggerBindingId"], included: true);
+
+        var sourceReferences = ElsaRuntimeV2StorageManifest.Require(
+            ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDocumentKind);
+        AssertColumn(
+            sourceReferences,
+            ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDefinitionVersionIdField,
+            PortableType.String,
+            128,
+            nullable: false);
+        AssertIndex(
+            sourceReferences,
+            ElsaRuntimeV2StorageManifest.ByDefinitionVersionIndex,
+            [ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDefinitionVersionIdField]);
+        AssertIndex(
+            sourceReferences,
+            "by_definition_version_and_document_id",
+            [
+                ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDefinitionVersionIdField,
+                ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceIdField
+            ],
+            included: true);
 
         var publicationProjectionState = ElsaRuntimeV2StorageManifest.Require(
             ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind);
@@ -106,6 +141,16 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             ],
             included: true);
         Assert.True(triggerBindings.Indexes.Single(index => index.Name == "by_trigger_binding_id").IsUnique);
+
+        var activationSlots = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDocumentKind);
+        AssertColumn(activationSlots, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDefinitionIdField, PortableType.String, 128, nullable: true);
+        AssertColumn(activationSlots, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotNameField, PortableType.String, 128, nullable: true);
+        AssertColumn(activationSlots, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotActiveActivationIdField, PortableType.String, 128, nullable: true);
+        AssertIndex(activationSlots, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotByDefinition, [ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDefinitionIdField]);
+        AssertIndex(activationSlots, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotByDefinitionAndSlotId, [ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDefinitionIdField, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotNameField, ElsaRuntimeV2StorageManifest.IdField], included: true);
+        AssertIndex(activationSlots, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotByActiveActivation, [ElsaRuntimeV2StorageManifest.WorkflowActivationSlotActiveActivationIdField], unique: true);
+        AssertIndex(activationSlots, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotByActiveActivationAndSlotId, [ElsaRuntimeV2StorageManifest.WorkflowActivationSlotActiveActivationIdField, ElsaRuntimeV2StorageManifest.IdField]);
+        Assert.All(activationSlots.Indexes.Where(index => index.Name.Contains("active_activation", StringComparison.Ordinal)), index => Assert.Equal(MissingValueBehavior.Excluded, index.MissingValues));
 
         var executionState = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind);
         AssertIndex(executionState, "by_collection_and_pinned_artifact", ["collection", "historyArtifactId", "historyArtifactTimestamp", "historyWorkflowExecutionId"]);
@@ -162,13 +207,56 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind),
             ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField,
             PortableType.String,
-            ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyProjectionLength);
+            ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyProjectionLength,
+            nullable: false);
         AssertColumn(
             ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind),
             ElsaRuntimeV2StorageManifest.SchedulerWorkRecordedAtField,
             PortableType.DateTimeOffset,
             null,
             nullable: false);
+        var schedulerWork = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind);
+        AssertColumn(
+            schedulerWork,
+            ElsaRuntimeV2StorageManifest.IdField,
+            PortableType.String,
+            ElsaRuntimeV2StorageManifest.SchedulerWorkPhysicalIdMaximumLength,
+            nullable: false);
+        AssertColumn(
+            schedulerWork,
+            ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField,
+            PortableType.String,
+            ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength,
+            nullable: false);
+        var workflowExecution = schedulerWork.Columns.Single(column =>
+            column.Name == ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField);
+        Assert.Equal(
+            ElsaRuntimeV2StorageManifest.WorkflowExecutionOrdinalKeyField,
+            Assert.IsType<OrdinalIdentityDefinition>(workflowExecution.OrdinalIdentity).PhysicalColumn);
+        Assert.DoesNotContain(
+            schedulerWork.Columns,
+            column => column.Name == ElsaRuntimeV2StorageManifest.WorkflowExecutionOrdinalKeyField);
+        AssertColumn(
+            schedulerWork,
+            ElsaRuntimeV2StorageManifest.CollectionField,
+            PortableType.String,
+            ElsaRuntimeV2StorageManifest.SchedulerWorkCollectionProjectionLength,
+            nullable: false);
+        AssertIndex(schedulerWork, ElsaRuntimeV2StorageManifest.BySchedulerWorkOrderIndex, [
+            ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField,
+            ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField,
+            ElsaRuntimeV2StorageManifest.IdField], included: true);
+        var pendingExecutions = Assert.Single(schedulerWork.Indexes, index =>
+            index.Name == ElsaRuntimeV2StorageManifest.SchedulerWorkPendingExecutionIdentityIndex);
+        Assert.True(pendingExecutions.UseOrdinalIdentities);
+        Assert.False(schedulerWork.Indexes.Single(index =>
+            index.Name == ElsaRuntimeV2StorageManifest.BySchedulerWorkOrderIndex).UseOrdinalIdentities);
+        Assert.Equal(
+            [
+                new IndexColumn(ElsaRuntimeV2StorageManifest.CollectionField, SortDirection.Ascending),
+                new IndexColumn(ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, SortDirection.Ascending)
+            ],
+            pendingExecutions.Columns);
         var schedulerPoison = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.SchedulerPoisonDocumentKind);
         AssertColumn(schedulerPoison, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, PortableType.String, ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength);
         AssertColumn(schedulerPoison, ElsaRuntimeV2StorageManifest.SchedulerPoisonWorkItemIdField, PortableType.String, ElsaRuntimeV2StorageManifest.SchedulerPoisonWorkItemProjectionLength);
@@ -185,10 +273,15 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             PortableType.String,
             ElsaRuntimeV2StorageManifest.DurableTimerClaimOrderKeyProjectionLength);
         var bookmark = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind);
-        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.StimulusHashField, PortableType.String, ElsaRuntimeV2StorageManifest.StimulusHashProjectionLength);
-        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.StimulusTypeField, PortableType.String, ElsaRuntimeV2StorageManifest.StimulusTypeProjectionLength);
-        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.StimulusLookupKeyField, PortableType.String, ElsaRuntimeV2StorageManifest.BookmarkStimulusLookupKeyProjectionLength);
-        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.StimulusTypeLookupKeyField, PortableType.String, ElsaRuntimeV2StorageManifest.BookmarkStimulusLookupKeyProjectionLength);
+        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.IdField, PortableType.String, ElsaRuntimeV2StorageManifest.RuntimeCompositeIdMaximumLength, nullable: false);
+        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, PortableType.String, ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength, nullable: false);
+        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.BookmarkIdField, PortableType.String, ElsaRuntimeV2StorageManifest.RuntimeExecutionIdProjectionLength, nullable: false);
+        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.StimulusHashField, PortableType.String, ElsaRuntimeV2StorageManifest.StimulusHashProjectionLength, nullable: false);
+        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.StimulusTypeField, PortableType.String, ElsaRuntimeV2StorageManifest.StimulusTypeProjectionLength, nullable: false);
+        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.StimulusLookupKeyField, PortableType.String, ElsaRuntimeV2StorageManifest.BookmarkStimulusLookupKeyProjectionLength, nullable: false);
+        AssertColumn(bookmark, ElsaRuntimeV2StorageManifest.StimulusTypeLookupKeyField, PortableType.String, ElsaRuntimeV2StorageManifest.BookmarkStimulusLookupKeyProjectionLength, nullable: false);
+        AssertIndex(bookmark, ElsaRuntimeV2StorageManifest.BookmarkByStimulusAndTypeAndIdentityIndex, [ElsaRuntimeV2StorageManifest.StimulusLookupKeyField, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, ElsaRuntimeV2StorageManifest.BookmarkIdField, ElsaRuntimeV2StorageManifest.IdField], included: true);
+        AssertIndex(bookmark, ElsaRuntimeV2StorageManifest.BookmarkByStimulusTypeAndIdentityIndex, [ElsaRuntimeV2StorageManifest.StimulusTypeLookupKeyField, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField, ElsaRuntimeV2StorageManifest.BookmarkIdField, ElsaRuntimeV2StorageManifest.IdField], included: true);
         AssertColumn(
             ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind),
             ElsaRuntimeV2StorageManifest.WorkflowDispatchIdField,
@@ -208,7 +301,12 @@ public sealed class ElsaRuntimeV2StorageManifestTests
         AssertColumn(operational, ElsaRuntimeV2StorageManifest.RecoveryHeartbeatOwnerIdField, PortableType.String, ElsaRuntimeV2StorageManifest.IdMaximumLength);
         var outbox = ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind);
         AssertColumn(outbox, ElsaRuntimeV2StorageManifest.PostCommitOutboxStatusField, PortableType.Int32, null);
-        AssertColumn(outbox, ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindField, PortableType.String, ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindProjectionLength);
+        AssertColumn(outbox, ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableIsEligibleField, PortableType.Boolean, null, nullable: false);
+        AssertColumn(outbox, ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField, PortableType.DateTimeOffset, null, nullable: false);
+        AssertColumn(outbox, ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindField, PortableType.String, ElsaRuntimeV2StorageManifest.PostCommitOutboxIntentKindProjectionLength, nullable: false);
+        AssertIndex(outbox, ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableIndex,
+            [ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableIsEligibleField, ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField, ElsaRuntimeV2StorageManifest.PostCommitOutboxRecordedAtField, ElsaRuntimeV2StorageManifest.PostCommitOutboxItemIdField, ElsaRuntimeV2StorageManifest.IdField],
+            included: true);
 
         foreach (var unit in units)
         {
@@ -298,7 +396,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
             [ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleDocumentKind] =
             [
                 ElsaRuntimeV2StorageManifest.ArtifactIdField,
-                ElsaRuntimeV2StorageManifest.RecurringTriggerSchedulePublicationIdField,
+                ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleActivationIdField,
                 ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleNextOccurrenceField,
                 ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIdField,
                 ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIsActiveField
@@ -328,6 +426,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
                 ElsaRuntimeV2StorageManifest.CollectionField,
                 ElsaRuntimeV2StorageManifest.PostCommitOutboxStatusField,
                 ElsaRuntimeV2StorageManifest.PostCommitOutboxDeliverableAtField,
+                ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableIsEligibleField,
                 ElsaRuntimeV2StorageManifest.PostCommitOutboxClaimableAtField,
                 ElsaRuntimeV2StorageManifest.PostCommitOutboxRecordedAtField,
                 ElsaRuntimeV2StorageManifest.PostCommitOutboxItemIdField,
@@ -397,7 +496,7 @@ public sealed class ElsaRuntimeV2StorageManifestTests
                 ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingIsActiveField,
                 ElsaRuntimeV2StorageManifest.TriggerBindingIdField,
                 ElsaRuntimeV2StorageManifest.ArtifactIdField,
-                ElsaRuntimeV2StorageManifest.PublicationIdField
+                ElsaRuntimeV2StorageManifest.ActivationIdField
             ]
         };
 

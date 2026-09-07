@@ -210,7 +210,7 @@ public sealed class WorkflowExecutableInspectorTests
             definitionId,
             definitionVersionId,
             artifactVersion,
-            publicationId,
+            activationId,
             slotId,
             createdAt,
             publishedAt,
@@ -230,7 +230,7 @@ public sealed class WorkflowExecutableInspectorTests
         Assert.Equal("definition-v1", definitionId);
         Assert.Equal("definition-version-v1", definitionVersionId);
         Assert.Equal("1.0.0", artifactVersion);
-        Assert.Null(publicationId);
+        Assert.Null(activationId);
         Assert.Null(slotId);
         Assert.Equal(_now, createdAt);
         Assert.Equal(_now, publishedAt);

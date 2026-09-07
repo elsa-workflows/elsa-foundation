@@ -129,7 +129,7 @@ internal static class GroundworkV2SchedulerWorkStorageConventions
         ArgumentException.ThrowIfNullOrWhiteSpace(workItemId);
 
         var logicalId = CompositeId(workflowExecutionId, workItemId);
-        return logicalId.Length <= ElsaRuntimeV2StorageManifest.IdMaximumLength
+        return logicalId.Length <= ElsaRuntimeV2StorageManifest.SchedulerWorkPhysicalIdMaximumLength
             ? logicalId
             : HashedIdentityPrefix + StableHash(logicalId);
     }

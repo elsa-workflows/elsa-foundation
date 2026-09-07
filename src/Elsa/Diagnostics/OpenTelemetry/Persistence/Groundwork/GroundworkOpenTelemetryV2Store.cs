@@ -1,4 +1,6 @@
+using System.Buffers.Binary;
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -26,11 +28,11 @@ public sealed class GroundworkOpenTelemetryStore :
     IAsyncDisposable
 {
     private const int DrainBatchSize = 64;
-    private const int MaxAppendAttempts = 3;
-    private const int TraceAggregationMaxGroups = 1_000;
+    private const int MaxCaptureAttempts = 3;
+    private const int MaximumRetentionTraceKeys = 100_000;
     private readonly IOpenTelemetrySourceRegistry? sourceRegistry;
     private readonly V2OpenTelemetryBinding binding;
-    private readonly IStorageProviderConnection? connection;
+    private readonly IStorageProviderConnection connection;
     private readonly V2Sessions sessions;
     private readonly V2OpenTelemetryStorageSchemaSet schema;
     private readonly DiagnosticsDrain<OpenTelemetryBatch, bool> drain;
@@ -43,6 +45,7 @@ public sealed class GroundworkOpenTelemetryStore :
     private readonly int instrumentCapacity;
     private readonly int maxQuerySize;
     private readonly TimeProvider timeProvider;
+    private readonly IProviderCommandObserver? commandObserver;
     private long droppedTraces;
     private long droppedSpans;
     private long droppedMetricPoints;
@@ -54,7 +57,8 @@ public sealed class GroundworkOpenTelemetryStore :
         V2OpenTelemetryBinding binding,
         TimeProvider? timeProvider = null,
         IOpenTelemetrySourceRegistry? sourceRegistry = null,
-        IDiagnosticsPersistenceObserver? observer = null)
+        IDiagnosticsPersistenceObserver? observer = null,
+        IProviderCommandObserver? commandObserver = null)
     {
         this.connection = connection ?? throw new ArgumentNullException(nameof(connection));
         ArgumentNullException.ThrowIfNull(options);
@@ -62,6 +66,7 @@ public sealed class GroundworkOpenTelemetryStore :
         binding.Validate();
         this.sourceRegistry = sourceRegistry;
         this.timeProvider = timeProvider ?? TimeProvider.System;
+        this.commandObserver = commandObserver;
         schema = new();
         sessions = new();
         (traceCapacity, spanCapacity, metricPointCapacity, logCapacity, resourceCapacity, instrumentCapacity, maxQuerySize) =
@@ -115,20 +120,33 @@ public sealed class GroundworkOpenTelemetryStore :
             return new([], sourceRegistry?.DroppedCount ?? 0);
 
         var predicates = new List<Predicate>();
-        AddEqual(predicates, ResourceColumns.ServiceName, filter.ServiceName);
+        AddEqual(predicates, ResourceColumns.ServiceNameKey,
+            string.IsNullOrWhiteSpace(filter.ServiceName) ? null : V2OpenTelemetryCodec.Identity(filter.ServiceName, nameof(filter.ServiceName)));
         if (filter.Status is { } status)
             predicates.Add(new Predicate.Equal(ResourceColumns.Status, QueryConstant.Of(ResourceColumns.Status, (long)status)));
         if (!string.IsNullOrWhiteSpace(filter.Search))
             predicates.Add(new Predicate.Or([
                 new Predicate.Substring(ResourceColumns.Id, filter.Search, Anchor.Contains),
                 new Predicate.Substring(ResourceColumns.ServiceName, filter.Search, Anchor.Contains)]));
+        var selectedIndex = string.IsNullOrWhiteSpace(filter.Search) switch
+        {
+            false => null,
+            true when !string.IsNullOrWhiteSpace(filter.ServiceName) && filter.Status is null =>
+                V2OpenTelemetryStorageSchema.ResourceServiceLastSeenIndex,
+            true when string.IsNullOrWhiteSpace(filter.ServiceName) && filter.Status is not null =>
+                V2OpenTelemetryStorageSchema.ResourceStatusLastSeenIndex,
+            true when string.IsNullOrWhiteSpace(filter.ServiceName) && filter.Status is null =>
+                V2OpenTelemetryStorageSchema.ResourceLastSeenIndex,
+            _ => null
+        };
         var rows = Query(
             sessions.Resources,
             predicates,
             ResourceColumns.LastSeen,
             take,
             descending: true,
-            ResourceColumns.Id).Rows;
+            selectedIndex,
+            ResourceColumns.IdOrderKey).Rows;
         return new(rows.Select(V2OpenTelemetryCodec.Deserialize<TelemetryResource>).ToArray(), sourceRegistry?.DroppedCount ?? 0);
     }
 
@@ -137,31 +155,41 @@ public sealed class GroundworkOpenTelemetryStore :
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
+        cancellationToken.ThrowIfCancellationRequested();
         ValidateRange(filter.From, filter.To, nameof(filter));
-        var take = Math.Min(Math.Min(ClampTake(filter.Take, maxQuerySize), traceCapacity), TraceAggregationMaxGroups);
+        var take = Math.Min(ClampTake(filter.Take, maxQuerySize), traceCapacity);
         if (take == 0)
             return ValueTask.FromResult(new OpenTelemetryTraceResult([], Interlocked.Read(ref droppedTraces)));
 
         var source = new List<Predicate>();
-        AddSubstring(source, TraceColumns.TraceId, filter.TraceId);
-        AddEqual(source, TraceColumns.ResourceId, filter.ResourceId);
-        AddEqual(source, TraceColumns.ServiceName, filter.ServiceName);
-        AddSubstring(source, TraceColumns.WorkflowInstanceId, filter.WorkflowInstanceId);
-        AddEqual(source, TraceColumns.Status, filter.Status is { } status ? (long)status : null);
-        AddRange(source, TraceColumns.StartTime, filter.From, filter.To);
+        AddCanonicalSubstring(source, TraceSummaryColumns.TraceIdSearchKey, filter.TraceId);
+        AddElementEqual(source, V2OpenTelemetryStorageSchema.ResourceKeys,
+            string.IsNullOrWhiteSpace(filter.ResourceId) ? null : V2OpenTelemetryCodec.CanonicalSearchKey(filter.ResourceId));
+        AddElementEqual(source, V2OpenTelemetryStorageSchema.ServiceNames,
+            string.IsNullOrWhiteSpace(filter.ServiceName) ? null : V2OpenTelemetryCodec.CanonicalSearchKey(filter.ServiceName));
+        AddElementSubstring(source, V2OpenTelemetryStorageSchema.WorkflowInstanceIds, filter.WorkflowInstanceId);
+        AddEqual(source, TraceSummaryColumns.Status, filter.Status is { } status ? (long)status : null);
+        AddRange(source, TraceSummaryColumns.StartTime, filter.From, filter.To);
         if (!string.IsNullOrWhiteSpace(filter.Search))
             source.Add(new Predicate.Or([
-                new Predicate.Substring(TraceColumns.TraceId, filter.Search, Anchor.Contains),
-                new Predicate.Substring(TraceColumns.Name, filter.Search, Anchor.Contains)]));
+                new Predicate.Substring(
+                    TraceSummaryColumns.TraceIdSearchKey,
+                    V2OpenTelemetryCodec.CanonicalSearchKey(filter.Search),
+                    Anchor.Contains),
+                new Predicate.Substring(
+                    TraceSummaryColumns.NameSearchKey,
+                    V2OpenTelemetryCodec.CanonicalSearchKey(filter.Search),
+                    Anchor.Contains)]));
 
-        var aggregation = sessions.Traces.Aggregate(new AggregationQuery(V2OpenTelemetryStorageSchema.TraceProfile)
-        {
-            SourcePredicate = All(source),
-            OrderBy = V2OpenTelemetryStorageSchema.StartTime,
-            OrderDirection = global::Groundwork.Kernel.SortDirection.Descending,
-            Take = take
-        });
-        var traces = aggregation.Rows.Select(ToTrace).Reverse().ToArray();
+        var traces = Query(
+                sessions.TraceSummaries,
+                source,
+                TraceSummaryColumns.StartTime,
+                take,
+                descending: true,
+                source.Count == 0 ? V2OpenTelemetryStorageSchema.TraceSummaryStartIndex : null,
+                TraceSummaryColumns.TraceKey)
+            .Rows.Select(V2OpenTelemetryCodec.DeserializeTraceSummary).Reverse().ToArray();
         return ValueTask.FromResult(new OpenTelemetryTraceResult(traces, Interlocked.Read(ref droppedTraces)));
     }
 
@@ -170,19 +198,42 @@ public sealed class GroundworkOpenTelemetryStore :
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(traceId);
-        var aggregate = sessions.Traces.Aggregate(new AggregationQuery(V2OpenTelemetryStorageSchema.TraceProfile)
+        cancellationToken.ThrowIfCancellationRequested();
+        var traceKey = V2OpenTelemetryCodec.TraceKey(traceId);
+        var summary = sessions.TraceSummaries.Read(new StorageKey(new Dictionary<string, object?>
         {
-            SourcePredicate = new Predicate.Equal(TraceColumns.TraceId, QueryConstant.Of(TraceColumns.TraceId, traceId)),
-            Take = 1
-        });
-        var row = aggregate.Rows.SingleOrDefault();
-        if (row is null)
+            [V2OpenTelemetryStorageSchema.TraceKey] = traceKey
+        }));
+        if (summary is null)
             return ValueTask.FromResult<OpenTelemetryTraceDetail?>(null);
-        var trace = ToTrace(row);
-        var tracePredicate = new[] { new Predicate.Equal(SpanColumns.TraceId, QueryConstant.Of(SpanColumns.TraceId, trace.TraceId)) };
-        var spans = QueryAll(sessions.Spans, tracePredicate, SpanColumns.StartTime, maxQuerySize, cancellationToken, SpanColumns.SpanId)
+        var trace = V2OpenTelemetryCodec.DeserializeTraceSummary(summary.Values.Values);
+        var tracePredicate = new[]
+        {
+            new Predicate.Equal(SpanColumns.TraceKey, QueryConstant.Of(SpanColumns.TraceKey, traceKey))
+        };
+        var spans = QueryAll(
+                sessions.Spans,
+                tracePredicate,
+                SpanColumns.StartTime,
+                maxQuerySize,
+                V2OpenTelemetryStorageSchema.SpanTraceDetailIndex,
+                cancellationToken,
+                SpanColumns.SpanId,
+                SpanColumns.Sequence)
             .Select(V2OpenTelemetryCodec.Deserialize<TelemetrySpan>).ToArray();
-        var logs = QueryAll(sessions.Logs, tracePredicate.Select(predicate => Rebind(predicate, LogColumns.TraceId)), LogColumns.Timestamp, maxQuerySize, cancellationToken, LogColumns.Id)
+        var logPredicate = new[]
+        {
+            new Predicate.Equal(LogColumns.TraceKey, QueryConstant.Of(LogColumns.TraceKey, traceKey))
+        };
+        var logs = QueryAll(
+                sessions.Logs,
+                logPredicate,
+                LogColumns.Timestamp,
+                maxQuerySize,
+                V2OpenTelemetryStorageSchema.LogTraceDetailIndex,
+                cancellationToken,
+                LogColumns.Id,
+                LogColumns.Sequence)
             .Select(V2OpenTelemetryCodec.Deserialize<OtlpLogRecord>).ToArray();
         var resources = trace.ResourceIds
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -209,8 +260,15 @@ public sealed class GroundworkOpenTelemetryStore :
         AddEqual(predicates, MetricColumns.ServiceName, filter.ServiceName);
         AddSubstring(predicates, MetricColumns.InstrumentName, filter.InstrumentName);
         AddRange(predicates, MetricColumns.Timestamp, filter.From, filter.To);
-        var points = Query(sessions.MetricPoints, predicates, MetricColumns.Timestamp, take, descending: false, MetricColumns.Id)
-            .Rows.Select(V2OpenTelemetryCodec.Deserialize<MetricPoint>).ToArray();
+        var points = Query(
+                sessions.MetricPoints,
+                predicates,
+                MetricColumns.Timestamp,
+                take,
+                descending: true,
+                predicates.Count == 0 ? V2OpenTelemetryStorageSchema.MetricPointTimestampIndex : null,
+                MetricColumns.Id)
+            .Rows.Select(V2OpenTelemetryCodec.Deserialize<MetricPoint>).Reverse().ToArray();
         var instruments = points.Select(point => point.InstrumentId)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(id => sessions.Instruments.Read(new StorageKey(new Dictionary<string, object?> { [V2OpenTelemetryStorageSchema.Id] = id })))
@@ -238,8 +296,15 @@ public sealed class GroundworkOpenTelemetryStore :
         AddSubstring(predicates, LogColumns.SeverityText, filter.Severity);
         AddSubstring(predicates, LogColumns.Body, filter.Search);
         AddRange(predicates, LogColumns.Timestamp, filter.From, filter.To);
-        var logs = Query(sessions.Logs, predicates, LogColumns.Timestamp, take, descending: false, LogColumns.Id)
-            .Rows.Select(V2OpenTelemetryCodec.Deserialize<OtlpLogRecord>).ToArray();
+        var logs = Query(
+                sessions.Logs,
+                predicates,
+                LogColumns.Timestamp,
+                take,
+                descending: true,
+                predicates.Count == 0 ? V2OpenTelemetryStorageSchema.LogTimestampIndex : null,
+                LogColumns.Id)
+            .Rows.Select(V2OpenTelemetryCodec.Deserialize<OtlpLogRecord>).Reverse().ToArray();
         return ValueTask.FromResult(new OpenTelemetryLogResult(logs, Interlocked.Read(ref droppedLogs)));
     }
 
@@ -252,7 +317,7 @@ public sealed class GroundworkOpenTelemetryStore :
             metricPointCapacity,
             logCapacity,
             Count(sessions.Resources, ResourceColumns.Id),
-            Count(sessions.Traces, TraceColumns.Sequence),
+            Count(sessions.TraceSummaries, TraceSummaryColumns.TraceKey),
             Count(sessions.Spans, SpanColumns.Sequence),
             Count(sessions.Instruments, InstrumentColumns.Id),
             Count(sessions.MetricPoints, MetricColumns.Sequence),
@@ -275,27 +340,219 @@ public sealed class GroundworkOpenTelemetryStore :
             throw new ArgumentException("The diagnostics drain batch identity cannot be empty.", nameof(batchId));
         cancellationToken.ThrowIfCancellationRequested();
 
-        var services = batch.Resources.ToDictionary(resource => resource.Id, resource => resource.ServiceName, StringComparer.OrdinalIgnoreCase);
-        var traces = batch.Traces.Select(trace => V2OpenTelemetryCodec.Trace(trace, ServiceFor(trace.ResourceIds, services))).ToArray();
+        var services = await ResolveServicesAsync(batch, cancellationToken);
+        var traceServices = batch.Traces
+            .Select(trace => (Trace: trace, ServiceNames: ServicesFrom(trace.ResourceIds, services)))
+            .ToArray();
+        var traceGroups = traceServices.GroupBy(
+            item => V2OpenTelemetryCodec.TraceKey(item.Trace.TraceId),
+            StringComparer.Ordinal).ToArray();
+        var traces = traceServices.Select(item => V2OpenTelemetryCodec.Trace(item.Trace, item.ServiceNames.FirstOrDefault())).ToArray();
         var spans = batch.Spans.Select(V2OpenTelemetryCodec.Span).ToArray();
-        var points = batch.MetricPoints.Select(point => V2OpenTelemetryCodec.MetricPoint(point, ServiceFor([point.ResourceId], services))).ToArray();
-        var logs = batch.Logs.Select(log => V2OpenTelemetryCodec.Log(log, ServiceFor([log.ResourceId], services))).ToArray();
+        var points = batch.MetricPoints.Select(point => V2OpenTelemetryCodec.MetricPoint(point, ServiceFrom(point.ResourceId, services))).ToArray();
+        var logs = batch.Logs.Select(log => V2OpenTelemetryCodec.Log(log, ServiceFrom(log.ResourceId, services))).ToArray();
         var resources = batch.Resources.Select(V2OpenTelemetryCodec.Resource).ToArray();
         var instruments = batch.Instruments.Select(instrument => V2OpenTelemetryCodec.Instrument(instrument, batchId.IssuedAt)).ToArray();
-        var fingerprint = Fingerprint(resources, instruments, traces, spans, points, logs);
+        // The durable identity describes caller-supplied batch content, not mutable catalog
+        // enrichment. Otherwise an acknowledgement-loss replay could conflict merely because a
+        // referenced resource changed between attempts.
+        var fingerprint = Fingerprint(
+            resources,
+            instruments,
+            batch.Traces.Select(trace => V2OpenTelemetryCodec.Trace(trace)).ToArray(),
+            spans,
+            batch.MetricPoints.Select(point => V2OpenTelemetryCodec.MetricPoint(point, null)).ToArray(),
+            batch.Logs.Select(log => V2OpenTelemetryCodec.Log(log, null)).ToArray());
+        var resourceUnit = schema.Unit(V2OpenTelemetryStorageSchema.ResourceUnitId);
+        var instrumentUnit = schema.Unit(V2OpenTelemetryStorageSchema.InstrumentUnitId);
+        var ledgerUnit = schema.Unit(V2OpenTelemetryStorageSchema.CaptureLedgerUnitId);
+        var summaryUnit = schema.Unit(V2OpenTelemetryStorageSchema.TraceSummaryUnitId);
 
-        EnsureLedger(batchId, fingerprint);
-        foreach (var resource in resources)
-            EnsureCatalog(sessions.Resources, resource);
-        foreach (var instrument in instruments)
-            EnsureCatalog(sessions.Instruments, instrument);
-        await AppendAsync(sessions.Traces, traces, batchId, "traces", cancellationToken);
-        await AppendAsync(sessions.Spans, spans, batchId, "spans", cancellationToken);
-        await AppendAsync(sessions.MetricPoints, points, batchId, "metric-points", cancellationToken);
-        await AppendAsync(sessions.Logs, logs, batchId, "logs", cancellationToken);
+        EnsureRequiredCapabilities();
+
+        Exception? failure = null;
+        for (var attempt = 1; attempt <= MaxCaptureAttempts; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                using var work = connection.BeginUnitOfWork(
+                    StorageAccess.Scoped(binding.StorageScope),
+                    BatchWriteOptions.Exact,
+                    commandObserver,
+                    schema.Units.ToArray());
+                var transaction = V2Sessions.Open(work, schema.Units);
+                var ledgerKey = new StorageKey(new Dictionary<string, object?>
+                {
+                    [V2OpenTelemetryStorageSchema.BatchId] = batchId.ToString()
+                });
+                var existingLedger = transaction.Ledger.Read(ledgerKey);
+                if (existingLedger is not null)
+                {
+                    EnsureLedgerMatches(existingLedger, fingerprint);
+                    work.Rollback();
+                    return;
+                }
+                var existingTraceSummaryKeys = await ReadExistingTraceSummaryKeysAsync(
+                    transaction.TraceSummaries,
+                    traceGroups.Select(group => group.Key).ToArray(),
+                    cancellationToken);
+
+                foreach (var resource in resources)
+                    work.Stage(RowWrite.Upsert(resourceUnit, resource));
+                foreach (var instrument in instruments)
+                    work.Stage(RowWrite.Upsert(instrumentUnit, instrument));
+
+                await AppendExactAsync(transaction.Traces, traces, batchId, "traces", cancellationToken);
+                await AppendExactAsync(transaction.Spans, spans, batchId, "spans", cancellationToken);
+                await AppendExactAsync(transaction.MetricPoints, points, batchId, "metric-points", cancellationToken);
+                await AppendExactAsync(transaction.Logs, logs, batchId, "logs", cancellationToken);
+
+                foreach (var group in traceGroups)
+                {
+                    var key = new StorageKey(new Dictionary<string, object?>
+                    {
+                        [V2OpenTelemetryStorageSchema.TraceKey] = group.Key
+                    });
+                    // The provider-neutral keyed batch read proves which summaries exist without one
+                    // point read per new trace. Existing rows are still read individually so their
+                    // optimistic-concurrency versions remain authoritative inside this transaction.
+                    var existing = existingTraceSummaryKeys.Contains(group.Key)
+                        ? transaction.TraceSummaries.Read(key)
+                        : null;
+                    var records = existing is null
+                        ? group.Select(item => item.Trace).ToArray()
+                        : new[] { V2OpenTelemetryCodec.DeserializeTraceSummary(existing.Values.Values) }
+                            .Concat(group.Select(item => item.Trace)).ToArray();
+                    var retainedServices = existing is null
+                        ? []
+                        : V2OpenTelemetryCodec.DeserializeSummaryElements(
+                            existing.Values.Values,
+                            V2OpenTelemetryStorageSchema.ServiceNames);
+                    var summary = V2OpenTelemetryCodec.TraceSummary(
+                        MergeTraceRecords(records),
+                        retainedServices.Concat(group
+                            .SelectMany(item => item.ServiceNames)
+                            .Select(V2OpenTelemetryCodec.CanonicalSearchKey)));
+                    var options = existing is null
+                        ? WriteOptions.CreateOnly
+                        : WriteOptions.IfVersion(existing.Version ?? throw new InvalidDataException(
+                            "The OpenTelemetry trace summary omitted its optimistic-concurrency version."));
+                    work.Stage(RowWrite.ConditionalUpsert(summaryUnit, summary, options));
+                }
+
+                work.Stage(RowWrite.Insert(ledgerUnit, V2OpenTelemetryCodec.Ledger(batchId, fingerprint)));
+                var report = await work.CommitWithOutcomesAsync(cancellationToken);
+                if (!report.IsSuccessful)
+                    throw new IOException("The OpenTelemetry v3 atomic capture commit returned failed row outcomes.");
+                return;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (NotSupportedException)
+            {
+                throw;
+            }
+            catch (ArgumentException)
+            {
+                throw;
+            }
+            catch (InvalidDataException)
+            {
+                throw;
+            }
+            catch (JsonException exception)
+            {
+                throw new InvalidDataException(
+                    "The persisted OpenTelemetry v3 capture state contained malformed JSON.",
+                    exception);
+            }
+            catch (AppendIdempotencyConflictException)
+            {
+                throw;
+            }
+            catch (CaptureBatchIdentityConflictException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (attempt < MaxCaptureAttempts)
+            {
+                failure = exception;
+                await Task.Delay(TimeSpan.FromMilliseconds(25 * attempt), cancellationToken);
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        }
+
+        throw new IOException("The OpenTelemetry v3 atomic capture failed after retries.", failure);
     }
 
-    private async ValueTask AppendAsync(
+    private async ValueTask<IReadOnlyDictionary<string, string>> ResolveServicesAsync(
+        OpenTelemetryBatch batch,
+        CancellationToken cancellationToken)
+    {
+        var services = batch.Resources.ToDictionary(
+            resource => resource.Id,
+            resource => resource.ServiceName,
+            StringComparer.OrdinalIgnoreCase);
+        var missingResourceIds = batch.Traces.SelectMany(trace => trace.ResourceIds)
+            .Concat(batch.MetricPoints.Select(point => point.ResourceId))
+            .Concat(batch.Logs.Select(log => log.ResourceId))
+            .Where(id => !services.ContainsKey(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Cast<object?>()
+            .ToArray();
+        if (missingResourceIds.Length == 0)
+            return services;
+
+        var retained = await sessions.Resources.BatchReadAsync(
+            new KeyedBatchReadRequest(
+                new TableId(sessions.Resources.Unit.Name),
+                ResourceColumns.Id,
+                missingResourceIds,
+                Projection.ColumnsOnly(ResourceColumns.Id, ResourceColumns.ServiceName)),
+            connection,
+            cancellationToken);
+        foreach (var row in retained.Rows)
+        {
+            var id = row.Values.TryGetValue(V2OpenTelemetryStorageSchema.Id, out var rawId) && rawId is string resourceId
+                ? resourceId
+                : throw new InvalidDataException("The OpenTelemetry resource batch read omitted its identity.");
+            var serviceName = row.Values.TryGetValue(V2OpenTelemetryStorageSchema.ServiceName, out var rawServiceName) && rawServiceName is string service
+                ? service
+                : throw new InvalidDataException("The OpenTelemetry resource batch read omitted its service name.");
+            services[id] = serviceName;
+        }
+        return services;
+    }
+
+    private async ValueTask<HashSet<string>> ReadExistingTraceSummaryKeysAsync(
+        IStorageSession session,
+        IReadOnlyList<string> traceKeys,
+        CancellationToken cancellationToken)
+    {
+        if (traceKeys.Count == 0)
+            return new(StringComparer.Ordinal);
+
+        var result = await session.BatchReadAsync(
+            new KeyedBatchReadRequest(
+                new TableId(session.Unit.Name),
+                TraceSummaryColumns.TraceKey,
+                traceKeys.Cast<object?>().ToArray(),
+                Projection.ColumnsOnly(TraceSummaryColumns.TraceKey)),
+            connection,
+            cancellationToken);
+        return result.Rows.Select(row => row.Values.TryGetValue(V2OpenTelemetryStorageSchema.TraceKey, out var value) && value is string key
+                ? key
+                : throw new InvalidDataException("The OpenTelemetry trace-summary batch read omitted its trace key."))
+            .ToHashSet(StringComparer.Ordinal);
+    }
+
+    private static async ValueTask AppendExactAsync(
         IStorageSession session,
         IReadOnlyList<StorageValues> values,
         DiagnosticsDrainBatchId batchId,
@@ -306,29 +563,10 @@ public sealed class GroundworkOpenTelemetryStore :
             return;
         var exact = session as IExactAppendStorageSession ??
             throw new NotSupportedException("The selected Groundwork provider does not advertise exact append outcomes.");
-        var operation = new OperationId(batchId.IssuedAt, $"otel-v2:{batchId}:{kind}");
-        Exception? failure = null;
-        for (var attempt = 1; attempt <= MaxAppendAttempts; attempt++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
-            {
-                var report = exact.AppendWithOutcomes(operation, values);
-                if (report.Outcomes.Count != values.Count)
-                    throw new InvalidDataException("Groundwork returned an incomplete exact append outcome report.");
-                return;
-            }
-            catch (Exception exception) when (attempt < MaxAppendAttempts)
-            {
-                failure = exception;
-                await Task.Delay(TimeSpan.FromMilliseconds(25 * attempt), cancellationToken);
-            }
-            catch (Exception exception)
-            {
-                failure = exception;
-            }
-        }
-        throw new IOException($"The OpenTelemetry v2 {kind} append failed after retries.", failure);
+        var operation = new OperationId(batchId.IssuedAt, $"otel-v3:{batchId}:{kind}");
+        var report = await exact.AppendWithOutcomesAsync(operation, values, cancellationToken);
+        if (report.Outcomes.Count != values.Count)
+            throw new InvalidDataException("Groundwork returned an incomplete exact append outcome report.");
     }
 
     private DiagnosticsDrain<OpenTelemetryBatch, bool> CreateDrain(
@@ -348,10 +586,11 @@ public sealed class GroundworkOpenTelemetryStore :
             },
             observer);
 
-    private async ValueTask<int> ApplyRetentionAsync(CancellationToken cancellationToken)
+    private async ValueTask<int> ApplyRetentionAsync(
+        OperationId traceRetentionOperation,
+        CancellationToken cancellationToken)
     {
-        var deleted = 0;
-        deleted += sessions.Traces.ApplyRetention(new RetentionExecutionOptions { KeepNewestOverride = traceCapacity, CancellationToken = cancellationToken }).DeletedRows;
+        var deleted = await ApplyTraceRetentionAsync(traceRetentionOperation, cancellationToken);
         deleted += sessions.Spans.ApplyRetention(new RetentionExecutionOptions { KeepNewestOverride = spanCapacity, CancellationToken = cancellationToken }).DeletedRows;
         deleted += sessions.MetricPoints.ApplyRetention(new RetentionExecutionOptions { KeepNewestOverride = metricPointCapacity, CancellationToken = cancellationToken }).DeletedRows;
         deleted += sessions.Logs.ApplyRetention(new RetentionExecutionOptions { KeepNewestOverride = logCapacity, CancellationToken = cancellationToken }).DeletedRows;
@@ -360,33 +599,146 @@ public sealed class GroundworkOpenTelemetryStore :
         return deleted;
     }
 
-    private void EnsureCatalog(IStorageSession session, StorageValues values)
+    private async ValueTask<int> ApplyTraceRetentionAsync(
+        OperationId operation,
+        CancellationToken cancellationToken)
     {
-        var result = session.Upsert(values);
-        if (!result.Succeeded && result.Status != WriteOutcomeStatus.Replayed)
-            throw new IOException($"The OpenTelemetry catalog upsert returned {result.Status}.");
+        EnsureRequiredCapabilities();
+        var summaryUnit = schema.Unit(V2OpenTelemetryStorageSchema.TraceSummaryUnitId);
+        var resourceUnit = schema.Unit(V2OpenTelemetryStorageSchema.ResourceUnitId);
+        Exception? failure = null;
+        for (var attempt = 1; attempt <= MaxCaptureAttempts; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                using var work = connection.BeginUnitOfWork(
+                    StorageAccess.Scoped(binding.StorageScope),
+                    BatchWriteOptions.Exact,
+                    commandObserver,
+                    schema.Unit(V2OpenTelemetryStorageSchema.TraceUnitId),
+                    summaryUnit,
+                    resourceUnit);
+                var traceSession = work.OpenSession(schema.Unit(V2OpenTelemetryStorageSchema.TraceUnitId));
+                var summarySession = work.OpenSession(summaryUnit);
+                var resourceSession = work.OpenSession(resourceUnit);
+                var retention = await traceSession.ApplyRetentionAsync(operation, new RetentionExecutionOptions
+                {
+                    KeepNewestOverride = traceCapacity,
+                    AffectedKeyProjection = new(
+                        V2OpenTelemetryStorageSchema.TraceKey,
+                        MaximumRetentionTraceKeys),
+                    CancellationToken = cancellationToken
+                });
+
+                foreach (var traceKey in retention.AffectedKeys
+                             .Select(value => value as string ?? throw new InvalidDataException(
+                                 "Groundwork returned a non-string OpenTelemetry retention trace key."))
+                             .Distinct(StringComparer.Ordinal))
+                {
+                    var summaryKey = new StorageKey(new Dictionary<string, object?>
+                    {
+                        [V2OpenTelemetryStorageSchema.TraceKey] = traceKey
+                    });
+                    var existing = summarySession.Read(summaryKey);
+                    var remaining = QueryAll(
+                            traceSession,
+                            [new Predicate.Equal(
+                                TraceColumns.TraceKey,
+                                QueryConstant.Of(TraceColumns.TraceKey, traceKey))],
+                            TraceColumns.Sequence,
+                            maxQuerySize,
+                            null,
+                            cancellationToken)
+                        .ToArray();
+                    if (remaining.Length == 0)
+                    {
+                        if (existing?.Version is { } version)
+                            work.Stage(RowWrite.Delete(summaryUnit, summaryKey, WriteOptions.IfVersion(version)));
+                        continue;
+                    }
+
+                    var trace = MergeTraceRecords(remaining
+                        .Select(V2OpenTelemetryCodec.Deserialize<TelemetryTrace>)
+                        .ToArray());
+                    var serviceKeys = ServicesFor(
+                            trace.ResourceIds,
+                            ImmutableDictionary<string, string>.Empty,
+                            resourceSession)
+                        .Select(V2OpenTelemetryCodec.CanonicalSearchKey);
+                    var values = V2OpenTelemetryCodec.TraceSummary(trace, serviceKeys);
+                    var options = existing is null
+                        ? WriteOptions.CreateOnly
+                        : WriteOptions.IfVersion(existing.Version ?? throw new InvalidDataException(
+                            "The OpenTelemetry trace summary omitted its optimistic-concurrency version."));
+                    work.Stage(RowWrite.ConditionalUpsert(summaryUnit, values, options));
+                }
+
+                var report = await work.CommitWithOutcomesAsync(cancellationToken);
+                if (!report.IsSuccessful)
+                    throw new IOException("The OpenTelemetry v3 trace-retention commit returned failed row outcomes.");
+                return retention.DeletedRows;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (RetentionAffectedKeyLimitExceededException)
+            {
+                throw;
+            }
+            catch (NotSupportedException)
+            {
+                throw;
+            }
+            catch (ArgumentException)
+            {
+                throw;
+            }
+            catch (InvalidDataException)
+            {
+                throw;
+            }
+            catch (JsonException exception)
+            {
+                throw new InvalidDataException(
+                    "The persisted OpenTelemetry v3 retention state contained malformed JSON.",
+                    exception);
+            }
+            catch (RetentionIdempotencyConflictException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (attempt < MaxCaptureAttempts)
+            {
+                failure = exception;
+                await Task.Delay(TimeSpan.FromMilliseconds(25 * attempt), cancellationToken);
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        }
+
+        throw new IOException("The OpenTelemetry v3 trace retention failed after retries.", failure);
     }
 
-    private void EnsureLedger(DiagnosticsDrainBatchId batchId, string fingerprint)
+    private void EnsureRequiredCapabilities()
     {
-        var key = new StorageKey(new Dictionary<string, object?> { [V2OpenTelemetryStorageSchema.BatchId] = batchId.ToString() });
-        var existing = sessions.Ledger.Read(key);
-        if (existing is not null)
+        var available = connection.Capabilities.Select(capability => capability.Id).ToHashSet();
+        var required = new[]
         {
-            EnsureLedgerMatches(existing, fingerprint);
-            return;
-        }
-        var result = sessions.Ledger.Insert(V2OpenTelemetryCodec.Ledger(batchId, fingerprint));
-        if (result.Succeeded || result.Status == WriteOutcomeStatus.Replayed)
-            return;
-
-        existing = sessions.Ledger.Read(key);
-        if (existing is not null)
+            WellKnownCapabilities.AtomicCommit,
+            BatchWriteCapabilities.ExactAppendOutcomes,
+            BatchWriteCapabilities.ExactRetention,
+            BatchWriteCapabilities.ExactRetentionAffectedKeys
+        };
+        var missing = required.Where(capability => !available.Contains(capability)).ToArray();
+        if (missing.Length != 0)
         {
-            EnsureLedgerMatches(existing, fingerprint);
-            return;
+            throw new NotSupportedException(
+                $"OpenTelemetry v3 requires Groundwork capabilities: {string.Join(", ", missing.Select(capability => capability.Value))}.");
         }
-        throw new IOException($"The OpenTelemetry capture ledger write returned {result.Status}.");
     }
 
     private static void EnsureLedgerMatches(StoredEntry existing, string fingerprint)
@@ -394,73 +746,99 @@ public sealed class GroundworkOpenTelemetryStore :
         if (!StringComparer.Ordinal.Equals(
                 existing.Values.Values.GetValueOrDefault(V2OpenTelemetryStorageSchema.Fingerprint)?.ToString(),
                 fingerprint))
-            throw new InvalidOperationException("The OpenTelemetry v2 batch identity was reused with different content.");
+            throw new CaptureBatchIdentityConflictException();
     }
 
-    private string? ServiceFor(IEnumerable<string> resourceIds, IReadOnlyDictionary<string, string> batchServices)
+    private static string? ServiceFrom(string resourceId, IReadOnlyDictionary<string, string> services) =>
+        services.TryGetValue(resourceId, out var serviceName) ? serviceName : null;
+
+    private static IReadOnlyList<string> ServicesFrom(
+        IEnumerable<string> resourceIds,
+        IReadOnlyDictionary<string, string> services) =>
+        resourceIds.Where(services.ContainsKey)
+            .Select(resourceId => services[resourceId])
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+    private IReadOnlyList<string> ServicesFor(
+        IEnumerable<string> resourceIds,
+        IReadOnlyDictionary<string, string> batchServices,
+        IStorageSession? resourceSession = null)
     {
+        var services = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        resourceSession ??= sessions.Resources;
         foreach (var resourceId in resourceIds)
         {
             if (batchServices.TryGetValue(resourceId, out var serviceName))
-                return serviceName;
-            var retained = sessions.Resources.Read(new StorageKey(new Dictionary<string, object?>
+            {
+                services.Add(serviceName);
+                continue;
+            }
+            var retained = resourceSession.Read(new StorageKey(new Dictionary<string, object?>
             {
                 [V2OpenTelemetryStorageSchema.Id] = resourceId
             }));
             if (retained is not null)
-                return V2OpenTelemetryCodec.Deserialize<TelemetryResource>(retained.Values.Values).ServiceName;
+                services.Add(V2OpenTelemetryCodec.Deserialize<TelemetryResource>(retained.Values.Values).ServiceName);
         }
-        return null;
+        return services.OrderBy(value => value, StringComparer.Ordinal).ToArray();
     }
 
-    private static QueryMaterializedResult Query(
+    private QueryMaterializedResult Query(
         IStorageSession session,
         IEnumerable<Predicate> predicates,
         ColumnRef orderColumn,
         int take,
         bool descending,
+        string? selectedIndex,
         params ColumnRef[] tieBreakers) =>
-        QueryPage(session, predicates, orderColumn, take, descending, null, tieBreakers);
+        QueryPage(session, predicates, orderColumn, take, descending, selectedIndex, null, tieBreakers);
 
-    private static QueryMaterializedResult QueryPage(
+    private QueryMaterializedResult QueryPage(
         IStorageSession session,
         IEnumerable<Predicate> predicates,
         ColumnRef orderColumn,
         int take,
         bool descending,
-        int? offset,
+        string? selectedIndex,
+        string? continuation,
         IReadOnlyList<ColumnRef> tieBreakers)
     {
         var order = ImmutableArray.CreateBuilder<OrderTerm>();
         order.Add(new(orderColumn, descending ? OrderDirection.Descending : OrderDirection.Ascending, descending ? NullOrder.First : NullOrder.Last));
         foreach (var tieBreaker in tieBreakers)
             order.Add(new(tieBreaker, OrderDirection.Ascending, NullOrder.Last));
-        return session.Query(new QueryRequest(
-            new TableId(session.Unit.Name),
-            All(predicates.ToArray()) ?? Predicate.AlwaysTrue.Instance,
-            order.ToImmutable(),
-            Projection.All,
-            offset is null ? Paging.Keyset(take) : Paging.OffsetLimit(offset.Value, take)));
+        return session.Query(
+            new QueryRequest(
+                new TableId(session.Unit.Name),
+                All(predicates.ToArray()) ?? Predicate.AlwaysTrue.Instance,
+                order.ToImmutable(),
+                Projection.All,
+                continuation is null ? Paging.Keyset(take) : Paging.Continuation(continuation, take)),
+            // Supply the declaration used to open the session. A provider's session unit can
+            // include physical covering keys, which must not be retargeted as logical columns.
+            schema.Unit(session.Unit.Id.Value).CreateQueryRenderOptions(selectedIndex));
     }
 
-    private static IReadOnlyList<IReadOnlyDictionary<string, object?>> QueryAll(
+    private IReadOnlyList<IReadOnlyDictionary<string, object?>> QueryAll(
         IStorageSession session,
         IEnumerable<Predicate> predicates,
         ColumnRef orderColumn,
         int pageSize,
+        string? selectedIndex,
         CancellationToken cancellationToken,
         params ColumnRef[] tieBreakers)
     {
         var rows = new List<IReadOnlyDictionary<string, object?>>();
-        var offset = 0;
-        QueryMaterializedResult page;
+        string? continuation = null;
         do
         {
             cancellationToken.ThrowIfCancellationRequested();
-            page = QueryPage(session, predicates, orderColumn, pageSize, false, offset, tieBreakers);
+            var page = QueryPage(session, predicates, orderColumn, pageSize, false, selectedIndex, continuation, tieBreakers);
             rows.AddRange(page.Rows);
-            offset += page.Rows.Count;
-        } while (page.Rows.Count == pageSize);
+            continuation = page.NextContinuationToken;
+        } while (continuation is not null);
         return rows;
     }
 
@@ -468,7 +846,7 @@ public sealed class GroundworkOpenTelemetryStore :
         checked((int)Math.Min(int.MaxValue, session.Query(new QueryRequest(
             new TableId(session.Unit.Name),
             Predicate.AlwaysTrue.Instance,
-            [new OrderTerm(orderColumn)],
+            [new OrderTerm(orderColumn, OrderDirection.Ascending, NullOrder.Last)],
             Projection.All,
             Paging.Keyset(1),
             result: ResultShape.TotalCount.Instance)).TotalCount ?? 0));
@@ -533,6 +911,43 @@ public sealed class GroundworkOpenTelemetryStore :
             predicates.Add(new Predicate.Substring(column, value, Anchor.Contains));
     }
 
+    private static void AddCanonicalSubstring(
+        ICollection<Predicate> predicates,
+        ColumnRef searchKeyColumn,
+        string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            predicates.Add(new Predicate.Substring(
+                searchKeyColumn,
+                V2OpenTelemetryCodec.CanonicalSearchKey(value),
+                Anchor.Contains));
+        }
+    }
+
+    private static void AddElementEqual(ICollection<Predicate> predicates, string field, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            predicates.Add(new Predicate.ElementOf(
+                new ElementSetRef(field, QueryType.String),
+                [QueryConstant.Of(value)],
+                SetQuantifier.Any));
+        }
+    }
+
+    private static void AddElementSubstring(ICollection<Predicate> predicates, string field, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            predicates.Add(new Predicate.ElementSubstring(
+                new ElementSetRef(field, QueryType.String),
+                value,
+                Anchor.Contains,
+                QueryStringComparisonPolicy.UnicodeOrdinalIgnoreCase));
+        }
+    }
+
     private static void AddRange(ICollection<Predicate> predicates, ColumnRef column, DateTimeOffset? from, DateTimeOffset? to)
     {
         if (from is null && to is null)
@@ -542,12 +957,6 @@ public sealed class GroundworkOpenTelemetryStore :
             from is { } lower ? Bound.Inclusive(QueryConstant.Of(column, lower)) : null,
             to is { } upper ? Bound.Inclusive(QueryConstant.Of(column, upper)) : null));
     }
-
-    private static Predicate Rebind(Predicate predicate, ColumnRef column) => predicate switch
-    {
-        Predicate.Equal equal => new Predicate.Equal(column, QueryConstant.Of(column, equal.Value.Value)),
-        _ => throw new InvalidOperationException("The OpenTelemetry query predicate cannot be rebound to another unit.")
-    };
 
     private static void ValidateRange(DateTimeOffset? from, DateTimeOffset? to, string parameterName)
     {
@@ -562,22 +971,70 @@ public sealed class GroundworkOpenTelemetryStore :
 
     private static int ClampTake(int? requested, int max = int.MaxValue) => Math.Clamp(requested ?? max, 0, max);
 
+    private static TelemetryTrace MergeTraceRecords(IEnumerable<TelemetryTrace> records) =>
+        TelemetryTraceMerger.Merge(records
+            .OrderBy(record => record.StartTime)
+            .ThenBy(record => record.TraceId, StringComparer.Ordinal)
+            .ThenBy(record => record.RootSpanId, StringComparer.Ordinal)
+            .ThenBy(record => record.Name, StringComparer.Ordinal)
+            .ThenBy(record => record.EndTime)
+            .ThenBy(record => record.SpanCount)
+            .ToArray());
+
     private static string Fingerprint(params IReadOnlyList<StorageValues>[] batches)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        AppendFingerprintInteger(hash, batches.Length);
         foreach (var batch in batches)
+        {
+            AppendFingerprintInteger(hash, batch.Count);
             foreach (var values in batch)
             {
+                AppendFingerprintInteger(hash, values.Values.Count);
                 foreach (var pair in values.Values.OrderBy(pair => pair.Key, StringComparer.Ordinal))
                 {
-                    var text = $"{pair.Key}\u001f{pair.Value}";
-                    var bytes = Encoding.UTF8.GetBytes(text);
-                    hash.AppendData(bytes);
-                    hash.AppendData([0]);
+                    AppendFingerprintText(hash, pair.Key);
+                    AppendFingerprintValue(hash, pair.Value);
                 }
-                hash.AppendData([1]);
             }
+        }
         return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+
+    private static void AppendFingerprintValue(IncrementalHash hash, object? value)
+    {
+        if (value is null)
+        {
+            AppendFingerprintText(hash, "null");
+            return;
+        }
+
+        AppendFingerprintText(hash, value.GetType().FullName ?? value.GetType().Name);
+        var canonical = value switch
+        {
+            string text => text,
+            DateTimeOffset timestamp => timestamp.ToString("O", CultureInfo.InvariantCulture),
+            DateTime timestamp => timestamp.ToString("O", CultureInfo.InvariantCulture),
+            byte[] bytes => Convert.ToBase64String(bytes),
+            IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
+            _ => throw new InvalidDataException(
+                $"The OpenTelemetry v3 batch fingerprint does not support values of type '{value.GetType().FullName}'.")
+        };
+        AppendFingerprintText(hash, canonical ?? string.Empty);
+    }
+
+    private static void AppendFingerprintText(IncrementalHash hash, string value)
+    {
+        var bytes = Encoding.UTF8.GetBytes(value);
+        AppendFingerprintInteger(hash, bytes.Length);
+        hash.AppendData(bytes);
+    }
+
+    private static void AppendFingerprintInteger(IncrementalHash hash, int value)
+    {
+        Span<byte> bytes = stackalloc byte[sizeof(int)];
+        BinaryPrimitives.WriteInt32LittleEndian(bytes, value);
+        hash.AppendData(bytes);
     }
 
     private async Task ObserveFailureAsync(OpenTelemetryBatch batch, Task<bool> acknowledgement)
@@ -597,6 +1054,9 @@ public sealed class GroundworkOpenTelemetryStore :
     private sealed class DrainTarget(GroundworkOpenTelemetryStore owner)
         : IDiagnosticsDrainTarget<OpenTelemetryBatch, bool>
     {
+        private readonly Lock retentionGate = new();
+        private OperationId? pendingTraceRetention;
+
         public async ValueTask<DiagnosticsDrainCommit<bool>> CommitAsync(
             DiagnosticsDrainBatch<OpenTelemetryBatch> batch,
             CancellationToken cancellationToken = default)
@@ -615,7 +1075,21 @@ public sealed class GroundworkOpenTelemetryStore :
 
         public async ValueTask<int> ApplyRetentionAsync(CancellationToken cancellationToken = default)
         {
-            return await owner.ApplyRetentionAsync(cancellationToken);
+            OperationId operation;
+            lock (retentionGate)
+            {
+                operation = pendingTraceRetention ??= new OperationId(
+                    owner.timeProvider.GetUtcNow(),
+                    $"otel-v3:retention:traces:{Guid.NewGuid():N}");
+            }
+
+            var deleted = await owner.ApplyRetentionAsync(operation, cancellationToken);
+            lock (retentionGate)
+            {
+                if (Equals(pendingTraceRetention, operation))
+                    pendingTraceRetention = null;
+            }
+            return deleted;
         }
 
         private static Guid ChildId(Guid parent, int index)
@@ -649,9 +1123,10 @@ public sealed class GroundworkOpenTelemetryStore :
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                owner.EnsureRequiredCapabilities();
                 foreach (var unit in owner.schema.Units)
                     connection.Schema.Apply(unit);
-                owner.sessions.Publish(connection, owner.binding);
+                owner.sessions.Publish(connection, owner.binding, owner.commandObserver);
                 var created = new Lease(owner);
                 lock (gate)
                     lease = created;
@@ -684,6 +1159,9 @@ public sealed class GroundworkOpenTelemetryStore :
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
+    private sealed class CaptureBatchIdentityConflictException()
+        : InvalidOperationException("The OpenTelemetry v3 batch identity was reused with different content.");
+
     private sealed class V2Sessions
     {
         internal IStorageSession Traces { get; private set; } = null!;
@@ -693,15 +1171,32 @@ public sealed class GroundworkOpenTelemetryStore :
         internal IStorageSession Resources { get; private set; } = null!;
         internal IStorageSession Instruments { get; private set; } = null!;
         internal IStorageSession Ledger { get; private set; } = null!;
+        internal IStorageSession TraceSummaries { get; private set; } = null!;
 
         internal V2Sessions() { }
 
-        internal void Publish(IStorageProviderConnection connection, V2OpenTelemetryBinding binding)
+        internal static V2Sessions Open(IUnitOfWork work, IReadOnlyList<StorageUnit> units)
+        {
+            ArgumentNullException.ThrowIfNull(work);
+            ArgumentNullException.ThrowIfNull(units);
+            var sessions = new V2Sessions();
+            sessions.Bind(units.Select(work.OpenSession).ToArray());
+            return sessions;
+        }
+
+        internal void Publish(
+            IStorageProviderConnection connection,
+            V2OpenTelemetryBinding binding,
+            IProviderCommandObserver? observer)
         {
             var access = StorageAccess.Scoped(binding.StorageScope);
             var units = new V2OpenTelemetryStorageSchemaSet().Units;
-            var opened = units.Select(unit => connection.OpenSession(unit, access)).ToArray();
-            if (opened.Length != 7)
+            Bind(units.Select(unit => connection.OpenSession(unit, access, observer)).ToArray());
+        }
+
+        private void Bind(IReadOnlyList<IStorageSession> opened)
+        {
+            if (opened.Count != 8)
                 throw new InvalidOperationException("OpenTelemetry v2 did not open all storage units.");
             Traces = opened[0];
             Spans = opened[1];
@@ -710,17 +1205,18 @@ public sealed class GroundworkOpenTelemetryStore :
             Resources = opened[4];
             Instruments = opened[5];
             Ledger = opened[6];
+            TraceSummaries = opened[7];
             Validate();
         }
 
         internal void Release()
         {
-            Traces = Spans = MetricPoints = Logs = Resources = Instruments = Ledger = null!;
+            Traces = Spans = MetricPoints = Logs = Resources = Instruments = Ledger = TraceSummaries = null!;
         }
 
         private void Validate()
         {
-            if (new[] { Traces.Unit.Id.Value, Spans.Unit.Id.Value, MetricPoints.Unit.Id.Value, Logs.Unit.Id.Value, Resources.Unit.Id.Value, Instruments.Unit.Id.Value, Ledger.Unit.Id.Value }.Distinct(StringComparer.Ordinal).Count() != 7)
+            if (new[] { Traces.Unit.Id.Value, Spans.Unit.Id.Value, MetricPoints.Unit.Id.Value, Logs.Unit.Id.Value, Resources.Unit.Id.Value, Instruments.Unit.Id.Value, Ledger.Unit.Id.Value, TraceSummaries.Unit.Id.Value }.Distinct(StringComparer.Ordinal).Count() != 8)
                 throw new ArgumentException("OpenTelemetry v2 sessions must each be bound to a distinct storage unit.");
         }
     }
@@ -728,12 +1224,17 @@ public sealed class GroundworkOpenTelemetryStore :
     private sealed class V2OpenTelemetryStorageSchemaSet
     {
         internal IReadOnlyList<StorageUnit> Units { get; } = V2OpenTelemetryStorageSchema.CreateUnits();
+
+        internal StorageUnit Unit(string id) =>
+            Units.Single(unit => StringComparer.Ordinal.Equals(unit.Id.Value, id));
     }
 
     private static class TraceColumns
     {
         internal static ColumnRef Sequence => Column(V2OpenTelemetryStorageSchema.Sequence, QueryType.Int64, false);
-        internal static ColumnRef TraceId => Column(V2OpenTelemetryStorageSchema.TraceId, QueryType.String, false, 256);
+        internal static ColumnRef TraceId => Column(
+            V2OpenTelemetryStorageSchema.TraceId, QueryType.String, false, V2OpenTelemetryCodec.MaximumTraceIdCodeUnits);
+        internal static ColumnRef TraceKey => Column(V2OpenTelemetryStorageSchema.TraceKey, QueryType.String, false, 64);
         internal static ColumnRef ResourceId => Column(V2OpenTelemetryStorageSchema.ResourceId, QueryType.String, false, 512);
         internal static ColumnRef ServiceName => Column(V2OpenTelemetryStorageSchema.ServiceName, QueryType.String, true, 512);
         internal static ColumnRef WorkflowInstanceId => Column(V2OpenTelemetryStorageSchema.WorkflowInstanceId, QueryType.String, true, 512);
@@ -743,11 +1244,35 @@ public sealed class GroundworkOpenTelemetryStore :
         private static ColumnRef Column(string name, QueryType type, bool nullable, int? max = null) => new(new TableId("elsa_otel_traces_v2"), name, type, nullable, max);
     }
 
+    private static class TraceSummaryColumns
+    {
+        internal static ColumnRef TraceKey => Column(V2OpenTelemetryStorageSchema.TraceKey, QueryType.String, false, 64);
+        internal static ColumnRef TraceId => Column(
+            V2OpenTelemetryStorageSchema.TraceId, QueryType.String, false, V2OpenTelemetryCodec.MaximumTraceIdCodeUnits);
+        internal static ColumnRef TraceIdSearchKey => Column(
+            V2OpenTelemetryStorageSchema.TraceIdSearchKey,
+            QueryType.String,
+            false,
+            V2OpenTelemetryCodec.MaximumTraceIdSearchKeyCodeUnits);
+        internal static ColumnRef NameSearchKey => Column(
+            V2OpenTelemetryStorageSchema.NameSearchKey,
+            QueryType.String,
+            true,
+            V2OpenTelemetryCodec.MaximumSummaryNameSearchKeyCodeUnits);
+        internal static ColumnRef Status => Column(V2OpenTelemetryStorageSchema.Status, QueryType.Int64, false);
+        internal static ColumnRef StartTime => Column(V2OpenTelemetryStorageSchema.StartTime, QueryType.DateTimeOffset, false);
+        internal static ColumnRef Name => Column(V2OpenTelemetryStorageSchema.Name, QueryType.String, true);
+        private static ColumnRef Column(string name, QueryType type, bool nullable, int? max = null) =>
+            new(new TableId("elsa_otel_trace_summaries_v3"), name, type, nullable, max);
+    }
+
     private static class SpanColumns
     {
         internal static ColumnRef Sequence => Column(V2OpenTelemetryStorageSchema.Sequence, QueryType.Int64, false);
-        internal static ColumnRef TraceId => Column(V2OpenTelemetryStorageSchema.TraceId, QueryType.String, false, 256);
-        internal static ColumnRef SpanId => Column(V2OpenTelemetryStorageSchema.SpanId, QueryType.String, false, 256);
+        internal static ColumnRef TraceId => Column(
+            V2OpenTelemetryStorageSchema.TraceId, QueryType.String, false, V2OpenTelemetryCodec.MaximumTraceIdCodeUnits);
+        internal static ColumnRef TraceKey => Column(V2OpenTelemetryStorageSchema.TraceKey, QueryType.String, false, 64);
+        internal static ColumnRef SpanId => Column(V2OpenTelemetryStorageSchema.SpanId, QueryType.String, false, 128);
         internal static ColumnRef StartTime => Column(V2OpenTelemetryStorageSchema.StartTime, QueryType.DateTimeOffset, false);
         private static ColumnRef Column(string name, QueryType type, bool nullable, int? max = null) => new(new TableId("elsa_otel_spans_v2"), name, type, nullable, max);
     }
@@ -755,7 +1280,7 @@ public sealed class GroundworkOpenTelemetryStore :
     private static class MetricColumns
     {
         internal static ColumnRef Sequence => Column(V2OpenTelemetryStorageSchema.Sequence, QueryType.Int64, false);
-        internal static ColumnRef Id => Column(V2OpenTelemetryStorageSchema.Id, QueryType.String, false, 512);
+        internal static ColumnRef Id => Column(V2OpenTelemetryStorageSchema.Id, QueryType.String, false, 128);
         internal static ColumnRef ResourceId => Column(V2OpenTelemetryStorageSchema.ResourceId, QueryType.String, false, 512);
         internal static ColumnRef ServiceName => Column(V2OpenTelemetryStorageSchema.ServiceName, QueryType.String, true, 512);
         internal static ColumnRef InstrumentName => Column(V2OpenTelemetryStorageSchema.InstrumentName, QueryType.String, false);
@@ -766,10 +1291,12 @@ public sealed class GroundworkOpenTelemetryStore :
     private static class LogColumns
     {
         internal static ColumnRef Sequence => Column(V2OpenTelemetryStorageSchema.Sequence, QueryType.Int64, false);
-        internal static ColumnRef Id => Column(V2OpenTelemetryStorageSchema.Id, QueryType.String, false, 512);
+        internal static ColumnRef Id => Column(V2OpenTelemetryStorageSchema.Id, QueryType.String, false, 128);
         internal static ColumnRef ResourceId => Column(V2OpenTelemetryStorageSchema.ResourceId, QueryType.String, false, 512);
         internal static ColumnRef ServiceName => Column(V2OpenTelemetryStorageSchema.ServiceName, QueryType.String, true, 512);
-        internal static ColumnRef TraceId => Column(V2OpenTelemetryStorageSchema.TraceId, QueryType.String, true, 256);
+        internal static ColumnRef TraceId => Column(
+            V2OpenTelemetryStorageSchema.TraceId, QueryType.String, true, V2OpenTelemetryCodec.MaximumTraceIdCodeUnits);
+        internal static ColumnRef TraceKey => Column(V2OpenTelemetryStorageSchema.TraceKey, QueryType.String, true, 64);
         internal static ColumnRef SpanId => Column(V2OpenTelemetryStorageSchema.SpanId, QueryType.String, true, 256);
         internal static ColumnRef SeverityText => Column(V2OpenTelemetryStorageSchema.SeverityText, QueryType.String, false);
         internal static ColumnRef Body => Column(V2OpenTelemetryStorageSchema.Body, QueryType.String, false);
@@ -781,6 +1308,8 @@ public sealed class GroundworkOpenTelemetryStore :
     {
         internal static ColumnRef Id => Column(V2OpenTelemetryStorageSchema.Id, QueryType.String, false, 512);
         internal static ColumnRef ServiceName => Column(V2OpenTelemetryStorageSchema.ServiceName, QueryType.String, false, 512);
+        internal static ColumnRef ServiceNameKey => Column(V2OpenTelemetryStorageSchema.ServiceNameKey, QueryType.String, false, 64);
+        internal static ColumnRef IdOrderKey => Column(V2OpenTelemetryStorageSchema.IdOrderKey, QueryType.String, false, 64);
         internal static ColumnRef Status => Column(V2OpenTelemetryStorageSchema.Status, QueryType.Int64, false);
         internal static ColumnRef LastSeen => Column(V2OpenTelemetryStorageSchema.LastSeen, QueryType.DateTimeOffset, false);
         private static ColumnRef Column(string name, QueryType type, bool nullable, int? max = null) => new(new TableId("elsa_otel_resources_v2"), name, type, nullable, max);

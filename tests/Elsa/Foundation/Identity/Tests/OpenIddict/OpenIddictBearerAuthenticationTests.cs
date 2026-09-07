@@ -119,13 +119,14 @@ public sealed class OpenIddictBearerAuthenticationTests
                     services.AddLogging();
                     services.AddRouting();
                     services.AddAuthorization();
+                    services.AddOpenIddictVendorForTests(
+                        builder => builder.UseInMemoryDatabase(databaseName));
                     services.AddFoundationIdentityOpenIddict(
                         options =>
                         {
                             options.IsDevelopmentOrDemo = true;
                             configure?.Invoke(options);
-                        },
-                        configureDbContext: builder => builder.UseInMemoryDatabase(databaseName));
+                        });
                 });
                 webHost.Configure(app =>
                 {

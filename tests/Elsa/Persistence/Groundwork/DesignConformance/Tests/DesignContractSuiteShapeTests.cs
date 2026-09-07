@@ -13,11 +13,11 @@ public class DesignContractSuiteShapeTests
             "Elsa.Activities.Design.Core",
             "Elsa.Activities.Design.Persistence.Core",
             "Elsa.Activities.Design.Reconciliation.Core",
+            "Elsa.Activities.Runtime.Core",
             "Elsa.Events.Core",
             "Elsa.Expressions.Core",
             "Elsa.Locking.Core",
             "Elsa.Pipelines.Core",
-            "Elsa.Persistence.Core",
             "Elsa.Persistence.Groundwork.DesignConformance.Tests",
             "Elsa.Primitives",
             "Elsa.Primitives.Hosting",
@@ -26,6 +26,7 @@ public class DesignContractSuiteShapeTests
             "Elsa.Workflows.Design.Persistence.Core",
             "Elsa.Workflows.Design.Validations.Core",
             "Elsa.Workflows.Primitives",
+            "Elsa.Workflows.Runtime.Core",
             "Microsoft.Extensions.DependencyInjection",
             "Microsoft.Extensions.DependencyInjection.Abstractions",
             "Microsoft.VisualStudio.TestPlatform.ObjectModel",
@@ -59,6 +60,7 @@ public class DesignContractSuiteShapeTests
         [
             "CShells.Abstractions",
             "Elsa.Activities.Design.Core",
+            "Elsa.Activities.Runtime.Core",
             "Elsa.Events.Core",
             "Elsa.Expressions.Core",
             "Elsa.Pipelines.Core",
@@ -71,6 +73,7 @@ public class DesignContractSuiteShapeTests
             "Microsoft.Extensions.Configuration.Abstractions",
             "Microsoft.Extensions.DependencyInjection",
             "Microsoft.Extensions.DependencyInjection.Abstractions",
+            "Microsoft.Extensions.Logging.Abstractions",
             "Microsoft.Extensions.Options",
             "Microsoft.Extensions.Primitives",
             "Microsoft.NETCore.App.Ref",
@@ -90,10 +93,10 @@ public class DesignContractSuiteShapeTests
             "src/Elsa/Activities/Design/Core/Elsa.Activities.Design.Core.csproj",
             "src/Elsa/Activities/Design/Persistence/Core/Elsa.Activities.Design.Persistence.Core.csproj",
             "src/Elsa/Activities/Design/Reconciliation/Core/Elsa.Activities.Design.Reconciliation.Core.csproj",
+            "src/Elsa/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj",
             "src/Elsa/Events/Core/Elsa.Events.Core.csproj",
             "src/Elsa/Expressions/Core/Elsa.Expressions.Core.csproj",
             "src/Elsa/Locking/Core/Elsa.Locking.Core.csproj",
-            "src/Elsa/Persistence/Core/Elsa.Persistence.Core.csproj",
             "src/Elsa/Pipelines/Core/Elsa.Pipelines.Core.csproj",
             "src/Elsa/Primitives/Hosting/Elsa.Primitives.Hosting.csproj",
             "src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj",
@@ -101,7 +104,8 @@ public class DesignContractSuiteShapeTests
             "src/Elsa/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj",
             "src/Elsa/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj",
             "src/Elsa/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj",
-            "src/Elsa/Workflows/Primitives/Elsa.Workflows.Primitives.csproj"
+            "src/Elsa/Workflows/Primitives/Elsa.Workflows.Primitives.csproj",
+            "src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
         ],
         StringComparer.OrdinalIgnoreCase);
 

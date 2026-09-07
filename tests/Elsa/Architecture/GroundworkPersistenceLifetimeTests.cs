@@ -63,7 +63,6 @@ public sealed class GroundworkPersistenceLifetimeTests
         new("src/Elsa/Activities/Runtime/ActivitiesRuntimeFeature.cs", "ActivityFaultIncidentRecorder"),
         new("src/Elsa/Secrets/Extensions/SecretsServiceCollectionExtensions.cs", "ISecretManager"),
         new("src/Elsa/Secrets/Extensions/SecretsServiceCollectionExtensions.cs", "ISecretValueResolver"),
-        new("src/Elsa/Workflows/Publishing/WorkflowsPublishingFeature.cs", "IPublicationProjectionPreparer"),
         new("src/Elsa/Workflows/Publishing/WorkflowsPublishingFeature.cs", "IPublicationActivator"),
         new("src/Elsa/Workflows/Publishing/WorkflowsPublishingFeature.cs", "PublicationSnapshotReviewService"),
         new("src/Elsa/Workflows/Runtime/Api/WorkflowsRuntimeTriggersFeature.cs", "IWorkflowTriggerIndexer"),

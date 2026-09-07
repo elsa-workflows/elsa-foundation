@@ -2,7 +2,6 @@ using System.Text.Json;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Services;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Persistence.Core;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -640,7 +639,7 @@ public abstract class TwoNodeAcceptanceTests
             new DateTimeOffset(2026, 7, 20, 8, 30, 0, TimeSpan.Zero),
             new DateTimeOffset(2026, 7, 20, 8, 45, 0, TimeSpan.Zero),
             WorkflowExecutableReferenceScope.Published,
-            PublicationId: "publication-distributed",
+            ActivationId: "publication-distributed",
             SlotId: "production");
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

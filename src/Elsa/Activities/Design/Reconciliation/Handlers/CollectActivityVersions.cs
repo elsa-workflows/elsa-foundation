@@ -7,7 +7,8 @@ using Elsa.Activities.Design.Reconciliation.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Exceptions;
 using Elsa.Activities.Design.Reconciliation.Services;
 using Elsa.Events.Core.Contracts;
-using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Serialization.Core;
 using System.Text.Json;
 

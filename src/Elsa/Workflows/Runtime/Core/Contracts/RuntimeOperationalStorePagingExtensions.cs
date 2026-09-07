@@ -72,9 +72,9 @@ public static class RuntimeOperationalStorePagingExtensions
         return timers;
     }
 
-    public static async ValueTask<IReadOnlyList<RecurringTriggerSchedule>> ListAllByPublicationAsync(
+    public static async ValueTask<IReadOnlyList<RecurringTriggerSchedule>> ListAllByActivationAsync(
         this IRecurringTriggerScheduleStore store,
-        string publicationId,
+        string activationId,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(store);
@@ -82,9 +82,9 @@ public static class RuntimeOperationalStorePagingExtensions
         string? continuationToken = null;
         do
         {
-            var page = await store.ListByPublicationPageAsync(
-                new RecurringTriggerSchedulePublicationPageQuery(
-                    publicationId,
+            var page = await store.ListByActivationPageAsync(
+                new RecurringTriggerScheduleActivationPageQuery(
+                    activationId,
                     RuntimeStorePageRequest.MaximumLimit,
                     continuationToken),
                 cancellationToken);

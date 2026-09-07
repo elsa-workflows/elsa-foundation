@@ -11,9 +11,9 @@
 #   Elsa.Workbench : http://localhost:13000   (root returns Healthy JSON)
 #   Elsa Studio : http://localhost:14000
 #
-# Persistence: elsa-workbench is composed with GroundworkUnifiedPersistencePostgreSql
-# via the mounted ./elsa-workbench.shells.json, so runtime + workflows-design +
-# activities-design all live in the 'postgres' service's database.
+# Persistence: elsa-workbench is composed with an explicit Groundwork PostgreSQL
+# provider and lane features via the mounted ./elsa-workbench.shells.json, so
+# runtime + workflows-design + activities-design all live in the Postgres target.
 #
 # Verify Postgres is actually used:
 #   docker compose exec postgres psql -U elsa -d elsa -c '\dt'
@@ -59,11 +59,11 @@ services:
       Cors__AllowedOrigins__0: "http://localhost:14000"
       # The connection string is supplied by the mounted shells.json below. To override
       # it without editing that file, uncomment the next line:
-      # CShells__Shells__default__Features__GroundworkUnifiedPersistencePostgreSql__ConnectionString: "Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa"
+      # CShells__Shells__default__Features__GroundworkProviderPostgreSql__ConnectionString: "Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa"
     ports:
       - "13000:8080"
     volumes:
-      # Curated demo composition (Postgres unified persistence). Read-only.
+      # Curated demo composition (explicit Postgres provider and lanes). Read-only.
       - ./elsa-workbench.shells.json:/app/shells.json:ro
       # Nuplane directory feed: drop .nupkg activity/extension packages here to load them.
       - server-packages:/app/packages

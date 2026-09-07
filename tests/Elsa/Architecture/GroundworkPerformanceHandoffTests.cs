@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json.Nodes;
 using Xunit;
 
@@ -64,7 +65,11 @@ public sealed class GroundworkPerformanceHandoffTests
             ["command-send-lease-ack"] =
             ["lease-visible-commands-by-execution", "list-visible-command-executions", "count-pending-commands-by-execution"],
             ["diagnostics-durable-history"] =
-            ["resources-by-last-seen", "resources-by-status", "resources-by-service", "instruments-by-last-seen"],
+            [
+                "resources-by-last-seen", "resources-by-status", "resources-by-service",
+                "traces-by-last-seen", "trace-detail", "metrics-by-last-seen", "logs-by-last-seen",
+                "structured-log-recent", "structured-log-replay"
+            ],
             ["due-timer-selection"] = ["list-due"],
             ["iam-normalized-lookup-update"] =
             ["find-user-by-normalized-name", "find-user-by-normalized-email", "find-role-by-normalized-name", "list-user-roles", "list-role-users"],
@@ -136,6 +141,8 @@ public sealed class GroundworkPerformanceHandoffTests
         var workloads = documents
             .SelectMany(document => document["workloads"]!.AsArray())
             .Select(workload => workload!.AsObject())
+            .GroupBy(workload => workload["id"]!.GetValue<string>(), StringComparer.Ordinal)
+            .Select(group => group.OrderByDescending(workload => workload["version"]!.GetValue<string>(), StringComparer.Ordinal).First())
             .ToDictionary(workload => workload["id"]!.GetValue<string>(), StringComparer.Ordinal);
 
         Assert.Equal(ExpectedNativeRoutes.Keys.Order(StringComparer.Ordinal), workloads.Keys.Order(StringComparer.Ordinal));
@@ -159,7 +166,6 @@ public sealed class GroundworkPerformanceHandoffTests
             var expectedBlockedReason = id switch
             {
                 "diagnostics-durable-history" => "gate.diagnostics.absolute-budget-required",
-                "secret-create-read-list" => "comparator.secret.real-ef-required",
                 _ => null
             };
             Assert.Equal(
@@ -208,6 +214,530 @@ public sealed class GroundworkPerformanceHandoffTests
         Assert.Equal("benchmark.ready", workload["benchmarkAdmission"]!["reason"]!.GetValue<string>());
     }
 
+    [Fact]
+    public void Operator_runner_uses_the_live_registry_and_keeps_evidence_phases_separate()
+    {
+        var runner = File.ReadAllText(Path.Combine(RepoRoot, "tools", "groundwork", "run-e3-medium-baseline.py"));
+
+        Assert.Contains("describe-matrix", runner, StringComparison.Ordinal);
+        Assert.Contains("AdapterHostRevision", runner, StringComparison.Ordinal);
+        Assert.Contains("HarnessRevision", runner, StringComparison.Ordinal);
+        Assert.DoesNotContain("WORKLOADS =", runner, StringComparison.Ordinal);
+        foreach (var command in new[] { "capture", "correctness", "measure" })
+            Assert.Contains($"commands.add_parser(\"{command}\"", runner, StringComparison.Ordinal);
+        Assert.Contains("for name in (\"compare\", \"gate\")", runner, StringComparison.Ordinal);
+        Assert.Contains("Dry run only", runner, StringComparison.Ordinal);
+        Assert.Contains("require_idle_host()", runner, StringComparison.Ordinal);
+        Assert.Contains("def process_pid(", runner, StringComparison.Ordinal);
+        Assert.Contains("next(csv.reader([stripped], strict=True))", runner, StringComparison.Ordinal);
+        Assert.Contains("TASKLIST_CSV_ROW.fullmatch(stripped)", runner, StringComparison.Ordinal);
+        Assert.Contains("raw_pid.isascii() and raw_pid.isdecimal()", runner, StringComparison.Ordinal);
+        Assert.Contains("stripped.split(maxsplit=1)[0]", runner, StringComparison.Ordinal);
+        Assert.Contains("process_pid(line, windows=windows) != own_pid", runner, StringComparison.Ordinal);
+        Assert.DoesNotContain("own_pid not in line", runner, StringComparison.Ordinal);
+
+        var targetContext = runner.IndexOf("def target_context(", StringComparison.Ordinal);
+        Assert.True(targetContext >= 0);
+        Assert.True(
+            runner.IndexOf("require_phase(registration, phase)", targetContext, StringComparison.Ordinal) <
+            runner.IndexOf("probe_provider(root", targetContext, StringComparison.Ordinal));
+        foreach (var phase in new[] { "capture", "correctness", "measure" })
+        {
+            var method = runner.IndexOf($"def {phase}(", StringComparison.Ordinal);
+            var pathAdmission = runner.IndexOf("ensure_external(", method, StringComparison.Ordinal);
+            var contextAdmission = runner.IndexOf($"target_context(args, \"{phase}\"", method, StringComparison.Ordinal);
+            Assert.True(method >= 0 && pathAdmission >= 0 && contextAdmission >= 0);
+            Assert.True(pathAdmission < contextAdmission);
+        }
+
+        var measureMethod = runner.IndexOf("def measure(", StringComparison.Ordinal);
+        var compareMethod = runner.IndexOf("def compare_or_gate(", measureMethod, StringComparison.Ordinal);
+        var measureBody = runner[measureMethod..compareMethod];
+        var outputAdmission = measureBody.IndexOf("ensure_measurement_output_admissible(output)", StringComparison.Ordinal);
+        var measurementContextAdmission = measureBody.IndexOf("target_context(args, \"measure\"", StringComparison.Ordinal);
+        Assert.True(outputAdmission >= 0 && measurementContextAdmission > outputAdmission);
+        Assert.Contains(
+            "measurement_command = [\"dotnet\", str(harness), \"measure\", \"--out\", str(output)]",
+            measureBody,
+            StringComparison.Ordinal);
+        Assert.True(
+            measureBody.IndexOf("subprocess.run(command,", StringComparison.Ordinal) <
+            measureBody.IndexOf("subprocess.run(measurement_command,", StringComparison.Ordinal));
+
+        var adapterHost = File.ReadAllText(Path.Combine(
+            RepoRoot,
+            "benchmarks",
+            "Elsa.Groundwork.StorePerformance.AdapterHost",
+            "Program.cs"));
+        var harness = File.ReadAllText(Path.Combine(
+            RepoRoot,
+            "benchmarks",
+            "Elsa.Groundwork.StorePerformance.Benchmarks",
+            "Program.cs"));
+        Assert.Contains("RequireCleanCurrentBuild", adapterHost, StringComparison.Ordinal);
+        Assert.Contains("RequireCleanCurrentBuild", harness, StringComparison.Ordinal);
+        Assert.Contains("RequireWithin", harness, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Diagnostics_performance_workflow_is_manual_ungraded_and_phase_separated()
+    {
+        var workflow = File.ReadAllText(Path.Combine(
+            RepoRoot,
+            ".github",
+            "workflows",
+            "http-workflow-performance.yml"));
+        var jobStart = workflow.IndexOf("  groundwork-diagnostics:", StringComparison.Ordinal);
+        var jobEnd = workflow.IndexOf("\n  alert:", jobStart, StringComparison.Ordinal);
+
+        Assert.True(jobStart >= 0 && jobEnd > jobStart);
+        var job = workflow[jobStart..jobEnd];
+
+        Assert.Contains("suite=groundwork-diagnostics", workflow, StringComparison.Ordinal);
+        Assert.Contains(
+            "if: ${{ github.event_name == 'workflow_dispatch' && inputs.suite == 'groundwork-diagnostics' }}",
+            job,
+            StringComparison.Ordinal);
+        Assert.Contains("timeout-minutes: 300", job, StringComparison.Ordinal);
+        Assert.Contains("diagnostics_provider:", workflow, StringComparison.Ordinal);
+        Assert.Contains("provider: ${{ fromJSON(inputs.diagnostics_provider", job, StringComparison.Ordinal);
+        Assert.Contains("[\"sqlite\",\"postgresql\",\"sqlserver\",\"mongodb\"]", job, StringComparison.Ordinal);
+        Assert.Contains("run-e3-medium-baseline.py capture", job, StringComparison.Ordinal);
+        Assert.Contains("run-e3-medium-baseline.py correctness", job, StringComparison.Ordinal);
+        Assert.Contains("DIAGNOSTICS_CORRECTNESS_DIR:", job, StringComparison.Ordinal);
+        Assert.Contains("/${{ matrix.provider }}/correctness", job, StringComparison.Ordinal);
+        var correctnessStart = job.IndexOf("      - name: Verify diagnostics correctness", StringComparison.Ordinal);
+        var correctnessEnd = job.IndexOf("      - name: Reset SQLite database before timing", correctnessStart, StringComparison.Ordinal);
+        Assert.True(correctnessStart >= 0 && correctnessEnd > correctnessStart);
+        var correctnessStep = job[correctnessStart..correctnessEnd];
+        Assert.Contains("--out \"$DIAGNOSTICS_CORRECTNESS_DIR\"", correctnessStep, StringComparison.Ordinal);
+        Assert.DoesNotContain("--out \"$DIAGNOSTICS_OUTPUT_DIR\"", correctnessStep, StringComparison.Ordinal);
+        Assert.Contains("--execute | tee \"$DIAGNOSTICS_WORK_ROOT/correctness-summary.txt\"", correctnessStep, StringComparison.Ordinal);
+        var timingPreparationEnd = job.IndexOf("      - name: Stop non-target containers before timing", correctnessEnd, StringComparison.Ordinal);
+        Assert.True(timingPreparationEnd > correctnessEnd);
+        var sqliteResetStep = job[correctnessEnd..timingPreparationEnd];
+        Assert.Contains("if: ${{ matrix.provider == 'sqlite' }}", sqliteResetStep, StringComparison.Ordinal);
+        Assert.Contains(
+            "rm -f -- \"$sqlite_file\" \"$sqlite_file-shm\" \"$sqlite_file-wal\" \"$sqlite_file-journal\"",
+            sqliteResetStep,
+            StringComparison.Ordinal);
+        var measurementStart = job.IndexOf("      - name: Measure diagnostics evidence", timingPreparationEnd, StringComparison.Ordinal);
+        var measurementEnd = job.IndexOf("      - name: Record provider diagnostics", measurementStart, StringComparison.Ordinal);
+        Assert.True(measurementStart >= 0 && measurementEnd > measurementStart);
+        var measurementStep = job[measurementStart..measurementEnd];
+        Assert.Contains("--out \"$DIAGNOSTICS_OUTPUT_DIR\"", measurementStep, StringComparison.Ordinal);
+        Assert.DoesNotContain("--out \"$DIAGNOSTICS_CORRECTNESS_DIR\"", measurementStep, StringComparison.Ordinal);
+        Assert.Contains("pg_isready -h 127.0.0.1", job, StringComparison.Ordinal);
+        Assert.Contains("psql -h 127.0.0.1", job, StringComparison.Ordinal);
+        Assert.Contains("mongo_attestation=\"$(image_attestation \"$mongo_container\")\"", job, StringComparison.Ordinal);
+        Assert.Contains("ELSA_BENCH_MONGO_CONTAINER_ATTESTATION", job, StringComparison.Ordinal);
+        Assert.Contains(
+            "User Id=sa;Pass" + "word=%s;TrustServerCertificate=True;Encrypt=False;Initial Catalog=%s",
+            job,
+            StringComparison.Ordinal);
+        Assert.Contains("dotnet build-server shutdown", job, StringComparison.Ordinal);
+        Assert.Contains("run-e3-medium-baseline.py measure", job, StringComparison.Ordinal);
+        Assert.DoesNotContain("continue-on-error", job, StringComparison.Ordinal);
+        Assert.DoesNotContain("budget-gate", job, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("run-e3-medium-baseline.py compare", job, StringComparison.Ordinal);
+        Assert.Contains("$DIAGNOSTICS_WORK_ROOT/run-summary.txt", job, StringComparison.Ordinal);
+        Assert.Contains("/${{ matrix.provider }}/correctness-summary.txt", job, StringComparison.Ordinal);
+        Assert.DoesNotContain("$DIAGNOSTICS_OUTPUT_DIR/run-summary.txt", job, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Operator_runner_rejects_unbound_preexisting_measurement_output_before_resolving_context()
+    {
+        var runnerPath = Path.Combine(RepoRoot, "tools", "groundwork", "run-e3-medium-baseline.py");
+        const string assertions = """
+import runpy
+import sys
+import tempfile
+from pathlib import Path
+
+module = runpy.run_path(sys.argv[1])
+ensure_measurement_output_admissible = module["ensure_measurement_output_admissible"]
+
+with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    missing = root / "missing"
+    ensure_measurement_output_admissible(missing)
+
+    empty = root / "empty"
+    empty.mkdir()
+    ensure_measurement_output_admissible(empty)
+
+    occupied = root / "occupied"
+    occupied.mkdir()
+    (occupied / "correctness.process.json").write_text("{}", encoding="utf-8")
+    try:
+        ensure_measurement_output_admissible(occupied)
+    except ValueError as exception:
+        assert "artifact-manifest.v2.json" in str(exception), exception
+        assert "fresh directory" in str(exception), exception
+    else:
+        raise AssertionError("measurement accepted preexisting output without a manifest")
+
+    resumable = root / "resumable"
+    resumable.mkdir()
+    (resumable / "artifact-manifest.v2.json").write_text("{}", encoding="utf-8")
+    (resumable / "first.process.json").write_text("{}", encoding="utf-8")
+    ensure_measurement_output_admissible(resumable)
+
+    regular_file = root / "regular-file"
+    regular_file.write_text("not a directory", encoding="utf-8")
+    try:
+        ensure_measurement_output_admissible(regular_file)
+    except ValueError as exception:
+        assert "not a directory" in str(exception), exception
+    else:
+        raise AssertionError("measurement accepted a regular file as its output directory")
+""";
+
+        var result = RunPython(assertions, runnerPath);
+
+        Assert.True(result.ExitCode == 0, result.Error);
+    }
+
+    [Fact]
+    public void Operator_runner_invalidates_evidence_when_capture_does_not_complete()
+    {
+        var runnerPath = Path.Combine(RepoRoot, "tools", "groundwork", "run-e3-medium-baseline.py");
+        const string assertions = """
+import runpy
+import sys
+import tempfile
+from pathlib import Path
+
+module = runpy.run_path(sys.argv[1])
+begin_capture = module["begin_capture"]
+complete_capture = module["complete_capture"]
+require_capture_complete = module["require_capture_complete"]
+
+with tempfile.TemporaryDirectory() as directory:
+    evidence = Path(directory) / "evidence"
+    evidence.mkdir()
+    (evidence / "previous.native-plan.json").write_text("previous", encoding="utf-8")
+
+    try:
+        begin_capture(evidence)
+    except ValueError as exception:
+        assert "empty" in str(exception), exception
+    else:
+        raise AssertionError("capture reused a non-empty evidence directory")
+
+    try:
+        require_capture_complete(evidence)
+    except ValueError as exception:
+        assert "incomplete" in str(exception), exception
+    else:
+        raise AssertionError("failed capture left evidence admissible")
+
+    marker = module["capture_marker"](evidence)
+    marker.unlink()
+    fresh = Path(directory) / "fresh-evidence"
+    marker = begin_capture(fresh)
+    try:
+        require_capture_complete(fresh)
+    except ValueError as exception:
+        assert "incomplete" in str(exception), exception
+    else:
+        raise AssertionError("in-progress capture was not blocked")
+    complete_capture(marker)
+    require_capture_complete(fresh)
+""";
+
+        var result = RunPython(assertions, runnerPath);
+
+        Assert.True(result.ExitCode == 0, result.Error);
+    }
+
+    [Fact]
+    public void Operator_runner_process_guard_matches_exact_pids_and_fails_closed()
+    {
+        var runnerPath = Path.Combine(RepoRoot, "tools", "groundwork", "run-e3-medium-baseline.py");
+        const string assertions = """
+import runpy
+import sys
+from types import SimpleNamespace
+
+module = runpy.run_path(sys.argv[1])
+process_pid = module["process_pid"]
+require_idle_host = module["require_idle_host"]
+runner_globals = require_idle_host.__globals__
+
+cases = [
+    (" 1234 dotnet test", False, 1234),
+    ("91234 dotnet test", False, 91234),
+    ("+1234 dotnet test", False, None),
+    ("1_234 dotnet test", False, None),
+    ('"dotnet.exe","1234","Console","1","12,345 K"', True, 1234),
+    ('"dotnet.exe","91234","Console","1","12,345 K"', True, 91234),
+    ('"dotnet.exe","+1234","Console","1","12,345 K"', True, None),
+    ('"dotnet.exe","1_234","Console","1","12,345 K"', True, None),
+    ('"dotnet.exe","1234"', True, None),
+    ('dotnet.exe,1234,Console,1,"12,345 K"', True, None),
+    ('"dotnet.exe","not-a-pid","Console","1","12,345 K"', True, None),
+    ("malformed dotnet row", False, None),
+    ("", False, None),
+]
+for line, windows, expected in cases:
+    actual = process_pid(line, windows=windows)
+    assert actual == expected, (line, windows, expected, actual)
+
+def run_guard(name, process_table):
+    commands = []
+    runner_globals["os"] = SimpleNamespace(name=name, getpid=lambda: 1234)
+    runner_globals["repository_root"] = lambda: "."
+    runner_globals["run_text"] = lambda command, cwd: commands.append(command) or process_table
+    try:
+        require_idle_host()
+        result = None
+    except ValueError as exception:
+        result = str(exception)
+    return result, commands
+
+result, commands = run_guard("posix", " 1234 dotnet test\n5678 harmless-process")
+assert result is None, result
+assert commands == [["ps", "-Ao", "pid=,command="]], commands
+
+result, _ = run_guard("posix", "91234 dotnet test")
+assert "91234 dotnet test" in result, result
+result, _ = run_guard("posix", "malformed dotnet row")
+assert "malformed dotnet row" in result, result
+for malformed_self_posix in ("+1234 dotnet test", "1_234 dotnet test"):
+    result, _ = run_guard("posix", malformed_self_posix)
+    assert malformed_self_posix in result, result
+
+own_windows = '"dotnet.exe","1234","Console","1","12,345 K"'
+result, commands = run_guard("nt", own_windows)
+assert result is None, result
+assert commands == [["tasklist", "/fo", "csv", "/nh"]], commands
+
+collision_windows = '"dotnet.exe","91234","Console","1","12,345 K"'
+result, _ = run_guard("nt", collision_windows)
+assert collision_windows in result, result
+malformed_windows = '"dotnet.exe","not-a-pid","Console","1","12,345 K"'
+result, _ = run_guard("nt", malformed_windows)
+assert malformed_windows in result, result
+malformed_self_windows = '"dotnet.exe","1234","Console","1","12,345 K"junk'
+result, _ = run_guard("nt", malformed_self_windows)
+assert result is not None, "malformed Windows process row was treated as the current process"
+assert malformed_self_windows in result, result
+for malformed_self_windows in (
+    '"dotnet.exe","+1234","Console","1","12,345 K"',
+    '"dotnet.exe","1_234","Console","1","12,345 K"',
+    '"dotnet.exe","1234"',
+    'dotnet.exe,1234,Console,1,"12,345 K"',
+):
+    result, _ = run_guard("nt", malformed_self_windows)
+    assert malformed_self_windows in result, result
+""";
+
+        var result = RunPython(assertions, runnerPath);
+
+        Assert.True(result.ExitCode == 0, result.Error);
+    }
+
+    [Fact]
+    public void Operator_runner_accounts_for_trace_detail_composite_evidence()
+    {
+        var runnerPath = Path.Combine(RepoRoot, "tools", "groundwork", "run-e3-medium-baseline.py");
+        const string assertions = """
+import json
+import hashlib
+import runpy
+import sys
+import tempfile
+from pathlib import Path
+
+validate_evidence = runpy.run_path(sys.argv[1])["validate_evidence"]
+request = {
+    "ComparisonCohortId": "cohort",
+    "MeasurementSetId": "measurement",
+    "WorkloadId": "diagnostics-durable-history",
+    "WorkloadVersion": "1.3.0",
+    "Provider": "sqlite",
+    "Adapter": "groundwork-v2",
+    "PhysicalForm": "ordinary-groundwork-diagnostics-units",
+    "Scale": "medium",
+    "CommitSha": "a" * 40,
+    "HarnessAssemblySha256": "b" * 64,
+    "CompositionFingerprint": "c" * 64,
+    "HostFingerprintSha256": "d" * 64,
+    "ProviderVersion": "3.50.4",
+    "ProviderTopology": "file-backed-distinct-connections",
+    "ProviderConfiguration": {},
+    "Seed": "seed",
+    "InputFingerprintSha256": "e" * 64,
+    "NativePlanIdentity": "identity",
+}
+document = {
+    "SchemaVersion": 2,
+    **{name: value for name, value in request.items() if name != "NativePlanIdentity"},
+    "Identity": request["NativePlanIdentity"],
+    "RouteContract": "provider-native-routes",
+    "Routes": [],
+    "BlockedRoutes": [],
+    "TraceDetailConstituents": [],
+}
+registration = {"RequiredNativeRoutes": ["trace-detail"]}
+with tempfile.TemporaryDirectory() as directory:
+    raw_plan = Path(directory) / "trace.raw.json"
+    page_plan = Path(directory) / "trace-page.raw.json"
+    log_plan = Path(directory) / "trace-log.raw.json"
+    raw_plan.write_text('{"plan":"initial"}', encoding="utf-8")
+    page_plan.write_text('{"plan":"continuation"}', encoding="utf-8")
+    log_plan.write_text('{"plan":"log"}', encoding="utf-8")
+    constituent = {
+        "RouteIdentity": "trace-detail/spans-by-trace-key-start-id",
+        "RawPlanReference": raw_plan.name,
+        "RawPlanSha256": hashlib.sha256(raw_plan.read_bytes()).hexdigest(),
+        "PlanClassification": "index-search",
+        "PhysicalIndexName": "trace-index",
+        "CommandText": "SELECT page",
+        "PhysicalCardinality": 100_000,
+        "HasStorageScopePredicate": True,
+        "HasRoutePredicate": True,
+        "FiniteLimit": 1,
+        "PublicRowBound": 2,
+        "MaterializedCandidateCount": 2,
+        "ObservedCommandCount": 2,
+        "MaxInvocationCount": 2,
+        "Pages": [{
+            "PageIndex": 1,
+            "RawPlanReference": page_plan.name,
+            "RawPlanSha256": hashlib.sha256(page_plan.read_bytes()).hexdigest(),
+            "CommandText": "SELECT continuation page",
+        }],
+    }
+    point_read = {
+        **constituent,
+        "RawPlanReference": "",
+        "RawPlanSha256": "",
+        "PlanClassification": "primary-key-read",
+        "PhysicalIndexName": "",
+        "FiniteLimit": 1,
+        "PublicRowBound": 1,
+        "MaterializedCandidateCount": 1,
+        "ObservedCommandCount": 1,
+        "MaxInvocationCount": 1,
+        "Pages": None,
+    }
+    log_constituent = {
+        **constituent,
+        "RouteIdentity": "trace-detail/logs-by-trace-key-timestamp-id",
+        "RawPlanReference": log_plan.name,
+        "RawPlanSha256": hashlib.sha256(log_plan.read_bytes()).hexdigest(),
+        "PublicRowBound": 1,
+        "MaterializedCandidateCount": 1,
+        "ObservedCommandCount": 1,
+        "MaxInvocationCount": 1,
+        "Pages": [],
+    }
+    document["TraceDetailConstituents"] = [
+        {**point_read, "RouteIdentity": "trace-detail/summary-by-trace-key"},
+        constituent,
+        log_constituent,
+        {**point_read, "RouteIdentity": "trace-detail/resources-by-id"},
+    ]
+    path = Path(directory) / "native-plan.json"
+
+    def expect_invalid(candidate, message):
+        path.write_text(json.dumps(candidate), encoding="utf-8")
+        try:
+            validate_evidence(path, request, registration, timing=True)
+        except ValueError:
+            return
+        raise AssertionError(message)
+
+    path.write_text(json.dumps(document), encoding="utf-8")
+    validate_evidence(path, request, registration, timing=True)
+
+    for invalid_contract in ("provider-native-routes-blocked", "unknown", None):
+        invalid_document = json.loads(json.dumps(document))
+        invalid_document["RouteContract"] = invalid_contract
+        path.write_text(json.dumps(invalid_document), encoding="utf-8")
+        try:
+            validate_evidence(path, request, registration, timing=False)
+        except ValueError as exception:
+            assert "route contract" in str(exception), exception
+        else:
+            raise AssertionError("standalone correctness accepted an invalid route contract")
+
+    blocked_document = json.loads(json.dumps(document))
+    blocked_document["RouteContract"] = "provider-native-routes-blocked"
+    blocked_document["TraceDetailConstituents"] = []
+    blocked_document["BlockedRoutes"] = ["trace-detail"]
+    path.write_text(json.dumps(blocked_document), encoding="utf-8")
+    validate_evidence(path, request, registration, timing=False)
+    try:
+        validate_evidence(path, request, registration, timing=False, require_complete=True)
+    except ValueError as exception:
+        assert "blocked or incomplete" in str(exception), exception
+    else:
+        raise AssertionError("workflow completeness opt-in accepted blocked native evidence")
+
+    contradictory = json.loads(json.dumps(blocked_document))
+    contradictory["RouteContract"] = "provider-native-routes"
+    path.write_text(json.dumps(contradictory), encoding="utf-8")
+    try:
+        validate_evidence(path, request, registration, timing=False)
+    except ValueError as exception:
+        assert "declares blocked routes" in str(exception), exception
+    else:
+        raise AssertionError("standalone correctness accepted contradictory native evidence")
+
+    reserved_plan = Path(directory) / "Gate.v1.json"
+    reserved_plan.write_text('{"plan":"reserved"}', encoding="utf-8")
+    reserved = json.loads(json.dumps(document))
+    reserved["TraceDetailConstituents"][1]["RawPlanReference"] = reserved_plan.name
+    reserved["TraceDetailConstituents"][1]["RawPlanSha256"] = hashlib.sha256(reserved_plan.read_bytes()).hexdigest()
+    expect_invalid(reserved, "mixed-case reserved result filename was accepted as raw-plan evidence")
+
+    wrong_point_read = json.loads(json.dumps(document))
+    wrong_point_read["TraceDetailConstituents"][0]["PlanClassification"] = "index-search"
+    wrong_point_read["TraceDetailConstituents"][0]["PhysicalIndexName"] = "fake-index"
+    expect_invalid(wrong_point_read, "indexed classification was accepted for a trace-detail point read")
+
+    point_read_with_artifact = json.loads(json.dumps(document))
+    point_read_with_artifact["TraceDetailConstituents"][0]["RawPlanReference"] = raw_plan.name
+    point_read_with_artifact["TraceDetailConstituents"][0]["RawPlanSha256"] = hashlib.sha256(raw_plan.read_bytes()).hexdigest()
+    expect_invalid(point_read_with_artifact, "raw-plan artifact was accepted for a trace-detail point read")
+
+    wrong_indexed_query = json.loads(json.dumps(document))
+    wrong_indexed_query["TraceDetailConstituents"][1]["PlanClassification"] = " "
+    wrong_indexed_query["TraceDetailConstituents"][1]["PhysicalIndexName"] = ""
+    expect_invalid(wrong_indexed_query, "blank indexed-query classification and index were accepted")
+
+    missing_predicate = json.loads(json.dumps(document))
+    missing_predicate["TraceDetailConstituents"][2]["HasRoutePredicate"] = False
+    expect_invalid(missing_predicate, "trace-detail evidence without the route predicate was accepted")
+
+    raw_plan.write_text("tampered", encoding="utf-8")
+    expect_invalid(document, "tampered trace-detail raw plan was accepted")
+    raw_plan.write_text('{"plan":"initial"}', encoding="utf-8")
+    page_plan.write_text("tampered", encoding="utf-8")
+    expect_invalid(document, "tampered trace-detail continuation plan was accepted")
+    page_plan.write_text('{"plan":"continuation"}', encoding="utf-8")
+
+    malformed = dict(document)
+    malformed["TraceDetailConstituents"] = [{"RouteIdentity": "trace-detail/spans-by-trace-key-start-id"}]
+    expect_invalid(malformed, "malformed trace-detail constituent was accepted")
+
+    incomplete = dict(document)
+    incomplete["TraceDetailConstituents"] = document["TraceDetailConstituents"][:-1]
+    expect_invalid(incomplete, "incomplete trace-detail constituent set was accepted")
+
+    document["TraceDetailConstituents"] = []
+    expect_invalid(document, "empty trace-detail constituent evidence was accepted")
+""";
+
+        var result = RunPython(assertions, runnerPath);
+
+        Assert.True(result.ExitCode == 0, result.Error);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("blocked")]
@@ -246,6 +776,39 @@ public sealed class GroundworkPerformanceHandoffTests
 
     private static JsonObject ReadJson(string path) => JsonNode.Parse(File.ReadAllText(path))!.AsObject();
 
+    private static (int ExitCode, string Error) RunPython(string script, string runnerPath)
+    {
+        foreach (var executable in new[] { "python3", "python" })
+        {
+            try
+            {
+                var startInfo = new ProcessStartInfo(executable)
+                {
+                    WorkingDirectory = RepoRoot,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false
+                };
+                startInfo.ArgumentList.Add("-c");
+                startInfo.ArgumentList.Add(script);
+                startInfo.ArgumentList.Add(runnerPath);
+                using var process = Process.Start(startInfo);
+                if (process is null)
+                    continue;
+                var output = process.StandardOutput.ReadToEnd();
+                var error = process.StandardError.ReadToEnd();
+                process.WaitForExit();
+                return (process.ExitCode, string.Join(Environment.NewLine, output, error));
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                // Try the next conventional Python executable name.
+            }
+        }
+
+        return (-1, "Python is required to validate the Groundwork operator runner.");
+    }
+
     private static string WorkloadSchemaPath => Path.Combine(
         RepoRoot,
         "specs",
@@ -278,7 +841,11 @@ public sealed class GroundworkPerformanceHandoffTests
         Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "runtime.json"),
         Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "distributed-runtime.json"),
         Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "diagnostics.json"),
-        IdentityWorkloadPath
+        Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "diagnostics-durable-history-v1.2.json"),
+        Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "diagnostics-durable-history-v1.3.json"),
+        Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "recovery-scan-v1.2.json"),
+        IdentityWorkloadPath,
+        Path.Combine(RepoRoot, "specs", "094-harden-groundwork-stores", "workloads", "secret-create-read-list-v1.1.json")
     ];
 
     private static string RepoRoot

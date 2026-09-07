@@ -7,7 +7,7 @@
       - server process lifecycle control (stop / start / restart) so a test can KILL the running Elsa.Workbench mid-suspend
         and relaunch it against the same on-disk SQLite database, proving durable checkpoint recovery end-to-end.
 
-    The reference server persists to SQLite on disk (GroundworkUnifiedPersistenceSqlite) and composes
+    The reference server persists to SQLite on disk through the explicit Groundwork provider and persistence lanes and composes
     WorkflowsRuntimeResumption + WorkflowsRuntimeCheckpointPersistence (Coalesced/50), so a suspended instance
     survives a real process restart and the resumption pump re-drives it. These are the behaviors the in-process
     C# crash tests stub out (in-memory store + hand-driven sweep); only an e2e restart exercises the real substrate.

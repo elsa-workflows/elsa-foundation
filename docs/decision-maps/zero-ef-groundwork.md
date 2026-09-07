@@ -216,6 +216,16 @@ What executable conformance kit proves capability claims, storage forms, queries
 
 The local Runtime, IAM/Secrets, distributed, recovery, capability-admission, and provider-native route matrices pass across SQLite, SQL Server, PostgreSQL, and a transaction-capable MongoDB replica set. Completion still requires immutable current-head result/native-plan publication into the coverage ledger and linked current evidence from diagnostics #642; closed PR #660 is historical replay provenance only. Historical `preview.60` Identity artifacts remain provenance only.
 
+Diagnostics #642 now has a focused current-v2 recertification for exact Groundwork
+`0.4.0-preview.3` ([receipt](../../specs/139-groundwork-diagnostics-persistence/evidence/preview0403-recertification-results.json)):
+the shared diagnostics suite passed 97/97, Structured Logs v2 passed 29/32 with SQLite
+executed and three unavailable-provider skips, OpenTelemetry v2 passed 8/11 with SQLite
+executed and three unavailable-provider skips, and Groundwork aggregate composition passed
+3/3. Hosted CI run 33498592159 then passed both v2 matrices across SQLite, PostgreSQL,
+SQL Server, and transaction-capable MongoDB at exact head `ebce7a70e`. This updates
+package/four-provider correctness evidence only; it is not a #646 performance verdict or
+grouped/native-plan promotion.
+
 ## performance-harness: How Are EF And Groundwork Compared Fairly?
 
 Blocked by: provider-conformance
@@ -269,7 +279,7 @@ What dependency-ordered Elsa slices migrate design, runtime, IAM, diagnostics, I
 
 ### Answer
 
-Resolve each store family into independently grabbable issues with only its specific released upstream dependencies. The workflow/activity **design lane is complete and #641 is closed**: spec 093 (US1–US4, PRs #907/#919/#933/#934) made Groundwork the only design provider, deleted the EF design implementation family and its in-memory query fallback, and left the EF-core surface ratchet with zero design-persistence entries; its gate-5 criterion was replaced by the ratified 2026-07-22 absolute-budget amendment. Spec 094 hardens the existing Runtime, IAM, Secrets, and Distributed implementations on Groundwork `preview.103`; Identity #644 is closed; diagnostics #642 has its replayed adapters and reference-host composition on `main` through PRs #1048 and #1072 but still owes preview.103 provider/performance evidence and EF-oracle deletion; #646 owns executed EF comparison and physical-shape verdicts; and #647 owns the final reference-host switch and EF-family deletion. OpenIddict is a separately delivered migration lane (#643), but it remains inside the zero-EF completion gate: #647 and parent #629 cannot close until the OpenIddict EF implementation and dependency surface are deleted too.
+Resolve each store family into independently grabbable issues with only its specific released upstream dependencies. The workflow/activity **design lane is complete and #641 is closed**: spec 093 (US1–US4, PRs #907/#919/#933/#934) made Groundwork the only design provider, deleted the EF design implementation family and its in-memory query fallback, and left the EF-core surface ratchet with zero design-persistence entries; its gate-5 criterion was replaced by the ratified 2026-07-22 absolute-budget amendment. Spec 094 hardens the existing Runtime, IAM, Secrets, and Distributed implementations on Groundwork `0.4.0-preview.3`; Identity #644 is closed; diagnostics #642 has its replayed adapters and reference-host composition on `main` through PRs #1048 and #1072, with the focused exact-`0.4.0-preview.3` recertification recorded above. That receipt does not replace the required current four-provider/performance evidence or EF-oracle deletion; #646 owns executed EF comparison and accepted workload verdicts; and #647 owns the final reference-host switch and Elsa-authored EF-family deletion. OpenIddict adapter migration #643 is delivered, and the remaining vendor-selected OpenIddict EF persistence is isolated in Workbench under the ratified ADR 0042 boundary rather than counted as an Elsa-authored persistence implementation.
 
 ## ef-removal: When May The EF Implementation Family Be Deleted?
 

@@ -2205,6 +2205,45 @@
       "contentTypes": [
         "application/json"
       ],
+      "displayName": "HTTP: GET publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/executable-export",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Core.Models.WorkflowArtifactClosure",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflows/{param:regex(^(?!drafts$).\u002B$)}/executable-export"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsExportWorkflowExecutableClosureEndpoint"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
       "displayName": "HTTP: POST /publishing/workflows/{versionId:regex(^(?!drafts$).\u002B$)}/preflight",
       "methods": [
         "POST"
@@ -2402,46 +2441,6 @@
         "*/*",
         "application/json"
       ],
-      "displayName": "HTTP: GET /publishing/workflows/{definitionId}/slots",
-      "methods": [
-        "GET"
-      ],
-      "owner": "Elsa.Workflows.Publishing.Api",
-      "ownerKind": "Module",
-      "responses": [
-        {
-          "bodyType": "Elsa.Workflows.Publishing.Api.Models.PublicationSlotListResponse",
-          "contentTypes": [
-            "application/json"
-          ],
-          "statusCode": 200
-        },
-        {
-          "bodyType": "System.Void",
-          "contentTypes": [],
-          "statusCode": 401
-        },
-        {
-          "bodyType": "System.Void",
-          "contentTypes": [],
-          "statusCode": 403
-        }
-      ],
-      "route": {
-        "value": "/publishing/workflows/{param}/slots"
-      },
-      "securityDisposition": {
-        "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
-      },
-      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsListPublicationSlotsEndpoint"
-    },
-    {
-      "authoringModel": "Minimal API",
-      "contentTypes": [
-        "*/*",
-        "application/json"
-      ],
       "displayName": "HTTP: DELETE /publishing/workflows/{definitionId}/slots/{slotName}",
       "methods": [
         "DELETE"
@@ -2475,46 +2474,6 @@
         "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsUnpublishPublicationSlotEndpoint"
-    },
-    {
-      "authoringModel": "Minimal API",
-      "contentTypes": [
-        "*/*",
-        "application/json"
-      ],
-      "displayName": "HTTP: GET /publishing/workflows/{definitionId}/slots/{slotName}",
-      "methods": [
-        "GET"
-      ],
-      "owner": "Elsa.Workflows.Publishing.Api",
-      "ownerKind": "Module",
-      "responses": [
-        {
-          "bodyType": "Elsa.Workflows.Publishing.Api.Models.PublicationSlotView",
-          "contentTypes": [
-            "application/json"
-          ],
-          "statusCode": 200
-        },
-        {
-          "bodyType": "System.Void",
-          "contentTypes": [],
-          "statusCode": 401
-        },
-        {
-          "bodyType": "System.Void",
-          "contentTypes": [],
-          "statusCode": 403
-        }
-      ],
-      "route": {
-        "value": "/publishing/workflows/{param}/slots/{param}"
-      },
-      "securityDisposition": {
-        "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
-      },
-      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsGetPublicationSlotEndpoint"
     },
     {
       "authoringModel": "Minimal API",
@@ -2554,6 +2513,84 @@
         "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsRestorePublicationSlotEndpoint"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/activation-slots/{definitionId}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.WorkflowActivationSlotListView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/activation-slots/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsListWorkflowActivationSlots"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/activation-slots/{definitionId}/{slotName}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.WorkflowActivationSlotView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/activation-slots/{param}/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetWorkflowActivationSlot"
     },
     {
       "authoringModel": "Minimal API",

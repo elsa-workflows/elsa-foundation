@@ -1,9 +1,14 @@
-using Elsa.Persistence.Groundwork.PostgreSql.Unified.DependencyInjection;
-using Elsa.Persistence.Groundwork.ReferenceComposition;
+using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Persistence.Groundwork.UnifiedHost.Tests;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
+using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
+using Groundwork.PostgreSql;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -11,10 +16,9 @@ namespace Elsa.Persistence.Groundwork.PostgreSql.UnifiedHost.Tests;
 
 /// <summary>
 /// End-to-end proof of the headline goal against <b>PostgreSQL</b>: one host-selected database backs every Elsa
-/// module. The host composes a single feature (<c>AddGroundworkPostgreSqlUnifiedPersistence</c>) which
-/// materializes the six provider-level feature manifests into <b>one</b> PostgreSQL database and points every
-/// family's neutral ports at it. Nothing here is PostgreSQL- or Groundwork-specific except the one host
-/// registration call. Skips gracefully when Docker is unavailable.
+/// module. The host composes one provider connection and each provider-level lane explicitly into <b>one</b>
+/// PostgreSQL database. Nothing here is PostgreSQL- or Groundwork-specific except the provider connection
+/// registration. Skips gracefully when Docker is unavailable.
 /// </summary>
 [Collection(PostgresContainerCollection.Name)]
 public sealed class PostgreSqlUnifiedGroundworkHostTests(PostgresContainerFixture fixture)
@@ -26,7 +30,13 @@ public sealed class PostgreSqlUnifiedGroundworkHostTests(PostgresContainerFixtur
             .AddLogging()
             .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
             .AddSingleton<ISystemClock, FakeSystemClock>();
-        services.AddGroundworkPostgreSqlUnifiedPersistence(connectionString);
+        services
+            .AddGroundworkStorageProviderConnection(_ => new PostgreSqlProviderFactory().Create(connectionString))
+            .AddGroundworkV2RuntimeStores()
+            .AddGroundworkDistributedRuntimeStores()
+            .AddGroundworkWorkflowsDesignStores()
+            .AddGroundworkActivitiesDesignStores()
+            .AddGroundworkPublishingStores();
 
         var provider = services.BuildServiceProvider();
         // A bare provider has no host lifecycle; drive runtime admission after explicit schema application.

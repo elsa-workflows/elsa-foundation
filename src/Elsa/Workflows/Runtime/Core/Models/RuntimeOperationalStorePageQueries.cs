@@ -32,20 +32,20 @@ public sealed record DurableTimerPageQuery : RuntimeStorePageRequest
     public string WorkflowExecutionId { get; }
 }
 
-/// <summary>One finite, deterministic page of recurring schedules for one publication.</summary>
-public sealed record RecurringTriggerSchedulePublicationPageQuery : RuntimeStorePageRequest
+/// <summary>One finite, deterministic page of recurring schedules for one activation.</summary>
+public sealed record RecurringTriggerScheduleActivationPageQuery : RuntimeStorePageRequest
 {
-    public RecurringTriggerSchedulePublicationPageQuery(
-        string publicationId,
+    public RecurringTriggerScheduleActivationPageQuery(
+        string activationId,
         int limit = DefaultLimit,
         string? continuationToken = null)
         : base(limit, continuationToken)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
-        PublicationId = publicationId;
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
+        ActivationId = activationId;
     }
 
-    public string PublicationId { get; }
+    public string ActivationId { get; }
 }
 
 /// <summary>One finite, deterministic page of recurring schedules for one artifact.</summary>

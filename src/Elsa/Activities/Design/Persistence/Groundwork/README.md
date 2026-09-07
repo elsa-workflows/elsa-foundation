@@ -39,5 +39,5 @@ layout, and dependency records pointing at a generation the active store no long
 ## See also
 
 - [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md) — replacement contracts and v2 seams.
-- [`../../../../Persistence/Groundwork/Unified/README.md`](../../../../Persistence/Groundwork/Unified/README.md)
-  — provider selection and deployment composition.
+- [`../../../../Persistence/Groundwork/EXTENSION_POINTS.md`](../../../../Persistence/Groundwork/EXTENSION_POINTS.md)
+  — provider connection and target composition.

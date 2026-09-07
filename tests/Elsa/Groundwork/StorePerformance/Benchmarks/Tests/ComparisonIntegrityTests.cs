@@ -14,22 +14,69 @@ public sealed class ComparisonIntegrityTests
     public void Comparison_rejects_a_missing_operation_from_one_measured_run()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read", "write"], omitFromRun: (3, "write"));
-        fixture.WriteTarget("groundwork", "store", operations: ["read", "write"]);
+        var operations = ArtifactFixture.BookmarkOperations;
+        fixture.WriteTarget("ef", "store", operations, omitFromRun: (3, operations[1]));
+        fixture.WriteTarget("groundwork", "store", operations);
         fixture.Bind();
 
         var result = fixture.Compare();
 
         Assert.False(result.Complete);
-        Assert.Contains("identical", result.BlockReason!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("frozen workload operation sequence", result.BlockReason!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Comparison_rejects_an_extra_operation_not_in_the_frozen_workload_sequence()
+    {
+        using var fixture = ArtifactFixture.Create();
+        var operations = ArtifactFixture.BookmarkOperations.Append("irrelevant-cheap-read").ToArray();
+        fixture.WriteTarget("ef", "store", operations);
+        fixture.WriteTarget("groundwork", "store", operations);
+        fixture.Bind();
+
+        var result = fixture.Compare();
+
+        Assert.False(result.Complete);
+        Assert.Contains("frozen workload operation sequence", result.BlockReason!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Comparison_rejects_a_renamed_operation_not_in_the_frozen_workload_sequence()
+    {
+        using var fixture = ArtifactFixture.Create();
+        var operations = ArtifactFixture.BookmarkOperations;
+        operations[1] = "renamed-bookmark-read";
+        fixture.WriteTarget("ef", "store", operations);
+        fixture.WriteTarget("groundwork", "store", operations);
+        fixture.Bind();
+
+        var result = fixture.Compare();
+
+        Assert.False(result.Complete);
+        Assert.Contains("frozen workload operation sequence", result.BlockReason!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Comparison_rejects_a_reordered_operation_sequence()
+    {
+        using var fixture = ArtifactFixture.Create();
+        var operations = ArtifactFixture.BookmarkOperations.Reverse().ToArray();
+        fixture.WriteTarget("ef", "store", operations);
+        fixture.WriteTarget("groundwork", "store", operations);
+        fixture.Bind();
+
+        var result = fixture.Compare();
+
+        Assert.False(result.Complete);
+        Assert.Contains("frozen workload operation sequence", result.BlockReason!, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void Comparison_rejects_a_target_with_different_frozen_input_between_processes()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"], alternateInputOnRun: 2);
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations, alternateInputOnRun: 2);
         fixture.Bind();
 
         var result = fixture.Compare();
@@ -42,8 +89,8 @@ public sealed class ComparisonIntegrityTests
     public void Comparison_rejects_targets_from_different_commits()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"], commitSha: new string('f', 40));
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations, commitSha: new string('f', 40));
 
         var error = Assert.Throws<PerformanceContractException>(fixture.Bind);
 
@@ -54,8 +101,8 @@ public sealed class ComparisonIntegrityTests
     public void Comparison_rejects_targets_from_different_machine_fingerprints()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"], processorCount: 2);
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations, processorCount: 2);
         fixture.Bind();
 
         var result = fixture.Compare();
@@ -68,8 +115,8 @@ public sealed class ComparisonIntegrityTests
     public void Comparison_machine_fingerprint_excludes_capture_timestamps()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"], timestampUtc: "2026-07-24T00:00:00Z");
-        fixture.WriteTarget("groundwork", "store", operations: ["read"], timestampUtc: "2026-07-24T00:01:00Z");
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations, timestampUtc: "2026-07-24T00:00:00Z");
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations, timestampUtc: "2026-07-24T00:01:00Z");
         fixture.Bind();
 
         Assert.True(fixture.Compare().Complete);
@@ -79,8 +126,8 @@ public sealed class ComparisonIntegrityTests
     public void Manifest_rejects_different_hosts_with_identical_generic_machine_metadata()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"], hostFingerprintSha256: new string('f', 64));
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations, hostFingerprintSha256: new string('f', 64));
 
         var error = Assert.Throws<PerformanceContractException>(fixture.Bind);
 
@@ -91,8 +138,8 @@ public sealed class ComparisonIntegrityTests
     public void Comparison_rejects_nonpositive_raw_latency_samples()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"], transform: operation => operation with { RawLatenciesMilliseconds = [.. operation.RawLatenciesMilliseconds.Skip(1), 0] });
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations, transform: operation => operation with { RawLatenciesMilliseconds = [.. operation.RawLatenciesMilliseconds.Skip(1), 0] });
         fixture.Bind();
 
         var result = fixture.Compare();
@@ -105,8 +152,8 @@ public sealed class ComparisonIntegrityTests
     public void Comparison_rejects_summaries_that_do_not_match_raw_samples()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"], transform: operation => operation with { P50Milliseconds = 2, P95Milliseconds = 2, P99Milliseconds = 2, ThroughputPerSecond = 1000 });
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations, transform: operation => operation with { P50Milliseconds = 2, P95Milliseconds = 2, P99Milliseconds = 2, ThroughputPerSecond = 1000 });
         fixture.Bind();
 
         var result = fixture.Compare();
@@ -116,25 +163,39 @@ public sealed class ComparisonIntegrityTests
     }
 
     [Fact]
+    public void Comparison_rejects_operation_identities_with_outer_whitespace()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: [" read"]);
+        fixture.WriteTarget("groundwork", "store", operations: [" read"]);
+        fixture.Bind();
+
+        var result = fixture.Compare();
+
+        Assert.False(result.Complete);
+        Assert.Contains("frozen workload operation sequence", result.BlockReason!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Comparison_aggregates_recomputed_raw_metrics_instead_of_tolerated_stored_summaries()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"], transform: operation => operation with { P50Milliseconds = operation.P50Milliseconds + 5e-13 });
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations, transform: operation => operation with { P50Milliseconds = operation.P50Milliseconds + 5e-13 });
         fixture.Bind();
 
         var result = fixture.Compare();
 
         Assert.True(result.Complete);
-        Assert.All(Assert.Single(result.TargetOperations).P50Milliseconds, value => Assert.Equal(1d, value));
+        Assert.All(result.TargetOperations, operation => Assert.All(operation.P50Milliseconds, value => Assert.Equal(1d, value)));
     }
 
     [Fact]
     public void Comparison_rejects_nonpositive_operation_count_or_duration()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"], transform: operation => operation with { Count = 0, SteadyStateSeconds = 0 });
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations, transform: operation => operation with { Count = 0, SteadyStateSeconds = 0 });
         fixture.Bind();
 
         var result = fixture.Compare();
@@ -148,39 +209,42 @@ public sealed class ComparisonIntegrityTests
     {
         using var fixture = ArtifactFixture.Create();
         fixture.WriteTarget("ef", "store", operations: ["read", "oracle-only"]);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"]);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations);
         fixture.Bind();
 
         var comparison = fixture.Compare();
-        var gate = GateEvaluator.Evaluate(GatePolicy.DefaultFor(GateClass.OrdinaryStore), comparison);
+        var gate = GateEvaluator.Evaluate(GatePolicy.DefaultFor(GateClass.OrdinaryStore, comparison.WorkloadId), comparison);
 
         Assert.False(comparison.Complete);
         Assert.Equal(PerformanceVerdict.Blocked, gate.Verdict);
     }
 
     [Fact]
-    public void Comparison_rejects_forged_secret_artifacts_even_when_the_measurement_sets_are_complete()
+    public void Comparison_rejects_blocked_diagnostics_artifacts_even_when_the_measurement_sets_are_complete()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"], workloadId: ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"], workloadId: ReproducibleWorkloadScenarioCatalog.BlockedWorkloadId);
+        const string groundworkForm = "ordinary-groundwork-diagnostics-units";
+        const string efForm = "efcore-diagnostics-relational-tables";
+        var operations = ReproducibleWorkloadScenarioCatalog.Get(ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId).OperationSequence.ToArray();
+        fixture.WriteTarget("ef-diagnostics-oracle", efForm, operations: operations, workloadId: ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId);
+        fixture.WriteTarget("groundwork-v2", groundworkForm, operations: operations, workloadId: ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId);
         fixture.Bind();
 
-        var comparison = fixture.Compare();
-        var gate = GateEvaluator.Evaluate(GatePolicy.DefaultFor(GateClass.OrdinaryStore), comparison);
+        var comparison = fixture.Compare($"sqlite/ef-diagnostics-oracle/{efForm}", $"sqlite/groundwork-v2/{groundworkForm}");
+        var gate = GateEvaluator.Evaluate(GatePolicy.DefaultFor(comparison.WorkloadId), comparison);
 
         Assert.False(comparison.Complete);
-        Assert.Contains(ReproducibleWorkloadScenarioCatalog.BlockedReasonCode, comparison.BlockReason);
+        Assert.Contains(ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode, comparison.BlockReason);
         Assert.Equal(PerformanceVerdict.Blocked, gate.Verdict);
-        Assert.Contains(ReproducibleWorkloadScenarioCatalog.BlockedReasonCode, gate.Reason);
+        Assert.Contains(ReproducibleWorkloadScenarioCatalog.DiagnosticsBlockedReasonCode, gate.Reason);
     }
 
     [Fact]
-    public void Comparison_rejects_forged_complete_iam_artifacts_without_a_ratified_adapter_form_mapping()
+    public void Comparison_rejects_post_hoc_forged_iam_artifacts_before_adapter_form_admission()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"]);
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations);
         fixture.ForgeWorkloadIdentity(
             "iam-normalized-lookup-update",
             "1.1.0",
@@ -194,15 +258,15 @@ public sealed class ComparisonIntegrityTests
             "sqlite/groundwork-aspnetcore-identity/entity-type-specific-physical-tables-current-identity-shape");
 
         Assert.False(result.Complete);
-        Assert.Contains("iam.adapter-form.ratification-required", result.BlockReason, StringComparison.Ordinal);
+        Assert.Contains("frozen", result.BlockReason, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void Comparison_rejects_direct_artifacts_outside_the_frozen_physical_forms()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "unreviewed-form", operations: ["read"]);
-        fixture.WriteTarget("groundwork", "unreviewed-form", operations: ["read"]);
+        fixture.WriteTarget("ef", "unreviewed-form", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "unreviewed-form", operations: ArtifactFixture.BookmarkOperations);
         fixture.Bind();
 
         var result = fixture.Compare("sqlite/ef/unreviewed-form", "sqlite/groundwork/unreviewed-form");
@@ -215,8 +279,8 @@ public sealed class ComparisonIntegrityTests
     public void Comparison_rejects_native_plan_evidence_not_bound_to_the_requested_content()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"], evidencePlanContentSha: new string('f', 64));
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations, evidencePlanContentSha: new string('f', 64));
         fixture.Bind();
 
         var result = fixture.Compare();
@@ -229,8 +293,8 @@ public sealed class ComparisonIntegrityTests
     public void Comparison_rejects_native_plan_document_bound_to_a_different_target()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"], evidenceDocumentAdapter: "ef");
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations, evidenceDocumentAdapter: "ef");
         fixture.Bind();
 
         var result = fixture.Compare();
@@ -243,8 +307,8 @@ public sealed class ComparisonIntegrityTests
     public void Comparison_rejects_native_plan_document_captured_for_different_input()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"], evidenceDocumentInputFingerprint: new string('f', 64));
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations, evidenceDocumentInputFingerprint: new string('f', 64));
         fixture.Bind();
 
         var result = fixture.Compare();
@@ -257,8 +321,8 @@ public sealed class ComparisonIntegrityTests
     public void Comparison_rejects_provider_version_not_observed_by_the_adapter()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"], observedProviderVersion: "3.45.0");
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations, observedProviderVersion: "3.45.0");
         fixture.Bind();
 
         var result = fixture.Compare();
@@ -271,11 +335,11 @@ public sealed class ComparisonIntegrityTests
     public void Comparison_rejects_native_route_evidence_without_admitted_bounded_facts()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
         fixture.WriteTarget(
             "groundwork",
             "store",
-            operations: ["read"],
+            operations: ArtifactFixture.BookmarkOperations,
             routeTransform: route => route with { HasRoutePredicate = false, FiniteLimit = 0 });
         fixture.Bind();
 
@@ -289,8 +353,8 @@ public sealed class ComparisonIntegrityTests
     public void Comparison_rejects_missing_required_native_route_evidence()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"], omitNativeRoute: "list-by-stimulus-type");
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations, omitNativeRoute: "list-by-stimulus-type");
         fixture.Bind();
 
         var result = fixture.Compare();
@@ -303,8 +367,8 @@ public sealed class ComparisonIntegrityTests
     public void Artifact_store_rejects_a_duplicate_identity_and_unknown_json_field()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"]);
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations);
         fixture.Bind();
         var original = Directory.EnumerateFiles(fixture.Directory, "*.process.json").First();
         File.Copy(original, Path.Combine(fixture.Directory, "duplicate.process.json"));
@@ -322,8 +386,8 @@ public sealed class ComparisonIntegrityTests
     public void Artifact_store_rejects_native_plan_evidence_tampered_after_manifest()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"]);
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations);
         fixture.Bind();
         File.WriteAllText(Path.Combine(fixture.Directory, "ef-set.native-plan.json"), "tampered");
 
@@ -336,8 +400,8 @@ public sealed class ComparisonIntegrityTests
     public void Artifact_store_rejects_raw_provider_plan_tampered_after_manifest()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"]);
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations);
         fixture.Bind();
         var rawPlan = Directory.EnumerateFiles(fixture.Directory, "groundwork-set.*.raw-plan.json").First();
         File.WriteAllText(rawPlan, "tampered");
@@ -348,11 +412,63 @@ public sealed class ComparisonIntegrityTests
     }
 
     [Fact]
+    public void Manifest_binds_trace_detail_constituent_and_continuation_page_plans()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations);
+        const string constituentReference = "trace-detail.spans.page-0000.raw.json";
+        const string continuationReference = "trace-detail.spans.page-0001.raw.json";
+        const string constituentPayload = "{\"plan\":\"constituent\"}";
+        const string continuationPayload = "{\"plan\":\"continuation\"}";
+        File.WriteAllText(Path.Combine(fixture.Directory, constituentReference), constituentPayload);
+        File.WriteAllText(Path.Combine(fixture.Directory, continuationReference), continuationPayload);
+        var constituentSha = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(constituentPayload))).ToLowerInvariant();
+        var continuationSha = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(continuationPayload))).ToLowerInvariant();
+        var constituent = new DiagnosticsTraceDetailConstituentEvidence(
+            "trace-detail/spans-by-trace-key-start-id",
+            constituentReference,
+            constituentSha,
+            "index-search",
+            "ix-trace-detail",
+            "SELECT",
+            100_000,
+            true,
+            true,
+            127,
+            100_000,
+            100_000,
+            2,
+            788,
+            [new DiagnosticsTraceDetailPageEvidence(1, continuationReference, continuationSha, "SELECT CONTINUATION")]);
+        foreach (var path in Directory.EnumerateFiles(fixture.Directory, "*.process.json"))
+        {
+            var artifact = JsonSerializer.Deserialize<ProcessArtifact>(File.ReadAllBytes(path), ArtifactStore.JsonOptions)!;
+            var correctness = artifact.Correctness with
+            {
+                NativePlan = artifact.Correctness.NativePlan with { TraceDetailConstituents = [constituent] }
+            };
+            File.WriteAllText(path, JsonSerializer.Serialize(artifact with { Correctness = correctness }, ArtifactStore.JsonOptions));
+        }
+
+        fixture.Bind();
+
+        using var manifest = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(fixture.Directory, "artifact-manifest.v2.json")));
+        var hashes = manifest.RootElement.GetProperty("ArtifactsSha256");
+        Assert.True(hashes.TryGetProperty(constituentReference, out _));
+        Assert.True(hashes.TryGetProperty(continuationReference, out _));
+        ArtifactStore.ReadAll(fixture.Directory);
+
+        File.WriteAllText(Path.Combine(fixture.Directory, continuationReference), "{\"plan\":\"tampered\"}");
+        var error = Assert.Throws<PerformanceContractException>(() => ArtifactStore.ReadAll(fixture.Directory));
+        Assert.Contains("integrity hash", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Manifest_rejects_raw_provider_plan_reused_across_measurement_sets()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"], rawPlanReferenceOwner: "ef-set");
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations, rawPlanReferenceOwner: "ef-set");
 
         var error = Assert.Throws<PerformanceContractException>(fixture.Bind);
 
@@ -363,7 +479,7 @@ public sealed class ComparisonIntegrityTests
     public void Manifest_rejects_secret_bearing_raw_provider_plan_json()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
         var rawPlan = Directory.EnumerateFiles(fixture.Directory, "ef-set.*.raw-plan.json").First();
         File.WriteAllText(rawPlan, """{"connectionString":"Server=db;User ID=sa;Pwd=pwned","token":"abc"}""");
 
@@ -376,7 +492,7 @@ public sealed class ComparisonIntegrityTests
     public void Manifest_rejects_endpoint_bearing_raw_provider_plan_json()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
         var rawPlan = Directory.EnumerateFiles(fixture.Directory, "ef-set.*.raw-plan.json").First();
         File.WriteAllText(rawPlan, """{"server":"db.internal","database":"elsa","user":"sa"}""");
 
@@ -435,15 +551,15 @@ public sealed class ComparisonIntegrityTests
     public void Artifact_schema_v2_rejects_v1_manifests_and_missing_required_process_fields()
     {
         using var legacy = ArtifactFixture.Create();
-        legacy.WriteTarget("ef", "store", operations: ["read"]);
-        legacy.WriteTarget("groundwork", "store", operations: ["read"]);
+        legacy.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        legacy.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations);
         legacy.Bind();
         var legacyManifest = Path.Combine(legacy.Directory, "artifact-manifest.v2.json");
         File.WriteAllText(legacyManifest, File.ReadAllText(legacyManifest).Replace("\"SchemaVersion\": 2", "\"SchemaVersion\": 1", StringComparison.Ordinal));
         Assert.Throws<PerformanceContractException>(() => ArtifactStore.ReadAll(legacy.Directory));
 
         using var missing = ArtifactFixture.Create();
-        missing.WriteTarget("ef", "store", operations: ["read"]);
+        missing.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
         var artifact = Directory.EnumerateFiles(missing.Directory, "*.process.json").First();
         File.WriteAllText(artifact, File.ReadAllText(artifact).Replace("  \"ComparisonCohortId\": \"cohort-646\",\n", "", StringComparison.Ordinal));
         Assert.Throws<PerformanceContractException>(() => ArtifactStore.WriteManifest(missing.Directory));
@@ -453,16 +569,144 @@ public sealed class ComparisonIntegrityTests
     public void Gate_rows_include_p50_and_honest_ratio_confidence_intervals()
     {
         using var fixture = ArtifactFixture.Create();
-        fixture.WriteTarget("ef", "store", operations: ["read"]);
-        fixture.WriteTarget("groundwork", "store", operations: ["read"]);
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations);
         fixture.Bind();
 
-        var verdict = GateEvaluator.Evaluate(GatePolicy.DefaultFor(GateClass.OrdinaryStore), fixture.Compare());
+        var comparison = fixture.Compare();
+        var verdict = GateEvaluator.Evaluate(GatePolicy.DefaultFor(comparison.WorkloadId), comparison);
 
-        var row = Assert.Single(verdict.Rows);
-        Assert.True(double.IsFinite(row.P50Ratio));
-        Assert.True(double.IsFinite(row.P95RatioCi.Low));
-        Assert.True(double.IsFinite(row.P99RatioCi.High));
+        Assert.Equal(PerformanceVerdict.Pass, verdict.Verdict);
+        Assert.Equal(ArtifactFixture.BookmarkOperations.Length, verdict.Rows.Count);
+        Assert.All(verdict.Rows, row =>
+        {
+            Assert.True(double.IsFinite(row.P50Ratio));
+            Assert.True(double.IsFinite(row.P95RatioCi.Low));
+            Assert.True(double.IsFinite(row.P99RatioCi.High));
+        });
+    }
+
+    [Fact]
+    public void Gate_evaluator_rejects_a_hand_constructed_complete_comparison_without_admitted_artifacts()
+    {
+        var operations = new[] { CompleteAggregate("read") };
+        var comparison = new ComparisonResult(
+            1,
+            new string('a', 64),
+            "bookmark-lookup",
+            "1.1.0",
+            "sqlite",
+            "100k",
+            "sqlite/ef/document-type-specific-tables",
+            "sqlite/groundwork/document-type-specific-tables",
+            true,
+            true,
+            operations,
+            operations,
+            null);
+
+        var verdict = GateEvaluator.Evaluate(GatePolicy.DefaultFor(comparison.WorkloadId), comparison);
+
+        Assert.Equal(PerformanceVerdict.Blocked, verdict.Verdict);
+        Assert.Contains("not produced by the admitted artifact comparison path", verdict.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Gate_evaluator_rejects_an_admitted_comparison_after_manifest_identity_is_changed()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.Bind();
+
+        var comparison = fixture.Compare();
+        var tampered = comparison with { ArtifactManifestSha256 = new string('a', 64) };
+        var verdict = GateEvaluator.Evaluate(GatePolicy.DefaultFor(comparison.WorkloadId), tampered);
+
+        Assert.Equal(PerformanceVerdict.Blocked, verdict.Verdict);
+        Assert.Contains("manifest", verdict.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Gate_evaluator_rejects_an_admitted_comparison_after_aggregate_evidence_is_changed()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.Bind();
+
+        var comparison = fixture.Compare();
+        var targetOperations = comparison.TargetOperations.ToArray();
+        targetOperations[0] = targetOperations[0] with { P95Milliseconds = [100d, 100d, 100d] };
+        var tampered = comparison with { TargetOperations = targetOperations };
+        var verdict = GateEvaluator.Evaluate(GatePolicy.DefaultFor(comparison.WorkloadId), tampered);
+
+        Assert.Equal(PerformanceVerdict.Blocked, verdict.Verdict);
+        Assert.Contains("raw operation evidence", verdict.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Bounded_read_absolute_ceiling_rejects_a_ratio_neutral_140_millisecond_regression()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations, transform: At140Milliseconds);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations, transform: At140Milliseconds);
+        fixture.Bind();
+
+        var comparison = fixture.Compare();
+        var verdict = GateEvaluator.Evaluate(
+            GatePolicy.DefaultFor(GateClass.RuntimeHotPath, comparison.WorkloadId),
+            comparison);
+
+        Assert.True(comparison.Complete);
+        Assert.True(comparison.CorrectnessEqual);
+        Assert.Equal(PerformanceVerdict.Redesign, verdict.Verdict);
+        Assert.Equal(ArtifactFixture.BookmarkOperations.Length, verdict.Rows.Count);
+        var row = verdict.Rows[0];
+        Assert.Equal(1d, row.P95Ratio);
+        Assert.Equal(GatePolicy.AdoptedBoundedReadPathP95Milliseconds, row.MaxP95Milliseconds);
+        Assert.Equal(140d, row.P95Milliseconds);
+        Assert.False(row.Pass);
+    }
+
+    [Fact]
+    public void Gate_evaluator_rejects_a_forged_ordinary_policy_for_a_bounded_read()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations, transform: At140Milliseconds);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations, transform: At140Milliseconds);
+        fixture.Bind();
+
+        var comparison = fixture.Compare();
+        var verdict = GateEvaluator.Evaluate(
+            new GatePolicy(GateClass.OrdinaryStore, 1.25, .80, 2.0, null),
+            comparison);
+
+        Assert.Equal(PerformanceVerdict.Blocked, verdict.Verdict);
+        Assert.Contains("gate class", verdict.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Gate_evaluator_preserves_a_valid_reviewed_threshold_at_the_comparison_boundary()
+    {
+        using var fixture = ArtifactFixture.Create();
+        fixture.WriteTarget("ef", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.WriteTarget("groundwork", "store", operations: ArtifactFixture.BookmarkOperations);
+        fixture.Bind();
+
+        var comparison = fixture.Compare();
+        var policy = new GatePolicy(
+            GateClass.RuntimeHotPath,
+            1.01,
+            .99,
+            1.10,
+            new GateReview(comparison.WorkloadId, comparison.WorkloadVersion, "proposer", "reviewer", "review-42", "2026-07-24T00:00:00Z"),
+            17d);
+        var verdict = GateEvaluator.Evaluate(policy, comparison);
+
+        Assert.Equal(PerformanceVerdict.Pass, verdict.Verdict);
+        Assert.Equal(ArtifactFixture.BookmarkOperations.Length, verdict.Rows.Count);
+        Assert.All(verdict.Rows, row => Assert.Equal(17d, row.MaxP95Milliseconds));
     }
 
     [Fact]
@@ -500,12 +744,39 @@ public sealed class ComparisonIntegrityTests
         Assert.Equal(1, document.RootElement.GetProperty("SchemaVersion").GetInt32());
         Assert.Matches("^[0-9a-f]{64}$", document.RootElement.GetProperty("PayloadSha256").GetString()!);
     }
+
+    private static OperationSample At140Milliseconds(OperationSample operation)
+    {
+        var latencies = Enumerable.Repeat(140d, operation.RawLatenciesMilliseconds.Count).ToArray();
+        return operation with
+        {
+            P50Milliseconds = 140d,
+            P95Milliseconds = 140d,
+            P99Milliseconds = 140d,
+            RawLatenciesMilliseconds = latencies
+        };
+    }
+
+    private static ProcessAggregate CompleteAggregate(string operation) => new(
+        operation,
+        [1d, 1d, 1d],
+        [1d, 1d, 1d],
+        [1d, 1d, 1d],
+        [100d, 100d, 100d],
+        new Dictionary<int, IReadOnlyList<double>>
+        {
+            [1] = Enumerable.Repeat(1d, 100).ToArray(),
+            [2] = Enumerable.Repeat(1d, 100).ToArray(),
+            [3] = Enumerable.Repeat(1d, 100).ToArray()
+        });
 }
 
 internal sealed class ArtifactFixture : IDisposable
 {
     private ArtifactFixture(string directory) => Directory = directory;
     public string Directory { get; }
+    public static string[] BookmarkOperations =>
+        ReproducibleWorkloadScenarioCatalog.Get("bookmark-lookup").OperationSequence.ToArray();
     public static ArtifactFixture Create() => new(Path.Combine(Path.GetTempPath(), "elsa646-artifacts-", Guid.NewGuid().ToString("N")));
     public void WriteTarget(string adapter, string form, string[] operations, (int Run, string Operation)? omitFromRun = null, int? alternateInputOnRun = null, Func<OperationSample, OperationSample>? transform = null, string? commitSha = null, int processorCount = 1, string timestampUtc = "2026-07-24T00:00:00Z", string? evidencePlanContentSha = null, Func<NativeRouteEvidence, NativeRouteEvidence>? routeTransform = null, string? omitNativeRoute = null, string? evidenceDocumentAdapter = null, string? hostFingerprintSha256 = null, string? evidenceDocumentInputFingerprint = null, string? observedProviderVersion = null, string? rawPlanReferenceOwner = null, string? workloadId = null)
     {

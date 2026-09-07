@@ -13,6 +13,8 @@ namespace Elsa.Diagnostics.Persistence.Tests;
 
 public sealed partial class DiagnosticsPersistenceArchitectureTests
 {
+    private const string CurrentGroundworkVersion = "0.4.0-preview.17";
+    private const string EfLedgerGroundworkVersion = "0.4.0-preview.3";
     private static string RepoRoot { get; } = FindRepoRoot();
     private static readonly string DiagnosticsSourceRoot = Path.Combine(RepoRoot, "src", "Elsa", "Diagnostics");
     private static readonly string DiagnosticsTestRoot = Path.Combine(RepoRoot, "tests", "Elsa", "Diagnostics");
@@ -57,6 +59,85 @@ public sealed partial class DiagnosticsPersistenceArchitectureTests
                 "Diagnostics core and shared lifecycle public contracts must not expose Groundwork types:" +
                 Environment.NewLine + string.Join(Environment.NewLine, publicSurfaceViolations));
         }
+    }
+
+    [Fact]
+    public void Current_groundwork_family_and_ef_oracle_ledger_are_closeout_ready()
+    {
+        var packageVersions = XDocument.Load(Path.Combine(RepoRoot, "Directory.Packages.props"))
+            .Descendants("PackageVersion")
+            .Where(element => element.Attribute("Include")?.Value.StartsWith("Groundwork", StringComparison.Ordinal) == true)
+            .ToDictionary(
+                element => element.Attribute("Include")!.Value,
+                element => element.Attribute("Version")?.Value,
+                StringComparer.Ordinal);
+
+        Assert.NotEmpty(packageVersions);
+        Assert.All(packageVersions, package => Assert.Equal(CurrentGroundworkVersion, package.Value));
+
+        var explicitProjectVersions = FindDiagnosticsProjects()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .SelectMany(project =>
+            {
+                var document = XDocument.Load(project);
+                var localVersion = document.Descendants("GroundworkVersion")
+                    .Select(element => element.Value)
+                    .FirstOrDefault();
+                return document.Descendants("PackageReference")
+                    .Where(element => element.Attribute("Include")?.Value.StartsWith("Groundwork", StringComparison.Ordinal) == true)
+                    .Select(element =>
+                    {
+                        var version = element.Attribute("Version")?.Value ?? element.Attribute("VersionOverride")?.Value;
+                        return (Path: RelativePath(project), Package: element.Attribute("Include")!.Value,
+                            Version: version == "$(GroundworkVersion)" ? localVersion : version);
+                    });
+            })
+            .Where(reference => reference.Version is not null)
+            .ToArray();
+
+        Assert.NotEmpty(explicitProjectVersions);
+        Assert.All(explicitProjectVersions, reference =>
+            Assert.Equal(CurrentGroundworkVersion, reference.Version));
+
+        var ledger = File.ReadAllLines(Path.Combine(
+            RepoRoot, "specs", "139-groundwork-diagnostics-persistence", "ef-test-removal-ledger.md"));
+        var factRows = ledger
+            .Where(line => line.StartsWith("| `", StringComparison.Ordinal) || line.StartsWith("| .", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.Equal(46, factRows.Length);
+        Assert.Equal(39, factRows.Count(line => line.Contains("covered", StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal(4, factRows.Count(line => line.Contains("Superseded contract:", StringComparison.Ordinal)));
+        Assert.Equal(3, factRows.Count(line => line.Contains(
+            "Retired at the Groundwork boundary", StringComparison.Ordinal)));
+        Assert.All(factRows, line => Assert.True(
+            new[]
+            {
+                line.Contains("covered", StringComparison.OrdinalIgnoreCase),
+                line.Contains("Superseded contract:", StringComparison.Ordinal),
+                line.Contains("Retired at the Groundwork boundary", StringComparison.Ordinal)
+            }.Count(disposition => disposition) == 1,
+            $"Ledger row must have exactly one closeout disposition: {line}"));
+        var currentTestSources = Directory.EnumerateFiles(DiagnosticsTestRoot, "*.cs", SearchOption.AllDirectories)
+            .Select(File.ReadAllText)
+            .ToArray();
+        foreach (var row in factRows.Where(line =>
+                     line.Contains("covered", StringComparison.OrdinalIgnoreCase) ||
+                     line.Contains("Superseded contract:", StringComparison.Ordinal)))
+        {
+            var evidenceColumn = row.Split('|')[3];
+            var evidence = LedgerEvidencePattern().Matches(evidenceColumn)
+                .Select(match => (Class: match.Groups["class"].Value, Method: match.Groups["method"].Value))
+                .ToArray();
+            Assert.NotEmpty(evidence);
+            Assert.All(evidence, reference => Assert.Contains(currentTestSources, source =>
+                Regex.IsMatch(source, $@"\bclass\s+{Regex.Escape(reference.Class)}\b", RegexOptions.CultureInvariant) &&
+                Regex.IsMatch(source, $@"\b{Regex.Escape(reference.Method)}\s*\(", RegexOptions.CultureInvariant)));
+        }
+        var ledgerText = string.Join(Environment.NewLine, ledger);
+        Assert.Contains($"**Groundwork baseline:** exact `{EfLedgerGroundworkVersion}`", ledgerText, StringComparison.Ordinal);
+        Assert.Contains("Disposition: 39 covered; 4 superseded contracts; 3 EF-mechanism-only facts retired at the Groundwork boundary", ledgerText, StringComparison.Ordinal);
+        Assert.DoesNotContain("one remaining OpenTelemetry test", ledgerText, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -503,4 +584,7 @@ public sealed partial class DiagnosticsPersistenceArchitectureTests
 
     [GeneratedRegex(@"\b(?:using\s+Groundwork(?:\.|\s*;)|Groundwork\.)", RegexOptions.CultureInvariant)]
     private static partial Regex GroundworkSourcePattern();
+
+    [GeneratedRegex(@"`(?<class>[A-Za-z0-9_]+Tests)\.(?<method>[A-Za-z0-9_]+)`", RegexOptions.CultureInvariant)]
+    private static partial Regex LedgerEvidencePattern();
 }

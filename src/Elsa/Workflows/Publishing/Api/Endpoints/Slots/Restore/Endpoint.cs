@@ -6,6 +6,7 @@ using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using NativeEndpoints;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints.Slots.Restore;
@@ -26,7 +27,7 @@ public sealed class Endpoint(
 
     public override async Task<PublicationSlotView> HandleAsync(RestorePublicationSlotRequest request, CancellationToken cancellationToken)
     {
-        Core.Models.PublicationSlot slot;
+        WorkflowActivationSlot slot;
         try
         {
             slot = await restorer.RestoreAsync(request.DefinitionId, request.SlotName, cancellationToken);

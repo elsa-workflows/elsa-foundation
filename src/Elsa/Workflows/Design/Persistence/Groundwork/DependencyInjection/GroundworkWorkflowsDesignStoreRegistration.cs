@@ -1,5 +1,6 @@
-using Elsa.Persistence.Core;
-using Elsa.Persistence.Core.DependencyInjection;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Identity;
@@ -35,7 +36,11 @@ public static class GroundworkWorkflowsDesignStoreRegistration
         services.TryAddScoped<IDraftOriginator, DraftOriginator>();
 
         ReplaceScoped<IWorkflowDefinitionStore, GroundworkWorkflowDefinitionStore>(services);
-        ReplaceScoped<IWorkflowDefinitionVersionStore, GroundworkWorkflowDefinitionVersionStore>(services);
+        services.RemoveAll<GroundworkWorkflowDefinitionVersionStore>();
+        services.AddScoped<GroundworkWorkflowDefinitionVersionStore>();
+        services.RemoveAll<IWorkflowDefinitionVersionStore>();
+        services.AddScoped<IWorkflowDefinitionVersionStore>(provider =>
+            provider.GetRequiredService<GroundworkWorkflowDefinitionVersionStore>());
         ReplaceScoped<IWorkflowDefinitionDraftStore, GroundworkWorkflowDefinitionDraftStore>(services);
         ReplaceScoped<IWorkflowDefinitionListProjectionStore, GroundworkWorkflowDefinitionListProjectionStore>(services);
         ReplaceScoped<IWorkflowDefinitionVersionLayoutStore, GroundworkWorkflowDefinitionVersionLayoutStore>(services);

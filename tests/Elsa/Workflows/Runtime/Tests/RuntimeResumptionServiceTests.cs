@@ -158,6 +158,150 @@ public sealed class RuntimeResumptionServiceTests
     }
 
     [Fact]
+    public async Task SweepAsync_RetainsRecoveryContinuationAcrossBoundedSweeps()
+    {
+        var harness = new Harness();
+        harness.RecoveryScanner.Pages.Enqueue(new RecoveryPage(
+            [NewCandidate("wfexec-recovery-a")],
+            "recovery-next-1"));
+        harness.RecoveryScanner.Pages.Enqueue(new RecoveryPage(
+            [NewCandidate("wfexec-recovery-b")],
+            null));
+
+        var first = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest(recoveryScanBatchSize: 1));
+        var second = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest(recoveryScanBatchSize: 1));
+
+        Assert.Equal("wfexec-recovery-a", Assert.Single(first.Dispatches).WorkflowExecutionId);
+        Assert.Equal("wfexec-recovery-b", Assert.Single(second.Dispatches).WorkflowExecutionId);
+        Assert.Equal(2, harness.RecoveryScanner.Requests.Count);
+        Assert.Null(harness.RecoveryScanner.Requests[0].ContinuationToken);
+        Assert.Equal("recovery-next-1", harness.RecoveryScanner.Requests[1].ContinuationToken);
+    }
+
+    [Fact]
+    public async Task SweepAsync_RetainsProgressWhenRecoveryPageIsEmptyButFiltered()
+    {
+        var harness = new Harness();
+        harness.RecoveryScanner.Pages.Enqueue(new RecoveryPage([], "recovery-filtered-next"));
+        harness.RecoveryScanner.Pages.Enqueue(new RecoveryPage([NewCandidate("wfexec-recovery")], null));
+
+        var first = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest(recoveryScanBatchSize: 1));
+        var second = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest(recoveryScanBatchSize: 1));
+
+        Assert.Empty(first.Dispatches);
+        Assert.Equal("wfexec-recovery", Assert.Single(second.Dispatches).WorkflowExecutionId);
+        Assert.Equal("recovery-filtered-next", harness.RecoveryScanner.Requests[1].ContinuationToken);
+    }
+
+    [Fact]
+    public async Task SweepAsync_RewindsRecoveryCursorWhenARecoveryDispatchFails()
+    {
+        var harness = new Harness();
+        harness.RecoveryScanner.Pages.Enqueue(new RecoveryPage([NewCandidate("wfexec-retry")], "recovery-next"));
+        harness.RecoveryScanner.Pages.Enqueue(new RecoveryPage([NewCandidate("wfexec-retry")], null));
+        harness.AgentProvider.FailFor = "wfexec-retry";
+
+        var first = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest(recoveryScanBatchSize: 1));
+
+        harness.AgentProvider.FailFor = null;
+        var second = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest(recoveryScanBatchSize: 1));
+
+        Assert.Equal(RuntimeResumptionDispatchOutcome.Faulted, Assert.Single(first.Dispatches).Outcome);
+        Assert.Equal(RuntimeResumptionDispatchOutcome.Accepted, Assert.Single(second.Dispatches).Outcome);
+        Assert.Null(harness.RecoveryScanner.Requests[1].ContinuationToken);
+    }
+
+    [Fact]
+    public async Task SweepAsync_PreservesLegacyScannerCollectionCompatibilityWithoutFabricatingPaging()
+    {
+        var legacyScanner = new LegacyRecoveryScanner([NewCandidate("wfexec-legacy")]);
+        var agentProvider = new FakeAgentProvider();
+        var service = new RuntimeResumptionService(
+            new FakeOutboxProcessor(),
+            new FakeWorkQueue(),
+            legacyScanner,
+            agentProvider,
+            new ShortRuntimeExecutionIdGenerator(),
+            new FixedTimeProvider(Now),
+            new InMemoryWorkflowExecutionStateStore());
+
+        var result = await service.SweepAsync(new RuntimeResumptionSweepRequest(recoveryScanBatchSize: 1));
+
+        Assert.Equal("wfexec-legacy", Assert.Single(result.Dispatches).WorkflowExecutionId);
+        Assert.Null(Assert.Single(legacyScanner.Requests).ContinuationToken);
+    }
+
+    [Fact]
+    public async Task SweepAsync_UsesLegacyPathForInMemoryScannerOverACustomLivenessStore()
+    {
+        var liveness = new LegacyLivenessStore(new ExecutionLivenessState(
+            "op-legacy",
+            "wfexec-legacy-store",
+            new RuntimeExecutionLease(
+                "lease-legacy",
+                "wfexec-legacy-store",
+                "worker-legacy",
+                Now.AddMinutes(-2),
+                Now.AddMinutes(-1),
+                fencingToken: 1),
+            heartbeat: null,
+            drain: null,
+            interruptedExecution: null));
+        var scanner = new InMemoryRuntimeRecoveryScanner(liveness);
+        Assert.False(scanner.SupportsPaging);
+        var agentProvider = new FakeAgentProvider();
+        var service = new RuntimeResumptionService(
+            new FakeOutboxProcessor(),
+            new FakeWorkQueue(),
+            scanner,
+            agentProvider,
+            new ShortRuntimeExecutionIdGenerator(),
+            new FixedTimeProvider(Now),
+            new InMemoryWorkflowExecutionStateStore());
+
+        var result = await service.SweepAsync(new RuntimeResumptionSweepRequest(recoveryScanBatchSize: 1));
+
+        Assert.Equal("wfexec-legacy-store", Assert.Single(result.Dispatches).WorkflowExecutionId);
+    }
+
+    [Fact]
+    public async Task SweepAsync_DoesNotAdvanceRecoveryWhenBacklogFillsDispatchCap()
+    {
+        var harness = new Harness();
+        harness.WorkQueue.PendingExecutionIds = ["wfexec-backlog"];
+        harness.RecoveryScanner.Pages.Enqueue(new RecoveryPage(
+            [NewCandidate("wfexec-recovery")],
+            "recovery-next-1"));
+
+        var result = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest(
+            recoveryScanBatchSize: 1,
+            maxExecutionsPerSweep: 1));
+
+        Assert.Equal("wfexec-backlog", Assert.Single(result.Dispatches).WorkflowExecutionId);
+        Assert.Empty(harness.RecoveryScanner.Requests);
+    }
+
+    [Fact]
+    public async Task SweepAsync_DoesNotReuseARecoveryCursorAcrossDifferentExclusionSets()
+    {
+        var harness = new Harness();
+        harness.RecoveryScanner.Pages.Enqueue(new RecoveryPage(
+            [NewCandidate("wfexec-excluded")],
+            "recovery-next-excluded"));
+        harness.RecoveryScanner.Pages.Enqueue(new RecoveryPage(
+            [NewCandidate("wfexec-next")],
+            null));
+
+        await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest(
+            recoveryScanBatchSize: 1,
+            excludedWorkflowExecutionIds: new HashSet<string>(StringComparer.Ordinal) { "wfexec-excluded" }));
+        var second = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest(recoveryScanBatchSize: 1));
+
+        Assert.Equal("wfexec-next", Assert.Single(second.Dispatches).WorkflowExecutionId);
+        Assert.Null(harness.RecoveryScanner.Requests[1].ContinuationToken);
+    }
+
+    [Fact]
     public async Task SweepAsync_ExcludesRequestedExecutionIds()
     {
         var harness = new Harness();
@@ -511,16 +655,68 @@ public sealed class RuntimeResumptionServiceTests
         }
     }
 
-    private sealed class FakeRecoveryScanner : IRuntimeRecoveryScanner
+    private sealed class FakeRecoveryScanner : IRuntimeRecoveryPagedScanner
     {
         public IReadOnlyCollection<RuntimeRecoveryCandidate> Candidates { get; set; } = [];
         public List<RuntimeRecoveryScanRequest> Requests { get; } = [];
+        public Queue<RecoveryPage> Pages { get; } = new();
 
         public ValueTask<IReadOnlyCollection<RuntimeRecoveryCandidate>> ScanAsync(RuntimeRecoveryScanRequest request, CancellationToken cancellationToken = default)
         {
             Requests.Add(request);
             return new(Candidates);
         }
+
+        public ValueTask<RuntimeRecoveryPage> ScanPageAsync(RuntimeRecoveryScanRequest request, CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            var page = Pages.Count > 0
+                ? Pages.Dequeue()
+                : new RecoveryPage(Candidates, null);
+            return new(new RuntimeRecoveryPage(request, page.Items.Take(request.Limit).ToArray(), page.NextContinuationToken));
+        }
+    }
+
+    private sealed record RecoveryPage(
+        IReadOnlyCollection<RuntimeRecoveryCandidate> Items,
+        string? NextContinuationToken);
+
+    private sealed class LegacyRecoveryScanner(IReadOnlyCollection<RuntimeRecoveryCandidate> candidates) : IRuntimeRecoveryScanner
+    {
+        public List<RuntimeRecoveryScanRequest> Requests { get; } = [];
+
+        public ValueTask<IReadOnlyCollection<RuntimeRecoveryCandidate>> ScanAsync(
+            RuntimeRecoveryScanRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            return new(candidates);
+        }
+    }
+
+    // Deliberately implements only the legacy liveness store surface. The scanner must not advertise a resumable
+    // page when this custom store cannot provide due-ordered recovery reads; ordinary resumption still uses its
+    // historical collection path.
+    private sealed class LegacyLivenessStore : IExecutionLivenessStateStore
+    {
+        private readonly InMemoryExecutionLivenessStateStore inner = new();
+
+        public LegacyLivenessStore(ExecutionLivenessState state) => inner.SaveAsync(state).GetAwaiter().GetResult();
+
+        public ValueTask<ExecutionLivenessState> SaveAsync(ExecutionLivenessState state, CancellationToken cancellationToken = default) =>
+            inner.SaveAsync(state, cancellationToken);
+
+        public ValueTask<ExecutionLivenessStateWriteResult> TrySaveAsync(ExecutionLivenessState state, long expectedRevision, CancellationToken cancellationToken = default) =>
+            inner.TrySaveAsync(state, expectedRevision, cancellationToken);
+
+        public ValueTask<ExecutionLivenessState?> FindAsync(string workflowExecutionId, string operationalStateId, CancellationToken cancellationToken = default) =>
+            inner.FindAsync(workflowExecutionId, operationalStateId, cancellationToken);
+
+        public ValueTask<VersionedExecutionLivenessState?> FindVersionedAsync(string workflowExecutionId, string operationalStateId, CancellationToken cancellationToken = default) =>
+            inner.FindVersionedAsync(workflowExecutionId, operationalStateId, cancellationToken);
+
+        public ValueTask<RuntimeStorePage<ExecutionLivenessState>> ListAllPageAsync(RuntimeStorePageRequest query, CancellationToken cancellationToken = default) =>
+            inner.ListAllPageAsync(query, cancellationToken);
     }
 
     private sealed class FakeAgentProvider : IWorkflowExecutionActorProvider

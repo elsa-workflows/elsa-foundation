@@ -19,37 +19,37 @@ public interface IWorkflowTriggerBindingStore
     /// <summary>Upserts a single trigger binding, keyed by its <see cref="WorkflowTriggerBinding.TriggerBindingId"/>.</summary>
     ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default);
 
-    /// <summary>Atomically replaces one publication's prepared bindings without exposing them to serving queries.</summary>
-    ValueTask PreparePublicationAsync(
-        string publicationId,
+    /// <summary>Atomically replaces one activation's prepared bindings without exposing them to serving queries.</summary>
+    ValueTask PrepareActivationAsync(
+        string activationId,
         IReadOnlyCollection<WorkflowTriggerBinding> bindings,
         CancellationToken cancellationToken = default) =>
-        ValueTask.FromException(new NotSupportedException("This trigger-binding store does not support publication-scoped preparation."));
+        ValueTask.FromException(new NotSupportedException("This trigger-binding store does not support activation-scoped preparation."));
 
     /// <summary>
     /// Returns one finite, deterministically ordered page of prepared or active bindings owned by one
-    /// publication. Callers whose business semantics require the complete publication projection must
+    /// activation. Callers whose business semantics require the complete activation projection must
     /// deliberately traverse the opaque continuation.
     /// </summary>
-    ValueTask<WorkflowTriggerBindingPage> ListByPublicationAsync(
-        WorkflowTriggerBindingPublicationPageQuery query,
+    ValueTask<WorkflowTriggerBindingPage> ListByActivationAsync(
+        WorkflowTriggerBindingActivationPageQuery query,
         CancellationToken cancellationToken = default) =>
         ValueTask.FromException<WorkflowTriggerBindingPage>(
-            new NotSupportedException("This trigger-binding store does not support publication-scoped queries."));
+            new NotSupportedException("This trigger-binding store does not support activation-scoped queries."));
 
     /// <summary>
-    /// Makes one prepared publication visible and, when supplied, removes only the replaced publication from
-    /// serving visibility. Rows are retained until publication-scoped cleanup.
+    /// Makes one prepared activation visible and, when supplied, removes only the replaced activation from
+    /// serving visibility. Rows are retained until activation-scoped cleanup.
     /// </summary>
-    ValueTask ActivatePublicationAsync(
-        string publicationId,
-        string? replacedPublicationId,
+    ValueTask ActivateAsync(
+        string activationId,
+        string? replacedActivationId,
         CancellationToken cancellationToken = default) =>
-        ValueTask.FromException(new NotSupportedException("This trigger-binding store does not support publication-scoped activation."));
+        ValueTask.FromException(new NotSupportedException("This trigger-binding store does not support activation-scoped activation."));
 
-    /// <summary>Deletes every binding owned by one publication without affecting shared artifacts or other slots.</summary>
-    ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default) =>
-        ValueTask.FromException(new NotSupportedException("This trigger-binding store does not support publication-scoped deletion."));
+    /// <summary>Deletes every binding owned by one activation without affecting shared artifacts or other slots.</summary>
+    ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException(new NotSupportedException("This trigger-binding store does not support activation-scoped deletion."));
 
     /// <summary>
     /// Removes every binding owned by the given artifact. Returns the number of bindings removed. Used on

@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Elsa.Events.Core.Contracts;
-using Elsa.Persistence.Core.Design;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Enums;
 using Elsa.Primitives.Versioning;

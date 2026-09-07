@@ -1,18 +1,44 @@
-# Proposal: an absolute-budget basis and executable gate for the three oracle-less diagnostics providers
+# Diagnostics absolute-budget basis and ungraded first-measurement authority
 
-Status: **PROPOSAL — needs an independent reviewer and one first measurement.**
+Status: **MEASUREMENT SHAPE RATIFIED 2026-09-03 — numeric policies still need first measurements and ratification.**
 Proposed by the EF-Core-oracle scoping analysis
 ([`docs/reports/ef-core-oracle-scoping-2026-08.md`](../../../docs/reports/ef-core-oracle-scoping-2026-08.md), PR #1279).
-Reviewer: **unassigned.** Numeric values: **deliberately absent** — see
+Independent reviewer: **#646 control-room review, recorded in PR #1514.** Numeric values:
+**deliberately absent** — see
 [The numbers are not in this document](#the-numbers-are-not-in-this-document).
 
-This document is the **proposal half**, in the same sense as
-[`runtime-absolute-budget-basis.md`](runtime-absolute-budget-basis.md). It authorizes no edit, sets no
-number, and produces no verdict.
+The program owner authorized the phase split while directing the remaining program to completion:
+provider-native plan and correctness evidence may now precede one provenance-bound, ungraded
+four-process measurement set. That set exists only to derive candidate provider budgets. It cannot enter
+`compare`, the ratio `gate`, a coverage-ledger verdict, or EF deletion. `budget-gate` still requires an
+independently reviewed numeric policy for the exact workload version and provider.
 
-**Companion:** [`diagnostics-sqlite-split-basis.md`](diagnostics-sqlite-split-basis.md) covers the SQLite
-half (Route 1) and is a **hard prerequisite** for this one — see
-[Why this cannot start first](#why-this-cannot-start-first).
+This decision keeps all four Groundwork providers in the v1.3 contract. It supersedes the older
+SQLite-only split proposal: the retained EF diagnostics adapter remains correctness-only, and no
+semantically unequal EF ratio is used as a diagnostics performance verdict. The historical analysis
+below explains how the absolute policy shape was derived; where it discusses narrowing to SQLite or
+waiting for an adapter leaf, this current decision and the delivered v1.3 adapter/native-plan work lead.
+
+## Executable shape decision
+
+The executable implementation decision for this proposal is now recorded in the #646 delivery slice.
+The no-comparand workflow is deliberately separate from the ratio workflow: schema-v2 `MeasurementResult`
+classifies successful raw evidence as `EvaluationStatus: ungraded`; it does not claim a verdict.
+`AbsoluteBudgetPolicy` and `AbsoluteBudgetEvaluator` implement `measure` and `budget-gate`, while
+`ComparisonResult`, `GatePolicy`, and `GateEvaluator` remain unchanged. The five proposed budget-bearing
+classes — durable append, bounded read, grouped reduction, exact count, and retention write — plus the
+four explicit `NotHotPath` operations (the two restart observations and the two correctness-only
+operations) are the adopted policy shape. This reverses the earlier 093 omission because diagnostics
+has three providers without an oracle to compare against; it does not authorize numeric values.
+
+Numeric budgets remain unratified. Each concrete provider policy
+and its numeric ratification must be recorded on a later #646 pull request or issue before that policy
+or any verdict is merged, and the overall diagnostics gate remains blocked until that evidence exists.
+In particular, p99 and throughput belong only to `AbsoluteBudgetPolicy`; they are not added to the
+existing ratio `GatePolicy`.
+
+**Historical companion:** [`diagnostics-sqlite-split-basis.md`](diagnostics-sqlite-split-basis.md)
+records the superseded narrowing proposal. It is not an implementation prerequisite.
 
 ## The problem, in the contract's own words
 
@@ -157,12 +183,12 @@ costs, different index structures, and in MongoDB's case a transaction-capable r
 path is not comparable to a single-node relational commit. `requiredProviderEvidence` already declares
 three *different* evidence kinds for them, which is the contract conceding the same point.
 
-This is also why the budgets cannot be expressed as class constants. `GatePolicy.DefaultFor` keys on
-`GateClass` and takes no workload or provider argument, and
-`RatifiedBoundedReadPathP95Milliseconds` is the standing proof of what happens when a per-workload number
-is declared as a constant anyway: ratified at 40 ms, **enforced by nothing**, with five bounded-read
-workloads silently carrying the 150 ms durable-write ceiling instead. Per-provider diagnostics budgets
-must arrive as reviewed policy **files**, keyed by workload *and* provider.
+This is also why provider-specific diagnostics budgets cannot be expressed as the runtime class constants.
+`GatePolicy.DefaultFor(workloadId)` now derives the workload's class; diagnostics remains `OrdinaryStore`
+and intentionally has no default absolute ceiling, while the eight runtime workloads receive their
+40 ms bounded-read or 150 ms durable-write backstop (the 40 ms adoption is recorded under #1176 pending
+explicit acceptance). Per-provider diagnostics budgets must still
+arrive as reviewed policy **files**, keyed by workload *and* provider.
 
 ## What must change in code
 
@@ -170,7 +196,7 @@ Additive, but larger than Route 1 by a wide margin.
 
 | # | Change | Location |
 |---:|---|---|
-| 1 | Add `MaxP99Milliseconds` and `MinThroughputPerSecond` to `GatePolicy`, `ReviewedGateReplacement`, and `GateRow`, inherited-on-omission exactly as `MaxP95Milliseconds` already is. | `Harness/Gates.cs:17`, `:57`, `:62` |
+| 1 | ~~Add `MaxP99Milliseconds` and `MinThroughputPerSecond` to the ratio gate types.~~ **Superseded.** Keep p99 and throughput in the separate `AbsoluteBudgetPolicy` path so ratio and no-comparand workflows remain independent. | `Harness/AbsoluteBudgets.cs` |
 | 2 | Add a **measurement** mode to the artifact/comparison layer: one complete four-process measurement set with no comparand, distinct from a `ComparisonResult`. It must keep every existing binding (cohort, machine environment, workload/version/provider/scale/seed/input fingerprint, correctness digest) and drop only the oracle. | `Harness/ArtifactsAndMatrix.cs:498-512` |
 | 3 | Add an absolute-only evaluation path that emits `Pass`/`Redesign` from the three bounds alone, with no ratio terms, and populates rows with measured-vs-budget per operation. | `Harness/Gates.cs:81-119` |
 | 4 | Extend the policy-file loader to carry a **per-provider** budget table keyed by operation class, and reject a file that omits a class the workload's operation sequence contains. Silence on an operation must be an error, not a pass. | `Harness/Gates.cs:65-79` (`GatePolicyFile`) |
@@ -226,11 +252,11 @@ oracle *harvesting* — so it does not sit on the irreversible path that governs
   comparison at one commit would compare a thing to itself.
 - **Do not transplant 093's numeric budgets.** Different operations, different access shapes, and a
   harness absent from this repository. Method transfers; values do not.
-- **Do not wire `RatifiedBoundedReadPathP95Milliseconds`** as part of this work.
-  `ProtocolAndGateTests.Ratified_bounded_read_ceiling_is_declared_but_enforced_by_no_construction_path`
-  fails if any construction path starts applying it, and #1176 owns the wire-or-supersede choice. Once
-  per-provider policy files exist, superseding is the cleaner resolution — but that is #1176's call to
-  record, not a side effect of this change.
+- **Do not use the runtime class ceilings as diagnostics provider budgets.** #1176 now wires
+  `AdoptedBoundedReadPathP95Milliseconds` for the five bounded-read runtime workloads and retains the
+  150 ms durable-write ceiling for the other three runtime hot paths. Diagnostics remains an
+  `OrdinaryStore` workload with no default absolute ceiling; Route 2 still requires independently
+  reviewed per-provider policy files.
 - **Do not let a missing budget read as a pass.** Item 4 above exists because the most likely silent
   failure is a policy file that omits an operation class and a gate that therefore never bounds it.
 

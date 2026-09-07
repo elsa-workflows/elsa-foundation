@@ -23,6 +23,8 @@ internal static class RuntimeApiEndpointTestFactory
             [("GET", "runtime/workflows/executables/{artifactId}")] = Endpoint<GetWorkflowExecutable, WorkflowExecutableDetailsView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
             [("GET", "runtime/workflows/executables/{artifactId}/source-references/{sourceReferenceId}/input-sources")] = Endpoint<GetWorkflowExecutableInputSources, WorkflowExecutableInputSourcesView>(WorkflowRuntimePermissions.WorkflowPublishingRead),
             [("GET", "runtime/workflows/executables/{artifactId}/provenance")] = Endpoint<GetWorkflowExecutableProvenance, ExecutableProvenanceView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("GET", "runtime/workflows/activation-slots/{definitionId}")] = Endpoint<ListWorkflowActivationSlots, WorkflowActivationSlotListView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
+            [("GET", "runtime/workflows/activation-slots/{definitionId}/{slotName}")] = Endpoint<GetWorkflowActivationSlot, WorkflowActivationSlotView>(WorkflowRuntimePermissions.WorkflowRuntimeRead),
             [("POST", "runtime/workflows/executables/{artifactId}/execute")] = Endpoint<ExecuteWorkflow, WorkflowExecutionStartDispatchView>(WorkflowRuntimePermissions.WorkflowRuntimeExecute),
             [("POST", "runtime/workflows/stimuli")] = Endpoint<DispatchStimulus, DispatchStimulusResponse>(WorkflowRuntimePermissions.WorkflowRuntimeExecute),
             [("GET", "runtime/workflows/dispatches")] = Endpoint<ListWorkflowDispatches, IReadOnlyCollection<WorkflowDispatchView>>(WorkflowRuntimePermissions.WorkflowRuntimeRead),

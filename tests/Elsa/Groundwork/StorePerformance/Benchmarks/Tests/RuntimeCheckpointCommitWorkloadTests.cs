@@ -32,6 +32,19 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
         Assert.Equal(RuntimeCheckpointCommitWorkload.CheckpointCount, adapter.Shared.RootWriteLeaseCount);
     }
 
+    [Fact]
+    public async Task Replaying_the_same_fixture_is_an_equivalent_commit_not_a_fingerprint_conflict()
+    {
+        var adapter = new CheckpointAdapter();
+        var workload = new RuntimeCheckpointCommitWorkload();
+
+        var first = await workload.ExecuteAsync(adapter);
+        var replay = await workload.ExecuteAsync(adapter);
+
+        Assert.Equal(first.ResultDigest, replay.ResultDigest);
+        Assert.Equal(RuntimeCheckpointCommitWorkload.CheckpointCount, adapter.Shared.Markers.Count);
+    }
+
     [Theory]
     [InlineData(CheckpointFault.AliasInitialClients)]
     [InlineData(CheckpointFault.AliasedComponentInstances)]
@@ -91,6 +104,29 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
             value.Contains("Ledger", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public async Task Exposes_the_frozen_public_operation_phases_without_rebuilding_the_scenario_in_the_adapter()
+    {
+        var adapter = new CheckpointAdapter();
+        var operations = await new RuntimeCheckpointCommitWorkload().PrepareMeasuredOperationsAsync(adapter);
+
+        Assert.Equal(
+            ReproducibleWorkloadScenarioCatalog.Get(RuntimeCheckpointCommitWorkload.WorkloadId).OperationSequence,
+            operations.Select(operation => operation.Id));
+        Assert.All(operations, operation => Assert.NotNull(operation));
+
+        foreach (var operation in operations)
+        {
+            await operation.PrepareInvocationAsync(0);
+            var providerCommandsBeforeInvoke = adapter.Shared.ProviderCommandCount;
+            await operation.InvokeAsync(0);
+            Assert.True(
+                adapter.Shared.ProviderCommandCount > providerCommandsBeforeInvoke,
+                $"Timed operation '{operation.Id}' did not issue a provider command.");
+        }
+        Assert.Equal(3, adapter.OpenedClients.Count);
+    }
+
     private sealed class CheckpointAdapter(CheckpointFault fault = CheckpointFault.None) : IRuntimeCheckpointCommitWorkloadAdapter
     {
         private readonly CheckpointBacking _secondary = fault == CheckpointFault.DifferentInitialBacking ? new() : null!;
@@ -142,6 +178,7 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
         public List<RuntimePostCommitOutboxQuery> OutboxRequests { get; } = [];
         public int HeartbeatCount { get; set; }
         public int RootWriteLeaseCount { get; set; }
+        public int ProviderCommandCount { get; set; }
     }
 
     private sealed class CheckpointPublicStore :
@@ -162,6 +199,7 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
         public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            _backing.ProviderCommandCount++;
             lock (_backing.Gate)
             {
                 if (_backing.Markers.TryGetValue(commit.CommitId, out var replay))
@@ -213,6 +251,7 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
         public ValueTask<RuntimeExecutionLease> AcquireAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            _backing.ProviderCommandCount++;
             lock (_backing.Gate)
             {
                 var token = _backing.FenceCounters.GetValueOrDefault(workflowExecutionId) + 1;
@@ -229,6 +268,7 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
         public ValueTask<RuntimeExecutionOwnershipTransitionResult> HeartbeatAsync(RuntimeExecutionLease lease, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            _backing.ProviderCommandCount++;
             lock (_backing.Gate)
             {
                 var current = _backing.Leases.GetValueOrDefault(lease.WorkflowExecutionId);
@@ -287,7 +327,12 @@ public sealed class RuntimeCheckpointCommitWorkloadTests
             return new(state);
         }
 
-        ValueTask<WorkflowExecutionState?> IWorkflowExecutionStateStore.FindAsync(string workflowExecutionId, CancellationToken cancellationToken) => new(_backing.Workflows.GetValueOrDefault(workflowExecutionId));
+        ValueTask<WorkflowExecutionState?> IWorkflowExecutionStateStore.FindAsync(string workflowExecutionId, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _backing.ProviderCommandCount++;
+            return new(_backing.Workflows.GetValueOrDefault(workflowExecutionId));
+        }
         public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) => new((IReadOnlyCollection<WorkflowExecutionState>)_backing.Workflows.Values.ToArray());
         public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default) => new(new WorkflowExecutionStatePage(_backing.Workflows.Values.Where(value => WorkflowExecutionStateHistory.Matches(value, query)).OrderBy(value => value, Comparer<WorkflowExecutionState>.Create(WorkflowExecutionStateHistory.Compare)).Take(query.PageSize).ToArray(), null, false, _backing.Workflows.Count));
         public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) => new((IReadOnlyCollection<string>)_backing.Workflows.Values.Select(value => value.PinnedExecutable.ArtifactId).Distinct(StringComparer.Ordinal).ToArray());

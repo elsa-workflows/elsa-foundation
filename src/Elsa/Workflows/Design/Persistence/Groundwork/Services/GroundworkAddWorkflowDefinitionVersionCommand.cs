@@ -1,6 +1,7 @@
 using Elsa.Locking.Core;
-using Elsa.Persistence.Core;
-using Elsa.Persistence.Core.Design;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Exceptions;
 using Elsa.Primitives.Versioning;

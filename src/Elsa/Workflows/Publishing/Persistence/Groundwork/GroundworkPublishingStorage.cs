@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Globalization;
-using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Groundwork.Kernel;

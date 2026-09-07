@@ -15,7 +15,6 @@ using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Tests.Support;
-using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;

@@ -43,7 +43,8 @@
               "http://localhost:5089"
             ]
           },
-          "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
+          "IdentityGroundworkPersistence": {},
+          "FoundationIdentityAspNetCoreIdentityGroundwork": {
             "IsDevelopmentOrDemo": true,
             "SeedAdminUserName": "admin",
             "SeedAdminPassword": "Password123!",
@@ -63,10 +64,16 @@
             "Model": "auto",
             "BaseDirectory": ".elsa/copilot"
           },
-          "GroundworkUnifiedPersistenceSqlite": {
+          "GroundworkProviderSqlite": {},
+          "GroundworkWorkflowRuntime": {
             "CacheWorkflowExecutables": true,
             "WorkflowExecutableCacheCapacity": 256
           },
+          "ActivitiesDesignGroundworkPersistence": {},
+          "WorkflowsDesignGroundworkPersistence": {},
+          "WorkflowsRuntimeDistributed": {},
+          "WorkflowsRuntimeDistributedGroundworkPersistence": {},
+          "GroundworkWorkflowDashboard": {},
           "Http": {},
           "HttpJavaScript": {},
           "JavaScriptActivities": {},

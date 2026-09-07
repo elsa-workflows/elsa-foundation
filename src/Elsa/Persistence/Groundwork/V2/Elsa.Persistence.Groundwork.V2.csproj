@@ -6,7 +6,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Core\Elsa.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\Workflows\Runtime\Attention\Elsa.Workflows.Runtime.Attention.csproj" />
   </ItemGroup>
@@ -26,13 +25,6 @@
          verify them without widening Elsa's public persistence API. Architecture-reviewed for #269. -->
     <InternalsVisibleTo Include="Elsa.Persistence.Groundwork.V2.Runtime.Tests" />
     <InternalsVisibleTo Include="Elsa.Persistence.Groundwork.V2.Tests" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- Provider-specific composition lives in its own dependency-closed project. -->
-    <Compile Remove="Providers/**/*" />
-    <EmbeddedResource Remove="Providers/**/*" />
-    <None Remove="Providers/**/*" />
   </ItemGroup>
 
 </Project>

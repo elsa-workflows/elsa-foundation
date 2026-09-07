@@ -510,6 +510,76 @@ only. It does not import a #646 performance verdict, delete either diagnostics
 EF oracle, complete T047/T050-T055/T057, promote a final evidence generation,
 or authorize #642 closure.
 
+## Groundwork 0.4.0-preview.9 consumption checkpoint
+
+The repository's central package pins, explicit project overrides, diagnostics consumers, and
+release-lifecycle checks consume the published `0.4.0-preview.9` family. The immutable
+[`v0.4.0-preview.9`](https://github.com/valence-works/groundwork-v2/releases/tag/v0.4.0-preview.9)
+release targets Groundwork commit `408210729ec054368b0cf959274fdc26e04a8393`; its Feedz publication
+and feed verification workflow completed successfully. The release workflow restored every public
+package and tool from Feedz, and Elsa's isolated package-only consumer passed against the exact
+release artifact. The preview.9 observer contract supplies the structured,
+redacted MongoDB point-read identity required by the trace-detail evidence; the earlier
+ordinal-identity query and index-shape fixes remain part of the published family. Existing NU1903
+SSH.NET vulnerability warnings remain unchanged.
+
+This is published-package consumption and focused compatibility evidence only. It does not import a
+#646 performance verdict, promote a new four-provider evidence receipt, delete either diagnostics
+EF oracle, complete T050/T051/T052/T053/T054/T055/T057, or authorize #642 closure. The preview.3
+recertification below remains historical and immutable.
+
+## Historical exact Groundwork 0.4.0-preview.3 recertification checkpoint (immutable)
+
+The current Elsa source head for this focused recertification is `8b92d34b7832271daa1ef24986311401c5d56e20`.
+The Groundwork package family resolves exactly to `0.4.0-preview.3`, from tag `v0.4.0-preview.3`
+and release SHA `9de7aa0e6271c311536d2a78a1e6c1f0260e1fda`. The current receipt is
+[preview0403-recertification-results.json](evidence/preview0403-recertification-results.json).
+
+The shared diagnostics persistence correctness and architecture suite passed 97/97. The initial local
+v2 Structured Logs matrix passed 29/32 and the OpenTelemetry matrix passed 8/11, with SQLite executed
+and the three unavailable server providers skipped. Groundwork aggregate feature composition passed
+3/3. The Structured Logs v2 test project was corrected to declare `IsTestProject`, so the 29/32 result
+is an executed test result rather than a build-only result. Build output continues to report the existing
+NU1903 SSH.NET warning.
+
+Hosted CI run [33498592159](https://github.com/elsa-workflows/elsa-foundation/actions/runs/33498592159)
+then passed the `Groundwork v2 native provider matrix` job at exact head
+`ebce7a70e157ea788f191c48ac68b062b5d6478d`. Its diagnostics step executes both v2 provider-matrix
+projects against SQLite, PostgreSQL 17.6, SQL Server 2022 CU21, and a transaction-capable MongoDB
+7.0.24 replica set. This is current four-provider correctness evidence; the lane deliberately does not
+promote grouped reduction or native query plans.
+
+The three EF-mechanism-only ledger facts are explicitly retired at the Groundwork boundary: both
+`DbContextFactory` lifetime facts have no Groundwork equivalent, while the reserved high-water
+sentinel is replaced by the provider-neutral lifetime high-water invariant with no reserved visible
+data row. The EF oracle source remains intact; #647 still owns deletion and the final zero-EF guard.
+
+This is current-v2 correctness and package evidence, including the hosted four-provider functional
+matrix. It does not import a #646 performance verdict, assert numeric budgets, promote grouped/native-plan evidence,
+complete T050/T051/T052/T053/T054/T055/T057, or authorize #642 closure. The earlier preview.1
+closeout receipt below remains historical and immutable.
+
+## Historical exact Groundwork 0.4.0-preview.1 closeout checkpoint (immutable)
+
+The adopted Elsa `main` source is `3e694377ff6a73dc6b80e34991222b1f8cd47509`, and every
+Groundwork package pin is exactly `0.4.0-preview.1` from release SHA
+`701229e0a736670f406140ed7c61f00e10156ffd`. The current receipt is
+[preview0401-closeout-results.json](evidence/preview0401-closeout-results.json).
+
+The focused shared diagnostics suite passed 96/96 before the closeout guard was added. The new
+guard then passed 1/1 and checks package currency, explicit diagnostics project overrides, all 46
+preserved EF facts, the 43 covered / 3 EF-mechanism-only disposition, and removal of the stale
+one-remaining-OpenTelemetry note. The exact current v2 matrices passed SQLite (Structured Logs
+29/29 and OpenTelemetry 8/8); PostgreSQL, SQL Server, and MongoDB were skipped because their
+connection-string environment variables were not configured.
+
+This checkpoint does not promote grouped reduction or native-plan evidence. The current v2 tests
+exercise public provider behavior but do not emit the required exact-0.4 four-provider plan receipt;
+preview.86/.88 and the stale draft PRs #1287/#1294 remain historical inputs. #646 owns the accepted
+diagnostics timing/physical-form verdict and grouped/native promotion. #647 owns explicit
+disposition of the three EF-mechanism-only facts, dependency-ordered EF deletion, and the final
+zero-EF guard. No EF oracle code was deleted by this checkpoint.
+
 ## Final dependency audit
 
 ```bash

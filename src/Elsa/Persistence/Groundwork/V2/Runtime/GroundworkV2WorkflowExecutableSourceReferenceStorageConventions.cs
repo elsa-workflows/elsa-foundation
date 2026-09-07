@@ -24,7 +24,8 @@ internal static class GroundworkV2WorkflowExecutableSourceReferenceStorageConven
                 [ElsaRuntimeV2StorageManifest.ExpiresAtField] = reference.ExpiresAt ?? DateTimeOffset.MaxValue,
                 [ElsaRuntimeV2StorageManifest.IsRetiredField] = reference.DeletedAt is not null,
                 [ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceIdField] = reference.SourceReferenceId,
-                [ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDefinitionIdField] = reference.DefinitionId
+                [ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDefinitionIdField] = reference.DefinitionId,
+                [ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDefinitionVersionIdField] = reference.DefinitionVersionId
             });
     }
 
@@ -72,6 +73,8 @@ internal static class GroundworkV2WorkflowExecutableSourceReferenceStorageConven
             reference.SourceReferenceId);
         EnsureProjection(values, ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDefinitionIdField,
             reference.DefinitionId);
+        EnsureProjection(values, ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDefinitionVersionIdField,
+            reference.DefinitionVersionId);
         return reference;
     }
 

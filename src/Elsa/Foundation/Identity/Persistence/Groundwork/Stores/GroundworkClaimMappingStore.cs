@@ -1,7 +1,8 @@
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Documents;
-using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 
@@ -19,17 +20,17 @@ public sealed class GroundworkClaimMappingStore(
         CancellationToken cancellationToken = default)
     {
         accessContextAccessor.EnsureCurrentScope(tenantId);
-        var result = rows.QueryWithTotalCount(
+        var result = rows.QueryAllPages(
             IdentityStorageManifest.IdentityClaimMappingDocumentKind,
             new GroundworkIdentityRowQuery(
                 IdentityStorageManifest.ProviderLookupKeyField,
                 GroundworkIdentityRowComparison.Equal,
                 IdentityDocumentId.From(tenantId, provider),
                 IdentityStorageManifest.ClaimMappingOrderField,
-                Take: IdentityStorageManifest.MaxMaterializedListEntries,
                 ExpectedIndex: IdentityV2StorageManifest.ClaimMappingByProviderIndex),
+            IdentityStorageManifest.MaxMaterializedListEntries,
             cancellationToken);
-        GroundworkIdentityListGuard.EnsureWithinMaterializationLimit<IPagedClaimMappingStore>(result.TotalCount);
+        GroundworkIdentityListGuard.EnsureWithinMaterializationLimit<IPagedClaimMappingStore>(result.Rows.Count);
         return ValueTask.FromResult<IReadOnlyList<ClaimMappingRule>>(result.Rows
             .Select(Map)
             .ToArray());

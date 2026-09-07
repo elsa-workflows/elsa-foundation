@@ -8,8 +8,10 @@ using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Api.Requests;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -38,6 +40,7 @@ public sealed class RuntimeMinimalApiBehaviorTests
     private const string DescendantsPath = ActivityPath + "/descendants";
     private const string LayoutPath = ActivityPath + "/layout";
     private const string ValuePayloadPath = ActivityPath + "/value-evidence/value-1/payload";
+    private const string ActivationSlotPath = "/runtime/workflows/activation-slots/definition-1/default";
 
     [Theory]
     [InlineData(WorkflowExecutionCommandDispatchStatus.Accepted, HttpStatusCode.OK)]
@@ -54,6 +57,33 @@ public sealed class RuntimeMinimalApiBehaviorTests
         using var response = await host.Client.PostAsJsonAsync(ExecutePath, new { });
 
         Assert.Equal(expectedStatus, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Activation_slot_reads_use_the_runtime_authority_and_render_missing_slots_as_404()
+    {
+        var authority = new InMemoryWorkflowActivationAuthority();
+        await authority.TryActivateAsync(new WorkflowActivationSlotRequest(
+            "definition-1",
+            "default",
+            "activation-1",
+            WorkflowActivationSource.ArtifactReconciliation("source-1"),
+            0,
+            DateTimeOffset.UnixEpoch));
+        await using var host = await StartAsync(
+            _ => DispatchView(WorkflowExecutionCommandDispatchStatus.Accepted),
+            services => services.AddSingleton<IWorkflowActivationAuthority>(authority));
+
+        using var list = await host.Client.GetAsync("/runtime/workflows/activation-slots/definition-1");
+        using var detail = await host.Client.GetAsync(ActivationSlotPath);
+        using var missing = await host.Client.GetAsync("/runtime/workflows/activation-slots/definition-1/missing");
+
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        var detailBody = await detail.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("activation-1", detailBody.GetProperty("activeActivationId").GetString());
+        Assert.Equal("artifact-reconciliation", detailBody.GetProperty("sourceKind").GetString());
     }
 
     /// <remarks>
@@ -439,7 +469,9 @@ public sealed class RuntimeMinimalApiBehaviorTests
     private static WorkflowExecutionStartDispatchView DispatchView(WorkflowExecutionCommandDispatchStatus status) =>
         new("wfexec-1", "artifact-1", "1.0.0", "hash-1", status.ToString(), "envelope-1", "agent-1", "in-process", status == WorkflowExecutionCommandDispatchStatus.Accepted ? null : "reason");
 
-    private static async Task<BehaviorHost> StartAsync(Func<object, object?> behavior)
+    private static async Task<BehaviorHost> StartAsync(
+        Func<object, object?> behavior,
+        Action<IServiceCollection>? configureServices = null)
     {
         var builder = WebApplication.CreateBuilder();
         builder.Services.AddElsaEndpoints();
@@ -455,6 +487,7 @@ public sealed class RuntimeMinimalApiBehaviorTests
         builder.Services.AddSingleton<IActivityExecutionDescendantsReader>(seams);
         builder.Services.AddSingleton<IActivityExecutionLayoutReader>(seams);
         builder.Services.AddSingleton<IActivityExecutionValuePayloadReader>(seams);
+        configureServices?.Invoke(builder.Services);
         // The owner's failure shapes are DI-provided services, so the host composes the feature
         // exactly like the replay oracle does; the behavior seams above win the TryAdd registrations.
         new WorkflowsRuntimeApiFeature().ConfigureServices(builder.Services);

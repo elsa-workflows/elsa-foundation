@@ -405,7 +405,7 @@ access are distinct immutable values; privileged access always has a named purpo
 Run the direct scope/session evidence:
 
 ```bash
-dotnet test tests/Elsa/Persistence/Core/Tests/Elsa.Persistence.Core.Tests.csproj \
+dotnet test tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj \
   --configuration Release --no-build
 
 dotnet test tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj \
@@ -629,6 +629,11 @@ provider/topology host evidence.
 Also run invalid compositions: missing source, duplicate unit, unsupported route/capability, wrong MongoDB topology, and scope-policy conflict. Each must fail before serving work with a stable owner-aware diagnostic.
 
 ## 6. Exercise schema tooling
+
+> **Historical example (pre-#1488):** The commands in this section reference the deleted
+> `ReferenceComposition` assembly and are retained as immutable migration evidence. They are not a
+> current executable path. Current #646 benchmark composition identity is emitted by the AdapterHost
+> `describe-composition` command and is unrelated to a physical schema-target fingerprint.
 
 Build the concrete host schema-source assembly, then set the connection value only through an environment variable. The shipped unified leaves register
 `GroundworkAllFeaturesDeploymentSchema` as their six-family runtime authority; hosts that explicitly select
@@ -862,11 +867,24 @@ then-current workloads,
 and rejects drift before matrix admission. The v1.0 values remain immutable history; this checkpoint does not
 claim that they were reproducible or executed.
 
-`secret-create-read-list` remains v1.0.0 and Blocked under
-`comparator.secret.real-ef-required` until #646 has a real EF Secret repository comparator. No
-synthetic comparator or waiver was added. Its explicit blocked admission is enforced before matrix child
-launch and again by comparison and gate, including against forged complete artifacts. It publishes no timings,
-physical-form selection, performance verdict, or coverage-ledger advancement; T100 remains open.
+The historical `secret-create-read-list` v1.0.0 source remains Blocked under
+`comparator.secret.real-ef-required`; it is retained as immutable history and is not silently rewritten.
+The separate `secret-create-read-list-v1.1.json` successor is now executable for the exact temporary
+SQLite EF comparator and public Groundwork Secret adapter, with the same result digest and a real
+`list-filtered` native-plan capture. No synthetic comparator or waiver was added. The v1.1 successor
+still publishes no timings, physical-form selection, performance verdict, or coverage-ledger advancement;
+T100 remains open until #646 executes the comparison protocol.
+
+This is an explicit program-owner decision recorded on 2026-09-01, not an inferred waiver: preserve the
+v1.0 file and hashes byte-for-byte, execute the reproducible v1.1 successor, admit EF only on SQLite, and
+fail closed for EF Secret on SQL Server, PostgreSQL, and MongoDB before opening a provider or creating
+artifacts. Groundwork retains its independent four-provider evidence obligation.
+
+Concurrent-create evidence is taken at command execution. EF SQLite must show two distinct physical
+connections simultaneously inside its command interceptor. Groundwork PostgreSQL, SQL Server, and
+MongoDB must likewise overlap two independent provider connections at the provider-command observer.
+Groundwork SQLite instead records its enforced `GW-SQLITE-LIFETIME-001` single-connection serialization:
+both real conditional-upsert commands must be observed, but no overlap is claimed or fabricated.
 
 ### Ratified diagnostics workload and additive ledger denominator
 
@@ -929,7 +947,7 @@ candidate are:
 | Correctness/mechanism | The JSON fingerprints could match while semantic input fields drifted from the code-owned parameters. `WorkloadCatalog` now compares every semantic JSON field with the code-owned parameter set before admitting the workload, and a negative test proves that recomputing the source digest cannot bypass this check. | PASS |
 | Evidence integrity | Expected results were derived dynamically from the same implementation under test, so they were not an independent ratchet. All twelve then-current workloads have separately maintained literal golden vectors, duplicated independently in the conformance test, and catalog admission rejects any mismatch. | PASS |
 | Scope/test preservation | The checkpoint described definitions as executable workloads even though it adds contract vectors rather than public-operation runners. The CLI and documentation now use `workload-vectors`, explicitly reserve execution for future real adapters, and remove the unsupported T099 evidence claim. | PASS |
-| Evidence integrity | Secret's Blocked state existed only in prose, so synthetic or forged artifacts could still enter matrix, comparison, or gate paths. The closed workload schema now carries `benchmarkAdmission`; matrix planning, comparison, and gating reject Secret with `comparator.secret.real-ef-required`, including forged complete inputs. | PASS |
+| Evidence integrity | The historical Secret v1.0 Blocked state now remains explicit immutable provenance, while the executable v1.1 successor is admitted only for its exact EF/Groundwork adapter/form mappings. The closed workload schema carries `benchmarkAdmission`; matrix planning, comparison, and gating reject unratified Secret mappings, including forged complete inputs. | PASS |
 | Correctness/evidence integrity | The first replacement review found that ready IAM still checked only hashes, version, and seed; reviewed source-digest drift could therefore change its semantic inputs, scenario, or operation sequence. IAM admission now binds all six semantic inputs, scenario identity, and exact operation sequence to `IamNormalizedLookupWorkload`; three negative cases recompute the source digest and prove each class of drift fails closed. | PASS |
 
 Root revalidation of the remediated candidate passed the benchmark harness **60/60**, the focused
@@ -1305,7 +1323,10 @@ final-seed rejection test, and compares the full poison record returned by `List
 queue suite is **17/17**, the complete benchmark-harness test
 project is **231/231**, the benchmark project warnings-as-errors build is clean, both changed-code
 path-restricted formatter checks pass, and `git diff --check` is clean. These are container-free
-correctness checks; provider and restart evidence remain deliberately unclaimed.
+correctness checks; provider and restart evidence remain deliberately unclaimed. MongoDB correctness
+remains admitted, but its native-plan and timing target is explicitly blocked because the Groundwork
+observer emits descriptive commands for the distinct route, whose `$sort`/`$group` materialization is
+not a bounded native plan.
 
 The three initial adversarial reviews examined `8c1c27e..8b3cb89f`. Evidence integrity passed, but
 correctness requested changes because the runner trusted returned contention claims without first
@@ -1356,7 +1377,10 @@ all 128 visible workflow IDs and exactly 8,176 pending commands.
 
 This is shared-backing public-contract correctness only. It does not claim provider or process
 restart durability, native-plan evidence, timing, EF comparison, a physical-form verdict,
-coverage-ledger evidence, or Spec 094 task completion. T100 remains unchecked.
+coverage-ledger evidence, or Spec 094 task completion. T100 remains unchecked. MongoDB correctness
+remains admitted, but its native-plan and timing target is explicitly blocked because the Groundwork
+observer emits descriptive commands for the distinct route, whose `$sort`/`$group` materialization is
+not a bounded native plan.
 
 Root verification rejected the worker’s initial **12/12** result because send acknowledgements did
 not compare the full command/envelope shape, concurrent lease responses were hashed in client order

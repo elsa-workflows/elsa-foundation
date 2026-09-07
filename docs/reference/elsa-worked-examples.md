@@ -28,7 +28,9 @@ There is no shared `Elsa.Workflows.Core` parent package. Design and Runtime are 
 
 Top-level domain Cores in play:
 
-- `Elsa.Persistence.Core` - generic persistence contracts such as `IAddCommand<T>` and `IQuery<T>`.
+- Runtime persistence access and scope contracts now live in `Elsa.Workflows.Runtime.Core`; design
+  operation identity, failure contracts, and named store ports live in
+  `Elsa.Workflows.Design.Persistence.Core`.
 - `Elsa.Serialization.Core` - serialization contracts.
 
 Workflows sub-domain Cores:
@@ -38,13 +40,14 @@ Workflows sub-domain Cores:
 
 The observable cross-`.Core` reference today is in Design's sub-sub-domain Cores:
 
-- `Elsa.Workflows.Design.Persistence.Core` - references `Elsa.Workflows.Design.Core` and may reference `Elsa.Persistence.Core` as an explicit design choice when useful.
+- `Elsa.Workflows.Design.Persistence.Core` - references `Elsa.Workflows.Design.Core` and owns the
+  provider-neutral design persistence ports.
 
 Implementations:
 
 - `Elsa.Workflows.Design.Persistence.Groundwork` - Groundwork implementation of the design-persistence sub-sub-domain (the only shipped design-persistence provider; the former EF Core implementation was removed by spec 093).
 
-Impl-to-impl carve-out: implementations across unrelated sub-domains never reference each other. Implementations within the same provider family may reference each other — for example a provider-specific package extending a shared base implementation within the same persistence family (`Elsa.Persistence.EFCore.Sqlite` extending `Elsa.Persistence.EFCore`).
+Impl-to-impl carve-out: implementations across unrelated sub-domains never reference each other. Implementations within the same provider family may reference each other — for example a provider-specific package extending a shared base implementation within the same persistence family. The former `Elsa.Persistence.EFCore.Sqlite` / `Elsa.Persistence.EFCore` pair illustrated this rule but is no longer shipped.
 
 ## Adapter pattern: Elsa.Locking
 
@@ -194,6 +197,8 @@ The reverse form would force `Elsa.JavaScript` to grow one sub-branch per model-
 
 ## Sync contributor pattern: IEntityModelCreatingHandler
 
+Historical example: the first-party EF implementation and these interfaces have been removed. This section explains the original rationale, not currently available APIs; see the [current persistence scope](../program-goals/zero-ef-persistence.md).
+
 Instantiates framework §2.6.5.
 
 EF Core's `OnModelCreating` lifecycle hook needs to invoke contributing handlers synchronously at the moment EF Core builds the model. Async event dispatch cannot apply because `OnModelCreating` is intrinsically sync.
@@ -248,4 +253,3 @@ Key reasoning:
 Activity-specific validators co-locate with their activity's design-time module. The validator is an `IDraftValidator` registered by the `Elsa.Http.Activities.Design` feature; it is not its own event handler.
 
 This is not a license to over-elaborate every cross-domain contribution. The three-segment composition activates only when the consumer domain also has an internal phase axis that must appear at the package boundary.
-

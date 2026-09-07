@@ -37,7 +37,22 @@ public class GroundworkWorkflowRuntimeFeature : IShellFeature
         Category = "Performance")]
     public int WorkflowExecutableCacheCapacity { get; set; } = WorkflowExecutableCacheOptions.DefaultCapacity;
 
-    public void ConfigureServices(IServiceCollection services) =>
+    [ManifestSetting(
+        DisplayName = "Recovery continuation signing key",
+        Description = "At least 32 UTF-8 bytes shared by nodes that consume durable recovery pages. Required for durable recovery paging.",
+        Category = "Security",
+        Secret = true)]
+    public string? RecoveryContinuationSigningKey { get; set; }
+
+    public void ConfigureServices(IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.Configure<RuntimeRecoveryContinuationOptions>(options =>
+        {
+            if (!string.IsNullOrWhiteSpace(RecoveryContinuationSigningKey))
+                options.SigningKey = RecoveryContinuationSigningKey;
+            options.AllowEphemeralDevelopmentKey = false;
+        });
         services.AddGroundworkV2RuntimeStores(
             new WorkflowExecutableCacheOptions
             {
@@ -45,4 +60,5 @@ public class GroundworkWorkflowRuntimeFeature : IShellFeature
                 Capacity = WorkflowExecutableCacheCapacity
             },
             Target);
+    }
 }

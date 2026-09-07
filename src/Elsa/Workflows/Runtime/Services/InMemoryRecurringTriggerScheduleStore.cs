@@ -13,7 +13,7 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
 {
     private readonly object _syncRoot = new();
     private readonly Dictionary<string, RecurringTriggerSchedule> _schedules = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _preparedPublications = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _preparedActivations = new(StringComparer.Ordinal);
 
     public ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default)
     {
@@ -29,37 +29,37 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         }
     }
 
-    public ValueTask PreparePublicationAsync(
-        string publicationId,
+    public ValueTask PrepareActivationAsync(
+        string activationId,
         IReadOnlyCollection<RecurringTriggerSchedule> schedules,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
         ArgumentNullException.ThrowIfNull(schedules);
         cancellationToken.ThrowIfCancellationRequested();
-        ValidatePublicationSchedules(publicationId, schedules);
+        ValidateActivationSchedules(activationId, schedules);
 
         lock (_syncRoot)
         {
-            RemoveByPublication(publicationId);
+            RemoveByActivation(activationId);
             foreach (var schedule in schedules)
             {
                 var prepared = schedule with { IsActive = false };
                 _schedules[prepared.ScheduleId] = prepared;
             }
-            _preparedPublications.Add(publicationId);
+            _preparedActivations.Add(activationId);
         }
 
         return ValueTask.CompletedTask;
     }
 
-    public async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByPublicationAsync(
-        string publicationId,
+    public async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByActivationAsync(
+        string activationId,
         CancellationToken cancellationToken = default) =>
-        await RuntimeOperationalStorePagingExtensions.ListAllByPublicationAsync(this, publicationId, cancellationToken);
+        await RuntimeOperationalStorePagingExtensions.ListAllByActivationAsync(this, activationId, cancellationToken);
 
-    public ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByPublicationPageAsync(
-        RecurringTriggerSchedulePublicationPageQuery query,
+    public ValueTask<RuntimeStorePage<RecurringTriggerSchedule>> ListByActivationPageAsync(
+        RecurringTriggerScheduleActivationPageQuery query,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
@@ -68,7 +68,7 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         lock (_syncRoot)
         {
             var schedules = _schedules.Values
-                .Where(schedule => StringComparer.Ordinal.Equals(schedule.PublicationId, query.PublicationId))
+                .Where(schedule => StringComparer.Ordinal.Equals(schedule.ActivationId, query.ActivationId))
                 .OrderBy(schedule => schedule.ScheduleId, StringComparer.Ordinal)
                 .ToArray();
             return new(CreatePage(query, schedules));
@@ -92,38 +92,38 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         }
     }
 
-    public ValueTask ActivatePublicationAsync(
-        string publicationId,
-        string? replacedPublicationId,
+    public ValueTask ActivateAsync(
+        string activationId,
+        string? replacedActivationId,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
-        if (replacedPublicationId is not null)
-            ArgumentException.ThrowIfNullOrWhiteSpace(replacedPublicationId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
+        if (replacedActivationId is not null)
+            ArgumentException.ThrowIfNullOrWhiteSpace(replacedActivationId);
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
         {
-            if (!_preparedPublications.Contains(publicationId))
-                throw new InvalidOperationException($"Publication '{publicationId}' has no prepared recurring-schedule projection.");
+            if (!_preparedActivations.Contains(activationId))
+                throw new InvalidOperationException($"Activation '{activationId}' has no prepared recurring-schedule projection.");
 
-            SetPublicationActivity(publicationId, true);
-            if (replacedPublicationId is not null && !StringComparer.Ordinal.Equals(replacedPublicationId, publicationId))
-                SetPublicationActivity(replacedPublicationId, false);
+            SetActivationActive(activationId, true);
+            if (replacedActivationId is not null && !StringComparer.Ordinal.Equals(replacedActivationId, activationId))
+                SetActivationActive(replacedActivationId, false);
         }
 
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default)
+    public ValueTask DeleteByActivationAsync(string activationId, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(activationId);
         cancellationToken.ThrowIfCancellationRequested();
 
         lock (_syncRoot)
         {
-            RemoveByPublication(publicationId);
-            _preparedPublications.Remove(publicationId);
+            RemoveByActivation(activationId);
+            _preparedActivations.Remove(activationId);
         }
 
         return ValueTask.CompletedTask;
@@ -209,31 +209,31 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         return ValueTask.CompletedTask;
     }
 
-    private static void ValidatePublicationSchedules(
-        string publicationId,
+    private static void ValidateActivationSchedules(
+        string activationId,
         IReadOnlyCollection<RecurringTriggerSchedule> schedules)
     {
         foreach (var schedule in schedules)
         {
             ArgumentNullException.ThrowIfNull(schedule);
-            if (!StringComparer.Ordinal.Equals(schedule.PublicationId, publicationId))
-                throw new ArgumentException($"Schedule '{schedule.ScheduleId}' does not belong to publication '{publicationId}'.", nameof(schedules));
+            if (!StringComparer.Ordinal.Equals(schedule.ActivationId, activationId))
+                throw new ArgumentException($"Schedule '{schedule.ScheduleId}' does not belong to activation '{activationId}'.", nameof(schedules));
             ArgumentException.ThrowIfNullOrWhiteSpace(schedule.SlotId);
         }
     }
 
-    private void SetPublicationActivity(string publicationId, bool isActive)
+    private void SetActivationActive(string activationId, bool isActive)
     {
         foreach (var schedule in _schedules.Values
-                     .Where(schedule => StringComparer.Ordinal.Equals(schedule.PublicationId, publicationId))
+                     .Where(schedule => StringComparer.Ordinal.Equals(schedule.ActivationId, activationId))
                      .ToArray())
             _schedules[schedule.ScheduleId] = schedule with { IsActive = isActive };
     }
 
-    private void RemoveByPublication(string publicationId)
+    private void RemoveByActivation(string activationId)
     {
         foreach (var scheduleId in _schedules.Values
-                     .Where(schedule => StringComparer.Ordinal.Equals(schedule.PublicationId, publicationId))
+                     .Where(schedule => StringComparer.Ordinal.Equals(schedule.ActivationId, activationId))
                      .Select(schedule => schedule.ScheduleId)
                      .ToArray())
             _schedules.Remove(scheduleId);

@@ -52,7 +52,7 @@
 
 **Decision**: `AspNetCoreIdentitySignInService` binds the effective tenant to the scoped provider-neutral persistence access context before `UserManager` lookup. Every Groundwork store acquires an ordinary session from that immutable scope and validates any tenant carried on the entity. Cross-tenant administrative/seeding paths use an explicit privileged scoped purpose.
 
-**Rationale**: ASP.NET Core Identity lookup methods do not carry tenant IDs. The current global lookup followed by `TenantId` comparison leaks the boundary and cannot support the same username in two tenants. The existing `Elsa.Persistence.Core` accessor/binder is the approved provider-neutral seam.
+**Rationale**: ASP.NET Core Identity lookup methods do not carry tenant IDs. The current global lookup followed by `TenantId` comparison leaks the boundary and cannot support the same username in two tenants. The existing `Elsa.Workflows.Runtime.Core` accessor/binder is the approved provider-neutral seam.
 
 **Alternatives considered**:
 

@@ -35,14 +35,10 @@ seams. A provider feature must register an `IGroundworkStorageSessionSource`
 (`Elsa.Persistence.Groundwork.Composition`) bound to a provider connection, plus the host
 `Elsa.Serialization.Core.IPayloadSerializer` that these adapters consume.
 
-Two composition shapes:
-
-- **Unified** — enable one provider feature
-  (`AddGroundwork{Sqlite|SqlServer|PostgreSql|MongoDb}UnifiedPersistence(…)`). It routes through
-  `AddGroundworkUnifiedStoreFamilies()`, which composes this lane with the other Groundwork store
-  families over one provider connection.
-- **Lane-specific** — call `AddGroundworkWorkflowsDesignStores()` directly against a manually registered
-  provider connection and payload serializer.
+The host owns composition: register one provider connection, then call
+`AddGroundworkWorkflowsDesignStores()` alongside the other lanes it needs. Workbench's default shell calls
+the provider and lane features explicitly against one target; a split host can provide distinct target names
+where transaction boundaries allow it.
 
 Schema application is not an operator step. The storage session source admits every registered unit at
 startup, so the host creates and validates its own schema; a unit whose live schema has drifted from its

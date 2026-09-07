@@ -1,6 +1,6 @@
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Mediator.Core.Models;
-using Elsa.Persistence.Core.Design;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Definitions.Delete;

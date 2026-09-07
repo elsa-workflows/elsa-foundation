@@ -5,7 +5,6 @@
   <ItemGroup><PackageReference Include="Microsoft.NET.Test.Sdk" /><PackageReference Include="xunit" /><PackageReference Include="xunit.runner.visualstudio" /></ItemGroup>
   <ItemGroup><ProjectReference Include="../../../../../src/Elsa/Workflows/Dashboard/Elsa.Workflows.Dashboard.csproj" /></ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../../../src/Elsa/Persistence/Groundwork/ReferenceComposition/Elsa.Persistence.Groundwork.ReferenceComposition.csproj" />
     <!--
       The MongoDB dashboard wiring is asserted here rather than in Elsa.Workflows.Dashboard.MongoDb.Tests
       because that project references Testcontainers, which excludes it from the PR-time fast gate. The

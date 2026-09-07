@@ -1,4 +1,5 @@
-using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
@@ -52,33 +53,19 @@ public sealed class PublishingGroundworkStoreTests
     {
         await using var persistence = await PublishingV2TestPersistence.CreateAsync("memory");
         var queries = new List<QueryRequest>();
-        var indexHints = new List<string>();
-        var source = new RecordingSessionSource(persistence.Sessions, queries, indexHints: indexHints);
+        var source = new RecordingSessionSource(persistence.Sessions, queries);
         var access = persistence.Access();
         var serializer = new PublishingGroundworkDocumentSerializer();
-        var slots = new GroundworkPublicationSlotStore(source, access, serializer);
         var publications = new GroundworkPublicationRecordStore(source, access, serializer);
         var intents = new GroundworkPublicationProjectionIntentStore(source, access, serializer);
 
-        await slots.ListByDefinitionAsync("definition-1");
-        await slots.TryActivateAsync("definition-1", "default", "publication-1", 0, Now);
         await publications.ListBySlotAsync("definition-1:default");
         await intents.ListByPublicationAsync("publication-1");
 
         Assert.Collection(
             queries,
-            query => AssertQuery(query, PublishingGroundworkStorageManifest.WorkflowDefinitionIdField, "definition-1"),
-            query => AssertQuery(query, PublishingGroundworkStorageManifest.ActivePublicationIdField, "publication-1"),
             query => AssertQuery(query, PublishingGroundworkStorageManifest.SlotIdField, "definition-1:default"),
             query => AssertQuery(query, PublishingGroundworkStorageManifest.PublicationIdField, "publication-1"));
-        Assert.Equal(
-            [
-                PublishingGroundworkStorageManifest.SlotByDefinitionIndex,
-                PublishingGroundworkStorageManifest.SlotByActivePublicationIndex,
-                PublishingGroundworkStorageManifest.RecordBySlotIndex,
-                PublishingGroundworkStorageManifest.IntentByPublicationIndex
-            ],
-            indexHints);
     }
 
     [Fact]
@@ -109,17 +96,6 @@ public sealed class PublishingGroundworkStoreTests
         await using var persistence = await PublishingV2TestPersistence.CreateAsync(provider);
         var stores = Stores.Create(persistence);
 
-        var initial = await stores.Slots.TryActivateAsync("definition-1", "default", "publication-current", 0, Now);
-        Assert.True(initial.Succeeded);
-        var duplicateAuthority = await stores.Slots.TryActivateAsync("definition-1", "blue", "publication-current", 0, Now);
-        Assert.False(duplicateAuthority.Succeeded);
-        Assert.Equal("publication_already_active", duplicateAuthority.Failure?.Code);
-        var concurrent = await Task.WhenAll(
-            stores.Slots.TryActivateAsync("definition-1", "default", "publication-a", 1, Now.AddMinutes(1)).AsTask(),
-            stores.Slots.TryActivateAsync("definition-1", "default", "publication-b", 1, Now.AddMinutes(1)).AsTask());
-        Assert.Single(concurrent, x => x.Succeeded);
-        Assert.Single(concurrent, x => !x.Succeeded && x.Failure?.Code == "slot_revision_conflict");
-
         var candidate = Publication("publication-record", PublicationStatus.Candidate);
         await stores.Publications.SaveAsync(candidate);
         var transitions = await Task.WhenAll(
@@ -145,33 +121,11 @@ public sealed class PublishingGroundworkStoreTests
         persistence.Restart();
         stores = Stores.Create(persistence);
 
-        var slot = await stores.Slots.FindAsync("definition-1", "default");
-        Assert.Equal(2, slot!.Revision);
-        Assert.Contains(slot.ActivePublicationId, new[] { "publication-a", "publication-b" });
-        Assert.Single(await stores.Slots.ListByDefinitionAsync("definition-1"));
         Assert.Single(await stores.Publications.ListBySlotAsync(candidate.SlotId));
         Assert.NotEqual(PublicationStatus.Candidate, (await stores.Publications.FindAsync(candidate.PublicationId))!.Status);
         Assert.Equal(1, (await stores.Policies.FindAsync("definition-1"))!.Revision);
         Assert.Equal(PublicationProjectionIntentStatus.Delivering, (await stores.Intents.FindAsync("intent-1"))!.Status);
         Assert.Single(await stores.Intents.ListByPublicationAsync("publication-record"));
-    }
-
-    [Theory]
-    [InlineData("memory")]
-    [InlineData("sqlite")]
-    public async Task Concurrent_different_slots_cannot_authorize_the_same_publication(string provider)
-    {
-        await using var persistence = await PublishingV2TestPersistence.CreateAsync(provider);
-        var stores = Stores.Create(persistence);
-
-        var transitions = await Task.WhenAll(
-            stores.Slots.TryActivateAsync("definition-1", "red", "publication-shared", 0, Now).AsTask(),
-            stores.Slots.TryActivateAsync("definition-1", "blue", "publication-shared", 0, Now).AsTask());
-
-        Assert.Single(transitions, transition => transition.Succeeded);
-        var rejected = Assert.Single(transitions, transition => !transition.Succeeded);
-        Assert.Equal("publication_already_active", rejected.Failure?.Code);
-        Assert.Single(await stores.Slots.ListByDefinitionAsync("definition-1"));
     }
 
     [Theory]
@@ -213,9 +167,7 @@ public sealed class PublishingGroundworkStoreTests
         for (var index = 0; index < count; index++)
         {
             var suffix = index.ToString("D4");
-            Assert.True((await stores.Slots.TryActivateAsync(
-                "definition-1", $"bulk-{suffix}", $"publication-slot-{suffix}", 0, Now)).Succeeded);
-            await stores.Publications.SaveAsync(BulkPublication($"publication-record-{suffix}", "definition-1:bulk"));
+            await stores.Publications.SaveAsync(BulkPublication($"publication-record-{suffix}", "bulk"));
             await stores.Intents.SaveAsync(new PublicationProjectionIntent(
                 $"intent-{suffix}", "bulk-publication", PublicationProjectionKinds.TriggerBindings,
                 PublicationProjectionOperation.Prepare, PublicationProjectionIntentStatus.Pending, 0, null, null));
@@ -223,26 +175,11 @@ public sealed class PublishingGroundworkStoreTests
             Assert.True((await stores.DraftRuns.TryCreateAsync(BulkDraftTestRun($"draft-{suffix}", Now.AddMinutes(-1)))).Created);
         }
 
-        Assert.Equal(count, (await stores.Slots.ListByDefinitionAsync("definition-1")).Count);
-        Assert.Equal(count, (await stores.Publications.ListBySlotAsync("definition-1:bulk")).Count);
+        Assert.Equal(count, (await stores.Publications.ListBySlotAsync(
+            WorkflowActivationSlotIdentity.Create("definition-1", "bulk"))).Count);
         Assert.Equal(count, (await stores.Intents.ListByPublicationAsync("bulk-publication")).Count);
         Assert.Equal(count, await stores.Reviews.DeleteExpiredAsync(Now, count));
         Assert.Equal(count, await stores.DraftRuns.DeleteExpiredAsync(Now, count));
-    }
-
-    [Fact]
-    public void Active_publication_index_is_sparse_and_unique()
-    {
-        var unit = PublishingGroundworkStorageManifest.Require(
-            PublishingGroundworkStorageManifest.PublicationSlotDocumentKind);
-        var index = Assert.Single(unit.Indexes, index =>
-            index.Name == PublishingGroundworkStorageManifest.SlotByActivePublicationIndex);
-
-        Assert.True(index.IsUnique);
-        Assert.Equal(MissingValueBehavior.Excluded, index.MissingValues);
-        Assert.Equal(
-            [PublishingGroundworkStorageManifest.ActivePublicationIdField],
-            index.Columns.Select(column => column.Column));
     }
 
     private static GroundworkPublicationSnapshotReviewStore ReviewStore(PublishingV2TestPersistence persistence) =>
@@ -255,7 +192,7 @@ public sealed class PublishingGroundworkStoreTests
 
     private static PublicationRecord Publication(string id, PublicationStatus status) => new(
         id,
-        PublicationSlotIdentity.Create("definition-1", "default"),
+        WorkflowActivationSlotIdentity.Create("definition-1", "default"),
         "definition-1",
         "version-1",
         "artifact-1",
@@ -267,9 +204,9 @@ public sealed class PublishingGroundworkStoreTests
         null,
         null);
 
-    private static PublicationRecord BulkPublication(string id, string slotId) => new(
+    private static PublicationRecord BulkPublication(string id, string slotName) => new(
         id,
-        slotId,
+        WorkflowActivationSlotIdentity.Create("definition-1", slotName),
         "definition-1",
         "version-1",
         $"artifact-{id}",
@@ -290,7 +227,6 @@ public sealed class PublishingGroundworkStoreTests
     }
 
     private sealed record Stores(
-        GroundworkPublicationSlotStore Slots,
         GroundworkPublicationRecordStore Publications,
         GroundworkPublicationPolicyStore Policies,
         GroundworkPublicationProjectionIntentStore Intents,
@@ -302,7 +238,6 @@ public sealed class PublishingGroundworkStoreTests
             var serializer = new PublishingGroundworkDocumentSerializer();
             var access = persistence.Access();
             return new(
-                new GroundworkPublicationSlotStore(persistence.Sessions, access, serializer),
                 new GroundworkPublicationRecordStore(persistence.Sessions, access, serializer),
                 new GroundworkPublicationPolicyStore(persistence.Sessions, access, serializer),
                 new GroundworkPublicationProjectionIntentStore(persistence.Sessions, access, serializer),

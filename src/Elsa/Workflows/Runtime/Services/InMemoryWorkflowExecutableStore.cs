@@ -14,11 +14,30 @@ public sealed class InMemoryWorkflowExecutableStore : IWorkflowExecutableStore
     {
         ArgumentNullException.ThrowIfNull(executable);
 
+        return SaveBatchAsync([executable], cancellationToken);
+    }
+
+    public ValueTask SaveBatchAsync(
+        IReadOnlyList<WorkflowExecutable> executables,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(executables);
+        cancellationToken.ThrowIfCancellationRequested();
+        foreach (var executable in executables)
+        {
+            ArgumentNullException.ThrowIfNull(executable);
+            ArgumentException.ThrowIfNullOrWhiteSpace(executable.Identity.ArtifactId);
+        }
+
+        if (executables.Select(executable => executable.Identity.ArtifactId).Distinct(StringComparer.Ordinal).Count() != executables.Count)
+            throw new ArgumentException("A workflow executable batch must contain distinct artifact ids.", nameof(executables));
+
         lock (_gate)
         {
             // Idempotent by artifact id: artifacts are content-addressed and immutable, so an already-stored
             // artifact is authoritative — a behaviorally identical republish must not overwrite it (ADR 0038).
-            _executables.TryAdd(executable.Identity.ArtifactId, executable);
+            foreach (var executable in executables)
+                _executables.TryAdd(executable.Identity.ArtifactId, executable);
         }
 
         return ValueTask.CompletedTask;

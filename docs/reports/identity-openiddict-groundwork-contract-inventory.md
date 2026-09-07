@@ -377,6 +377,6 @@ The production-store slices must not begin by copying the current EF schema mech
 - [Identity sign-in flow](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Services/AspNetCoreIdentitySignInService.cs)
 - [OpenIddict registration](../../src/Elsa/Foundation/Identity/OpenIddict/Extensions/OpenIddictIdentityServiceCollectionExtensions.cs)
 - [OpenIddict token flow](../../src/Elsa/Foundation/Identity/OpenIddict/OpenIddictTokenService.cs)
-- [OpenIddict EF model](../../src/Elsa/Foundation/Identity/OpenIddict/EntityFrameworkCore/OpenIddictIdentityDbContext.cs)
+- [Workbench-owned OpenIddict vendor EF model](../../src/Apps/Elsa.Workbench/OpenIddict/OpenIddictIdentityDbContext.cs)
 - [Identity tests](../../tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity)
 - [OpenIddict tests](../../tests/Elsa/Foundation/Identity/Tests/OpenIddict)

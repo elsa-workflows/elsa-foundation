@@ -38,6 +38,7 @@ namespace Elsa.Activities.Scheduling.Tests;
 public sealed class DurableTimerRestartCrashTests
 {
     private const string TimerId = DelayTestExecutable.TimerId;
+    private const string RecoveryContinuationSigningKey = "durable-timer-restart-signing-key-32-bytes";
     private static readonly DateTimeOffset T0 = new(2026, 7, 1, 12, 0, 0, TimeSpan.Zero);
     private static readonly TimeSpan Delay5s = TimeSpan.FromSeconds(5);
 
@@ -187,6 +188,8 @@ public sealed class DurableTimerRestartCrashTests
                 // Each generation owns its own connection to the shared file, so disposing a generation
                 // closes only that connection and the durable rows outlive it.
                 services.AddGroundworkStorageProviderConnection(_ => store.Connect());
+                services.Configure<RuntimeRecoveryContinuationOptions>(options =>
+                    options.SigningKey = RecoveryContinuationSigningKey);
                 services.AddGroundworkV2RuntimeStores();
                 // Override the runtime clock so due-time computation and the pump sweep share one
                 // controllable timeline.

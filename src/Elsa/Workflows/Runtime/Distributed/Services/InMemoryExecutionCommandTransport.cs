@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Models;

@@ -106,22 +106,22 @@ public sealed class HttpEndpointRouteTableSynchronizerTests
         var oldBinding = PublicationBinding("publication-old", "artifact-old", "foo");
         var candidateBinding = PublicationBinding("publication-new", "artifact-new", "bar");
 
-        await bindings.PreparePublicationAsync("publication-old", [oldBinding]);
-        await bindings.ActivatePublicationAsync("publication-old", replacedPublicationId: null);
+        await bindings.PrepareActivationAsync("publication-old", [oldBinding]);
+        await bindings.ActivateAsync("publication-old", replacedActivationId: null);
         await synchronizer.RefreshAsync();
         Assert.Equal(new[] { "foo" }, routeTable.RouteTemplates);
 
         // Preparation is deliberately invisible until authority changes.
-        await bindings.PreparePublicationAsync("publication-new", [candidateBinding]);
+        await bindings.PrepareActivationAsync("publication-new", [candidateBinding]);
         await synchronizer.RefreshAsync();
         Assert.Equal(new[] { "foo" }, routeTable.RouteTemplates);
 
         // Activation retires the old projection; compensation performs the inverse authority transition.
-        await bindings.ActivatePublicationAsync("publication-new", "publication-old");
+        await bindings.ActivateAsync("publication-new", "publication-old");
         await synchronizer.RefreshAsync();
         Assert.Equal(new[] { "bar" }, routeTable.RouteTemplates);
 
-        await bindings.ActivatePublicationAsync("publication-old", "publication-new");
+        await bindings.ActivateAsync("publication-old", "publication-new");
         await synchronizer.RefreshAsync();
         Assert.Equal(new[] { "foo" }, routeTable.RouteTemplates);
     }
@@ -231,7 +231,7 @@ public sealed class HttpEndpointRouteTableSynchronizerTests
                 artifactId,
                 binding.ExecutableNodeId,
                 binding.StimulusHash),
-            PublicationId = publicationId,
+            ActivationId = publicationId,
             SlotId = "slot-default",
             IsActive = false
         };

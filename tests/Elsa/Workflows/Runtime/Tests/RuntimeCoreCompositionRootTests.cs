@@ -197,6 +197,8 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
     {
         var services = new ServiceCollection().AddWorkflowRuntime();
         services.AddLogging();
+        services.AddSingleton<IWellKnownTypeRegistry, StubWellKnownTypeRegistry>();
+        services.AddSingleton<IPayloadSerializer, StubPayloadSerializer>();
         ReplaceWithScopedRuntimeStores(services);
 
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions
@@ -215,6 +217,8 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         var observations = new SchedulerQueueScopeObservations();
         var services = new ServiceCollection().AddWorkflowRuntime();
         services.AddLogging();
+        services.AddSingleton<IWellKnownTypeRegistry, StubWellKnownTypeRegistry>();
+        services.AddSingleton<IPayloadSerializer, StubPayloadSerializer>();
         services.AddSingleton(observations);
         services.RemoveAll<IWorkflowSchedulerWorkQueue>();
         services.AddScoped<IWorkflowSchedulerWorkQueue, ScopeTrackingSchedulerWorkQueue>();
@@ -378,6 +382,7 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
     {
         services.AddScoped<IPortableExpressionEvaluator, StubPortableExpressionEvaluator>();
         services.AddSingleton<IWellKnownTypeRegistry, StubWellKnownTypeRegistry>();
+        services.AddSingleton<IPayloadSerializer, StubPayloadSerializer>();
     }
 
     private sealed class ReplacementStartPolicy : IWorkflowExecutableStartPolicy
@@ -392,6 +397,18 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
     {
         public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request) =>
             ValueTask.FromResult(JsonSerializer.SerializeToElement<object?>(null));
+    }
+
+    private sealed class StubPayloadSerializer : IPayloadSerializer
+    {
+        public string Serialize(object payload) => throw new NotSupportedException();
+        public JsonElement SerializeToElement(object payload) => throw new NotSupportedException();
+        public object Deserialize(string serializedData) => throw new NotSupportedException();
+        public object Deserialize(string serializedData, Type type) => throw new NotSupportedException();
+        public object Deserialize(JsonElement serializedData) => throw new NotSupportedException();
+        public T Deserialize<T>(string payload) => throw new NotSupportedException();
+        public T Deserialize<T>(JsonElement payload) => throw new NotSupportedException();
+        public JsonSerializerOptions GetOptions() => throw new NotSupportedException();
     }
 
     private sealed class StubWellKnownTypeRegistry : IWellKnownTypeRegistry

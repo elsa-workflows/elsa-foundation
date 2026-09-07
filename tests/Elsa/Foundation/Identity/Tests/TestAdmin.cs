@@ -14,7 +14,7 @@ internal static class TestAdmin
     public const string Email = "admin@elsa.local";
     public const string RoleName = "administrator";
 
-    /// <summary>The seed options a dev/demo test host passes to the identity EF Core registration.</summary>
+    /// <summary>The seed options a development/demo test host passes to the Groundwork Identity registration.</summary>
     public static IdentitySeedOptions SeedOptions() => new()
     {
         UserName = UserName,

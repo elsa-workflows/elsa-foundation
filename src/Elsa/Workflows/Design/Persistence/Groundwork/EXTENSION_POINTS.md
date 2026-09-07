@@ -153,17 +153,13 @@ schema unless the host opts into safe startup auto-apply. It is wired per provid
 `AddGroundworkSchemaReadinessGuard()`, called from each provider's document-store registration — not
 by this lane. Schema application stays an operator/CLI responsibility.
 
-## Host composition (unified vs lane-specific)
+## Host composition
 
-- **Unified (shipped reference host):** enabling one provider feature —
-  `AddGroundwork{Sqlite|SqlServer|PostgreSql|MongoDb}UnifiedPersistence(…)` — routes through
-  `AddGroundworkUnifiedStoreFamilies()`, which composes this lane
-  (`AddGroundworkWorkflowsDesignStores`) alongside the activities-design and other store families over
-  one physical document store. The selected provider's document-store registration owns the readiness
-  guard. See [`../../../../Persistence/Groundwork/Unified/README.md`](../../../../Persistence/Groundwork/Unified/README.md).
-- **Lane-specific:** a host may call `AddGroundworkWorkflowsDesignStores()` directly after registering
-  a provider `IDocumentStore` and the host `IPayloadSerializer`, composing only this lane (the shape
-  the registration tests exercise).
+The host registers one provider connection through `Elsa.Persistence.Groundwork.Composition`, then calls
+`AddGroundworkWorkflowsDesignStores()` alongside whichever runtime, activity-design, distributed, publishing,
+or dashboard lanes it needs. Each lane receives the target name explicitly, so a host can split independent
+stores while keeping transaction-spanning operations co-located. Workbench composes the complete default
+single-target shape through its provider and lane features.
 
 ## Document model
 
@@ -180,5 +176,5 @@ derives errors on demand from the already-loaded draft through the shielded vali
 - The EF Core design persistence implementation is removed by spec 093 US4; Groundwork is the sole
   workflow-design persistence provider.
 - Validation extension points: [`../../Validations/EXTENSION_POINTS.md`](../../Validations/EXTENSION_POINTS.md)
-- Unified provider selection and schema operations: [`../../../../Persistence/Groundwork/Unified/README.md`](../../../../Persistence/Groundwork/Unified/README.md)
+- Provider connection and target composition: [`../../../../Persistence/Groundwork/EXTENSION_POINTS.md`](../../../../Persistence/Groundwork/EXTENSION_POINTS.md)
 - Repo-wide index: [`../../../../../../EXTENSION_POINTS.md`](../../../../../../EXTENSION_POINTS.md)

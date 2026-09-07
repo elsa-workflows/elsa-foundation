@@ -12,8 +12,9 @@ using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
 using Elsa.Foundation.Identity.Tests.OpenIddict;
-using Elsa.Persistence.Core;
-using Elsa.Persistence.Core.DependencyInjection;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Groundwork.Store;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -84,11 +85,11 @@ internal sealed class AspNetCoreIdentityGroundworkHttpFixture : IAsyncDisposable
                     services.AddAuthorization();
                     services.AddSingleton<IStorageProviderConnection>(persistence.Connection);
                     services.AddPersistenceCore(AspNetCoreIdentityGroundworkHttpFixture.PrimaryTenant);
-                    services.AddFoundationIdentityOpenIddict(
-                        options => options.IsDevelopmentOrDemo = true,
-                        configureDbContext: builder => OpenIddictIdentityFixture.ConfigureInMemoryStore(
+                    services.AddOpenIddictVendorForTests(
+                        builder => OpenIddictIdentityFixture.ConfigureInMemoryStore(
                             builder,
                             $"openiddict-{databaseSuffix}"));
+                    services.AddFoundationIdentityOpenIddict(options => options.IsDevelopmentOrDemo = true);
                     services.AddFoundationAspNetCoreIdentityGroundwork();
                     services.Configure<IdentityOptions>(options => options.User.RequireUniqueEmail = true);
                     services.Configure<AspNetCoreIdentityOptions>(options =>

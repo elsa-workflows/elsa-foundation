@@ -1,6 +1,7 @@
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
-using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Dashboard;
 using Elsa.Workflows.Design.Persistence.Groundwork;

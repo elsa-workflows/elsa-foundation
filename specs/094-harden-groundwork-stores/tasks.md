@@ -117,14 +117,14 @@ Unless a row is externally owned by #644 or #660, every provider-evidence task m
 
 ### Tests for User Story 4
 
-- [X] T032 [P] [US4] Write failing provider-neutral scope/access/default-scope tests in `tests/Elsa/Persistence/Core/Tests/PersistenceAccessContextTests.cs`
+- [X] T032 [P] [US4] Write failing provider-neutral scope/access/default-scope tests in `tests/Elsa/Workflows/Runtime/Tests/PersistenceAccessContextTests.cs`
 - [X] T033 [P] [US4] Write failing Groundwork wrong-scope/mixed-UoW/cancellation/reuse contract tests plus direct session-factory/mapper/privileged-recorder branch tests in `tests/Elsa/Persistence/Groundwork/Conformance/Tests/StorageScopeContractTests.cs`, `tests/Elsa/Persistence/Groundwork/Tests/GroundworkStoreSessionFactoryTests.cs`, and `tests/Elsa/Persistence/Groundwork/Tests/GroundworkPrivilegedAccessRecorderTests.cs`
 - [X] T034 [P] [US4] Write failing logic-bearing service lifetime, registration, and cross-request leakage tests in `tests/Elsa/Architecture/GroundworkPersistenceLifetimeTests.cs` and `tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimePersistenceRegistrationTests.cs`
 
 ### Implementation for User Story 4
 
-- [X] T035 [US4] Add provider-neutral scope, access-policy, named-purpose, and current-context contracts in `src/Elsa/Persistence/Core/PersistenceScope.cs`, `src/Elsa/Persistence/Core/PersistenceAccessPolicy.cs`, `src/Elsa/Persistence/Core/PersistenceAccessContext.cs`, and `src/Elsa/Persistence/Core/IPersistenceAccessContextAccessor.cs`
-- [X] T036 [US4] Register scoped access-context selection with the nonblank single-tenant default `default` in `src/Elsa/Persistence/Core/DependencyInjection/PersistenceCoreServiceCollectionExtensions.cs`
+- [X] T035 [US4] Add provider-neutral scope, access-policy, named-purpose, and current-context contracts in `src/Elsa/Workflows/Runtime/Core/Models/PersistenceScope.cs`, `src/Elsa/Workflows/Runtime/Core/Models/PersistenceAccessPolicy.cs`, `src/Elsa/Workflows/Runtime/Core/Models/PersistenceAccessContext.cs`, and `src/Elsa/Workflows/Runtime/Core/Contracts/IPersistenceAccessContextAccessor.cs`
+- [X] T036 [US4] Register scoped access-context selection with the nonblank single-tenant default `default` in `src/Elsa/Workflows/Runtime/Core/Extensions/PersistenceCoreServiceCollectionExtensions.cs`
 - [X] T037 [US4] Map Elsa scope/access to immutable Groundwork sessions in `src/Elsa/Persistence/Groundwork/Scoping/IGroundworkStoreSessionFactory.cs`, `src/Elsa/Persistence/Groundwork/Scoping/GroundworkStoreSessionFactory.cs`, and `src/Elsa/Persistence/Groundwork/Scoping/GroundworkPersistenceAccessMapper.cs`
 - [X] T038 [US4] Retire the application-wide global store seam and make provider initializers own static factories in `src/Elsa/Persistence/Groundwork/GroundworkDocumentStoreHolder.cs`, `src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkDocumentStoreInitializer.cs`, and `src/Elsa/Persistence/Groundwork/PostgreSql/PostgreSqlGroundworkDocumentStoreInitializer.cs`
 - [X] T039 [US4] Make runtime adapters acquire per-operation/per-UoW sessions through `src/Elsa/Persistence/Groundwork/Stores/GroundworkScopedDocumentStore.cs` and `src/Elsa/Persistence/Groundwork/DependencyInjection/GroundworkRuntimeStoreRegistration.cs`

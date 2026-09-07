@@ -268,7 +268,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             PublishedAt: Now,
             Scope: WorkflowExecutableReferenceScope.Published,
             ExpiresAt: null,
-            PublicationId: $"publication-{sourceReferenceId}",
+            ActivationId: $"publication-{sourceReferenceId}",
             SlotId: $"slot-{sourceReferenceId}");
         await _provider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(reference);
         return reference;

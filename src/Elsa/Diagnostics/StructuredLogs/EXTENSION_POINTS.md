@@ -57,21 +57,6 @@ construct and register the adapter with their selected Groundwork provider and a
 it installs this concrete feature, replaces the in-memory store, and contributes its diagnostic-record stream
 to the combined Groundwork deployment manifest.
 
-### Temporary EF Core compatibility override
-
-`Elsa.Diagnostics.StructuredLogs.Persistence.EFCore` ships **`EfCoreStructuredLogStore`**, an `IStructuredLogStore` override that makes captured logs durable. It is enabled per-provider, e.g. the `DiagnosticsStructuredLogsPersistenceEFCoreSqlite` shell feature. It remains only as a temporary comparison, oracle, and compatibility implementation until #646 completes the retained performance measurement and #647 deletes the EF diagnostics surface; it has not yet been removed.
-
-Key design points (so the override stays safe on a high-volume, hot logging path):
-- **Non-blocking append** writes to the existing bounded `Channel` (drop-oldest); a background drain loop batch-inserts into the `StructuredLogsDbContext` and completes accepted append operations after commit.
-- **Feedback-loop break:** the persistence feature configures the DbContext factory with `UseLoggerFactory(NullLoggerFactory.Instance)`, so the store's own "Executed DbCommand" logs are not captured and re-persisted.
-- **Compatibility cursor/state:** `PersistedStructuredLogEntry` uses its existing auto-increment `long Id` rather than `Sequence`. The adapter-private codec wraps it in the opaque boundary, and reserved hidden state rows in the existing table preserve lifetime logical high-water independently of retained tail rows. State and appended data commit in one `SaveChanges`; failed batches cannot advance high-water. State is excluded from recent history, read-after pages, and retention counts; exact reserved input is rejected and concurrent initializers safely converge on the maximum. No EF schema or migration surface was added for this change; Groundwork is the durable cursor conformance target.
-- **Retention:** the drain loop periodically prunes rows below `maxId - maxRetainedEntries` so the table stays bounded like the in-memory ring buffer.
-- **Startup ordering:** a migration startup task runs first; a draining startup task (`StartStructuredLogDrainingStartupTask`) then calls `store.StartDraining()`. Batch inserts retry briefly to tolerate the pre-migration window.
-- **Shutdown ordering:** `StopStructuredLogDrainingShellTerminator` completes and flushes the channel
-  during graceful shell termination, after `Start`-phase task producers have stopped and while the
-  DbContext factory is still usable. Async store disposal remains the bounded fallback for plain DI
-  containers and emergency paths where CShells skips terminators.
-
 ---
 
 ## Notes

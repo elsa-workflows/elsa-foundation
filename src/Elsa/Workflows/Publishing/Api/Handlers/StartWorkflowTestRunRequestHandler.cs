@@ -4,7 +4,6 @@ using Elsa.Workflows.Publishing.Services;
 using System.Text.Json;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Expressions.Core.Models;
-using Elsa.Persistence.Core;
 using Elsa.Primitives.Identity;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;

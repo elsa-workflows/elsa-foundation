@@ -1,8 +1,10 @@
+using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
+using Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
-using Elsa.Groundwork.StorePerformance.Benchmarks.Contracts;
 
 namespace Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 
@@ -50,7 +52,88 @@ public sealed record NativeRouteEvidence(
     bool HasStorageScopePredicate,
     bool HasRoutePredicate,
     int FiniteLimit,
-    int MaterializedCandidateCount);
+    int MaterializedCandidateCount,
+    RuntimeNativeResultShape ResultShape = RuntimeNativeResultShape.Page,
+    int? ScalarResultCount = null,
+    bool UsesLatestPerKey = false)
+{
+    /// <summary>The actual provider row bound, including any continuation lookahead.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int NativeFetchLimit { get; init; }
+
+    /// <summary>
+    /// Value-free structured execution facts captured from the actual provider callback. The field is
+    /// optional while providers are migrated one route at a time; migrated routes must validate it.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StructuredExecutionEvidence? StructuredEvidence { get; init; }
+}
+
+/// <summary>
+/// Evidence for one independently observed operation contributing to the public trace-detail call.
+/// Primary-key reads deliberately carry no index or raw-plan reference: they are bounded native key
+/// operations, not secondary-index claims. Ordered signal queries retain a normal raw-plan artifact.
+/// </summary>
+public sealed record DiagnosticsTraceDetailConstituentEvidence(
+    string RouteIdentity,
+    string RawPlanReference,
+    string RawPlanSha256,
+    string PlanClassification,
+    string PhysicalIndexName,
+    string CommandText,
+    int PhysicalCardinality,
+    bool HasStorageScopePredicate,
+    bool HasRoutePredicate,
+    int FiniteLimit,
+    int PublicRowBound,
+    int MaterializedCandidateCount,
+    int ObservedCommandCount,
+    int MaxInvocationCount,
+    IReadOnlyList<DiagnosticsTraceDetailPageEvidence>? Pages = null);
+
+/// <summary>One retained provider-native page shape for a bounded trace-detail signal query.</summary>
+public sealed record DiagnosticsTraceDetailPageEvidence(
+    int PageIndex,
+    string RawPlanReference,
+    string RawPlanSha256,
+    string CommandText);
+/// <summary>
+/// Value-free diagnostics for one provider-native route that was deliberately blocked. Raw plans are
+/// retained separately and referenced by safe artifact name plus digest; the failure message itself is
+/// never persisted because it may contain provider command text or identifiers.
+/// </summary>
+public sealed record DiagnosticsBlockedRouteEvidence(
+    string RouteIdentity,
+    string FailurePhase,
+    string ReasonCode,
+    IReadOnlyList<DiagnosticsBlockedRawPlanEvidence> RawPlans);
+
+public sealed record DiagnosticsBlockedRawPlanEvidence(
+    string Reference,
+    string Sha256);
+
+/// <summary>Standalone capture output for an incomplete diagnostics native-plan capture. This envelope
+/// is useful for diagnosis, but is intentionally not a native-plan acceptance envelope.</summary>
+public sealed record DiagnosticsBlockedCaptureDocument(
+    int SchemaVersion,
+    string Provider,
+    string Adapter,
+    string WorkloadId,
+    string WorkloadVersion,
+    string MeasurementSetId,
+    IReadOnlyList<DiagnosticsBlockedRouteEvidence> Routes);
+public sealed record DiagnosticsOracleRouteObservation(
+    string RouteIdentity,
+    IReadOnlyList<string> CommandTexts,
+    string NativePlan);
+public sealed record SecretProviderConcurrencyEvidence(
+    int IndependentClientCount,
+    int CompletedContenders,
+    int ProviderCommandStartCount,
+    bool ProviderCommandOverlapObserved,
+    bool ProviderCommandsSerializedByDesign,
+    bool EveryContenderIssuedProviderCommands,
+    int DistinctPhysicalConnectionCount);
 public sealed record NativePlanEvidenceDocument(
     int SchemaVersion,
     string ComparisonCohortId,
@@ -71,8 +154,22 @@ public sealed record NativePlanEvidenceDocument(
     string Seed,
     string InputFingerprintSha256,
     string Identity,
-    IReadOnlyList<NativeRouteEvidence> Routes);
-public sealed record NativePlanEvidence(string Identity, string Reference, string ContentSha256, IReadOnlyList<NativeRouteEvidence> Routes);
+    IReadOnlyList<NativeRouteEvidence> Routes,
+    string RouteContract = "provider-native-routes",
+    IReadOnlyList<string>? BlockedRoutes = null,
+    IReadOnlyList<DiagnosticsOracleRouteObservation>? OracleObservations = null,
+    IReadOnlyList<DiagnosticsTraceDetailConstituentEvidence>? TraceDetailConstituents = null)
+{
+    public SecretProviderConcurrencyEvidence? ProviderConcurrency { get; init; }
+}
+public sealed record NativePlanEvidence(string Identity, string Reference, string ContentSha256, IReadOnlyList<NativeRouteEvidence> Routes)
+{
+    public SecretProviderConcurrencyEvidence? ProviderConcurrency { get; init; }
+    public string RouteContract { get; init; } = "provider-native-routes";
+    public IReadOnlyList<string> BlockedRoutes { get; init; } = [];
+    public IReadOnlyList<DiagnosticsOracleRouteObservation> OracleObservations { get; init; } = [];
+    public IReadOnlyList<DiagnosticsTraceDetailConstituentEvidence> TraceDetailConstituents { get; init; } = [];
+}
 public sealed record CorrectnessEvidence(
     string ObservedResultDigestSha256,
     string ObservedProviderVersion,
@@ -128,9 +225,11 @@ public static class HostFingerprint
         {
             foreach (var path in new[] { "/etc/machine-id", "/var/lib/dbus/machine-id" })
             {
-                if (!File.Exists(path)) continue;
+                if (!File.Exists(path))
+                    continue;
                 var value = File.ReadAllText(path).Trim();
-                if (value.Length > 0) return $"linux:{value}";
+                if (value.Length > 0)
+                    return $"linux:{value}";
             }
         }
         else if (OperatingSystem.IsMacOS())
@@ -150,7 +249,8 @@ public static class HostFingerprint
                 var output = process.StandardOutput.ReadToEnd();
                 process.WaitForExit();
                 var match = Regex.Match(output, "\"IOPlatformUUID\"\\s*=\\s*\"([^\"]+)\"", RegexOptions.CultureInvariant);
-                if (process.ExitCode == 0 && match.Success) return $"macos:{match.Groups[1].Value}";
+                if (process.ExitCode == 0 && match.Success)
+                    return $"macos:{match.Groups[1].Value}";
             }
         }
         else if (OperatingSystem.IsWindows())
@@ -159,7 +259,8 @@ public static class HostFingerprint
                 @"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Cryptography",
                 "MachineGuid",
                 null) as string;
-            if (!string.IsNullOrWhiteSpace(value)) return $"windows:{value}";
+            if (!string.IsNullOrWhiteSpace(value))
+                return $"windows:{value}";
         }
 
         throw new PerformanceContractException("A stable OS machine identity is unavailable; same-host benchmark evidence cannot be produced.");
@@ -172,6 +273,14 @@ public interface IBenchmarkAdapter : IAsyncDisposable
 {
     Task PrepareAsync(CancellationToken cancellationToken);
     Task<CorrectnessEvidence> VerifyCorrectnessAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Prepares the process-local fixture used by measurement and returns its correctness evidence. The
+    /// default preserves the original lifecycle for adapters whose correctness setup is already cheap.
+    /// </summary>
+    Task<CorrectnessEvidence> PrepareMeasurementAsync(CancellationToken cancellationToken) =>
+        VerifyCorrectnessAsync(cancellationToken);
+
     IReadOnlyList<IBenchmarkOperation> Operations { get; }
 
     /// <summary>Exact provider-native command observer used by measured artifacts.</summary>
@@ -196,12 +305,14 @@ public static class ProcessMeasurement
     public static async Task<ProcessArtifact> ExecuteAsync(PerformanceWorkload workload, RunRequest request, BenchmarkProtocol protocol, IBenchmarkAdapter adapter, string outputDirectory, CancellationToken cancellationToken)
     {
         protocol.Validate();
-        ArtifactAdmission.ValidateRequest(workload, request);
+        ArtifactAdmission.ValidateForPhase(workload, request, BenchmarkPhase.Measurement);
         var hostFingerprint = HostFingerprint.CaptureSha256();
         if (hostFingerprint != request.HostFingerprintSha256)
             throw new PerformanceContractException("The adapter child process is not running on the matrix host.");
         SourceProvenance.RequireCleanHead(SourceProvenance.FindRepositoryRoot(), request.CommitSha);
         SourceProvenance.RequireHarnessAssembly(request.HarnessAssemblySha256);
+        await adapter.PrepareAsync(cancellationToken);
+
         IProviderRoundTripObserver? observer = null;
         if (request.ProcessKind == ProcessKind.Measured)
         {
@@ -214,8 +325,7 @@ public static class ProcessMeasurement
                 throw new PerformanceContractException(
                     $"The round-trip observer targets provider '{observer.Provider}', not requested provider '{request.Provider}'.");
         }
-        await adapter.PrepareAsync(cancellationToken);
-        var correctness = await adapter.VerifyCorrectnessAsync(cancellationToken);
+        var correctness = await PrepareMeasurementFixtureAsync(adapter, cancellationToken);
         ArtifactAdmission.ValidateCorrectness(workload, request, correctness, outputDirectory);
         var operations = new List<OperationSample>();
         foreach (var operation in adapter.Operations)
@@ -230,6 +340,11 @@ public static class ProcessMeasurement
             RoundTripInstrumentation = observer?.Instrumentation
         };
     }
+
+    internal static Task<CorrectnessEvidence> PrepareMeasurementFixtureAsync(
+        IBenchmarkAdapter adapter,
+        CancellationToken cancellationToken) =>
+        adapter.PrepareMeasurementAsync(cancellationToken);
 
     private static async Task WarmAsync(IBenchmarkOperation operation, int count, CancellationToken token)
     {
@@ -308,11 +423,20 @@ public static class ProcessMeasurement
 
 public static class ArtifactAdmission
 {
-    public static void Validate(PerformanceWorkload workload, ProcessArtifact artifact, string outputDirectory)
+    public static void Validate(PerformanceWorkload workload, ProcessArtifact artifact, string outputDirectory) =>
+        ValidateCore(workload, artifact, outputDirectory, BenchmarkPhase.Comparison);
+
+    internal static void ValidateForMeasurement(PerformanceWorkload workload, ProcessArtifact artifact, string outputDirectory) =>
+        ValidateCore(workload, artifact, outputDirectory, BenchmarkPhase.Measurement);
+
+    internal static void ValidateForAbsoluteMeasurement(PerformanceWorkload workload, ProcessArtifact artifact, string outputDirectory) =>
+        ValidateForMeasurement(workload, artifact, outputDirectory);
+
+    private static void ValidateCore(PerformanceWorkload workload, ProcessArtifact artifact, string outputDirectory, BenchmarkPhase phase)
     {
         if (artifact.SchemaVersion != 2 || artifact.Protocol != BenchmarkProtocol.Acceptance || !artifact.CorrectnessPassed)
             throw new PerformanceContractException("Process artifacts require schema v2, the acceptance protocol, and passing correctness evidence.");
-        ValidateRequest(workload, artifact.Request);
+        ValidateForPhase(workload, artifact.Request, phase);
         if (artifact.Correctness is null || artifact.Machine is null || artifact.Operations is null)
             throw new PerformanceContractException("Process artifacts require correctness, machine, and operation fields.");
         ValidateCorrectness(workload, artifact.Request, artifact.Correctness, outputDirectory);
@@ -336,10 +460,35 @@ public static class ArtifactAdmission
         ArtifactSafety.Validate(artifact);
     }
 
-    public static void ValidateRequest(PerformanceWorkload workload, RunRequest request)
+    public static void ValidateRequest(PerformanceWorkload workload, RunRequest request) =>
+        ValidateForPhase(workload, request, BenchmarkPhase.Comparison);
+
+    public static void ValidateForPhase(PerformanceWorkload workload, RunRequest request, BenchmarkPhase phase)
     {
-        BenchmarkAdmissionGuard.RequireReady(workload);
-        BenchmarkAdapterAdmission.RequireAdmitted(workload, request.Adapter, request.PhysicalForm);
+        ArgumentNullException.ThrowIfNull(workload);
+        ArgumentNullException.ThrowIfNull(request);
+        BenchmarkAdmissionGuard.RequireForPhase(workload, phase);
+        if (phase == BenchmarkPhase.Measurement &&
+            DiagnosticsAdmission.IsUngradedMeasurementAllowed(workload) &&
+            string.Equals(request.Adapter, DiagnosticsNativePlanContract.EfAdapter, StringComparison.Ordinal))
+            throw new PerformanceContractException(
+                $"Diagnostics measurement is not admitted for the EF correctness-only adapter: {DiagnosticsAdmission.EfCorrectnessOnlyMeasurementReasonCode}.");
+        ValidateRequestCore(workload, request);
+    }
+
+    /// <summary>
+    /// Validates an untimed diagnostics evidence request. Capture and correctness are allowed to compose
+    /// a provider while the numeric timing gate remains blocked. This narrow exception retains every
+    /// request, adapter, provenance, topology, fingerprint, and artifact-safety check.
+    /// </summary>
+    public static void ValidateEvidenceRequest(PerformanceWorkload workload, RunRequest request)
+    {
+        ValidateForPhase(workload, request, BenchmarkPhase.Correctness);
+    }
+
+    private static void ValidateRequestCore(PerformanceWorkload workload, RunRequest request)
+    {
+        BenchmarkAdapterAdmission.RequireAdmitted(workload, request.Provider, request.Adapter, request.PhysicalForm);
         ArtifactSafety.ValidateRequest(request);
         if (workload.Id != request.WorkloadId ||
             workload.Version != request.WorkloadVersion ||
@@ -372,31 +521,123 @@ public static class ArtifactAdmission
             throw new PerformanceContractException("Native-plan evidence file is missing or does not match the requested content digest.");
 
         var routes = nativePlan.Routes;
-        if (routes is null ||
-            routes.Count != workload.RequiredNativeRoutes.Count ||
-            !routes.Select(route => route.RouteIdentity).Order(StringComparer.Ordinal).SequenceEqual(workload.RequiredNativeRoutes.Order(StringComparer.Ordinal), StringComparer.Ordinal) ||
+        if (routes is null || routes.Any(route => route is null))
+            throw new PerformanceContractException("Native-plan evidence must admit every required route with a retained raw-plan digest, bounded cardinality, predicates, finite limit, and materialized-count facts.");
+        var diagnosticsWorkload = string.Equals(workload.Id, DiagnosticsDurableHistoryWorkload.WorkloadId, StringComparison.Ordinal);
+        var efCorrectnessOnly = diagnosticsWorkload &&
+                                string.Equals(request.Adapter, DiagnosticsNativePlanContract.EfAdapter, StringComparison.Ordinal) &&
+                                string.Equals(nativePlan.RouteContract, DiagnosticsNativePlanContract.EfCorrectnessOnlyRouteContract, StringComparison.Ordinal);
+        var diagnosticsRoutesBlocked = diagnosticsWorkload &&
+                                       (string.Equals(nativePlan.RouteContract, DiagnosticsNativePlanContract.BlockedRouteContract, StringComparison.Ordinal) || efCorrectnessOnly);
+        var blockedRoutes = nativePlan.BlockedRoutes ?? [];
+        if (nativePlan.RouteContract == "provider-native-routes" && blockedRoutes.Count != 0)
+            throw new PerformanceContractException("Complete provider-native evidence cannot declare blocked routes.");
+        if (routes.Any(route => IsStructuredEvidenceRoute(workload, request, route) && InvalidOptionalRawPlanPair(route)))
+            throw new PerformanceContractException(
+                "The migrated structured-evidence route must provide both optional raw-plan reference and digest, or neither.");
+        var traceDetailConstituents = nativePlan.TraceDetailConstituents ?? [];
+        if (!diagnosticsWorkload && traceDetailConstituents.Count != 0)
+            throw new PerformanceContractException("Trace-detail constituent evidence is valid only for the diagnostics workload.");
+        ValidateIamNativeRoutes(workload, routes);
+        ValidateSecretNativeRoutes(workload, routes);
+        ValidateRecoveryNativeRoutes(workload, routes);
+        ValidateRuntimeScheduleNativeRoutes(workload, routes);
+        ValidateSecretConcurrency(workload, request, nativePlan.ProviderConcurrency);
+        if (efCorrectnessOnly && routes.Count != 0)
+            throw new PerformanceContractException("The EF diagnostics correctness-only evidence must not claim provider-native bounded routes.");
+        var oracleObservations = nativePlan.OracleObservations ?? [];
+        if (efCorrectnessOnly &&
+            (oracleObservations.Count != workload.RequiredNativeRoutes.Count ||
+             !oracleObservations.Select(observation => observation.RouteIdentity).Order(StringComparer.Ordinal)
+                 .SequenceEqual(workload.RequiredNativeRoutes.Order(StringComparer.Ordinal), StringComparer.Ordinal) ||
+             oracleObservations.Any(observation => observation.CommandTexts.Count == 0 ||
+                                                   observation.CommandTexts.Any(string.IsNullOrWhiteSpace) ||
+                                                   string.IsNullOrWhiteSpace(observation.NativePlan))))
+            throw new PerformanceContractException("The EF diagnostics correctness-only evidence must retain every exact observed public-route command and its provider plan; it may not claim those routes as bounded native evidence.");
+        if (!efCorrectnessOnly && oracleObservations.Count != 0)
+            throw new PerformanceContractException("Oracle-only route observations are valid only for the temporary EF diagnostics correctness path.");
+        var diagnosticsAdmittedIdentities = routes.Select(route => route.RouteIdentity)
+            .Concat(traceDetailConstituents.Count == 0 ? [] : ["trace-detail"])
+            .Concat(blockedRoutes)
+            .ToArray();
+        if (diagnosticsRoutesBlocked &&
+            (!blockedRoutes.Any() ||
+             diagnosticsAdmittedIdentities.Distinct(StringComparer.Ordinal).Count() != workload.RequiredNativeRoutes.Count ||
+             !diagnosticsAdmittedIdentities.Order(StringComparer.Ordinal).SequenceEqual(workload.RequiredNativeRoutes.Order(StringComparer.Ordinal), StringComparer.Ordinal) ||
+             blockedRoutes.Any(route => routes.Any(candidate => candidate.RouteIdentity == route) ||
+                                        traceDetailConstituents.Count != 0 && route == "trace-detail")))
+            throw new PerformanceContractException("Blocked diagnostics native-plan evidence must account for every required route exactly once.");
+        if (!diagnosticsRoutesBlocked && (diagnosticsAdmittedIdentities.Length != workload.RequiredNativeRoutes.Count ||
+            !diagnosticsAdmittedIdentities.Order(StringComparer.Ordinal).SequenceEqual(workload.RequiredNativeRoutes.Order(StringComparer.Ordinal), StringComparer.Ordinal) ||
             routes.Select(route => route.RouteIdentity).Distinct(StringComparer.Ordinal).Count() != routes.Count ||
             routes.Any(route =>
-                !ArtifactStore.SafeRawPlanReference(route.RawPlanReference) ||
-                !IsSha256(route.RawPlanSha256) ||
+                (IsStructuredEvidenceRoute(workload, request, route)
+                    ? InvalidOptionalRawPlanPair(route)
+                    : !ArtifactStore.SafeRawPlanReference(route.RawPlanReference) || !IsSha256(route.RawPlanSha256)) ||
                 string.IsNullOrWhiteSpace(route.PlanClassification) ||
                 string.IsNullOrWhiteSpace(route.IndexName) ||
                 route.PhysicalCardinality <= 0 ||
-                !route.HasStorageScopePredicate ||
-                !route.HasRoutePredicate ||
-                route.FiniteLimit <= 0 ||
-                route.MaterializedCandidateCount <= 0 ||
-                route.MaterializedCandidateCount > route.FiniteLimit))
-            throw new PerformanceContractException("Native-plan evidence must admit every required route with a retained raw-plan digest, bounded cardinality, predicates, finite limit, and materialized-count facts.");
-        if (routes.Select(route => route.RawPlanReference).Distinct(StringComparer.Ordinal).Count() != routes.Count)
+                route.HasStorageScopePredicate != ExpectedNativeRouteStorageScopePredicate(request.Provider, diagnosticsWorkload) ||
+                (RoutePredicateRequired(workload, route, diagnosticsWorkload) && !route.HasRoutePredicate) ||
+                route.ResultShape switch
+                {
+                    RuntimeNativeResultShape.Page => route.FiniteLimit <= 0 ||
+                                                     route.MaterializedCandidateCount <= 0 ||
+                                                     route.MaterializedCandidateCount > route.FiniteLimit ||
+                                                     route.ScalarResultCount is not null,
+                    RuntimeNativeResultShape.ScalarCount => route.FiniteLimit != 0 ||
+                                                            route.MaterializedCandidateCount != 0 ||
+                                                            route.ScalarResultCount is not > 0,
+                    _ => true
+                })))
+            throw new PerformanceContractException("Native-plan evidence must admit every required route with a safe raw-plan pair or the exact migrated typed route, bounded cardinality, predicates, finite page or scalar-count, and materialized-result facts.");
+        var rawReferences = routes.Select(route => route.RawPlanReference)
+            .Where(reference => !string.IsNullOrEmpty(reference))
+            .Concat(traceDetailConstituents.Where(item => !string.IsNullOrWhiteSpace(item.RawPlanReference)).Select(item => item.RawPlanReference))
+            .Concat(traceDetailConstituents.SelectMany(item => item.Pages ?? []).Select(page => page.RawPlanReference))
+            .ToArray();
+        if (rawReferences.Distinct(StringComparer.Ordinal).Count() != rawReferences.Length)
             throw new PerformanceContractException("Every native route must bind a distinct retained raw provider-plan artifact.");
+        ValidateDiagnosticsNativeRoutes(workload, routes, traceDetailConstituents);
         foreach (var route in routes)
         {
-            var rawPlanPath = ArtifactStore.RawPlanPath(outputDirectory, route.RawPlanReference);
-            if (!File.Exists(rawPlanPath) || ArtifactStore.HashFile(rawPlanPath) != route.RawPlanSha256)
-                throw new PerformanceContractException($"Raw provider-plan evidence is missing or does not match its digest for route {route.RouteIdentity}.");
-            ArtifactStore.ValidateRawPlanFile(rawPlanPath);
+            var typedRoute = IsStructuredEvidenceRoute(workload, request, route);
+            if (typedRoute)
+                DiagnosticsNativePlanContract.ValidateStructuredEvidence(request.Provider, request.Adapter, route, request.ProviderVersion);
+
+            string? rawPlanPath = null;
+            if (!string.IsNullOrEmpty(route.RawPlanReference))
+            {
+                rawPlanPath = ArtifactStore.RawPlanPath(outputDirectory, route.RawPlanReference);
+                if (!File.Exists(rawPlanPath) || ArtifactStore.HashFile(rawPlanPath) != route.RawPlanSha256)
+                    throw new PerformanceContractException($"Raw provider-plan evidence is missing or does not match its digest for route {route.RouteIdentity}.");
+                ArtifactStore.ValidateRawPlanFile(rawPlanPath);
+            }
+            if (diagnosticsWorkload && !typedRoute)
+                DiagnosticsNativePlanContract.ValidateEnvelope(request.Provider, request.Adapter, route, rawPlanPath!);
+            if (string.Equals(request.Adapter, RuntimeNativePlanContract.GroundworkAdapter, StringComparison.Ordinal) &&
+                workload.Id is (RuntimeBookmarkLookupWorkload.WorkloadId or
+                    RuntimeTriggerBindingStimulusLookupWorkload.WorkloadId or
+                    DistributedPlacementTakeoverWorkload.WorkloadId or
+                    RuntimeDueTimerSelectionWorkload.WorkloadId or
+                    RuntimeRecurringScheduleSelectionWorkload.WorkloadId or
+                    RuntimeQueueDrainWorkload.WorkloadId or
+                    DistributedCommandSendLeaseAckWorkload.WorkloadId))
+                RuntimeNativePlanContract.ValidateEnvelope(request.WorkloadId, request.Provider, request.Adapter, route, rawPlanPath!);
+            if (string.Equals(workload.Id, SecretCreateReadListWorkload.WorkloadId, StringComparison.Ordinal))
+                SecretRetainedNativePlan.Validate(
+                    request.Provider,
+                    request.Adapter,
+                    route,
+                    File.ReadAllText(rawPlanPath!));
+            if (string.Equals(workload.Id, RuntimeRecoveryScanWorkload.WorkloadId, StringComparison.Ordinal))
+                RecoveryRetainedNativePlan.Validate(
+                    request.Provider,
+                    route,
+                    File.ReadAllText(rawPlanPath!));
         }
+        if (diagnosticsWorkload && traceDetailConstituents.Count != 0)
+            ValidateDiagnosticsTraceDetailConstituents(request, traceDetailConstituents, outputDirectory);
         NativePlanEvidenceDocument document;
         try
         {
@@ -430,10 +671,294 @@ public static class ArtifactAdmission
             document.Seed != request.Seed ||
             document.InputFingerprintSha256 != request.InputFingerprintSha256 ||
             document.Identity != nativePlan.Identity ||
+            document.RouteContract != (efCorrectnessOnly
+                ? DiagnosticsNativePlanContract.EfCorrectnessOnlyRouteContract
+                : diagnosticsRoutesBlocked
+                    ? DiagnosticsNativePlanContract.BlockedRouteContract
+                : workload.RequiredNativeRoutes.Count == 0
+                    ? "no-native-routes-declared"
+                    : "provider-native-routes") ||
+            document.ProviderConcurrency != nativePlan.ProviderConcurrency ||
             document.Routes is null ||
-            !document.Routes.SequenceEqual(routes))
+            !SameStructuredEvidence(document.Routes, routes) ||
+            !(document.BlockedRoutes ?? []).SequenceEqual(blockedRoutes) ||
+            !SameStructuredEvidence(document.TraceDetailConstituents ?? [], traceDetailConstituents))
             throw new PerformanceContractException("Native-plan evidence file does not match the admitted target, provenance, or structured route evidence.");
+        if (efCorrectnessOnly &&
+            (document.OracleObservations is null ||
+             !SameStructuredEvidence(document.OracleObservations, oracleObservations)))
+            throw new PerformanceContractException("EF diagnostics oracle observations do not match the admitted evidence.");
+        if (!efCorrectnessOnly && document.OracleObservations is not null && document.OracleObservations.Count != 0)
+            throw new PerformanceContractException("Non-EF diagnostics evidence cannot carry oracle-only route observations.");
         ArtifactSafety.Validate(evidence);
+    }
+
+    private static bool SameStructuredEvidence<T>(IReadOnlyList<T> first, IReadOnlyList<T> second) =>
+        System.Text.Json.JsonSerializer.Serialize(first, ArtifactStore.JsonOptions) ==
+        System.Text.Json.JsonSerializer.Serialize(second, ArtifactStore.JsonOptions);
+
+    internal static bool IsStructuredEvidenceRoute(
+        RunRequest request,
+        NativeRouteEvidence route) =>
+        string.Equals(request.WorkloadId, DiagnosticsDurableHistoryWorkload.WorkloadId, StringComparison.Ordinal) &&
+        string.Equals(request.Provider, "sqlite", StringComparison.Ordinal) &&
+        string.Equals(request.Adapter, DiagnosticsNativePlanContract.GroundworkAdapter, StringComparison.Ordinal) &&
+        route.RouteIdentity is "structured-log-replay" or "structured-log-recent";
+
+    private static bool IsStructuredEvidenceRoute(
+        PerformanceWorkload workload,
+        RunRequest request,
+        NativeRouteEvidence route) =>
+        string.Equals(workload.Id, request.WorkloadId, StringComparison.Ordinal) &&
+        IsStructuredEvidenceRoute(request, route);
+
+    internal static bool InvalidOptionalRawPlanPair(NativeRouteEvidence route)
+    {
+        if (route.RawPlanReference is null || route.RawPlanSha256 is null)
+            return true;
+
+        var hasReference = !string.IsNullOrEmpty(route.RawPlanReference);
+        var hasDigest = !string.IsNullOrEmpty(route.RawPlanSha256);
+        return hasReference != hasDigest ||
+               hasReference && (!ArtifactStore.SafeRawPlanReference(route.RawPlanReference) || !IsSha256(route.RawPlanSha256));
+    }
+
+    private static void ValidateIamNativeRoutes(
+        PerformanceWorkload workload,
+        IReadOnlyList<NativeRouteEvidence> routes)
+    {
+        if (!string.Equals(workload.Id, IamNormalizedLookupWorkload.WorkloadId, StringComparison.Ordinal))
+            return;
+
+        var expectedLimits = IamNormalizedLookupWorkload.NativeRouteLimits;
+        var routeNamesMatch = workload.RequiredNativeRoutes.Count == expectedLimits.Count &&
+                              workload.RequiredNativeRoutes.Order(StringComparer.Ordinal)
+                                  .SequenceEqual(expectedLimits.Keys.Order(StringComparer.Ordinal), StringComparer.Ordinal) &&
+                              routes.Count == expectedLimits.Count &&
+                              routes.Select(route => route.RouteIdentity).Distinct(StringComparer.Ordinal).Count() == expectedLimits.Count &&
+                              routes.All(route => expectedLimits.ContainsKey(route.RouteIdentity));
+        var routeFactsMatch = routes.All(route =>
+            route.PhysicalCardinality == 100_000 &&
+            route.MaterializedCandidateCount == 1 &&
+            expectedLimits.TryGetValue(route.RouteIdentity, out var finiteLimit) &&
+            route.FiniteLimit == finiteLimit);
+
+        if (!routeNamesMatch || !routeFactsMatch)
+            throw new PerformanceContractException(
+                "IAM native-plan evidence must contain exactly the five frozen route names and bind physical cardinality 100000, one materialized candidate, and the exact route-specific finite limits.");
+    }
+
+    private static bool RoutePredicateRequired(
+        PerformanceWorkload workload,
+        NativeRouteEvidence route,
+        bool diagnosticsWorkload) =>
+        !diagnosticsWorkload &&
+        !(workload.Id == RuntimeQueueDrainWorkload.WorkloadId &&
+          route.RouteIdentity == "list-pending-scheduler-workflow-executions");
+
+    private static bool ExpectedNativeRouteStorageScopePredicate(string provider, bool diagnosticsWorkload) =>
+        !diagnosticsWorkload || DiagnosticsNativePlanContract.ExpectedStorageScopePredicate(provider, storageScopeRequired: true);
+
+    private static void ValidateSecretNativeRoutes(
+        PerformanceWorkload workload,
+        IReadOnlyList<NativeRouteEvidence> routes)
+    {
+        if (!string.Equals(workload.Id, SecretCreateReadListWorkload.WorkloadId, StringComparison.Ordinal))
+            return;
+
+        var route = routes.Count == 1 && routes[0].RouteIdentity == "list-filtered" ? routes[0] : null;
+        if (route is null ||
+            route.PhysicalCardinality != SecretCreateReadListWorkload.CanonicalSecretCount +
+            SecretCreateReadListWorkload.NoiseSecretCount + 1 ||
+            route.FiniteLimit != SecretCreateReadListWorkload.PageSize ||
+            route.MaterializedCandidateCount != SecretCreateReadListWorkload.PageSize)
+            throw new PerformanceContractException(
+                "Secret native-plan evidence must contain the frozen list-filtered route with physical cardinality 68 and a 16-row bounded page.");
+    }
+
+    private static void ValidateRecoveryNativeRoutes(
+        PerformanceWorkload workload,
+        IReadOnlyList<NativeRouteEvidence> routes)
+    {
+        if (!string.Equals(workload.Id, RuntimeRecoveryScanWorkload.WorkloadId, StringComparison.Ordinal))
+            return;
+
+        var expectedRoutes = RuntimeRecoveryScanWorkload.NativeRouteIdentities;
+        var routeNamesMatch = workload.RequiredNativeRoutes.Count == expectedRoutes.Count &&
+                              workload.RequiredNativeRoutes.Order(StringComparer.Ordinal)
+                                  .SequenceEqual(expectedRoutes.Order(StringComparer.Ordinal), StringComparer.Ordinal) &&
+                              routes.Count == expectedRoutes.Count &&
+                              routes.Select(route => route.RouteIdentity).Distinct(StringComparer.Ordinal).Count() == expectedRoutes.Count &&
+                              routes.All(route => expectedRoutes.Contains(route.RouteIdentity, StringComparer.Ordinal));
+        var routeFactsMatch = routes.All(route =>
+            route.PhysicalCardinality == RuntimeRecoveryScanWorkload.ExecutionCount &&
+            route.MaterializedCandidateCount == 1 &&
+            route.FiniteLimit == 1);
+
+        if (!routeNamesMatch || !routeFactsMatch)
+            throw new PerformanceContractException(
+                "Recovery native-plan evidence must contain exactly the four frozen route names and bind physical cardinality 2048, one materialized candidate, and a finite limit of one.");
+    }
+
+    private static void ValidateRuntimeScheduleNativeRoutes(
+        PerformanceWorkload workload,
+        IReadOnlyList<NativeRouteEvidence> routes)
+    {
+        var expectedRoutes = workload.Id switch
+        {
+            "due-timer-selection" => new[] { "list-due" },
+            "recurring-schedule-selection" => new[] { "list-due", "page-by-publication" },
+            _ => null
+        };
+        if (expectedRoutes is null)
+            return;
+
+        if (routes.Count != expectedRoutes.Length ||
+            !routes.Select(route => route.RouteIdentity).Order(StringComparer.Ordinal)
+                .SequenceEqual(expectedRoutes.Order(StringComparer.Ordinal), StringComparer.Ordinal))
+            throw new PerformanceContractException(
+                $"{workload.Id} native-plan evidence must contain exactly its frozen bounded route identities.");
+
+        foreach (var route in routes)
+        {
+            var definition = RuntimeNativePlanContract.For(workload.Id, route.RouteIdentity);
+            if (route.PhysicalCardinality != definition.PhysicalCardinality ||
+                route.FiniteLimit != definition.FiniteLimit ||
+                route.MaterializedCandidateCount != definition.FiniteLimit)
+                throw new PerformanceContractException(
+                    $"{workload.Id} route '{route.RouteIdentity}' does not bind its frozen physical cardinality, finite limit, and materialized count.");
+
+        }
+    }
+
+    private static void ValidateDiagnosticsNativeRoutes(
+        PerformanceWorkload workload,
+        IReadOnlyList<NativeRouteEvidence> routes,
+        IReadOnlyList<DiagnosticsTraceDetailConstituentEvidence> traceDetailConstituents)
+    {
+        if (!string.Equals(workload.Id, DiagnosticsDurableHistoryWorkload.WorkloadId, StringComparison.Ordinal))
+            return;
+
+        var expected = DiagnosticsDurableHistoryWorkload.NativeRouteCardinalities;
+        var namesMatch = routes.Select(route => route.RouteIdentity)
+                             .Concat(traceDetailConstituents.Count == 0 ? [] : ["trace-detail"])
+                             .Distinct(StringComparer.Ordinal).Count() == routes.Count + (traceDetailConstituents.Count == 0 ? 0 : 1) &&
+                         routes.All(route => expected.ContainsKey(route.RouteIdentity));
+        var factsMatch = routes.All(route =>
+            expected.TryGetValue(route.RouteIdentity, out var cardinality) &&
+            route.PhysicalCardinality == cardinality &&
+            route.FiniteLimit == DiagnosticsDurableHistoryWorkload.NativeRouteLimits[route.RouteIdentity] &&
+            route.MaterializedCandidateCount == route.FiniteLimit);
+        if (!namesMatch || !factsMatch)
+            throw new PerformanceContractException(
+                "Diagnostics native-plan evidence must contain only declared diagnostics routes and bind their frozen cardinalities and strictly bounded route limits.");
+
+        if (traceDetailConstituents.Count != 0)
+        {
+            var expectedConstituents = DiagnosticsNativePlanContract.TraceDetailConstituents(
+                DiagnosticsNativePlanContract.GroundworkAdapter);
+            if (traceDetailConstituents.Select(item => item.RouteIdentity).Distinct(StringComparer.Ordinal).Count() != expectedConstituents.Count ||
+                !traceDetailConstituents.Select(item => item.RouteIdentity).Order(StringComparer.Ordinal)
+                    .SequenceEqual(expectedConstituents.Select(item => item.RouteIdentity).Order(StringComparer.Ordinal), StringComparer.Ordinal))
+                throw new PerformanceContractException("Diagnostics trace-detail evidence must account for every constituent exactly once.");
+        }
+
+        // Route booleans are an admission summary, not authority. The retained provider artifacts are
+        // structurally checked alongside their digest below, after the generic reference and file checks.
+        // That prevents a staged JSON envelope from making a table scan look covered merely by setting
+        // HasStorageScopePredicate/HasRoutePredicate to true.
+    }
+
+    private static void ValidateDiagnosticsTraceDetailConstituents(
+        RunRequest request,
+        IReadOnlyList<DiagnosticsTraceDetailConstituentEvidence> constituents,
+        string outputDirectory)
+    {
+        if (!string.Equals(request.Adapter, DiagnosticsNativePlanContract.GroundworkAdapter, StringComparison.Ordinal))
+            throw new PerformanceContractException("Only Groundwork may publish provider-native trace-detail constituent evidence.");
+
+        foreach (var constituent in constituents)
+        {
+            if (string.IsNullOrWhiteSpace(constituent.RawPlanReference))
+            {
+                DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
+                    request.Provider,
+                    request.Adapter,
+                    constituent,
+                    null);
+                continue;
+            }
+
+            if (!ArtifactStore.SafeRawPlanReference(constituent.RawPlanReference) ||
+                !IsSha256(constituent.RawPlanSha256))
+                throw new PerformanceContractException(
+                    $"Trace-detail constituent '{constituent.RouteIdentity}' has an unsafe or undigested raw-plan reference.");
+            var path = ArtifactStore.RawPlanPath(outputDirectory, constituent.RawPlanReference);
+            if (!File.Exists(path) || ArtifactStore.HashFile(path) != constituent.RawPlanSha256)
+                throw new PerformanceContractException(
+                    $"Raw provider-plan evidence is missing or does not match its digest for trace-detail constituent {constituent.RouteIdentity}.");
+            ArtifactStore.ValidateRawPlanFile(path);
+            DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
+                request.Provider,
+                request.Adapter,
+                constituent,
+                path);
+
+            var pages = constituent.Pages ?? [];
+            var expectedPageCount = checked((constituent.PublicRowBound + constituent.FiniteLimit - 1) / constituent.FiniteLimit);
+            if (pages.Count != expectedPageCount - 1 ||
+                pages.Select(page => page.PageIndex).SequenceEqual(Enumerable.Range(1, pages.Count)) == false)
+                throw new PerformanceContractException(
+                    $"Trace-detail constituent '{constituent.RouteIdentity}' must retain its initial page and every continuation page exactly once.");
+            foreach (var page in pages)
+            {
+                if (!ArtifactStore.SafeRawPlanReference(page.RawPlanReference) || !IsSha256(page.RawPlanSha256) || string.IsNullOrWhiteSpace(page.CommandText))
+                    throw new PerformanceContractException(
+                        $"Trace-detail constituent '{constituent.RouteIdentity}' has an unsafe, undigested, or empty continuation page artifact.");
+                var pagePath = ArtifactStore.RawPlanPath(outputDirectory, page.RawPlanReference);
+                if (!File.Exists(pagePath) || ArtifactStore.HashFile(pagePath) != page.RawPlanSha256)
+                    throw new PerformanceContractException(
+                        $"Raw provider-plan evidence is missing or does not match its digest for trace-detail page {page.PageIndex} of {constituent.RouteIdentity}.");
+                ArtifactStore.ValidateRawPlanFile(pagePath);
+                DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
+                    request.Provider,
+                    request.Adapter,
+                    constituent with
+                    {
+                        RawPlanReference = page.RawPlanReference,
+                        RawPlanSha256 = page.RawPlanSha256,
+                        CommandText = page.CommandText
+                    },
+                    pagePath);
+            }
+        }
+    }
+
+    private static void ValidateSecretConcurrency(
+        PerformanceWorkload workload,
+        RunRequest request,
+        SecretProviderConcurrencyEvidence? evidence)
+    {
+        if (!string.Equals(workload.Id, SecretCreateReadListWorkload.WorkloadId, StringComparison.Ordinal))
+        {
+            if (evidence is not null)
+                throw new PerformanceContractException("Only the Secret workload may publish Secret provider-concurrency evidence.");
+            return;
+        }
+
+        var expectedSerialized = string.Equals(request.Provider, "sqlite", StringComparison.Ordinal) &&
+                                 string.Equals(request.Adapter, "groundwork-secret-repository", StringComparison.Ordinal);
+        var expectedConnections = expectedSerialized ? 1 : 2;
+        if (evidence is null ||
+            evidence.IndependentClientCount != SecretCreateReadListWorkload.ConcurrentContenders ||
+            evidence.CompletedContenders != SecretCreateReadListWorkload.ConcurrentContenders ||
+            evidence.ProviderCommandStartCount != SecretCreateReadListWorkload.ConcurrentContenders ||
+            evidence.ProviderCommandOverlapObserved == expectedSerialized ||
+            evidence.ProviderCommandsSerializedByDesign != expectedSerialized ||
+            !evidence.EveryContenderIssuedProviderCommands ||
+            evidence.DistinctPhysicalConnectionCount != expectedConnections)
+            throw new PerformanceContractException(
+                "Secret correctness evidence must retain the exact provider-command overlap/serialization, contender-command, and physical-connection proof.");
     }
 
     public static bool SameMachineEnvironment(MachineMetadata first, MachineMetadata second) =>

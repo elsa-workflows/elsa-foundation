@@ -2,7 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork;
-using Elsa.Persistence.Core.Design;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Design.Core.Models;
@@ -57,7 +57,7 @@ public static class UnifiedGroundworkHostContract
                      ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind,
                      WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
                      ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
-                     PublishingGroundworkStorageManifest.PublicationSlotDocumentKind
+                     ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDocumentKind
                  })
         {
             var unit = sessions.Unit(unitId);

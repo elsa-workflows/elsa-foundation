@@ -1,6 +1,7 @@
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Endpoints;
 
@@ -22,18 +23,18 @@ internal static class PublicationSlotViews
         exception.Message.Contains("no source reference", StringComparison.Ordinal);
 
     public static async ValueTask<PublicationSlotView> ComposeAsync(
-        PublicationSlot slot,
+        WorkflowActivationSlot slot,
         IPublicationRecordStore publicationStore,
         CancellationToken cancellationToken) =>
         PublicationSlotView.From(slot, await ResolveVisiblePublicationAsync(slot, publicationStore, cancellationToken));
 
     private static async ValueTask<PublicationRecord?> ResolveVisiblePublicationAsync(
-        PublicationSlot slot,
+        WorkflowActivationSlot slot,
         IPublicationRecordStore publicationStore,
         CancellationToken cancellationToken)
     {
-        if (slot.ActivePublicationId is { } activePublicationId)
-            return await publicationStore.FindAsync(activePublicationId, cancellationToken);
+        if (slot.ActiveActivationId is { } activeActivationId)
+            return await publicationStore.FindAsync(activeActivationId, cancellationToken);
         return (await publicationStore.ListBySlotAsync(slot.SlotId, cancellationToken))
             .OrderByDescending(publication => publication.CreatedAt)
             .ThenByDescending(publication => publication.PublicationId, StringComparer.Ordinal)

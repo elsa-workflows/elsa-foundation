@@ -1,5 +1,6 @@
 using System.Diagnostics.Metrics;
-using Elsa.Persistence.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Kernel;
 using Groundwork.Store;
 

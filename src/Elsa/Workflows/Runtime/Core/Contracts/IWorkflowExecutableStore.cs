@@ -13,6 +13,20 @@ public interface IWorkflowExecutableStore
     ValueTask SaveAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Saves one closure's immutable artifacts as a single atomic unit. Either every previously absent artifact
+    /// becomes visible together or none does; already-present content-addressed artifacts are left untouched.
+    /// </summary>
+    /// <remarks>
+    /// Reconciliation requires this stronger boundary because a closure is its isolation unit. Custom stores that
+    /// do not support atomic multi-artifact writes fail closed instead of silently degrading to sequential saves.
+    /// </remarks>
+    ValueTask SaveBatchAsync(
+        IReadOnlyList<WorkflowExecutable> executables,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException(new NotSupportedException(
+            $"{GetType().Name} does not support atomic workflow executable batches."));
+
+    /// <summary>
     /// Unconditionally deletes an artifact for exceptional privileged administration and low-level store tests.
     /// Garbage collection must use the guarded overload.
     /// </summary>

@@ -10,11 +10,8 @@
       - src/Elsa/Workflows/Design/CodeGeneration targets netstandard2.0 as a
         Roslyn source generator and pins its own TargetFramework/ImplicitUsings.
 
-      - src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore sits
-        inside the frozen EF oracle that FrozenAspNetCoreIdentityEfOracleRatchetTests
-        fingerprints for specs/144-zero-ef-final-removal. No change to that tree
-        — including its .csproj — is permitted before the approved removal work
-        unit, so it is left byte-for-byte alone.
+      - The former src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore
+        tree was retired with issue #1482 together with its frozen oracle and ratchet.
 
     Still deliberately absent: Version. CI injects /p:Version.
   -->

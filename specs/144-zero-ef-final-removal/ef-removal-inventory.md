@@ -4,9 +4,9 @@
 
 **Source ref**: `origin/main` at `f769b516598eb807c9528e7c2e72085b346603e8`
 
-**Captured baseline**: `tests/Elsa/Architecture/Baselines/ef-core-surface.json` (schema `1`, SHA-256 `909ff9369a0d2e2defc6f717a87580458a80fdfa2038b279307b49419581f16f`)
+**Captured intake baseline**: `tests/Elsa/Architecture/Baselines/ef-core-surface.json` (schema `1`, SHA-256 `909ff9369a0d2e2defc6f717a87580458a80fdfa2038b279307b49419581f16f`). This hash and the scoreboard below are the immutable intake record; the committed temporary scoreboard is refreshed as each admitted deletion slice removes stale entries.
 
-**Frozen ASP.NET Core Identity oracle baseline**: `tests/Elsa/Architecture/Baselines/frozen-aspnetcore-identity-ef-oracle.json` (schema `1`, file SHA-256 `d1f114e701a9df7a66235255533de0306b75b3f08776953a8491f1c89613a7bc`, protected tree SHA-256 `f9dfeb17c994f17af07203b55498642da79a50ff0161cef252f28bec3a0ad17c`)
+**Frozen ASP.NET Core Identity oracle baseline**: retired with issue #1482 together with its ratchet test and protected Identity EF tree; the historical hashes remain above only as provenance for the intake review.
 **Mechanical entry count**: `308`
 
 This is an intake record, not permission to delete an entry. The canonical exact identities remain
@@ -32,6 +32,31 @@ its entries without copying a second mutable 308-row list into a hand-maintained
 | `HostConfigurationFiles` | 3 | Empty |
 | `EfFreeBoundaryViolations` | 0 | Empty |
 | **Total** | **308** | **Absolute zero after #647** |
+
+## Issue #1482 current reconciliation (2026-09-01)
+
+The Identity EF leaf is absent from the current tree. The current shrink-only scoreboard contains
+seven EF projects, 13 direct package edges, eight central package versions, 17 direct EF project
+edges, 19 static transitive project consumers, 40 static transitive package consumers, 78 restored
+package consumers, five migrations, nine context files, 25 registration files, and one host
+configuration entry. The remaining entries are diagnostics, the explicitly retained OpenIddict
+vendor boundary, and the shared EF substrate; they are not part of issue #1482's deletion scope.
+
+The following current-source reconciliations are part of this slice:
+
+- `src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/` and its solution edge are deleted.
+- `tests/Elsa/Architecture/Baselines/frozen-aspnetcore-identity-ef-oracle.json` and
+  `FrozenAspNetCoreIdentityEfOracleRatchetTests` are deleted; the temporary repository-wide baseline
+  has only its stale Identity entries removed.
+- `tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity/EfCoreIdentityStoreTests.cs` and the
+  EF-vs-Groundwork Identity comparator files are deleted after their Groundwork replacements were
+  verified; the durable divergence ledger remains historical evidence, not a #646 verdict.
+- Shared API/Identity fixtures use `IdentityV2TestPersistence` and Groundwork Identity stores. The
+  OpenIddict vendor EF test context and package remain intentionally retained under ADR 0042.
+
+Issue #646 remains open without an accepted final performance verdict. This reconciliation therefore
+does not certify spec 144's final zero-EF gate or advance T011; it records only the explicit Identity
+EF deletion requested by issue #1482.
 
 ## Exact-entry classification
 

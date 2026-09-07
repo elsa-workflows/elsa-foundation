@@ -96,12 +96,12 @@ public sealed class PublishingMinimalApiBehaviorTests
         var factory = new RecordingRequestSenderFactory();
         await using var host = await PublishingMinimalApiHost.StartAsync(factory.Create);
 
-        using var notFound = await SendAsync(
+        using var methodNotAllowed = await SendAsync(
             host.Client,
             HttpMethod.Get,
             "/publishing/workflows/missing-definition/slots/default",
             identity: "trusted-domain-not-found");
-        Assert.Equal(HttpStatusCode.NotFound, notFound.StatusCode);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, methodNotAllowed.StatusCode);
 
         using var conflict = await SendAsync(
             host.Client,
@@ -150,8 +150,6 @@ public sealed class PublishingMinimalApiBehaviorTests
     }
 
     [Theory]
-    [InlineData("GET", "/publishing/workflows/definition-route/slots")]
-    [InlineData("GET", "/publishing/workflows/definition-route/slots/default")]
     [InlineData("GET", "/publishing/workflows/definition-route/policy")]
     [InlineData("PUT", "/publishing/workflows/definition-route/policy")]
     public async Task Unexpected_slot_and_policy_store_failures_preserve_legacy_problem_details(
@@ -161,9 +159,7 @@ public sealed class PublishingMinimalApiBehaviorTests
         await using var host = await PublishingMinimalApiScenarioHost.StartAsync(
             configureServices: services =>
             {
-                services.RemoveAll<IPublicationSlotStore>();
                 services.RemoveAll<IPublicationPolicyStore>();
-                services.AddSingleton<IPublicationSlotStore, ThrowingPublicationSlotStore>();
                 services.AddSingleton<IPublicationPolicyStore, ThrowingPublicationPolicyStore>();
             });
 
@@ -253,44 +249,6 @@ public sealed class PublishingMinimalApiBehaviorTests
     }
 
     private static StringContent Json(string body) => new(body, Encoding.UTF8, "application/json");
-}
-
-internal sealed class ThrowingPublicationSlotStore(IHttpContextAccessor contextAccessor) : IPublicationSlotStore
-{
-    private readonly InMemoryPublicationSlotStore inner = new();
-
-    public ValueTask<PublicationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default) =>
-        ShouldThrow() ? Fail<PublicationSlot?>() : inner.FindAsync(workflowDefinitionId, slotName, cancellationToken);
-
-    public ValueTask<IReadOnlyCollection<PublicationSlot>> ListByDefinitionAsync(
-        string workflowDefinitionId,
-        CancellationToken cancellationToken = default) =>
-        ShouldThrow() ? Fail<IReadOnlyCollection<PublicationSlot>>() : inner.ListByDefinitionAsync(workflowDefinitionId, cancellationToken);
-
-    public ValueTask<PublicationSlotTransitionResult> TryActivateAsync(
-        string workflowDefinitionId,
-        string slotName,
-        string publicationId,
-        long expectedRevision,
-        DateTimeOffset updatedAt,
-        CancellationToken cancellationToken = default) =>
-        inner.TryActivateAsync(workflowDefinitionId, slotName, publicationId, expectedRevision, updatedAt, cancellationToken);
-
-    public ValueTask<PublicationSlotTransitionResult> TryUnpublishAsync(
-        string workflowDefinitionId,
-        string slotName,
-        long expectedRevision,
-        DateTimeOffset updatedAt,
-        CancellationToken cancellationToken = default) =>
-        inner.TryUnpublishAsync(workflowDefinitionId, slotName, expectedRevision, updatedAt, cancellationToken);
-
-    private bool ShouldThrow() => string.Equals(
-        contextAccessor.HttpContext?.Request.Headers[PublishingCompatibilityCases.IdentityHeader].ToString(),
-        "trusted-store-500",
-        StringComparison.Ordinal);
-
-    private static ValueTask<T> Fail<T>() =>
-        ValueTask.FromException<T>(new InvalidOperationException("private store payload"));
 }
 
 internal sealed class ThrowingPublicationPolicyStore(IHttpContextAccessor contextAccessor) : IPublicationPolicyStore

@@ -113,7 +113,6 @@ public sealed class ActivitiesDesignStorageManifestTests
         Assert.Equal(
             128,
             unit.Columns.Single(column => column.Name == ActivitiesDesignStorageManifest.ActivityDefinitionVersionSemVerSortKeyField).MaxLength);
-
         Assert.False(unit.Columns.Single(column =>
             column.Name == ActivitiesDesignStorageManifest.ActivityDefinitionVersionDefinitionIdField).IsNullable);
         Assert.False(unit.Columns.Single(column =>

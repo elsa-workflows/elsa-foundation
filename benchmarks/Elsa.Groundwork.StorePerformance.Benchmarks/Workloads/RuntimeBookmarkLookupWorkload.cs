@@ -12,9 +12,9 @@ namespace Elsa.Groundwork.StorePerformance.Benchmarks.Workloads;
 /// </summary>
 public sealed class RuntimeBookmarkLookupWorkload
 {
-    private const string PrimaryStimulusType = "runtime-bookmark-lookup";
-    private const string PrimaryStimulusHash = "bookmark-lookup-v1.1";
-    private const string SecondaryStimulusHash = "bookmark-lookup-other-scope";
+    internal const string PrimaryStimulusType = "runtime-bookmark-lookup";
+    internal const string PrimaryStimulusHash = "bookmark-lookup-v1.1";
+    internal const string SecondaryStimulusHash = "bookmark-lookup-other-scope";
     private const string NoiseStimulusHash = "bookmark-lookup-noise";
     private static readonly DateTimeOffset SeededAt = new(2026, 7, 20, 10, 0, 0, TimeSpan.Zero);
     private static readonly ReproducibleWorkloadScenario Scenario = ReproducibleWorkloadScenarioCatalog.Get(WorkloadId);
@@ -104,6 +104,68 @@ public sealed class RuntimeBookmarkLookupWorkload
             resultDigest,
             operations,
             actualObservations);
+    }
+
+    /// <summary>
+    /// Prepares the two bounded public lookup operations used by process measurement. The deterministic
+    /// fixture is created here when a fresh adapter is supplied; when correctness has already seeded the
+    /// same adapter, the existing rows are reused. In either case setup and the probe page are outside the
+    /// measurement callback, while each returned operation calls the public stimulus-index route itself.
+    /// </summary>
+    public async ValueTask<IReadOnlyList<IRuntimeBookmarkLookupWorkloadOperation>> PrepareMeasuredOperationsAsync(
+        IRuntimeBookmarkLookupWorkloadAdapter adapter,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(adapter);
+        var scenario = ValidateScenario();
+        if (!scenario.OperationSequence.SequenceEqual(
+                ["seed-bookmarks", "lookup-by-stimulus-and-type", "read-next-bounded-page", "verify-cross-scope-isolation"],
+                StringComparer.Ordinal))
+            throw new InvalidOperationException("The bookmark scenario operation sequence no longer matches the measured lookup contract.");
+
+        var scopes = await adapter.OpenIsolatedScopesAsync(cancellationToken);
+        ArgumentNullException.ThrowIfNull(scopes);
+        ArgumentNullException.ThrowIfNull(scopes.Primary);
+        ArgumentNullException.ThrowIfNull(scopes.Secondary);
+
+        var expectedMatches = Enumerable.Range(0, MatchingBookmarks)
+            .Select(workflow => CreateBookmark(workflow, 0, match: true, isSecondaryScope: false))
+            .ToArray();
+        var probe = await scopes.Primary.BookmarkStimulusIndex.ListByStimulusPageAsync(
+            new BookmarkStimulusPageQuery(PrimaryStimulusType, PrimaryStimulusHash, PageSize),
+            cancellationToken);
+        if (probe.Items.Count == 0)
+        {
+            await SeedAsync(scopes.Primary.BookmarkStateStore, isSecondaryScope: false, cancellationToken);
+            await SeedAsync(scopes.Secondary.BookmarkStateStore, isSecondaryScope: true, cancellationToken);
+            probe = await scopes.Primary.BookmarkStimulusIndex.ListByStimulusPageAsync(
+                new BookmarkStimulusPageQuery(PrimaryStimulusType, PrimaryStimulusHash, PageSize),
+                cancellationToken);
+        }
+
+        RequirePage(probe, expectedMatches.Take(PageSize), "measured bookmark lookup setup", continuationRequired: true);
+        var continuation = probe.NextContinuationToken!;
+        return
+        [
+            new RuntimeBookmarkLookupWorkloadOperation(
+                "lookup-by-stimulus-and-type",
+                (_, _) => ValueTask.CompletedTask,
+                async (_, token) =>
+                {
+                    var page = await scopes.Primary.BookmarkStimulusIndex.ListByStimulusPageAsync(
+                        new BookmarkStimulusPageQuery(PrimaryStimulusType, PrimaryStimulusHash, PageSize), token);
+                    RequirePage(page, expectedMatches.Take(PageSize), "measured first bookmark lookup page", continuationRequired: true);
+                }),
+            new RuntimeBookmarkLookupWorkloadOperation(
+                "read-next-bounded-page",
+                (_, _) => ValueTask.CompletedTask,
+                async (_, token) =>
+                {
+                    var page = await scopes.Primary.BookmarkStimulusIndex.ListByStimulusPageAsync(
+                        new BookmarkStimulusPageQuery(PrimaryStimulusType, PrimaryStimulusHash, PageSize, continuation), token);
+                    RequirePage(page, expectedMatches.Skip(PageSize), "measured second bookmark lookup page", continuationRequired: false);
+                })
+        ];
     }
 
     private static ReproducibleWorkloadScenario ValidateScenario()
@@ -243,8 +305,35 @@ public interface IRuntimeBookmarkLookupWorkloadAdapter
     ValueTask<RuntimeBookmarkLookupScopes> OpenIsolatedScopesAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>One workload-owned bounded public lookup phase for process measurement.</summary>
+public interface IRuntimeBookmarkLookupWorkloadOperation
+{
+    string Id { get; }
+    ValueTask PrepareInvocationAsync(long invocation, CancellationToken cancellationToken = default);
+    ValueTask InvokeAsync(long invocation, CancellationToken cancellationToken = default);
+}
+
+internal sealed class RuntimeBookmarkLookupWorkloadOperation(
+    string id,
+    Func<long, CancellationToken, ValueTask> prepare,
+    Func<long, CancellationToken, ValueTask> invoke) : IRuntimeBookmarkLookupWorkloadOperation
+{
+    public string Id { get; } = id;
+
+    public ValueTask PrepareInvocationAsync(long invocation, CancellationToken cancellationToken = default) =>
+        prepare(invocation, cancellationToken);
+
+    public ValueTask InvokeAsync(long invocation, CancellationToken cancellationToken = default) =>
+        invoke(invocation, cancellationToken);
+}
+
 /// <summary>Two scopes expose only the bookmark state and stimulus-index public contracts.</summary>
 public sealed record RuntimeBookmarkLookupScopes(RuntimeBookmarkLookupScope Primary, RuntimeBookmarkLookupScope Secondary);
+
+/// <summary>Public bookmark stores minted from one adapter-owned runtime DI scope.</summary>
+public sealed record RuntimeBookmarkLookupClient(
+    IBookmarkStateStore BookmarkStateStore,
+    IBookmarkStimulusIndex BookmarkStimulusIndex);
 
 /// <summary>
 /// One host-selected logical storage scope. The stimulus index is required to be the same store

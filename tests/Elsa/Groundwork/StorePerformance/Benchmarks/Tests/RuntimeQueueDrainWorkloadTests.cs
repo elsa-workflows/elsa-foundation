@@ -60,6 +60,36 @@ public sealed class RuntimeQueueDrainWorkloadTests
     }
 
     [Fact]
+    public async Task Prepares_the_six_bounded_public_operations_before_invocation()
+    {
+        var adapter = new QueueAdapter();
+        var operations = await new RuntimeQueueDrainWorkload().PrepareMeasuredOperationsAsync(adapter);
+
+        Assert.Equal(
+            [
+                "enqueue-work-items",
+                "claim-bounded-batch",
+                "complete-current-claims",
+                "retry-expired-claim",
+                "record-and-read-poison-state",
+                "attempt-stale-acknowledgement"
+            ],
+            operations.Select(operation => operation.Id));
+
+        foreach (var operation in operations)
+        {
+            await operation.PrepareInvocationAsync(-1);
+            await operation.InvokeAsync(-1);
+            await operation.PrepareInvocationAsync(0);
+            await operation.InvokeAsync(0);
+        }
+
+        Assert.Equal(2, adapter.Shared.StaleAcknowledgements);
+        Assert.True(adapter.Shared.Poison.Count == 2);
+        Assert.True(adapter.Opened.Count >= 2);
+    }
+
+    [Fact]
     public void Public_adapter_surface_is_semantically_limited_to_provider_neutral_runtime_contracts()
     {
         var roots = new[] { typeof(IRuntimeQueueDrainWorkloadAdapter), typeof(RuntimeQueueDrainClients), typeof(RuntimeQueueDrainClient) };

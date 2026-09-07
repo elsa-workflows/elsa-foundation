@@ -49,7 +49,7 @@ The unit lands red-first contract tests, a shared four-provider correctness/rest
 | Elsa §E2.3 / §E2.4: Foundation and Primitives boundaries | PASS | No shared primitives change. Foundation Identity remains the owner; generic provider capability gaps would land upstream in Groundwork. |
 | Elsa §E2.5 and zero-EF ADR | PASS | No new EF surface or migration is added. The frozen EF implementation remains available only to #646 and cannot coactivate with the Groundwork feature; the checked-in contract baseline does not execute EF. |
 | Elsa §E6 naming | PASS | New Elsa-owned types stay within the component budget and use `...Store`, `...Source`, `...Coordinator`, or provider prefixes consistently. External Identity names remain exempt. |
-| Groundwork-neutral core boundary | PASS | `Elsa.Foundation.Identity.Abstractions` gains no Groundwork/project/package reference. The optional provider-neutral tenant binding uses `Elsa.Persistence.Core`, not Groundwork. |
+| Groundwork-neutral core boundary | PASS | `Elsa.Foundation.Identity.Abstractions` gains no Groundwork/project/package reference. The optional provider-neutral tenant binding uses `Elsa.Workflows.Runtime.Core`, not Groundwork. |
 | Greenfield/data migration boundary | PASS | Golden fixtures and manifests may be replaced without data conversion; no compatibility migration or runtime auto-upgrade is created. |
 
 ### Post-Design Recheck

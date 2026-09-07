@@ -5,11 +5,8 @@ using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Foundation.Identity.Abstractions.Ownership;
 using Elsa.Locking.Core;
-using Elsa.Persistence.Core;
-using Elsa.Persistence.Core.Design;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Persistence.Groundwork;
-using Elsa.Persistence.Groundwork.ReferenceComposition;
-using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
@@ -26,8 +23,14 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
+using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Dashboard.Persistence.Groundwork.V2;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
+using Groundwork.Sqlite;
 using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -38,10 +41,10 @@ namespace Elsa.Persistence.Groundwork.UnifiedHost.Tests;
 
 /// <summary>
 /// End-to-end proof of the headline goal: <b>one host-selected database backs every Elsa module</b>. The host
-/// composes a single feature (<c>AddGroundworkSqliteUnifiedPersistence</c>) which opens <b>one</b> Groundwork
+/// composes one provider connection and each Groundwork lane explicitly. The host opens <b>one</b> Groundwork
 /// v2 provider connection over a SQLite file, admits every lane's declared storage units into it, and points
-/// every family's neutral ports at it. Nothing here is SQLite- or Groundwork-specific except the one host
-/// registration call.
+/// every family's neutral ports at it. Nothing here is SQLite- or Groundwork-specific except the provider
+/// connection registration.
 /// </summary>
 public class UnifiedGroundworkHostTests
 {
@@ -58,7 +61,14 @@ public class UnifiedGroundworkHostTests
             .AddSingleton<IDistributedLockProvider, ImmediateDistributedLockProvider>()
             .AddScoped<IPersistenceAccessContextAccessor>(_ => TenantAccessContextAccessor.Instance);
         var provider = services
-            .AddGroundworkSqliteUnifiedPersistence(database.ConnectionString)
+            .AddGroundworkStorageProviderConnection(_ => new SqliteProviderFactory().Create(database.ConnectionString))
+            .AddGroundworkV2RuntimeStores()
+            .AddGroundworkDistributedRuntimeStores()
+            .AddGroundworkWorkflowsDesignStores()
+            .AddGroundworkActivitiesDesignStores()
+            .AddGroundworkPublishingStores()
+            .AddGroundworkV2WorkflowRunHealth()
+            .AddGroundworkV2WorkflowPortfolio()
             .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         _ = provider.GetRequiredService<TemporarySqliteDatabase>();
         await provider.InitializeGroundworkStoreAsync();
@@ -74,7 +84,14 @@ public class UnifiedGroundworkHostTests
             .AddSingleton<IDistributedLockProvider, ImmediateDistributedLockProvider>()
             .AddScoped<IPersistenceAccessContextAccessor>(_ => TenantAccessContextAccessor.Instance);
         var provider = services
-            .AddGroundworkSqliteUnifiedPersistence(connectionString)
+            .AddGroundworkStorageProviderConnection(_ => new SqliteProviderFactory().Create(connectionString))
+            .AddGroundworkV2RuntimeStores()
+            .AddGroundworkDistributedRuntimeStores()
+            .AddGroundworkWorkflowsDesignStores()
+            .AddGroundworkActivitiesDesignStores()
+            .AddGroundworkPublishingStores()
+            .AddGroundworkV2WorkflowRunHealth()
+            .AddGroundworkV2WorkflowPortfolio()
             .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         await provider.InitializeGroundworkStoreAsync();
         return provider;
@@ -97,8 +114,9 @@ public class UnifiedGroundworkHostTests
         // Runtime resolves off it.
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
 
-        // Publishing authority uses the same durable store; the API's in-memory fallbacks must not win.
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IPublicationSlotStore>());
+        // Runtime activation authority and the publishing journal use the same durable store; the API's
+        // in-memory fallbacks must not win.
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowActivationAuthority>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IPublicationRecordStore>());
 
         // Design lane ports resolve (scoped).
@@ -148,7 +166,7 @@ public class UnifiedGroundworkHostTests
         };
         var publication = new PublicationRecord(
             "publication-1",
-            PublicationSlotIdentity.Create("workflow-1", "default"),
+            WorkflowActivationSlotIdentity.Create("workflow-1", "default"),
             "workflow-1",
             "workflow-version-1",
             "artifact-1",
@@ -225,7 +243,7 @@ public class UnifiedGroundworkHostTests
             ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind,
             WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
             ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind,
-            PublishingGroundworkStorageManifest.PublicationSlotDocumentKind
+            ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDocumentKind
         };
 
         foreach (var unitId in lanes)
@@ -246,7 +264,7 @@ public class UnifiedGroundworkHostTests
     {
         await using var database = new TemporarySqliteDatabase();
         var now = DateTimeOffset.Parse("2026-07-13T10:00:00Z");
-        var slotId = PublicationSlotIdentity.Create("definition-1", "default");
+        var slotId = WorkflowActivationSlotIdentity.Create("definition-1", "default");
         var record = new PublicationRecord(
             "publication-1", slotId, "definition-1", "version-1", "artifact-1", "reference-1", 0,
             PublicationStatus.Active, now, now, null, null);
@@ -255,19 +273,25 @@ public class UnifiedGroundworkHostTests
         {
             await using var firstScope = firstHost.CreateAsyncScope();
             await firstScope.ServiceProvider.GetRequiredService<IPublicationRecordStore>().SaveAsync(record);
-            var activation = await firstScope.ServiceProvider.GetRequiredService<IPublicationSlotStore>()
-                .TryActivateAsync("definition-1", "default", record.PublicationId, 0, now);
+            var activation = await firstScope.ServiceProvider.GetRequiredService<IWorkflowActivationAuthority>()
+                .TryActivateAsync(new WorkflowActivationSlotRequest(
+                    "definition-1",
+                    "default",
+                    record.PublicationId,
+                    WorkflowActivationSource.Publishing,
+                    0,
+                    now));
             Assert.True(activation.Succeeded);
         }
 
         await using var restartedHost = await BuildHostAsync(database.ConnectionString);
         await using var restartedScope = restartedHost.CreateAsyncScope();
-        var restoredSlot = await restartedScope.ServiceProvider.GetRequiredService<IPublicationSlotStore>()
+        var restoredSlot = await restartedScope.ServiceProvider.GetRequiredService<IWorkflowActivationAuthority>()
             .FindAsync("definition-1", "default");
         var restoredRecord = await restartedScope.ServiceProvider.GetRequiredService<IPublicationRecordStore>()
             .FindAsync(record.PublicationId);
 
-        Assert.Equal(record.PublicationId, restoredSlot?.ActivePublicationId);
+        Assert.Equal(record.PublicationId, restoredSlot?.ActiveActivationId);
         Assert.Equal(PublicationStatus.Active, restoredRecord?.Status);
     }
 
