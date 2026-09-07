@@ -16,9 +16,9 @@
     <PackageReference Include="Groundwork.PostgreSql" Version="$(GroundworkVersion)" />
     <PackageReference Include="Groundwork.SqlServer" Version="$(GroundworkVersion)" />
     <PackageReference Include="Groundwork.MongoDb" Version="$(GroundworkVersion)" />
-    <PackageReference Include="Testcontainers.MongoDb" Version="4.12.0" />
-    <PackageReference Include="Testcontainers.MsSql" Version="4.12.0" />
-    <PackageReference Include="Testcontainers.PostgreSql" Version="4.12.0" />
+    <PackageReference Include="Testcontainers.MongoDb" Version="4.15.0" />
+    <PackageReference Include="Testcontainers.MsSql" Version="4.15.0" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.15.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.10" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.10" />
