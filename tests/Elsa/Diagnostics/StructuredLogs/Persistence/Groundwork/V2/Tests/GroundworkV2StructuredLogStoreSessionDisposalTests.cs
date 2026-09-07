@@ -65,3 +65,26 @@ public sealed class GroundworkV2StructuredLogStoreSessionDisposalTests
     private static GroundworkStructuredLogStore CreateStore(IStorageProviderConnection real, out IReadOnlyList<IStorageSession> opened) =>
         new(SessionRecordingConnection.Wrap(real, out opened), Options.Create(new StructuredLogsOptions()), Binding);
 }
+
+public sealed class GroundworkV2StructuredLogStoreSessionSerializationTests
+{
+    [Fact]
+    public async Task Concurrent_readers_never_overlap_on_the_owned_session()
+    {
+        using var database = new TemporarySqliteDatabase();
+        using var real = database.Connection;
+        await using var store = new GroundworkStructuredLogStore(
+            SerializationProbeConnection.Wrap(real, out var maxOverlap),
+            Options.Create(new StructuredLogsOptions()),
+            new StructuredLogStoreBinding("tenant", "scope", "structured-logs"));
+        await using var lease = await ((IDiagnosticsPersistenceStartupResource)store).AcquireAsync();
+
+        await Task.WhenAll(Enumerable.Range(0, 6).Select(_ => Task.Run(async () =>
+        {
+            await store.GetHighWaterMarkAsync();
+            await store.GetRecentAsync(StructuredLogFilter.None);
+        })));
+
+        Assert.Equal(1, maxOverlap());
+    }
+}

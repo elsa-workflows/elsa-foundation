@@ -208,7 +208,7 @@ public sealed class GroundworkOpenTelemetryStore :
         ArgumentException.ThrowIfNullOrWhiteSpace(traceId);
         cancellationToken.ThrowIfCancellationRequested();
         var traceKey = V2OpenTelemetryCodec.TraceKey(traceId);
-        var summary = sessions.TraceSummaries.Read(new StorageKey(new Dictionary<string, object?>
+        var summary = Read(sessions.TraceSummaries, new StorageKey(new Dictionary<string, object?>
         {
             [V2OpenTelemetryStorageSchema.TraceKey] = traceKey
         }));
@@ -245,7 +245,7 @@ public sealed class GroundworkOpenTelemetryStore :
             .Select(V2OpenTelemetryCodec.Deserialize<OtlpLogRecord>).ToArray();
         var resources = trace.ResourceIds
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(id => sessions.Resources.Read(new StorageKey(new Dictionary<string, object?> { [V2OpenTelemetryStorageSchema.Id] = id })))
+            .Select(id => Read(sessions.Resources, new StorageKey(new Dictionary<string, object?> { [V2OpenTelemetryStorageSchema.Id] = id })))
             .Where(entry => entry is not null)
             .Select(entry => V2OpenTelemetryCodec.Deserialize<TelemetryResource>(entry!.Values.Values))
             .OrderBy(resource => resource.ServiceName, StringComparer.Ordinal)
@@ -279,7 +279,7 @@ public sealed class GroundworkOpenTelemetryStore :
             .Rows.Select(V2OpenTelemetryCodec.Deserialize<MetricPoint>).Reverse().ToArray();
         var instruments = points.Select(point => point.InstrumentId)
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(id => sessions.Instruments.Read(new StorageKey(new Dictionary<string, object?> { [V2OpenTelemetryStorageSchema.Id] = id })))
+            .Select(id => Read(sessions.Instruments, new StorageKey(new Dictionary<string, object?> { [V2OpenTelemetryStorageSchema.Id] = id })))
             .Where(entry => entry is not null)
             .Select(entry => V2OpenTelemetryCodec.Deserialize<MetricInstrument>(entry!.Values.Values))
             .OrderBy(instrument => instrument.Id, StringComparer.Ordinal)
@@ -527,14 +527,14 @@ public sealed class GroundworkOpenTelemetryStore :
         if (missingResourceIds.Length == 0)
             return services;
 
-        var retained = await sessions.Resources.BatchReadAsync(
+        var retained = await sessions.SerializedAsync(sessions.Resources, owned => owned.BatchReadAsync(
             new KeyedBatchReadRequest(
                 new TableId(sessions.Resources.Unit.Name),
                 ResourceColumns.Id,
                 missingResourceIds,
                 Projection.ColumnsOnly(ResourceColumns.Id, ResourceColumns.ServiceName)),
             connection,
-            cancellationToken);
+            cancellationToken), cancellationToken);
         foreach (var row in retained.Rows)
         {
             var id = row.Values.TryGetValue(V2OpenTelemetryStorageSchema.Id, out var rawId) && rawId is string resourceId
@@ -609,11 +609,11 @@ public sealed class GroundworkOpenTelemetryStore :
         CancellationToken cancellationToken)
     {
         var deleted = await ApplyTraceRetentionAsync(traceRetentionOperation, cancellationToken);
-        deleted += sessions.Spans.ApplyRetention(new RetentionExecutionOptions { KeepNewestOverride = spanCapacity, CancellationToken = cancellationToken }).DeletedRows;
-        deleted += sessions.MetricPoints.ApplyRetention(new RetentionExecutionOptions { KeepNewestOverride = metricPointCapacity, CancellationToken = cancellationToken }).DeletedRows;
-        deleted += sessions.Logs.ApplyRetention(new RetentionExecutionOptions { KeepNewestOverride = logCapacity, CancellationToken = cancellationToken }).DeletedRows;
-        deleted += sessions.Resources.ApplyRetention(new RetentionExecutionOptions { KeepNewestOverride = resourceCapacity, CancellationToken = cancellationToken }).DeletedRows;
-        deleted += sessions.Instruments.ApplyRetention(new RetentionExecutionOptions { KeepNewestOverride = instrumentCapacity, CancellationToken = cancellationToken }).DeletedRows;
+        deleted += sessions.Serialized(sessions.Spans, owned => owned.ApplyRetention(new RetentionExecutionOptions { KeepNewestOverride = spanCapacity, CancellationToken = cancellationToken })).DeletedRows;
+        deleted += sessions.Serialized(sessions.MetricPoints, owned => owned.ApplyRetention(new RetentionExecutionOptions { KeepNewestOverride = metricPointCapacity, CancellationToken = cancellationToken })).DeletedRows;
+        deleted += sessions.Serialized(sessions.Logs, owned => owned.ApplyRetention(new RetentionExecutionOptions { KeepNewestOverride = logCapacity, CancellationToken = cancellationToken })).DeletedRows;
+        deleted += sessions.Serialized(sessions.Resources, owned => owned.ApplyRetention(new RetentionExecutionOptions { KeepNewestOverride = resourceCapacity, CancellationToken = cancellationToken })).DeletedRows;
+        deleted += sessions.Serialized(sessions.Instruments, owned => owned.ApplyRetention(new RetentionExecutionOptions { KeepNewestOverride = instrumentCapacity, CancellationToken = cancellationToken })).DeletedRows;
         return deleted;
     }
 
@@ -793,7 +793,7 @@ public sealed class GroundworkOpenTelemetryStore :
                 services.Add(serviceName);
                 continue;
             }
-            var retained = resourceSession.Read(new StorageKey(new Dictionary<string, object?>
+            var retained = Read(resourceSession, new StorageKey(new Dictionary<string, object?>
             {
                 [V2OpenTelemetryStorageSchema.Id] = resourceId
             }));
@@ -827,17 +827,20 @@ public sealed class GroundworkOpenTelemetryStore :
         order.Add(new(orderColumn, descending ? OrderDirection.Descending : OrderDirection.Ascending, descending ? NullOrder.First : NullOrder.Last));
         foreach (var tieBreaker in tieBreakers)
             order.Add(new(tieBreaker, OrderDirection.Ascending, NullOrder.Last));
-        return session.Query(
-            new QueryRequest(
-                new TableId(session.Unit.Name),
-                All(predicates.ToArray()) ?? Predicate.AlwaysTrue.Instance,
-                order.ToImmutable(),
-                Projection.All,
-                continuation is null ? Paging.Keyset(take) : Paging.Continuation(continuation, take)),
-            // Supply the declaration used to open the session. A provider's session unit can
-            // include physical covering keys, which must not be retargeted as logical columns.
-            schema.Unit(session.Unit.Id.Value).CreateQueryRenderOptions(selectedIndex));
+        var request = new QueryRequest(
+            new TableId(session.Unit.Name),
+            All(predicates.ToArray()) ?? Predicate.AlwaysTrue.Instance,
+            order.ToImmutable(),
+            Projection.All,
+            continuation is null ? Paging.Keyset(take) : Paging.Continuation(continuation, take));
+        // Supply the declaration used to open the session. A provider's session unit can
+        // include physical covering keys, which must not be retargeted as logical columns.
+        var renderOptions = schema.Unit(session.Unit.Id.Value).CreateQueryRenderOptions(selectedIndex);
+        return sessions.Serialized(session, owned => owned.Query(request, renderOptions));
     }
+
+    private StoredEntry? Read(IStorageSession session, StorageKey key) =>
+        sessions.Serialized(session, owned => owned.Read(key));
 
     private IReadOnlyList<IReadOnlyDictionary<string, object?>> QueryAll(
         IStorageSession session,
@@ -860,14 +863,14 @@ public sealed class GroundworkOpenTelemetryStore :
         return rows;
     }
 
-    private static int Count(IStorageSession session, ColumnRef orderColumn) =>
-        checked((int)Math.Min(int.MaxValue, session.Query(new QueryRequest(
-            new TableId(session.Unit.Name),
+    private int Count(IStorageSession session, ColumnRef orderColumn) =>
+        checked((int)Math.Min(int.MaxValue, sessions.Serialized(session, owned => owned.Query(new QueryRequest(
+            new TableId(owned.Unit.Name),
             Predicate.AlwaysTrue.Instance,
             [new OrderTerm(orderColumn, OrderDirection.Ascending, NullOrder.Last)],
             Projection.All,
             Paging.Keyset(1),
-            result: ResultShape.TotalCount.Instance)).TotalCount ?? 0));
+            result: ResultShape.TotalCount.Instance))).TotalCount ?? 0));
 
     private static TelemetryTrace ToTrace(AggregationRow row)
     {
@@ -1195,7 +1198,45 @@ public sealed class GroundworkOpenTelemetryStore :
         // a unit of work belong to that unit of work, which disposes them itself.
         private IOwnedStorageSession[]? owned;
 
+        // Groundwork serializes commands on shared OpenSession views itself; an owned session is single-owner,
+        // and this store is that owner. Readers, the drain's retention pass, and the durability probes all use
+        // these sessions concurrently, so each gets one gate here. Unit-of-work sessions have no gate.
+        private readonly Dictionary<IStorageSession, SemaphoreSlim> gates = new(ReferenceEqualityComparer.Instance);
+
         internal V2Sessions() { }
+
+        internal T Serialized<T>(IStorageSession session, Func<IStorageSession, T> operation)
+        {
+            if (!gates.TryGetValue(session, out var gate))
+                return operation(session);
+            gate.Wait();
+            try
+            {
+                return operation(session);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
+        internal async ValueTask<T> SerializedAsync<T>(
+            IStorageSession session,
+            Func<IStorageSession, ValueTask<T>> operation,
+            CancellationToken cancellationToken)
+        {
+            if (!gates.TryGetValue(session, out var gate))
+                return await operation(session);
+            await gate.WaitAsync(cancellationToken);
+            try
+            {
+                return await operation(session);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
 
         internal static V2Sessions Open(IUnitOfWork work, IReadOnlyList<StorageUnit> units)
         {
@@ -1223,6 +1264,8 @@ public sealed class GroundworkOpenTelemetryStore :
                     opened.Add(connection.OpenOwnedSession(unit, access, observer));
                 Bind(opened);
                 owned = opened.ToArray();
+                foreach (var session in opened)
+                    gates[session] = new SemaphoreSlim(1, 1);
             }
             catch
             {
@@ -1250,8 +1293,14 @@ public sealed class GroundworkOpenTelemetryStore :
         {
             Traces = Spans = MetricPoints = Logs = Resources = Instruments = Ledger = TraceSummaries = null!;
             var releasing = Interlocked.Exchange(ref owned, null);
-            if (releasing is not null)
-                Dispose(releasing);
+            if (releasing is null)
+                return;
+            foreach (var session in releasing)
+            {
+                if (gates.Remove(session, out var gate))
+                    gate.Dispose();
+            }
+            Dispose(releasing);
         }
 
         private static void Dispose(IReadOnlyList<IOwnedStorageSession> sessions)
