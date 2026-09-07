@@ -23,6 +23,7 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
     private Task<DiagnosticsDrainStopResult>? _stopTask;
     private Task? _asyncDisposeTask;
     private Task? _shutdownCancellationTask;
+    private readonly SemaphoreSlim _targetLock = new(1, 1);
     private long _retentionUnits;
     private long _queueDepth;
     private long _queueSequence;
@@ -215,11 +216,29 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
                 if (batch.Count == 0)
                     continue;
 
-                var committedUnits = await CommitWithRetryAsync(batch.ToArray(), cancellationToken);
-                await ApplyPeriodicRetentionAsync(committedUnits, cancellationToken);
+                // The target's commit and retention share one lock so the pending-retention barrier can
+                // never touch the target while a batch is mid-commit.
+                await _targetLock.WaitAsync(cancellationToken);
+                try
+                {
+                    var committedUnits = await CommitWithRetryAsync(batch.ToArray(), cancellationToken);
+                    await ApplyPeriodicRetentionAsync(committedUnits, cancellationToken);
+                }
+                finally
+                {
+                    _targetLock.Release();
+                }
             }
 
-            await ApplyRetentionWithRetryAsync(cancellationToken);
+            await _targetLock.WaitAsync(cancellationToken);
+            try
+            {
+                await ApplyRetentionWithRetryAsync(cancellationToken);
+            }
+            finally
+            {
+                _targetLock.Release();
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -272,11 +291,37 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
 
     private async Task ApplyPeriodicRetentionAsync(int committedUnits, CancellationToken cancellationToken)
     {
-        _retentionUnits += committedUnits;
-        if (_retentionUnits >= _options.RetentionInterval)
+        if (Interlocked.Add(ref _retentionUnits, committedUnits) >= _options.RetentionInterval)
             await ApplyRetentionWithRetryAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Applies the target's retention now, regardless of how many units have been committed since the
+    /// last periodic pass. Periodic retention runs every <see cref="DiagnosticsDrainOptions.RetentionInterval"/>
+    /// committed units and once more when the drain stops, so a caller that has awaited its
+    /// acknowledgements can still observe the last partial interval's overflow until the next tick. This
+    /// is the barrier for callers that need capacity retention to be visible now, such as a durability
+    /// wait before an exact inspection. It is serialized with the loop's own retention and is a no-op on a
+    /// drain that has not started or has already stopped.
+    /// </summary>
+    public async Task ApplyPendingRetentionAsync(CancellationToken cancellationToken = default)
+    {
+        if (State != DiagnosticsDrainState.Running)
+            return;
+        await _targetLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (State != DiagnosticsDrainState.Running)
+                return;
+            await ApplyRetentionWithRetryAsync(cancellationToken);
+        }
+        finally
+        {
+            _targetLock.Release();
+        }
+    }
+
+    /// <summary>Callers hold <see cref="_targetLock"/>; the loop and the barrier never overlap on the target.</summary>
     private async Task ApplyRetentionWithRetryAsync(CancellationToken cancellationToken)
     {
         for (var attempt = 1; attempt <= _options.MaxAttempts; attempt++)
@@ -285,7 +330,7 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
             {
                 var deleted = await _target.ApplyRetentionAsync(cancellationToken);
                 ArgumentOutOfRangeException.ThrowIfNegative(deleted);
-                _retentionUnits = 0;
+                Interlocked.Exchange(ref _retentionUnits, 0);
                 if (deleted > 0)
                     Observe(observer => observer.RecordLoss(DiagnosticsPersistenceLossReason.DurableRetentionDeletion, deleted));
                 return;

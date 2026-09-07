@@ -82,6 +82,30 @@ public sealed class DiagnosticsDrainValidationTests : DiagnosticsDrainTestBase
             baseRetryDelay: TimeSpan.Zero,
             maxRetryDelay: TimeSpan.Zero);
 
+    [Fact]
+    public async Task Pending_retention_barrier_applies_retention_below_the_periodic_interval()
+    {
+        // Cohort run 34088499054, PostgreSQL: every acknowledgement had completed but the last partial
+        // interval's overflow was still retained when the workload inspected exact counts.
+        var target = new ScriptedTarget { Retention = () => 7 };
+        var drain = Fixture.Create(target, retentionInterval: 1_000, batchSize: 2);
+        await drain.ApplyPendingRetentionAsync();
+        Assert.Equal(0, target.RetentionCalls); // not started: nothing to apply
+
+        drain.Start();
+        var acknowledgements = Enumerable.Range(0, 5).Select(item => drain.EnqueueAsync(item).AsTask()).ToArray();
+        await Task.WhenAll(acknowledgements);
+        Assert.Equal(0, target.RetentionCalls); // five units, interval 1000: no periodic pass yet
+
+        await drain.ApplyPendingRetentionAsync();
+        Assert.Equal(1, target.RetentionCalls); // the barrier applies it now
+
+        await drain.StopAsync();
+        Assert.Equal(2, target.RetentionCalls); // the stop path's final pass is unchanged
+        await drain.ApplyPendingRetentionAsync();
+        Assert.Equal(2, target.RetentionCalls); // stopped: nothing to apply
+    }
+
     private sealed class ScriptedTarget : IDiagnosticsDrainTarget<int, int>
     {
         private int _commitCalls;

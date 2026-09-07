@@ -447,6 +447,16 @@ internal sealed class DiagnosticsDurableHistoryAdapter(
 
         public async Task WaitForDurabilityAsync(CancellationToken cancellationToken)
         {
+            await WaitForVisibilityAsync(cancellationToken);
+            // Visibility proves every accepted record is durable; capacity retention runs on the drain's
+            // own cadence, so the last partial interval's overflow can still be present. The workload
+            // inspects exact retained counts next, so ask the store to apply retention now.
+            if (inner is GroundworkOpenTelemetryStore store)
+                await store.ApplyPendingRetentionAsync(cancellationToken);
+        }
+
+        private async Task WaitForVisibilityAsync(CancellationToken cancellationToken)
+        {
             var target = expectations.Read();
             var deadline = DateTime.UtcNow + (durabilityTimeout ?? TimeSpan.FromMinutes(30));
             var timeoutMessage = "OpenTelemetry durability did not become visible within the untimed flush budget.";
