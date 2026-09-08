@@ -411,7 +411,7 @@ public sealed class GroundworkOpenTelemetryStore :
                     work.Rollback();
                     return;
                 }
-                var existingTraceSummaryKeys = await ReadExistingTraceSummaryKeysAsync(
+                var existingTraceSummaries = await ReadExistingTraceSummariesAsync(
                     transaction.TraceSummaries,
                     traceGroups.Select(group => group.Key).ToArray(),
                     cancellationToken);
@@ -432,31 +432,26 @@ public sealed class GroundworkOpenTelemetryStore :
                     {
                         [V2OpenTelemetryStorageSchema.TraceKey] = group.Key
                     });
-                    // The provider-neutral keyed batch read proves which summaries exist without one
-                    // point read per new trace. Existing rows are still read individually so their
-                    // optimistic-concurrency versions remain authoritative inside this transaction.
-                    var existing = existingTraceSummaryKeys.Contains(group.Key)
-                        ? transaction.TraceSummaries.Read(key)
-                        : null;
+                    var existing = existingTraceSummaries.GetValueOrDefault(group.Key);
                     var records = existing is null
                         ? group.Select(item => item.Trace).ToArray()
-                        : new[] { V2OpenTelemetryCodec.DeserializeTraceSummary(existing.Values.Values) }
+                        : new[] { V2OpenTelemetryCodec.DeserializeTraceSummary(existing) }
                             .Concat(group.Select(item => item.Trace)).ToArray();
                     var retainedServices = existing is null
                         ? []
                         : V2OpenTelemetryCodec.DeserializeSummaryElements(
-                            existing.Values.Values,
+                            existing,
                             V2OpenTelemetryStorageSchema.ServiceNames);
                     var summary = V2OpenTelemetryCodec.TraceSummary(
                         MergeTraceRecords(records),
                         retainedServices.Concat(group
                             .SelectMany(item => item.ServiceNames)
                             .Select(V2OpenTelemetryCodec.CanonicalSearchKey)));
-                    var options = existing is null
-                        ? WriteOptions.CreateOnly
-                        : WriteOptions.IfVersion(existing.Version ?? throw new InvalidDataException(
-                            "The OpenTelemetry trace summary omitted its optimistic-concurrency version."));
-                    work.Stage(RowWrite.ConditionalUpsert(summaryUnit, summary, options));
+                    // The drain is the only writer of trace summaries, so it does not fence against itself:
+                    // an unconditional upsert lets every provider batch the group's rows natively, where a
+                    // conditional one is sent row by row (#1598). The unit keeps its version column; the
+                    // ledger insert in the same transaction is what makes a replayed batch conflict.
+                    work.Stage(RowWrite.Upsert(summaryUnit, summary));
                 }
 
                 work.Stage(RowWrite.Insert(ledgerUnit, V2OpenTelemetryCodec.Ledger(batchId, fingerprint)));
@@ -548,26 +543,34 @@ public sealed class GroundworkOpenTelemetryStore :
         return services;
     }
 
-    private async ValueTask<HashSet<string>> ReadExistingTraceSummaryKeysAsync(
+    /// <summary>
+    /// One provider-neutral keyed batch read returns every existing summary in the batch's trace groups
+    /// with its full row, instead of an existence probe followed by one point read per existing group.
+    /// </summary>
+    private async ValueTask<IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>> ReadExistingTraceSummariesAsync(
         IStorageSession session,
         IReadOnlyList<string> traceKeys,
         CancellationToken cancellationToken)
     {
+        var existing = new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.Ordinal);
         if (traceKeys.Count == 0)
-            return new(StringComparer.Ordinal);
+            return existing;
 
         var result = await session.BatchReadAsync(
             new KeyedBatchReadRequest(
                 new TableId(session.Unit.Name),
                 TraceSummaryColumns.TraceKey,
                 traceKeys.Cast<object?>().ToArray(),
-                Projection.ColumnsOnly(TraceSummaryColumns.TraceKey)),
+                Projection.All),
             connection,
             cancellationToken);
-        return result.Rows.Select(row => row.Values.TryGetValue(V2OpenTelemetryStorageSchema.TraceKey, out var value) && value is string key
-                ? key
-                : throw new InvalidDataException("The OpenTelemetry trace-summary batch read omitted its trace key."))
-            .ToHashSet(StringComparer.Ordinal);
+        foreach (var row in result.Rows)
+        {
+            if (!row.Values.TryGetValue(V2OpenTelemetryStorageSchema.TraceKey, out var value) || value is not string key)
+                throw new InvalidDataException("The OpenTelemetry trace-summary batch read omitted its trace key.");
+            existing[key] = row.Values;
+        }
+        return existing;
     }
 
     private static async ValueTask AppendExactAsync(
