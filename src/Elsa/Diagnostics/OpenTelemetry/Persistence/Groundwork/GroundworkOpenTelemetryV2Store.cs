@@ -324,8 +324,11 @@ public sealed class GroundworkOpenTelemetryStore :
             spanCapacity,
             metricPointCapacity,
             logCapacity,
-            Count(sessions.Resources, ResourceColumns.Id),
-            Count(sessions.TraceSummaries, TraceSummaryColumns.TraceKey),
+            // Counts order by an indexed non-string column wherever one exists: a string order is an
+            // ordinal ordering, which MongoDB renders as a per-document JavaScript key over the whole
+            // collection when the count carries it, and this method runs on every durability probe (#1598).
+            Count(sessions.Resources, ResourceColumns.LastSeen),
+            Count(sessions.TraceSummaries, TraceSummaryColumns.StartTime),
             Count(sessions.Spans, SpanColumns.Sequence),
             Count(sessions.Instruments, InstrumentColumns.Id),
             Count(sessions.MetricPoints, MetricColumns.Sequence),
