@@ -1132,6 +1132,25 @@ public sealed class GroundworkV2OpenTelemetryTests
     }
 
     [Fact]
+    public async Task Drain_on_a_serialized_writer_provider_commits_each_queued_batch_on_its_own()
+    {
+        using var database = new TemporarySqliteDatabase();
+        var observer = new RecordingCommandObserver();
+        await using var fixture = await OpenStoreAsync(database, start: true, commandObserver: observer);
+        Assert.Contains(fixture.Connection.Capabilities, capability => capability.Id == WellKnownCapabilities.SerializedWriter);
+        var ledgerReadsBefore = LedgerReads(observer);
+
+        for (var index = 0; index < 3; index++)
+            await fixture.Store.WriteAsync(CaptureBatch($"serialized-trace-{index}"));
+        await fixture.Store.CompleteDrainingAsync();
+
+        // One ledger lookup per transaction: three queued batches, three transactions, however the drain
+        // paced its passes. A grouped commit would have read the ledger once for the batches of a pass.
+        Assert.Equal(3, LedgerReads(observer) - ledgerReadsBefore);
+        Assert.Equal(3, (await fixture.Store.GetDiagnosticsAsync()).TraceCount);
+    }
+
+    [Fact]
     public async Task Grouped_capture_replay_skips_committed_batches_and_refuses_a_changed_one()
     {
         using var database = new TemporarySqliteDatabase();
@@ -1523,6 +1542,10 @@ public sealed class GroundworkV2OpenTelemetryTests
                 commands.Clear();
         }
     }
+
+    private static int LedgerReads(RecordingCommandObserver observer) => observer.Commands.Count(command =>
+        command.Kind == ProviderCommandKind.Read &&
+        command.CommandText?.Contains("elsa_otel_capture_ledger_v3", StringComparison.OrdinalIgnoreCase) == true);
 
     private static void AssertSingleBatchRead(RecordingCommandObserver observer, string table)
     {

@@ -45,6 +45,7 @@ public sealed class GroundworkOpenTelemetryStore :
     private readonly int instrumentCapacity;
     private readonly int maxQuerySize;
     private readonly int captureRecordsPerCommit;
+    private readonly bool serializedWriter;
     private readonly TimeProvider timeProvider;
     private readonly IProviderCommandObserver? commandObserver;
     private long droppedTraces;
@@ -73,6 +74,10 @@ public sealed class GroundworkOpenTelemetryStore :
         (traceCapacity, spanCapacity, metricPointCapacity, logCapacity, resourceCapacity, instrumentCapacity, maxQuerySize) =
             ReadOptions(options.Value);
         captureRecordsPerCommit = Math.Max(1, options.Value.CaptureRecordsPerCommit);
+        // A serialized-writer provider (SQLite) makes every foreground commit wait for the drain's running
+        // transaction, so there each queued batch commits on its own, as it did before grouping; elsewhere a
+        // grouped commit is the cheaper shape and the group is bounded by CaptureRecordsPerCommit (#1598).
+        serializedWriter = connection.Capabilities.Any(capability => capability.Id == WellKnownCapabilities.SerializedWriter);
         startupResource = new(this, connection);
         drain = CreateDrain(options.Value, observer);
     }
@@ -1205,7 +1210,7 @@ public sealed class GroundworkOpenTelemetryStore :
             {
                 var item = batch.Items[index];
                 var records = checked(item.Traces.Count + item.Spans.Count + item.MetricPoints.Count + item.Logs.Count);
-                if (group.Count > 0 && checked(groupRecords + records) > owner.captureRecordsPerCommit)
+                if (group.Count > 0 && (owner.serializedWriter || checked(groupRecords + records) > owner.captureRecordsPerCommit))
                 {
                     await FlushAsync();
                     groupStart = index;

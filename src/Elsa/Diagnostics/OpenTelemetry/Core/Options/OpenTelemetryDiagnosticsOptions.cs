@@ -64,10 +64,11 @@ public class OpenTelemetryDiagnosticsOptions
 
     /// <summary>
     /// The most telemetry records (traces, spans, metric points and log records together) the durable
-    /// capture commits in one provider transaction. Queued batches are grouped up to this many records
-    /// per commit; a single batch larger than this still commits on its own. Larger groups mean fewer
-    /// transactions and round trips per record, bounded so a transaction stays well inside provider
-    /// limits and never holds a single-writer database for long.
+    /// capture commits in one provider transaction on a provider that does not serialize its writers.
+    /// Queued batches are grouped up to this many records per commit; a single batch larger than this
+    /// still commits on its own. On a provider that advertises Groundwork's serialized-writer capability
+    /// (SQLite) every queued batch commits on its own regardless of this value, because a grouped
+    /// transaction would hold every foreground commit for its whole duration (#1598).
     /// </summary>
     public int CaptureRecordsPerCommit { get; set; } = 4_096;
 }

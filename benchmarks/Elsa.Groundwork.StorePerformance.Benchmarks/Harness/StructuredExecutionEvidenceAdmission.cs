@@ -5,7 +5,7 @@ public static partial class DiagnosticsNativePlanContract
     /// <summary>
     /// The diagnostics routes whose admission reads typed callback evidence instead of provider plan
     /// text, per provider. A route is listed only where Groundwork reports both a collected bounded-query
-    /// shape and a collected plan for it (observed on 0.4.0-preview.20); the rest stay on the raw path
+    /// shape and a collected plan for it (observed on 0.4.0-preview.21); the rest stay on the raw path
     /// until valence-works/groundwork-v2#432, #422 and #423 land (#1594).
     /// </summary>
     private static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> StructuredEvidenceRoutesByProvider =
