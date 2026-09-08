@@ -44,6 +44,7 @@ public sealed class GroundworkOpenTelemetryStore :
     private readonly int resourceCapacity;
     private readonly int instrumentCapacity;
     private readonly int maxQuerySize;
+    private readonly int captureRecordsPerCommit;
     private readonly TimeProvider timeProvider;
     private readonly IProviderCommandObserver? commandObserver;
     private long droppedTraces;
@@ -71,6 +72,7 @@ public sealed class GroundworkOpenTelemetryStore :
         sessions = new();
         (traceCapacity, spanCapacity, metricPointCapacity, logCapacity, resourceCapacity, instrumentCapacity, maxQuerySize) =
             ReadOptions(options.Value);
+        captureRecordsPerCommit = Math.Max(1, options.Value.CaptureRecordsPerCommit);
         startupResource = new(this, connection);
         drain = CreateDrain(options.Value, observer);
     }
@@ -115,8 +117,23 @@ public sealed class GroundworkOpenTelemetryStore :
     public ValueTask WriteAsync(
         DiagnosticsDrainBatchId batchId,
         OpenTelemetryBatch batch,
-        CancellationToken cancellationToken = default) =>
-        WriteDurablyAsync(batchId, batch, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(batch);
+        return WriteDurablyAsync([new CaptureItem(batchId, batch)], cancellationToken);
+    }
+
+    /// <summary>
+    /// Writes several identified batches as one durable commit. Each batch keeps its own capture
+    /// ledger identity, so replaying any of them alone or in another grouping is still detected.
+    /// </summary>
+    public ValueTask WriteGroupAsync(
+        IReadOnlyList<(DiagnosticsDrainBatchId BatchId, OpenTelemetryBatch Batch)> batches,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(batches);
+        return WriteDurablyAsync(batches.Select(item => new CaptureItem(item.BatchId, item.Batch)).ToArray(), cancellationToken);
+    }
 
     public async ValueTask<OpenTelemetryResourceResult> QueryResourcesAsync(
         OpenTelemetryResourceFilter filter,
@@ -351,29 +368,29 @@ public sealed class GroundworkOpenTelemetryStore :
         }
     }
 
-    private async ValueTask WriteDurablyAsync(
-        DiagnosticsDrainBatchId batchId,
-        OpenTelemetryBatch batch,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(batch);
-        if (batchId.Value == Guid.Empty)
-            throw new ArgumentException("The diagnostics drain batch identity cannot be empty.", nameof(batchId));
-        cancellationToken.ThrowIfCancellationRequested();
+    private sealed record CaptureItem(DiagnosticsDrainBatchId LedgerId, OpenTelemetryBatch Batch);
 
+    private sealed record PreparedCapture(
+        CaptureItem Item,
+        IReadOnlyList<(TelemetryTrace Trace, IReadOnlyList<string> ServiceNames)> TraceServices,
+        IReadOnlyList<StorageValues> Traces,
+        IReadOnlyList<StorageValues> Spans,
+        IReadOnlyList<StorageValues> Points,
+        IReadOnlyList<StorageValues> Logs,
+        IReadOnlyList<StorageValues> Resources,
+        IReadOnlyList<StorageValues> Instruments,
+        string Fingerprint);
+
+    private async ValueTask<PreparedCapture> PrepareAsync(CaptureItem item, CancellationToken cancellationToken)
+    {
+        var batch = item.Batch;
         var services = await ResolveServicesAsync(batch, cancellationToken);
         var traceServices = batch.Traces
             .Select(trace => (Trace: trace, ServiceNames: ServicesFrom(trace.ResourceIds, services)))
             .ToArray();
-        var traceGroups = traceServices.GroupBy(
-            item => V2OpenTelemetryCodec.TraceKey(item.Trace.TraceId),
-            StringComparer.Ordinal).ToArray();
-        var traces = traceServices.Select(item => V2OpenTelemetryCodec.Trace(item.Trace, item.ServiceNames.FirstOrDefault())).ToArray();
-        var spans = batch.Spans.Select(V2OpenTelemetryCodec.Span).ToArray();
-        var points = batch.MetricPoints.Select(point => V2OpenTelemetryCodec.MetricPoint(point, ServiceFrom(point.ResourceId, services))).ToArray();
-        var logs = batch.Logs.Select(log => V2OpenTelemetryCodec.Log(log, ServiceFrom(log.ResourceId, services))).ToArray();
         var resources = batch.Resources.Select(V2OpenTelemetryCodec.Resource).ToArray();
-        var instruments = batch.Instruments.Select(instrument => V2OpenTelemetryCodec.Instrument(instrument, batchId.IssuedAt)).ToArray();
+        var instruments = batch.Instruments.Select(instrument => V2OpenTelemetryCodec.Instrument(instrument, item.LedgerId.IssuedAt)).ToArray();
+        var spans = batch.Spans.Select(V2OpenTelemetryCodec.Span).ToArray();
         // The durable identity describes caller-supplied batch content, not mutable catalog
         // enrichment. Otherwise an acknowledgement-loss replay could conflict merely because a
         // referenced resource changed between attempts.
@@ -384,13 +401,48 @@ public sealed class GroundworkOpenTelemetryStore :
             spans,
             batch.MetricPoints.Select(point => V2OpenTelemetryCodec.MetricPoint(point, null)).ToArray(),
             batch.Logs.Select(log => V2OpenTelemetryCodec.Log(log, null)).ToArray());
+        return new(
+            item,
+            traceServices,
+            traceServices.Select(entry => V2OpenTelemetryCodec.Trace(entry.Trace, entry.ServiceNames.FirstOrDefault())).ToArray(),
+            spans,
+            batch.MetricPoints.Select(point => V2OpenTelemetryCodec.MetricPoint(point, ServiceFrom(point.ResourceId, services))).ToArray(),
+            batch.Logs.Select(log => V2OpenTelemetryCodec.Log(log, ServiceFrom(log.ResourceId, services))).ToArray(),
+            resources,
+            instruments,
+            fingerprint);
+    }
+
+    /// <summary>
+    /// Commits one or more identified batches in one provider transaction. Every batch keeps its own
+    /// capture ledger row and fingerprint, so an acknowledgement-loss replay of any of them is still
+    /// detected and a changed replay still conflicts, while the appends, catalog upserts and summary
+    /// merges of the whole group travel as one batch per unit. One transaction per queued batch cost
+    /// the hosted MongoDB lane about ten round trips and a majority commit per 64-record batch, which
+    /// drained under fifty records per second (#1598).
+    /// </summary>
+    private async ValueTask WriteDurablyAsync(IReadOnlyList<CaptureItem> items, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        if (items.Count == 0)
+            return;
+        foreach (var item in items)
+        {
+            ArgumentNullException.ThrowIfNull(item.Batch);
+            if (item.LedgerId.Value == Guid.Empty)
+                throw new ArgumentException("The diagnostics drain batch identity cannot be empty.", nameof(items));
+        }
+        if (items.Select(item => item.LedgerId.Value).Distinct().Count() != items.Count)
+            throw new ArgumentException("A durable capture group cannot carry the same batch identity twice.", nameof(items));
+        cancellationToken.ThrowIfCancellationRequested();
+        var prepared = new List<PreparedCapture>(items.Count);
+        foreach (var item in items)
+            prepared.Add(await PrepareAsync(item, cancellationToken));
         var resourceUnit = schema.Unit(V2OpenTelemetryStorageSchema.ResourceUnitId);
         var instrumentUnit = schema.Unit(V2OpenTelemetryStorageSchema.InstrumentUnitId);
         var ledgerUnit = schema.Unit(V2OpenTelemetryStorageSchema.CaptureLedgerUnitId);
         var summaryUnit = schema.Unit(V2OpenTelemetryStorageSchema.TraceSummaryUnitId);
-
         EnsureRequiredCapabilities();
-
         Exception? failure = null;
         for (var attempt = 1; attempt <= MaxCaptureAttempts; attempt++)
         {
@@ -403,38 +455,44 @@ public sealed class GroundworkOpenTelemetryStore :
                     commandObserver,
                     schema.Units.ToArray());
                 var transaction = V2Sessions.Open(work, schema.Units);
-                var ledgerKey = new StorageKey(new Dictionary<string, object?>
+                var ledgered = await ReadLedgerAsync(
+                    transaction.Ledger,
+                    prepared.Select(capture => capture.Item.LedgerId.ToString()).ToArray(),
+                    cancellationToken);
+                var pending = new List<PreparedCapture>(prepared.Count);
+                foreach (var capture in prepared)
                 {
-                    [V2OpenTelemetryStorageSchema.BatchId] = batchId.ToString()
-                });
-                var existingLedger = transaction.Ledger.Read(ledgerKey);
-                if (existingLedger is not null)
+                    if (ledgered.TryGetValue(capture.Item.LedgerId.ToString(), out var existing))
+                        EnsureLedgerMatches(existing, capture.Fingerprint);
+                    else
+                        pending.Add(capture);
+                }
+                if (pending.Count == 0)
                 {
-                    EnsureLedgerMatches(existingLedger, fingerprint);
                     work.Rollback();
                     return;
                 }
+                // The append operation identity follows the first uncommitted batch, so a replay that
+                // finds part of the group already committed never reuses an identity with another payload.
+                var appendId = pending[0].Item.LedgerId;
+                var traceGroups = pending
+                    .SelectMany(capture => capture.TraceServices)
+                    .GroupBy(item => V2OpenTelemetryCodec.TraceKey(item.Trace.TraceId), StringComparer.Ordinal)
+                    .ToArray();
                 var existingTraceSummaries = await ReadExistingTraceSummariesAsync(
                     transaction.TraceSummaries,
                     traceGroups.Select(group => group.Key).ToArray(),
                     cancellationToken);
-
-                foreach (var resource in resources)
+                foreach (var resource in LastPerKey(pending.SelectMany(capture => capture.Resources), V2OpenTelemetryStorageSchema.Id))
                     work.Stage(RowWrite.Upsert(resourceUnit, resource));
-                foreach (var instrument in instruments)
+                foreach (var instrument in LastPerKey(pending.SelectMany(capture => capture.Instruments), V2OpenTelemetryStorageSchema.Id))
                     work.Stage(RowWrite.Upsert(instrumentUnit, instrument));
-
-                await AppendExactAsync(transaction.Traces, traces, batchId, "traces", cancellationToken);
-                await AppendExactAsync(transaction.Spans, spans, batchId, "spans", cancellationToken);
-                await AppendExactAsync(transaction.MetricPoints, points, batchId, "metric-points", cancellationToken);
-                await AppendExactAsync(transaction.Logs, logs, batchId, "logs", cancellationToken);
-
+                await AppendExactAsync(transaction.Traces, pending.SelectMany(capture => capture.Traces).ToArray(), appendId, "traces", cancellationToken);
+                await AppendExactAsync(transaction.Spans, pending.SelectMany(capture => capture.Spans).ToArray(), appendId, "spans", cancellationToken);
+                await AppendExactAsync(transaction.MetricPoints, pending.SelectMany(capture => capture.Points).ToArray(), appendId, "metric-points", cancellationToken);
+                await AppendExactAsync(transaction.Logs, pending.SelectMany(capture => capture.Logs).ToArray(), appendId, "logs", cancellationToken);
                 foreach (var group in traceGroups)
                 {
-                    var key = new StorageKey(new Dictionary<string, object?>
-                    {
-                        [V2OpenTelemetryStorageSchema.TraceKey] = group.Key
-                    });
                     var existing = existingTraceSummaries.GetValueOrDefault(group.Key);
                     var records = existing is null
                         ? group.Select(item => item.Trace).ToArray()
@@ -453,11 +511,11 @@ public sealed class GroundworkOpenTelemetryStore :
                     // The drain is the only writer of trace summaries, so it does not fence against itself:
                     // an unconditional upsert lets every provider batch the group's rows natively, where a
                     // conditional one is sent row by row (#1598). The unit keeps its version column; the
-                    // ledger insert in the same transaction is what makes a replayed batch conflict.
+                    // ledger inserts in the same transaction are what make a replayed batch conflict.
                     work.Stage(RowWrite.Upsert(summaryUnit, summary));
                 }
-
-                work.Stage(RowWrite.Insert(ledgerUnit, V2OpenTelemetryCodec.Ledger(batchId, fingerprint)));
+                foreach (var capture in pending)
+                    work.Stage(RowWrite.Insert(ledgerUnit, V2OpenTelemetryCodec.Ledger(capture.Item.LedgerId, capture.Fingerprint)));
                 var report = await work.CommitWithOutcomesAsync(cancellationToken);
                 if (!report.IsSuccessful)
                     throw new IOException("The OpenTelemetry v3 atomic capture commit returned failed row outcomes.");
@@ -503,8 +561,46 @@ public sealed class GroundworkOpenTelemetryStore :
                 failure = exception;
             }
         }
-
         throw new IOException("The OpenTelemetry v3 atomic capture failed after retries.", failure);
+    }
+
+    /// <summary>Keeps the last row staged for each key, as sequential upserts would have left it.</summary>
+    private static IEnumerable<StorageValues> LastPerKey(IEnumerable<StorageValues> rows, string keyColumn)
+    {
+        var order = new List<string>();
+        var latest = new Dictionary<string, StorageValues>(StringComparer.Ordinal);
+        foreach (var row in rows)
+        {
+            var key = row.Values.GetValueOrDefault(keyColumn)?.ToString() ?? string.Empty;
+            if (latest.TryAdd(key, row))
+                order.Add(key);
+            else
+                latest[key] = row;
+        }
+        return order.Select(key => latest[key]);
+    }
+
+    private async ValueTask<IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>> ReadLedgerAsync(
+        IStorageSession session,
+        IReadOnlyList<string> batchIds,
+        CancellationToken cancellationToken)
+    {
+        var existing = new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.Ordinal);
+        var result = await session.BatchReadAsync(
+            new KeyedBatchReadRequest(
+                new TableId(session.Unit.Name),
+                LedgerColumns.BatchId,
+                batchIds.Cast<object?>().ToArray(),
+                Projection.All),
+            connection,
+            cancellationToken);
+        foreach (var row in result.Rows)
+        {
+            if (!row.Values.TryGetValue(V2OpenTelemetryStorageSchema.BatchId, out var value) || value is not string key)
+                throw new InvalidDataException("The OpenTelemetry capture-ledger batch read omitted its batch identity.");
+            existing[key] = row.Values;
+        }
+        return existing;
     }
 
     private async ValueTask<IReadOnlyDictionary<string, string>> ResolveServicesAsync(
@@ -777,10 +873,10 @@ public sealed class GroundworkOpenTelemetryStore :
         }
     }
 
-    private static void EnsureLedgerMatches(StoredEntry existing, string fingerprint)
+    private static void EnsureLedgerMatches(IReadOnlyDictionary<string, object?> existing, string fingerprint)
     {
         if (!StringComparer.Ordinal.Equals(
-                existing.Values.Values.GetValueOrDefault(V2OpenTelemetryStorageSchema.Fingerprint)?.ToString(),
+                existing.GetValueOrDefault(V2OpenTelemetryStorageSchema.Fingerprint)?.ToString(),
                 fingerprint))
             throw new CaptureBatchIdentityConflictException();
     }
@@ -1102,14 +1198,36 @@ public sealed class GroundworkOpenTelemetryStore :
         {
             var results = new bool[batch.Items.Count];
             var count = 0;
+            var group = new List<CaptureItem>();
+            var groupStart = 0;
+            var groupRecords = 0;
             for (var index = 0; index < batch.Items.Count; index++)
             {
-                var child = new DiagnosticsDrainBatchId(ChildId(batch.Id.Value, index), batch.Id.IssuedAt);
-                await owner.WriteDurablyAsync(child, batch.Items[index], cancellationToken);
-                results[index] = true;
-                count = checked(count + batch.Items[index].Traces.Count + batch.Items[index].Spans.Count + batch.Items[index].MetricPoints.Count + batch.Items[index].Logs.Count);
+                var item = batch.Items[index];
+                var records = checked(item.Traces.Count + item.Spans.Count + item.MetricPoints.Count + item.Logs.Count);
+                if (group.Count > 0 && checked(groupRecords + records) > owner.captureRecordsPerCommit)
+                {
+                    await FlushAsync();
+                    groupStart = index;
+                }
+                group.Add(new CaptureItem(new DiagnosticsDrainBatchId(ChildId(batch.Id.Value, index), batch.Id.IssuedAt), item));
+                groupRecords = checked(groupRecords + records);
             }
+            if (group.Count > 0)
+                await FlushAsync();
             return new(results, count);
+
+            // Every queued batch keeps the ledger identity it had when each one committed alone, so a
+            // retry of this drain batch after a partial success skips the groups already committed.
+            async ValueTask FlushAsync()
+            {
+                await owner.WriteDurablyAsync(group, cancellationToken);
+                for (var committed = groupStart; committed < groupStart + group.Count; committed++)
+                    results[committed] = true;
+                count = checked(count + groupRecords);
+                group.Clear();
+                groupRecords = 0;
+            }
         }
 
         public async ValueTask<int> ApplyRetentionAsync(CancellationToken cancellationToken = default)
@@ -1367,6 +1485,12 @@ public sealed class GroundworkOpenTelemetryStore :
         internal static ColumnRef StartTime => Column(V2OpenTelemetryStorageSchema.StartTime, QueryType.DateTimeOffset, false);
         internal static ColumnRef Name => Column(V2OpenTelemetryStorageSchema.Name, QueryType.String, true);
         private static ColumnRef Column(string name, QueryType type, bool nullable, int? max = null) => new(new TableId("elsa_otel_traces_v2"), name, type, nullable, max);
+    }
+
+    private static class LedgerColumns
+    {
+        internal static ColumnRef BatchId => new(
+            new TableId("elsa_otel_capture_ledger_v3"), V2OpenTelemetryStorageSchema.BatchId, QueryType.String, false, 64);
     }
 
     private static class TraceSummaryColumns

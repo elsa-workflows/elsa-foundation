@@ -1108,6 +1108,50 @@ public sealed class GroundworkV2OpenTelemetryTests
         }
     }
 
+    [Fact]
+    public async Task Grouped_capture_reads_the_ledger_once_and_keeps_one_ledger_row_per_batch()
+    {
+        using var database = new TemporarySqliteDatabase();
+        var observer = new RecordingCommandObserver();
+        await using var fixture = await OpenStoreAsync(database, commandObserver: observer);
+        var batches = Enumerable.Range(0, 3)
+            .Select(index => (BatchId: DiagnosticsDrainBatchId.New(), Batch: CaptureBatch($"grouped-trace-{index}")))
+            .ToArray();
+
+        await fixture.Store.WriteGroupAsync(batches);
+
+        AssertSingleBatchRead(observer, "elsa_otel_capture_ledger_v3");
+        AssertSingleBatchRead(observer, "elsa_otel_trace_summaries_v3");
+        var diagnostics = await fixture.Store.GetDiagnosticsAsync();
+        Assert.Equal((3, 3), (diagnostics.TraceCount, diagnostics.ResourceCount));
+
+        // Each batch keeps its own ledger identity, so replaying any one alone is a no-op, not a duplicate.
+        foreach (var (batchId, batch) in batches)
+            await fixture.Store.WriteAsync(batchId, batch);
+        Assert.Equal(3, (await fixture.Store.GetDiagnosticsAsync()).TraceCount);
+    }
+
+    [Fact]
+    public async Task Grouped_capture_replay_skips_committed_batches_and_refuses_a_changed_one()
+    {
+        using var database = new TemporarySqliteDatabase();
+        await using var fixture = await OpenStoreAsync(database);
+        var first = (BatchId: DiagnosticsDrainBatchId.New(), Batch: CaptureBatch("grouped-replay-1"));
+        var second = (BatchId: DiagnosticsDrainBatchId.New(), Batch: CaptureBatch("grouped-replay-2"));
+        await fixture.Store.WriteAsync(first.BatchId, first.Batch);
+
+        await fixture.Store.WriteGroupAsync([first, second]);
+        Assert.Equal(2, (await fixture.Store.GetDiagnosticsAsync()).TraceCount);
+
+        await fixture.Store.WriteGroupAsync([first, second]);
+        Assert.Equal(2, (await fixture.Store.GetDiagnosticsAsync()).TraceCount);
+
+        var conflict = await Assert.ThrowsAnyAsync<InvalidOperationException>(() =>
+            fixture.Store.WriteGroupAsync([(first.BatchId, CaptureBatch("grouped-replay-changed")), second]).AsTask());
+        Assert.Contains("batch identity was reused", conflict.Message, StringComparison.Ordinal);
+        Assert.Equal(2, (await fixture.Store.GetDiagnosticsAsync()).TraceCount);
+    }
+
     private static async Task<OpenTelemetryStoreFixture> OpenStoreAsync(
         TemporarySqliteDatabase database,
         OpenTelemetryDiagnosticsOptions? options = null,

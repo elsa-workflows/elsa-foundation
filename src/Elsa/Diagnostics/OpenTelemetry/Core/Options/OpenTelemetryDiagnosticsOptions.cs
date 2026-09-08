@@ -61,4 +61,13 @@ public class OpenTelemetryDiagnosticsOptions
     /// grace period). Negative values are clamped to zero; <see cref="TimeSpan.Zero"/> disables the graceful wait.
     /// </summary>
     public TimeSpan ShutdownDrainTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// The most telemetry records (traces, spans, metric points and log records together) the durable
+    /// capture commits in one provider transaction. Queued batches are grouped up to this many records
+    /// per commit; a single batch larger than this still commits on its own. Larger groups mean fewer
+    /// transactions and round trips per record, bounded so a transaction stays well inside provider
+    /// limits and never holds a single-writer database for long.
+    /// </summary>
+    public int CaptureRecordsPerCommit { get; set; } = 4_096;
 }

@@ -116,11 +116,11 @@ Both durable EF stores inherit `ChannelDrainingStoreBase<T>`. Its behavior is ap
 |---|---|
 | Queue | Bounded multi-writer/single-reader channel with `DropOldest`; enqueue never waits for database I/O. |
 | Structured Logs batch | Up to 200 entries. Queue capacity is `max(BufferCapacity, 200) * 4` (8,000 by default). |
-| OpenTelemetry batch | Up to 64 normalized OTLP batches. Queue capacity is `max(SubscriberChannelCapacity, 64) * 4` (4,000 batches by default). |
+| OpenTelemetry batch | Up to 64 normalized OTLP batches. Queue capacity is `max(SubscriberChannelCapacity, 64) * 4` (4,000 batches by default). The batches of one drain pass are committed in groups of up to `CaptureRecordsPerCommit` records (4,096 by default), one provider transaction per group, while every OTLP batch keeps its own capture-ledger identity and fingerprint. |
 | Retry | Initial attempt plus eight retries. Exponential delay begins at 50 ms and caps at 5 seconds. Cancellation is never converted into a retry. |
 | Retry exhaustion | Drop the failed batch, emit an error, keep the drain loop alive. OpenTelemetry increments per-signal process counters; Structured Logs only logs the loss. |
 | Queue overflow | Drop the oldest queued item. A warning is rate-limited to one per 30 seconds. OpenTelemetry counts every shed batch's signals; Structured Logs has no queryable shed count. |
-| Prune cadence | Structured Logs every 5,000 accounted entries; OpenTelemetry every 500 inserted records. Failed prune retries with the same schedule; exhaustion leaves the counter armed for a later retry. |
+| Prune cadence | Structured Logs every 5,000 accounted entries; OpenTelemetry every `max(500, smallest bounded capacity / 4)` inserted records. Failed prune retries with the same schedule; exhaustion leaves the counter armed for a later retry. |
 | Graceful shutdown | Stop accepting writes, drain every queued item through bounded retries, then perform a final best-effort trim. Shell termination runs while storage services are still available. |
 | Fallback disposal | Async disposal waits up to `ShutdownDrainTimeout` (10 seconds by default), then cancels and accepts loss. Synchronous disposal cancels immediately. |
 | Crash/restart | Only committed batches survive. In-memory queued records and process-local drop counters do not. Structured Logs seeds its next logical sequence from durable history. OpenTelemetry reconstructs durable query state, while its in-memory source registry and drop counters restart from zero and repopulate on new writes. |
