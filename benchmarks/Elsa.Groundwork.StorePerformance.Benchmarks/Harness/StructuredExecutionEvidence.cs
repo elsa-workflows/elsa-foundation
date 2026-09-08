@@ -106,6 +106,22 @@ public sealed record StructuredBoundedQueryEvidence(
     bool HasLookahead,
     bool IncludesTotalCount);
 
+/// <summary>Observed spill fact for an executed operator; absent means not observed, never no spill.</summary>
+public sealed record StructuredPlanSpill(
+    bool Spilled,
+    long? SpilledBytes,
+    long? SpilledRows);
+
+/// <summary>
+/// Observed details of a sort or limiting node (Groundwork preview.19): native sort keys as logical
+/// order terms, the native bound, and the spill observation. Every value is tri-state; null or an
+/// unknown bound kind means not observed.
+/// </summary>
+public sealed record StructuredPlanNodeDetails(
+    IReadOnlyList<StructuredOrderTerm>? NativeSortKeys,
+    StructuredNativeBound NativeLimit,
+    StructuredPlanSpill? Spill);
+
 /// <summary>One mapped native plan node, retaining only typed operators and opaque physical IDs.</summary>
 public sealed record StructuredPlanNode(
     int Id,
@@ -115,7 +131,8 @@ public sealed record StructuredPlanNode(
     Guid? IndexId,
     string? LogicalIndexName,
     bool? IsCovering,
-    string? SortPurpose);
+    string? SortPurpose,
+    StructuredPlanNodeDetails? Details = null);
 
 /// <summary>Independent plan availability/provenance and the mapped winning-plan facts.</summary>
 public sealed record StructuredPlanEvidence(
@@ -126,4 +143,5 @@ public sealed record StructuredPlanEvidence(
     Guid? ChosenPhysicalIndexId,
     string? FailureCategory,
     int? CollectionCommandCount,
-    IReadOnlyList<StructuredPlanNode>? Nodes);
+    IReadOnlyList<StructuredPlanNode>? Nodes,
+    IReadOnlyList<int>? ObservedRootOrder = null);
