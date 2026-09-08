@@ -135,8 +135,10 @@ internal static class DiagnosticsNativePlanCapture
                         continue;
                     }
 
-                    var migratedStructuredRoute = request.Provider == "sqlite" &&
-                                                  route is ("structured-log-replay" or "structured-log-recent");
+                    var migratedStructuredRoute = DiagnosticsNativePlanContract.IsStructuredEvidenceRoute(
+                        request.Provider,
+                        request.Adapter,
+                        route);
                     if (migratedStructuredRoute)
                     {
                         routes.Add(await CaptureStructuredEvidenceRouteAsync(
@@ -344,12 +346,11 @@ internal static class DiagnosticsNativePlanCapture
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(observed);
         ArgumentException.ThrowIfNullOrWhiteSpace(route);
-        if (!string.Equals(request.Provider, "sqlite", StringComparison.Ordinal) ||
-            !string.Equals(request.Adapter, DiagnosticsDurableHistoryAdapter.AdapterId, StringComparison.Ordinal) ||
-            route is not ("structured-log-recent" or "structured-log-replay"))
+        if (!string.Equals(request.Adapter, DiagnosticsDurableHistoryAdapter.AdapterId, StringComparison.Ordinal) ||
+            !DiagnosticsNativePlanContract.IsStructuredEvidenceRoute(request.Provider, request.Adapter, route))
         {
             throw new PerformanceContractException(
-                "Structured callback capture is limited to the SQLite Groundwork structured-log recent and replay routes.");
+                $"Structured callback capture is not admitted for route '{route}' on provider '{request.Provider}'.");
         }
 
         var specification = DiagnosticsNativePlanContract.For(request.Adapter, route);
@@ -365,11 +366,11 @@ internal static class DiagnosticsNativePlanCapture
         if (result != limit)
             throw new PerformanceContractException($"Diagnostics native route '{route}' returned {result} rows; expected {limit}.");
 
-        var structuredEvidence = RequireStructuredEvidence(adapter, route, observed.Version);
+        var structuredEvidence = RequireStructuredEvidence(adapter, request.Provider, route, observed.Version);
         var nativeFetchLimit = structuredEvidence.BoundedQuery?.NativeLimit.Value;
         if (nativeFetchLimit != checked(limit + 1))
             throw new PerformanceContractException(
-                $"SQLite diagnostics route '{route}' emitted native fetch limit {nativeFetchLimit?.ToString() ?? "unknown"}; expected {limit + 1}.");
+                $"Diagnostics route '{route}' emitted native fetch limit {nativeFetchLimit?.ToString() ?? "unknown"}; expected {limit + 1}.");
 
         var routeEvidence = new NativeRouteEvidence(
             route,
@@ -396,28 +397,30 @@ internal static class DiagnosticsNativePlanCapture
         return routeEvidence;
     }
 
+    /// <summary>
+    /// The route's one bounded read. A route may also observe point reads (the metrics page resolves its
+    /// instruments one by one), so the bounded query is selected by operation and must be unique; the
+    /// legacy command count is no longer a proxy for it.
+    /// </summary>
     private static StructuredExecutionEvidence RequireStructuredEvidence(
         DiagnosticsDurableHistoryAdapter adapter,
+        string provider,
         string route,
         string expectedProviderVersion)
     {
-        var observations = adapter.StructuredEvidence;
-        if (observations.Count != 1)
+        var observations = adapter.StructuredEvidence
+            .Where(observation => string.Equals(observation.Operation, "BoundedQuery", StringComparison.Ordinal))
+            .ToArray();
+        if (observations.Length != 1)
             throw new PerformanceContractException(
-                $"SQLite diagnostics route '{route}' emitted {observations.Count} structured execution observations; expected exactly one terminal read.");
-
-        var commands = adapter.CommandObserver.Commands;
-        if (commands.Count != 1)
-            throw new PerformanceContractException(
-                $"SQLite diagnostics route '{route}' retained {commands.Count} legacy command observations; expected exactly one read command.");
-
+                $"Diagnostics route '{route}' emitted {observations.Length} structured bounded-query observations; expected exactly one terminal read.");
         var evidence = observations[0];
-        if (!string.Equals(evidence.Provider, "SQLite", StringComparison.OrdinalIgnoreCase))
-            throw new PerformanceContractException("SQLite structured evidence did not identify the SQLite provider.");
+        if (string.IsNullOrWhiteSpace(evidence.Provider))
+            throw new PerformanceContractException($"Structured evidence for '{route}' on '{provider}' did not identify its provider.");
         if (!string.Equals(evidence.ProviderVersion, expectedProviderVersion, StringComparison.Ordinal))
-            throw new PerformanceContractException("SQLite structured evidence did not identify the observed provider version.");
+            throw new PerformanceContractException($"Structured evidence for '{route}' did not identify the observed provider version.");
         if (evidence.BoundedQuery?.NativeLimit is null)
-            throw new PerformanceContractException("SQLite structured evidence did not retain the bounded-query native limit.");
+            throw new PerformanceContractException($"Structured evidence for '{route}' did not retain the bounded-query native limit.");
         return evidence;
     }
 

@@ -425,7 +425,11 @@ internal sealed class DiagnosticsArtifactFixture : IDisposable
         var rawContent = identity == "resources-by-last-seen"
             ? new DiagnosticsNativePlanArtifact(1, "sqlite", DiagnosticsNativePlanContract.GroundworkAdapter, identity, specification.TableName, specification.IndexName, physicalIndex, "SELECT * FROM elsa_otel_resources_v2 WHERE __groundwork_scope = @scope ORDER BY lastSeen DESC, idOrderKey ASC, id ASC LIMIT 127", $"2 0 SEARCH elsa_otel_resources_v2 USING INDEX {physicalIndex} (__groundwork_scope=?)")
             : new DiagnosticsNativePlanArtifact(1, "sqlite", DiagnosticsNativePlanContract.GroundworkAdapter, identity, specification.TableName, specification.IndexName, physicalIndex, "SELECT * FROM elsa_otel_trace_summaries_v3 WHERE __groundwork_scope = @scope ORDER BY startTime DESC, __groundwork_ordinal_traceKey ASC LIMIT 127", $"2 0 SEARCH elsa_otel_trace_summaries_v3 USING INDEX {physicalIndex} (__groundwork_scope=?)");
-        return new NativeRouteEvidence(identity, rawReference, Hash(JsonSerializer.SerializeToUtf8Bytes(rawContent, ArtifactStore.JsonOptions)), "index-search", physicalIndex, specification.PhysicalCardinality, true, false, specification.FiniteLimit, specification.FiniteLimit);
+        var rawSha256 = Hash(JsonSerializer.SerializeToUtf8Bytes(rawContent, ArtifactStore.JsonOptions));
+        // A migrated route carries typed callback evidence beside its optional raw artifact; the rest stay raw-only.
+        return DiagnosticsNativePlanContract.IsStructuredEvidenceRoute("sqlite", DiagnosticsNativePlanContract.GroundworkAdapter, identity)
+            ? TypedDiagnosticsEvidence.Route("sqlite", identity, rawReference, rawSha256)
+            : new NativeRouteEvidence(identity, rawReference, rawSha256, "index-search", physicalIndex, specification.PhysicalCardinality, true, false, specification.FiniteLimit, specification.FiniteLimit);
     }
 
     private static string Hash(byte[] bytes) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant();

@@ -410,7 +410,7 @@ public sealed class StructuredExecutionEvidenceAdmissionTests
     {
         var specification = DiagnosticsNativePlanContract.For(
             DiagnosticsNativePlanContract.GroundworkAdapter,
-            "resources-by-last-seen");
+            "traces-by-last-seen");
         using var fixture = AdmissionFixture.CreateUnmigrated(new NativeRouteEvidence(
             specification.RouteIdentity,
             "missing.json",
@@ -573,89 +573,7 @@ public sealed class StructuredExecutionEvidenceAdmissionTests
         public void Dispose() => source.Dispose();
     }
 
-    private static NativeRouteEvidence ValidRoute()
-    {
-        var specification = DiagnosticsNativePlanContract.For(
-            DiagnosticsNativePlanContract.GroundworkAdapter,
-            "structured-log-replay");
-        var targetId = Guid.Parse("22222222-2222-2222-2222-222222222222");
-        var indexId = Guid.Parse("33333333-3333-3333-3333-333333333333");
-        var evidence = new StructuredExecutionEvidence(
-            1,
-            "SQLite",
-            "3.46.0",
-            "BoundedQuery",
-            "Read",
-            "Statement",
-            new(
-                Guid.Parse("11111111-1111-1111-1111-111111111111"),
-                Guid.Parse("44444444-4444-4444-4444-444444444444"),
-                Guid.Parse("55555555-5555-5555-5555-555555555555"),
-                Guid.Parse("66666666-6666-6666-6666-666666666666"),
-                0,
-                0),
-            new("elsa-structured-logs", targetId, "Predicate"),
-            "Succeeded",
-            null,
-            "Collected",
-            new(
-                new StructuredConjunctionPredicate(
-                [
-                    new("__groundwork_scope", "Equal", "String", "Ordinal", "NotApplicable", "Scope", Guid.Parse("77777777-7777-7777-7777-777777777777")),
-                    new("sequence", "LowerBound", "Int64", "Exact", "Exclusive", "Caller", Guid.Parse("88888888-8888-8888-8888-888888888888")),
-                    new("sequence", "UpperBound", "Int64", "Exact", "Inclusive", "Caller", Guid.Parse("99999999-9999-9999-9999-999999999999"))
-                ]),
-                [new("sequence", "Ascending", null, [], "Exact")],
-                new(true, []),
-                new("Absent", null),
-                new("Explicit", 128),
-                false,
-                true,
-                false),
-            new(
-                "Collected",
-                "EstimatedExplain",
-                true,
-                specification.IndexName,
-                indexId,
-                null,
-                1,
-                [new(0, null, "IndexSearch", targetId, indexId, specification.IndexName, false, null)]));
+    private static NativeRouteEvidence ValidRoute() => TypedDiagnosticsEvidence.Route("sqlite", "structured-log-replay");
 
-        return new NativeRouteEvidence(
-            specification.RouteIdentity,
-            "raw.json",
-            new string('a', 64),
-            DiagnosticsNativePlanContract.IndexSearchPlanClassification,
-            DiagnosticsNativePlanContract.ExpectedPhysicalIndexName("sqlite", specification),
-            specification.PhysicalCardinality,
-            true,
-            false,
-            specification.FiniteLimit,
-            specification.FiniteLimit)
-        {
-            NativeFetchLimit = specification.FiniteLimit + 1,
-            StructuredEvidence = evidence
-        };
-    }
-
-    private static NativeRouteEvidence ValidRecentRoute()
-    {
-        var replay = ValidRoute();
-        var replayEvidence = replay.StructuredEvidence!;
-        var replayQuery = replayEvidence.BoundedQuery!;
-        var recentEvidence = replayEvidence with
-        {
-            BoundedQuery = replayQuery with
-            {
-                Predicate = new StructuredConjunctionPredicate([replayQuery.Predicate.Facts[0]]),
-                Ordering = [replayQuery.Ordering[0] with { Direction = "Descending" }]
-            }
-        };
-        return replay with
-        {
-            RouteIdentity = "structured-log-recent",
-            StructuredEvidence = recentEvidence
-        };
-    }
+    private static NativeRouteEvidence ValidRecentRoute() => TypedDiagnosticsEvidence.Route("sqlite", "structured-log-recent");
 }
