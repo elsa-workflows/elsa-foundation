@@ -599,13 +599,25 @@ public sealed class GroundworkOpenTelemetryStore :
             {
                 BatchSize = DrainBatchSize,
                 QueueCapacity = Math.Max(DrainBatchSize, options.SubscriberChannelCapacity) * 4,
-                RetentionInterval = 500,
+                RetentionInterval = RetentionIntervalFor(options),
                 MaxAttempts = 3,
                 BaseRetryDelay = TimeSpan.FromMilliseconds(50),
                 MaxRetryDelay = TimeSpan.FromSeconds(5),
                 ShutdownTimeout = options.ShutdownDrainTimeout <= TimeSpan.Zero ? TimeSpan.FromTicks(1) : options.ShutdownDrainTimeout
             },
             observer);
+
+    /// <summary>
+    /// Periodic retention runs after this many committed records. 500 stays the floor for small hosts;
+    /// larger capacities run it after a quarter of the smallest bounded stream, so a pass never fires
+    /// on every batch of a large cohort, where each pass sorts and skips the whole retained window of
+    /// every unit and grew to a minute per batch on MongoDB (#1598). The overshoot between passes is
+    /// bounded by the interval and is pruned by the next pass or the durability barrier.
+    /// </summary>
+    private static int RetentionIntervalFor(OpenTelemetryDiagnosticsOptions options) =>
+        Math.Max(500, Math.Min(
+            Math.Min(options.TraceCapacity, options.SpanCapacity),
+            Math.Min(options.MetricPointCapacity, options.LogRecordCapacity)) / 4);
 
     private async ValueTask<int> ApplyRetentionAsync(
         OperationId traceRetentionOperation,
