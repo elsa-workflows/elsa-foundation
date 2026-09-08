@@ -98,7 +98,8 @@ internal static class StructuredEvidenceMapper
         plan.ChosenPhysicalIndexId?.Value,
         plan.FailureCategory?.ToString(),
         plan.CollectionCommandCount,
-        plan.WinningPlan?.Nodes.Select(Map).ToArray());
+        plan.WinningPlan?.Nodes.Select(Map).ToArray(),
+        plan.WinningPlan?.ObservedRootOrder?.ToArray());
 
     private static StructuredPlanNode Map(ProviderPlanNode node) => new(
         node.Id,
@@ -108,5 +109,11 @@ internal static class StructuredEvidenceMapper
         node.IndexId?.Value,
         node.LogicalIndexName,
         node.IsCovering,
-        node.SortPurpose?.ToString());
+        node.SortPurpose?.ToString(),
+        node.Details is null ? null : Map(node.Details));
+
+    private static StructuredPlanNodeDetails Map(ProviderPlanNodeDetails details) => new(
+        details.NativeSortKeys?.Select(Map).ToArray(),
+        new StructuredNativeBound(details.NativeLimit.Kind.ToString(), details.NativeLimit.Value is { } value ? checked((int)value) : null),
+        details.Spill is null ? null : new StructuredPlanSpill(details.Spill.Spilled, details.Spill.SpilledBytes, details.Spill.SpilledRows));
 }
