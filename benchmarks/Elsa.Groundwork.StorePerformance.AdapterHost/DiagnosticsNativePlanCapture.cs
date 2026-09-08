@@ -397,11 +397,8 @@ internal static class DiagnosticsNativePlanCapture
         return routeEvidence;
     }
 
-    /// <summary>
-    /// The route's one bounded read. A route may also observe point reads (the metrics page resolves its
-    /// instruments one by one), so the bounded query is selected by operation and must be unique; the
-    /// legacy command count is no longer a proxy for it.
-    /// </summary>
+    /// <summary>The route's one bounded read, selected by operation because a route may also observe
+    /// point reads (the metrics page resolves its instruments one by one).</summary>
     private static StructuredExecutionEvidence RequireStructuredEvidence(
         DiagnosticsDurableHistoryAdapter adapter,
         string provider,
