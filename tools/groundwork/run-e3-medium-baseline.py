@@ -155,7 +155,7 @@ def release_binaries(root: Path) -> tuple[Path, Path]:
 def run_text(command: list[str], *, cwd: Path) -> str:
     result = subprocess.run(command, cwd=cwd, check=False, capture_output=True, text=True)
     if result.returncode != 0:
-        raise ValueError(f"{Path(command[0]).name} failed with exit code {result.returncode}")
+        raise ValueError(f"{Path(command[0]).name} failed with exit code {result.returncode}:\n" + "\n".join((result.stderr or result.stdout).strip().splitlines()[-12:]))
     return result.stdout.strip()
 
 

@@ -701,9 +701,7 @@ public static class ArtifactAdmission
         RunRequest request,
         NativeRouteEvidence route) =>
         string.Equals(request.WorkloadId, DiagnosticsDurableHistoryWorkload.WorkloadId, StringComparison.Ordinal) &&
-        string.Equals(request.Provider, "sqlite", StringComparison.Ordinal) &&
-        string.Equals(request.Adapter, DiagnosticsNativePlanContract.GroundworkAdapter, StringComparison.Ordinal) &&
-        route.RouteIdentity is "structured-log-replay" or "structured-log-recent";
+        DiagnosticsNativePlanContract.IsStructuredEvidenceRoute(request.Provider, request.Adapter, route.RouteIdentity);
 
     private static bool IsStructuredEvidenceRoute(
         PerformanceWorkload workload,

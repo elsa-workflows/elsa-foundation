@@ -1121,7 +1121,7 @@ public static partial class DiagnosticsNativePlanContract
 
     // Groundwork's page executor fetches one extra row to determine continuation. FiniteLimit
     // and retained evidence counts remain the public page bound, not this native fetch ceiling.
-    private static int ExpectedNativeFetchLimit(DiagnosticsNativeRouteSpec specification) =>
+    internal static int ExpectedNativeFetchLimit(DiagnosticsNativeRouteSpec specification) =>
         specification.StorageScopeRequired ? checked(specification.FiniteLimit + 1) : specification.FiniteLimit;
 
     private static bool ContainsOnlyExactEqualityPredicates(
@@ -1794,7 +1794,7 @@ public static partial class DiagnosticsNativePlanContract
             ? RuntimeNativeOrderDirection.Descending
             : RuntimeNativeOrderDirection.Ascending;
 
-    private static bool IsOrdinalStringOrderColumn(string column) =>
+    internal static bool IsOrdinalStringOrderColumn(string column) =>
         column is "id" or "idOrderKey" or "traceKey" or "spanId";
 
     private static void ValidateSqlServerPlan(string plan, DiagnosticsNativeRouteSpec specification, string physicalIndexName)

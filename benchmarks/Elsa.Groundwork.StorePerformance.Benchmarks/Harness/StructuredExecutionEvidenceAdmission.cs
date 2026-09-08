@@ -2,6 +2,38 @@ namespace Elsa.Groundwork.StorePerformance.Benchmarks.Harness;
 
 public static partial class DiagnosticsNativePlanContract
 {
+    /// <summary>
+    /// The diagnostics routes whose admission reads typed callback evidence instead of provider plan
+    /// text, per provider. A route is listed only where Groundwork reports both a collected bounded-query
+    /// shape and a collected plan for it (observed on 0.4.0-preview.19); the rest stay on the raw path
+    /// until valence-works/groundwork-v2#432, #422 and #423 land (#1594). MongoDB evidence carries a
+    /// fixed provider version instead of the server's (valence-works/groundwork-v2#433), so no MongoDB
+    /// route is admitted from typed evidence yet.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> StructuredEvidenceRoutesByProvider =
+        new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+        {
+            ["sqlite"] = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "structured-log-recent", "structured-log-replay", "metrics-by-last-seen", "logs-by-last-seen",
+                "resources-by-last-seen", "resources-by-status", "resources-by-service"
+            },
+            ["postgresql"] = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "structured-log-recent", "structured-log-replay", "metrics-by-last-seen", "logs-by-last-seen"
+            },
+            ["sqlserver"] = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "structured-log-recent", "structured-log-replay", "metrics-by-last-seen", "logs-by-last-seen"
+            },
+            ["mongodb"] = new HashSet<string>(StringComparer.Ordinal)
+        };
+
+    internal static bool IsStructuredEvidenceRoute(string provider, string adapter, string route) =>
+        string.Equals(adapter, GroundworkAdapter, StringComparison.Ordinal) &&
+        StructuredEvidenceRoutesByProvider.TryGetValue(provider, out var routes) &&
+        routes.Contains(route);
+
     internal static void ValidateStructuredEvidence(
         string provider,
         string adapter,
@@ -15,9 +47,10 @@ public static partial class DiagnosticsNativePlanContract
     }
 
     /// <summary>
-    /// Admits migrated structured-log consumer routes from typed callback evidence only. The raw SQL and
-    /// native-plan artifacts remain available for unrelated routes, but these routes cannot pass by
-    /// reparsing either artifact or by trusting the legacy route summary fields.
+    /// Admits a migrated route from typed callback evidence only. The raw SQL and native-plan artifacts
+    /// remain available for unmigrated routes, but a migrated route cannot pass by reparsing either
+    /// artifact or by trusting the legacy route summary fields. Every check is derived from the route
+    /// specification, so a provider that emits a different shape fails closed rather than being excused.
     /// </summary>
     internal static void ValidateStructuredEvidence(
         string provider,
@@ -27,30 +60,30 @@ public static partial class DiagnosticsNativePlanContract
         ArgumentException.ThrowIfNullOrWhiteSpace(provider);
         ArgumentException.ThrowIfNullOrWhiteSpace(adapter);
         ArgumentNullException.ThrowIfNull(route);
-
-        if (!string.Equals(provider, "sqlite", StringComparison.Ordinal) ||
-            !string.Equals(adapter, GroundworkAdapter, StringComparison.Ordinal) ||
-            route.RouteIdentity is not ("structured-log-replay" or "structured-log-recent"))
-            throw Reject("Structured evidence is only admitted for the SQLite Groundwork structured-log routes.");
-
-        var replay = string.Equals(route.RouteIdentity, "structured-log-replay", StringComparison.Ordinal);
-        var specification = For(adapter, route.RouteIdentity);
-        if (!string.Equals(route.PlanClassification, IndexSearchPlanClassification, StringComparison.Ordinal) ||
-            route.PhysicalCardinality != specification.PhysicalCardinality ||
-            route.FiniteLimit != specification.FiniteLimit ||
-            route.MaterializedCandidateCount != specification.FiniteLimit ||
-            route.HasStorageScopePredicate != true ||
-            route.HasRoutePredicate ||
-            !string.Equals(route.IndexName, ExpectedPhysicalIndexName("sqlite", specification), StringComparison.Ordinal) ||
-            route.NativeFetchLimit != checked(specification.FiniteLimit + 1) ||
-            route.ResultShape != RuntimeNativeResultShape.Page ||
-            route.ScalarResultCount is not null ||
-            route.UsesLatestPerKey)
-            throw Reject("Structured evidence route metadata is not the frozen bounded structured-log shape.");
-
+        if (!IsStructuredEvidenceRoute(provider, adapter, route.RouteIdentity))
+            throw Reject($"Structured evidence is not admitted for route '{route.RouteIdentity}' on provider '{provider}'.");
         var evidence = route.StructuredEvidence ?? throw Reject("Structured execution evidence is missing.");
+        var specification = For(adapter, route.RouteIdentity);
+        var replay = string.Equals(route.RouteIdentity, "structured-log-replay", StringComparison.Ordinal);
+        var scopePredicate = ExpectedStorageScopePredicate(provider, specification);
+        var nativeFetchLimit = ExpectedNativeFetchLimit(specification);
+        var metadataMismatch =
+            !string.Equals(route.PlanClassification, IndexSearchPlanClassification, StringComparison.Ordinal) ? "plan classification"
+            : route.PhysicalCardinality != specification.PhysicalCardinality ? "physical cardinality"
+            : route.FiniteLimit != specification.FiniteLimit ? "finite limit"
+            : route.MaterializedCandidateCount != specification.FiniteLimit ? "materialized candidate count"
+            : route.HasStorageScopePredicate != scopePredicate ? "storage scope predicate"
+            : route.HasRoutePredicate != (specification.PredicateColumn is not null) ? "route predicate"
+            : !string.Equals(route.IndexName, ExpectedPhysicalIndexName(provider, specification), StringComparison.Ordinal) ? "index name"
+            : route.NativeFetchLimit != nativeFetchLimit ? "native fetch limit"
+            : route.ResultShape != RuntimeNativeResultShape.Page ? "result shape"
+            : route.ScalarResultCount is not null ? "scalar result count"
+            : route.UsesLatestPerKey ? "latest-per-key"
+            : null;
+        if (metadataMismatch is not null)
+            throw Reject($"Structured evidence route metadata is not the frozen bounded route shape ({metadataMismatch}).");
         if (evidence.SchemaVersion != 1 ||
-            !string.Equals(evidence.Provider, "SQLite", StringComparison.Ordinal) ||
+            !string.Equals(evidence.Provider, ProviderDisplayName(provider), StringComparison.OrdinalIgnoreCase) ||
             string.IsNullOrWhiteSpace(evidence.ProviderVersion) ||
             !string.Equals(evidence.Operation, "BoundedQuery", StringComparison.Ordinal) ||
             !string.Equals(evidence.CommandKind, "Read", StringComparison.Ordinal) ||
@@ -58,10 +91,9 @@ public static partial class DiagnosticsNativePlanContract
             !string.Equals(evidence.Outcome, "Succeeded", StringComparison.Ordinal) ||
             evidence.FailureCategory is not null ||
             !string.Equals(evidence.ShapeAvailability, "Collected", StringComparison.Ordinal))
-            throw Reject("Structured execution evidence does not prove a successful collected SQLite bounded read.");
+            throw Reject($"Structured execution evidence does not prove a successful collected {ProviderDisplayName(provider)} bounded read.");
         if (evidence.PointRead is not null)
-            throw Reject("A bounded structured-log route may not carry point-read evidence.");
-
+            throw Reject("A bounded route may not carry point-read evidence.");
         if (evidence.Identity is null ||
             evidence.Target is null ||
             evidence.Identity.CaptureId == Guid.Empty ||
@@ -71,59 +103,65 @@ public static partial class DiagnosticsNativePlanContract
             evidence.Identity.CommandOrdinal != 0 ||
             evidence.Identity.StatementOrdinal != 0)
             throw Reject("Structured execution identity is missing or outside the single-command route.");
-
-        if (!string.Equals(evidence.Target.LogicalUnitId, "elsa-structured-logs", StringComparison.Ordinal) ||
+        if (!string.Equals(evidence.Target.LogicalUnitId, LogicalUnitIdFor(route.RouteIdentity), StringComparison.Ordinal) ||
             evidence.Target.PhysicalTargetId == Guid.Empty ||
-            !string.Equals(evidence.Target.ScopeBinding, "Predicate", StringComparison.Ordinal))
-            throw Reject("Structured execution target does not prove the scoped structured-log unit.");
-
+            !string.Equals(evidence.Target.ScopeBinding, scopePredicate ? "Predicate" : "PhysicalTarget", StringComparison.Ordinal))
+            throw Reject("Structured execution target does not prove the scoped storage unit.");
         var query = evidence.BoundedQuery ?? throw Reject("The collected bounded-query shape is missing.");
-        ValidatePredicate(query.Predicate, replay);
-        ValidateOrdering(query.Ordering ?? throw Reject("Structured ordering evidence is missing."), replay);
+        ValidatePredicate(query.Predicate, specification, scopePredicate, replay);
+        ValidateOrdering(query.Ordering ?? throw Reject("Structured ordering evidence is missing."), specification);
         if (query.Projection is null ||
             query.Projection.LogicalColumns is null ||
             query.Projection.AllColumns != true || query.Projection.LogicalColumns.Count != 0 ||
             query.NativeOffset is null || query.NativeLimit is null ||
             query.NativeOffset.Kind != "Absent" || query.NativeOffset.Value is not null ||
-            query.NativeLimit.Kind != "Explicit" || query.NativeLimit.Value != specification.FiniteLimit + 1 ||
+            query.NativeLimit.Kind != "Explicit" || query.NativeLimit.Value != nativeFetchLimit ||
             query.HasContinuation || !query.HasLookahead || query.IncludesTotalCount)
             throw Reject("Structured bounded-query paging or projection facts are not the emitted route shape.");
-
-        var plan = evidence.Plan ?? throw Reject("Structured plan evidence is missing.");
-        if (!string.Equals(plan.Availability, "Collected", StringComparison.Ordinal) ||
-            !string.Equals(plan.Provenance, "EstimatedExplain", StringComparison.Ordinal) ||
-            plan.ChoseExpectedIndex != true ||
-            !string.Equals(plan.ExpectedLogicalIndex, specification.IndexName, StringComparison.Ordinal) ||
-            plan.ChosenPhysicalIndexId is not Guid chosenPhysicalIndexId ||
-            chosenPhysicalIndexId == Guid.Empty ||
-            plan.FailureCategory is not null ||
-            plan.CollectionCommandCount != 1)
-            throw Reject("Structured plan evidence does not prove the collected selected index.");
-
-        var nodes = plan.Nodes ?? throw Reject("Structured winning-plan nodes are missing.");
-        if (nodes.Count != 1 || nodes.Any(candidate => candidate is null))
-            throw Reject("Structured winning-plan evidence must contain exactly one SQLite access node.");
-        var node = nodes[0];
-        if (node.Id != 0 ||
-            node.ParentId is not null ||
-            !string.Equals(node.Operation, "IndexSearch", StringComparison.Ordinal) ||
-            node.TargetId != evidence.Target.PhysicalTargetId ||
-            node.IndexId != plan.ChosenPhysicalIndexId ||
-            !string.Equals(node.LogicalIndexName, specification.IndexName, StringComparison.Ordinal) ||
-            node.IsCovering is null ||
-            node.SortPurpose is not null)
-            throw Reject("Structured winning-plan evidence is not the exact SQLite structured-log index-search shape.");
+        ValidatePlan(evidence.Plan, evidence.Target.PhysicalTargetId, provider, specification, nativeFetchLimit);
     }
 
-    private static void ValidatePredicate(StructuredConjunctionPredicate predicate, bool replay)
+    private static string ProviderDisplayName(string provider) => provider switch
+    {
+        "sqlite" => "SQLite",
+        "postgresql" => "PostgreSQL",
+        "sqlserver" => "SQL Server",
+        "mongodb" => "MongoDB",
+        _ => throw Reject($"Provider '{provider}' has no structured evidence contract.")
+    };
+
+    private static string ExpectedPlanProvenance(string provider) => provider switch
+    {
+        "sqlite" or "postgresql" => "EstimatedExplain",
+        "sqlserver" or "mongodb" => "ExplainReplay",
+        _ => throw Reject($"Provider '{provider}' has no structured plan contract.")
+    };
+
+    private static string LogicalUnitIdFor(string route) => route switch
+    {
+        "structured-log-recent" or "structured-log-replay" => "elsa-structured-logs",
+        "metrics-by-last-seen" => "elsa-otel-metric-points-v2",
+        "logs-by-last-seen" => "elsa-otel-logs-v2",
+        "resources-by-last-seen" or "resources-by-status" or "resources-by-service" => "elsa-otel-resources-v2",
+        _ => throw Reject($"Route '{route}' has no structured evidence unit.")
+    };
+
+    private static void ValidatePredicate(
+        StructuredConjunctionPredicate? predicate,
+        DiagnosticsNativeRouteSpec specification,
+        bool scopePredicate,
+        bool replay)
     {
         var facts = predicate?.Facts ?? throw Reject("Structured predicate evidence is missing.");
-        if (facts.Count != (replay ? 3 : 1) || facts.Any(fact => fact is null))
-            throw Reject(replay
-                ? "Structured predicate evidence must contain the complete scope and replay bounds."
-                : "Structured recent evidence must contain only its emitted scope predicate.");
-
-        RequireFact(facts, "__groundwork_scope", "Equal", "String", "Ordinal", "NotApplicable", "Scope");
+        if (facts.Any(fact => fact is null))
+            throw Reject("Structured predicate evidence contains a null fact.");
+        var expected = (scopePredicate ? 1 : 0) + (specification.PredicateColumn is null ? 0 : 1) + (replay ? 2 : 0);
+        if (facts.Count != expected)
+            throw Reject("Structured predicate evidence must contain exactly the emitted scope and route predicates.");
+        if (scopePredicate)
+            RequireFact(facts, "__groundwork_scope", "Equal", "String", "Ordinal", "NotApplicable", "Scope");
+        if (specification.PredicateColumn is { } column)
+            RequireFact(facts, column, "Equal", null, null, "NotApplicable", "Caller");
         if (replay)
         {
             RequireFact(facts, "sequence", "LowerBound", "Int64", "Exact", "Exclusive", "Caller");
@@ -135,35 +173,109 @@ public static partial class DiagnosticsNativePlanContract
         IReadOnlyList<StructuredPredicateFact> facts,
         string column,
         string @operator,
-        string valueType,
-        string comparison,
+        string? valueType,
+        string? comparison,
         string boundInclusivity,
         string bindingRole)
     {
         var matches = facts.Where(fact => fact is not null &&
                 string.Equals(fact.LogicalColumn, column, StringComparison.Ordinal) &&
                 string.Equals(fact.Operator, @operator, StringComparison.Ordinal) &&
-                string.Equals(fact.ValueType, valueType, StringComparison.Ordinal) &&
-                string.Equals(fact.Comparison, comparison, StringComparison.Ordinal) &&
+                (valueType is null || string.Equals(fact.ValueType, valueType, StringComparison.Ordinal)) &&
+                (comparison is null || string.Equals(fact.Comparison, comparison, StringComparison.Ordinal)) &&
                 string.Equals(fact.BoundInclusivity, boundInclusivity, StringComparison.Ordinal) &&
                 string.Equals(fact.BindingRole, bindingRole, StringComparison.Ordinal))
             .ToArray();
         if (matches.Length != 1 || matches[0].BindingId == Guid.Empty)
-            throw Reject("Structured predicate evidence is missing a unique complete binding fact.");
+            throw Reject($"Structured predicate evidence is missing a unique complete binding fact for '{column}'.");
     }
 
-    private static void ValidateOrdering(IReadOnlyList<StructuredOrderTerm> ordering, bool replay)
+    private static readonly IReadOnlySet<string> OrdinalOrderingTransforms =
+        new HashSet<string>(StringComparer.Ordinal) { "OrdinalStringKey", "PhysicalSearchKey" };
+
+    /// <summary>
+    /// The emitted ordering must be the route's complete ordering in order and direction. An ordinal
+    /// string column is emitted with the ordinal comparison and one of the provider's ordinal transforms;
+    /// every other column is emitted exactly, without transforms or a null placement.
+    /// </summary>
+    private static void ValidateOrdering(IReadOnlyList<StructuredOrderTerm> ordering, DiagnosticsNativeRouteSpec specification)
     {
-        if (ordering.Count != 1 || ordering.Any(term => term is null))
-            throw Reject("Structured ordering evidence must contain exactly one emitted term.");
-        var term = ordering[0];
-        if (term.Transforms is null ||
-            !string.Equals(term.LogicalColumn, "sequence", StringComparison.Ordinal) ||
-            !string.Equals(term.Direction, replay ? "Ascending" : "Descending", StringComparison.Ordinal) ||
-            term.NullPlacement is not null ||
-            term.Transforms.Count != 0 ||
-            !string.Equals(term.Comparison, "Exact", StringComparison.Ordinal))
-            throw Reject("Structured ordering evidence is not the emitted structured-log sequence ordering.");
+        var expected = specification.EffectiveOrdering;
+        if (ordering.Count != expected.Count || ordering.Any(term => term is null))
+            throw Reject("Structured ordering evidence does not contain the route's complete ordering.");
+        for (var index = 0; index < expected.Count; index++)
+        {
+            var term = ordering[index];
+            var column = expected[index];
+            var ordinal = IsOrdinalStringOrderColumn(column.Column);
+            if (term.Transforms is null ||
+                !string.Equals(term.LogicalColumn, column.Column, StringComparison.Ordinal) ||
+                !string.Equals(term.Direction, column.Direction == RuntimeNativeOrderDirection.Descending ? "Descending" : "Ascending", StringComparison.Ordinal) ||
+                term.NullPlacement is not null ||
+                (ordinal
+                    ? !string.Equals(term.Comparison, "Ordinal", StringComparison.Ordinal) || term.Transforms.Count > 1 || term.Transforms.Any(transform => !OrdinalOrderingTransforms.Contains(transform))
+                    : !string.Equals(term.Comparison, "Exact", StringComparison.Ordinal) || term.Transforms.Count != 0))
+                throw Reject($"Structured ordering evidence term {index} is not the emitted route ordering.");
+        }
+    }
+
+    private static readonly IReadOnlySet<string> AccessOperations =
+        new HashSet<string>(StringComparer.Ordinal) { "IndexSearch", "IndexScan" };
+
+    private static readonly IReadOnlySet<string> PassThroughOperations =
+        new HashSet<string>(StringComparer.Ordinal) { "Limit", "Materialize", "Projection" };
+
+    /// <summary>
+    /// An index-search route proves exactly one access node on the expected logical index against the
+    /// statement's target, with only limit, fetch and projection work around it: no sort, no scan, no
+    /// filter, no observed spill, and no observed bound other than the route's own lookahead limit.
+    /// </summary>
+    private static void ValidatePlan(
+        StructuredPlanEvidence? plan,
+        Guid targetId,
+        string provider,
+        DiagnosticsNativeRouteSpec specification,
+        int nativeFetchLimit)
+    {
+        if (plan is null)
+            throw Reject("Structured plan evidence is missing.");
+        if (!string.Equals(plan.Availability, "Collected", StringComparison.Ordinal) ||
+            !string.Equals(plan.Provenance, ExpectedPlanProvenance(provider), StringComparison.Ordinal) ||
+            plan.ChoseExpectedIndex != true ||
+            !string.Equals(plan.ExpectedLogicalIndex, specification.IndexName, StringComparison.Ordinal) ||
+            plan.ChosenPhysicalIndexId is not Guid chosenPhysicalIndexId ||
+            chosenPhysicalIndexId == Guid.Empty ||
+            plan.FailureCategory is not null ||
+            plan.CollectionCommandCount is null or < 1)
+            throw Reject("Structured plan evidence does not prove the collected selected index.");
+        var nodes = plan.Nodes ?? throw Reject("Structured winning-plan nodes are missing.");
+        if (nodes.Count == 0 || nodes.Any(candidate => candidate is null))
+            throw Reject("Structured winning-plan evidence is empty.");
+        var access = nodes.Where(node => AccessOperations.Contains(node.Operation)).ToArray();
+        if (access.Length != 1)
+            throw Reject("Structured winning-plan evidence must contain exactly one index access node.");
+        var accessNode = access[0];
+        if (accessNode.TargetId != targetId ||
+            accessNode.IndexId != chosenPhysicalIndexId ||
+            !string.Equals(accessNode.LogicalIndexName, specification.IndexName, StringComparison.Ordinal) ||
+            accessNode.SortPurpose is not null)
+            throw Reject("Structured winning-plan access node is not the expected index against the statement target.");
+        foreach (var node in nodes)
+        {
+            if (!ReferenceEquals(node, accessNode) && !PassThroughOperations.Contains(node.Operation))
+                throw Reject($"Structured winning-plan evidence carries unexpected native work '{node.Operation}'.");
+            if (node.SortPurpose is not null)
+                throw Reject("An index-search route must not observe a sort purpose.");
+            if (node.Details is not { } details)
+                continue;
+            if (details.Spill?.Spilled == true)
+                throw Reject("Structured winning-plan evidence observed a spill.");
+            if (details.NativeSortKeys is not null)
+                throw Reject("An index-search route must not observe native sort keys.");
+            if (string.Equals(details.NativeLimit.Kind, "Explicit", StringComparison.Ordinal) &&
+                details.NativeLimit.Value != nativeFetchLimit)
+                throw Reject("Structured winning-plan evidence observed a native bound other than the route's lookahead limit.");
+        }
     }
 
     private static PerformanceContractException Reject(string detail) =>
