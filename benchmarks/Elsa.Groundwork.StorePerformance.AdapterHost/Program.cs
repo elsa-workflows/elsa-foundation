@@ -371,5 +371,13 @@ static async Task<int> VerifyCorrectness(string[] args)
     Console.WriteLine($"result-digest={correctness.ObservedResultDigestSha256}");
     Console.WriteLine($"round-trips={adapter.RoundTripObserver?.Snapshot()}");
     Console.WriteLine($"instrumentation={adapter.RoundTripObserver?.Instrumentation}");
+    // Diagnostic only: an operator investigating throughput can ask for the retained command
+    // names grouped by count. It is never part of the evidence.
+    if (Environment.GetEnvironmentVariable("ELSA_BENCH_COMMAND_BREAKDOWN") == "1" &&
+        adapter.RoundTripObserver is WritePathRoundTripObserver breakdown)
+    {
+        foreach (var group in breakdown.Commands.GroupBy(command => command.Operation, StringComparer.Ordinal).OrderByDescending(group => group.Count()))
+            Console.WriteLine($"command-breakdown={group.Key}:{group.Count()}");
+    }
     return 0;
 }
