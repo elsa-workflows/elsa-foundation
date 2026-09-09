@@ -215,22 +215,21 @@ public sealed class GroundworkV2OpenTelemetryTests
     }
 
     [Fact]
-    public void Trace_summary_ordinal_identity_is_selected_only_by_its_start_index()
+    public void Trace_summary_ordinal_identity_orders_through_its_persisted_key_with_or_without_the_start_index()
     {
         var logical = V2OpenTelemetryStorageSchema.CreateTraceSummaries();
         var physical = SearchKeyProjection.Expand(logical);
 
-        var selected = SearchKeyQueryMappings.For(physical, "elsa_otel_trace_summaries_start")[V2OpenTelemetryStorageSchema.TraceKey];
-        Assert.Equal(V2OpenTelemetryStorageSchema.TraceKey, selected.SourceColumn);
-        Assert.Equal(TraceKeyOrdinalIdentity, selected.PhysicalColumn);
-        Assert.True(selected.OrderByPhysicalColumn);
-        Assert.True(selected.PreservesOrdinalIdentity);
-
-        var ordinary = SearchKeyQueryMappings.For(physical)[V2OpenTelemetryStorageSchema.TraceKey];
-        Assert.Equal(V2OpenTelemetryStorageSchema.TraceKey, ordinary.SourceColumn);
-        Assert.Equal(V2OpenTelemetryStorageSchema.TraceKey, ordinary.PhysicalColumn);
-        Assert.False(ordinary.OrderByPhysicalColumn);
-        Assert.False(ordinary.PreservesOrdinalIdentity);
+        // The start index declares ordinal identities, so the persisted key is the route whether the
+        // query nominates that index or leaves the choice to the provider (valence-works/groundwork-v2#443).
+        foreach (var selectedIndex in new[] { "elsa_otel_trace_summaries_start", null })
+        {
+            var mapping = SearchKeyQueryMappings.For(physical, selectedIndex)[V2OpenTelemetryStorageSchema.TraceKey];
+            Assert.Equal(V2OpenTelemetryStorageSchema.TraceKey, mapping.SourceColumn);
+            Assert.Equal(TraceKeyOrdinalIdentity, mapping.PhysicalColumn);
+            Assert.True(mapping.OrderByPhysicalColumn);
+            Assert.True(mapping.PreservesOrdinalIdentity);
+        }
     }
 
     private static void AssertSignalId(StorageUnit unit)
