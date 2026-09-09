@@ -158,24 +158,15 @@ public sealed class GroundworkOpenTelemetryStore :
             predicates.Add(new Predicate.Or([
                 new Predicate.Substring(ResourceColumns.Id, filter.Search, Anchor.Contains),
                 new Predicate.Substring(ResourceColumns.ServiceName, filter.Search, Anchor.Contains)]));
-        var selectedIndex = string.IsNullOrWhiteSpace(filter.Search) switch
-        {
-            false => null,
-            true when !string.IsNullOrWhiteSpace(filter.ServiceName) && filter.Status is null =>
-                V2OpenTelemetryStorageSchema.ResourceServiceLastSeenIndex,
-            true when string.IsNullOrWhiteSpace(filter.ServiceName) && filter.Status is not null =>
-                V2OpenTelemetryStorageSchema.ResourceStatusLastSeenIndex,
-            true when string.IsNullOrWhiteSpace(filter.ServiceName) && filter.Status is null =>
-                V2OpenTelemetryStorageSchema.ResourceLastSeenIndex,
-            _ => null
-        };
+        // No index nomination: the declared indexes and the provider optimizer decide, and the
+        // harness proves the chosen access path from typed plan evidence (#1596).
         var rows = Query(
             sessions.Resources,
             predicates,
             ResourceColumns.LastSeen,
             take,
             descending: true,
-            selectedIndex,
+            selectedIndex: null,
             ResourceColumns.IdOrderKey).Rows;
         return new(rows.Select(V2OpenTelemetryCodec.Deserialize<TelemetryResource>).ToArray(), sourceRegistry?.DroppedCount ?? 0);
     }
@@ -217,6 +208,9 @@ public sealed class GroundworkOpenTelemetryStore :
                 TraceSummaryColumns.StartTime,
                 take,
                 descending: true,
+                // Nominated on purpose: the ordering includes the traceKey ordinal identity, and Groundwork
+                // orders by the persisted identity key only when the selected index covers it
+                // (valence-works/groundwork-v2#443); without it the key is computed and no index serves the sort.
                 source.Count == 0 ? V2OpenTelemetryStorageSchema.TraceSummaryStartIndex : null,
                 TraceSummaryColumns.TraceKey)
             .Rows.Select(V2OpenTelemetryCodec.DeserializeTraceSummary).Reverse().ToArray();
@@ -296,6 +290,7 @@ public sealed class GroundworkOpenTelemetryStore :
                 MetricColumns.Timestamp,
                 take,
                 descending: true,
+                // Nominated on purpose: id is an ordinal identity column (valence-works/groundwork-v2#443).
                 predicates.Count == 0 ? V2OpenTelemetryStorageSchema.MetricPointTimestampIndex : null,
                 MetricColumns.Id)
             .Rows.Select(V2OpenTelemetryCodec.Deserialize<MetricPoint>).Reverse().ToArray();
@@ -332,6 +327,7 @@ public sealed class GroundworkOpenTelemetryStore :
                 LogColumns.Timestamp,
                 take,
                 descending: true,
+                // Nominated on purpose: id is an ordinal identity column (valence-works/groundwork-v2#443).
                 predicates.Count == 0 ? V2OpenTelemetryStorageSchema.LogTimestampIndex : null,
                 LogColumns.Id)
             .Rows.Select(V2OpenTelemetryCodec.Deserialize<OtlpLogRecord>).Reverse().ToArray();

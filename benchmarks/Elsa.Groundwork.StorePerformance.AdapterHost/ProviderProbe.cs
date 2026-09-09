@@ -173,10 +173,10 @@ internal static class ProviderProbe
         var settings = new SqlConnectionStringBuilder(connectionString);
         await using var connection = new SqlConnection(settings.ConnectionString);
         await connection.OpenAsync(cancellationToken);
-        var version = await ScalarAsync(
-            connection,
-            "SELECT CONVERT(varchar(128), SERVERPROPERTY('ProductVersion'));",
-            cancellationToken);
+        // Groundwork stamps ADO.NET's ServerVersion ("16.00.4215") on execution evidence, not the
+        // four-part ProductVersion ("16.0.4215.2"); the probe observes the same witness so a typed
+        // capture can prove it came from the probed server (#1594).
+        var version = connection.ServerVersion;
 
         // The wire handshake establishes product/version only. Require the independently captured
         // launcher attestation before emitting the stronger frozen container topology label.

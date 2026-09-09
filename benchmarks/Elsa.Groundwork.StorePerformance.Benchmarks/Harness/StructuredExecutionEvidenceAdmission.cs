@@ -5,8 +5,10 @@ public static partial class DiagnosticsNativePlanContract
     /// <summary>
     /// The diagnostics routes whose admission reads typed callback evidence instead of provider plan
     /// text, per provider. A route is listed only where Groundwork reports both a collected bounded-query
-    /// shape and a collected plan for it (observed on 0.4.0-preview.21); the rest stay on the raw path
-    /// until valence-works/groundwork-v2#432, #422 and #423 land (#1594).
+    /// shape and a collected plan for it (observed on 0.4.0-preview.26: persisted ordinal identity keys and
+    /// the renderer's computed sort fields are typed since valence-works/groundwork-v2#432). The bounded
+    /// resource routes admit the same scan-and-sort exception the raw path grants for the frozen 128-row
+    /// catalog, proven from typed plan nodes and sort keys (#1594).
     /// </summary>
     private static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> StructuredEvidenceRoutesByProvider =
         new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
@@ -18,15 +20,18 @@ public static partial class DiagnosticsNativePlanContract
             },
             ["postgresql"] = new HashSet<string>(StringComparer.Ordinal)
             {
-                "structured-log-recent", "structured-log-replay", "metrics-by-last-seen", "logs-by-last-seen"
+                "structured-log-recent", "structured-log-replay", "metrics-by-last-seen", "logs-by-last-seen",
+                "traces-by-last-seen", "resources-by-last-seen", "resources-by-status", "resources-by-service"
             },
             ["sqlserver"] = new HashSet<string>(StringComparer.Ordinal)
             {
-                "structured-log-recent", "structured-log-replay", "metrics-by-last-seen", "logs-by-last-seen"
+                "structured-log-recent", "structured-log-replay", "metrics-by-last-seen", "logs-by-last-seen",
+                "traces-by-last-seen", "resources-by-last-seen", "resources-by-status", "resources-by-service"
             },
             ["mongodb"] = new HashSet<string>(StringComparer.Ordinal)
             {
-                "structured-log-recent", "structured-log-replay"
+                "structured-log-recent", "structured-log-replay", "metrics-by-last-seen", "logs-by-last-seen",
+                "traces-by-last-seen", "resources-by-last-seen", "resources-by-status", "resources-by-service"
             }
         };
 
@@ -68,8 +73,10 @@ public static partial class DiagnosticsNativePlanContract
         var replay = string.Equals(route.RouteIdentity, "structured-log-replay", StringComparison.Ordinal);
         var scopePredicate = ExpectedStorageScopePredicate(provider, specification);
         var nativeFetchLimit = ExpectedNativeFetchLimit(specification);
+        var boundedScanSort = IsBoundedScanSortPlan(evidence.Plan, provider, adapter, specification);
+        var expectedClassification = boundedScanSort ? BoundedCatalogScanSortPlanClassification : IndexSearchPlanClassification;
         var metadataMismatch =
-            !string.Equals(route.PlanClassification, IndexSearchPlanClassification, StringComparison.Ordinal) ? "plan classification"
+            !string.Equals(route.PlanClassification, expectedClassification, StringComparison.Ordinal) ? "plan classification"
             : route.PhysicalCardinality != specification.PhysicalCardinality ? "physical cardinality"
             : route.FiniteLimit != specification.FiniteLimit ? "finite limit"
             : route.MaterializedCandidateCount != specification.FiniteLimit ? "materialized candidate count"
@@ -115,12 +122,140 @@ public static partial class DiagnosticsNativePlanContract
             query.Projection.LogicalColumns is null ||
             query.Projection.AllColumns != true || query.Projection.LogicalColumns.Count != 0 ||
             query.NativeOffset is null || query.NativeLimit is null ||
-            query.NativeOffset.Kind != "Absent" || query.NativeOffset.Value is not null ||
+            !IsNoOffset(query.NativeOffset) ||
             query.NativeLimit.Kind != "Explicit" || query.NativeLimit.Value != nativeFetchLimit ||
             query.HasContinuation || !query.HasLookahead || query.IncludesTotalCount)
             throw Reject("Structured bounded-query paging or projection facts are not the emitted route shape.");
-        ValidatePlan(evidence.Plan, evidence.Target.PhysicalTargetId, provider, specification, nativeFetchLimit);
+        if (boundedScanSort)
+            ValidateBoundedScanSortPlan(evidence.Plan!, evidence.Target.PhysicalTargetId, provider, specification, nativeFetchLimit);
+        else
+            ValidatePlan(evidence.Plan, evidence.Target.PhysicalTargetId, provider, specification, nativeFetchLimit);
     }
+
+    /// <summary>
+    /// The frozen 128-row resource catalog may legitimately be scanned, or read through an index that does
+    /// not carry its ordering, and then sorted; the raw path admits that exact shape per provider, and the
+    /// typed path admits it only when the collected plan of a bounded resource route contains a sort.
+    /// </summary>
+    private static bool IsBoundedScanSortPlan(
+        StructuredPlanEvidence? plan,
+        string provider,
+        string adapter,
+        DiagnosticsNativeRouteSpec specification) =>
+        plan is { Availability: "Collected", Nodes: { } nodes } &&
+        IsBoundedResourceRoute(provider, adapter, specification) &&
+        nodes.Any(node => node is not null && SortOperations.Contains(node.Operation));
+
+    /// <summary>
+    /// The indexes a bounded resource route may read through before sorting: its declared index, or for
+    /// the status route on MongoDB the captured status-only index the raw path already admits.
+    /// </summary>
+    private static bool IsAdmissibleBoundedScanIndex(string provider, DiagnosticsNativeRouteSpec specification, string? logicalIndexName) =>
+        string.Equals(logicalIndexName, specification.IndexName, StringComparison.Ordinal) ||
+        (provider == "mongodb" &&
+         specification.RouteIdentity == "resources-by-status" &&
+         string.Equals(logicalIndexName, MongoStatusOnlyResourceIndex, StringComparison.Ordinal));
+
+    internal static string ClassifyStructuredPlan(
+        string provider,
+        string adapter,
+        DiagnosticsNativeRouteSpec specification,
+        StructuredPlanEvidence? plan) =>
+        IsBoundedScanSortPlan(plan, provider, adapter, specification)
+            ? BoundedCatalogScanSortPlanClassification
+            : IndexSearchPlanClassification;
+
+    private static readonly IReadOnlySet<string> SortOperations =
+        new HashSet<string>(StringComparer.Ordinal) { "Sort", "TopNSort" };
+
+    private static readonly IReadOnlySet<string> ScanOperations =
+        new HashSet<string>(StringComparer.Ordinal) { "TableScan", "IndexScan", "IndexSearch" };
+
+    /// <summary>
+    /// Native work a provider adds around a bounded catalog scan and sort: the ordinal string keys are
+    /// computed by PostgreSQL as aggregate-over-function subplans and by MongoDB as compute stages.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> BoundedScanSortSupportByProvider =
+        new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+        {
+            ["postgresql"] = new HashSet<string>(StringComparer.Ordinal) { "Limit", "Materialize", "Projection", "Aggregate", "FunctionScan" },
+            // SQL Server applies the scope predicate as a Filter over the scan and computes the collated keys in a Compute Scalar.
+            ["sqlserver"] = new HashSet<string>(StringComparer.Ordinal) { "Limit", "Materialize", "Projection", "Compute", "Filter" },
+            ["mongodb"] = new HashSet<string>(StringComparer.Ordinal) { "Limit", "Materialize", "Projection", "Compute" }
+        };
+
+    /// <summary>
+    /// A bounded scan-and-sort plan proves exactly one scan of the statement's target, exactly one sort
+    /// whose observed native keys are the route's complete ordering with the ordinal transforms the
+    /// route's string columns require, no spill, and no bound other than the route's lookahead limit.
+    /// </summary>
+    private static void ValidateBoundedScanSortPlan(
+        StructuredPlanEvidence plan,
+        Guid targetId,
+        string provider,
+        DiagnosticsNativeRouteSpec specification,
+        int nativeFetchLimit)
+    {
+        if (!string.Equals(plan.Provenance, ExpectedPlanProvenance(provider), StringComparison.Ordinal) ||
+            (plan.ExpectedLogicalIndex is not null && !string.Equals(plan.ExpectedLogicalIndex, specification.IndexName, StringComparison.Ordinal)) ||
+            plan.FailureCategory is not null ||
+            plan.CollectionCommandCount is null or < 1)
+            throw Reject("Structured plan evidence does not prove a collected bounded catalog scan.");
+        var nodes = plan.Nodes ?? throw Reject("Structured winning-plan nodes are missing.");
+        if (nodes.Count == 0 || nodes.Any(candidate => candidate is null))
+            throw Reject("Structured winning-plan evidence is empty.");
+        if (!BoundedScanSortSupportByProvider.TryGetValue(provider, out var support))
+            throw Reject($"Provider '{provider}' has no bounded catalog scan contract.");
+        var scans = nodes.Where(node => ScanOperations.Contains(node.Operation)).ToArray();
+        if (scans.Length != 1 || scans[0].TargetId != targetId)
+            throw Reject("A bounded catalog scan must contain exactly one scan of the statement target.");
+        if (scans[0].Operation != "TableScan" && !IsAdmissibleBoundedScanIndex(provider, specification, scans[0].LogicalIndexName))
+            throw Reject("A bounded catalog index read is not through an admitted index.");
+        var sorts = nodes.Where(node => SortOperations.Contains(node.Operation)).ToArray();
+        if (sorts.Length != 1)
+            throw Reject("A bounded catalog scan must contain exactly one sort.");
+        foreach (var node in nodes)
+        {
+            if (!ReferenceEquals(node, scans[0]) && !ReferenceEquals(node, sorts[0]) && !support.Contains(node.Operation))
+                throw Reject($"Structured winning-plan evidence carries unexpected native work '{node.Operation}'.");
+            if (node.Details is not { } details)
+                continue;
+            if (details.Spill?.Spilled == true)
+                throw Reject("Structured winning-plan evidence observed a spill.");
+            if (string.Equals(details.NativeLimit.Kind, "Explicit", StringComparison.Ordinal) &&
+                details.NativeLimit.Value != nativeFetchLimit)
+                throw Reject("Structured winning-plan evidence observed a native bound other than the route's lookahead limit.");
+        }
+        var keys = sorts[0].Details?.NativeSortKeys ?? throw Reject("The bounded catalog sort did not observe its native sort keys.");
+        var expected = specification.EffectiveOrdering;
+        if (keys.Count != expected.Count)
+            throw Reject("The bounded catalog sort keys are not the route's complete ordering.");
+        for (var index = 0; index < expected.Count; index++)
+        {
+            var key = keys[index];
+            var column = expected[index];
+            var ordinal = IsOrdinalStringOrderColumn(column.Column);
+            var direction = column.Direction == RuntimeNativeOrderDirection.Descending ? "Descending" : "Ascending";
+            // An ordinal column's native key is its ordinal comparison, carried either by one computed key
+            // transform or, where the provider sorts the binary-collated column itself, by no transform.
+            if (key is null ||
+                !string.Equals(key.LogicalColumn, column.Column, StringComparison.Ordinal) ||
+                !string.Equals(key.Direction, direction, StringComparison.Ordinal) ||
+                key.Transforms is null ||
+                (ordinal
+                    ? !string.Equals(key.Comparison, "Ordinal", StringComparison.Ordinal) || key.Transforms.Count > 1 || key.Transforms.Any(transform => !OrdinalOrderingTransforms.Contains(transform))
+                    : key.Transforms.Count != 0))
+                throw Reject($"Bounded catalog sort key {index} is not the route's ordering term.");
+        }
+    }
+
+    /// <summary>
+    /// A route emits no offset. A provider whose paging syntax always states a row offset before its
+    /// row count (SQL Server) reports an explicit zero, which is the same fact.
+    /// </summary>
+    private static bool IsNoOffset(StructuredNativeBound offset) =>
+        offset.Kind == "Absent" && offset.Value is null ||
+        offset.Kind == "Explicit" && offset.Value == 0;
 
     private static string ProviderDisplayName(string provider) => provider switch
     {
@@ -138,9 +273,10 @@ public static partial class DiagnosticsNativePlanContract
         _ => throw Reject($"Provider '{provider}' has no structured plan contract.")
     };
 
-    private static string LogicalUnitIdFor(string route) => route switch
+    internal static string LogicalUnitIdFor(string route) => route switch
     {
         "structured-log-recent" or "structured-log-replay" => "elsa-structured-logs",
+        "traces-by-last-seen" => "elsa-otel-trace-summaries-v3",
         "metrics-by-last-seen" => "elsa-otel-metric-points-v2",
         "logs-by-last-seen" => "elsa-otel-logs-v2",
         "resources-by-last-seen" or "resources-by-status" or "resources-by-service" => "elsa-otel-resources-v2",
@@ -221,10 +357,27 @@ public static partial class DiagnosticsNativePlanContract
     }
 
     private static readonly IReadOnlySet<string> AccessOperations =
-        new HashSet<string>(StringComparer.Ordinal) { "IndexSearch", "IndexScan" };
+        new HashSet<string>(StringComparer.Ordinal) { "IndexSearch", "IndexScan", "PrimaryKeySearch" };
+
+    /// <summary>
+    /// The structured-log routes order by the unit's own key, so a provider that answers them through the
+    /// primary key (SQL Server seeks its key index backward instead of the declared sequence-order index)
+    /// performs the same index search; the plan reports that access as a primary-key search.
+    /// </summary>
+    private static bool IsKeyOrderedRoute(DiagnosticsNativeRouteSpec specification) =>
+        specification.RouteIdentity is "structured-log-recent" or "structured-log-replay" &&
+        string.Equals(specification.OrderColumn, "sequence", StringComparison.Ordinal);
 
     private static readonly IReadOnlySet<string> PassThroughOperations =
         new HashSet<string>(StringComparer.Ordinal) { "Limit", "Materialize", "Projection" };
+
+    /// <summary>
+    /// SQL Server fetches the columns an index does not cover through a bookmark lookup joined to the
+    /// seek (both reported as Materialize) and applies the residual scope guard as a separate Filter
+    /// operator; PostgreSQL folds the same residual into its index scan node.
+    /// </summary>
+    private static readonly IReadOnlySet<string> SqlServerPassThroughOperations =
+        new HashSet<string>(StringComparer.Ordinal) { "Limit", "Materialize", "Projection", "Filter" };
 
     /// <summary>
     /// An index-search route proves exactly one access node on the expected logical index against the
@@ -240,12 +393,13 @@ public static partial class DiagnosticsNativePlanContract
     {
         if (plan is null)
             throw Reject("Structured plan evidence is missing.");
+        // The access node proves the index. A store no longer nominates an index for these routes, so the
+        // plan's expectation facts are present only when a nomination was made; when present they must agree.
         if (!string.Equals(plan.Availability, "Collected", StringComparison.Ordinal) ||
             !string.Equals(plan.Provenance, ExpectedPlanProvenance(provider), StringComparison.Ordinal) ||
-            plan.ChoseExpectedIndex != true ||
-            !string.Equals(plan.ExpectedLogicalIndex, specification.IndexName, StringComparison.Ordinal) ||
-            plan.ChosenPhysicalIndexId is not Guid chosenPhysicalIndexId ||
-            chosenPhysicalIndexId == Guid.Empty ||
+            plan.ChoseExpectedIndex == false ||
+            (plan.ExpectedLogicalIndex is not null && !string.Equals(plan.ExpectedLogicalIndex, specification.IndexName, StringComparison.Ordinal)) ||
+            plan.ChosenPhysicalIndexId == Guid.Empty ||
             plan.FailureCategory is not null ||
             plan.CollectionCommandCount is null or < 1)
             throw Reject("Structured plan evidence does not prove the collected selected index.");
@@ -256,14 +410,22 @@ public static partial class DiagnosticsNativePlanContract
         if (access.Length != 1)
             throw Reject("Structured winning-plan evidence must contain exactly one index access node.");
         var accessNode = access[0];
-        if (accessNode.TargetId != targetId ||
-            accessNode.IndexId != chosenPhysicalIndexId ||
+        var passThrough = provider == "sqlserver" ? SqlServerPassThroughOperations : PassThroughOperations;
+        if (accessNode.Operation == "PrimaryKeySearch")
+        {
+            if (!IsKeyOrderedRoute(specification) || accessNode.TargetId != targetId || accessNode.IndexId is not null ||
+                accessNode.LogicalIndexName is not null || plan.ChosenPhysicalIndexId is not null || accessNode.SortPurpose is not null)
+                throw Reject("Structured winning-plan access node is not the expected index against the statement target.");
+        }
+        else if (accessNode.TargetId != targetId ||
+            accessNode.IndexId is not Guid accessIndexId || accessIndexId == Guid.Empty ||
+            (plan.ChosenPhysicalIndexId is Guid chosenPhysicalIndexId && accessIndexId != chosenPhysicalIndexId) ||
             !string.Equals(accessNode.LogicalIndexName, specification.IndexName, StringComparison.Ordinal) ||
             accessNode.SortPurpose is not null)
             throw Reject("Structured winning-plan access node is not the expected index against the statement target.");
         foreach (var node in nodes)
         {
-            if (!ReferenceEquals(node, accessNode) && !PassThroughOperations.Contains(node.Operation))
+            if (!ReferenceEquals(node, accessNode) && !passThrough.Contains(node.Operation))
                 throw Reject($"Structured winning-plan evidence carries unexpected native work '{node.Operation}'.");
             if (node.SortPurpose is not null)
                 throw Reject("An index-search route must not observe a sort purpose.");

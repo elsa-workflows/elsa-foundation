@@ -573,6 +573,135 @@ public sealed class StructuredExecutionEvidenceAdmissionTests
         public void Dispose() => source.Dispose();
     }
 
+    [Fact]
+    public void An_explicit_zero_native_offset_is_the_same_fact_as_no_offset_and_a_real_offset_is_not()
+    {
+        // SQL Server states OFFSET 0 ROWS before FETCH NEXT and reports an explicit zero offset.
+        var route = TypedDiagnosticsEvidence.Route("sqlserver", "structured-log-recent");
+        var query = route.StructuredEvidence!.BoundedQuery!;
+        var zero = route with { StructuredEvidence = route.StructuredEvidence with { BoundedQuery = query with { NativeOffset = new("Explicit", 0) } } };
+        DiagnosticsNativePlanContract.ValidateStructuredEvidence("sqlserver", DiagnosticsNativePlanContract.GroundworkAdapter, zero);
+
+        var five = route with { StructuredEvidence = route.StructuredEvidence with { BoundedQuery = query with { NativeOffset = new("Explicit", 5) } } };
+        Assert.Contains("paging or projection", Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateStructuredEvidence("sqlserver", DiagnosticsNativePlanContract.GroundworkAdapter, five)).Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Plan_expectation_facts_are_optional_and_the_access_node_proves_the_index()
+    {
+        // A store that no longer nominates an index yields evidence without expectation facts (#1596).
+        var route = TypedDiagnosticsEvidence.Route("sqlite", "structured-log-replay");
+        var plan = route.StructuredEvidence!.Plan;
+        var unnominated = route with { StructuredEvidence = route.StructuredEvidence with { Plan = plan with { ChoseExpectedIndex = null, ExpectedLogicalIndex = null, ChosenPhysicalIndexId = null } } };
+        DiagnosticsNativePlanContract.ValidateStructuredEvidence("sqlite", DiagnosticsNativePlanContract.GroundworkAdapter, unnominated);
+
+        var declined = route with { StructuredEvidence = route.StructuredEvidence with { Plan = plan with { ChoseExpectedIndex = false } } };
+        Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateStructuredEvidence("sqlite", DiagnosticsNativePlanContract.GroundworkAdapter, declined));
+
+        var foreignAccess = route with { StructuredEvidence = route.StructuredEvidence with { Plan = plan with { ChoseExpectedIndex = null, ExpectedLogicalIndex = null, ChosenPhysicalIndexId = null, Nodes = plan.Nodes!.Select(node => node with { LogicalIndexName = "elsa_other_index" }).ToArray() } } };
+        Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateStructuredEvidence("sqlite", DiagnosticsNativePlanContract.GroundworkAdapter, foreignAccess));
+    }
+
+    [Theory]
+    [InlineData("postgresql", "resources-by-last-seen", null)]
+    [InlineData("postgresql", "resources-by-status", null)]
+    [InlineData("sqlserver", "resources-by-last-seen", null)]
+    [InlineData("sqlserver", "resources-by-service", null)]
+    [InlineData("mongodb", "resources-by-last-seen", null)]
+    [InlineData("mongodb", "resources-by-status", "elsa_otel_resources_status")]
+    [InlineData("mongodb", "resources-by-service", "elsa_otel_resources_service_last_seen")]
+    public void Bounded_resource_routes_admit_a_typed_scan_and_sort_over_the_frozen_catalog(string provider, string route, string? scanIndex)
+    {
+        var evidence = TypedDiagnosticsEvidence.BoundedScanSortRoute(provider, route, scanIndex);
+
+        DiagnosticsNativePlanContract.ValidateStructuredEvidence(provider, DiagnosticsNativePlanContract.GroundworkAdapter, evidence);
+        Assert.Equal(
+            DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+            DiagnosticsNativePlanContract.ClassifyStructuredPlan(provider, DiagnosticsNativePlanContract.GroundworkAdapter,
+                DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, route), evidence.StructuredEvidence!.Plan));
+    }
+
+    [Fact]
+    public void Bounded_resource_scan_sort_rejects_wrong_keys_spill_foreign_index_and_index_search_classification()
+    {
+        var accepted = TypedDiagnosticsEvidence.BoundedScanSortRoute("mongodb", "resources-by-last-seen");
+        var plan = accepted.StructuredEvidence!.Plan;
+        var sort = plan.Nodes!.Single(node => node.Operation == "TopNSort");
+
+        var wrongKeys = accepted with { StructuredEvidence = accepted.StructuredEvidence with { Plan = plan with { Nodes = plan.Nodes!.Select(node => node == sort ? node with { Details = node.Details! with { NativeSortKeys = node.Details!.NativeSortKeys!.Take(2).ToArray() } } : node).ToArray() } } };
+        Assert.Contains("complete ordering", Assert.Throws<PerformanceContractException>(() => Validate(wrongKeys)).Message, StringComparison.Ordinal);
+
+        var spilled = accepted with { StructuredEvidence = accepted.StructuredEvidence with { Plan = plan with { Nodes = plan.Nodes!.Select(node => node == sort ? node with { Details = node.Details! with { Spill = new StructuredPlanSpill(true, 1, 1) } } : node).ToArray() } } };
+        Assert.Contains("spill", Assert.Throws<PerformanceContractException>(() => Validate(spilled)).Message, StringComparison.Ordinal);
+
+        var foreignIndex = TypedDiagnosticsEvidence.BoundedScanSortRoute("mongodb", "resources-by-last-seen", "elsa_otel_resources_status");
+        Assert.Contains("admitted index", Assert.Throws<PerformanceContractException>(() => Validate(foreignIndex)).Message, StringComparison.Ordinal);
+
+        // A plain key on an ordinal column is only that column's ordinal comparison when the provider says so.
+        var collated = TypedDiagnosticsEvidence.BoundedScanSortRoute("sqlserver", "resources-by-last-seen");
+        var collatedPlan = collated.StructuredEvidence!.Plan;
+        var collatedSort = collatedPlan.Nodes!.Single(node => node.Operation == "TopNSort");
+        var unknownComparison = collated with { StructuredEvidence = collated.StructuredEvidence with { Plan = collatedPlan with { Nodes = collatedPlan.Nodes!.Select(node => node == collatedSort ? node with { Details = node.Details! with { NativeSortKeys = node.Details!.NativeSortKeys!.Select(key => key.Transforms.Count == 0 && DiagnosticsNativePlanContract.IsOrdinalStringOrderColumn(key.LogicalColumn) ? key with { Comparison = "Unknown" } : key).ToArray() } } : node).ToArray() } } };
+        Assert.Contains("ordering term", Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateStructuredEvidence("sqlserver", DiagnosticsNativePlanContract.GroundworkAdapter, unknownComparison)).Message, StringComparison.Ordinal);
+
+        var misclassified = accepted with { PlanClassification = DiagnosticsNativePlanContract.IndexSearchPlanClassification };
+        Assert.Contains("plan classification", Assert.Throws<PerformanceContractException>(() => Validate(misclassified)).Message, StringComparison.Ordinal);
+
+        // An index-search route never admits a sort, so the same node set on a stream route fails closed.
+        var stream = TypedDiagnosticsEvidence.Route("mongodb", "traces-by-last-seen");
+        var sortedStream = stream with { StructuredEvidence = stream.StructuredEvidence! with { Plan = stream.StructuredEvidence.Plan with { Nodes = [.. stream.StructuredEvidence.Plan.Nodes!, sort] } } };
+        Assert.Throws<PerformanceContractException>(() => Validate(sortedStream));
+
+        static void Validate(NativeRouteEvidence route) =>
+            DiagnosticsNativePlanContract.ValidateStructuredEvidence("mongodb", DiagnosticsNativePlanContract.GroundworkAdapter, route);
+    }
+
+    /// <summary>
+    /// SQL Server's bookmark lookup and residual scope filter are that provider's index-search shape;
+    /// the same Filter on another provider is native work the route must not carry.
+    /// </summary>
+    [Theory]
+    [InlineData("traces-by-last-seen")]
+    [InlineData("metrics-by-last-seen")]
+    public void Sql_server_index_search_admits_the_bookmark_lookup_and_residual_filter_only_there(string routeIdentity)
+    {
+        var route = TypedDiagnosticsEvidence.Route("sqlserver", routeIdentity);
+        Assert.Equal(["Limit", "Materialize", "Filter", "IndexSearch", "Materialize"], route.StructuredEvidence!.Plan.Nodes!.Select(node => node.Operation));
+        DiagnosticsNativePlanContract.ValidateStructuredEvidence("sqlserver", DiagnosticsNativePlanContract.GroundworkAdapter, route);
+
+        var postgres = TypedDiagnosticsEvidence.Route("postgresql", routeIdentity, providerVersion: "17.6");
+        var filtered = postgres with { StructuredEvidence = postgres.StructuredEvidence! with { Plan = postgres.StructuredEvidence.Plan with { Nodes = [.. postgres.StructuredEvidence.Plan.Nodes!, new(1, 0, "Filter", null, null, null, null, null)] } } };
+        Assert.Contains("unexpected native work 'Filter'", Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateStructuredEvidence("postgresql", DiagnosticsNativePlanContract.GroundworkAdapter, filtered)).Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// SQL Server answers the key-ordered structured-log routes through its primary key; that access is
+    /// admitted only there, without a nomination, and never on a route ordered by a declared index.
+    /// </summary>
+    [Fact]
+    public void Primary_key_search_is_the_key_ordered_routes_index_search_and_nothing_else()
+    {
+        var recent = TypedDiagnosticsEvidence.Route("sqlserver", "structured-log-recent");
+        var plan = recent.StructuredEvidence!.Plan;
+        Assert.Equal("PrimaryKeySearch", plan.Nodes!.Single(node => node.TargetId is not null).Operation);
+        Assert.Null(plan.ChoseExpectedIndex);
+        DiagnosticsNativePlanContract.ValidateStructuredEvidence("sqlserver", DiagnosticsNativePlanContract.GroundworkAdapter, recent);
+
+        var nominated = recent with { StructuredEvidence = recent.StructuredEvidence with { Plan = plan with { ChoseExpectedIndex = true, ExpectedLogicalIndex = "elsa_structured_logs_sequence_order", ChosenPhysicalIndexId = Guid.NewGuid() } } };
+        Assert.Contains("access node", Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateStructuredEvidence("sqlserver", DiagnosticsNativePlanContract.GroundworkAdapter, nominated)).Message, StringComparison.Ordinal);
+
+        var traces = TypedDiagnosticsEvidence.Route("sqlserver", "traces-by-last-seen");
+        var tracesPlan = traces.StructuredEvidence!.Plan;
+        var keyed = traces with { StructuredEvidence = traces.StructuredEvidence with { Plan = tracesPlan with { ChoseExpectedIndex = null, ExpectedLogicalIndex = null, ChosenPhysicalIndexId = null, Nodes = tracesPlan.Nodes!.Select(node => node.TargetId is null ? node : node with { Operation = "PrimaryKeySearch", IndexId = null, LogicalIndexName = null, IsCovering = null }).ToArray() } } };
+        Assert.Contains("access node", Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateStructuredEvidence("sqlserver", DiagnosticsNativePlanContract.GroundworkAdapter, keyed)).Message, StringComparison.Ordinal);
+    }
+
     private static NativeRouteEvidence ValidRoute() => TypedDiagnosticsEvidence.Route("sqlite", "structured-log-replay");
 
     private static NativeRouteEvidence ValidRecentRoute() => TypedDiagnosticsEvidence.Route("sqlite", "structured-log-recent");

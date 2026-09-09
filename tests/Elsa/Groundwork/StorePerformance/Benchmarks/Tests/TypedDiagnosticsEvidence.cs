@@ -38,9 +38,74 @@ internal static class TypedDiagnosticsEvidence
         };
     }
 
+    /// <summary>
+    /// The bounded resource catalog shape a provider reports when it scans (or reads an index that does not
+    /// carry the ordering) and sorts the frozen 128-row catalog: PostgreSQL computes ordinal keys in
+    /// aggregate-over-function subplans under a table scan, MongoDB in compute stages before a top-N sort,
+    /// and SQL Server sorts the binary-collated columns, dropping the length key behind the unique tail.
+    /// </summary>
+    public static NativeRouteEvidence BoundedScanSortRoute(string provider, string routeIdentity, string? scanIndex = null, string providerVersion = "3.46.0")
+    {
+        var route = Route(provider, routeIdentity, providerVersion: providerVersion);
+        var specification = DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, routeIdentity);
+        var evidence = route.StructuredEvidence!;
+        var keys = specification.EffectiveOrdering
+            .Select(term => DiagnosticsNativePlanContract.IsOrdinalStringOrderColumn(term.Column)
+                ? new StructuredOrderTerm(term.Column, Direction(term), null, ["OrdinalStringKey"], "Ordinal")
+                : new StructuredOrderTerm(term.Column, Direction(term), null, [], "Unknown"))
+            .ToArray();
+        if (provider == "sqlserver")
+            keys[^1] = keys[^1] with { Transforms = [] };
+        var lookahead = DiagnosticsNativePlanContract.ExpectedNativeFetchLimit(specification);
+        var sortDetails = new StructuredPlanNodeDetails(keys, new("Explicit", lookahead), new StructuredPlanSpill(false, null, null));
+        StructuredPlanNode[] nodes = provider == "sqlserver"
+            ?
+            [
+                new(0, null, "Limit", null, null, null, null, null),
+                new(1, 0, "TopNSort", null, null, null, null, null, sortDetails),
+                new(2, 1, "Filter", null, null, null, null, null),
+                new(3, 2, "Compute", null, null, null, null, null),
+                new(4, 3, "TableScan", TargetId, null, null, null, null)
+            ]
+            : provider == "mongodb"
+            ?
+            [
+                scanIndex is null
+                    ? new(0, null, "TableScan", TargetId, null, null, null, null)
+                    : new(0, null, "IndexScan", TargetId, IndexId, scanIndex, false, null),
+                new(1, null, "Compute", null, null, null, null, null),
+                new(2, null, "Compute", null, null, null, null, null),
+                new(3, null, "TopNSort", null, null, null, null, null, sortDetails),
+                new(4, null, "Projection", null, null, null, null, null)
+            ]
+            :
+            [
+                new(0, null, "Limit", null, null, null, null, null),
+                new(1, 0, "Sort", null, null, null, null, null, sortDetails with { NativeLimit = new("Unknown", null) }),
+                new(2, 1, "TableScan", TargetId, null, null, null, null),
+                new(3, 2, "Aggregate", null, null, null, null, null),
+                new(4, 3, "FunctionScan", null, null, null, null, null),
+                new(5, 2, "Aggregate", null, null, null, null, null),
+                new(6, 5, "FunctionScan", null, null, null, null, null)
+            ];
+        var plan = evidence.Plan with
+        {
+            ChoseExpectedIndex = scanIndex is not null && scanIndex == specification.IndexName,
+            ChosenPhysicalIndexId = scanIndex is null ? null : IndexId,
+            Nodes = nodes,
+            ObservedRootOrder = provider == "mongodb" ? [0, 1, 2, 3, 4] : null
+        };
+        return route with
+        {
+            PlanClassification = DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+            StructuredEvidence = evidence with { Plan = plan }
+        };
+    }
+
     public static StructuredExecutionEvidence Build(string provider, string routeIdentity, string providerVersion = "3.46.0")
     {
         var specification = DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, routeIdentity);
+        var keyOrdered = provider == "sqlserver" && specification.RouteIdentity is "structured-log-recent" or "structured-log-replay";
         var scopePredicate = DiagnosticsNativePlanContract.ExpectedStorageScopePredicate(provider, specification);
         var nativeFetchLimit = DiagnosticsNativePlanContract.ExpectedNativeFetchLimit(specification);
         var facts = new List<StructuredPredicateFact>();
@@ -97,12 +162,26 @@ internal static class TypedDiagnosticsEvidence
             new(
                 "Collected",
                 provenance,
-                true,
-                specification.IndexName,
-                IndexId,
+                keyOrdered ? null : true,
+                keyOrdered ? null : specification.IndexName,
+                keyOrdered ? null : IndexId,
                 null,
                 1,
-                [new(0, null, "IndexSearch", TargetId, IndexId, specification.IndexName, false, null)]));
+                provider == "sqlserver"
+                    // SQL Server reads the columns the index does not cover through a bookmark lookup joined
+                    // to the seek, applies the residual scope guard as a separate Filter operator, and answers
+                    // the key-ordered structured-log routes through its primary-key index.
+                    ?
+                    [
+                        new(0, null, "Limit", null, null, null, null, null),
+                        new(1, 0, "Materialize", null, null, null, null, null),
+                        new(2, 1, "Filter", null, null, null, null, null),
+                        keyOrdered
+                            ? new(3, 2, "PrimaryKeySearch", TargetId, null, null, null, null)
+                            : new(3, 2, "IndexSearch", TargetId, IndexId, specification.IndexName, false, null),
+                        new(4, 1, "Materialize", null, null, null, null, null)
+                    ]
+                    : [new(0, null, "IndexSearch", TargetId, IndexId, specification.IndexName, false, null)]));
     }
 
     private static string Direction(RuntimeNativeOrderTerm term) =>
@@ -111,6 +190,7 @@ internal static class TypedDiagnosticsEvidence
     private static string LogicalUnitId(string routeIdentity) => routeIdentity switch
     {
         "structured-log-recent" or "structured-log-replay" => "elsa-structured-logs",
+        "traces-by-last-seen" => "elsa-otel-trace-summaries-v3",
         "metrics-by-last-seen" => "elsa-otel-metric-points-v2",
         "logs-by-last-seen" => "elsa-otel-logs-v2",
         "resources-by-last-seen" or "resources-by-status" or "resources-by-service" => "elsa-otel-resources-v2",
