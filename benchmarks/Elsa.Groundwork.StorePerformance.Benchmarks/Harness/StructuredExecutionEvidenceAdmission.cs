@@ -363,6 +363,14 @@ public static partial class DiagnosticsNativePlanContract
         new HashSet<string>(StringComparer.Ordinal) { "Limit", "Materialize", "Projection" };
 
     /// <summary>
+    /// SQL Server fetches the columns an index does not cover through a bookmark lookup joined to the
+    /// seek (both reported as Materialize) and applies the residual scope guard as a separate Filter
+    /// operator; PostgreSQL folds the same residual into its index scan node.
+    /// </summary>
+    private static readonly IReadOnlySet<string> SqlServerPassThroughOperations =
+        new HashSet<string>(StringComparer.Ordinal) { "Limit", "Materialize", "Projection", "Filter" };
+
+    /// <summary>
     /// An index-search route proves exactly one access node on the expected logical index against the
     /// statement's target, with only limit, fetch and projection work around it: no sort, no scan, no
     /// filter, no observed spill, and no observed bound other than the route's own lookahead limit.
@@ -392,6 +400,7 @@ public static partial class DiagnosticsNativePlanContract
         if (access.Length != 1)
             throw Reject("Structured winning-plan evidence must contain exactly one index access node.");
         var accessNode = access[0];
+        var passThrough = provider == "sqlserver" ? SqlServerPassThroughOperations : PassThroughOperations;
         if (accessNode.TargetId != targetId ||
             accessNode.IndexId != chosenPhysicalIndexId ||
             !string.Equals(accessNode.LogicalIndexName, specification.IndexName, StringComparison.Ordinal) ||
@@ -399,7 +408,7 @@ public static partial class DiagnosticsNativePlanContract
             throw Reject("Structured winning-plan access node is not the expected index against the statement target.");
         foreach (var node in nodes)
         {
-            if (!ReferenceEquals(node, accessNode) && !PassThroughOperations.Contains(node.Operation))
+            if (!ReferenceEquals(node, accessNode) && !passThrough.Contains(node.Operation))
                 throw Reject($"Structured winning-plan evidence carries unexpected native work '{node.Operation}'.");
             if (node.SortPurpose is not null)
                 throw Reject("An index-search route must not observe a sort purpose.");

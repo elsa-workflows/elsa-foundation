@@ -641,6 +641,25 @@ public sealed class StructuredExecutionEvidenceAdmissionTests
             DiagnosticsNativePlanContract.ValidateStructuredEvidence("mongodb", DiagnosticsNativePlanContract.GroundworkAdapter, route);
     }
 
+    /// <summary>
+    /// SQL Server's bookmark lookup and residual scope filter are that provider's index-search shape;
+    /// the same Filter on another provider is native work the route must not carry.
+    /// </summary>
+    [Theory]
+    [InlineData("traces-by-last-seen")]
+    [InlineData("structured-log-replay")]
+    public void Sql_server_index_search_admits_the_bookmark_lookup_and_residual_filter_only_there(string routeIdentity)
+    {
+        var route = TypedDiagnosticsEvidence.Route("sqlserver", routeIdentity);
+        Assert.Equal(["Limit", "Materialize", "Filter", "IndexSearch", "Materialize"], route.StructuredEvidence!.Plan.Nodes!.Select(node => node.Operation));
+        DiagnosticsNativePlanContract.ValidateStructuredEvidence("sqlserver", DiagnosticsNativePlanContract.GroundworkAdapter, route);
+
+        var postgres = TypedDiagnosticsEvidence.Route("postgresql", routeIdentity, providerVersion: "17.6");
+        var filtered = postgres with { StructuredEvidence = postgres.StructuredEvidence! with { Plan = postgres.StructuredEvidence.Plan with { Nodes = [.. postgres.StructuredEvidence.Plan.Nodes!, new(1, 0, "Filter", null, null, null, null, null)] } } };
+        Assert.Contains("unexpected native work 'Filter'", Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateStructuredEvidence("postgresql", DiagnosticsNativePlanContract.GroundworkAdapter, filtered)).Message, StringComparison.Ordinal);
+    }
+
     private static NativeRouteEvidence ValidRoute() => TypedDiagnosticsEvidence.Route("sqlite", "structured-log-replay");
 
     private static NativeRouteEvidence ValidRecentRoute() => TypedDiagnosticsEvidence.Route("sqlite", "structured-log-recent");

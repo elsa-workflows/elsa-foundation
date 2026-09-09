@@ -166,7 +166,18 @@ internal static class TypedDiagnosticsEvidence
                 IndexId,
                 null,
                 1,
-                [new(0, null, "IndexSearch", TargetId, IndexId, specification.IndexName, false, null)]));
+                provider == "sqlserver"
+                    // SQL Server reads the columns the index does not cover through a bookmark lookup joined
+                    // to the seek, and applies the residual scope guard as a separate Filter operator.
+                    ?
+                    [
+                        new(0, null, "Limit", null, null, null, null, null),
+                        new(1, 0, "Materialize", null, null, null, null, null),
+                        new(2, 1, "Filter", null, null, null, null, null),
+                        new(3, 2, "IndexSearch", TargetId, IndexId, specification.IndexName, false, null),
+                        new(4, 1, "Materialize", null, null, null, null, null)
+                    ]
+                    : [new(0, null, "IndexSearch", TargetId, IndexId, specification.IndexName, false, null)]));
     }
 
     private static string Direction(RuntimeNativeOrderTerm term) =>
