@@ -208,10 +208,10 @@ public sealed class GroundworkOpenTelemetryStore :
                 TraceSummaryColumns.StartTime,
                 take,
                 descending: true,
-                // Nominated on purpose: the ordering includes the traceKey ordinal identity, and Groundwork
-                // orders by the persisted identity key only when the selected index covers it
-                // (valence-works/groundwork-v2#443); without it the key is computed and no index serves the sort.
-                source.Count == 0 ? V2OpenTelemetryStorageSchema.TraceSummaryStartIndex : null,
+                // No nomination: Groundwork orders the traceKey ordinal identity through its persisted key
+                // whenever a declared identity index carries it (valence-works/groundwork-v2#443), so the
+                // provider's optimizer serves the sort from the start index on its own.
+                selectedIndex: null,
                 TraceSummaryColumns.TraceKey)
             .Rows.Select(V2OpenTelemetryCodec.DeserializeTraceSummary).Reverse().ToArray();
         return ValueTask.FromResult(new OpenTelemetryTraceResult(traces, Interlocked.Read(ref droppedTraces)));
@@ -290,8 +290,8 @@ public sealed class GroundworkOpenTelemetryStore :
                 MetricColumns.Timestamp,
                 take,
                 descending: true,
-                // Nominated on purpose: id is an ordinal identity column (valence-works/groundwork-v2#443).
-                predicates.Count == 0 ? V2OpenTelemetryStorageSchema.MetricPointTimestampIndex : null,
+                // No nomination: the id ordinal identity orders through its persisted key (valence-works/groundwork-v2#443).
+                selectedIndex: null,
                 MetricColumns.Id)
             .Rows.Select(V2OpenTelemetryCodec.Deserialize<MetricPoint>).Reverse().ToArray();
         var instruments = points.Select(point => point.InstrumentId)
@@ -327,8 +327,8 @@ public sealed class GroundworkOpenTelemetryStore :
                 LogColumns.Timestamp,
                 take,
                 descending: true,
-                // Nominated on purpose: id is an ordinal identity column (valence-works/groundwork-v2#443).
-                predicates.Count == 0 ? V2OpenTelemetryStorageSchema.LogTimestampIndex : null,
+                // No nomination: the id ordinal identity orders through its persisted key (valence-works/groundwork-v2#443).
+                selectedIndex: null,
                 LogColumns.Id)
             .Rows.Select(V2OpenTelemetryCodec.Deserialize<OtlpLogRecord>).Reverse().ToArray();
         return ValueTask.FromResult(new OpenTelemetryLogResult(logs, Interlocked.Read(ref droppedLogs)));
