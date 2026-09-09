@@ -41,7 +41,8 @@ internal static class TypedDiagnosticsEvidence
     /// <summary>
     /// The bounded resource catalog shape a provider reports when it scans (or reads an index that does not
     /// carry the ordering) and sorts the frozen 128-row catalog: PostgreSQL computes ordinal keys in
-    /// aggregate-over-function subplans under a table scan, MongoDB in compute stages before a top-N sort.
+    /// aggregate-over-function subplans under a table scan, MongoDB in compute stages before a top-N sort,
+    /// and SQL Server sorts the binary-collated columns, dropping the length key behind the unique tail.
     /// </summary>
     public static NativeRouteEvidence BoundedScanSortRoute(string provider, string routeIdentity, string? scanIndex = null, string providerVersion = "3.46.0")
     {
@@ -53,6 +54,8 @@ internal static class TypedDiagnosticsEvidence
                 ? new StructuredOrderTerm(term.Column, Direction(term), null, ["OrdinalStringKey"], "Ordinal")
                 : new StructuredOrderTerm(term.Column, Direction(term), null, [], "Unknown"))
             .ToArray();
+        if (provider == "sqlserver")
+            keys[^1] = keys[^1] with { Transforms = [] };
         var lookahead = DiagnosticsNativePlanContract.ExpectedNativeFetchLimit(specification);
         var sortDetails = new StructuredPlanNodeDetails(keys, new("Explicit", lookahead), new StructuredPlanSpill(false, null, null));
         StructuredPlanNode[] nodes = provider == "sqlserver"

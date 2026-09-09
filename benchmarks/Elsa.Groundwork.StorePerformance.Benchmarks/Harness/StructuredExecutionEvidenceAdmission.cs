@@ -236,12 +236,15 @@ public static partial class DiagnosticsNativePlanContract
             var column = expected[index];
             var ordinal = IsOrdinalStringOrderColumn(column.Column);
             var direction = column.Direction == RuntimeNativeOrderDirection.Descending ? "Descending" : "Ascending";
+            // An ordinal column's native key is its ordinal comparison, carried either by one computed key
+            // transform or, where the provider sorts the binary-collated column itself, by no transform.
             if (key is null ||
                 !string.Equals(key.LogicalColumn, column.Column, StringComparison.Ordinal) ||
                 !string.Equals(key.Direction, direction, StringComparison.Ordinal) ||
                 key.Transforms is null ||
-                key.Transforms.Any(transform => transform is not ("OrdinalStringKey" or "PhysicalSearchKey")) ||
-                (ordinal ? key.Transforms.Count != 1 : key.Transforms.Count != 0))
+                (ordinal
+                    ? !string.Equals(key.Comparison, "Ordinal", StringComparison.Ordinal) || key.Transforms.Count > 1 || key.Transforms.Any(transform => !OrdinalOrderingTransforms.Contains(transform))
+                    : key.Transforms.Count != 0))
                 throw Reject($"Bounded catalog sort key {index} is not the route's ordering term.");
         }
     }

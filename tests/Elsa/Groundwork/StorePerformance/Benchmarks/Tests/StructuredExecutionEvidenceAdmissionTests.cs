@@ -622,6 +622,13 @@ public sealed class StructuredExecutionEvidenceAdmissionTests
         var foreignIndex = TypedDiagnosticsEvidence.BoundedScanSortRoute("mongodb", "resources-by-last-seen", "elsa_otel_resources_status");
         Assert.Contains("admitted index", Assert.Throws<PerformanceContractException>(() => Validate(foreignIndex)).Message, StringComparison.Ordinal);
 
+        // A plain key on an ordinal column is only that column's ordinal comparison when the provider says so.
+        var collated = TypedDiagnosticsEvidence.BoundedScanSortRoute("sqlserver", "resources-by-last-seen");
+        var collatedPlan = collated.StructuredEvidence!.Plan;
+        var collatedSort = collatedPlan.Nodes!.Single(node => node.Operation == "TopNSort");
+        var unknownComparison = collated with { StructuredEvidence = collated.StructuredEvidence with { Plan = collatedPlan with { Nodes = collatedPlan.Nodes!.Select(node => node == collatedSort ? node with { Details = node.Details! with { NativeSortKeys = node.Details!.NativeSortKeys!.Select(key => key.Transforms.Count == 0 && DiagnosticsNativePlanContract.IsOrdinalStringOrderColumn(key.LogicalColumn) ? key with { Comparison = "Unknown" } : key).ToArray() } } : node).ToArray() } } };
+        Assert.Contains("ordering term", Assert.Throws<PerformanceContractException>(() => DiagnosticsNativePlanContract.ValidateStructuredEvidence("sqlserver", DiagnosticsNativePlanContract.GroundworkAdapter, unknownComparison)).Message, StringComparison.Ordinal);
+
         var misclassified = accepted with { PlanClassification = DiagnosticsNativePlanContract.IndexSearchPlanClassification };
         Assert.Contains("plan classification", Assert.Throws<PerformanceContractException>(() => Validate(misclassified)).Message, StringComparison.Ordinal);
 
