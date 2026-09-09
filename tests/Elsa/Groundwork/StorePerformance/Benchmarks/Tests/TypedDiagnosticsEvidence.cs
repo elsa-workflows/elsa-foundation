@@ -55,7 +55,16 @@ internal static class TypedDiagnosticsEvidence
             .ToArray();
         var lookahead = DiagnosticsNativePlanContract.ExpectedNativeFetchLimit(specification);
         var sortDetails = new StructuredPlanNodeDetails(keys, new("Explicit", lookahead), new StructuredPlanSpill(false, null, null));
-        StructuredPlanNode[] nodes = provider == "mongodb"
+        StructuredPlanNode[] nodes = provider == "sqlserver"
+            ?
+            [
+                new(0, null, "Limit", null, null, null, null, null),
+                new(1, 0, "TopNSort", null, null, null, null, null, sortDetails),
+                new(2, 1, "Filter", null, null, null, null, null),
+                new(3, 2, "Compute", null, null, null, null, null),
+                new(4, 3, "TableScan", TargetId, null, null, null, null)
+            ]
+            : provider == "mongodb"
             ?
             [
                 scanIndex is null

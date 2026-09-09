@@ -590,6 +590,8 @@ public sealed class StructuredExecutionEvidenceAdmissionTests
     [Theory]
     [InlineData("postgresql", "resources-by-last-seen", null)]
     [InlineData("postgresql", "resources-by-status", null)]
+    [InlineData("sqlserver", "resources-by-last-seen", null)]
+    [InlineData("sqlserver", "resources-by-service", null)]
     [InlineData("mongodb", "resources-by-last-seen", null)]
     [InlineData("mongodb", "resources-by-status", "elsa_otel_resources_status")]
     [InlineData("mongodb", "resources-by-service", "elsa_otel_resources_service_last_seen")]

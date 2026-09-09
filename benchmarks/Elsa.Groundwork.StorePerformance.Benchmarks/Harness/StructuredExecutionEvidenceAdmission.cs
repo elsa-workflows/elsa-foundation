@@ -179,7 +179,8 @@ public static partial class DiagnosticsNativePlanContract
         new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
         {
             ["postgresql"] = new HashSet<string>(StringComparer.Ordinal) { "Limit", "Materialize", "Projection", "Aggregate", "FunctionScan" },
-            ["sqlserver"] = new HashSet<string>(StringComparer.Ordinal) { "Limit", "Materialize", "Projection", "Compute" },
+            // SQL Server applies the scope predicate as a Filter over the scan and computes the collated keys in a Compute Scalar.
+            ["sqlserver"] = new HashSet<string>(StringComparer.Ordinal) { "Limit", "Materialize", "Projection", "Compute", "Filter" },
             ["mongodb"] = new HashSet<string>(StringComparer.Ordinal) { "Limit", "Materialize", "Projection", "Compute" }
         };
 
