@@ -72,7 +72,7 @@ arbitrary-index allowance.
 
 ### Structured execution evidence
 
-The harness consumes the published Groundwork `0.4.0-preview.24` package family.
+The harness consumes the published Groundwork `0.4.0-preview.25` package family.
 SQLite Groundwork `structured-log-replay` and `structured-log-recent` capture use the terminal
 `IProviderExecutionObserver` callback instead of parsing command text or retained
 native-plan text. The callback is mapped into the versioned artifact DTO without
