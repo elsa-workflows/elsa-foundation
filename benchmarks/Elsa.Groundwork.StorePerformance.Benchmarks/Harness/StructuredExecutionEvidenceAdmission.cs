@@ -5,8 +5,10 @@ public static partial class DiagnosticsNativePlanContract
     /// <summary>
     /// The diagnostics routes whose admission reads typed callback evidence instead of provider plan
     /// text, per provider. A route is listed only where Groundwork reports both a collected bounded-query
-    /// shape and a collected plan for it (observed on 0.4.0-preview.21); the rest stay on the raw path
-    /// until valence-works/groundwork-v2#432, #422 and #423 land (#1594).
+    /// shape and a collected plan for it (observed on 0.4.0-preview.22: persisted ordinal identity keys and
+    /// the renderer's computed sort fields are typed since valence-works/groundwork-v2#432). The bounded
+    /// resource routes admit the same scan-and-sort exception the raw path grants for the frozen 128-row
+    /// catalog, proven from typed plan nodes and sort keys (#1594).
     /// </summary>
     private static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> StructuredEvidenceRoutesByProvider =
         new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
@@ -18,15 +20,18 @@ public static partial class DiagnosticsNativePlanContract
             },
             ["postgresql"] = new HashSet<string>(StringComparer.Ordinal)
             {
-                "structured-log-recent", "structured-log-replay", "metrics-by-last-seen", "logs-by-last-seen"
+                "structured-log-recent", "structured-log-replay", "metrics-by-last-seen", "logs-by-last-seen",
+                "traces-by-last-seen", "resources-by-last-seen", "resources-by-status", "resources-by-service"
             },
             ["sqlserver"] = new HashSet<string>(StringComparer.Ordinal)
             {
-                "structured-log-recent", "structured-log-replay", "metrics-by-last-seen", "logs-by-last-seen"
+                "structured-log-recent", "structured-log-replay", "metrics-by-last-seen", "logs-by-last-seen",
+                "traces-by-last-seen", "resources-by-last-seen", "resources-by-status", "resources-by-service"
             },
             ["mongodb"] = new HashSet<string>(StringComparer.Ordinal)
             {
-                "structured-log-recent", "structured-log-replay"
+                "structured-log-recent", "structured-log-replay", "metrics-by-last-seen", "logs-by-last-seen",
+                "traces-by-last-seen", "resources-by-last-seen", "resources-by-status", "resources-by-service"
             }
         };
 
@@ -68,8 +73,10 @@ public static partial class DiagnosticsNativePlanContract
         var replay = string.Equals(route.RouteIdentity, "structured-log-replay", StringComparison.Ordinal);
         var scopePredicate = ExpectedStorageScopePredicate(provider, specification);
         var nativeFetchLimit = ExpectedNativeFetchLimit(specification);
+        var boundedScanSort = IsBoundedScanSortPlan(evidence.Plan, provider, adapter, specification);
+        var expectedClassification = boundedScanSort ? BoundedCatalogScanSortPlanClassification : IndexSearchPlanClassification;
         var metadataMismatch =
-            !string.Equals(route.PlanClassification, IndexSearchPlanClassification, StringComparison.Ordinal) ? "plan classification"
+            !string.Equals(route.PlanClassification, expectedClassification, StringComparison.Ordinal) ? "plan classification"
             : route.PhysicalCardinality != specification.PhysicalCardinality ? "physical cardinality"
             : route.FiniteLimit != specification.FiniteLimit ? "finite limit"
             : route.MaterializedCandidateCount != specification.FiniteLimit ? "materialized candidate count"
@@ -119,7 +126,123 @@ public static partial class DiagnosticsNativePlanContract
             query.NativeLimit.Kind != "Explicit" || query.NativeLimit.Value != nativeFetchLimit ||
             query.HasContinuation || !query.HasLookahead || query.IncludesTotalCount)
             throw Reject("Structured bounded-query paging or projection facts are not the emitted route shape.");
-        ValidatePlan(evidence.Plan, evidence.Target.PhysicalTargetId, provider, specification, nativeFetchLimit);
+        if (boundedScanSort)
+            ValidateBoundedScanSortPlan(evidence.Plan!, evidence.Target.PhysicalTargetId, provider, specification, nativeFetchLimit);
+        else
+            ValidatePlan(evidence.Plan, evidence.Target.PhysicalTargetId, provider, specification, nativeFetchLimit);
+    }
+
+    /// <summary>
+    /// The frozen 128-row resource catalog may legitimately be scanned, or read through an index that does
+    /// not carry its ordering, and then sorted; the raw path admits that exact shape per provider, and the
+    /// typed path admits it only when the collected plan of a bounded resource route contains a sort.
+    /// </summary>
+    private static bool IsBoundedScanSortPlan(
+        StructuredPlanEvidence? plan,
+        string provider,
+        string adapter,
+        DiagnosticsNativeRouteSpec specification) =>
+        plan is { Availability: "Collected", Nodes: { } nodes } &&
+        IsBoundedResourceRoute(provider, adapter, specification) &&
+        nodes.Any(node => node is not null && SortOperations.Contains(node.Operation));
+
+    /// <summary>
+    /// The indexes a bounded resource route may read through before sorting: its declared index, or for
+    /// the status route on MongoDB the captured status-only index the raw path already admits.
+    /// </summary>
+    private static bool IsAdmissibleBoundedScanIndex(string provider, DiagnosticsNativeRouteSpec specification, string? logicalIndexName) =>
+        string.Equals(logicalIndexName, specification.IndexName, StringComparison.Ordinal) ||
+        (provider == "mongodb" &&
+         specification.RouteIdentity == "resources-by-status" &&
+         string.Equals(logicalIndexName, MongoStatusOnlyResourceIndex, StringComparison.Ordinal));
+
+    internal static string ClassifyStructuredPlan(
+        string provider,
+        string adapter,
+        DiagnosticsNativeRouteSpec specification,
+        StructuredPlanEvidence? plan) =>
+        IsBoundedScanSortPlan(plan, provider, adapter, specification)
+            ? BoundedCatalogScanSortPlanClassification
+            : IndexSearchPlanClassification;
+
+    private static readonly IReadOnlySet<string> SortOperations =
+        new HashSet<string>(StringComparer.Ordinal) { "Sort", "TopNSort" };
+
+    private static readonly IReadOnlySet<string> ScanOperations =
+        new HashSet<string>(StringComparer.Ordinal) { "TableScan", "IndexScan", "IndexSearch" };
+
+    /// <summary>
+    /// Native work a provider adds around a bounded catalog scan and sort: the ordinal string keys are
+    /// computed by PostgreSQL as aggregate-over-function subplans and by MongoDB as compute stages.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> BoundedScanSortSupportByProvider =
+        new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+        {
+            ["postgresql"] = new HashSet<string>(StringComparer.Ordinal) { "Limit", "Materialize", "Projection", "Aggregate", "FunctionScan" },
+            ["sqlserver"] = new HashSet<string>(StringComparer.Ordinal) { "Limit", "Materialize", "Projection", "Compute" },
+            ["mongodb"] = new HashSet<string>(StringComparer.Ordinal) { "Limit", "Materialize", "Projection", "Compute" }
+        };
+
+    /// <summary>
+    /// A bounded scan-and-sort plan proves exactly one scan of the statement's target, exactly one sort
+    /// whose observed native keys are the route's complete ordering with the ordinal transforms the
+    /// route's string columns require, no spill, and no bound other than the route's lookahead limit.
+    /// </summary>
+    private static void ValidateBoundedScanSortPlan(
+        StructuredPlanEvidence plan,
+        Guid targetId,
+        string provider,
+        DiagnosticsNativeRouteSpec specification,
+        int nativeFetchLimit)
+    {
+        if (!string.Equals(plan.Provenance, ExpectedPlanProvenance(provider), StringComparison.Ordinal) ||
+            !string.Equals(plan.ExpectedLogicalIndex, specification.IndexName, StringComparison.Ordinal) ||
+            plan.FailureCategory is not null ||
+            plan.CollectionCommandCount is null or < 1)
+            throw Reject("Structured plan evidence does not prove a collected bounded catalog scan.");
+        var nodes = plan.Nodes ?? throw Reject("Structured winning-plan nodes are missing.");
+        if (nodes.Count == 0 || nodes.Any(candidate => candidate is null))
+            throw Reject("Structured winning-plan evidence is empty.");
+        if (!BoundedScanSortSupportByProvider.TryGetValue(provider, out var support))
+            throw Reject($"Provider '{provider}' has no bounded catalog scan contract.");
+        var scans = nodes.Where(node => ScanOperations.Contains(node.Operation)).ToArray();
+        if (scans.Length != 1 || scans[0].TargetId != targetId)
+            throw Reject("A bounded catalog scan must contain exactly one scan of the statement target.");
+        if (scans[0].Operation != "TableScan" && !IsAdmissibleBoundedScanIndex(provider, specification, scans[0].LogicalIndexName))
+            throw Reject("A bounded catalog index read is not through an admitted index.");
+        var sorts = nodes.Where(node => SortOperations.Contains(node.Operation)).ToArray();
+        if (sorts.Length != 1)
+            throw Reject("A bounded catalog scan must contain exactly one sort.");
+        foreach (var node in nodes)
+        {
+            if (!ReferenceEquals(node, scans[0]) && !ReferenceEquals(node, sorts[0]) && !support.Contains(node.Operation))
+                throw Reject($"Structured winning-plan evidence carries unexpected native work '{node.Operation}'.");
+            if (node.Details is not { } details)
+                continue;
+            if (details.Spill?.Spilled == true)
+                throw Reject("Structured winning-plan evidence observed a spill.");
+            if (string.Equals(details.NativeLimit.Kind, "Explicit", StringComparison.Ordinal) &&
+                details.NativeLimit.Value != nativeFetchLimit)
+                throw Reject("Structured winning-plan evidence observed a native bound other than the route's lookahead limit.");
+        }
+        var keys = sorts[0].Details?.NativeSortKeys ?? throw Reject("The bounded catalog sort did not observe its native sort keys.");
+        var expected = specification.EffectiveOrdering;
+        if (keys.Count != expected.Count)
+            throw Reject("The bounded catalog sort keys are not the route's complete ordering.");
+        for (var index = 0; index < expected.Count; index++)
+        {
+            var key = keys[index];
+            var column = expected[index];
+            var ordinal = IsOrdinalStringOrderColumn(column.Column);
+            var direction = column.Direction == RuntimeNativeOrderDirection.Descending ? "Descending" : "Ascending";
+            if (key is null ||
+                !string.Equals(key.LogicalColumn, column.Column, StringComparison.Ordinal) ||
+                !string.Equals(key.Direction, direction, StringComparison.Ordinal) ||
+                key.Transforms is null ||
+                key.Transforms.Any(transform => transform is not ("OrdinalStringKey" or "PhysicalSearchKey")) ||
+                (ordinal ? key.Transforms.Count != 1 : key.Transforms.Count != 0))
+                throw Reject($"Bounded catalog sort key {index} is not the route's ordering term.");
+        }
     }
 
     private static string ProviderDisplayName(string provider) => provider switch
@@ -138,9 +261,10 @@ public static partial class DiagnosticsNativePlanContract
         _ => throw Reject($"Provider '{provider}' has no structured plan contract.")
     };
 
-    private static string LogicalUnitIdFor(string route) => route switch
+    internal static string LogicalUnitIdFor(string route) => route switch
     {
         "structured-log-recent" or "structured-log-replay" => "elsa-structured-logs",
+        "traces-by-last-seen" => "elsa-otel-trace-summaries-v3",
         "metrics-by-last-seen" => "elsa-otel-metric-points-v2",
         "logs-by-last-seen" => "elsa-otel-logs-v2",
         "resources-by-last-seen" or "resources-by-status" or "resources-by-service" => "elsa-otel-resources-v2",

@@ -161,90 +161,19 @@ internal static class DiagnosticsNativePlanCapture
                     string classification;
                     int result;
                     var physicalIndexName = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(request.Provider, specification);
-                    try
-                    {
-                        result = await InvokeRouteAsync(scopes.Primary, route, limit, cancellationToken);
-                        nativePath = RequireNativeArtifacts(
-                            explainDirectory,
-                            before,
-                            request.Provider,
-                            specification.IndexName,
-                            1)[0];
-                        (rawPlan, command, classification) = CaptureRouteEvidence(
-                            request.Provider,
-                            adapter.CommandObserver.Commands,
-                            request.Adapter,
-                            specification,
-                            nativePath);
-                    }
-                    catch (ExplainAssertionException exception) when (
-                        DiagnosticsNativePlanContract.IsBoundedResourceRoute(
-                            request.Provider,
-                            request.Adapter,
-                            specification))
-                    {
-                        // Groundwork retains the provider explain response before asserting the
-                        // declared index. PostgreSQL, SQL Server, or MongoDB may legitimately scan this
-                        // frozen 128-row catalog to return its 127-row page, so preserve that asserted
-                        // artifact and repeat only the public call with assertion disabled to prove its exact page.
-                        nativePath = RequireAssertionArtifact(
-                            explainDirectory,
-                            before,
-                            request.Provider,
-                            specification.IndexName,
-                            exception);
-                        (rawPlan, command, classification) = CaptureRouteEvidence(
-                            request.Provider,
-                            adapter.CommandObserver.Commands,
-                            request.Adapter,
-                            specification,
-                            nativePath);
-                        adapter.CommandObserver.ClearCommands();
-                        result = await InvokeBoundedResourceRouteWithoutExplainAssertionAsync(
-                            scopes.Primary,
-                            route,
-                            limit,
-                            cancellationToken);
-                    }
-                    catch (ExplainAssertionException exception) when (
-                        DiagnosticsNativePlanContract.IsSqlServerStructuredLogPrimaryKeyRoute(
-                            request.Provider,
-                            request.Adapter,
-                            specification))
-                    {
-                        // SQL Server can select the exact primary-key access path for these two
-                        // structured-log routes. Keep the failed invocation's command and XML,
-                        // prove that pair against the narrow equivalence contract, then rerun the
-                        // same public call only to establish its materialized page count.
-                        nativePath = RequireAssertionArtifact(
-                            explainDirectory,
-                            before,
-                            request.Provider,
-                            specification.IndexName,
-                            exception);
-                        (rawPlan, command, classification) = CaptureRouteEvidence(
-                            request.Provider,
-                            adapter.CommandObserver.Commands,
-                            request.Adapter,
-                            specification,
-                            nativePath);
-                        if (!DiagnosticsNativePlanContract.TryResolveSqlServerStructuredLogPrimaryKey(
-                                request.Provider,
-                                request.Adapter,
-                                specification,
-                                command,
-                                rawPlan,
-                                out physicalIndexName))
-                            throw;
-
-                        adapter.CommandObserver.ClearCommands();
-                        using var suppression = ExplainAssertionMode.Suppress();
-                        result = await InvokeRouteAsync(
-                            scopes.Primary,
-                            route,
-                            limit,
-                            cancellationToken);
-                    }
+                    result = await InvokeRouteAsync(scopes.Primary, route, limit, cancellationToken);
+                    nativePath = RequireNativeArtifacts(
+                        explainDirectory,
+                        before,
+                        request.Provider,
+                        specification.IndexName,
+                        1)[0];
+                    (rawPlan, command, classification) = CaptureRouteEvidence(
+                        request.Provider,
+                        adapter.CommandObserver.Commands,
+                        request.Adapter,
+                        specification,
+                        nativePath);
                     if (result != limit)
                         throw new PerformanceContractException($"Diagnostics native route '{route}' returned {result} rows; expected {limit}.");
                     var rawReference = ArtifactStore.RawPlanName($"diagnostics.{request.Provider}.{request.MeasurementSetId}.{route}.raw.json");
@@ -362,7 +291,21 @@ internal static class DiagnosticsNativePlanCapture
         // This is the producer-owned observation, not a reconstruction from RunRequest or SQL text.
         adapter.CommandObserver.ClearCommands();
         adapter.ClearStructuredEvidence();
-        var result = await InvokeRouteAsync(client, route, limit, cancellationToken);
+        int result;
+        try
+        {
+            result = await InvokeRouteAsync(client, route, limit, cancellationToken);
+        }
+        catch (ExplainAssertionException) when (
+            DiagnosticsNativePlanContract.IsBoundedResourceRoute(request.Provider, request.Adapter, specification))
+        {
+            // The provider asserted the declared index and the planner declined it for the frozen 128-row
+            // catalog. Repeat only the public call with the assertion suppressed; its typed plan proves the
+            // bounded scan and sort, as the raw path proves it from the retained assertion artifact.
+            adapter.CommandObserver.ClearCommands();
+            adapter.ClearStructuredEvidence();
+            result = await InvokeBoundedResourceRouteWithoutExplainAssertionAsync(client, route, limit, cancellationToken);
+        }
         if (result != limit)
             throw new PerformanceContractException($"Diagnostics native route '{route}' returned {result} rows; expected {limit}.");
 
@@ -376,7 +319,7 @@ internal static class DiagnosticsNativePlanCapture
             route,
             string.Empty,
             string.Empty,
-            DiagnosticsNativePlanContract.IndexSearchPlanClassification,
+            DiagnosticsNativePlanContract.ClassifyStructuredPlan(request.Provider, request.Adapter, specification, structuredEvidence.Plan),
             DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(request.Provider, specification),
             specification.PhysicalCardinality,
             DiagnosticsNativePlanContract.ExpectedStorageScopePredicate(request.Provider, specification),
@@ -405,12 +348,19 @@ internal static class DiagnosticsNativePlanCapture
         string route,
         string expectedProviderVersion)
     {
+        // A route may also observe point reads (the metrics page resolves its instruments one by one) and,
+        // on a provider that asserts the declared index through a separate explain statement, an
+        // unsupported bounded-query observation for that statement; the route's evidence is its single
+        // collected bounded read of the route's own unit.
+        var unit = DiagnosticsNativePlanContract.LogicalUnitIdFor(route);
         var observations = adapter.StructuredEvidence
-            .Where(observation => string.Equals(observation.Operation, "BoundedQuery", StringComparison.Ordinal))
+            .Where(observation => string.Equals(observation.Operation, "BoundedQuery", StringComparison.Ordinal) &&
+                                  string.Equals(observation.Target?.LogicalUnitId, unit, StringComparison.Ordinal) &&
+                                  string.Equals(observation.ShapeAvailability, "Collected", StringComparison.Ordinal))
             .ToArray();
         if (observations.Length != 1)
             throw new PerformanceContractException(
-                $"Diagnostics route '{route}' emitted {observations.Length} structured bounded-query observations; expected exactly one terminal read.");
+                $"Diagnostics route '{route}' emitted {observations.Length} collected structured bounded-query observations of '{unit}'; expected exactly one terminal read.");
         var evidence = observations[0];
         if (string.IsNullOrWhiteSpace(evidence.Provider))
             throw new PerformanceContractException($"Structured evidence for '{route}' on '{provider}' did not identify its provider.");

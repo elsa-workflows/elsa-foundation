@@ -573,6 +573,51 @@ public sealed class StructuredExecutionEvidenceAdmissionTests
         public void Dispose() => source.Dispose();
     }
 
+    [Theory]
+    [InlineData("postgresql", "resources-by-last-seen", null)]
+    [InlineData("postgresql", "resources-by-status", null)]
+    [InlineData("mongodb", "resources-by-last-seen", null)]
+    [InlineData("mongodb", "resources-by-status", "elsa_otel_resources_status")]
+    [InlineData("mongodb", "resources-by-service", "elsa_otel_resources_service_last_seen")]
+    public void Bounded_resource_routes_admit_a_typed_scan_and_sort_over_the_frozen_catalog(string provider, string route, string? scanIndex)
+    {
+        var evidence = TypedDiagnosticsEvidence.BoundedScanSortRoute(provider, route, scanIndex);
+
+        DiagnosticsNativePlanContract.ValidateStructuredEvidence(provider, DiagnosticsNativePlanContract.GroundworkAdapter, evidence);
+        Assert.Equal(
+            DiagnosticsNativePlanContract.BoundedCatalogScanSortPlanClassification,
+            DiagnosticsNativePlanContract.ClassifyStructuredPlan(provider, DiagnosticsNativePlanContract.GroundworkAdapter,
+                DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, route), evidence.StructuredEvidence!.Plan));
+    }
+
+    [Fact]
+    public void Bounded_resource_scan_sort_rejects_wrong_keys_spill_foreign_index_and_index_search_classification()
+    {
+        var accepted = TypedDiagnosticsEvidence.BoundedScanSortRoute("mongodb", "resources-by-last-seen");
+        var plan = accepted.StructuredEvidence!.Plan;
+        var sort = plan.Nodes!.Single(node => node.Operation == "TopNSort");
+
+        var wrongKeys = accepted with { StructuredEvidence = accepted.StructuredEvidence with { Plan = plan with { Nodes = plan.Nodes!.Select(node => node == sort ? node with { Details = node.Details! with { NativeSortKeys = node.Details!.NativeSortKeys!.Take(2).ToArray() } } : node).ToArray() } } };
+        Assert.Contains("complete ordering", Assert.Throws<PerformanceContractException>(() => Validate(wrongKeys)).Message, StringComparison.Ordinal);
+
+        var spilled = accepted with { StructuredEvidence = accepted.StructuredEvidence with { Plan = plan with { Nodes = plan.Nodes!.Select(node => node == sort ? node with { Details = node.Details! with { Spill = new StructuredPlanSpill(true, 1, 1) } } : node).ToArray() } } };
+        Assert.Contains("spill", Assert.Throws<PerformanceContractException>(() => Validate(spilled)).Message, StringComparison.Ordinal);
+
+        var foreignIndex = TypedDiagnosticsEvidence.BoundedScanSortRoute("mongodb", "resources-by-last-seen", "elsa_otel_resources_status");
+        Assert.Contains("admitted index", Assert.Throws<PerformanceContractException>(() => Validate(foreignIndex)).Message, StringComparison.Ordinal);
+
+        var misclassified = accepted with { PlanClassification = DiagnosticsNativePlanContract.IndexSearchPlanClassification };
+        Assert.Contains("plan classification", Assert.Throws<PerformanceContractException>(() => Validate(misclassified)).Message, StringComparison.Ordinal);
+
+        // An index-search route never admits a sort, so the same node set on a stream route fails closed.
+        var stream = TypedDiagnosticsEvidence.Route("mongodb", "traces-by-last-seen");
+        var sortedStream = stream with { StructuredEvidence = stream.StructuredEvidence! with { Plan = stream.StructuredEvidence.Plan with { Nodes = [.. stream.StructuredEvidence.Plan.Nodes!, sort] } } };
+        Assert.Throws<PerformanceContractException>(() => Validate(sortedStream));
+
+        static void Validate(NativeRouteEvidence route) =>
+            DiagnosticsNativePlanContract.ValidateStructuredEvidence("mongodb", DiagnosticsNativePlanContract.GroundworkAdapter, route);
+    }
+
     private static NativeRouteEvidence ValidRoute() => TypedDiagnosticsEvidence.Route("sqlite", "structured-log-replay");
 
     private static NativeRouteEvidence ValidRecentRoute() => TypedDiagnosticsEvidence.Route("sqlite", "structured-log-recent");

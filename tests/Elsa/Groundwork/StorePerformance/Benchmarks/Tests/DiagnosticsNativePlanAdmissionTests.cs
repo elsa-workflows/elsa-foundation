@@ -967,10 +967,15 @@ public sealed class DiagnosticsNativePlanAdmissionTests
         const string rawPlanReference = "resources-by-last-seen.raw.json";
         var rawPlanPath = Path.Combine(output.FullName, rawPlanReference);
         File.Copy(fixture.Path, rawPlanPath);
+        // A migrated route carries typed evidence beside its optional raw artifact (#1594).
+        var typed = TypedDiagnosticsEvidence.BoundedScanSortRoute("mongodb", "resources-by-last-seen", providerVersion: "8.0");
         var route = fixture.Route with
         {
             RawPlanReference = rawPlanReference,
-            RawPlanSha256 = Sha256(File.ReadAllBytes(rawPlanPath))
+            RawPlanSha256 = Sha256(File.ReadAllBytes(rawPlanPath)),
+            PlanClassification = typed.PlanClassification,
+            NativeFetchLimit = typed.NativeFetchLimit,
+            StructuredEvidence = typed.StructuredEvidence
         };
         var workload = WorkloadCatalog.Load(Repository.Root())
             .Workloads[ReproducibleWorkloadScenarioCatalog.DiagnosticsWorkloadId] with
@@ -1015,7 +1020,7 @@ public sealed class DiagnosticsNativePlanAdmissionTests
             evidenceDocument.Scale,
             evidenceDocument.CommitSha,
             evidenceDocument.HarnessAssemblySha256,
-            new Dictionary<string, string> { ["Groundwork.MongoDb"] = "0.4.0-preview.21" },
+            new Dictionary<string, string> { ["Groundwork.MongoDb"] = "0.4.0-preview.22" },
             evidenceDocument.CompositionFingerprint,
             evidenceDocument.HostFingerprintSha256,
             evidenceDocument.ProviderVersion,
