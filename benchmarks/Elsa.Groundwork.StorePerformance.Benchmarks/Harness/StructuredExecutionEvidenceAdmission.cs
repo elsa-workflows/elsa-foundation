@@ -246,8 +246,8 @@ public static partial class DiagnosticsNativePlanContract
     }
 
     /// <summary>
-    /// A route emits no offset. A provider whose paging syntax always states one (SQL Server's
-    /// <c>OFFSET 0 ROWS FETCH NEXT</c>) reports an explicit zero, which is the same fact.
+    /// A route emits no offset. A provider whose paging syntax always states a row offset before its
+    /// row count (SQL Server) reports an explicit zero, which is the same fact.
     /// </summary>
     private static bool IsNoOffset(StructuredNativeBound offset) =>
         offset.Kind == "Absent" && offset.Value is null ||
