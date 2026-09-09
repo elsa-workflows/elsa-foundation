@@ -5,10 +5,8 @@ public static partial class DiagnosticsNativePlanContract
     /// <summary>
     /// The diagnostics routes whose admission reads typed callback evidence instead of provider plan
     /// text, per provider. A route is listed only where Groundwork reports both a collected bounded-query
-    /// shape and a collected plan for it (observed on 0.4.0-preview.19); the rest stay on the raw path
-    /// until valence-works/groundwork-v2#432, #422 and #423 land (#1594). MongoDB evidence carries a
-    /// fixed provider version instead of the server's (valence-works/groundwork-v2#433), so no MongoDB
-    /// route is admitted from typed evidence yet.
+    /// shape and a collected plan for it (observed on 0.4.0-preview.21); the rest stay on the raw path
+    /// until valence-works/groundwork-v2#432, #422 and #423 land (#1594).
     /// </summary>
     private static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> StructuredEvidenceRoutesByProvider =
         new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
@@ -27,6 +25,9 @@ public static partial class DiagnosticsNativePlanContract
                 "structured-log-recent", "structured-log-replay", "metrics-by-last-seen", "logs-by-last-seen"
             },
             ["mongodb"] = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "structured-log-recent", "structured-log-replay"
+            }
         };
 
     internal static bool IsStructuredEvidenceRoute(string provider, string adapter, string route) =>
