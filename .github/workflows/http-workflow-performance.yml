@@ -149,6 +149,12 @@ jobs:
       # variation. More passes cannot fix that, so any absolute threshold wide enough to be stable is
       # too wide to catch a modest regression. Normalizing against a calibration workload measured on
       # the same runner is the real fix -- see #1212.
+      #
+      # Provisional budget (2026-09-09, issue #1569). Runner image ubuntu24/20260907.300 rolled out on
+      # 7 September and moved the floor: the preview.18 commit that measured 263.6 ms on the previous
+      # image measured 332.2 ms on it with the same code and workflow (run 34344776793). Seven
+      # non-inverted runs on the new image span 325-388 ms; 420 keeps ~8% over that maximum the way 290
+      # kept ~6% over the old one. Re-derive from a run history on this image once it exists.
       - name: Measure default-on warm path
         run: |
           mkdir -p artifacts/http-workflow-performance
@@ -166,7 +172,7 @@ jobs:
             --output-markdown artifacts/http-workflow-performance/report.md \
             --output-samples artifacts/http-workflow-performance/samples.txt \
             --passes 5 \
-            --enforce-p95-ms 290
+            --enforce-p95-ms 420
 
       - name: Stop server
         if: always()
