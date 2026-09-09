@@ -105,6 +105,7 @@ internal static class TypedDiagnosticsEvidence
     public static StructuredExecutionEvidence Build(string provider, string routeIdentity, string providerVersion = "3.46.0")
     {
         var specification = DiagnosticsNativePlanContract.For(DiagnosticsNativePlanContract.GroundworkAdapter, routeIdentity);
+        var keyOrdered = provider == "sqlserver" && specification.RouteIdentity is "structured-log-recent" or "structured-log-replay";
         var scopePredicate = DiagnosticsNativePlanContract.ExpectedStorageScopePredicate(provider, specification);
         var nativeFetchLimit = DiagnosticsNativePlanContract.ExpectedNativeFetchLimit(specification);
         var facts = new List<StructuredPredicateFact>();
@@ -161,20 +162,23 @@ internal static class TypedDiagnosticsEvidence
             new(
                 "Collected",
                 provenance,
-                true,
-                specification.IndexName,
-                IndexId,
+                keyOrdered ? null : true,
+                keyOrdered ? null : specification.IndexName,
+                keyOrdered ? null : IndexId,
                 null,
                 1,
                 provider == "sqlserver"
                     // SQL Server reads the columns the index does not cover through a bookmark lookup joined
-                    // to the seek, and applies the residual scope guard as a separate Filter operator.
+                    // to the seek, applies the residual scope guard as a separate Filter operator, and answers
+                    // the key-ordered structured-log routes through its primary-key index.
                     ?
                     [
                         new(0, null, "Limit", null, null, null, null, null),
                         new(1, 0, "Materialize", null, null, null, null, null),
                         new(2, 1, "Filter", null, null, null, null, null),
-                        new(3, 2, "IndexSearch", TargetId, IndexId, specification.IndexName, false, null),
+                        keyOrdered
+                            ? new(3, 2, "PrimaryKeySearch", TargetId, null, null, null, null)
+                            : new(3, 2, "IndexSearch", TargetId, IndexId, specification.IndexName, false, null),
                         new(4, 1, "Materialize", null, null, null, null, null)
                     ]
                     : [new(0, null, "IndexSearch", TargetId, IndexId, specification.IndexName, false, null)]));

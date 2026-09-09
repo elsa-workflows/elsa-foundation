@@ -665,7 +665,7 @@ public sealed class StructuredExecutionEvidenceAdmissionTests
     /// </summary>
     [Theory]
     [InlineData("traces-by-last-seen")]
-    [InlineData("structured-log-replay")]
+    [InlineData("metrics-by-last-seen")]
     public void Sql_server_index_search_admits_the_bookmark_lookup_and_residual_filter_only_there(string routeIdentity)
     {
         var route = TypedDiagnosticsEvidence.Route("sqlserver", routeIdentity);
@@ -676,6 +676,30 @@ public sealed class StructuredExecutionEvidenceAdmissionTests
         var filtered = postgres with { StructuredEvidence = postgres.StructuredEvidence! with { Plan = postgres.StructuredEvidence.Plan with { Nodes = [.. postgres.StructuredEvidence.Plan.Nodes!, new(1, 0, "Filter", null, null, null, null, null)] } } };
         Assert.Contains("unexpected native work 'Filter'", Assert.Throws<PerformanceContractException>(() =>
             DiagnosticsNativePlanContract.ValidateStructuredEvidence("postgresql", DiagnosticsNativePlanContract.GroundworkAdapter, filtered)).Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// SQL Server answers the key-ordered structured-log routes through its primary key; that access is
+    /// admitted only there, without a nomination, and never on a route ordered by a declared index.
+    /// </summary>
+    [Fact]
+    public void Primary_key_search_is_the_key_ordered_routes_index_search_and_nothing_else()
+    {
+        var recent = TypedDiagnosticsEvidence.Route("sqlserver", "structured-log-recent");
+        var plan = recent.StructuredEvidence!.Plan;
+        Assert.Equal("PrimaryKeySearch", plan.Nodes!.Single(node => node.TargetId is not null).Operation);
+        Assert.Null(plan.ChoseExpectedIndex);
+        DiagnosticsNativePlanContract.ValidateStructuredEvidence("sqlserver", DiagnosticsNativePlanContract.GroundworkAdapter, recent);
+
+        var nominated = recent with { StructuredEvidence = recent.StructuredEvidence with { Plan = plan with { ChoseExpectedIndex = true, ExpectedLogicalIndex = "elsa_structured_logs_sequence_order", ChosenPhysicalIndexId = Guid.NewGuid() } } };
+        Assert.Contains("access node", Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateStructuredEvidence("sqlserver", DiagnosticsNativePlanContract.GroundworkAdapter, nominated)).Message, StringComparison.Ordinal);
+
+        var traces = TypedDiagnosticsEvidence.Route("sqlserver", "traces-by-last-seen");
+        var tracesPlan = traces.StructuredEvidence!.Plan;
+        var keyed = traces with { StructuredEvidence = traces.StructuredEvidence with { Plan = tracesPlan with { ChoseExpectedIndex = null, ExpectedLogicalIndex = null, ChosenPhysicalIndexId = null, Nodes = tracesPlan.Nodes!.Select(node => node.TargetId is null ? node : node with { Operation = "PrimaryKeySearch", IndexId = null, LogicalIndexName = null, IsCovering = null }).ToArray() } } };
+        Assert.Contains("access node", Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateStructuredEvidence("sqlserver", DiagnosticsNativePlanContract.GroundworkAdapter, keyed)).Message, StringComparison.Ordinal);
     }
 
     private static NativeRouteEvidence ValidRoute() => TypedDiagnosticsEvidence.Route("sqlite", "structured-log-replay");

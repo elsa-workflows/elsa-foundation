@@ -357,7 +357,16 @@ public static partial class DiagnosticsNativePlanContract
     }
 
     private static readonly IReadOnlySet<string> AccessOperations =
-        new HashSet<string>(StringComparer.Ordinal) { "IndexSearch", "IndexScan" };
+        new HashSet<string>(StringComparer.Ordinal) { "IndexSearch", "IndexScan", "PrimaryKeySearch" };
+
+    /// <summary>
+    /// The structured-log routes order by the unit's own key, so a provider that answers them through the
+    /// primary key (SQL Server seeks its key index backward instead of the declared sequence-order index)
+    /// performs the same index search; the plan reports that access as a primary-key search.
+    /// </summary>
+    private static bool IsKeyOrderedRoute(DiagnosticsNativeRouteSpec specification) =>
+        specification.RouteIdentity is "structured-log-recent" or "structured-log-replay" &&
+        string.Equals(specification.OrderColumn, "sequence", StringComparison.Ordinal);
 
     private static readonly IReadOnlySet<string> PassThroughOperations =
         new HashSet<string>(StringComparer.Ordinal) { "Limit", "Materialize", "Projection" };
@@ -402,7 +411,13 @@ public static partial class DiagnosticsNativePlanContract
             throw Reject("Structured winning-plan evidence must contain exactly one index access node.");
         var accessNode = access[0];
         var passThrough = provider == "sqlserver" ? SqlServerPassThroughOperations : PassThroughOperations;
-        if (accessNode.TargetId != targetId ||
+        if (accessNode.Operation == "PrimaryKeySearch")
+        {
+            if (!IsKeyOrderedRoute(specification) || accessNode.TargetId != targetId || accessNode.IndexId is not null ||
+                accessNode.LogicalIndexName is not null || plan.ChosenPhysicalIndexId is not null || accessNode.SortPurpose is not null)
+                throw Reject("Structured winning-plan access node is not the expected index against the statement target.");
+        }
+        else if (accessNode.TargetId != targetId ||
             accessNode.IndexId is not Guid accessIndexId || accessIndexId == Guid.Empty ||
             (plan.ChosenPhysicalIndexId is Guid chosenPhysicalIndexId && accessIndexId != chosenPhysicalIndexId) ||
             !string.Equals(accessNode.LogicalIndexName, specification.IndexName, StringComparison.Ordinal) ||
