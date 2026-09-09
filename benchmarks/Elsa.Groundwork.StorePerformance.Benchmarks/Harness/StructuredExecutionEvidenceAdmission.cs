@@ -197,7 +197,7 @@ public static partial class DiagnosticsNativePlanContract
         int nativeFetchLimit)
     {
         if (!string.Equals(plan.Provenance, ExpectedPlanProvenance(provider), StringComparison.Ordinal) ||
-            !string.Equals(plan.ExpectedLogicalIndex, specification.IndexName, StringComparison.Ordinal) ||
+            (plan.ExpectedLogicalIndex is not null && !string.Equals(plan.ExpectedLogicalIndex, specification.IndexName, StringComparison.Ordinal)) ||
             plan.FailureCategory is not null ||
             plan.CollectionCommandCount is null or < 1)
             throw Reject("Structured plan evidence does not prove a collected bounded catalog scan.");
@@ -384,12 +384,13 @@ public static partial class DiagnosticsNativePlanContract
     {
         if (plan is null)
             throw Reject("Structured plan evidence is missing.");
+        // The access node proves the index. A store no longer nominates an index for these routes, so the
+        // plan's expectation facts are present only when a nomination was made; when present they must agree.
         if (!string.Equals(plan.Availability, "Collected", StringComparison.Ordinal) ||
             !string.Equals(plan.Provenance, ExpectedPlanProvenance(provider), StringComparison.Ordinal) ||
-            plan.ChoseExpectedIndex != true ||
-            !string.Equals(plan.ExpectedLogicalIndex, specification.IndexName, StringComparison.Ordinal) ||
-            plan.ChosenPhysicalIndexId is not Guid chosenPhysicalIndexId ||
-            chosenPhysicalIndexId == Guid.Empty ||
+            plan.ChoseExpectedIndex == false ||
+            (plan.ExpectedLogicalIndex is not null && !string.Equals(plan.ExpectedLogicalIndex, specification.IndexName, StringComparison.Ordinal)) ||
+            plan.ChosenPhysicalIndexId == Guid.Empty ||
             plan.FailureCategory is not null ||
             plan.CollectionCommandCount is null or < 1)
             throw Reject("Structured plan evidence does not prove the collected selected index.");
@@ -402,7 +403,8 @@ public static partial class DiagnosticsNativePlanContract
         var accessNode = access[0];
         var passThrough = provider == "sqlserver" ? SqlServerPassThroughOperations : PassThroughOperations;
         if (accessNode.TargetId != targetId ||
-            accessNode.IndexId != chosenPhysicalIndexId ||
+            accessNode.IndexId is not Guid accessIndexId || accessIndexId == Guid.Empty ||
+            (plan.ChosenPhysicalIndexId is Guid chosenPhysicalIndexId && accessIndexId != chosenPhysicalIndexId) ||
             !string.Equals(accessNode.LogicalIndexName, specification.IndexName, StringComparison.Ordinal) ||
             accessNode.SortPurpose is not null)
             throw Reject("Structured winning-plan access node is not the expected index against the statement target.");

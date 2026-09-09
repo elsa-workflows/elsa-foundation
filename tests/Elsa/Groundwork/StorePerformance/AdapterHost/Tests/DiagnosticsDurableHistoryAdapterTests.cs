@@ -168,12 +168,15 @@ public sealed class DiagnosticsDurableHistoryAdapterTests
             Assert.Empty(evidence.BoundedQuery.Projection.LogicalColumns);
             Assert.Equal("Collected", evidence.Plan.Availability);
             Assert.Equal("EstimatedExplain", evidence.Plan.Provenance);
-            Assert.True(evidence.Plan.ChoseExpectedIndex);
-            Assert.NotNull(evidence.Plan.ChosenPhysicalIndexId);
+            // The read nominates no index (#1596), so the plan carries no expectation facts; the access
+            // node itself proves which index the planner chose.
+            Assert.Null(evidence.Plan.ChoseExpectedIndex);
+            Assert.Null(evidence.Plan.ExpectedLogicalIndex);
+            Assert.Null(evidence.Plan.ChosenPhysicalIndexId);
             var node = Assert.Single(evidence.Plan.Nodes!);
             Assert.Equal("IndexSearch", node.Operation);
             Assert.Equal("elsa_structured_logs_sequence_order", node.LogicalIndexName);
-            Assert.Equal(evidence.Plan.ChosenPhysicalIndexId, node.IndexId);
+            Assert.NotEqual(Guid.Empty, node.IndexId);
         }
         finally
         {

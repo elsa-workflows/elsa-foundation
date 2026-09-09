@@ -158,7 +158,7 @@ public sealed class GroundworkStructuredLogStore :
             limit,
             descending: true,
             predicate,
-            predicate is null ? StructuredLogsGroundworkStorageSchema.SequenceOrderIndex : null);
+            selectedIndex: null); // The optimizer chooses; typed plan evidence proves it (#1596).
         var entries = page.Rows.Select(ToEntry).Where(filter.Matches).ToList();
         entries.Reverse();
         return Task.FromResult<IReadOnlyList<StructuredLogEntry>>(entries);
@@ -208,7 +208,7 @@ public sealed class GroundworkStructuredLogStore :
             Math.Min(maxCount, maxRecentQuerySize),
             false,
             new Predicate.And(predicates),
-            StructuredLogsGroundworkStorageSchema.SequenceOrderIndex);
+            selectedIndex: null); // The optimizer chooses; typed plan evidence proves it (#1596).
         var scanned = page.Rows.Select(ToEntry).ToArray();
         var next = scanned.Length == 0 ? afterCursor : scanned[^1].ReplayCursor;
         return Task.FromResult(new StructuredLogReadPage(scanned.Where(filter.Matches).ToArray(), next, page.NextContinuationToken is not null));

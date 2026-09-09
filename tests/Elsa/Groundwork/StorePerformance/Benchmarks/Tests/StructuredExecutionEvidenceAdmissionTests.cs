@@ -587,6 +587,24 @@ public sealed class StructuredExecutionEvidenceAdmissionTests
             DiagnosticsNativePlanContract.ValidateStructuredEvidence("sqlserver", DiagnosticsNativePlanContract.GroundworkAdapter, five)).Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Plan_expectation_facts_are_optional_and_the_access_node_proves_the_index()
+    {
+        // A store that no longer nominates an index yields evidence without expectation facts (#1596).
+        var route = TypedDiagnosticsEvidence.Route("sqlite", "structured-log-replay");
+        var plan = route.StructuredEvidence!.Plan;
+        var unnominated = route with { StructuredEvidence = route.StructuredEvidence with { Plan = plan with { ChoseExpectedIndex = null, ExpectedLogicalIndex = null, ChosenPhysicalIndexId = null } } };
+        DiagnosticsNativePlanContract.ValidateStructuredEvidence("sqlite", DiagnosticsNativePlanContract.GroundworkAdapter, unnominated);
+
+        var declined = route with { StructuredEvidence = route.StructuredEvidence with { Plan = plan with { ChoseExpectedIndex = false } } };
+        Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateStructuredEvidence("sqlite", DiagnosticsNativePlanContract.GroundworkAdapter, declined));
+
+        var foreignAccess = route with { StructuredEvidence = route.StructuredEvidence with { Plan = plan with { ChoseExpectedIndex = null, ExpectedLogicalIndex = null, ChosenPhysicalIndexId = null, Nodes = plan.Nodes!.Select(node => node with { LogicalIndexName = "elsa_other_index" }).ToArray() } } };
+        Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateStructuredEvidence("sqlite", DiagnosticsNativePlanContract.GroundworkAdapter, foreignAccess));
+    }
+
     [Theory]
     [InlineData("postgresql", "resources-by-last-seen", null)]
     [InlineData("postgresql", "resources-by-status", null)]
