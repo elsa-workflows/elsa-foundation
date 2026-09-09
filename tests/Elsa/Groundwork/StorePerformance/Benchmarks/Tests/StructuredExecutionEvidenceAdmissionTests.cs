@@ -573,6 +573,20 @@ public sealed class StructuredExecutionEvidenceAdmissionTests
         public void Dispose() => source.Dispose();
     }
 
+    [Fact]
+    public void An_explicit_zero_native_offset_is_the_same_fact_as_no_offset_and_a_real_offset_is_not()
+    {
+        // SQL Server states OFFSET 0 ROWS before FETCH NEXT and reports an explicit zero offset.
+        var route = TypedDiagnosticsEvidence.Route("sqlserver", "structured-log-recent");
+        var query = route.StructuredEvidence!.BoundedQuery!;
+        var zero = route with { StructuredEvidence = route.StructuredEvidence with { BoundedQuery = query with { NativeOffset = new("Explicit", 0) } } };
+        DiagnosticsNativePlanContract.ValidateStructuredEvidence("sqlserver", DiagnosticsNativePlanContract.GroundworkAdapter, zero);
+
+        var five = route with { StructuredEvidence = route.StructuredEvidence with { BoundedQuery = query with { NativeOffset = new("Explicit", 5) } } };
+        Assert.Contains("paging or projection", Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateStructuredEvidence("sqlserver", DiagnosticsNativePlanContract.GroundworkAdapter, five)).Message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("postgresql", "resources-by-last-seen", null)]
     [InlineData("postgresql", "resources-by-status", null)]

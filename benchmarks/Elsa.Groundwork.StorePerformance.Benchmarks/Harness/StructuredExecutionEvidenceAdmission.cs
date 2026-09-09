@@ -122,7 +122,7 @@ public static partial class DiagnosticsNativePlanContract
             query.Projection.LogicalColumns is null ||
             query.Projection.AllColumns != true || query.Projection.LogicalColumns.Count != 0 ||
             query.NativeOffset is null || query.NativeLimit is null ||
-            query.NativeOffset.Kind != "Absent" || query.NativeOffset.Value is not null ||
+            !IsNoOffset(query.NativeOffset) ||
             query.NativeLimit.Kind != "Explicit" || query.NativeLimit.Value != nativeFetchLimit ||
             query.HasContinuation || !query.HasLookahead || query.IncludesTotalCount)
             throw Reject("Structured bounded-query paging or projection facts are not the emitted route shape.");
@@ -244,6 +244,14 @@ public static partial class DiagnosticsNativePlanContract
                 throw Reject($"Bounded catalog sort key {index} is not the route's ordering term.");
         }
     }
+
+    /// <summary>
+    /// A route emits no offset. A provider whose paging syntax always states one (SQL Server's
+    /// <c>OFFSET 0 ROWS FETCH NEXT</c>) reports an explicit zero, which is the same fact.
+    /// </summary>
+    private static bool IsNoOffset(StructuredNativeBound offset) =>
+        offset.Kind == "Absent" && offset.Value is null ||
+        offset.Kind == "Explicit" && offset.Value == 0;
 
     private static string ProviderDisplayName(string provider) => provider switch
     {
