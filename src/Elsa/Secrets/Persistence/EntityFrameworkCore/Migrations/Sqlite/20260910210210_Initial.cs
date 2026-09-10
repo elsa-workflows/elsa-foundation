@@ -23,7 +23,7 @@ public partial class Initial : Migration
                 ScopeLookupKey = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
                 Status = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
                 HasNonExpiringActiveVersion = table.Column<bool>(type: "INTEGER", nullable: false),
-                MaxActiveVersionExpiresAt = table.Column<DateTimeOffset>(type: "TEXT", nullable: true),
+                MaxActiveVersionExpiresAt = table.Column<long>(type: "INTEGER", nullable: true),
                 Payload = table.Column<string>(type: "TEXT", nullable: false),
                 ConcurrencyToken = table.Column<byte[]>(type: "BLOB", nullable: false)
             },

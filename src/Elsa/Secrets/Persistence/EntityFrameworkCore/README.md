@@ -49,7 +49,8 @@ both replace `ISecretRepository`.
 Table `elsa_secrets`. Key: `TenantId` + `NormalizedName`. Projected list/search columns
 match Groundwork `SecretsGroundworkStorageSchema`. Full `Secret` document in `Payload`.
 OCC is an explicit `ConcurrencyToken` stamped on save — **not** cross-provider
-`IsRowVersion()` (Sqlite inserts NULL).
+`IsRowVersion()` (Sqlite inserts NULL). On Sqlite, `MaxActiveVersionExpiresAt` is
+stored as UTC ticks (`INTEGER`) so active-only expiry comparisons translate.
 
 Derived contexts: `SecretsSqliteDbContext`, `SecretsSqlServerDbContext`,
 `SecretsPostgreSqlDbContext`. Each has its own `Migrations/` folder and `ModelSnapshot`.

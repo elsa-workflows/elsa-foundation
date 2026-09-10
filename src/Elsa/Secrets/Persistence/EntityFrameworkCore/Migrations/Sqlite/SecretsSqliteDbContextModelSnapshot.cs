@@ -38,7 +38,7 @@ partial class SecretsSqliteDbContextModelSnapshot : ModelSnapshot
                     .HasColumnType("INTEGER");
 
                 b.Property<DateTimeOffset?>("MaxActiveVersionExpiresAt")
-                    .HasColumnType("TEXT");
+                    .HasColumnType("INTEGER");
 
                 b.Property<string>("NameSearchKey")
                     .IsRequired()

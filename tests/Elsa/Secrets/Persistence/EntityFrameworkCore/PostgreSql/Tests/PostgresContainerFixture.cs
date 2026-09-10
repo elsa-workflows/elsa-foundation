@@ -7,15 +7,12 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests;
 
 public sealed class PostgresContainerFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer container = new PostgreSqlBuilder("postgres:16-alpine")
-        .WithDatabase("elsa")
-        .WithUsername("postgres")
-        .WithPassword("postgres")
-        .Build();
+    private PostgreSqlContainer? container;
 
     public bool IsAvailable { get; private set; }
     public string? SkipReason { get; private set; }
-    public string ConnectionString => container.GetConnectionString();
+    public string ConnectionString => container?.GetConnectionString()
+        ?? throw new InvalidOperationException("PostgreSQL container is not available.");
 
     public async Task<string> CreateIsolatedDatabaseAsync()
     {
@@ -35,10 +32,16 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
     {
         try
         {
+            // Build() pings Docker; keep it out of the constructor so missing Docker skips instead of failing collection setup.
+            container = new PostgreSqlBuilder("postgres:16-alpine")
+                .WithDatabase("elsa")
+                .WithUsername("postgres")
+                .WithPassword("postgres")
+                .Build();
             await container.StartAsync();
             IsAvailable = true;
         }
-        catch (DockerUnavailableException exception)
+        catch (Exception exception) when (IsDockerUnavailable(exception))
         {
             IsAvailable = false;
             SkipReason = $"Docker/PostgreSQL container unavailable: {exception.Message}";
@@ -47,9 +50,13 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (IsAvailable)
+        if (IsAvailable && container is not null)
             await container.DisposeAsync();
     }
+
+    private static bool IsDockerUnavailable(Exception exception) =>
+        exception is DockerUnavailableException ||
+        exception.GetType().Name.Contains("Docker", StringComparison.Ordinal);
 }
 
 [CollectionDefinition(Name)]

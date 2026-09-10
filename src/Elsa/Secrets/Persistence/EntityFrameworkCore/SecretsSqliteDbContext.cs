@@ -14,6 +14,12 @@ public sealed class SecretsSqliteDbContext(DbContextOptions<SecretsSqliteDbConte
         {
             entity.Property(record => record.Payload).HasColumnType("TEXT");
             entity.Property(record => record.ConcurrencyToken).HasColumnType("BLOB");
+            // Sqlite cannot translate DateTimeOffset comparisons against TEXT. Store UTC ticks.
+            entity.Property(record => record.MaxActiveVersionExpiresAt)
+                .HasConversion(
+                    value => value.HasValue ? value.Value.UtcTicks : (long?)null,
+                    value => value.HasValue ? new DateTimeOffset(value.Value, TimeSpan.Zero) : null)
+                .HasColumnType("INTEGER");
         });
     }
 }

@@ -214,9 +214,12 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
         {
             var now = request.Now!.Value;
             var active = SecretsSearchKeys.StatusValue(SecretStatus.Active);
+            // Split predicates so EF can translate the nullable DateTimeOffset comparison
+            // (Sqlite stores it as ticks; SqlServer/Npgsql keep native types).
+            query = query.Where(row => row.Status == active);
             query = query.Where(row =>
-                row.Status == active &&
-                (row.HasNonExpiringActiveVersion || row.MaxActiveVersionExpiresAt > now));
+                row.HasNonExpiringActiveVersion ||
+                (row.MaxActiveVersionExpiresAt != null && row.MaxActiveVersionExpiresAt > now));
         }
         else if (request.Status is not null)
         {

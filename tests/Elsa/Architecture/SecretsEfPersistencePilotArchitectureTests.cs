@@ -44,7 +44,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
                 "tests/Elsa/Persistence/EntityFramework/",
                 "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/"
             ],
-            Adr0072SecretsEfPilot.SurfacePathPrefixes);
+            EfCoreSurfaceScanner.Adr0072SecretsEfPilot.SurfacePathPrefixes);
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         var snapshot = new EfCoreSurfaceScanner(RepoRoot).Scan();
         var leaked = snapshot.Categories()
             .SelectMany(category => category.Value.Select(entry => $"{category.Key}: {entry}"))
-            .Where(entry => Adr0072SecretsEfPilot.SurfacePathPrefixes.Any(prefix =>
+            .Where(entry => EfCoreSurfaceScanner.Adr0072SecretsEfPilot.SurfacePathPrefixes.Any(prefix =>
                 entry.Contains(prefix, StringComparison.Ordinal)))
             .ToArray();
         Assert.True(leaked.Length == 0, string.Join(Environment.NewLine, leaked));
