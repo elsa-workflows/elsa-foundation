@@ -64,6 +64,63 @@ public sealed class PayloadCatalogFileTests : IDisposable
         Assert.Equal(["alpha", "beta"], models);
     }
 
+    [Fact]
+    public void ReadArray_NullSerializer_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            PayloadCatalogFile.ReadArray<string>("catalog.json", null!, Factory));
+    }
+
+    [Fact]
+    public void ReadArray_NullExceptionFactory_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            PayloadCatalogFile.ReadArray<string>("catalog.json", new StubSerializer(), null!));
+    }
+
+    [Fact]
+    public void ReadArray_IoFailure_WrapsOriginalIoException()
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+
+        const string path = "/proc/self/mem";
+        Assert.True(File.Exists(path));
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            PayloadCatalogFile.ReadArray<string>(path, new StubSerializer(), Factory));
+
+        Assert.Contains(path, exception.Message, StringComparison.Ordinal);
+        Assert.Contains("the file could not be read.", exception.Message, StringComparison.Ordinal);
+        Assert.IsType<IOException>(exception.InnerException);
+    }
+
+    [Fact]
+    public void ReadArray_UnauthorizedFile_WrapsOriginalAccessFailure()
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
+            return;
+        if (Environment.IsPrivilegedProcess)
+            return;
+
+        var path = WriteTemp("""["alpha"]""");
+        File.SetUnixFileMode(path, UnixFileMode.None);
+
+        InvalidOperationException exception;
+        try
+        {
+            exception = Assert.Throws<InvalidOperationException>(() =>
+                PayloadCatalogFile.ReadArray<string>(path, new StubSerializer(), Factory));
+        }
+        finally
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+
+        Assert.Contains("the file could not be read.", exception.Message, StringComparison.Ordinal);
+        Assert.IsType<UnauthorizedAccessException>(exception.InnerException);
+    }
+
     private static Exception Factory(string path, string reason, Exception? inner) =>
         new InvalidOperationException($"{path}: {reason}", inner);
 
@@ -78,10 +135,17 @@ public sealed class PayloadCatalogFileTests : IDisposable
 
     public void Dispose()
     {
-        foreach (var file in _tempFiles)
+        foreach (var path in _tempFiles)
         {
-            try { File.Delete(file); }
+            try
+            {
+                if (Directory.Exists(path))
+                    Directory.Delete(path);
+                else
+                    File.Delete(path);
+            }
             catch (IOException) { /* best-effort */ }
+            catch (UnauthorizedAccessException) { /* best-effort */ }
         }
     }
 

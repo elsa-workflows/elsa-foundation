@@ -14,6 +14,8 @@ public static class DesignAtomicWriteProtocol
         Func<CancellationToken, Task>? beforeAttempt,
         CancellationToken cancellationToken)
         where TScope : IDisposable
+        where TMarker : class
+        where TResult : class
     {
         ArgumentNullException.ThrowIfNull(lane);
         ArgumentNullException.ThrowIfNull(stage);
@@ -52,6 +54,8 @@ public static class DesignAtomicWriteProtocol
         Func<TScope, CancellationToken, Task<TStage>> stage,
         CancellationToken cancellationToken)
         where TScope : IDisposable
+        where TMarker : class
+        where TResult : class
     {
         using var scope = lane.BeginScope();
         try
@@ -110,6 +114,8 @@ public static class DesignAtomicWriteProtocol
         Exception exception,
         CancellationToken cancellationToken)
         where TScope : IDisposable
+        where TMarker : class
+        where TResult : class
     {
         if (lane.DelayBeforeMarkerReload && attempt < lane.MarkerRaceAttemptBudget)
             await lane.Delay(attempt, cancellationToken);
@@ -140,6 +146,8 @@ public static class DesignAtomicWriteProtocol
         DesignAtomicWriteLane<TScope, TMarker, TStage, TResult> lane,
         TScope scope)
         where TScope : IDisposable
+        where TMarker : class
+        where TResult : class
     {
         if (!lane.RollbackOnAttemptFailure)
             return;

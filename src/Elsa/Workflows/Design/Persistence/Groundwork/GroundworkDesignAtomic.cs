@@ -138,7 +138,7 @@ public sealed class GroundworkDesignAtomicWrite(
         CancellationToken cancellationToken = default) =>
         ExecuteAsync(request, null, stage, cancellationToken);
 
-    public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
+    public async Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
         GroundworkDesignAtomicWriteRequest request,
         Func<CancellationToken, Task>? beforeAttempt,
         Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
@@ -257,7 +257,7 @@ public sealed class GroundworkDesignAtomicWrite(
                 $"Design operation marker '{id}' conflicted, but the winner could not be reloaded.")
         };
 
-        return DesignAtomicWriteProtocol.ExecuteAsync(
+        return await DesignAtomicWriteProtocol.ExecuteAsync(
             lane,
             (scope, ct) =>
             {

@@ -32,7 +32,7 @@ public sealed class GroundworkDesignAtomicWrite(GroundworkV2ActivityDesignStore 
         CancellationToken cancellationToken = default)
         => ExecuteAsync(request, null, stage, cancellationToken);
 
-    public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
+    public async Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
         GroundworkDesignAtomicWriteRequest request,
         Func<CancellationToken, Task>? beforeAttempt,
         Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
@@ -118,7 +118,7 @@ public sealed class GroundworkDesignAtomicWrite(GroundworkV2ActivityDesignStore 
             DelayBeforeMarkerReload = true
         };
 
-        return DesignAtomicWriteProtocol.ExecuteAsync(
+        return await DesignAtomicWriteProtocol.ExecuteAsync(
             lane,
             (scope, ct) =>
             {

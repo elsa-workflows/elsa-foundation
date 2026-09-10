@@ -11,6 +11,8 @@ namespace Elsa.Persistence.Groundwork.DesignAtomic;
 /// </remarks>
 public sealed class DesignAtomicWriteLane<TScope, TMarker, TStage, TResult>
     where TScope : IDisposable
+    where TMarker : class
+    where TResult : class
 {
     /// <summary>The catalog's operation-ledger unit id (for example <c>workflowDesignOperation</c>).</summary>
     public required string DocumentKind { get; init; }

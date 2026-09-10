@@ -9,7 +9,8 @@ namespace Elsa.Architecture.Tests;
 /// Each design catalog owns a private operation ledger. Crash-safety and replay are per-catalog: a
 /// commit spans many rows and tables inside one catalog, never across both. That is deliberate — the
 /// catalogs are a supported split-database topology, so a cross-catalog transaction could not be
-/// honoured anyway and cross-lane work goes through the post-commit outbox instead.
+/// honoured anyway. Cross-lane publication stages those rows in one transaction and refuses a
+/// split-target host.
 /// <para>
 /// The v2 catalog keys a storage unit by (target, unit id) and refuses two shapes under one id. Both
 /// lanes once named their ledger <c>designOperation</c> with different tables and different columns, so
