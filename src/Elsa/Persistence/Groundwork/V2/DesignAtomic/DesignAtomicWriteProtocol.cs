@@ -148,9 +148,14 @@ public static class DesignAtomicWriteProtocol
         {
             lane.Rollback(scope);
         }
-        catch (Exception)
+        catch (Exception exception) when (exception is not (
+            OutOfMemoryException or
+            StackOverflowException or
+            AccessViolationException))
         {
             // Preserve the provider's original failure when rollback itself fails.
+            // Rollback can throw provider/storage exceptions of many types; narrowing
+            // to InvalidOperationException would change which failures are swallowed.
         }
     }
 }

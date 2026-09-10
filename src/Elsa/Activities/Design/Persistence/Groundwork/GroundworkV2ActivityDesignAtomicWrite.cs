@@ -94,9 +94,14 @@ public sealed class GroundworkDesignAtomicWrite(GroundworkV2ActivityDesignStore 
                     if (winner is not null)
                         return ResolveReconciled(winner, request);
                 }
-                catch (Exception)
+                catch (Exception exception) when (exception is not (
+                    OutOfMemoryException or
+                    StackOverflowException or
+                    AccessViolationException))
                 {
-                    // Preserve the provider's original failure when reconciliation cannot classify it.
+                    // Preserve the provider's original failure when reconciliation cannot
+                    // classify it. Load/Resolve throw InvalidDataException, InvalidOperationException,
+                    // JsonException, and provider exceptions — not only ActivityDesign* types.
                 }
 
                 return null;
