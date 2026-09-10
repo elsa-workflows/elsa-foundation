@@ -402,7 +402,12 @@ public static partial class DiagnosticsNativePlanContract
             plan.ChosenPhysicalIndexId == Guid.Empty ||
             plan.FailureCategory is not null ||
             plan.CollectionCommandCount is null or < 1)
-            throw Reject("Structured plan evidence does not prove the collected selected index.");
+            throw Reject(
+                "Structured plan evidence does not prove the collected selected index: " +
+                $"availability={plan.Availability}, provenance={plan.Provenance}, choseExpectedIndex={plan.ChoseExpectedIndex?.ToString() ?? "null"}, " +
+                $"expectedLogicalIndex={plan.ExpectedLogicalIndex ?? "null"} (route index {specification.IndexName}), " +
+                $"chosenPhysicalIndexId={plan.ChosenPhysicalIndexId}, failureCategory={plan.FailureCategory ?? "null"}, " +
+                $"collectionCommandCount={plan.CollectionCommandCount?.ToString() ?? "null"}.");
         var nodes = plan.Nodes ?? throw Reject("Structured winning-plan nodes are missing.");
         if (nodes.Count == 0 || nodes.Any(candidate => candidate is null))
             throw Reject("Structured winning-plan evidence is empty.");

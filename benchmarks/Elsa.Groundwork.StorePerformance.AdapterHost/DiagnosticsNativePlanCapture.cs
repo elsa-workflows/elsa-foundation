@@ -247,11 +247,18 @@ internal static class DiagnosticsNativePlanCapture
             StructuredEvidence = structuredEvidence
         };
 
-        DiagnosticsNativePlanContract.ValidateStructuredEvidence(
-            request.Provider,
-            request.Adapter,
-            routeEvidence,
-            observed.Version);
+        try
+        {
+            DiagnosticsNativePlanContract.ValidateStructuredEvidence(
+                request.Provider,
+                request.Adapter,
+                routeEvidence,
+                observed.Version);
+        }
+        catch (PerformanceContractException exception)
+        {
+            throw new PerformanceContractException($"{exception.Message} (route '{specification.RouteIdentity}')");
+        }
 
         return routeEvidence;
     }
@@ -615,16 +622,23 @@ internal static class DiagnosticsNativePlanCapture
             {
                 StructuredEvidence = observed[0]
             };
-            if (pointRead)
+            try
             {
-                // Every fanned-out point read of the constituent is admitted; the constituent retains the first.
-                foreach (var read in observed)
+                if (pointRead)
+                {
+                    // Every fanned-out point read of the constituent is admitted; the constituent retains the first.
+                    foreach (var read in observed)
+                        DiagnosticsNativePlanContract.ValidateStructuredTraceDetailConstituent(
+                            request.Provider, request.Adapter, constituent with { StructuredEvidence = read }, observedProviderVersion);
+                }
+                else
                     DiagnosticsNativePlanContract.ValidateStructuredTraceDetailConstituent(
-                        request.Provider, request.Adapter, constituent with { StructuredEvidence = read }, observedProviderVersion);
+                        request.Provider, request.Adapter, constituent, observedProviderVersion);
             }
-            else
-                DiagnosticsNativePlanContract.ValidateStructuredTraceDetailConstituent(
-                    request.Provider, request.Adapter, constituent, observedProviderVersion);
+            catch (PerformanceContractException exception)
+            {
+                throw new PerformanceContractException($"{exception.Message} (constituent '{constituent.RouteIdentity}')");
+            }
             evidence.Add(constituent);
         }
         return evidence;
