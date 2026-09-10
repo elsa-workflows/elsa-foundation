@@ -153,7 +153,12 @@ tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 run_ndjson_shape_self_check
 
+# Top-level spikes/ is a disposable sandbox (not product code). Keep it out of
+# all-project restore so a spike can carry extra NuGet ids without expanding
+# the zero-EF receipt or the root package-source map. The receipt's
+# excludedDirectoryNames protocol field stays { .git, bin, obj }.
 symlink_path="$(find "$repo_root" \
+  -path "$repo_root/spikes" -prune -o \
   -type d \( -name .git -o -name bin -o -name obj \) -prune -o \
   -type l -print -quit)"
 [ -z "$symlink_path" ] || die 'repository discovery does not follow symbolic links.'
@@ -164,6 +169,7 @@ while IFS= read -r -d '' project; do
   assert_receipt_path_safe "$relative"
   project_paths+=("$relative")
 done < <(find "$repo_root" \
+  -path "$repo_root/spikes" -prune -o \
   -type d \( -name .git -o -name bin -o -name obj \) -prune -o \
   -type f -name '*.csproj' -print0)
 
@@ -192,6 +198,7 @@ while IFS= read -r -d '' project; do
   assert_receipt_path_safe "$relative"
   project_paths+=("$relative")
 done < <(find "$repo_root" \
+  -path "$repo_root/spikes" -prune -o \
   -type d \( -name .git -o -name bin -o -name obj \) -prune -o \
   -type f -name '*.csproj' -print0)
 IFS=$'\n' project_paths=($(printf '%s\n' "${project_paths[@]}" | LC_ALL=C sort -u))
@@ -216,6 +223,7 @@ while IFS= read -r -d '' input; do
       ;;
   esac
 done < <(find "$repo_root" \
+  -path "$repo_root/spikes" -prune -o \
   -type d \( -name .git -o -name bin -o -name obj \) -prune -o \
   -type f \( -name '*.csproj' -o -name '*.props' -o -name '*.targets' -o -name '*.rsp' -o -iname 'nuget.config' -o -name 'global.json' -o -name 'packages.lock.json' \) -print0)
 IFS=$'\n' input_paths=($(printf '%s\n' "${input_paths[@]}" | LC_ALL=C sort -u))

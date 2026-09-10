@@ -90,6 +90,13 @@ function Get-RepositoryFiles {
                     }).Count -gt 0) {
                     continue
                 }
+                # Top-level spikes/ is a disposable sandbox. Keep it out of all-project
+                # restore; excludedDirectoryNames stays { .git, bin, obj }.
+                $directoryFull = [System.IO.Path]::GetFullPath($directory)
+                if ([System.StringComparer]::OrdinalIgnoreCase.Equals($item.Name, 'spikes') -and
+                    [System.StringComparer]::OrdinalIgnoreCase.Equals($directoryFull, $RepoRoot)) {
+                    continue
+                }
                 if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
                     Stop-Driver 'repository discovery does not follow reparse-point directories.'
                 }
