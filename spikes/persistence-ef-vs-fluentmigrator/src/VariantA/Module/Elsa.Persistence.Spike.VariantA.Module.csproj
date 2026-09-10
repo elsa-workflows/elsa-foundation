@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Elsa.Persistence.Spike.VariantA</RootNamespace>
+    <Description>
+      Module package: EF Core + Relational only. Provider packages belong on the host/test/tooling.
+    </Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.10" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shared\Elsa.Persistence.Spike.Shared.csproj" />
+  </ItemGroup>
+</Project>

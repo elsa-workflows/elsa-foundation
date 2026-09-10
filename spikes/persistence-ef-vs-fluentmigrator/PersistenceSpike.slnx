@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/Shared/">
+    <Project Path="src/Shared/Elsa.Persistence.Spike.Shared.csproj" />
+  </Folder>
+  <Folder Name="/src/VariantA/">
+    <Project Path="src/VariantA/Module/Elsa.Persistence.Spike.VariantA.Module.csproj" />
+    <Project Path="src/VariantA/Tooling/Elsa.Persistence.Spike.VariantA.Tooling.csproj" />
+  </Folder>
+  <Folder Name="/src/VariantB/">
+    <Project Path="src/VariantB/Module/Elsa.Persistence.Spike.VariantB.Module.csproj" />
+    <Project Path="src/VariantB/Host/Elsa.Persistence.Spike.VariantB.Host.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/VariantA/Elsa.Persistence.Spike.VariantA.Tests.csproj" />
+    <Project Path="tests/VariantB/Elsa.Persistence.Spike.VariantB.Tests.csproj" />
+  </Folder>
+</Solution>

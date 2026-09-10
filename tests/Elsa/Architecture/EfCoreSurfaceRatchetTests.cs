@@ -195,6 +195,42 @@ public sealed class EfCoreSurfaceRatchetTests
     }
 
     [Fact]
+    public void Scanner_excludes_disposable_spike_projects_from_restore_inventory()
+    {
+        using var fixture = new TemporaryRepository();
+        fixture.Write("spikes/persistence-ef-vs-fluentmigrator/VariantA.Module/VariantA.Module.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" /></ItemGroup>
+            </Project>
+            """);
+        fixture.Write(
+            "spikes/persistence-ef-vs-fluentmigrator/VariantA.Module/SecretsDbContext.cs",
+            "public sealed class SecretsDbContext : DbContext;");
+        fixture.Write(
+            "spikes/persistence-ef-vs-fluentmigrator/VariantA.Module/Migrations/Initial.cs",
+            "[Migration(\"Initial\")] public sealed class Initial : Migration;");
+        fixture.Write(
+            "spikes/persistence-ef-vs-fluentmigrator/Program.cs",
+            "services.AddDbContext<SecretsDbContext>();");
+        fixture.Write(
+            "spikes/persistence-ef-vs-fluentmigrator/Directory.Packages.props",
+            "<Project><ItemGroup><PackageVersion Include=\"Microsoft.EntityFrameworkCore\" Version=\"10.0.0\" /></ItemGroup></Project>");
+
+        fixture.Write("src/Consumer/Elsa.Consumer.EFCore.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" /></ItemGroup>
+            </Project>
+            """);
+
+        var snapshot = new EfCoreSurfaceScanner(fixture.Path).Scan();
+
+        Assert.Equal(["src/Consumer/Elsa.Consumer.EFCore.csproj"], snapshot.EfProjects);
+        Assert.DoesNotContain(
+            snapshot.Categories().SelectMany(category => category.Value),
+            entry => entry.StartsWith("spikes/", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Scanner_excludes_only_the_canonical_historical_compatibility_subtree()
     {
         using var fixture = new TemporaryRepository();

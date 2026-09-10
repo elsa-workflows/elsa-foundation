@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Elsa.Persistence.Spike.VariantB.Host</RootNamespace>
+    <Description>
+      FluentMigrator runners, provider packages, and the EF model-differ drift check.
+      The module package does not reference these.
+    </Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="FluentMigrator.Runner.Core" Version="8.0.1" />
+    <PackageReference Include="FluentMigrator.Runner.SQLite" Version="8.0.1" />
+    <PackageReference Include="FluentMigrator.Runner.Postgres" Version="8.0.1" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Module\Elsa.Persistence.Spike.VariantB.Module.csproj" />
+  </ItemGroup>
+</Project>

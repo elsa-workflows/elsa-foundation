@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Elsa.Persistence.Spike.VariantB</RootNamespace>
+    <Description>
+      Module package: EF Core + Relational for queries, FluentMigrator for schema.
+      Provider packages and FM runners belong on the host/test.
+    </Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="FluentMigrator" Version="8.0.1" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.10" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shared\Elsa.Persistence.Spike.Shared.csproj" />
+  </ItemGroup>
+</Project>

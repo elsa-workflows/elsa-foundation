@@ -1616,7 +1616,8 @@ internal sealed class EfCoreSurfaceScanner
                path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
                path.Contains($"{Path.DirectorySeparatorChar}.git{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
                relative.StartsWith("docs/reports/repros/", StringComparison.OrdinalIgnoreCase) ||
-               relative.StartsWith("tools/compatibility/", StringComparison.OrdinalIgnoreCase);
+               relative.StartsWith("tools/compatibility/", StringComparison.OrdinalIgnoreCase) ||
+               relative.StartsWith("spikes/", StringComparison.OrdinalIgnoreCase);
     }
 
     private string Relative(string path) =>
