@@ -99,6 +99,37 @@ public sealed class TraceDetailStructuredAdmissionTests
         Assert.Contains("Ordered merge keys are not the route's complete ordering", rejected.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>A four-core SQL Server gathers the lookup join's parallel streams under the Top; the ordered gather merges on the route's ordering.</summary>
+    [Fact]
+    public void Page_may_gather_parallel_streams_on_the_route_ordering()
+    {
+        DiagnosticsNativePlanContract.ValidateStructuredTraceDetailConstituent("sqlserver", Adapter, Spans("sqlserver", exchange: true), Version);
+    }
+
+    [Fact]
+    public void Ordered_exchange_must_merge_on_the_route_ordering()
+    {
+        var rejected = Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateStructuredTraceDetailConstituent("sqlserver", Adapter, Spans("sqlserver", exchange: true, exchangeKeys: ["startTime"]), Version));
+        Assert.Contains("Ordered exchange keys are not the route's complete ordering", rejected.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Withheld_plan_rejection_names_the_provider_reason()
+    {
+        var spans = Spans("postgresql");
+        var withheld = spans with
+        {
+            StructuredEvidence = spans.StructuredEvidence! with
+            {
+                Plan = new("Unsupported", null, null, null, null, null, 4, null) { WithheldReason = "NoSinglePlan" }
+            }
+        };
+        var rejected = Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateStructuredTraceDetailConstituent("postgresql", Adapter, withheld, Version));
+        Assert.Contains("withheldReason=NoSinglePlan", rejected.Message, StringComparison.Ordinal);
+    }
+
     private static DiagnosticsTraceDetailConstituentEvidence Summary(StructuredExecutionEvidence evidence) => new(
         "trace-detail/summary-by-trace-key", "", "", "primary-key-read", "", "",
         DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream, true, true, 1, 1, 1, 1, 1)
@@ -123,7 +154,9 @@ public sealed class TraceDetailStructuredAdmissionTests
         bool rewriteEqualities = false,
         bool mergedPages = false,
         string[]? mergeKeys = null,
-        bool nestedMerge = false)
+        bool nestedMerge = false,
+        bool exchange = false,
+        string[]? exchangeKeys = null)
     {
         var specification = DiagnosticsNativePlanContract.TraceDetailConstituents(Adapter)
             .Single(item => item.RouteIdentity == "trace-detail/spans-by-trace-key-start-id");
@@ -138,11 +171,11 @@ public sealed class TraceDetailStructuredAdmissionTests
             Enumerable.Range(1, pages - 1)
                 .Select(page => new DiagnosticsTraceDetailPageEvidence(page, "", "", "")
                 {
-                    StructuredEvidence = Page(provider, specification, route, continuation: true, rewriteContinuation, rewriteEqualities, mergedPages, mergeKeys, nestedMerge)
+                    StructuredEvidence = Page(provider, specification, route, continuation: true, rewriteContinuation, rewriteEqualities, mergedPages, mergeKeys, nestedMerge, exchange, exchangeKeys)
                 })
                 .ToArray())
         {
-            StructuredEvidence = Page(provider, specification, route, continuation: false, null, false)
+            StructuredEvidence = Page(provider, specification, route, continuation: false, null, false, exchange: exchange, exchangeKeys: exchangeKeys)
         };
     }
 
@@ -155,7 +188,9 @@ public sealed class TraceDetailStructuredAdmissionTests
         bool rewriteEqualities,
         bool merged = false,
         string[]? mergeKeys = null,
-        bool nestedMerge = false)
+        bool nestedMerge = false,
+        bool exchange = false,
+        string[]? exchangeKeys = null)
     {
         var ordering = specification.Ordering;
         var scope = provider != "mongodb";
@@ -194,7 +229,17 @@ public sealed class TraceDetailStructuredAdmissionTests
             {
                 Continuation = continuation ? new("Lexicographic", branches, []) : null
             },
-            new("Collected", Provenance(provider), null, null, null, null, 1, merged
+            new("Collected", Provenance(provider), null, null, null, null, 1, exchange
+                ?
+                [
+                    new(0, null, "Limit", null, null, null, null, null),
+                    new(1, 0, "Exchange", null, null, null, null, null, MergeDetails(exchangeKeys ?? ordering.Select(term => term.Column).ToArray())),
+                    new(2, 1, "Materialize", null, null, null, null, null),
+                    new(3, 2, "Filter", null, null, null, null, null),
+                    new(4, 3, "IndexSearch", Target, Index, specification.IndexName, false, null),
+                    new(5, 2, "Materialize", null, null, null, null, null)
+                ]
+                : merged
                 ?
                 [
                     new(0, null, "Limit", null, null, null, null, null),

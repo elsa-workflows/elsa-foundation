@@ -376,7 +376,7 @@ public static partial class DiagnosticsNativePlanContract
         string.Equals(specification.OrderColumn, "sequence", StringComparison.Ordinal);
 
     private static readonly IReadOnlySet<string> PassThroughOperations =
-        new HashSet<string>(StringComparer.Ordinal) { "Limit", "Materialize", "Projection" };
+        new HashSet<string>(StringComparer.Ordinal) { "Limit", "Materialize", "Projection", "Exchange" };
 
     /// <summary>
     /// SQL Server fetches the columns an index does not cover through a bookmark lookup joined to the
@@ -384,7 +384,7 @@ public static partial class DiagnosticsNativePlanContract
     /// operator; PostgreSQL folds the same residual into its index scan node.
     /// </summary>
     private static readonly IReadOnlySet<string> SqlServerPassThroughOperations =
-        new HashSet<string>(StringComparer.Ordinal) { "Limit", "Materialize", "Projection", "Filter" };
+        new HashSet<string>(StringComparer.Ordinal) { "Limit", "Materialize", "Projection", "Filter", "Exchange" };
 
     /// <summary>
     /// An index-search route proves exactly one access node on the expected logical index against the
@@ -415,7 +415,7 @@ public static partial class DiagnosticsNativePlanContract
                 $"availability={plan.Availability}, provenance={plan.Provenance}, choseExpectedIndex={plan.ChoseExpectedIndex?.ToString() ?? "null"}, " +
                 $"expectedLogicalIndex={plan.ExpectedLogicalIndex ?? "null"} (route index {specification.IndexName}), " +
                 $"chosenPhysicalIndexId={plan.ChosenPhysicalIndexId}, failureCategory={plan.FailureCategory ?? "null"}, " +
-                $"collectionCommandCount={plan.CollectionCommandCount?.ToString() ?? "null"}.");
+                $"collectionCommandCount={plan.CollectionCommandCount?.ToString() ?? "null"}, withheldReason={plan.WithheldReason ?? "null"}.");
         var nodes = plan.Nodes ?? throw Reject("Structured winning-plan nodes are missing.");
         if (nodes.Count == 0 || nodes.Any(candidate => candidate is null))
             throw Reject("Structured winning-plan evidence is empty.");
@@ -452,8 +452,14 @@ public static partial class DiagnosticsNativePlanContract
                 continue;
             if (details.Spill?.Spilled == true)
                 throw Reject("Structured winning-plan evidence observed a spill.");
-            if (details.NativeSortKeys is not null)
-                throw Reject("An index-search route must not observe native sort keys.");
+            // A parallel plan's ordered gather (Exchange) merges already-ordered streams on the route's
+            // ordering; any other node reporting sort keys sorted, which an index-search route must not do.
+            if (details.NativeSortKeys is { } exchangeKeys)
+            {
+                if (node.Operation != "Exchange")
+                    throw Reject("An index-search route must not observe native sort keys.");
+                ValidateNativeSortKeys(exchangeKeys, specification, "Ordered exchange");
+            }
             if (string.Equals(details.NativeLimit.Kind, "Explicit", StringComparison.Ordinal) &&
                 details.NativeLimit.Value != nativeFetchLimit)
                 throw Reject("Structured winning-plan evidence observed a native bound other than the route's lookahead limit.");
@@ -504,8 +510,12 @@ public static partial class DiagnosticsNativePlanContract
                 continue;
             if (details.Spill?.Spilled == true)
                 throw Reject("Structured winning-plan evidence observed a spill.");
-            if (!merge && details.NativeSortKeys is not null)
-                throw Reject("An index-search route must not observe native sort keys.");
+            if (!merge && details.NativeSortKeys is { } exchangeKeys)
+            {
+                if (node.Operation != "Exchange")
+                    throw Reject("An index-search route must not observe native sort keys.");
+                ValidateNativeSortKeys(exchangeKeys, specification, "Ordered exchange");
+            }
             if (string.Equals(details.NativeLimit.Kind, "Explicit", StringComparison.Ordinal) &&
                 details.NativeLimit.Value != nativeFetchLimit)
                 throw Reject("Structured winning-plan evidence observed a native bound other than the route's lookahead limit.");

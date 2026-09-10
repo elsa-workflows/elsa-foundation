@@ -160,4 +160,8 @@ public sealed record StructuredPlanEvidence(
     string? FailureCategory,
     int? CollectionCommandCount,
     IReadOnlyList<StructuredPlanNode>? Nodes,
-    IReadOnlyList<int>? ObservedRootOrder = null);
+    IReadOnlyList<int>? ObservedRootOrder = null)
+{
+    /// <summary>Why an unsupported plan was withheld (Groundwork 0.4.0-preview.30); null on older evidence.</summary>
+    public string? WithheldReason { get; init; }
+}

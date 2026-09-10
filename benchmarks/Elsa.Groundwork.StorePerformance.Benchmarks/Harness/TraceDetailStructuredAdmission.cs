@@ -164,7 +164,7 @@ public static partial class DiagnosticsNativePlanContract
         var plan = evidence.Plan ?? throw Reject("Trace-detail point read plan evidence is missing.");
         if (plan.Availability != "Collected" || !string.Equals(plan.Provenance, ExpectedPlanProvenance(provider), StringComparison.Ordinal) ||
             plan.FailureCategory is not null)
-            throw Reject($"Trace-detail point read '{specification.RouteIdentity}' did not collect its native plan.");
+            throw Reject($"Trace-detail point read '{specification.RouteIdentity}' did not collect its native plan (availability={plan.Availability}, withheldReason={plan.WithheldReason ?? "null"}).");
         var nodes = plan.Nodes ?? throw Reject("Trace-detail point read plan nodes are missing.");
         var access = nodes.Where(node => node.TargetId is not null).ToArray();
         // The key search is the primary-key search, or the seek on the primary key's own index where a
@@ -177,7 +177,7 @@ public static partial class DiagnosticsNativePlanContract
         {
             if (!ReferenceEquals(node, access[0]) && !passThrough.Contains(node.Operation))
                 throw Reject($"Trace-detail point read '{specification.RouteIdentity}' carries unexpected native work '{node.Operation}'.");
-            if (node.Details?.Spill?.Spilled == true || node.Details?.NativeSortKeys is not null)
+            if (node.Details?.Spill?.Spilled == true || (node.Details?.NativeSortKeys is not null && node.Operation != "Exchange"))
                 throw Reject($"Trace-detail point read '{specification.RouteIdentity}' observed a sort or spill.");
         }
     }
