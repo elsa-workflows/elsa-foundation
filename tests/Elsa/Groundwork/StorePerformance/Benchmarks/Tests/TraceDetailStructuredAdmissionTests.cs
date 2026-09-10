@@ -67,6 +67,31 @@ public sealed class TraceDetailStructuredAdmissionTests
         Assert.Contains("is not the route's keyset branch", rejected.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>MongoDB answers a keyset page by merging one scan of the expected index per branch on the route's ordering.</summary>
+    [Fact]
+    public void Continuation_page_may_be_an_ordered_merge_of_scans_of_the_expected_index()
+    {
+        DiagnosticsNativePlanContract.ValidateStructuredTraceDetailConstituent("mongodb", Adapter, Spans("mongodb", mergedPages: true), Version);
+    }
+
+    [Fact]
+    public void First_page_may_not_be_an_ordered_merge()
+    {
+        var spans = Spans("mongodb", mergedPages: true);
+        var merged = spans with { StructuredEvidence = spans.Pages![0].StructuredEvidence! with { BoundedQuery = spans.StructuredEvidence!.BoundedQuery } };
+        var rejected = Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateStructuredTraceDetailConstituent("mongodb", Adapter, merged, Version));
+        Assert.Contains("admitted only for a keyset continuation page", rejected.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Ordered_merge_must_merge_on_the_route_ordering()
+    {
+        var rejected = Assert.Throws<PerformanceContractException>(() =>
+            DiagnosticsNativePlanContract.ValidateStructuredTraceDetailConstituent("mongodb", Adapter, Spans("mongodb", mergedPages: true, mergeKeys: ["startTime"]), Version));
+        Assert.Contains("Ordered merge keys are not the route's complete ordering", rejected.Message, StringComparison.Ordinal);
+    }
+
     private static DiagnosticsTraceDetailConstituentEvidence Summary(StructuredExecutionEvidence evidence) => new(
         "trace-detail/summary-by-trace-key", "", "", "primary-key-read", "", "",
         DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream, true, true, 1, 1, 1, 1, 1)
@@ -88,7 +113,9 @@ public sealed class TraceDetailStructuredAdmissionTests
     private static DiagnosticsTraceDetailConstituentEvidence Spans(
         string provider,
         Func<StructuredPredicateFact, StructuredPredicateFact>? rewriteContinuation = null,
-        bool rewriteEqualities = false)
+        bool rewriteEqualities = false,
+        bool mergedPages = false,
+        string[]? mergeKeys = null)
     {
         var specification = DiagnosticsNativePlanContract.TraceDetailConstituents(Adapter)
             .Single(item => item.RouteIdentity == "trace-detail/spans-by-trace-key-start-id");
@@ -97,12 +124,13 @@ public sealed class TraceDetailStructuredAdmissionTests
         return new(
             specification.RouteIdentity, "", "", "index-search",
             DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(provider, route), "",
-            specification.PhysicalCardinality, true, true, specification.FiniteLimit, specification.PublicRowBound,
+            specification.PhysicalCardinality, DiagnosticsNativePlanContract.ExpectedStorageScopePredicate(provider, specification.StorageScopeRequired), true,
+            specification.FiniteLimit, specification.PublicRowBound,
             specification.PublicRowBound, pages, pages,
             Enumerable.Range(1, pages - 1)
                 .Select(page => new DiagnosticsTraceDetailPageEvidence(page, "", "", "")
                 {
-                    StructuredEvidence = Page(provider, specification, route, continuation: true, rewriteContinuation, rewriteEqualities)
+                    StructuredEvidence = Page(provider, specification, route, continuation: true, rewriteContinuation, rewriteEqualities, mergedPages, mergeKeys)
                 })
                 .ToArray())
         {
@@ -116,9 +144,12 @@ public sealed class TraceDetailStructuredAdmissionTests
         DiagnosticsNativeRouteSpec route,
         bool continuation,
         Func<StructuredPredicateFact, StructuredPredicateFact>? rewriteContinuation,
-        bool rewriteEqualities)
+        bool rewriteEqualities,
+        bool merged = false,
+        string[]? mergeKeys = null)
     {
         var ordering = specification.Ordering;
+        var scope = provider != "mongodb";
         StructuredPredicateFact Fact(string column, string @operator) => new(
             column, @operator,
             DiagnosticsNativePlanContract.IsOrdinalStringOrderColumn(column) ? "String" : "Int64",
@@ -133,13 +164,15 @@ public sealed class TraceDetailStructuredAdmissionTests
             .ToArray();
         return new StructuredExecutionEvidence(
             1, DisplayName(provider), Version, "BoundedQuery", "Read", "Statement", Identity(),
-            new("elsa-otel-spans-v2", Target, "Predicate"), "Succeeded", null, "Collected",
+            new("elsa-otel-spans-v2", Target, scope ? "Predicate" : "PhysicalTarget"), "Succeeded", null, "Collected",
             new(
-                new StructuredConjunctionPredicate(
-                [
-                    new("__groundwork_scope", "Equal", "String", "Ordinal", "NotApplicable", "Scope", Guid.Parse("77777777-7777-7777-7777-777777777777")),
-                    new("traceKey", "Equal", "String", "Ordinal", "NotApplicable", "Caller", Binding)
-                ]),
+                new StructuredConjunctionPredicate(scope
+                    ?
+                    [
+                        new("__groundwork_scope", "Equal", "String", "Ordinal", "NotApplicable", "Scope", Guid.Parse("77777777-7777-7777-7777-777777777777")),
+                        new("traceKey", "Equal", "String", "Ordinal", "NotApplicable", "Caller", Binding)
+                    ]
+                    : [new("traceKey", "Equal", "String", "Ordinal", "NotApplicable", "Caller", Binding)]),
                 ordering.Select(term => DiagnosticsNativePlanContract.IsOrdinalStringOrderColumn(term.Column)
                     ? new StructuredOrderTerm(term.Column, "Ascending", null, ["OrdinalStringKey"], "Ordinal")
                     : new StructuredOrderTerm(term.Column, "Ascending", null, [], "Exact")).ToArray(),
@@ -152,8 +185,22 @@ public sealed class TraceDetailStructuredAdmissionTests
             {
                 Continuation = continuation ? new("Lexicographic", branches, []) : null
             },
-            new("Collected", Provenance(provider), null, null, null, null, 1,
-                [new(0, null, "IndexSearch", Target, Index, specification.IndexName, false, null)]));
+            new("Collected", Provenance(provider), null, null, null, null, 1, merged
+                ?
+                [
+                    new(0, null, "Limit", null, null, null, null, null),
+                    new(1, 0, "Materialize", null, null, null, null, null),
+                    new(2, 1, "MergeOrdered", null, null, null, null, null, new(
+                        (mergeKeys ?? ordering.Select(term => term.Column).ToArray())
+                            .Select(column => DiagnosticsNativePlanContract.IsOrdinalStringOrderColumn(column)
+                                ? new StructuredOrderTerm(column, "Ascending", null, ["PhysicalSearchKey"], "Ordinal")
+                                : new StructuredOrderTerm(column, "Ascending", null, [], "Exact")).ToArray(),
+                        new("Unknown", null), null)),
+                    new(3, 2, "Materialize", null, null, null, null, null),
+                    new(4, 3, "IndexScan", Target, Index, specification.IndexName, false, null),
+                    new(5, 2, "IndexScan", Target, Index, specification.IndexName, false, null)
+                ]
+                : [new(0, null, "IndexSearch", Target, Index, specification.IndexName, false, null)]));
     }
 
     private static StructuredExecutionIdentity Identity() => new(

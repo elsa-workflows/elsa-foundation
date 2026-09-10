@@ -192,7 +192,8 @@ public static partial class DiagnosticsNativePlanContract
             ValidateContinuation(continuation, routeSpecification.EffectiveOrdering, specification.RouteIdentity, pageIndex);
         try
         {
-            ValidatePlan(evidence.Plan, evidence.Target.PhysicalTargetId, provider, routeSpecification, nativeFetchLimit);
+            ValidatePlan(evidence.Plan, evidence.Target.PhysicalTargetId, provider, routeSpecification, nativeFetchLimit,
+                orderedMergeAdmitted: pageIndex > 0);
         }
         catch (PerformanceContractException exception)
         {
