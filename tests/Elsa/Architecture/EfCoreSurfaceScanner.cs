@@ -146,9 +146,10 @@ internal static class PersistenceProviderNeutralityBoundary
     private static bool HasProviderMarker(string value) =>
         value.Contains(".Groundwork", StringComparison.OrdinalIgnoreCase) ||
         value.Contains(".EFCore", StringComparison.OrdinalIgnoreCase) ||
-        value.Contains(".EntityFrameworkCore", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains(".EntityFramework", StringComparison.OrdinalIgnoreCase) ||
         value.Contains("/Groundwork/", StringComparison.OrdinalIgnoreCase) ||
         value.Contains("/EFCore/", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("/EntityFramework/", StringComparison.OrdinalIgnoreCase) ||
         value.Contains("/EntityFrameworkCore/", StringComparison.OrdinalIgnoreCase) ||
         value.Contains("/Sqlite/", StringComparison.OrdinalIgnoreCase) ||
         value.Contains("/SqlServer/", StringComparison.OrdinalIgnoreCase) ||
@@ -423,7 +424,9 @@ internal sealed class EfCoreSurfaceScanner
     public EfCoreSurfaceSnapshot Scan()
     {
         var projects = LoadProjects();
-        var inventoryProjects = projects;
+        var inventoryProjects = projects
+            .Where(project => !Adr0072SecretsEfPilot.IsSurfacePath(project.RelativePath))
+            .ToArray();
         var projectsByPath = projects.ToDictionary(x => x.FullPath, PathComparer);
         var efProjects = inventoryProjects.Where(IsEfProject).ToArray();
         var efProjectPaths = projects.Where(IsEfProject).Select(x => x.FullPath).ToHashSet(PathComparer);
@@ -503,9 +506,9 @@ internal sealed class EfCoreSurfaceScanner
             transitiveEfPackages,
             resolvedEfPackages,
             projectsMissingAssets,
-            SourceFiles("*.cs").Where(path => !IsApprovedOpenIddictVendorSource(Relative(path))).Where(IsEfMigration).Select(Relative).Sorted(),
-            SourceFiles("*.cs").Where(path => !IsApprovedOpenIddictVendorSource(Relative(path))).Where(IsDbContextFile).Select(Relative).Sorted(),
-            SourceFiles("*.cs").Where(path => !IsApprovedOpenIddictVendorSource(Relative(path))).SelectMany(RegistrationEntries).Sorted(),
+            SourceFiles("*.cs").Where(path => !IsApprovedOpenIddictVendorSource(Relative(path)) && !Adr0072SecretsEfPilot.IsSurfacePath(Relative(path))).Where(IsEfMigration).Select(Relative).Sorted(),
+            SourceFiles("*.cs").Where(path => !IsApprovedOpenIddictVendorSource(Relative(path)) && !Adr0072SecretsEfPilot.IsSurfacePath(Relative(path))).Where(IsDbContextFile).Select(Relative).Sorted(),
+            SourceFiles("*.cs").Where(path => !IsApprovedOpenIddictVendorSource(Relative(path)) && !Adr0072SecretsEfPilot.IsSurfacePath(Relative(path))).SelectMany(RegistrationEntries).Sorted(),
             ConfigurationFiles().SelectMany(HostConfigurationEntries).Sorted(),
             boundaryViolations);
     }
@@ -514,6 +517,24 @@ internal sealed class EfCoreSurfaceScanner
     // persistence. OpenIddictPersistenceArchitectureTests owns the exact package/source allowlist; the
     // general surface snapshot excludes those direct entries so the vendor implementation remains an
     // explicit, narrow exception governed by OpenIddictPersistenceArchitectureTests.
+    // ADR 0072 (proposed) Secrets EF pilot. First-party EF is still forbidden by ADR 0042 except the
+    // OpenIddict vendor exception and this reviewed allowlist. Accepting 0072 formally narrows 0042.
+    // The shrink-only baseline excludes these paths; SecretsEfPersistencePilotArchitectureTests owns
+    // the exact package and source inventory.
+    internal static class Adr0072SecretsEfPilot
+    {
+        public static readonly string[] SurfacePathPrefixes =
+        [
+            "src/Elsa/Persistence/EntityFramework/",
+            "src/Elsa/Secrets/Persistence/EntityFrameworkCore/",
+            "tests/Elsa/Persistence/EntityFramework/",
+            "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/"
+        ];
+
+        public static bool IsSurfacePath(string relativePath) =>
+            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
+    }
+
     private static bool IsApprovedOpenIddictVendorPackage(string project, string package) =>
         project switch
         {
@@ -1507,9 +1528,10 @@ internal sealed class EfCoreSurfaceScanner
 
     private static bool IsEfProject(ProjectInfo project) =>
         project.RelativePath.Contains("/EFCore/", StringComparison.OrdinalIgnoreCase) ||
+        project.RelativePath.Contains("/EntityFramework/", StringComparison.OrdinalIgnoreCase) ||
         project.RelativePath.Contains("/EntityFrameworkCore/", StringComparison.OrdinalIgnoreCase) ||
         project.Name.Contains(".EFCore", StringComparison.OrdinalIgnoreCase) ||
-        project.Name.Contains(".EntityFrameworkCore", StringComparison.OrdinalIgnoreCase);
+        project.Name.Contains(".EntityFramework", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsEfFreeBoundary(ProjectInfo project) =>
         PersistenceProviderNeutralityBoundary.ProjectNames.Contains(project.Name, StringComparer.Ordinal) ||
@@ -1616,6 +1638,7 @@ internal sealed class EfCoreSurfaceScanner
                path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
                path.Contains($"{Path.DirectorySeparatorChar}.git{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
                relative.StartsWith("docs/reports/repros/", StringComparison.OrdinalIgnoreCase) ||
+               relative.StartsWith("spikes/", StringComparison.OrdinalIgnoreCase) ||
                relative.StartsWith("tools/compatibility/", StringComparison.OrdinalIgnoreCase);
     }
 

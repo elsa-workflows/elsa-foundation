@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 102
+- Discovered feature classes: 103
 
 ## Features
 
@@ -70,6 +70,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | SecretsFeature | direct IShellFeature | Elsa.Secrets | IShellFeature | [SecretsFeature.cs](../../src/Elsa/Secrets/Features/SecretsFeature.cs) |
 | SecretsApiFeature | direct IWebShellFeature | Elsa.Secrets.Api | IWebShellFeature | [SecretsApiFeature.cs](../../src/Elsa/Secrets/Api/Features/SecretsApiFeature.cs) |
 | SecretsAttentionFeature | direct IShellFeature | Elsa.Secrets.Attention | IShellFeature | [SecretsAttentionFeature.cs](../../src/Elsa/Secrets/Attention/SecretsAttentionFeature.cs) |
+| SecretsEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Secrets.Persistence.EntityFrameworkCore | IShellFeature | [SecretsEntityFrameworkCoreFeature.cs](../../src/Elsa/Secrets/Persistence/EntityFrameworkCore/SecretsEntityFrameworkCoreFeature.cs) |
 | SecretsGroundworkPersistenceFeature | direct IShellFeature | Elsa.Secrets.Persistence.Groundwork | IShellFeature | [SecretsGroundworkPersistenceFeature.cs](../../src/Elsa/Secrets/Persistence/Groundwork/SecretsGroundworkPersistenceFeature.cs) |
 | NewtonsoftSerializationFeature | direct IShellFeature | Elsa.Serialization.Newtonsoft | IShellFeature | [NewtonsoftSerializationFeature.cs](../../src/Elsa/Serialization/Newtonsoft/NewtonsoftSerializationFeature.cs) |
 | SerializationFeature | direct IShellFeature | Elsa.Serialization.SystemText | IShellFeature | [SerializationFeature.cs](../../src/Elsa/Serialization/SystemText/SerializationFeature.cs) |
