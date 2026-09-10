@@ -38,11 +38,11 @@ any other route or bound, incomplete ordering, or any spill/materialization evid
 [canonical diagnostics durable-history v1.3 workload contract](../../specs/094-harden-groundwork-stores/contracts/diagnostics-durable-history-v1.3.md).
 SQLite retains the stricter index-search requirement proven by its native plan.
 
-PostgreSQL trace-detail command admission also accepts the published preview.16 row-value
-continuation for required, uniformly directed ordering columns. The complete ordered tuple,
-comparison direction, distinct cursor parameters, scope and trace-key equalities, and ordinal
-`C` collations must remain intact. Nullable and mixed-direction continuations keep their existing
-portable form; this compatibility rule does not admit extra predicates or relax native-plan gates.
+Trace-detail continuation pages are admitted from the typed continuation predicate Groundwork
+emits with every bounded query: either lexicographic branches (equalities on the leading ordering
+columns plus one boundary comparison, with the boundary's null admission stated) or a single row-value
+tuple over the complete uniformly directed ordering. The predicate must cover exactly the route's
+ordering; the command text is not read.
 
 MongoDB command admission permits the renderer's exact ordering-helper removal projection between
 sort and limit. It requires every rendered helper to be removed and rejects unknown helper fields,
@@ -63,23 +63,23 @@ The performance workflow passes `--require-complete-native-plan` to the operator
 standalone correctness remains usable with a blocked capture for diagnosis, while measurement and
 verdict gates still require complete admitted evidence.
 
-For SQL Server structured-log recent/replay, the exact scoped primary key may satisfy the redundant
-sequence-order index contract when retained native evidence proves the required traversal direction,
-scope equality seek, replay range bounds where applicable, bounded actual rows/read/lookup work, and
-unforced access without scan, sort, spill, or materialization. Evidence names the actual primary key;
-it is never relabelled as the secondary index. This is a route-specific compatibility rule, not an
-arbitrary-index allowance.
+A unit keyed by its provider sequence is read through its primary key: key-ordered diagnostics
+routes admit a `PrimaryKeySearch` access node as well as the declared sequence-order index, provided the
+typed evidence proves the scope seek, range bounds, bounded work and unforced access. Evidence names the
+actual primary key; it is never relabelled as the secondary index.
 
 ### Structured execution evidence
 
 The harness consumes the published Groundwork `0.4.0-preview.28` package family.
-SQLite Groundwork `structured-log-replay` and `structured-log-recent` capture use the terminal
+Every diagnostics route on SQLite, PostgreSQL, SQL Server and MongoDB, including the trace-detail
+point reads and their keyset continuation pages, is captured through the terminal
 `IProviderExecutionObserver` callback instead of parsing command text or retained
 native-plan text. The callback is mapped into the versioned artifact DTO without
 access to a query request or command text. Admission checks the actual emitted
 scope/range predicates, sequence ordering, projection, public page 127/native
-fetch 128, successful execution identity, exact observed provider version, and
-complete selected-index plan evidence.
+fetch 128, successful execution identity, exact observed provider version,
+complete selected-index plan evidence, the emitted continuation predicate on
+every page after the first, and the observed uniqueness witness of every point read.
 Replay requires both sequence bounds and ascending native ordering; recent
 requires only scope equality and descending native ordering. The public recent
 result is reversed after materialization, so its returned order is not evidence
@@ -92,12 +92,13 @@ correlates the capture window and persisted artifact; it is not an authenticatio
 claim about arbitrary external artifacts. Evidence collection is capture-only and
 is not enabled on timed benchmark compositions.
 
-This is an incremental consumer migration, not completion of raw-parser removal.
-Other routes/providers retain their existing raw admission until an equivalent
-typed producer and consumer proof exists. A complete plan forest proves operator
+The diagnostics workload no longer carries provider plan or command parsers; the raw explain
+artifacts are retained opaquely for audit. The runtime, IAM and secret workloads retain their
+existing raw admission until an equivalent typed producer and consumer proof exists
+(elsa-workflows/elsa-foundation#1594). A complete plan forest proves operator
 structure, not native sort keys, numeric plan bounds, spill absence, or enforced
-uniqueness. Unsupported continuation or point-read plan evidence remains unknown;
-declarations and emitted command limits cannot substitute for missing observed
+uniqueness; those are read from the typed sort, bound, spill and uniqueness facts.
+Declarations and emitted command limits cannot substitute for missing observed
 native facts. Elsa owns route cardinalities, fanout, budgets and verdicts;
 Groundwork owns application-neutral execution evidence. The SQLite EF adapter
 remains a separate correctness oracle until its removal gate is satisfied.

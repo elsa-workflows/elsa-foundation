@@ -605,7 +605,8 @@ public static class ArtifactAdmission
         var rawReferences = routes.Select(route => route.RawPlanReference)
             .Where(reference => !string.IsNullOrEmpty(reference))
             .Concat(traceDetailConstituents.Where(item => !string.IsNullOrWhiteSpace(item.RawPlanReference)).Select(item => item.RawPlanReference))
-            .Concat(traceDetailConstituents.SelectMany(item => item.Pages ?? []).Select(page => page.RawPlanReference))
+            .Concat(traceDetailConstituents.SelectMany(item => item.Pages ?? []).Select(page => page.RawPlanReference)
+                .Where(reference => !string.IsNullOrWhiteSpace(reference)))
             .ToArray();
         if (rawReferences.Distinct(StringComparer.Ordinal).Count() != rawReferences.Length)
             throw new PerformanceContractException("Every native route must bind a distinct retained raw provider-plan artifact.");
