@@ -279,7 +279,8 @@ internal static class DiagnosticsNativePlanCapture
         var observations = adapter.StructuredEvidence
             .Where(observation => string.Equals(observation.Operation, "BoundedQuery", StringComparison.Ordinal) &&
                                   string.Equals(observation.Target?.LogicalUnitId, unit, StringComparison.Ordinal) &&
-                                  string.Equals(observation.ShapeAvailability, "Collected", StringComparison.Ordinal))
+                                  string.Equals(observation.ShapeAvailability, "Collected", StringComparison.Ordinal) &&
+                                  observation.BoundedQuery is { IncludesTotalCount: false })
             .ToArray();
         if (observations.Length != 1)
             throw new PerformanceContractException(
@@ -583,9 +584,19 @@ internal static class DiagnosticsNativePlanCapture
         {
             var unit = DiagnosticsNativePlanContract.LogicalUnitIdForTable(specification.TableName);
             var pointRead = specification.OperationKind == DiagnosticsTraceDetailOperationKind.PrimaryKeyRead;
+            // The constituent's reads are the collected observations of its unit that carry the route's own
+            // key or predicate; the store's other reads of the same unit inside the window (the durability
+            // probe's total counts, whose shape every provider withholds) are not its pages.
             var observed = observations
                 .Where(observation => string.Equals(observation.Operation, pointRead ? "PointRead" : "BoundedQuery", StringComparison.Ordinal) &&
-                                      string.Equals(observation.Target?.LogicalUnitId, unit, StringComparison.Ordinal))
+                                      string.Equals(observation.Target?.LogicalUnitId, unit, StringComparison.Ordinal) &&
+                                      string.Equals(observation.ShapeAvailability, "Collected", StringComparison.Ordinal) &&
+                                      (pointRead
+                                          ? observation.PointRead?.KeyBounds.Any(bound =>
+                                              bound.BindingRole == "Key" && string.Equals(bound.LogicalColumn, specification.PredicateColumn, StringComparison.Ordinal)) == true
+                                          : observation.BoundedQuery is { IncludesTotalCount: false } query &&
+                                            query.Predicate?.Facts.Any(fact =>
+                                                fact is { BindingRole: "Caller" } && string.Equals(fact.LogicalColumn, specification.PredicateColumn, StringComparison.Ordinal)) == true))
                 .ToArray();
             if (observed.Length == 0 || observed.Length > specification.MaxInvocationCount)
                 throw new PerformanceContractException(
