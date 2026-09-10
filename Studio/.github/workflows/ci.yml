@@ -20,8 +20,7 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 11
+        # pnpm version comes from the "packageManager" field in package.json.
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -53,8 +52,7 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 11
+        # pnpm version comes from the "packageManager" field in package.json.
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
