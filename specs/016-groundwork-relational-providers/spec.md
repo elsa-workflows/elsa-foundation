@@ -4,7 +4,8 @@
 
 **Created**: 2026-06-10
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: #18 (restatused 2026-09-10 from git evidence)
 
 **Input**: User description: "Groundwork G4 SQL Server and PostgreSQL providers. Add Groundwork.SqlServer and Groundwork.PostgreSql provider packages that pass the same document/index contract as SQLite. Extract shared relational document-store behavior where useful, keep provider differences isolated, materialize schema history and unique declared indexes, and validate both providers with container-backed integration tests."
 

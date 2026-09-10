@@ -4,7 +4,8 @@
 
 **Created**: 2026-08-16
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: #1362 (restatused 2026-09-10 from git evidence)
 
 **Input**: User description: "Migrate the complete Structured Logs REST and SSE surface to the first-party Minimal API pattern while preserving query, streaming, authorization, compatibility, coexistence, and dynamic-unload contracts."
 

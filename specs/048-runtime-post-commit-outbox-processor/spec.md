@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-post-commit-outbox-processor`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #50, #51 (restatused 2026-09-10 from git evidence)
 **Input**: Continue the Runtime Execution Seam after recording post-commit intents into the outbox. Add a narrow single-run delivery processor without implementing background processing or delivery ownership.
 
 ## Scenarios & Tests

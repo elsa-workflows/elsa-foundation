@@ -27,15 +27,6 @@ public sealed class SecretsApiDependencyTests
         Assert.Contains("IWebShellFeature", source, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void No_secrets_fast_endpoints_transition_registration_remains()
-    {
-        var baseline = File.ReadAllText(Path.Join(
-            RepoRoot, "tests", "Elsa", "Architecture", "Baselines", "fastendpoints-transition-exceptions.json"));
-        Assert.DoesNotContain("Elsa.Secrets.Api.Endpoints.Secrets.", baseline, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"followUp\": \"#1348\"", baseline, StringComparison.Ordinal);
-    }
-
     private static string RepoRoot { get; } = FindRepoRoot();
 
     private static string FindRepoRoot()

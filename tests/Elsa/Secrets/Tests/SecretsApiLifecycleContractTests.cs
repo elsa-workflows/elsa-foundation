@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Elsa.Api.Compatibility.Testing.Comparison;
 using Elsa.Secrets.Tests.Support;
 using Xunit;
 
@@ -18,23 +17,6 @@ public sealed class SecretsApiLifecycleContractTests
         "DELETE /secrets/{param}",
         "POST /secrets/{param}/test"
     };
-
-    [Fact]
-    public async Task Migrated_lifecycle_http_and_openapi_match_the_immutable_fastendpoints_evidence()
-    {
-        var beforeHttp = SecretsCompatibilityEvidence.LoadLegacyHttp(LifecycleEndpoints);
-        var afterHttp = await SecretsCanaryHost.CaptureAsync(SecretsCompatibilityEvidence.Cases(LifecycleEndpoints));
-        await using var host = await SecretsCanaryHost.StartMigratedAsync();
-        var beforeOpenApi = SecretsCompatibilityEvidence.LoadLegacyOpenApi(LifecycleEndpoints);
-        var afterOpenApi = SecretsCompatibilityEvidence.CaptureOpenApi(
-            await host.GetCurrentOpenApiDocumentAsync(), LifecycleEndpoints);
-
-        var result = CompatibilityComparer.Compare(
-            new CompatibilityEvidenceSet { Http = beforeHttp, OpenApi = beforeOpenApi },
-            new CompatibilityEvidenceSet { Http = afterHttp, OpenApi = afterOpenApi });
-
-        Assert.True(result.IsCompatible, string.Join(Environment.NewLine, result.Failures));
-    }
 
     [Fact]
     public async Task Create_supports_encrypted_and_configuration_inputs_but_returns_metadata_only()

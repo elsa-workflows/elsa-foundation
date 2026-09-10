@@ -3,7 +3,7 @@
 Status: **ratified 2026-07-04** by Sipke — applied as framework constitution **§2.16.1**
 (v3.0.0 → v3.1.0) with an Elsa-side §E5 interpretive note carrying the worked examples
 (Elsa constitution v3.2.0 → v3.3.0); provenance recorded in the
-[amendment index](constitution-amendment-index.md). Originally produced as a proposal by W21
+constitution amendment index (retired 2026-09-10; see git history). Originally produced as a proposal by W21
 of the Elsa 4 remediation fleet, routed through
 [Constitution Readiness](../program-goals/constitution-readiness.md).
 
@@ -139,7 +139,7 @@ leaves or contracts-only seams and thereby breaks isolation/composition gates.
 2. **Adopt the six exception classes** as the worked catalog; they are exhaustive over the current
    sub-150-LoC population.
 3. On ratification, fold the text into the chosen constitution section with the next version bump, add
-   a provenance row to [`constitution-amendment-index.md`](constitution-amendment-index.md), and leave
+   a provenance row to the constitution amendment index (retired 2026-09-10; see git history), and leave
    this report linked from the originating bucket.
 
 ## Links
@@ -147,5 +147,5 @@ leaves or contracts-only seams and thereby breaks isolation/composition gates.
 - Finding source: [`review-modularity.md` §MD-5 + Open Question 1](elsa-4-architecture-review-2026-07/review-modularity.md)
 - Gates referenced: framework §2.1, §2.16, §2.18.4, §2.7; Elsa §E2.7
 - Routing: [Constitution Readiness](../program-goals/constitution-readiness.md) ·
-  [Amendment index](constitution-amendment-index.md)
+  Amendment index (retired 2026-09-10)
 - Bucket: [Elsa 4 review remediation](../program-goals/elsa-4-review-remediation.md)

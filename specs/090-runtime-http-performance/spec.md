@@ -4,7 +4,8 @@
 
 **Created**: 2026-07-11
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: #626 (restatused 2026-09-10 from git evidence)
 
 **Input**: User description: "Make synchronous HTTP workflows execute in milliseconds instead of seconds, deliver the improvement end to end, and provide clear runtime performance controls."
 

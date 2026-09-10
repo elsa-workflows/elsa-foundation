@@ -4,7 +4,8 @@
 
 **Created**: 2026-06-10
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: #18 (restatused 2026-09-10 from git evidence)
 
 **Input**: User description: "Groundwork G8 runtime evaluation and hardening. Produce explicit go/no-go decisions for Elsa workflow runtime stores: Groundwork default, Groundwork with physicalization, benchmark-gated, or specialized provider. Runtime hot paths must not migrate silently. The result must include benchmark/concurrency/retry/operational gates and tests that preserve the conservative classification."
 

@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-remove-direct-executor`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #69, #70 (restatused 2026-09-10 from git evidence)
 **Input**: Continue runtime execution seam cleanup after agent dispatch, scheduler state, and activity execution state exist. The legacy `IWorkflowExecutor`/`SequentialWorkflowExecutor` path executes artifacts inline and bypasses workflow execution agents, scheduler work, checkpoints, activity execution state, and incident/outbox behavior.
 
 ## Scenarios & Tests

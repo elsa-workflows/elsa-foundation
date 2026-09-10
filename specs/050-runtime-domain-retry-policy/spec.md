@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-domain-retry-policy`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #52, #53 (restatused 2026-09-10 from git evidence)
 **Input**: Complete the remaining Slice 8 domain retry boundary after operational recovery and post-commit outbox delivery. Add a default runtime domain retry policy that stays separate from operational recovery, without implementing workflow/activity retry scheduling.
 
 ## Scenarios & Tests

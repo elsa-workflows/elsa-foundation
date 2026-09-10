@@ -54,14 +54,19 @@ This is the whole policy. Everything else here is vocabulary in service of it.
 Where a spec's outcome was a decision not to build — a refuted hypothesis, a kill verdict — use
 `Abandoned` and record the verdict; that is a real and valuable result, not a failure state.
 
-## Specs are never moved or deleted
+## Moving and deleting specs
 
-A spec directory keeps its path forever, including after it reaches a terminal status. Specs are
-cross-referenced from reports, maps, ADRs, other specs, and code comments; moving one to an
-`archive/` directory breaks those links for no navigational gain that a status field does not
-already provide.
+A spec in a non-terminal status keeps its path. A spec with a terminal status (`Implemented`,
+`Superseded`, `Abandoned`; a few older specs say `Complete` or `Retired`, which read as terminal too)
+MAY be moved to `specs/archive/<same folder name>` by a consolidation PR that cites the git evidence
+for the status and repoints every inbound link. Never move a spec whose files are read by tests or
+linked from a project file: find those with `grep -rn "specs/" tests/ tools/ --include=*.cs` and
+`grep -rn "specs/" --include=*.csproj .`. The current exceptions are `092-domain-owned-apis`,
+`094-harden-groundwork-stores`, `139-groundwork-diagnostics-persistence`, and `141-runtime-alterations`.
 
-"Retired" means *terminal status*, not *relocated*.
+Once a spec reaches a terminal status its `checklists/` folder and `requirements.md` are process
+residue and are not kept; `spec.md`, `plan.md`, `tasks.md`, `research.md`, `data-model.md`,
+`quickstart.md`, `contracts/`, `evidence/`, ledgers and `versions/` stay.
 
 ## Discoverability
 
@@ -73,8 +78,9 @@ already provide.
 
 ## Applying this to the existing tree
 
-The 175 existing specs are **not** to be bulk-restatused by guesswork. A spec's status is corrected
-when someone has real knowledge of its outcome — while working in that area, or while reconciling a
-program-goal bucket. The generated map surfaces the backlog; it does not need to be drained at once.
+Bulk restatus IS allowed when each change cites a merged PR or commit, which satisfies the
+evidence requirement of constitution §2.25.3; a restatus without such a citation is guesswork and
+is not. Outside a consolidation pass, a spec's status is corrected when someone has real knowledge
+of its outcome — while working in that area, or while reconciling a program-goal bucket.
 
 The 42 specs with no status line at all should gain one when next touched.

@@ -757,7 +757,7 @@ performance verdict or coverage-ledger row advances.
 Hosted CI initially rejected the checkpoint because the benchmark test project did not follow the
 domain-tree path convention and the EF comparator had been placed in the EF-free Groundwork
 conformance project. The remediation moved protocol tests to
-`tests/Elsa/Groundwork/StorePerformance/Benchmarks/Tests`, moved the EF-vs-Groundwork SQLite
+`tools/ledger/StorePerformance/Benchmarks/Tests` (formerly `tests/Elsa/Groundwork/StorePerformance/Benchmarks/Tests`), moved the EF-vs-Groundwork SQLite
 correctness case into the already-EF-owning Foundation Identity test project, and removed the new EF
 edge from Groundwork conformance. After a forced full restore, the benchmark suite passed 16/16, the
 two SQLite correctness targets passed 2/2, and the project-path, Groundwork EF-free boundary, and

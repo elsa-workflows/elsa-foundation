@@ -16,7 +16,7 @@ namespace Elsa.Architecture.Tests;
 /// <c>Elsa.Workflows.Design.Persistence.Core</c> and <c>Elsa.Activities.Design.Persistence.Core</c>)
 /// have no direct or transitive edge to any Groundwork provider project or package — asserted at both
 /// the declared csproj reference-graph level and the restored (compiled) <c>project.assets.json</c>
-/// level, mirroring <see cref="EfCoreSurfaceScanner"/>.
+/// level, complementing the declared-graph walk in <see cref="EfCoreDependencyGuardTests"/>.
 /// </item>
 /// <item>
 /// Every one of the four Groundwork providers composes the complete design surface — the shared design
@@ -27,9 +27,9 @@ namespace Elsa.Architecture.Tests;
 /// feasible.
 /// </item>
 /// </list>
-/// This suite deliberately does <b>not</b> tighten the EF surface ratchet to zero; the design EF projects
-/// still exist on this branch and are removed by T072/T073, after which T075 drives the ratchet to zero.
-/// The negative-dependency assertions here target the core-to-Groundwork edge, which is already absent.
+/// EF Core absence across the design lane is asserted repository-wide by
+/// <see cref="EfCoreDependencyGuardTests"/>; the negative-dependency assertions here target the
+/// core-to-Groundwork edge.
 /// </summary>
 public sealed class DesignPersistenceBoundaryTests
 {
@@ -549,4 +549,11 @@ public sealed class DesignPersistenceBoundaryTests
         IReadOnlyList<string> PackageReferences,
         IReadOnlyList<string> ResolvedPackages,
         bool HasAssets);
+}
+
+// Ordinal ordering helper for the deterministic offender lists in this suite.
+internal static class DesignPersistenceBoundaryEnumerable
+{
+    public static IReadOnlyList<string> Sorted(this IEnumerable<string> values) =>
+        values.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
 }

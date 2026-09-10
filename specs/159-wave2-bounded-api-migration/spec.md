@@ -4,7 +4,8 @@
 
 **Created**: 2026-08-16
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: #1383 (restatused 2026-09-10 from git evidence)
 
 **Input**: User description: "Migrate the 13 bounded FastEndpoints registrations owned by BPMN Interchange, Modularity API, Execution Evidence, and Elsa 3 Import to module-owned Minimal APIs while preserving HTTP/OpenAPI, tenant, security, lifecycle, and unloadability contracts."
 

@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-activity-bookmark-request`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #61, #62 (restatused 2026-09-10 from git evidence)
 **Input**: Continue the Runtime Execution Seam after `CreateBookmark` checkpoint handling. Activities need a runtime-side way to request durable suspension/bookmark creation without directly persisting bookmarks or depending on Design-owned authored models.
 
 ## Scenarios & Tests

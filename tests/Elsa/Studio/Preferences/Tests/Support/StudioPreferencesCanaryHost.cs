@@ -2,7 +2,6 @@ using Elsa.Api.AspNetCore;
 using System.Security.Claims;
 using CShells.AspNetCore.Features;
 using Elsa.Api.Compatibility.Testing.Endpoints;
-using Elsa.Api.Compatibility.Testing.Http;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
@@ -114,23 +113,6 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
         await host.StartAsync();
         await SeedDashboardAsync(host.Services);
         return new StudioPreferencesCanaryHost(host);
-    }
-
-    public static async Task<IReadOnlyList<HttpCompatibilityObservation>> CaptureAsync(
-        IReadOnlyList<HttpCompatibilityCase> cases)
-    {
-        ArgumentNullException.ThrowIfNull(cases);
-        var observations = new List<HttpCompatibilityObservation>(cases.Count);
-
-        // A fresh host per case makes each observation independent of prior conditional writes and
-        // keeps revisions, timestamps, and seeded documents deterministic across repeated captures.
-        foreach (var testCase in cases)
-        {
-            await using var canary = await StartAsync();
-            observations.Add(await HttpEvidenceCapture.CaptureAsync(canary.Client, testCase));
-        }
-
-        return observations;
     }
 
     public async Task<StudioPreferenceDocument?> FindDashboardAsync()

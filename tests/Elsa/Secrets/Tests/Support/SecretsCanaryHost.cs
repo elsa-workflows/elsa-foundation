@@ -1,7 +1,6 @@
 using System.Security.Claims;
 using System.Collections.Concurrent;
 using CShells.FastEndpoints.Contracts;
-using Elsa.Api.Compatibility.Testing.Http;
 using Elsa.Api.Compatibility.Testing.Endpoints;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
@@ -143,23 +142,6 @@ public sealed class SecretsCanaryHost : IAsyncDisposable
         await host.StartAsync();
         await SeedAsync(host.Services);
         return new SecretsCanaryHost(host, endpointDataSources ?? []);
-    }
-
-    public static async Task<IReadOnlyList<HttpCompatibilityObservation>> CaptureAsync(
-        IReadOnlyList<HttpCompatibilityCase> cases)
-    {
-        ArgumentNullException.ThrowIfNull(cases);
-        var observations = new List<HttpCompatibilityObservation>(cases.Count);
-
-        // Every case receives a fresh repository so mutation cases cannot affect another
-        // observation and all seeded IDs/timestamps remain deterministic.
-        foreach (var testCase in cases)
-        {
-            await using var canary = await StartMigratedAsync();
-            observations.Add(await HttpEvidenceCapture.CaptureAsync(canary.Client, testCase));
-        }
-
-        return observations;
     }
 
     public async Task<string> GetCurrentOpenApiDocumentAsync()

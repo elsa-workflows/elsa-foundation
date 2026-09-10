@@ -11,8 +11,8 @@
 - **Dispatch redrive** (`POST runtime/workflows/dispatches/{id}/redrive`) — the full loop (a detached child dispatch
   truly dead-letters → operator redrives → the child materializes) is **not reachable over REST with the default
   server**: producing a real `DispatchFailed` needs delivery-failure injection, and a bogus child id fails at parent
-  *publish* (pinned then), not at runtime. The redrive endpoint's bogus-id no-op is already covered by
-  `write-endpoints/Test-RuntimeWrites.ps1`. This is a harness limitation, not missing behavior — see the gap
+  *publish* (pinned then), not at runtime. The redrive endpoint's bogus-id no-op is covered in-process by
+  `WorkflowDispatchRedriveContractTests`. This is a harness limitation, not missing behavior — see the gap
   analysis; the redrive path is heavily covered by the in-process C# tests (`WorkflowDispatchRedriveTests`, etc.).
 
 Requires the server from source (see ../README.md).

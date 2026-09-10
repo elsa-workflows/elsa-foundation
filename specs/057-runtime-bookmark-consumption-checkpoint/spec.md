@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-bookmark-consumption-checkpoint`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #59, #60 (restatused 2026-09-10 from git evidence)
 **Input**: Continue the Runtime Execution Seam after bookmark resume handler dispatch. A successful durable bookmark resume must consume the matched bookmark through a named runtime checkpoint before deterministic completion propagation continues.
 
 ## Scenarios & Tests

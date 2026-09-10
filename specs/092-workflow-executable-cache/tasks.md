@@ -9,7 +9,7 @@
 ## Phase 1: Setup and Evidence
 
 - [x] T001 Mark GitHub issue #625 in progress and link the spec 091 formal-review evidence that makes it a merge prerequisite
-- [x] T002 Record the 200-request warm p95, first-after-ready p95, and rematerialization comparison in `docs/reports/shell-activation-performance-2026-07.md`
+- [x] T002 Record the 200-request warm p95, first-after-ready p95, and rematerialization comparison in `docs/reports/archive/shell-activation-performance-2026-07.md`
 - [x] T003 Confirm the durable-store registration and all SQLite/PostgreSQL/MongoDB/SQL Server runtime/unified composition call sites
 
 ## Phase 2: Foundational Tests
@@ -74,7 +74,7 @@
 
 - [x] T025 Build the Release server with no branch-introduced warnings and run the final 20-boot frozen-data lane
 - [x] T026 Run the final 2x2 200-request warm lanes and verify first-after-ready ≤750 ms p95 and default-on warm ≤50 ms p95
-- [x] T027 Update raw provenance, results, residual costs, and follow-up recommendations in `docs/reports/shell-activation-performance-2026-07.md`
+- [x] T027 Update raw provenance, results, residual costs, and follow-up recommendations in `docs/reports/archive/shell-activation-performance-2026-07.md`
 - [x] T028 Run every affected solution test lane plus full `Elsa.Server.slnx` build
 - [x] T029 Run up to five formal review/fix iterations across specs 091/092, resolving all critical/high findings
 - [x] T030 Complete both task lists, run `speckit-analyze`, and resolve all critical/high cross-artifact findings

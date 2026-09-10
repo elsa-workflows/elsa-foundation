@@ -56,10 +56,6 @@
     <Compile Remove="ClrFixture/**/*" />
     <EmbeddedResource Remove="ClrFixture/**/*" />
     <None Remove="ClrFixture/**/*" />
-    <Compile Remove="Api/Capture/**/*" />
-    <EmbeddedResource Remove="Api/Capture/**/*" />
-    <None Remove="Api/Capture/**/*" />
-    <None Update="Api/Baselines/*.json" Link="Baselines/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
   </ItemGroup>
 
 </Project>

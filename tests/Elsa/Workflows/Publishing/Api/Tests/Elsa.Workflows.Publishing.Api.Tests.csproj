@@ -57,11 +57,4 @@
                       ReferenceOutputAssembly="false" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Compile Remove="Capture/**/*" />
-    <EmbeddedResource Remove="Capture/**/*" />
-    <None Remove="Capture/**/*" />
-    <None Update="Baselines/*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
-  </ItemGroup>
-
 </Project>

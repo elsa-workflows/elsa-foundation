@@ -27,7 +27,7 @@ Typical contents, though not every unit produces all of them:
 | `research.md` | Investigation results, measurements, refuted hypotheses. |
 | `data-model.md`, `contracts/` | Data shapes and contract definitions. |
 | `quickstart.md` | Verification walkthrough — how to prove the unit works. |
-| `checklists/` | Per-unit review checklists. |
+| `checklists/` | Per-unit review checklists; process residue, removed once the spec reaches a terminal status. |
 
 ## Lifecycle
 
@@ -38,10 +38,11 @@ Two rules worth knowing before you touch anything here:
 
 - **A spec reaches a terminal status in the same unit of work that finishes it.** The PR that merges
   the implementation is the PR that sets `**Status**: Implemented`.
-- **Specs are never moved or deleted.** A directory keeps its path forever; specs are cross-linked
-  from reports, maps, ADRs, other specs, and code. "Retired" means terminal status, not relocated.
+- **Live specs keep their path.** A spec with a terminal status may be moved to `specs/archive/` by a
+  consolidation PR that cites git evidence and repoints inbound links, unless tests or a project file
+  read its files — see the lifecycle doc for the exceptions.
 
 Two known conditions of the existing tree, both deliberate: **27 duplicate numbers** are
 grandfathered (renumbering would rewrite ~900 links for a cosmetic result), and many specs carry a
-stale `Draft` status. Neither is bulk-repaired by guesswork — a status is corrected when someone has
-real knowledge of the outcome.
+stale `Draft` status. Neither is repaired by guesswork — a status is corrected by someone with real
+knowledge of the outcome, or by a consolidation pass that cites a merged PR or commit per spec.

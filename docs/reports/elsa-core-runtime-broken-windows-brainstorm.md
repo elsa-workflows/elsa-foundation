@@ -33,9 +33,9 @@ Working understanding: Elsa 3 has too many serialization modes, custom converter
 
 Brainstorm direction: Elsa 4 should aim for a unified serialization story with explicit boundaries around what the runtime promises to persist. Some responsibility may need to move to integrators through typed value contracts, serializers, storage drivers, or explicit persistence policies.
 
-Source-backed topic note: [Elsa Core runtime serialization and value persistence analysis](elsa-core-runtime-serialization-value-persistence-analysis.md).
+Source-backed topic note: [Elsa Core runtime serialization and value persistence analysis](archive/elsa-core-runtime-serialization-value-persistence-analysis.md).
 
-Elsa 4 brainstorm decisions: [Elsa 4 runtime serialization brainstorm decisions](elsa-4-runtime-serialization-brainstorm-decisions.md).
+Elsa 4 brainstorm decisions: [Elsa 4 runtime serialization brainstorm decisions](archive/elsa-4-runtime-serialization-brainstorm-decisions.md).
 
 Questions to validate:
 
@@ -75,11 +75,11 @@ Working understanding: Elsa 3 has separate workflow execution and activity execu
 
 Brainstorm direction: investigate a shared middleware abstraction that can serve workflow execution and activity execution without hiding execution state. Decide whether linked-list materialization is actually buying enough performance to justify the debugging cost.
 
-Source-backed topic note: [Elsa Core runtime execution layer analysis](elsa-core-runtime-execution-layer-analysis.md).
+Source-backed topic note: [Elsa Core runtime execution layer analysis](archive/elsa-core-runtime-execution-layer-analysis.md).
 
 Elsa 4 brainstorm decisions: [Elsa 4 runtime execution brainstorm decisions](elsa-4-runtime-execution-brainstorm-decisions.md).
 
-Action plan: [Elsa 4 runtime execution action plan](elsa-4-runtime-execution-action-plan.md).
+Action plan: [Elsa 4 runtime execution action plan](archive/elsa-4-runtime-execution-action-plan.md).
 
 Questions to validate:
 

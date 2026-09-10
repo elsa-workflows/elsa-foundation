@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-executable-state-contracts`
 **Created**: 2026-06-10
-**Status**: Draft
+**Status**: Implemented
+Implemented: #7 (restatused 2026-09-10 from git evidence)
 **Input**: Start implementing the Elsa 4 Runtime Execution Seam from locked reports. First unit: runtime executable artifact and execution state contract.
 
 ## User Scenarios & Testing *(mandatory)*

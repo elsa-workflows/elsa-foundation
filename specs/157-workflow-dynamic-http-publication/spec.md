@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/1366-dynamic-http-metadata`
 **Created**: 2026-08-16
-**Status**: Draft
+**Status**: Implemented
+Implemented: #1381 (restatused 2026-09-10 from git evidence)
 **Input**: Issue #1366 and ADR 0068
 
 ## User Scenarios & Testing

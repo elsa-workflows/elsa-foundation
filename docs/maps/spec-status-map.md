@@ -14,29 +14,29 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [004-activity-semantic-versioning](../../specs/004-activity-semantic-versioning/spec.md) | Activity Semantic Versioning | Draft | - | 46 | 0 | retained, out of scope |
 | [005-workflow-as-activity](../../specs/005-workflow-as-activity/spec.md) | Workflow-as-Activity (Generalized Specialized-Activity Kind) | Superseded by 006 | - | 0 | 0 | superseded, retained, deferred, out of scope |
 | [006-activity-construction-seam](../../specs/006-activity-construction-seam/spec.md) | Descriptor-Type-Driven Activity Construction | Draft | - | 54 | 1 | superseded, retained, deferred, out of scope, construct-only |
-| [007-runtime-executable-state-contracts](../../specs/007-runtime-executable-state-contracts/spec.md) | Runtime Executable Artifact And Execution State Contracts | Draft | - | 18 | 0 | deferred, out of scope |
-| [008-checkpoint-commit-envelope](../../specs/008-checkpoint-commit-envelope/spec.md) | Checkpoint Commit Envelope And Post-Commit Intent Boundary | Draft | - | 6 | 0 | deferred, out of scope |
-| [009-runtime-pipeline-slots](../../specs/009-runtime-pipeline-slots/spec.md) | Runtime Pipeline Slots And Inspectable Plans | Draft | - | 7 | 0 | out of scope |
-| [010-runtime-bookmark-resume-contract](../../specs/010-runtime-bookmark-resume-contract/spec.md) | Runtime Bookmark Resume Contract | Draft | - | 8 | 0 | out of scope |
+| [007-runtime-executable-state-contracts](../../specs/007-runtime-executable-state-contracts/spec.md) | Runtime Executable Artifact And Execution State Contracts | Implemented | - | 18 | 0 | deferred, out of scope |
+| [008-checkpoint-commit-envelope](../../specs/008-checkpoint-commit-envelope/spec.md) | Checkpoint Commit Envelope And Post-Commit Intent Boundary | Implemented | - | 6 | 0 | deferred, out of scope |
+| [009-runtime-pipeline-slots](../../specs/009-runtime-pipeline-slots/spec.md) | Runtime Pipeline Slots And Inspectable Plans | Implemented | - | 7 | 0 | out of scope |
+| [010-runtime-bookmark-resume-contract](../../specs/010-runtime-bookmark-resume-contract/spec.md) | Runtime Bookmark Resume Contract | Implemented | - | 8 | 0 | out of scope |
 | [011-runtime-value-binding-contract](../../specs/011-runtime-value-binding-contract/spec.md) | Runtime Value Binding Contract | unknown | - | 9 | 0 | superseded, out of scope |
 | [012-groundwork-persistence-foundation](../../specs/012-groundwork-persistence-foundation/spec.md) | Groundwork Persistence Foundation | Draft | - | 23 | 2 | - |
 | [012-runtime-diagnostics-history-incidents](../../specs/012-runtime-diagnostics-history-incidents/spec.md) | Runtime Diagnostics History And Incidents | unknown | - | 9 | 0 | out of scope |
-| [013-groundwork-core-manifest-planner](../../specs/013-groundwork-core-manifest-planner/spec.md) | Groundwork Core Manifest And Planner Kernel | Draft | - | 38 | 0 | - |
+| [013-groundwork-core-manifest-planner](../../specs/013-groundwork-core-manifest-planner/spec.md) | Groundwork Core Manifest And Planner Kernel | Implemented | - | 38 | 0 | - |
 | [013-runtime-operational-recovery-outbox](../../specs/013-runtime-operational-recovery-outbox/spec.md) | Runtime Operational Recovery And Post-Commit Outbox | unknown | - | 10 | 0 | out of scope |
-| [014-groundwork-sqlite-document-store](../../specs/014-groundwork-sqlite-document-store/spec.md) | Groundwork SQLite Document Store | Draft | - | 17 | 0 | - |
+| [014-groundwork-sqlite-document-store](../../specs/014-groundwork-sqlite-document-store/spec.md) | Groundwork SQLite Document Store | Implemented | - | 17 | 0 | - |
 | [014-runtime-elsa3-migration-boundary](../../specs/014-runtime-elsa3-migration-boundary/spec.md) | Runtime Elsa 3 Migration Boundary | unknown | - | 8 | 0 | out of scope |
-| [015-groundwork-elsa-bridge](../../specs/015-groundwork-elsa-bridge/spec.md) | Groundwork Elsa Bridge | Draft | - | 18 | 0 | out of scope |
+| [015-groundwork-elsa-bridge](../../specs/015-groundwork-elsa-bridge/spec.md) | Groundwork Elsa Bridge | Implemented | - | 18 | 0 | out of scope |
 | [015-runtime-volatile-wait-contract](../../specs/015-runtime-volatile-wait-contract/spec.md) | Runtime Volatile Wait Contract | Draft | - | 7 | 1 | - |
-| [015-workflow-execution-slice](../../specs/015-workflow-execution-slice/spec.md) | Workflow Execution Vertical Slice | Draft | - | 40 | 0 | superseded, out of scope |
-| [016-groundwork-relational-providers](../../specs/016-groundwork-relational-providers/spec.md) | Groundwork SQL Server And PostgreSQL Providers | Draft | - | 21 | 0 | - |
+| [015-workflow-execution-slice](../../specs/015-workflow-execution-slice/spec.md) | Workflow Execution Vertical Slice | Implemented | - | 40 | 0 | superseded, out of scope |
+| [016-groundwork-relational-providers](../../specs/016-groundwork-relational-providers/spec.md) | Groundwork SQL Server And PostgreSQL Providers | Implemented | - | 21 | 0 | - |
 | [016-runtime-completion-propagation-contract](../../specs/016-runtime-completion-propagation-contract/spec.md) | Runtime Completion Propagation Contract | Draft | - | 6 | 1 | - |
-| [017-groundwork-mongodb-provider](../../specs/017-groundwork-mongodb-provider/spec.md) | Groundwork MongoDB Provider | Draft | - | 15 | 0 | - |
-| [017-runtime-generator-contract](../../specs/017-runtime-generator-contract/spec.md) | Runtime Generator Contract | Draft | - | 0 | 0 | - |
-| [018-groundwork-runtime-entities](../../specs/018-groundwork-runtime-entities/spec.md) | Groundwork Runtime-Defined Entities | Draft | - | 9 | 0 | deferred |
-| [018-runtime-control-plane-contract](../../specs/018-runtime-control-plane-contract/spec.md) | Runtime Control Plane Contract | Draft | - | 0 | 0 | - |
-| [019-groundwork-physicalization-performance](../../specs/019-groundwork-physicalization-performance/spec.md) | Groundwork Physicalization And Performance | Draft | - | 17 | 0 | deferred |
-| [019-runtime-wait-intent-contract](../../specs/019-runtime-wait-intent-contract/spec.md) | Runtime Wait Registration And Post-Commit Intent Contract | Draft | - | 0 | 0 | - |
-| [020-groundwork-runtime-evaluation-hardening](../../specs/020-groundwork-runtime-evaluation-hardening/spec.md) | Groundwork Runtime Evaluation And Hardening | Draft | - | 9 | 0 | - |
+| [017-groundwork-mongodb-provider](../../specs/017-groundwork-mongodb-provider/spec.md) | Groundwork MongoDB Provider | Implemented | - | 15 | 0 | - |
+| [017-runtime-generator-contract](../../specs/017-runtime-generator-contract/spec.md) | Runtime Generator Contract | Implemented | - | 0 | 0 | - |
+| [018-groundwork-runtime-entities](../../specs/018-groundwork-runtime-entities/spec.md) | Groundwork Runtime-Defined Entities | Implemented | - | 9 | 0 | deferred |
+| [018-runtime-control-plane-contract](../../specs/018-runtime-control-plane-contract/spec.md) | Runtime Control Plane Contract | Implemented | - | 0 | 0 | - |
+| [019-groundwork-physicalization-performance](../../specs/019-groundwork-physicalization-performance/spec.md) | Groundwork Physicalization And Performance | Implemented | - | 17 | 0 | deferred |
+| [019-runtime-wait-intent-contract](../../specs/019-runtime-wait-intent-contract/spec.md) | Runtime Wait Registration And Post-Commit Intent Contract | Implemented | - | 0 | 0 | - |
+| [020-groundwork-runtime-evaluation-hardening](../../specs/020-groundwork-runtime-evaluation-hardening/spec.md) | Groundwork Runtime Evaluation And Hardening | Implemented | - | 9 | 0 | - |
 | [020-runtime-agent-provider-contract](../../specs/020-runtime-agent-provider-contract/spec.md) | Runtime Execution Agent Provider Contract | Draft | - | 0 | 0 | - |
 | [021-runtime-inprocess-agent-provider](../../specs/021-runtime-inprocess-agent-provider/spec.md) | Runtime In-Process Execution Agent Provider | Draft | - | 0 | 0 | - |
 | [022-runtime-scheduler-work-queue](../../specs/022-runtime-scheduler-work-queue/spec.md) | Runtime Scheduler Work Queue | Draft | - | 0 | 0 | - |
@@ -51,47 +51,47 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [031-runtime-parent-completion-evaluation](../../specs/031-runtime-parent-completion-evaluation/spec.md) | Runtime Parent Completion Evaluation Enqueue | Draft | - | 6 | 1 | - |
 | [032-runtime-continuation-scheduling-enqueue](../../specs/032-runtime-continuation-scheduling-enqueue/spec.md) | Runtime Continuation Scheduling Enqueue | Draft | - | 6 | 1 | - |
 | [033-runtime-completion-checkpoint-enqueue](../../specs/033-runtime-completion-checkpoint-enqueue/spec.md) | Runtime Completion Checkpoint Enqueue | Draft | - | 7 | 1 | - |
-| [034-runtime-checkpoint-commit-dispatch](../../specs/034-runtime-checkpoint-commit-dispatch/spec.md) | Runtime Checkpoint Commit Dispatch | Draft | - | 8 | 0 | - |
-| [035-runtime-downstream-scheduling](../../specs/035-runtime-downstream-scheduling/spec.md) | Runtime Downstream Scheduling | Draft | - | 9 | 0 | superseded |
-| [036-runtime-root-continuation-scheduling](../../specs/036-runtime-root-continuation-scheduling/spec.md) | Runtime Root Continuation Scheduling | Draft | - | 7 | 0 | - |
-| [037-runtime-terminal-workflow-completion](../../specs/037-runtime-terminal-workflow-completion/spec.md) | Runtime Terminal Workflow Completion | Draft | - | 8 | 0 | - |
-| [038-runtime-workflow-start-checkpoint](../../specs/038-runtime-workflow-start-checkpoint/spec.md) | Runtime Workflow Start Checkpoint | Draft | - | 9 | 0 | superseded |
-| [039-runtime-workflow-state-store](../../specs/039-runtime-workflow-state-store/spec.md) | Runtime Workflow Execution State Store | Draft | - | 9 | 0 | - |
-| [040-runtime-activity-state-projection](../../specs/040-runtime-activity-state-projection/spec.md) | Runtime Activity Execution State Projection | Draft | - | 8 | 0 | - |
-| [041-runtime-bookmark-state-projection](../../specs/041-runtime-bookmark-state-projection/spec.md) | Runtime Bookmark State Projection | Draft | - | 10 | 0 | - |
-| [042-runtime-durable-value-state-projection](../../specs/042-runtime-durable-value-state-projection/spec.md) | Runtime Durable Value State Projection | Draft | - | 10 | 0 | - |
-| [043-runtime-incident-state-projection](../../specs/043-runtime-incident-state-projection/spec.md) | Runtime Incident State Projection | Draft | - | 10 | 0 | - |
-| [044-runtime-operational-state-projection](../../specs/044-runtime-operational-state-projection/spec.md) | Runtime Operational State Projection | Draft | - | 10 | 0 | - |
-| [045-runtime-scheduler-state-projection](../../specs/045-runtime-scheduler-state-projection/spec.md) | Runtime Scheduler State Projection | Draft | - | 10 | 0 | - |
-| [046-runtime-post-commit-outbox-store](../../specs/046-runtime-post-commit-outbox-store/spec.md) | Runtime Post-Commit Outbox Store | Draft | - | 9 | 0 | - |
-| [047-runtime-post-commit-outbox-recording](../../specs/047-runtime-post-commit-outbox-recording/spec.md) | Runtime Post-Commit Outbox Recording | Draft | - | 9 | 0 | - |
-| [048-runtime-post-commit-outbox-processor](../../specs/048-runtime-post-commit-outbox-processor/spec.md) | Runtime Post-Commit Outbox Processor | Draft | - | 9 | 0 | - |
-| [049-runtime-recovery-scanner](../../specs/049-runtime-recovery-scanner/spec.md) | Runtime Recovery Scanner | Draft | - | 9 | 0 | - |
-| [050-runtime-domain-retry-policy](../../specs/050-runtime-domain-retry-policy/spec.md) | Runtime Domain Retry Policy | Draft | - | 9 | 0 | - |
-| [051-runtime-volatile-wait-policy](../../specs/051-runtime-volatile-wait-policy/spec.md) | Runtime Volatile Wait Policy | Draft | - | 9 | 0 | - |
-| [052-runtime-control-plane-state-store](../../specs/052-runtime-control-plane-state-store/spec.md) | Runtime Control Plane State Store | Draft | - | 10 | 0 | - |
-| [053-runtime-generator-emission-scheduler](../../specs/053-runtime-generator-emission-scheduler/spec.md) | Runtime Generator Emission Scheduler | Draft | - | 10 | 0 | - |
-| [054-runtime-pause-boundary-enforcement](../../specs/054-runtime-pause-boundary-enforcement/spec.md) | Runtime Pause Boundary Enforcement | Draft | - | 11 | 0 | - |
-| [055-runtime-bookmark-stimulus-resume](../../specs/055-runtime-bookmark-stimulus-resume/spec.md) | Runtime Bookmark Stimulus Resume Dispatch | Draft | - | 12 | 0 | - |
-| [056-runtime-bookmark-resume-handler-boundary](../../specs/056-runtime-bookmark-resume-handler-boundary/spec.md) | Runtime Bookmark Resume Handler Boundary | Draft | - | 11 | 0 | - |
-| [057-runtime-bookmark-consumption-checkpoint](../../specs/057-runtime-bookmark-consumption-checkpoint/spec.md) | Runtime Bookmark Consumption Checkpoint | Draft | - | 10 | 0 | - |
-| [058-runtime-bookmark-creation-checkpoint](../../specs/058-runtime-bookmark-creation-checkpoint/spec.md) | Runtime Bookmark Creation Checkpoint | Draft | - | 11 | 0 | - |
-| [059-runtime-activity-bookmark-request](../../specs/059-runtime-activity-bookmark-request/spec.md) | Runtime Activity Bookmark Request | Draft | - | 10 | 0 | - |
-| [060-runtime-activity-output-capture](../../specs/060-runtime-activity-output-capture/spec.md) | Runtime Activity Output Capture | Draft | - | 11 | 0 | superseded |
-| [061-runtime-activity-input-resolution](../../specs/061-runtime-activity-input-resolution/spec.md) | Runtime Activity Input Resolution | Draft | - | 10 | 0 | superseded |
-| [062-runtime-activity-fault-incidents](../../specs/062-runtime-activity-fault-incidents/spec.md) | Runtime Activity Fault Incidents | Draft | - | 9 | 0 | - |
-| [063-runtime-bookmark-resume-fault-incidents](../../specs/063-runtime-bookmark-resume-fault-incidents/spec.md) | Runtime Bookmark Resume Fault Incidents | Draft | - | 9 | 0 | - |
+| [034-runtime-checkpoint-commit-dispatch](../../specs/034-runtime-checkpoint-commit-dispatch/spec.md) | Runtime Checkpoint Commit Dispatch | Implemented | - | 8 | 0 | - |
+| [035-runtime-downstream-scheduling](../../specs/035-runtime-downstream-scheduling/spec.md) | Runtime Downstream Scheduling | Implemented | - | 9 | 0 | superseded |
+| [036-runtime-root-continuation-scheduling](../../specs/036-runtime-root-continuation-scheduling/spec.md) | Runtime Root Continuation Scheduling | Implemented | - | 7 | 0 | - |
+| [037-runtime-terminal-workflow-completion](../../specs/037-runtime-terminal-workflow-completion/spec.md) | Runtime Terminal Workflow Completion | Implemented | - | 8 | 0 | - |
+| [038-runtime-workflow-start-checkpoint](../../specs/038-runtime-workflow-start-checkpoint/spec.md) | Runtime Workflow Start Checkpoint | Implemented | - | 9 | 0 | superseded |
+| [039-runtime-workflow-state-store](../../specs/039-runtime-workflow-state-store/spec.md) | Runtime Workflow Execution State Store | Implemented | - | 9 | 0 | - |
+| [040-runtime-activity-state-projection](../../specs/040-runtime-activity-state-projection/spec.md) | Runtime Activity Execution State Projection | Implemented | - | 8 | 0 | - |
+| [041-runtime-bookmark-state-projection](../../specs/041-runtime-bookmark-state-projection/spec.md) | Runtime Bookmark State Projection | Implemented | - | 10 | 0 | - |
+| [042-runtime-durable-value-state-projection](../../specs/042-runtime-durable-value-state-projection/spec.md) | Runtime Durable Value State Projection | Implemented | - | 10 | 0 | - |
+| [043-runtime-incident-state-projection](../../specs/043-runtime-incident-state-projection/spec.md) | Runtime Incident State Projection | Implemented | - | 10 | 0 | - |
+| [044-runtime-operational-state-projection](../../specs/044-runtime-operational-state-projection/spec.md) | Runtime Operational State Projection | Implemented | - | 10 | 0 | - |
+| [045-runtime-scheduler-state-projection](../../specs/045-runtime-scheduler-state-projection/spec.md) | Runtime Scheduler State Projection | Implemented | - | 10 | 0 | - |
+| [046-runtime-post-commit-outbox-store](../../specs/046-runtime-post-commit-outbox-store/spec.md) | Runtime Post-Commit Outbox Store | Implemented | - | 9 | 0 | - |
+| [047-runtime-post-commit-outbox-recording](../../specs/047-runtime-post-commit-outbox-recording/spec.md) | Runtime Post-Commit Outbox Recording | Implemented | - | 9 | 0 | - |
+| [048-runtime-post-commit-outbox-processor](../../specs/048-runtime-post-commit-outbox-processor/spec.md) | Runtime Post-Commit Outbox Processor | Implemented | - | 9 | 0 | - |
+| [049-runtime-recovery-scanner](../../specs/049-runtime-recovery-scanner/spec.md) | Runtime Recovery Scanner | Implemented | - | 9 | 0 | - |
+| [050-runtime-domain-retry-policy](../../specs/050-runtime-domain-retry-policy/spec.md) | Runtime Domain Retry Policy | Implemented | - | 9 | 0 | - |
+| [051-runtime-volatile-wait-policy](../../specs/051-runtime-volatile-wait-policy/spec.md) | Runtime Volatile Wait Policy | Implemented | - | 9 | 0 | - |
+| [052-runtime-control-plane-state-store](../../specs/052-runtime-control-plane-state-store/spec.md) | Runtime Control Plane State Store | Implemented | - | 10 | 0 | - |
+| [053-runtime-generator-emission-scheduler](../../specs/053-runtime-generator-emission-scheduler/spec.md) | Runtime Generator Emission Scheduler | Implemented | - | 10 | 0 | - |
+| [054-runtime-pause-boundary-enforcement](../../specs/054-runtime-pause-boundary-enforcement/spec.md) | Runtime Pause Boundary Enforcement | Implemented | - | 11 | 0 | - |
+| [055-runtime-bookmark-stimulus-resume](../../specs/055-runtime-bookmark-stimulus-resume/spec.md) | Runtime Bookmark Stimulus Resume Dispatch | Implemented | - | 12 | 0 | - |
+| [056-runtime-bookmark-resume-handler-boundary](../../specs/056-runtime-bookmark-resume-handler-boundary/spec.md) | Runtime Bookmark Resume Handler Boundary | Implemented | - | 11 | 0 | - |
+| [057-runtime-bookmark-consumption-checkpoint](../../specs/057-runtime-bookmark-consumption-checkpoint/spec.md) | Runtime Bookmark Consumption Checkpoint | Implemented | - | 10 | 0 | - |
+| [058-runtime-bookmark-creation-checkpoint](../../specs/058-runtime-bookmark-creation-checkpoint/spec.md) | Runtime Bookmark Creation Checkpoint | Implemented | - | 11 | 0 | - |
+| [059-runtime-activity-bookmark-request](../../specs/059-runtime-activity-bookmark-request/spec.md) | Runtime Activity Bookmark Request | Implemented | - | 10 | 0 | - |
+| [060-runtime-activity-output-capture](../../specs/060-runtime-activity-output-capture/spec.md) | Runtime Activity Output Capture | Implemented | - | 11 | 0 | superseded |
+| [061-runtime-activity-input-resolution](../../specs/061-runtime-activity-input-resolution/spec.md) | Runtime Activity Input Resolution | Implemented | - | 10 | 0 | superseded |
+| [062-runtime-activity-fault-incidents](../../specs/062-runtime-activity-fault-incidents/spec.md) | Runtime Activity Fault Incidents | Implemented | - | 9 | 0 | - |
+| [063-runtime-bookmark-resume-fault-incidents](../../specs/063-runtime-bookmark-resume-fault-incidents/spec.md) | Runtime Bookmark Resume Fault Incidents | Implemented | - | 9 | 0 | - |
 | [064-runtime-workflow-execution-context](../../specs/064-runtime-workflow-execution-context/spec.md) | Runtime Workflow Execution Context | Superseded (mechanism) by [ADR 0030](../../docs/adr/0030-runtime-expression-evaluation-uses-a-parameter-threaded-live-carrier.md) — intent carried forward and implemented by [spec 083 (runtime execution-time expression carrier)](../083-runtime-execution-expression-carrier/spec.md) | - | 7 | 0 | superseded |
-| [065-runtime-remove-execution-pool](../../specs/065-runtime-remove-execution-pool/spec.md) | Runtime Remove Execution Pool | Draft | - | 7 | 0 | - |
-| [066-runtime-storage-driver-boundary](../../specs/066-runtime-storage-driver-boundary/spec.md) | Runtime Storage Driver Boundary | Draft | - | 9 | 0 | - |
-| [067-runtime-remove-direct-executor](../../specs/067-runtime-remove-direct-executor/spec.md) | Runtime Remove Direct Executor | Draft | - | 9 | 0 | - |
-| [068-runtime-composed-activity-execution](../../specs/068-runtime-composed-activity-execution/spec.md) | Runtime Composed Activity Execution | Draft | - | 7 | 0 | - |
+| [065-runtime-remove-execution-pool](../../specs/065-runtime-remove-execution-pool/spec.md) | Runtime Remove Execution Pool | Implemented | - | 7 | 0 | - |
+| [066-runtime-storage-driver-boundary](../../specs/066-runtime-storage-driver-boundary/spec.md) | Runtime Storage Driver Boundary | Implemented | - | 9 | 0 | - |
+| [067-runtime-remove-direct-executor](../../specs/067-runtime-remove-direct-executor/spec.md) | Runtime Remove Direct Executor | Implemented | - | 9 | 0 | - |
+| [068-runtime-composed-activity-execution](../../specs/068-runtime-composed-activity-execution/spec.md) | Runtime Composed Activity Execution | Implemented | - | 7 | 0 | - |
 | [069-runtime-request-affine-execution](../../specs/069-runtime-request-affine-execution/spec.md) | Runtime Request-Affine Execution | Draft | - | 9 | 1 | - |
 | [070-workflow-root-activity-contract](../../specs/070-workflow-root-activity-contract/spec.md) | Workflow Root Activity Contract | Draft | - | 14 | 0 | superseded |
 | [071-activity-owned-composite-structure](../../specs/071-activity-owned-composite-structure/spec.md) | Activity-Owned Composite Structure | Draft | - | 0 | 0 | - |
 | [071-groundwork-host-configurable-runtime-store-poc](../../specs/071-groundwork-host-configurable-runtime-store-poc/spec.md) | Groundwork Host-Configurable Runtime Store POC | Draft | - | 0 | 7 | - |
-| [072-shell-feature-management](../../specs/072-shell-feature-management/spec.md) | Shell Feature Management | Draft | - | 19 | 0 | out of scope |
-| [073-diagnostics-structured-logs](../../specs/073-diagnostics-structured-logs/spec.md) | Diagnostics — Structured Logs (Capture, Live Streaming & Query) | Draft | - | 37 | 0 | retained, deferred, out of scope |
+| [072-shell-feature-management](../../specs/072-shell-feature-management/spec.md) | Shell Feature Management | Implemented | - | 19 | 0 | out of scope |
+| [073-diagnostics-structured-logs](../../specs/073-diagnostics-structured-logs/spec.md) | Diagnostics — Structured Logs (Capture, Live Streaming & Query) | Implemented | - | 37 | 0 | retained, deferred, out of scope |
 | [073-flowchart-scoped-execution](../../specs/073-flowchart-scoped-execution/spec.md) | Flowchart Scoped Execution | Draft | - | 67 | 0 | - |
 | [074-diagnostics-opentelemetry](../../specs/074-diagnostics-opentelemetry/spec.md) | Diagnostics — OpenTelemetry (Ingestion, Live Streaming & Query) | Draft | - | 0 | 0 | retained, deferred, out of scope |
 | [075-extension-builder-backend](../../specs/075-extension-builder-backend/spec.md) | Extension Builder — Backend Pipeline (Trusted-Team v1) | Draft | - | 53 | 0 | deferred, out of scope |
@@ -103,37 +103,37 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [080-runtime-checkpoint-commit](../../specs/080-runtime-checkpoint-commit/spec.md) | Runtime Checkpoint Commit | Draft | - | 0 | 0 | out of scope |
 | [081-typed-argument-model](../../specs/081-typed-argument-model/spec.md) | Typed Argument Model + Type Descriptor Registry (Backend) | Draft | - | 42 | 2 | retained, deferred, out of scope |
 | [082-runtime-pipeline-execution-spine](../../specs/082-runtime-pipeline-execution-spine/spec.md) | Runtime Pipeline Execution Spine (ADR 0029 Move 1) | Draft | - | 0 | 0 | out of scope |
-| [083-runtime-checkpoint-slot-decomposition](../../specs/083-runtime-checkpoint-slot-decomposition/spec.md) | Runtime Checkpoint Slot Decomposition (ADR 0029 Move 2, first slice) | Draft — establishes the Move 2 decomposition pattern; **seeks architect approval of the pattern before the remaining handlers**. | - | 0 | 0 | retained, out of scope |
-| [083-runtime-execution-expression-carrier](../../specs/083-runtime-execution-expression-carrier/spec.md) | Runtime Execution-Time Expression Carrier | Draft | - | 25 | 0 | superseded |
+| [083-runtime-checkpoint-slot-decomposition](../../specs/083-runtime-checkpoint-slot-decomposition/spec.md) | Runtime Checkpoint Slot Decomposition (ADR 0029 Move 2, first slice) | Implemented — establishes the Move 2 decomposition pattern (first slice); the remaining handlers are spec 084. | - | 0 | 0 | retained, out of scope |
+| [083-runtime-execution-expression-carrier](../../specs/083-runtime-execution-expression-carrier/spec.md) | Runtime Execution-Time Expression Carrier | Implemented | - | 25 | 0 | superseded |
 | [084-runtime-move2-slot-decomposition-remainder](../../specs/084-runtime-move2-slot-decomposition-remainder/spec.md) | Runtime Structure — ADR 0029 Move 2 Remainder + Drain-Path De-ambienting (W12) | Draft — completes ADR 0029 **Move 2** across all remaining scheduler handlers and folds in the surrounding runtime structural remediation (RT-4/RT-7/RT-8/RT-11) from the elsa-4 architecture review. Behavior-preserving. | - | 0 | 0 | out of scope |
 | [085-workflow-definition-gitops](../../specs/085-workflow-definition-gitops/spec.md) | Workflow-Definition GitOps — Git Reconciliation Source + Export Sink | Implemented — merged 2026-07-08 in PR #577 (squash `23056231`); tasks.md 35/35 complete. | - | 35 | 0 | superseded, deferred, out of scope |
 | [086-deterministic-payload-serialization](../../specs/086-deterministic-payload-serialization/spec.md) | Deterministic Payload Serialization | Implemented (merged to main, PR #549) — this spec documents the shipped behavior. The | - | 0 | 0 | out of scope |
 | [087-reconciler-definition-metadata-update](../../specs/087-reconciler-definition-metadata-update/spec.md) | Reconciler Definition-Metadata Update Path | Draft | - | 0 | 0 | out of scope |
 | [088-layout-metadata-opaque-jsonelement](../../specs/088-layout-metadata-opaque-jsonelement/spec.md) | Layout Metadata Bag Becomes Opaque JsonElement | Draft | - | 0 | 0 | out of scope |
-| [089-http-endpoint-parity](../../specs/089-http-endpoint-parity/spec.md) | HTTP Endpoint Full Parity | Draft | - | 9 | 0 | deferred, out of scope |
+| [089-http-endpoint-parity](../../specs/089-http-endpoint-parity/spec.md) | HTTP Endpoint Full Parity | Implemented | - | 9 | 0 | deferred, out of scope |
 | [090-activity-input-editor-options](../../specs/090-activity-input-editor-options/spec.md) | Activity Input Editor Options | Approved for implementation | - | 30 | 0 | retained |
-| [090-runtime-http-performance](../../specs/090-runtime-http-performance/spec.md) | Runtime HTTP Hot-Path Performance | Draft | - | 23 | 0 | - |
+| [090-runtime-http-performance](../../specs/090-runtime-http-performance/spec.md) | Runtime HTTP Hot-Path Performance | Implemented | - | 23 | 0 | - |
 | [090-trigger-contract-hardening](../../specs/090-trigger-contract-hardening/spec.md) | Trigger Publication Contract Hardening | Implemented (merged 2026-07-11 in PR #628) | - | 38 | 0 | retained |
 | [091-lazy-shell-activation](../../specs/091-lazy-shell-activation/spec.md) | Observable Shell Readiness and Cold Activation | Approved for implementation | - | 39 | 0 | - |
 | [091-structured-logs-replay-cursors](../../specs/091-structured-logs-replay-cursors/spec.md) | Durable Structured Logs Replay Cursors | Ratified and verified (2026-07-12). | - | 0 | 0 | retained, out of scope |
 | [092-domain-owned-apis](../../specs/092-domain-owned-apis/spec.md) | Domain-Owned Management APIs | Implemented and verified (2026-07-13) | - | 108 | 0 | retained |
-| [092-reusable-activity-definitions](../../specs/092-reusable-activity-definitions/spec.md) | Reusable Activity Definitions | Draft | - | 104 | 0 | retained, deferred, out of scope |
+| [092-reusable-activity-definitions](../../specs/092-reusable-activity-definitions/spec.md) | Reusable Activity Definitions | Implemented | - | 104 | 0 | retained, deferred, out of scope |
 | [092-workflow-executable-cache](../../specs/092-workflow-executable-cache/spec.md) | Bounded Workflow Executable Cache | Approved for implementation | - | 32 | 0 | retained |
 | [093-groundwork-design-persistence](../../specs/093-groundwork-design-persistence/spec.md) | Groundwork Design Persistence | Draft | - | 87 | 1 | superseded |
 | [094-harden-groundwork-stores](../../specs/094-harden-groundwork-stores/spec.md) | Harden Groundwork Store Families | Draft | - | 100 | 5 | - |
 | [095-groundwork-aspnetcore-identity](../../specs/095-groundwork-aspnetcore-identity/spec.md) | Groundwork ASP.NET Core Identity | Draft | - | 87 | 2 | - |
 | [095-runtime-intent-handlers](../../specs/095-runtime-intent-handlers/spec.md) | Contributed Runtime Intent Handlers | Approved | - | 24 | 0 | out of scope |
-| [095-value-flow-redesign](../../specs/095-value-flow-redesign/spec.md) | Replace Memory-Block Value Flow | Draft | - | 117 | 0 | retained, deferred, out of scope |
+| [095-value-flow-redesign](../../specs/095-value-flow-redesign/spec.md) | Replace Memory-Block Value Flow | Implemented | - | 117 | 0 | retained, deferred, out of scope |
 | [096-dispatch-workflow-fire-and-forget](../../specs/096-dispatch-workflow-fire-and-forget/spec.md) | Dispatch a Published Workflow Fire-and-Forget | Approved | - | 40 | 0 | retained, out of scope, construct-only |
 | [097-dispatch-dependency-hardening](../../specs/097-dispatch-dependency-hardening/spec.md) | Deterministic and Bounded Workflow Dispatch | Draft | - | 60 | 0 | retained, deferred, construct-only |
 | [098-dispatch-durability-inspection](../../specs/098-dispatch-durability-inspection/spec.md) | Durable and Inspectable Detached Dispatch | Approved | - | 53 | 0 | retained |
 | [099-dispatch-wait-success](../../specs/099-dispatch-wait-success/spec.md) | Wait for a Successful Child and Return Safe Outputs | Approved | - | 67 | 0 | retained, deferred, construct-only |
 | [100-dispatch-fault-cancellation](../../specs/100-dispatch-fault-cancellation/spec.md) | Complete Child Fault and Cancellation Semantics | Approved | - | 54 | 0 | deferred |
 | [101-dispatch-delivery-recovery](../../specs/101-dispatch-delivery-recovery/spec.md) | Dispatch Delivery Recovery | Draft | - | 60 | 0 | - |
-| [102-dispatch-test-run-scope](../../specs/102-dispatch-test-run-scope/spec.md) | Preserve Dispatch Test-Run Scope | Draft | - | 53 | 0 | retained, out of scope |
+| [102-dispatch-test-run-scope](../../specs/102-dispatch-test-run-scope/spec.md) | Preserve Dispatch Test-Run Scope | Implemented | - | 53 | 0 | retained, out of scope |
 | [103-dispatch-distributed-execution](../../specs/103-dispatch-distributed-execution/spec.md) | Execute DispatchWorkflow Across Distributed Nodes | Draft | - | 32 | 0 | - |
 | [104-dispatch-parent-audit](../../specs/104-dispatch-parent-audit/spec.md) | DispatchWorkflow Parent Audit Remediation | unknown | - | 27 | 0 | retained |
-| [105-drain-step-single-transaction](../../specs/105-drain-step-single-transaction/spec.md) | Single Durable Transaction per Drain Step (fold work-item ack into the checkpoint commit) | Draft | - | 0 | 0 | deferred, out of scope |
+| [105-drain-step-single-transaction](../../specs/105-drain-step-single-transaction/spec.md) | Single Durable Transaction per Drain Step (fold work-item ack into the checkpoint commit) | Implemented | - | 0 | 0 | deferred, out of scope |
 | [106-openiddict-groundwork-stores](../../specs/106-openiddict-groundwork-stores/spec.md) | OpenIddict Groundwork Stores | Draft | - | 11 | 62 | superseded, retained, deferred |
 | [106-runtime-live-drain-delivery](../../specs/106-runtime-live-drain-delivery/spec.md) | In-memory live-drain EnqueueSchedulerWork delivery (Immediate mode) | unknown | - | 0 | 0 | retained |
 | [107-side-effect-profile](../../specs/107-side-effect-profile/spec.md) | Author-Declared Side-Effect Profile Gates the Pre-Activation Claim Boundary | Draft | - | 0 | 0 | deferred, out of scope |
@@ -180,7 +180,7 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [139-groundwork-diagnostics-persistence](../../specs/139-groundwork-diagnostics-persistence/spec.md) | Durable Diagnostics Persistence | Draft | - | 48 | 14 | retained, out of scope |
 | [140-incident-strategies](../../specs/140-incident-strategies/spec.md) | Extensible Incident Strategies | Approved | - | 54 | 0 | retained |
 | [141-runtime-alterations](../../specs/141-runtime-alterations/spec.md) | Durable Runtime Alterations | Approved | - | 86 | 0 | superseded, retained, deferred |
-| [142-workflow-version-override](../../specs/142-workflow-version-override/spec.md) | Workflow Version Override | Draft | - | 21 | 0 | - |
+| [142-workflow-version-override](../../specs/142-workflow-version-override/spec.md) | Workflow Version Override | Implemented | - | 21 | 0 | - |
 | [143-expression-code-intelligence](../../specs/143-expression-code-intelligence/spec.md) | Expression Code Intelligence Foundation | Implemented | - | 25 | 0 | superseded, retained, out of scope |
 | [144-zero-ef-final-removal](../../specs/144-zero-ef-final-removal/spec.md) | Zero-EF Final Removal | Restated for first-party EF removal; implementation and final promotion remain pending. | - | 19 | 77 | superseded, retained, deferred, out of scope |
 | [145-publishing-engine-split](../../specs/145-publishing-engine-split/spec.md) | Publishing engine / API split | Draft | - | 28 | 1 | out of scope |
@@ -189,20 +189,20 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [148-authoring-schema-endpoints](../../specs/148-authoring-schema-endpoints/spec.md) | Authoring-Schema Endpoints for Headless Clients | Retrofit — documents behavior shipped in PR #1170 (issue #1164); source of truth for review and future evolution, not a driver of new implementation. | - | 0 | 0 | - |
 | [149-canonical-dependency-map](../../specs/149-canonical-dependency-map/spec.md) | Canonical Dependency Map | Draft | - | 0 | 0 | deferred, out of scope |
 | [150-package-version-computation](../../specs/150-package-version-computation/spec.md) | Package Version Computation and Selective Publishing | Draft | - | 0 | 0 | deferred, out of scope |
-| [151-foundation-identity-permission-policy-bridge](../../specs/151-foundation-identity-permission-policy-bridge/spec.md) | Foundation Identity Permission Policy Bridge | Draft | - | 56 | 0 | retained, deferred |
+| [151-foundation-identity-permission-policy-bridge](../../specs/151-foundation-identity-permission-policy-bridge/spec.md) | Foundation Identity Permission Policy Bridge | Implemented | - | 56 | 0 | retained, deferred |
 | [152-rest-api-migration-gates](../../specs/152-rest-api-migration-gates/spec.md) | REST API Migration Compatibility and Authoring Gates | Complete | - | 37 | 0 | retained |
-| [153-studio-preferences-api-canary](../../specs/153-studio-preferences-api-canary/spec.md) | Studio Preferences API Canary | Draft | - | 35 | 0 | retained |
-| [154-secrets-api-migration](../../specs/154-secrets-api-migration/spec.md) | Secrets API Minimal API Migration | Draft | - | 42 | 0 | retained, out of scope |
-| [155-structured-logs-api-migration](../../specs/155-structured-logs-api-migration/spec.md) | Structured Logs API Minimal API Migration | Draft | - | 46 | 0 | retained, out of scope |
+| [153-studio-preferences-api-canary](../../specs/153-studio-preferences-api-canary/spec.md) | Studio Preferences API Canary | Implemented | - | 35 | 0 | retained |
+| [154-secrets-api-migration](../../specs/154-secrets-api-migration/spec.md) | Secrets API Minimal API Migration | Implemented | - | 42 | 0 | retained, out of scope |
+| [155-structured-logs-api-migration](../../specs/155-structured-logs-api-migration/spec.md) | Structured Logs API Minimal API Migration | Implemented | - | 46 | 0 | retained, out of scope |
 | [156-retained-host-route-metadata](../../specs/156-retained-host-route-metadata/spec.md) | Retained Host Route Ownership and Security Metadata | Implemented | - | 14 | 0 | retained |
-| [157-workflow-dynamic-http-publication](../../specs/157-workflow-dynamic-http-publication/spec.md) | Workflow-authored Dynamic HTTP Publication | Draft | - | 10 | 0 | out of scope |
+| [157-workflow-dynamic-http-publication](../../specs/157-workflow-dynamic-http-publication/spec.md) | Workflow-authored Dynamic HTTP Publication | Implemented | - | 10 | 0 | out of scope |
 | [158-wave1-small-read-api-migration](../../specs/158-wave1-small-read-api-migration/spec.md) | Wave 1 Small and Read-Oriented REST API Migration | Implemented | - | 16 | 0 | retained, out of scope |
-| [159-wave2-bounded-api-migration](../../specs/159-wave2-bounded-api-migration/spec.md) | Wave 2 Bounded API Migration | Draft | - | 22 | 0 | - |
+| [159-wave2-bounded-api-migration](../../specs/159-wave2-bounded-api-migration/spec.md) | Wave 2 Bounded API Migration | Implemented | - | 22 | 0 | - |
 | [160-foundation-identity-minimal-api](../../specs/160-foundation-identity-minimal-api/spec.md) | Foundation Identity Minimal API Migration | Implemented | - | 18 | 0 | retained |
 | [161-agent-api-minimal-migration](../../specs/161-agent-api-minimal-migration/spec.md) | Wave 4 Agent REST and SSE API Migration | Implementation and control-room integration gates complete; independent final review pending | - | 15 | 0 | - |
-| [162-opentelemetry-api-migration](../../specs/162-opentelemetry-api-migration/spec.md) | OpenTelemetry API Minimal API Migration | Draft | - | 10 | 0 | retained |
+| [162-opentelemetry-api-migration](../../specs/162-opentelemetry-api-migration/spec.md) | OpenTelemetry API Minimal API Migration | Implemented | - | 10 | 0 | retained |
 | [163-wave6-workflows-design-review](../../specs/163-wave6-workflows-design-review/spec.md) | Wave 6 Workflows Design API Review Corrections | Implementation | - | 20 | 0 | retained |
-| [164-runtime-api-minimal-migration](../../specs/164-runtime-api-minimal-migration/spec.md) | Runtime API Minimal API Migration | Draft | - | 14 | 0 | retained, out of scope |
+| [164-runtime-api-minimal-migration](../../specs/164-runtime-api-minimal-migration/spec.md) | Runtime API Minimal API Migration | Implemented | - | 14 | 0 | retained, out of scope |
 | [165-unload-safe-openapi](../../specs/165-unload-safe-openapi/spec.md) | Unload-Safe OpenAPI Boundary | Implemented — merged by #1394 as `efe280446cafc998cbeb305bf235527eafd30b19` | - | 39 | 0 | retained, out of scope |
 | [166-activities-design-api-migration](../../specs/166-activities-design-api-migration/spec.md) | Activities Design API Minimal API Migration | Draft | - | 50 | 3 | retained, out of scope |
 | [167-publishing-api-migration](../../specs/167-publishing-api-migration/spec.md) | Publishing API Minimal API Migration | Implemented — merged by #1403 as `abc262aa50593cb037a27e0ac84dd2b1b78a9bd0` | - | 55 | 0 | retained, out of scope |

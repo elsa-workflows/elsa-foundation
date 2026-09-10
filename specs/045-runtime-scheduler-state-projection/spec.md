@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-scheduler-state-projection`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #47, #48 (restatused 2026-09-10 from git evidence)
 **Input**: Continue the Runtime Execution Seam after operational state projection. Checkpoint commits already carry scheduler state changes; the default in-memory writer should project those changes into a scheduler state store without conflating that store with the scheduler work queue.
 
 ## Scenarios & Tests

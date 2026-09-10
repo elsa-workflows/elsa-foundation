@@ -4,7 +4,8 @@
 
 **Created**: 2026-08-15
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: #1357 (restatused 2026-09-10 from git evidence)
 
 **Input**: User description: "Unify endpoint permission authorization on Foundation Identity policies for Minimal APIs and transitional FastEndpoints routes, including explicit any/all semantics, wildcard compatibility, normalized claims, module-owned catalog contributions, hard-veto resource denial, and shared evaluator integration."
 
