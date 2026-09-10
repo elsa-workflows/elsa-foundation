@@ -1,5 +1,10 @@
 # Elsa Foundation Ships Only Groundwork Persistence Implementations
 
+> **Proposed direction (not yet accepted):** [ADR 0072](0072-ef-first-relational-persistence-with-provider-derived-contexts.md)
+> drafts an EF-first relational family for new simple modules, with Groundwork frozen for those
+> domains and retained for runtime checkpoint/queue/placement until a later ADR. This ADR remains
+> in force until 0072 is accepted.
+
 Status: accepted (2026-07-12; ratified through the maintainer grilling and PR #630 review; the targeted constitution amendment remains separately pending consensus and compliance evidence).
 
 Tracking: [Elsa PRD #629](https://github.com/elsa-workflows/elsa-foundation/issues/629) and [Groundwork PRD #25](https://github.com/valence-works/Groundwork/issues/25).
