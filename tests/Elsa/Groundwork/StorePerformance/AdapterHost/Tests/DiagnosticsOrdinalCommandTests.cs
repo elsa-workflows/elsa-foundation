@@ -279,18 +279,20 @@ public sealed class DiagnosticsOrdinalCommandTests(ITestOutputHelper output)
         Assert.Throws<PerformanceContractException>(() => Validate("postgresql", specification, invalid));
     }
 
+    /// <summary>
+    /// The start index declares ordinal identities, so the persisted trace key orders the query whether
+    /// or not it is nominated (valence-works/groundwork-v2#443); no computed ordinal key appears.
+    /// </summary>
     [Fact]
-    public void Trace_summary_unselected_renderer_keeps_the_raw_trace_key_order()
+    public void Trace_summary_renderer_orders_by_the_persisted_trace_key_with_or_without_a_selected_index()
     {
         var specification = Specification("traces-by-last-seen");
-        var selected = Render("postgresql", specification, continuation: false);
-        var unselected = Render("postgresql", specification, continuation: false, selectIndex: false);
-
-        Assert.Contains("__groundwork_ordinal_traceKey", selected, StringComparison.Ordinal);
-        Assert.DoesNotContain("string_agg", selected, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("__groundwork_ordinal_traceKey", unselected, StringComparison.Ordinal);
-        Assert.Contains("traceKey", unselected, StringComparison.Ordinal);
-        Assert.Contains("string_agg", unselected, StringComparison.OrdinalIgnoreCase);
+        foreach (var selectIndex in new[] { true, false })
+        {
+            var rendered = Render("postgresql", specification, continuation: false, selectIndex: selectIndex);
+            Assert.Contains("__groundwork_ordinal_traceKey", rendered, StringComparison.Ordinal);
+            Assert.DoesNotContain("string_agg", rendered, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     private static DiagnosticsNativeRouteSpec Specification(string route)
