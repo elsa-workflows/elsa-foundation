@@ -7,7 +7,7 @@
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
     <ImportDirectoryBuildTargets>false</ImportDirectoryBuildTargets>
-    <GroundworkVersion Condition="'$(GroundworkVersion)' == ''">0.4.0-preview.28</GroundworkVersion>
+    <GroundworkVersion Condition="'$(GroundworkVersion)' == ''">0.4.0-preview.29</GroundworkVersion>
   </PropertyGroup>
 
   <ItemGroup>

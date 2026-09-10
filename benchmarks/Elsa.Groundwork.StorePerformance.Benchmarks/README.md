@@ -70,7 +70,7 @@ actual primary key; it is never relabelled as the secondary index.
 
 ### Structured execution evidence
 
-The harness consumes the published Groundwork `0.4.0-preview.28` package family.
+The harness consumes the published Groundwork `0.4.0-preview.29` package family.
 Every diagnostics route on SQLite, PostgreSQL, SQL Server and MongoDB, including the trace-detail
 point reads and their keyset continuation pages, is captured through the terminal
 `IProviderExecutionObserver` callback instead of parsing command text or retained
