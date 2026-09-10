@@ -969,7 +969,7 @@ public sealed class ArchitectureGuardTests
     [Fact]
     public void Pruned_unused_public_contracts_do_not_reappear_in_production_source()
     {
-        var sourceRoot = Path.Combine(RepoRoot, "src");
+        var sourceRoot = Path.Join(RepoRoot, "src");
         var violations = Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
             .Where(file => !IsGeneratedScratchFile(file) && !IsBuildArtifactFile(file))
             .SelectMany(file => FindPrunedPublicContractNames(File.ReadAllText(file))
