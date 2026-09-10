@@ -89,14 +89,25 @@ public sealed record DiagnosticsTraceDetailConstituentEvidence(
     int MaterializedCandidateCount,
     int ObservedCommandCount,
     int MaxInvocationCount,
-    IReadOnlyList<DiagnosticsTraceDetailPageEvidence>? Pages = null);
+    IReadOnlyList<DiagnosticsTraceDetailPageEvidence>? Pages = null)
+{
+    /// <summary>
+    /// The constituent's typed Groundwork observation: the point read, or the first bounded page. When
+    /// present the raw-plan reference, digest and command text are empty; admission reads typed facts.
+    /// </summary>
+    public StructuredExecutionEvidence? StructuredEvidence { get; init; }
+}
 
 /// <summary>One retained provider-native page shape for a bounded trace-detail signal query.</summary>
 public sealed record DiagnosticsTraceDetailPageEvidence(
     int PageIndex,
     string RawPlanReference,
     string RawPlanSha256,
-    string CommandText);
+    string CommandText)
+{
+    /// <summary>The page's typed bounded-query observation, including its emitted continuation predicate.</summary>
+    public StructuredExecutionEvidence? StructuredEvidence { get; init; }
+}
 /// <summary>
 /// Value-free diagnostics for one provider-native route that was deliberately blocked. Raw plans are
 /// retained separately and referenced by safe artifact name plus digest; the failure message itself is
@@ -877,6 +888,15 @@ public static class ArtifactAdmission
 
         foreach (var constituent in constituents)
         {
+            if (constituent.StructuredEvidence is not null)
+            {
+                DiagnosticsNativePlanContract.ValidateStructuredTraceDetailConstituent(
+                    request.Provider,
+                    request.Adapter,
+                    constituent,
+                    expectedProviderVersion: null);
+                continue;
+            }
             if (string.IsNullOrWhiteSpace(constituent.RawPlanReference))
             {
                 DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(

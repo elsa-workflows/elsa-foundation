@@ -71,7 +71,19 @@ public sealed record StructuredPredicateFact(
     string Comparison,
     string BoundInclusivity,
     string BindingRole,
-    Guid BindingId);
+    Guid? BindingId);
+
+/// <summary>One lexicographic keyset branch: the prefix equalities or null tests, then the boundary on the next order term.</summary>
+public sealed record StructuredContinuationBranch(
+    IReadOnlyList<StructuredPredicateFact> Equalities,
+    StructuredPredicateFact Boundary,
+    bool BoundaryAdmitsNull);
+
+/// <summary>The value-free keyset continuation predicate a provider emitted: lexicographic branches or one native tuple bound.</summary>
+public sealed record StructuredContinuationPredicate(
+    string Form,
+    IReadOnlyList<StructuredContinuationBranch> Branches,
+    IReadOnlyList<StructuredPredicateFact> TupleBounds);
 
 /// <summary>Closed conjunction shape; an omitted value means the whole shape is unavailable.</summary>
 public sealed record StructuredConjunctionPredicate(
@@ -104,7 +116,11 @@ public sealed record StructuredBoundedQueryEvidence(
     StructuredNativeBound NativeLimit,
     bool HasContinuation,
     bool HasLookahead,
-    bool IncludesTotalCount);
+    bool IncludesTotalCount)
+{
+    /// <summary>Present exactly when <see cref="HasContinuation"/> is true (Groundwork 0.4.0-preview.28).</summary>
+    public StructuredContinuationPredicate? Continuation { get; init; }
+}
 
 /// <summary>Observed spill fact for an executed operator; absent means not observed, never no spill.</summary>
 public sealed record StructuredPlanSpill(

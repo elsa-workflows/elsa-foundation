@@ -181,6 +181,7 @@ public static class ArtifactStore
                 .Select(constituent => RawPlanName(constituent.RawPlanReference)))
             .Concat((nativePlan.TraceDetailConstituents ?? [])
                 .SelectMany(constituent => constituent.Pages ?? [])
+                .Where(page => !string.IsNullOrWhiteSpace(page.RawPlanReference))
                 .Select(page => RawPlanName(page.RawPlanReference)));
 
     private static IEnumerable<(string Owner, string Reference, string Sha256)> RawPlanBindings(ProcessArtifact artifact)
@@ -195,7 +196,7 @@ public static class ArtifactStore
         {
             if (!string.IsNullOrWhiteSpace(constituent.RawPlanReference))
                 yield return ($"{measurementSet}|{constituent.RouteIdentity}", RawPlanName(constituent.RawPlanReference), constituent.RawPlanSha256);
-            foreach (var page in constituent.Pages ?? [])
+            foreach (var page in (constituent.Pages ?? []).Where(page => !string.IsNullOrWhiteSpace(page.RawPlanReference)))
                 yield return ($"{measurementSet}|{constituent.RouteIdentity}|page-{page.PageIndex}", RawPlanName(page.RawPlanReference), page.RawPlanSha256);
         }
     }
