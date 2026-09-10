@@ -217,15 +217,32 @@ public sealed class SqliteEfSecretRepositoryTests
         {
             var path = System.IO.Path.Join(System.IO.Path.GetTempPath(), $"elsa-secrets-ef-{Guid.NewGuid():N}.db");
             var connection = new SqliteConnection($"Data Source={path}");
-            await connection.OpenAsync();
-            var options = new DbContextOptionsBuilder<SecretsSqliteDbContext>()
-                .UseSqlite(connection, sqlite => sqlite
-                    .MigrationsAssembly(typeof(SecretsSqliteDbContext).Assembly.GetName().Name)
-                    .MigrationsHistoryTable(SecretsEfModule.HistoryTableName))
-                .Options;
-            var context = new SecretsSqliteDbContext(options);
-            await EfDatabaseMigrator.ApplyAsync(context, SecretsSqliteDbContext.ExpectedProviderName);
-            return new SqliteFixture(path, connection, context, new EfSecretRepository(context));
+            try
+            {
+                await connection.OpenAsync();
+                var options = new DbContextOptionsBuilder<SecretsSqliteDbContext>()
+                    .UseSqlite(connection, sqlite => sqlite
+                        .MigrationsAssembly(typeof(SecretsSqliteDbContext).Assembly.GetName().Name)
+                        .MigrationsHistoryTable(SecretsEfModule.HistoryTableName))
+                    .Options;
+                var context = new SecretsSqliteDbContext(options);
+                try
+                {
+                    await EfDatabaseMigrator.ApplyAsync(context, SecretsSqliteDbContext.ExpectedProviderName);
+                    return new SqliteFixture(path, connection, context, new EfSecretRepository(context));
+                }
+                catch (Exception)
+                {
+                    await context.DisposeAsync();
+                    throw;
+                }
+            }
+            catch (Exception)
+            {
+                await connection.DisposeAsync();
+                File.Delete(path);
+                throw;
+            }
         }
 
         public async ValueTask DisposeAsync()

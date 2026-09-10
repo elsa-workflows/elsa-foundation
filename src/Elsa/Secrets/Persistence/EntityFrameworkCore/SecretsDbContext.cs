@@ -1,3 +1,4 @@
+using System.Linq;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Configuration;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;

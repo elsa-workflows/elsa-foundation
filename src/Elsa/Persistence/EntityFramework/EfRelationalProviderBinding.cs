@@ -182,6 +182,14 @@ public static class EfRelationalProviderBinding
         {
             return null;
         }
+        catch (TypeLoadException)
+        {
+            return null;
+        }
+        catch (ReflectionTypeLoadException)
+        {
+            return null;
+        }
     }
 
     private static bool TrySplitAssemblyQualifiedName(string assemblyQualifiedName, out string typeName, out string assemblyName)
