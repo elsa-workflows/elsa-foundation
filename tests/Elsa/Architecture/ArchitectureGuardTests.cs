@@ -39,6 +39,27 @@ public sealed class ArchitectureGuardTests
 
     private static readonly Regex AssemblyInternalsVisibleToPattern = new(@"assembly\s*:\s*InternalsVisibleTo", RegexOptions.Compiled);
 
+    // Speculative public contracts removed because they had zero in-repo consumers. Match
+    // public type declarations only so OpenIddict's IApplicationManager (constitution R3
+    // exception) and longer identifiers such as IApplicationManagerOptions stay legal.
+    private static readonly string[] PrunedPublicContractNames =
+    [
+        "IExpressionFactory",
+        "IHttpContextValueSelector",
+        "IRuntimeInputBindingValidator",
+        "IWorkflowDesignContextFactory",
+        "IWorkflowDesignContext",
+        "WorkflowDesignContext",
+        "IApplicationManager",
+        "ICredentialManager",
+        "IProviderManager",
+        "IClaimMappingManager",
+    ];
+
+    private static readonly Regex PrunedPublicContractDeclarationPattern = new(
+        $@"\bpublic\s+(?:(?:partial|sealed|abstract|static|readonly)\s+)*(?:interface|class|record(?:\s+(?:struct|class))?|struct|enum)\s+(?<name>{string.Join("|", PrunedPublicContractNames)})\b",
+        RegexOptions.Compiled);
+
     [Fact]
     public void Solution_has_no_global_layer_marker_folders()
     {
@@ -948,36 +969,47 @@ public sealed class ArchitectureGuardTests
     [Fact]
     public void Pruned_unused_public_contracts_do_not_reappear_in_production_source()
     {
-        // Speculative public contracts with zero in-repo consumers. A resurrection would
-        // force humans to treat an unused stub as product API again.
-        string[] forbiddenTokens =
-        [
-            "IExpressionFactory",
-            "IHttpContextValueSelector",
-            "IRuntimeInputBindingValidator",
-            "IWorkflowDesignContext",
-            "IWorkflowDesignContextFactory",
-            "WorkflowDesignContext",
-            "IApplicationManager",
-            "ICredentialManager",
-            "IProviderManager",
-            "IClaimMappingManager",
-        ];
-
         var sourceRoot = Path.Combine(RepoRoot, "src");
         var violations = Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
             .Where(file => !IsGeneratedScratchFile(file) && !IsBuildArtifactFile(file))
-            .SelectMany(file =>
-            {
-                var code = StripCommentsAndStringLiterals(File.ReadAllText(file));
-                return forbiddenTokens
-                    .Where(token => code.Contains(token, StringComparison.Ordinal))
-                    .Select(token => $"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {token}");
-            })
+            .SelectMany(file => FindPrunedPublicContractNames(File.ReadAllText(file))
+                .Select(name => $"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {name}"))
             .Distinct()
             .ToList();
 
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
+    public void Pruned_contract_guard_matches_public_declarations_not_external_or_longer_names()
+    {
+        Assert.Equal(
+            ["IApplicationManager"],
+            FindPrunedPublicContractNames(
+                """
+                public interface IApplicationManager
+                {
+                    void Register();
+                }
+                """));
+        Assert.Equal(
+            ["WorkflowDesignContext"],
+            FindPrunedPublicContractNames("public sealed class WorkflowDesignContext { }"));
+        Assert.Equal(
+            ["IWorkflowDesignContextFactory"],
+            FindPrunedPublicContractNames("public interface IWorkflowDesignContextFactory { }"));
+
+        Assert.Empty(FindPrunedPublicContractNames(
+            """
+            using OpenIddict.Abstractions;
+
+            public sealed class OpenIddictTokenService(IApplicationManager applications)
+            {
+                public IApplicationManagerOptions Options { get; } = new();
+            }
+
+            public sealed class IApplicationManagerOptions;
+            """));
     }
 
     [Fact] // spec 006 T052 (SC-002) — the deleted 005 implementation-descriptor family is gone from production code.
@@ -1069,6 +1101,11 @@ public sealed class ArchitectureGuardTests
         var normalized = filePath.Replace(Path.DirectorySeparatorChar, '/');
         return normalized.Contains("/obj/", StringComparison.Ordinal) || normalized.Contains("/bin/", StringComparison.Ordinal);
     }
+
+    private static IReadOnlyList<string> FindPrunedPublicContractNames(string source) =>
+        PrunedPublicContractDeclarationPattern.Matches(StripCommentsAndStringLiterals(source))
+            .Select(match => match.Groups["name"].Value)
+            .ToArray();
 
     private static bool IsRuntimeProject(ProjectInfo project) =>
         project.Name == "Elsa.Workflows.Runtime"
