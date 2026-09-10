@@ -5,7 +5,7 @@ public static partial class DiagnosticsNativePlanContract
     /// <summary>
     /// The diagnostics routes whose admission reads typed callback evidence instead of provider plan
     /// text, per provider. A route is listed only where Groundwork reports both a collected bounded-query
-    /// shape and a collected plan for it (observed on 0.4.0-preview.26: persisted ordinal identity keys and
+    /// shape and a collected plan for it (observed on 0.4.0-preview.27: persisted ordinal identity keys and
     /// the renderer's computed sort fields are typed since valence-works/groundwork-v2#432). The bounded
     /// resource routes admit the same scan-and-sort exception the raw path grants for the frozen 128-row
     /// catalog, proven from typed plan nodes and sort keys (#1594).
@@ -16,7 +16,7 @@ public static partial class DiagnosticsNativePlanContract
             ["sqlite"] = new HashSet<string>(StringComparer.Ordinal)
             {
                 "structured-log-recent", "structured-log-replay", "metrics-by-last-seen", "logs-by-last-seen",
-                "resources-by-last-seen", "resources-by-status", "resources-by-service"
+                "traces-by-last-seen", "resources-by-last-seen", "resources-by-status", "resources-by-service"
             },
             ["postgresql"] = new HashSet<string>(StringComparer.Ordinal)
             {
