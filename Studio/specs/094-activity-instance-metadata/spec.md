@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-28
 
-**Status**: Draft
+**Status**: Implemented — merged in PR #479
 
 **Input**: User description: "Let workflow authors give each activity occurrence a useful Display Name and Description, surface copyable technical identifiers in the Inspector, and remove repetitive version labels from activity nodes and the normal palette."
 
