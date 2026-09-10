@@ -190,7 +190,14 @@ public static partial class DiagnosticsNativePlanContract
             throw Reject($"Trace-detail page {pageIndex} of '{specification.RouteIdentity}' misreports its continuation.");
         if (query.Continuation is { } continuation)
             ValidateContinuation(continuation, routeSpecification.EffectiveOrdering, specification.RouteIdentity, pageIndex);
-        ValidatePlan(evidence.Plan, evidence.Target.PhysicalTargetId, provider, routeSpecification, nativeFetchLimit);
+        try
+        {
+            ValidatePlan(evidence.Plan, evidence.Target.PhysicalTargetId, provider, routeSpecification, nativeFetchLimit);
+        }
+        catch (PerformanceContractException exception)
+        {
+            throw new PerformanceContractException($"{exception.Message} (page {pageIndex})");
+        }
     }
 
     private static void ValidateContinuation(
