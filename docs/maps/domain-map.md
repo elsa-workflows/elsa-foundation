@@ -7,7 +7,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 ## Summary
 
 - Source projects: 138
-- Test projects: 107
+- Test projects: 108
 - Domains: 27
 - Direct cross-domain references: 707
 
@@ -35,7 +35,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Pipelines | 1 | 0 | contract |
 | Elsa.Primitives | 2 | 2 | feature/implementation<br>test |
 | Elsa.Samples | 0 | 1 | test |
-| Elsa.Secrets | 7 | 6 | contract<br>feature/implementation<br>test |
+| Elsa.Secrets | 7 | 7 | contract<br>feature/implementation<br>test |
 | Elsa.Serialization | 3 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Studio | 3 | 2 | contract<br>feature/implementation<br>test |
 | Elsa.Tasks | 3 | 1 | contract<br>feature/implementation<br>helper<br>test |
@@ -260,6 +260,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | test | Elsa.Samples | Nuplane.Activities.Tests | test | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Samples.Nuplane.Activities |
 | [Elsa.Secrets.Attention.Tests](../../tests/Elsa/Secrets/Attention/Tests/Elsa.Secrets.Attention.Tests.csproj) | test | Elsa.Secrets | Attention.Tests | test | Elsa.Secrets.Attention |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj) | test | Elsa.Secrets | Persistence.EntityFrameworkCore.PostgreSql.Tests | test | Elsa.Secrets.Persistence.EntityFrameworkCore |
+| [Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj) | test | Elsa.Secrets | Persistence.EntityFrameworkCore.SqlServer.Tests | test | Elsa.Secrets.Persistence.EntityFrameworkCore |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Secrets | Persistence.EntityFrameworkCore.Tests | test | Elsa.Secrets.Persistence.EntityFrameworkCore |
 | [Elsa.Secrets.Persistence.Groundwork.V2.ProviderMatrix.Tests](../../tests/Elsa/Secrets/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Secrets.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj) | test | Elsa.Secrets | Persistence.Groundwork.V2.ProviderMatrix.Tests | test | Elsa.Secrets.Persistence.Groundwork |
 | [Elsa.Secrets.Persistence.Groundwork.V2.Tests](../../tests/Elsa/Secrets/Persistence/Groundwork/V2/Tests/Elsa.Secrets.Persistence.Groundwork.V2.Tests.csproj) | test | Elsa.Secrets | Persistence.Groundwork.V2.Tests | test | Elsa.Persistence.Groundwork.Testing<br>Elsa.Secrets.Persistence.Groundwork |

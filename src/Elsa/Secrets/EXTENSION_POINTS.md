@@ -11,8 +11,9 @@ repository as a scoped service. A named target can be supplied when a host route
 
 An additive EF Core replacement lives in `Elsa.Secrets.Persistence.EntityFrameworkCore` (proposed
 [ADR 0072](https://github.com/elsa-workflows/elsa-foundation/pull/1623) pilot). It is opt-in, is not the
-Workbench default, and must not be enabled in the same shell as Groundwork Secrets persistence. See
-[`Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Persistence/EntityFrameworkCore/EXTENSION_POINTS.md).
+Workbench default, and must not be enabled in the same shell as Groundwork Secrets persistence.
+Both registrations record `SecretRepositoryBackend` and throw if the other backend is already selected.
+See [`Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Persistence/EntityFrameworkCore/EXTENSION_POINTS.md).
 
 `SecretsGroundworkStorageSchema` declares the fresh `elsa-secrets` unit. Tenant id and normalized secret name form
 its key, searchable/filterable values are projected into typed columns, and the complete secret is retained in a

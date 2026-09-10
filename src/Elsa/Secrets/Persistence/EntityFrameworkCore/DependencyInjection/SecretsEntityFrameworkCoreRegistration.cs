@@ -22,6 +22,7 @@ public static class SecretsEntityFrameworkCoreRegistration
         var migrationsAssembly = typeof(SecretsDbContext).Assembly.GetName().Name;
 
         services.AddSingleton(options);
+        SelectSecretRepositoryBackend(services, SecretRepositoryBackend.EntityFramework);
         services.RemoveAll<ISecretRepository>();
 
         switch (provider)
@@ -89,6 +90,17 @@ public static class SecretsEntityFrameworkCoreRegistration
 
         throw new InvalidOperationException(
             "Secrets EF requires ConnectionString or ConnectionName for a non-Sqlite provider.");
+    }
+
+    internal static void SelectSecretRepositoryBackend(IServiceCollection services, string backend)
+    {
+        var existing = services
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<SecretRepositoryBackend>()
+            .FirstOrDefault();
+        SecretRepositoryBackend.EnsureCompatible(existing?.Name, backend);
+        if (existing is null)
+            services.AddSingleton(new SecretRepositoryBackend(backend));
     }
 }
 

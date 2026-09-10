@@ -109,6 +109,19 @@ public sealed class SqliteEfSecretRepositoryTests
     }
 
     [Fact]
+    public async Task Active_only_normalizes_offset_expiries_to_utc()
+    {
+        await using var fixture = await SqliteFixture.CreateAsync();
+        var plusTwo = new DateTimeOffset(2026, 8, 16, 14, 0, 0, TimeSpan.FromHours(2));
+        await fixture.Repository.SaveAsync(Secret("tenant-a", "offset.future", "v", expiresAt: plusTwo));
+        var now = new DateTimeOffset(2026, 8, 16, 11, 30, 0, TimeSpan.FromHours(-1));
+        var page = await fixture.Repository.ListPageAsync(
+            "tenant-a",
+            new SecretRepositoryListRequest(activeOnly: true, now: now, take: 20));
+        Assert.Equal("offset.future", Assert.Single(page.Items).Name);
+    }
+
+    [Fact]
     public async Task Search_refuses_an_oversized_scoped_catalog()
     {
         await using var fixture = await SqliteFixture.CreateAsync();

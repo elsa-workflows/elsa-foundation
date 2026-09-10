@@ -18,7 +18,8 @@ ef() {
   dotnet ef "$@"
 }
 
-echo "This stub regenerates Secrets Initial migrations. Review provider snapshots for engine-specific APIs before committing."
+echo "Phase 2 stub: this will fail if an Initial migration already exists (dotnet ef rejects the duplicate name)."
+echo "Regeneration that remove/replaces existing Initial sets is Phase 2. Review provider snapshots before committing."
 
 ef migrations add Initial --context SecretsSqliteDbContext --project "$module" --startup-project "$startup" --output-dir Migrations/Sqlite --namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.Sqlite
 ef migrations add Initial --context SecretsSqlServerDbContext --project "$module" --startup-project "$startup" --output-dir Migrations/SqlServer --namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.SqlServer

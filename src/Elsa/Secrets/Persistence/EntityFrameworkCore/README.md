@@ -8,8 +8,9 @@ store. This package does not switch Workbench and does not remove Groundwork.
 This is an intentional first-party EF pilot under **proposed**
 [ADR 0072](https://github.com/elsa-workflows/elsa-foundation/pull/1623) (provider-derived
 `DbContext` types, Variant A). [ADR 0042](../../../../../docs/adr/0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md)
-still forbids first-party EF except the OpenIddict vendor exception and this reviewed
-allowlist. Accepting 0072 formally narrows 0042. This PR does not accept 0072.
+still forbids first-party EF except the OpenIddict vendor exception. The ratchet may
+exclude these proposed pilot paths for review; that exclusion is not an accepted ADR
+amendment. Accepting 0072 formally narrows 0042. This PR does not accept 0072.
 
 The module package references `Microsoft.EntityFrameworkCore` and
 `Microsoft.EntityFrameworkCore.Relational` only. Sqlite / SqlServer / Npgsql engines live
@@ -42,7 +43,7 @@ provider package.
 `MigratePolicy` is `AutoMigrate` (default) or `Validate` (fail if pending).
 
 Do not enable this feature together with `SecretsGroundworkPersistence` in the same shell:
-both replace `ISecretRepository`.
+both replace `ISecretRepository`, and registration throws if the other backend is already selected.
 
 ## Schema
 

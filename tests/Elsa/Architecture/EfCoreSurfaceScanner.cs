@@ -517,10 +517,10 @@ internal sealed class EfCoreSurfaceScanner
     // persistence. OpenIddictPersistenceArchitectureTests owns the exact package/source allowlist; the
     // general surface snapshot excludes those direct entries so the vendor implementation remains an
     // explicit, narrow exception governed by OpenIddictPersistenceArchitectureTests.
-    // ADR 0072 (proposed) Secrets EF pilot. First-party EF is still forbidden by ADR 0042 except the
-    // OpenIddict vendor exception and this reviewed allowlist. Accepting 0072 formally narrows 0042.
-    // The shrink-only baseline excludes these paths; SecretsEfPersistencePilotArchitectureTests owns
-    // the exact package and source inventory.
+    // ADR 0072 (proposed) Secrets EF pilot. ADR 0042 still permits only the OpenIddict vendor
+    // exception; this prefix exclusion is a review-time ratchet carve-out, not an accepted
+    // amendment. SecretsEfPersistencePilotArchitectureTests owns the exact package and source
+    // inventory. Accepting 0072 is what would formally narrow 0042.
     internal static class Adr0072SecretsEfPilot
     {
         public static readonly string[] SurfacePathPrefixes =

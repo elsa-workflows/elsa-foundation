@@ -12,8 +12,9 @@ accumulate entity configuration. Module-owned derived contexts remain first-clas
 This package is an intentional first-party EF edge under **proposed**
 [ADR 0072](https://github.com/elsa-workflows/elsa-foundation/pull/1623).
 [ADR 0042](../../../../docs/adr/0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md)
-still forbids first-party EF except the OpenIddict vendor exception and this reviewed
-pilot allowlist. Accepting 0072 formally narrows 0042.
+still forbids first-party EF except the OpenIddict vendor exception. The ratchet may
+exclude these proposed pilot paths for review; that exclusion is not an accepted ADR
+amendment. Accepting 0072 formally narrows 0042.
 
 ## What this package owns
 

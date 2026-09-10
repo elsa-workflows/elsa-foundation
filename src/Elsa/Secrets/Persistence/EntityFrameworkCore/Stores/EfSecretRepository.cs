@@ -83,10 +83,15 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
             await context.SaveChangesAsync(cancellationToken);
             return true;
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException exception) when (IsUniqueConstraintViolation(exception))
         {
             context.ChangeTracker.Clear();
             return false;
+        }
+        catch (DbUpdateException exception)
+        {
+            context.ChangeTracker.Clear();
+            throw new InvalidOperationException($"Could not add secret '{secret.Name}'.", exception);
         }
     }
 
@@ -154,12 +159,10 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
             context.ChangeTracker.Clear();
             return new SecretRevisionSaveResult(SecretRevisionSaveStatus.Conflict);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException exception)
         {
             context.ChangeTracker.Clear();
-            return existing is null
-                ? new SecretRevisionSaveResult(SecretRevisionSaveStatus.Conflict)
-                : new SecretRevisionSaveResult(SecretRevisionSaveStatus.Conflict);
+            throw new InvalidOperationException($"Could not save secret '{secret.Name}'.", exception);
         }
 
         var saved = existing ?? context.Secrets.Local.Single(row =>
@@ -212,7 +215,7 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
 
         if (request.ActiveOnly)
         {
-            var now = request.Now!.Value;
+            var now = request.Now!.Value.ToUniversalTime();
             var active = SecretsSearchKeys.StatusValue(SecretStatus.Active);
             // Split predicates so EF can translate the nullable DateTimeOffset comparison
             // (Sqlite stores it as ticks; SqlServer/Npgsql keep native types).
@@ -268,6 +271,34 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
     {
         ValidateTenantId(tenantId);
         SecretNameConstraints.Validate(normalizedName);
+    }
+
+    internal static bool IsUniqueConstraintViolation(DbUpdateException exception)
+    {
+        for (var current = (Exception?)exception; current is not null; current = current.InnerException)
+        {
+            var type = current.GetType();
+            var fullName = type.FullName ?? "";
+            if (fullName.Contains("SqliteException", StringComparison.Ordinal))
+            {
+                if (type.GetProperty("SqliteErrorCode")?.GetValue(current) is 19)
+                    return true;
+                if (current.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase) ||
+                    current.Message.Contains("PRIMARY KEY", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            if (fullName.Contains("PostgresException", StringComparison.Ordinal) &&
+                type.GetProperty("SqlState")?.GetValue(current) as string == "23505")
+                return true;
+
+            if ((fullName.EndsWith(".SqlException", StringComparison.Ordinal) ||
+                 fullName.Equals("Microsoft.Data.SqlClient.SqlException", StringComparison.Ordinal)) &&
+                type.GetProperty("Number")?.GetValue(current) is 2627 or 2601)
+                return true;
+        }
+
+        return false;
     }
 
     private static void ValidateTenantId(string tenantId)

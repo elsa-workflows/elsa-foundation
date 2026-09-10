@@ -33,10 +33,7 @@ public sealed record SecretDocument(
             secret.Scope is null ? null : SecretsSearchKeys.LookupKey(secret.Scope),
             SecretsSearchKeys.StatusValue(secret.Status),
             activeVersions.Any(version => version.ExpiresAt is null),
-            activeVersions
-                .Where(version => version.ExpiresAt is not null)
-                .Select(version => version.ExpiresAt)
-                .Max(),
+            MaxUtcExpiry(activeVersions),
             secret);
     }
 
@@ -61,6 +58,15 @@ public sealed record SecretDocument(
         Payload = ToPayload(),
         ConcurrencyToken = concurrencyToken ?? []
     };
+
+    private static DateTimeOffset? MaxUtcExpiry(IEnumerable<SecretVersion> activeVersions)
+    {
+        var expiries = activeVersions
+            .Where(version => version.ExpiresAt is not null)
+            .Select(version => version.ExpiresAt!.Value.ToUniversalTime())
+            .ToArray();
+        return expiries.Length == 0 ? null : expiries.Max();
+    }
 
     public void CopyProjectionsTo(SecretRecord record)
     {

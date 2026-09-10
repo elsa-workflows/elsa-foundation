@@ -512,6 +512,9 @@
   <Folder Name="/tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/">
     <Project Path="tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/">
+    <Project Path="tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Secrets/Persistence/Groundwork/V2/">
     <Project Path="tests/Elsa/Secrets/Persistence/Groundwork/V2/Tests/Elsa.Secrets.Persistence.Groundwork.V2.Tests.csproj" />
   </Folder>

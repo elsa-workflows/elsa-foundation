@@ -1,11 +1,11 @@
 # Elsa Foundation Ships Only Groundwork Persistence Implementations
 
-> **Pilot allowlist (proposed ADR 0072, not accepted):** first-party EF remains forbidden except
-> the OpenIddict vendor exception in this ADR and the reviewed Secrets EF persistence packages
-> (`Elsa.Persistence.EntityFramework`, `Elsa.Secrets.Persistence.EntityFrameworkCore`, its
-> tooling and tests). See [PR #1623](https://github.com/elsa-workflows/elsa-foundation/pull/1623)
-> and `SecretsEfPersistencePilotArchitectureTests`. Accepting 0072 formally narrows this ADR.
-> Groundwork stays the default Secrets store; Workbench is not switched.
+> **Pending amendment (proposed ADR 0072, not accepted):** [PR #1623](https://github.com/elsa-workflows/elsa-foundation/pull/1623)
+> and [PR #1624](https://github.com/elsa-workflows/elsa-foundation/pull/1624) review a Secrets EF
+> persistence pilot. This accepted ADR still permits only the OpenIddict vendor exception below.
+> The architecture ratchet may exclude the proposed pilot path prefixes so that review can proceed;
+> that exclusion is not an accepted amendment of this ADR. Accepting 0072 is what would formally
+> narrow the first-party EF rule. Groundwork stays the default Secrets store; Workbench is not switched.
 
 Status: accepted (2026-07-12; ratified through the maintainer grilling and PR #630 review; the targeted constitution amendment remains separately pending consensus and compliance evidence).
 

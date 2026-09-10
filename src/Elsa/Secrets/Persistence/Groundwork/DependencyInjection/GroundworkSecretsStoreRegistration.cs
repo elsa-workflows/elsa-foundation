@@ -12,6 +12,13 @@ public static class GroundworkSecretsStoreRegistration
         this IServiceCollection services,
         string? targetName = null)
     {
+        var existingBackend = services
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<SecretRepositoryBackend>()
+            .FirstOrDefault();
+        SecretRepositoryBackend.EnsureCompatible(existingBackend?.Name, SecretRepositoryBackend.Groundwork);
+        if (existingBackend is null)
+            services.AddSingleton(new SecretRepositoryBackend(SecretRepositoryBackend.Groundwork));
         services.AddGroundworkStorageUnit(SecretsGroundworkStorageSchema.CreateUnit(), targetName);
         services.RemoveAll<ISecretRepository>();
         services.AddScoped<ISecretRepository>(provider => new GroundworkSecretRepository(

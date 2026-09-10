@@ -41,6 +41,14 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
             new SecretRepositoryListRequest(search: "PAYMENTS", take: 10));
         Assert.Equal("payments.api", Assert.Single(page.Items).Name);
         Assert.Equal("updated", page.Items[0].DisplayName);
+
+        var plusTwo = new DateTimeOffset(2026, 8, 16, 14, 0, 0, TimeSpan.FromHours(2));
+        Assert.True(await repository.TryAddAsync(Secret("tenant-a", "offset.future", "v", expiresAt: plusTwo)));
+        var now = new DateTimeOffset(2026, 8, 16, 11, 30, 0, TimeSpan.FromHours(-1));
+        var active = await repository.ListPageAsync(
+            "tenant-a",
+            new SecretRepositoryListRequest(activeOnly: true, now: now, take: 10));
+        Assert.Contains(active.Items, secret => secret.Name == "offset.future");
     }
 
     [SkippableFact]
@@ -59,7 +67,12 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
         Assert.Contains(SecretsPostgreSqlDbContext.ExpectedProviderName, exception.Message, StringComparison.Ordinal);
     }
 
-    private static Secret Secret(string tenantId, string name, string value, string? displayName = null) => new()
+    private static Secret Secret(
+        string tenantId,
+        string name,
+        string value,
+        string? displayName = null,
+        DateTimeOffset? expiresAt = null) => new()
     {
         TenantId = tenantId,
         Name = name,
@@ -72,6 +85,7 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
             {
                 Version = 1,
                 Status = SecretStatus.Active,
+                ExpiresAt = expiresAt,
                 Payload = SecretPayload.FromValue(value)
             }
         ]

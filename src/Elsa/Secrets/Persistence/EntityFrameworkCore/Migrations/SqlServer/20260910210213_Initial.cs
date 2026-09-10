@@ -14,8 +14,8 @@ public partial class Initial : Migration
             name: "elsa_secrets",
             columns: table => new
             {
-                TenantId = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
-                NormalizedName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
+                TenantId = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false, collation: "Latin1_General_BIN2"),
+                NormalizedName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false, collation: "Latin1_General_BIN2"),
                 NameSearchKey = table.Column<string>(type: "nvarchar(max)", nullable: false),
                 DisplayNameSearchKey = table.Column<string>(type: "nvarchar(max)", nullable: false),
                 TypeNameLookupKey = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),

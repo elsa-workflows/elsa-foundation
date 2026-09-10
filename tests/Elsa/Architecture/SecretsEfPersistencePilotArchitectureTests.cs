@@ -34,6 +34,61 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "Npgsql.EntityFrameworkCore.PostgreSQL"
     ];
 
+    private static readonly string[] ToolingPackages =
+    [
+        "Microsoft.EntityFrameworkCore.Design",
+        "Microsoft.EntityFrameworkCore.Sqlite",
+        "Microsoft.EntityFrameworkCore.SqlServer",
+        "Npgsql.EntityFrameworkCore.PostgreSQL"
+    ];
+
+    private static readonly string[] PilotSources =
+    [
+        "src/Elsa/Persistence/EntityFramework/EfDatabaseMigrator.cs",
+        "src/Elsa/Persistence/EntityFramework/EfMigrateOptions.cs",
+        "src/Elsa/Persistence/EntityFramework/EfMigratePolicy.cs",
+        "src/Elsa/Persistence/EntityFramework/EfMigrationsHistory.cs",
+        "src/Elsa/Persistence/EntityFramework/EfProviderGuard.cs",
+        "src/Elsa/Persistence/EntityFramework/EfProviderNames.cs",
+        "src/Elsa/Persistence/EntityFramework/EfRelationalProviderBinding.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Configuration/SecretRecordConfiguration.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/DependencyInjection/SecretsEntityFrameworkCoreRegistration.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Entities/SecretRecord.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260910210216_Initial.Designer.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260910210216_Initial.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/SecretsPostgreSqlDbContextModelSnapshot.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260910210213_Initial.Designer.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260910210213_Initial.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/SecretsSqlServerDbContextModelSnapshot.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260910210210_Initial.Designer.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260910210210_Initial.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/SecretsSqliteDbContextModelSnapshot.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/SecretsDbContext.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/SecretsEfModule.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/SecretsEntityFrameworkCoreFeature.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/SecretsPostgreSqlDbContext.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/SecretsSqlServerDbContext.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/SecretsSqliteDbContext.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Serialization/SecretsEfJson.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/EfSecretRepository.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/SecretDocument.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/SecretRevisionMapper.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsSearchKeys.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/SecretsPostgreSqlDesignTimeFactory.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/SecretsSqlServerDesignTimeFactory.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/SecretsSqliteDesignTimeFactory.cs",
+        "tests/Elsa/Persistence/EntityFramework/Tests/EfDatabaseMigratorTests.cs",
+        "tests/Elsa/Persistence/EntityFramework/Tests/EfMigrationsHistoryTests.cs",
+        "tests/Elsa/Persistence/EntityFramework/Tests/EfProviderGuardTests.cs",
+        "tests/Elsa/Persistence/EntityFramework/Tests/EfRelationalProviderBindingTests.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/PostgreSqlEfSecretRepositoryTests.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/PostgresContainerFixture.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/SqlServerContainerFixture.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/SqlServerEfSecretRepositoryTests.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEntityFrameworkCoreFeatureTests.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SqliteEfSecretRepositoryTests.cs"
+    ];
+
     [Fact]
     public void Pilot_paths_are_the_reviewed_adr_0072_allowlist()
     {
@@ -65,10 +120,19 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         var tooling = PackageIncludes(RepoPath(
             "src", "Elsa", "Secrets", "Persistence", "EntityFrameworkCore", "Tooling",
             "Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling.csproj"));
-        Assert.Contains("Microsoft.EntityFrameworkCore.Design", tooling);
-        Assert.Contains("Microsoft.EntityFrameworkCore.Sqlite", tooling);
-        Assert.Contains("Microsoft.EntityFrameworkCore.SqlServer", tooling);
-        Assert.Contains("Npgsql.EntityFrameworkCore.PostgreSQL", tooling);
+        Assert.Equal(ToolingPackages, tooling);
+    }
+
+    [Fact]
+    public void Pilot_sources_are_the_exact_reviewed_inventory()
+    {
+        var actual = EfCoreSurfaceScanner.Adr0072SecretsEfPilot.SurfacePathPrefixes
+            .SelectMany(prefix => Directory.EnumerateFiles(RepoPath(prefix.TrimEnd('/').Split('/')), "*.cs", SearchOption.AllDirectories)
+                .Select(path => Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/')))
+            .Where(path => !path.Contains("/obj/", StringComparison.Ordinal) && !path.Contains("/bin/", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(PilotSources, actual);
     }
 
     [Fact]

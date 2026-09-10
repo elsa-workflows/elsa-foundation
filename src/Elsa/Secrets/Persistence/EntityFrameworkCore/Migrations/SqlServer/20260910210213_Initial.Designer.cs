@@ -25,11 +25,13 @@ partial class Initial
             {
                 b.Property<string>("TenantId")
                     .HasMaxLength(256)
-                    .HasColumnType("nvarchar(256)");
+                    .HasColumnType("nvarchar(256)")
+                    .UseCollation("Latin1_General_BIN2");
 
                 b.Property<string>("NormalizedName")
                     .HasMaxLength(256)
-                    .HasColumnType("nvarchar(256)");
+                    .HasColumnType("nvarchar(256)")
+                    .UseCollation("Latin1_General_BIN2");
 
                 b.Property<byte[]>("ConcurrencyToken")
                     .IsConcurrencyToken()

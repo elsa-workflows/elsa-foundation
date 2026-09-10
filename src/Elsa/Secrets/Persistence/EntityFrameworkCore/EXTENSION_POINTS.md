@@ -5,7 +5,7 @@ first-party store.
 
 ## Replacement contract
 
-- **`ISecretRepository`** (and `IRevisionAwareSecretRepository` / `IPagedSecretRepository` via the same instance): `EfSecretRepository` when `SecretsEntityFrameworkCore` is enabled. Registration removes prior repository descriptors, matching Groundwork.
+- **`ISecretRepository`** (and `IRevisionAwareSecretRepository` / `IPagedSecretRepository` via the same instance): `EfSecretRepository` when `SecretsEntityFrameworkCore` is enabled. Registration records `SecretRepositoryBackend.EntityFramework` and refuses a prior Groundwork (or other) backend — order-independent, not silent last-write-wins.
 
 ## Shell feature
 
