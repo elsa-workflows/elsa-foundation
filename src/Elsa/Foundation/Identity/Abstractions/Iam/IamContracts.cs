@@ -179,32 +179,6 @@ public interface IRoleManager
     ValueTask AssignPermissionAsync(RolePermissionAssignment request, CancellationToken cancellationToken = default);
 }
 
-public interface IApplicationManager
-{
-    ValueTask<ApplicationRecord> RegisterAsync(RegisterApplicationRequest request, CancellationToken cancellationToken = default);
-}
-
-public interface ICredentialManager
-{
-    ValueTask<CredentialIssueResult> IssueAsync(IssueCredentialRequest request, CancellationToken cancellationToken = default);
-
-    ValueTask RotateAsync(RotateCredentialRequest request, CancellationToken cancellationToken = default);
-
-    ValueTask RevokeAsync(RevokeCredentialRequest request, CancellationToken cancellationToken = default);
-}
-
-public interface IProviderManager
-{
-    ValueTask<ProviderConfigurationRecord?> FindEffectiveAsync(string tenantId, string provider, bool allowGlobalFallback = false, CancellationToken cancellationToken = default);
-
-    ValueTask SaveAsync(ProviderConfigurationRecord configuration, CancellationToken cancellationToken = default);
-}
-
-public interface IClaimMappingManager
-{
-    ValueTask<IReadOnlyList<ClaimMappingRule>> ListEffectiveRulesAsync(string tenantId, string provider, CancellationToken cancellationToken = default);
-}
-
 public sealed record UserRecord(
     string Id,
     string TenantId,
@@ -331,16 +305,6 @@ public sealed record LinkExternalIdentityRequest(
 public sealed record CreateRoleRequest(string TenantId, string Name, string? Description, IReadOnlySet<string> Permissions);
 
 public sealed record RolePermissionAssignment(string TenantId, string RoleId, string Permission);
-
-public sealed record RegisterApplicationRequest(string TenantId, string ClientId, string DisplayName, ApplicationType Type, IReadOnlySet<string> Scopes);
-
-public sealed record IssueCredentialRequest(string TenantId, CredentialSubjectType SubjectType, string SubjectId, CredentialKind Kind, IReadOnlySet<string> Scopes);
-
-public sealed record CredentialIssueResult(CredentialRecord Credential, string PlainTextSecret);
-
-public sealed record RotateCredentialRequest(string TenantId, string CredentialId, DateTimeOffset? GraceUntil);
-
-public sealed record RevokeCredentialRequest(string TenantId, string CredentialId, string Reason);
 
 public enum UserStatus
 {

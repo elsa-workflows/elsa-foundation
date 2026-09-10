@@ -132,7 +132,7 @@ Classification: weak/stub implementation.
 
 Evidence:
 
-- [WorkflowDesignContext](../../src/Elsa/Workflows/Design/Core/WorkflowDesignContext.cs) throws `NotImplementedException` for both exposed members.
+- `WorkflowDesignContext` threw `NotImplementedException` for both exposed members. *(Later pruned as an unused public contract; this report is a historical snapshot.)*
 - [VariableExpressionDescriptor](../../src/Elsa/Expressions/Services/VariableExpressionDescriptor.cs) throws `NotImplementedException` for `HandlerFactory` and `Properties`.
 - [MultiDownloadableContentHandler](../../src/Elsa/Http/Services/MultiDownloadableContentHandler.cs) throws `NotImplementedException` for `Priority`.
 - [ScriptExecutionContext](../../src/Elsa/Workflows/Runtime/JavaScript/Activities/RunJavaScript/TestClasses/ScriptExecutionContext.cs) throws `NotImplementedException` in runtime-facing test-class code.

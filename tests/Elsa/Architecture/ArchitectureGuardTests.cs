@@ -945,6 +945,41 @@ public sealed class ArchitectureGuardTests
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
 
+    [Fact]
+    public void Pruned_unused_public_contracts_do_not_reappear_in_production_source()
+    {
+        // Speculative public contracts with zero in-repo consumers. A resurrection would
+        // force humans to treat an unused stub as product API again.
+        string[] forbiddenTokens =
+        [
+            "IExpressionFactory",
+            "IHttpContextValueSelector",
+            "IRuntimeInputBindingValidator",
+            "IWorkflowDesignContext",
+            "IWorkflowDesignContextFactory",
+            "WorkflowDesignContext",
+            "IApplicationManager",
+            "ICredentialManager",
+            "IProviderManager",
+            "IClaimMappingManager",
+        ];
+
+        var sourceRoot = Path.Combine(RepoRoot, "src");
+        var violations = Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(file => !IsGeneratedScratchFile(file) && !IsBuildArtifactFile(file))
+            .SelectMany(file =>
+            {
+                var code = StripCommentsAndStringLiterals(File.ReadAllText(file));
+                return forbiddenTokens
+                    .Where(token => code.Contains(token, StringComparison.Ordinal))
+                    .Select(token => $"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {token}");
+            })
+            .Distinct()
+            .ToList();
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
     [Fact] // spec 006 T052 (SC-002) — the deleted 005 implementation-descriptor family is gone from production code.
     public void No_production_code_references_deleted_implementation_descriptor_types()
     {
