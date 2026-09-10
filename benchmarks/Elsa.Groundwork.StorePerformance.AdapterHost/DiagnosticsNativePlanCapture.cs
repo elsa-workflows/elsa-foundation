@@ -76,11 +76,10 @@ internal static class DiagnosticsNativePlanCapture
                         try
                         {
                             traceDetailConstituents.AddRange(await CaptureTraceDetailConstituentsAsync(
+                                adapter,
                                 scopes.Primary,
                                 request,
-                                outputDirectory,
-                                explainDirectory,
-                                adapter.CommandObserver,
+                                observed.Version,
                                 cancellationToken));
                         }
                         catch (PerformanceContractException exception) when (DiagnosticsNativePlanContract.IsExpectedBlockedPlanFailure(exception))
@@ -152,92 +151,9 @@ internal static class DiagnosticsNativePlanCapture
                         continue;
                     }
 
-                    adapter.CommandObserver.ClearCommands();
-                    adapter.ClearStructuredEvidence();
-                    var before = Directory.EnumerateFiles(explainDirectory).ToHashSet(StringComparer.Ordinal);
-                    string nativePath;
-                    string rawPlan;
-                    string command;
-                    string classification;
-                    int result;
-                    var physicalIndexName = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(request.Provider, specification);
-                    result = await InvokeRouteAsync(scopes.Primary, route, limit, cancellationToken);
-                    nativePath = RequireNativeArtifacts(
-                        explainDirectory,
-                        before,
-                        request.Provider,
-                        specification.IndexName,
-                        1)[0];
-                    (rawPlan, command, classification) = CaptureRouteEvidence(
-                        request.Provider,
-                        adapter.CommandObserver.Commands,
-                        request.Adapter,
-                        specification,
-                        nativePath);
-                    if (result != limit)
-                        throw new PerformanceContractException($"Diagnostics native route '{route}' returned {result} rows; expected {limit}.");
-                    var rawReference = ArtifactStore.RawPlanName($"diagnostics.{request.Provider}.{request.MeasurementSetId}.{route}.raw.json");
-                    var rawPath = Path.Combine(outputDirectory, rawReference);
-                    var artifact = new DiagnosticsNativePlanArtifact(1, request.Provider, request.Adapter, route, specification.TableName, specification.IndexName, physicalIndexName, command, rawPlan);
-                    var routeEvidence = new NativeRouteEvidence(
-                        route,
-                        rawReference,
-                        string.Empty,
-                        classification,
-                        physicalIndexName,
-                        specification.PhysicalCardinality,
-                        DiagnosticsNativePlanContract.ExpectedStorageScopePredicate(request.Provider, specification),
-                        specification.PredicateColumn is not null,
-                        limit,
-                        limit)
-                    {
-                        NativeFetchLimit = 0
-                    };
-
-                    // Validate the provider-owned plan before publishing the retained envelope. A
-                    // provider may still choose a sort/spill/scan for a route whose declaration has an
-                    // index; that is blocked evidence, never a synthetic index-search claim.
-                    var validationPath = Path.Combine(Path.GetTempPath(), $"diagnostics-native-plan-{Guid.NewGuid():N}.json");
-                    try
-                    {
-                        WriteEnvelope(validationPath, artifact);
-                        try
-                        {
-                            DiagnosticsNativePlanContract.ValidateEnvelope(request.Provider, request.Adapter, routeEvidence, validationPath);
-                        }
-                        catch (PerformanceContractException exception) when (DiagnosticsNativePlanContract.IsExpectedBlockedPlanFailure(exception))
-                        {
-                            blockedRoutes.Add(route);
-                            blockedRouteDiagnostics.Add(CreateBlockedRouteDiagnostic(
-                                route,
-                                "route-plan-validation",
-                                DiagnosticsNativePlanContract.BlockedPlanReasonCode(exception),
-                                PreserveBlockedExplainArtifacts(
-                                    explainDirectory,
-                                    before,
-                                    outputDirectory,
-                                    request.Provider,
-                                    request.MeasurementSetId,
-                                    route,
-                                    nativePath)));
-                            continue;
-                        }
-
-                        WriteEnvelope(rawPath, artifact);
-                        routes.Add(routeEvidence with { RawPlanSha256 = ArtifactStore.HashFile(rawPath) });
-                    }
-                    finally
-                    {
-                        try
-                        {
-                            if (File.Exists(validationPath))
-                                File.Delete(validationPath);
-                        }
-                        catch
-                        {
-                            // The temporary validation copy is not part of the retained artifact set.
-                        }
-                    }
+                    // Every diagnostics route on every provider is admitted from typed evidence; a route
+                    // outside that table has no admission path any more (#1594).
+                    throw new PerformanceContractException($"Diagnostics route '{route}' has no typed admission on provider '{request.Provider}'.");
                 }
                 var routeContract = blockedRoutes.Count == 0
                     ? "provider-native-routes"
@@ -331,12 +247,7 @@ internal static class DiagnosticsNativePlanCapture
             StructuredEvidence = structuredEvidence
         };
 
-        DiagnosticsNativePlanContract.ValidateStructuredEvidence(
-            request.Provider,
-            request.Adapter,
-            routeEvidence,
-            observed.Version);
-
+        Named($"route '{route}'", () => DiagnosticsNativePlanContract.ValidateStructuredEvidence(request.Provider, request.Adapter, routeEvidence, observed.Version));
         return routeEvidence;
     }
 
@@ -356,7 +267,8 @@ internal static class DiagnosticsNativePlanCapture
         var observations = adapter.StructuredEvidence
             .Where(observation => string.Equals(observation.Operation, "BoundedQuery", StringComparison.Ordinal) &&
                                   string.Equals(observation.Target?.LogicalUnitId, unit, StringComparison.Ordinal) &&
-                                  string.Equals(observation.ShapeAvailability, "Collected", StringComparison.Ordinal))
+                                  string.Equals(observation.ShapeAvailability, "Collected", StringComparison.Ordinal) &&
+                                  observation.BoundedQuery is { IncludesTotalCount: false })
             .ToArray();
         if (observations.Length != 1)
             throw new PerformanceContractException(
@@ -634,68 +546,36 @@ internal static class DiagnosticsNativePlanCapture
         IReadOnlyList<DiagnosticsBlockedRawPlanEvidence> rawPlans) =>
         new(route, phase, reasonCode, rawPlans);
 
+    /// <summary>
+    /// Captures the trace-detail composite from typed Groundwork observations of the one public
+    /// <c>GetTraceAsync</c> call: the summary and resource point reads and every bounded page of the
+    /// span and log sequences, in observation order. No command text or native plan is read.
+    /// </summary>
     private static async Task<IReadOnlyList<DiagnosticsTraceDetailConstituentEvidence>> CaptureTraceDetailConstituentsAsync(
+        DiagnosticsDurableHistoryAdapter adapter,
         DiagnosticsDurableHistoryClient client,
         RunRequest request,
-        string outputDirectory,
-        string explainDirectory,
-        WritePathRoundTripObserver commandObserver,
+        string observedProviderVersion,
         CancellationToken cancellationToken)
     {
         var specifications = DiagnosticsNativePlanContract.TraceDetailConstituents(request.Adapter);
-        var beforeTraceDetail = Directory.EnumerateFiles(explainDirectory).ToHashSet(StringComparer.Ordinal);
+        adapter.CommandObserver.ClearCommands();
+        adapter.ClearStructuredEvidence();
         var detail = await client.OpenTelemetry.GetTraceAsync(
             DiagnosticsDurableHistoryWorkload.TraceIdForTesting(DiagnosticsDurableHistoryWorkload.RetainedRecordsPerStream - 1),
             cancellationToken);
         if (detail is null)
             throw new PerformanceContractException("Diagnostics trace-detail capture did not find its fixture trace.");
-
-        var mongo = string.Equals(request.Provider, "mongodb", StringComparison.Ordinal);
-        var observedReads = commandObserver.Commands
-            .Where(command => !command.IsProbe && command.Kind == ProviderCommandKind.Read)
-            .ToArray();
-        if (mongo)
-            RequireKnownMongoReadOperations(observedReads);
-        var commands = observedReads
-            .Where(command => !string.IsNullOrWhiteSpace(command.CommandText))
-            .ToArray();
-        var mongoQueryCommands = mongo
-            ? commands.Where(command => command.Operation == "mongodb.query").ToArray()
-            : [];
-        var mongoPointCommands = mongo
-            ? commands.Where(command => command.Operation == "mongodb.read").ToArray()
-            : [];
-        var mongoPointCommandsByRoute = ClassifyMongoPointReads(mongoPointCommands, specifications);
-        var mongoQueryOffset = 0;
+        var observations = adapter.StructuredEvidence;
         var evidence = new List<DiagnosticsTraceDetailConstituentEvidence>(specifications.Count);
         foreach (var specification in specifications)
         {
-            ProviderCommandEvent[] queryCommands;
-            ProviderCommandEvent[] pointCommands;
-            if (mongo)
-            {
-                queryCommands = specification.OperationKind == DiagnosticsTraceDetailOperationKind.BoundedOrderedQuery
-                    ? mongoQueryCommands.Skip(mongoQueryOffset).Take(specification.MaxInvocationCount).ToArray()
-                    : [];
-                pointCommands = specification.OperationKind == DiagnosticsTraceDetailOperationKind.PrimaryKeyRead
-                    ? mongoPointCommandsByRoute.GetValueOrDefault(specification.RouteIdentity)?.ToArray() ?? []
-                    : [];
-                mongoQueryOffset += queryCommands.Length;
-            }
-            else
-            {
-                var matching = commands.Where(command =>
-                    command.CommandText!.Contains(specification.TableName, StringComparison.OrdinalIgnoreCase)).ToArray();
-                queryCommands = matching.Where(command => command.Operation.EndsWith(".query", StringComparison.Ordinal)).ToArray();
-                pointCommands = matching.Where(command => !command.Operation.EndsWith(".query", StringComparison.Ordinal)).ToArray();
-            }
-            var observedCount = specification.OperationKind == DiagnosticsTraceDetailOperationKind.BoundedOrderedQuery
-                ? queryCommands.Length
-                : pointCommands.Length;
-            if (observedCount == 0 || observedCount > specification.MaxInvocationCount)
+            var unit = DiagnosticsNativePlanContract.LogicalUnitIdForTable(specification.TableName);
+            var pointRead = specification.OperationKind == DiagnosticsTraceDetailOperationKind.PrimaryKeyRead;
+            var observed = observations.Where(observation => DiagnosticsNativePlanContract.IsConstituentObservation(observation, specification)).ToArray();
+            if (observed.Length == 0 || observed.Length > specification.MaxInvocationCount)
                 throw new PerformanceContractException(
-                    $"Diagnostics trace-detail constituent '{specification.RouteIdentity}' observed {observedCount} provider commands; expected a finite positive count no greater than {specification.MaxInvocationCount}.");
-
+                    $"Diagnostics trace-detail constituent '{specification.RouteIdentity}' observed {observed.Length} typed reads of '{unit}'; expected a finite positive count no greater than {specification.MaxInvocationCount}.");
             var materialized = specification.RouteIdentity switch
             {
                 "trace-detail/spans-by-trace-key-start-id" => detail.Spans.Count,
@@ -703,269 +583,50 @@ internal static class DiagnosticsNativePlanCapture
                 "trace-detail/resources-by-id" => detail.Resources.Count,
                 _ => 1
             };
-            if (specification.OperationKind == DiagnosticsTraceDetailOperationKind.PrimaryKeyRead)
-            {
-                var command = pointCommands[0].CommandText!;
-                var pointEvidence = new DiagnosticsTraceDetailConstituentEvidence(
-                    specification.RouteIdentity,
-                    "",
-                    "",
-                    "primary-key-read",
-                    "",
-                    command,
-                    specification.PhysicalCardinality,
-                    DiagnosticsNativePlanContract.ExpectedStorageScopePredicate(
-                        request.Provider,
-                        specification.StorageScopeRequired),
-                    true,
-                    specification.FiniteLimit,
-                    specification.PublicRowBound,
-                    materialized,
-                    observedCount,
-                    specification.MaxInvocationCount);
-                foreach (var pointCommand in pointCommands)
-                    DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
-                        request.Provider,
-                        request.Adapter,
-                        pointEvidence with { CommandText = pointCommand.CommandText! },
-                        null);
-                evidence.Add(pointEvidence);
-                continue;
-            }
-
-            var expectedPageCount = checked((specification.PublicRowBound + specification.FiniteLimit - 1) / specification.FiniteLimit);
-            if (queryCommands.Length != expectedPageCount)
-                throw new PerformanceContractException(
-                    $"Diagnostics trace-detail constituent '{specification.RouteIdentity}' must emit exactly {expectedPageCount} bounded page queries in the frozen fixture; observed {queryCommands.Length}.");
-            var physicalIndexName = DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(request.Provider, new DiagnosticsNativeRouteSpec(
+            var scopePredicate = DiagnosticsNativePlanContract.ExpectedStorageScopePredicate(request.Provider, specification.StorageScopeRequired);
+            var constituent = new DiagnosticsTraceDetailConstituentEvidence(
                 specification.RouteIdentity,
-                specification.TableName,
-                specification.IndexName,
-                specification.Ordering[0].Column,
-                specification.PredicateColumn,
+                string.Empty,
+                string.Empty,
+                pointRead ? DiagnosticsNativePlanContract.PrimaryKeyReadClassification : DiagnosticsNativePlanContract.IndexSearchPlanClassification,
+                pointRead ? string.Empty : DiagnosticsNativePlanContract.ExpectedPhysicalIndexName(request.Provider, DiagnosticsNativePlanContract.RouteSpecificationFor(specification)),
+                string.Empty,
                 specification.PhysicalCardinality,
-                specification.FiniteLimit,
-                specification.StorageScopeRequired,
-                false,
-                specification.Ordering));
-            // ExplainAssertionMode numbers and retains one artifact per provider command. Keep every
-            // page, including the keyset continuation pages, so admission can reparse every command
-            // and every provider-owned plan instead of treating a multi-page QueryAll as one route.
-            var nativePaths = RequireNativeArtifacts(
-                explainDirectory,
-                beforeTraceDetail,
-                request.Provider,
-                specification.IndexName,
-                queryCommands.Length);
-            var pages = new List<DiagnosticsTraceDetailPageEvidence>(queryCommands.Length);
-            for (var pageIndex = 0; pageIndex < queryCommands.Length; pageIndex++)
-            {
-                var rawPlan = IamNativePlanParser.NormalizeForArtifact(request.Provider, File.ReadAllText(nativePaths[pageIndex]));
-                var pageCommand = mongo
-                    ? MongoExplainCommandInspector.SerializeCommand(
-                        MongoExplainCommandInspector.ExtractCommand(rawPlan))
-                    : queryCommands[pageIndex].CommandText!;
-                var pageReference = ArtifactStore.RawPlanName(
-                    $"diagnostics.{request.Provider}.{request.MeasurementSetId}.{ConstituentSlug(specification.RouteIdentity)}.page-{pageIndex:D4}.raw.json");
-                var pagePath = Path.Combine(outputDirectory, pageReference);
-                var pageArtifact = new DiagnosticsNativePlanArtifact(
-                    1,
-                    request.Provider,
-                    request.Adapter,
-                    specification.RouteIdentity,
-                    specification.TableName,
-                    specification.IndexName,
-                    physicalIndexName,
-                    pageCommand,
-                    rawPlan);
-                var pageEvidence = new DiagnosticsTraceDetailConstituentEvidence(
-                    specification.RouteIdentity,
-                    pageReference,
-                    string.Empty,
-                    DiagnosticsNativePlanContract.IndexSearchPlanClassification,
-                    physicalIndexName,
-                    pageCommand,
-                    specification.PhysicalCardinality,
-                    DiagnosticsNativePlanContract.ExpectedStorageScopePredicate(
-                        request.Provider,
-                        specification.StorageScopeRequired),
-                    true,
-                    specification.FiniteLimit,
-                    specification.PublicRowBound,
-                    materialized,
-                    observedCount,
-                    specification.MaxInvocationCount);
-                var pageSha256 = ValidateAndPublishTraceDetailPage(
-                    request.Provider,
-                    request.Adapter,
-                    pageEvidence,
-                    pageArtifact,
-                    pagePath);
-
-                pages.Add(new DiagnosticsTraceDetailPageEvidence(
-                    pageIndex,
-                    pageReference,
-                    pageSha256,
-                    pageCommand));
-            }
-
-            var firstPage = pages[0];
-            var constituentEvidence = new DiagnosticsTraceDetailConstituentEvidence(
-                specification.RouteIdentity,
-                firstPage.RawPlanReference,
-                firstPage.RawPlanSha256,
-                DiagnosticsNativePlanContract.IndexSearchPlanClassification,
-                physicalIndexName,
-                firstPage.CommandText,
-                specification.PhysicalCardinality,
-                DiagnosticsNativePlanContract.ExpectedStorageScopePredicate(
-                    request.Provider,
-                    specification.StorageScopeRequired),
+                scopePredicate,
                 true,
                 specification.FiniteLimit,
                 specification.PublicRowBound,
                 materialized,
-                observedCount,
+                observed.Length,
                 specification.MaxInvocationCount,
-                pages.Skip(1).ToArray());
-            evidence.Add(constituentEvidence);
+                pointRead
+                    ? null
+                    : observed.Skip(1).Select((page, index) => new DiagnosticsTraceDetailPageEvidence(index + 1, string.Empty, string.Empty, string.Empty)
+                    {
+                        StructuredEvidence = page
+                    }).ToArray())
+            {
+                StructuredEvidence = observed[0]
+            };
+            // Every fanned-out point read of the constituent is admitted; the constituent retains the first.
+            foreach (var read in pointRead ? observed : [observed[0]])
+                Named($"constituent '{constituent.RouteIdentity}'", () => DiagnosticsNativePlanContract.ValidateStructuredTraceDetailConstituent(
+                    request.Provider, request.Adapter, constituent with { StructuredEvidence = read }, observedProviderVersion));
+            evidence.Add(constituent);
         }
-
-        if (mongo && mongoQueryOffset != mongoQueryCommands.Length)
-            throw new PerformanceContractException(
-                $"Diagnostics trace-detail capture observed unclassified MongoDB provider commands: " +
-                $"query={mongoQueryCommands.Length - mongoQueryOffset}.");
-
         return evidence;
     }
 
-    internal static void RequireKnownMongoReadOperations(IEnumerable<ProviderCommandEvent> commands)
+    private static void Named(string label, Action validate)
     {
-        ArgumentNullException.ThrowIfNull(commands);
-        var reads = commands
-            .Where(command => !command.IsProbe && command.Kind == ProviderCommandKind.Read)
-            .ToArray();
-        var unknown = reads
-            .Where(command => command.Operation is not ("mongodb.query" or "mongodb.read"))
-            .Select(command => command.Operation)
-            .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-        if (unknown.Length != 0)
-            throw new PerformanceContractException(
-                $"Diagnostics trace-detail capture observed unsupported MongoDB read operations: {string.Join(", ", unknown)}.");
-        if (reads.Any(command => string.IsNullOrWhiteSpace(command.CommandText)))
-            throw new PerformanceContractException(
-                "Diagnostics trace-detail capture observed a MongoDB read without command identity evidence.");
-    }
-
-    internal static IReadOnlyDictionary<string, IReadOnlyList<ProviderCommandEvent>> ClassifyMongoPointReads(
-        IEnumerable<ProviderCommandEvent> commands,
-        IReadOnlyList<DiagnosticsTraceDetailConstituentSpec> specifications)
-    {
-        ArgumentNullException.ThrowIfNull(commands);
-        ArgumentNullException.ThrowIfNull(specifications);
-        var result = new Dictionary<string, List<ProviderCommandEvent>>(StringComparer.Ordinal);
-        foreach (var command in commands)
+        try
         {
-            var collection = DiagnosticsNativePlanContract.RequireMongoPointCollection(command.CommandText!);
-            var matches = specifications.Where(specification =>
-                specification.OperationKind == DiagnosticsTraceDetailOperationKind.PrimaryKeyRead &&
-                collection.StartsWith(specification.TableName + "__scope__", StringComparison.Ordinal)).ToArray();
-            if (matches.Length != 1)
-                throw new PerformanceContractException(
-                    $"Diagnostics trace-detail capture could not bind MongoDB point read collection '{collection}' to exactly one constituent.");
-            if (!result.TryGetValue(matches[0].RouteIdentity, out var routeCommands))
-            {
-                routeCommands = [];
-                result.Add(matches[0].RouteIdentity, routeCommands);
-            }
-            routeCommands.Add(command);
+            validate();
         }
-        return result.ToDictionary(
-            pair => pair.Key,
-            pair => (IReadOnlyList<ProviderCommandEvent>)pair.Value.ToArray(),
-            StringComparer.Ordinal);
-    }
-
-    private static string ConstituentSlug(string identity) => identity.Replace('/', '-');
-
-    private static string RequireGroundworkCommand(IReadOnlyList<ProviderCommandEvent> commands, DiagnosticsNativeRouteSpec specification)
-    {
-        var matches = commands.Where(command => !command.IsProbe &&
-            command.Operation.EndsWith(".query", StringComparison.Ordinal) &&
-            command.Kind == ProviderCommandKind.Read &&
-            !string.IsNullOrWhiteSpace(command.CommandText) && command.CommandText.Contains(specification.TableName, StringComparison.OrdinalIgnoreCase)).ToArray();
-        if (matches.Length != 1)
-            throw new PerformanceContractException($"Diagnostics route '{specification.RouteIdentity}' must emit exactly one provider query against '{specification.TableName}'; observed {matches.Length}.");
-        return matches[0].CommandText!;
-    }
-
-    private static string CaptureMongoCommand(
-        IReadOnlyList<ProviderCommandEvent> commands,
-        DiagnosticsNativeRouteSpec specification,
-        string rawPlan)
-    {
-        var matches = commands.Where(command => !command.IsProbe &&
-            command.Operation.EndsWith(".query", StringComparison.Ordinal) &&
-            command.Kind == ProviderCommandKind.Read).ToArray();
-        if (matches.Length != 1)
-            throw new PerformanceContractException(
-                $"Diagnostics route '{specification.RouteIdentity}' must emit exactly one MongoDB provider query; observed {matches.Length}.");
-
-        // MongoDB query observers expose a descriptive label. The retained explain response is the
-        // authoritative source of the physical collection, filter, ordering, and limit, so persist
-        // that actual command verbatim.
-        return MongoExplainCommandInspector.SerializeCommand(
-            MongoExplainCommandInspector.ExtractCommand(rawPlan));
-    }
-
-    private static (string RawPlan, string Command, string Classification) CaptureRouteEvidence(
-        string provider,
-        IReadOnlyList<ProviderCommandEvent> commands,
-        string adapter,
-        DiagnosticsNativeRouteSpec specification,
-        string nativePath)
-    {
-        var rawPlan = IamNativePlanParser.NormalizeForArtifact(provider, File.ReadAllText(nativePath));
-        var command = string.Equals(provider, "mongodb", StringComparison.Ordinal)
-            ? CaptureMongoCommand(commands, specification, rawPlan)
-            : RequireGroundworkCommand(commands, specification);
-        var classification = DiagnosticsNativePlanContract.ClassifyPlan(
-            provider,
-            adapter,
-            specification,
-            rawPlan);
-        return (rawPlan, command, classification);
-    }
-
-    private static string RequireAssertionArtifact(
-        string directory,
-        IReadOnlySet<string> before,
-        string provider,
-        string logicalIndexName,
-        ExplainAssertionException exception)
-    {
-        var path = exception.ArtifactPath;
-        if (string.IsNullOrWhiteSpace(path))
-            throw new PerformanceContractException(
-                $"Diagnostics native-plan assertion for logical index '{logicalIndexName}' did not retain an artifact path.");
-
-        var fullPath = Path.GetFullPath(path);
-        var fullDirectory = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        var extension = IamNativePlanParser.RawPlanExtension(provider);
-        var suffix = $"-{logicalIndexName}{extension}";
-        var pathComparison = OperatingSystem.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
-        if (!fullPath.StartsWith(fullDirectory, pathComparison) ||
-            before.Any(candidate => string.Equals(candidate, fullPath, pathComparison)) ||
-            !File.Exists(fullPath) ||
-            !Path.GetFileName(fullPath).EndsWith(suffix, StringComparison.Ordinal))
-            throw new PerformanceContractException(
-                $"Diagnostics native-plan assertion for logical index '{logicalIndexName}' did not retain its exact provider artifact.");
-
-        return fullPath;
+        catch (PerformanceContractException exception)
+        {
+            throw new PerformanceContractException($"{exception.Message} ({label})");
+        }
     }
 
     private static async Task<int> InvokeBoundedResourceRouteWithoutExplainAssertionAsync(
@@ -1047,65 +708,6 @@ internal static class DiagnosticsNativePlanCapture
                 throw new PerformanceContractException(
                     $"Diagnostics bounded resource route '{route}' returned resource '{actualResource.Id}' with non-canonical fixture fields.");
         }
-    }
-
-    internal static IReadOnlyList<string> RequireNativeArtifacts(
-        string directory,
-        IReadOnlySet<string> before,
-        string provider,
-        string logicalIndexName,
-        int expectedCount)
-    {
-        var extension = IamNativePlanParser.RawPlanExtension(provider);
-        var suffix = $"-{logicalIndexName}{extension}";
-        var matches = Directory.EnumerateFiles(directory)
-            .Where(path => !before.Contains(path) &&
-                           Path.GetFileName(path).EndsWith(suffix, StringComparison.Ordinal))
-            .OrderBy(path => Path.GetFileName(path), StringComparer.Ordinal)
-            .ToArray();
-        if (matches.Length != expectedCount)
-            throw new PerformanceContractException(
-                $"Diagnostics trace-detail query for logical index '{logicalIndexName}' must emit exactly {expectedCount} provider-native explain artifacts; observed {matches.Length}.");
-        return matches;
-    }
-
-    internal static string ValidateAndPublishTraceDetailPage(
-        string provider,
-        string adapter,
-        DiagnosticsTraceDetailConstituentEvidence evidence,
-        DiagnosticsNativePlanArtifact artifact,
-        string path)
-    {
-        var validationPath = Path.Combine(Path.GetTempPath(), $"diagnostics-trace-detail-{Guid.NewGuid():N}.json");
-        try
-        {
-            WriteEnvelope(validationPath, artifact);
-            var validatedSha256 = ArtifactStore.HashFile(validationPath);
-            DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
-                provider,
-                adapter,
-                evidence with { RawPlanSha256 = validatedSha256 },
-                validationPath);
-
-            WriteEnvelope(path, artifact);
-            var retainedSha256 = ArtifactStore.HashFile(path);
-            if (!string.Equals(validatedSha256, retainedSha256, StringComparison.Ordinal))
-                throw new PerformanceContractException(
-                    $"Diagnostics trace-detail query '{evidence.RouteIdentity}' retained a different provider-native plan than the artifact admitted for publication.");
-            return retainedSha256;
-        }
-        finally
-        {
-            if (File.Exists(validationPath))
-                File.Delete(validationPath);
-        }
-    }
-
-    private static void WriteEnvelope(string path, DiagnosticsNativePlanArtifact artifact)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, JsonSerializer.Serialize(artifact, new JsonSerializerOptions { WriteIndented = true }));
-        ArtifactStore.ValidateRawPlanFile(path);
     }
 
     internal static NativePlanEvidenceDocument CreateDocument(

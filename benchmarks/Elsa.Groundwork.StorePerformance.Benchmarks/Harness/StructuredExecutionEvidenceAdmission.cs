@@ -5,7 +5,7 @@ public static partial class DiagnosticsNativePlanContract
     /// <summary>
     /// The diagnostics routes whose admission reads typed callback evidence instead of provider plan
     /// text, per provider. A route is listed only where Groundwork reports both a collected bounded-query
-    /// shape and a collected plan for it (observed on 0.4.0-preview.27: persisted ordinal identity keys and
+    /// shape and a collected plan for it (observed on 0.4.0-preview.28: persisted ordinal identity keys and
     /// the renderer's computed sort fields are typed since valence-works/groundwork-v2#432). The bounded
     /// resource routes admit the same scan-and-sort exception the raw path grants for the frozen 128-row
     /// catalog, proven from typed plan nodes and sort keys (#1594).
@@ -226,10 +226,17 @@ public static partial class DiagnosticsNativePlanContract
                 details.NativeLimit.Value != nativeFetchLimit)
                 throw Reject("Structured winning-plan evidence observed a native bound other than the route's lookahead limit.");
         }
-        var keys = sorts[0].Details?.NativeSortKeys ?? throw Reject("The bounded catalog sort did not observe its native sort keys.");
+        ValidateNativeSortKeys(
+            sorts[0].Details?.NativeSortKeys ?? throw Reject("The bounded catalog sort did not observe its native sort keys."),
+            specification, "Bounded catalog sort");
+    }
+
+    /// <summary>The native keys of a sort or ordered merge must be the route's complete ordering, term by term.</summary>
+    private static void ValidateNativeSortKeys(IReadOnlyList<StructuredOrderTerm> keys, DiagnosticsNativeRouteSpec specification, string what)
+    {
         var expected = specification.EffectiveOrdering;
         if (keys.Count != expected.Count)
-            throw Reject("The bounded catalog sort keys are not the route's complete ordering.");
+            throw Reject($"{what} keys are not the route's complete ordering.");
         for (var index = 0; index < expected.Count; index++)
         {
             var key = keys[index];
@@ -245,7 +252,7 @@ public static partial class DiagnosticsNativePlanContract
                 (ordinal
                     ? !string.Equals(key.Comparison, "Ordinal", StringComparison.Ordinal) || key.Transforms.Count > 1 || key.Transforms.Any(transform => !OrdinalOrderingTransforms.Contains(transform))
                     : key.Transforms.Count != 0))
-                throw Reject($"Bounded catalog sort key {index} is not the route's ordering term.");
+                throw Reject($"{what} key {index} is not the route's ordering term.");
         }
     }
 
@@ -389,7 +396,8 @@ public static partial class DiagnosticsNativePlanContract
         Guid targetId,
         string provider,
         DiagnosticsNativeRouteSpec specification,
-        int nativeFetchLimit)
+        int nativeFetchLimit,
+        bool orderedMergeAdmitted = false)
     {
         if (plan is null)
             throw Reject("Structured plan evidence is missing.");
@@ -402,15 +410,26 @@ public static partial class DiagnosticsNativePlanContract
             plan.ChosenPhysicalIndexId == Guid.Empty ||
             plan.FailureCategory is not null ||
             plan.CollectionCommandCount is null or < 1)
-            throw Reject("Structured plan evidence does not prove the collected selected index.");
+            throw Reject(
+                "Structured plan evidence does not prove the collected selected index: " +
+                $"availability={plan.Availability}, provenance={plan.Provenance}, choseExpectedIndex={plan.ChoseExpectedIndex?.ToString() ?? "null"}, " +
+                $"expectedLogicalIndex={plan.ExpectedLogicalIndex ?? "null"} (route index {specification.IndexName}), " +
+                $"chosenPhysicalIndexId={plan.ChosenPhysicalIndexId}, failureCategory={plan.FailureCategory ?? "null"}, " +
+                $"collectionCommandCount={plan.CollectionCommandCount?.ToString() ?? "null"}.");
         var nodes = plan.Nodes ?? throw Reject("Structured winning-plan nodes are missing.");
         if (nodes.Count == 0 || nodes.Any(candidate => candidate is null))
             throw Reject("Structured winning-plan evidence is empty.");
         var access = nodes.Where(node => AccessOperations.Contains(node.Operation)).ToArray();
+        var passThrough = provider == "sqlserver" ? SqlServerPassThroughOperations : PassThroughOperations;
+        var merges = nodes.Where(node => node.Operation == "MergeOrdered").ToArray();
+        if (merges.Length > 0)
+        {
+            ValidateOrderedMergePlan(nodes, access, merges, targetId, specification, nativeFetchLimit, passThrough, orderedMergeAdmitted);
+            return;
+        }
         if (access.Length != 1)
             throw Reject("Structured winning-plan evidence must contain exactly one index access node.");
         var accessNode = access[0];
-        var passThrough = provider == "sqlserver" ? SqlServerPassThroughOperations : PassThroughOperations;
         if (accessNode.Operation == "PrimaryKeySearch")
         {
             if (!IsKeyOrderedRoute(specification) || accessNode.TargetId != targetId || accessNode.IndexId is not null ||
@@ -434,6 +453,58 @@ public static partial class DiagnosticsNativePlanContract
             if (details.Spill?.Spilled == true)
                 throw Reject("Structured winning-plan evidence observed a spill.");
             if (details.NativeSortKeys is not null)
+                throw Reject("An index-search route must not observe native sort keys.");
+            if (string.Equals(details.NativeLimit.Kind, "Explicit", StringComparison.Ordinal) &&
+                details.NativeLimit.Value != nativeFetchLimit)
+                throw Reject("Structured winning-plan evidence observed a native bound other than the route's lookahead limit.");
+        }
+    }
+
+    /// <summary>
+    /// A provider may answer a keyset continuation page's lexicographic disjunction by scanning the
+    /// expected index once per branch and merging the scans on the route's ordering without a blocking
+    /// sort (MongoDB's sort-merge stage). Every input is the expected index against the target, the merge keys
+    /// are the route's complete ordering, and only limit, fetch and projection work surrounds them.
+    /// </summary>
+    private static void ValidateOrderedMergePlan(
+        IReadOnlyList<StructuredPlanNode> nodes,
+        StructuredPlanNode[] access,
+        StructuredPlanNode[] merges,
+        Guid targetId,
+        DiagnosticsNativeRouteSpec specification,
+        int nativeFetchLimit,
+        IReadOnlySet<string> passThrough,
+        bool admitted)
+    {
+        if (!admitted)
+            throw Reject("An ordered merge of index scans is admitted only for a keyset continuation page.");
+        // The planner may nest merges (a merge of merged branches); every merge orders on the route's keys.
+        if (access.Length < 2)
+            throw Reject("An ordered merge must combine at least two scans of the expected index.");
+        foreach (var scan in access)
+        {
+            if (scan.Operation == "PrimaryKeySearch" || scan.TargetId != targetId ||
+                scan.IndexId is not Guid scanIndexId || scanIndexId == Guid.Empty ||
+                !string.Equals(scan.LogicalIndexName, specification.IndexName, StringComparison.Ordinal) ||
+                scan.SortPurpose is not null)
+                throw Reject("An ordered merge input is not the expected index against the statement target.");
+        }
+        foreach (var node in nodes)
+        {
+            var merge = merges.Contains(node);
+            if (!merge && !AccessOperations.Contains(node.Operation) && !passThrough.Contains(node.Operation))
+                throw Reject($"Structured winning-plan evidence carries unexpected native work '{node.Operation}'.");
+            if (node.SortPurpose is not null)
+                throw Reject("An index-search route must not observe a sort purpose.");
+            if (merge)
+                ValidateNativeSortKeys(
+                    node.Details?.NativeSortKeys ?? throw Reject("The ordered merge did not observe its merge keys."),
+                    specification, "Ordered merge");
+            if (node.Details is not { } details)
+                continue;
+            if (details.Spill?.Spilled == true)
+                throw Reject("Structured winning-plan evidence observed a spill.");
+            if (!merge && details.NativeSortKeys is not null)
                 throw Reject("An index-search route must not observe native sort keys.");
             if (string.Equals(details.NativeLimit.Kind, "Explicit", StringComparison.Ordinal) &&
                 details.NativeLimit.Value != nativeFetchLimit)

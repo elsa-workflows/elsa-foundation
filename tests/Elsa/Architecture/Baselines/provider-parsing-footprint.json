@@ -1,18 +1,18 @@
 {
   "parserFileLines": {
-    "benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/DiagnosticsNativePlanCapture.cs": 1121,
+    "benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/DiagnosticsNativePlanCapture.cs": 723,
     "benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/IamNativePlanParser.cs": 372,
     "benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/SecretNativePlanCapture.cs": 719,
-    "benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Harness/DiagnosticsNativePlan.cs": 3169,
+    "benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Harness/DiagnosticsNativePlan.cs": 335,
     "benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Harness/MongoExplainCommandInspector.cs": 141,
     "benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Harness/RuntimeNativePlan.cs": 939,
     "tools/groundwork/run-e3-medium-baseline.py": 667
   },
   "markerOccurrences": {
-    "explain-json": 35,
-    "mongo-command": 52,
+    "explain-json": 8,
+    "mongo-command": 25,
     "showplan-xml": 0,
-    "sql-text": 11,
-    "sqlite-explain": 9
+    "sql-text": 0,
+    "sqlite-explain": 8
   }
 }
