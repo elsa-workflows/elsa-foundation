@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-06
 
-**Status**: Draft
+**Status**: Implemented — merged in PR #1161
 
 **Issue**: [elsa-workflows/elsa-foundation#1157](https://github.com/elsa-workflows/elsa-foundation/issues/1157) — "No file-based workflow deployment: JsonWorkflowReconciliation is unshipped, folder-less, and never publishes" (gaps 1–3 + readiness note are in scope here; gap 4, hand-authorable `(activityTypeKey, version)` input, is the excluded stretch item)
 
