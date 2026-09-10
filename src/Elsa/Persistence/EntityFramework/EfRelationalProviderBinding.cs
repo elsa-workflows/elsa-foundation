@@ -23,7 +23,7 @@ public static class EfRelationalProviderBinding
     public static void UseSqlServer(DbContextOptionsBuilder builder, string connectionString, string historyTableName, string? migrationsAssembly = null) =>
         Use(
             builder,
-            "Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsBuilderExtensions, Microsoft.EntityFrameworkCore.SqlServer",
+            "Microsoft.EntityFrameworkCore.SqlServerDbContextOptionsExtensions, Microsoft.EntityFrameworkCore.SqlServer",
             "UseSqlServer",
             connectionString,
             historyTableName,

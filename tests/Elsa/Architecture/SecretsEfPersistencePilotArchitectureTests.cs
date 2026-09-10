@@ -37,8 +37,8 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
     private static readonly string[] ToolingPackages =
     [
         "Microsoft.EntityFrameworkCore.Design",
-        "Microsoft.EntityFrameworkCore.Sqlite",
         "Microsoft.EntityFrameworkCore.SqlServer",
+        "Microsoft.EntityFrameworkCore.Sqlite",
         "Npgsql.EntityFrameworkCore.PostgreSQL"
     ];
 

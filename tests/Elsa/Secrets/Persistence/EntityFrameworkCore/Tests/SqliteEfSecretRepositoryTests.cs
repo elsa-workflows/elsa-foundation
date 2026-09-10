@@ -112,9 +112,10 @@ public sealed class SqliteEfSecretRepositoryTests
     public async Task Active_only_normalizes_offset_expiries_to_utc()
     {
         await using var fixture = await SqliteFixture.CreateAsync();
+        // 14:00+02:00 == 12:00Z; 10:30-01:00 == 11:30Z, so the version is still active.
         var plusTwo = new DateTimeOffset(2026, 8, 16, 14, 0, 0, TimeSpan.FromHours(2));
         await fixture.Repository.SaveAsync(Secret("tenant-a", "offset.future", "v", expiresAt: plusTwo));
-        var now = new DateTimeOffset(2026, 8, 16, 11, 30, 0, TimeSpan.FromHours(-1));
+        var now = new DateTimeOffset(2026, 8, 16, 10, 30, 0, TimeSpan.FromHours(-1));
         var page = await fixture.Repository.ListPageAsync(
             "tenant-a",
             new SecretRepositoryListRequest(activeOnly: true, now: now, take: 20));
