@@ -6,9 +6,9 @@ Records direct project references only.
 
 ## Summary
 
-- Source projects: 135
-- Test projects: 104
-- Direct project references: 1194
+- Source projects: 138
+- Test projects: 108
+- Direct project references: 1201
 
 ## Projects
 
@@ -93,6 +93,7 @@ Records direct project references only.
 | [Elsa.Modularity.Core](../../src/Elsa/Modularity/Core/Elsa.Modularity.Core.csproj) | source | Elsa.Modularity | - | default | - |
 | [Elsa.Modularity.ExtensionBuilder](../../src/Elsa/Modularity/ExtensionBuilder/Elsa.Modularity.ExtensionBuilder.csproj) | source | Elsa.Modularity | - | default | Elsa.Foundation.Identity.Abstractions<br>Elsa.Git<br>Elsa.Modularity.Core |
 | [Elsa.Modularity.Nuplane](../../src/Elsa/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj) | source | Elsa.Modularity | - | default | Elsa.Modularity.Core |
+| [Elsa.Persistence.EntityFramework](../../src/Elsa/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | source | Elsa.Persistence | - | default | - |
 | [Elsa.Persistence.Groundwork.V2](../../src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj) | source | Elsa.Persistence | - | default | Elsa.Workflows.Runtime.Attention<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Pipelines.Core](../../src/Elsa/Pipelines/Core/Elsa.Pipelines.Core.csproj) | source | Elsa.Pipelines | - | default | - |
 | [Elsa.Primitives.Hosting](../../src/Elsa/Primitives/Hosting/Elsa.Primitives.Hosting.csproj) | source | Elsa.Primitives | - | default | Elsa.Primitives |
@@ -101,6 +102,8 @@ Records direct project references only.
 | [Elsa.Secrets.Attention](../../src/Elsa/Secrets/Attention/Elsa.Secrets.Attention.csproj) | source | Elsa.Secrets | - | default | Elsa.Attention.Core<br>Elsa.Secrets.Core |
 | [Elsa.Secrets.Core](../../src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj) | source | Elsa.Secrets | - | default | Elsa.Primitives |
 | [Elsa.Secrets](../../src/Elsa/Secrets/Elsa.Secrets.csproj) | source | Elsa.Secrets | - | default | Elsa.Expressions.Core<br>Elsa.Secrets.Core<br>Elsa.Serialization.Core |
+| [Elsa.Secrets.Persistence.EntityFrameworkCore](../../src/Elsa/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj) | source | Elsa.Secrets | - | default | Elsa.Persistence.EntityFramework<br>Elsa.Secrets.Core |
+| [Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling](../../src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling.csproj) | source | Elsa.Secrets | - | false | Elsa.Secrets.Persistence.EntityFrameworkCore |
 | [Elsa.Secrets.Persistence.Groundwork](../../src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj) | source | Elsa.Secrets | - | default | Elsa.Persistence.Groundwork.V2<br>Elsa.Secrets<br>Elsa.Secrets.Core |
 | [Elsa.Serialization.Core](../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj) | source | Elsa.Serialization | - | default | Elsa.Events.Core<br>Elsa.Primitives |
 | [Elsa.Serialization.Newtonsoft](../../src/Elsa/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj) | source | Elsa.Serialization | - | default | Elsa.Serialization.Core |
@@ -205,6 +208,7 @@ Records direct project references only.
 | [Elsa.Mediator.Tests](../../tests/Elsa/Mediator/Tests/Elsa.Mediator.Tests.csproj) | test | Elsa.Mediator | - | default | Elsa.Mediator |
 | [Elsa.Modularity.Attention.Tests](../../tests/Elsa/Modularity/Attention/Tests/Elsa.Modularity.Attention.Tests.csproj) | test | Elsa.Modularity | - | default | Elsa.Modularity.Attention |
 | [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Elsa.Modularity | - | default | Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Host<br>Elsa.Git<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.ExtensionBuilder<br>Elsa.Modularity.Nuplane<br>Elsa.Workbench |
+| [Elsa.Persistence.EntityFramework.Tests](../../tests/Elsa/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj) | test | Elsa.Persistence | - | default | Elsa.Persistence.EntityFramework |
 | [Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests](../../tests/Elsa/Persistence/Groundwork/DesignConformance/MongoDb/Tests/Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests.csproj) | test | Elsa.Persistence | - | default | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Persistence.Groundwork.DesignConformance.Tests<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Persistence.Groundwork<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Publishing.Persistence.Groundwork<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
 | [Elsa.Persistence.Groundwork.DesignConformance.PostgreSql.Tests](../../tests/Elsa/Persistence/Groundwork/DesignConformance/PostgreSql/Tests/Elsa.Persistence.Groundwork.DesignConformance.PostgreSql.Tests.csproj) | test | Elsa.Persistence | - | default | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Persistence.Groundwork.DesignConformance.Tests<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Persistence.Groundwork<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Publishing.Persistence.Groundwork<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
 | [Elsa.Persistence.Groundwork.DesignConformance.SqlServer.Tests](../../tests/Elsa/Persistence/Groundwork/DesignConformance/SqlServer/Tests/Elsa.Persistence.Groundwork.DesignConformance.SqlServer.Tests.csproj) | test | Elsa.Persistence | - | default | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Persistence.Groundwork.DesignConformance.Tests<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Persistence.Groundwork<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Publishing.Persistence.Groundwork<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
@@ -222,6 +226,9 @@ Records direct project references only.
 | [Elsa.Primitives.Tests](../../tests/Elsa/Primitives/Tests/Elsa.Primitives.Tests.csproj) | test | Elsa.Primitives | - | default | Elsa.Primitives |
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | test | Elsa.Samples | - | default | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Samples.Nuplane.Activities |
 | [Elsa.Secrets.Attention.Tests](../../tests/Elsa/Secrets/Attention/Tests/Elsa.Secrets.Attention.Tests.csproj) | test | Elsa.Secrets | - | default | Elsa.Secrets.Attention |
+| [Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj) | test | Elsa.Secrets | - | default | Elsa.Secrets.Persistence.EntityFrameworkCore |
+| [Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj) | test | Elsa.Secrets | - | default | Elsa.Secrets.Persistence.EntityFrameworkCore |
+| [Elsa.Secrets.Persistence.EntityFrameworkCore.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Secrets | - | default | Elsa.Secrets.Persistence.EntityFrameworkCore |
 | [Elsa.Secrets.Persistence.Groundwork.V2.ProviderMatrix.Tests](../../tests/Elsa/Secrets/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Secrets.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj) | test | Elsa.Secrets | net10.0 | false | Elsa.Secrets.Persistence.Groundwork |
 | [Elsa.Secrets.Persistence.Groundwork.V2.Tests](../../tests/Elsa/Secrets/Persistence/Groundwork/V2/Tests/Elsa.Secrets.Persistence.Groundwork.V2.Tests.csproj) | test | Elsa.Secrets | net10.0 | false | Elsa.Persistence.Groundwork.Testing<br>Elsa.Secrets.Persistence.Groundwork |
 | [Elsa.Secrets.Tests](../../tests/Elsa/Secrets/Tests/Elsa.Secrets.Tests.csproj) | test | Elsa.Secrets | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Compatibility.Testing<br>Elsa.Expressions<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Secrets<br>Elsa.Secrets.Api<br>Elsa.Secrets.Core<br>Elsa.Workflows.Runtime |
@@ -274,11 +281,11 @@ Records direct project references only.
 | Elsa.Locking | 2 | 0 |
 | Elsa.Mediator | 2 | 1 |
 | Elsa.Modularity | 5 | 2 |
-| Elsa.Persistence | 1 | 13 |
+| Elsa.Persistence | 2 | 14 |
 | Elsa.Pipelines | 1 | 0 |
 | Elsa.Primitives | 2 | 2 |
 | Elsa.Samples | 0 | 1 |
-| Elsa.Secrets | 5 | 4 |
+| Elsa.Secrets | 7 | 7 |
 | Elsa.Serialization | 3 | 1 |
 | Elsa.Studio | 3 | 2 |
 | Elsa.Tasks | 3 | 1 |

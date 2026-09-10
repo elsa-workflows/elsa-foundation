@@ -9,6 +9,8 @@
       "Directory.Packages.props -\u003E Microsoft.EntityFrameworkCore.InMemory",
       "Directory.Packages.props -\u003E Microsoft.EntityFrameworkCore.Relational",
       "Directory.Packages.props -\u003E Microsoft.EntityFrameworkCore.Sqlite",
+      "Directory.Packages.props -\u003E Microsoft.EntityFrameworkCore.SqlServer",
+      "Directory.Packages.props -\u003E Npgsql.EntityFrameworkCore.PostgreSQL",
       "Directory.Packages.props -\u003E OpenIddict.EntityFrameworkCore"
     ],
     "SharedBuildPackageReferences": [],
