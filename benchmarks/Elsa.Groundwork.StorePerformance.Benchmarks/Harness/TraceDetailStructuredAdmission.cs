@@ -34,6 +34,27 @@ public static partial class DiagnosticsNativePlanContract
             []);
 
     /// <summary>Validates one constituent's typed evidence against its specification and the observed provider version.</summary>
+    /// <summary>
+    /// A constituent's reads are the collected observations of its unit that carry the route's own key or
+    /// predicate; the store's other reads of the same unit inside the capture window (the durability probe's
+    /// total counts, whose shape every provider withholds) are not its pages.
+    /// </summary>
+    public static bool IsConstituentObservation(StructuredExecutionEvidence observation, DiagnosticsTraceDetailConstituentSpec specification)
+    {
+        ArgumentNullException.ThrowIfNull(observation);
+        ArgumentNullException.ThrowIfNull(specification);
+        var pointRead = specification.OperationKind == DiagnosticsTraceDetailOperationKind.PrimaryKeyRead;
+        return string.Equals(observation.Operation, pointRead ? "PointRead" : "BoundedQuery", StringComparison.Ordinal) &&
+               string.Equals(observation.Target?.LogicalUnitId, LogicalUnitIdForTable(specification.TableName), StringComparison.Ordinal) &&
+               string.Equals(observation.ShapeAvailability, "Collected", StringComparison.Ordinal) &&
+               (pointRead
+                   ? observation.PointRead?.KeyBounds.Any(bound =>
+                       bound.BindingRole == "Key" && string.Equals(bound.LogicalColumn, specification.PredicateColumn, StringComparison.Ordinal)) == true
+                   : observation.BoundedQuery is { IncludesTotalCount: false } query &&
+                     query.Predicate?.Facts.Any(fact =>
+                         fact is { BindingRole: "Caller" } && string.Equals(fact.LogicalColumn, specification.PredicateColumn, StringComparison.Ordinal)) == true);
+    }
+
     public static void ValidateStructuredTraceDetailConstituent(
         string provider,
         string adapter,

@@ -1,6 +1,6 @@
 {
   "parserFileLines": {
-    "benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/DiagnosticsNativePlanCapture.cs": 724,
+    "benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/DiagnosticsNativePlanCapture.cs": 723,
     "benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/IamNativePlanParser.cs": 372,
     "benchmarks/Elsa.Groundwork.StorePerformance.AdapterHost/SecretNativePlanCapture.cs": 719,
     "benchmarks/Elsa.Groundwork.StorePerformance.Benchmarks/Harness/DiagnosticsNativePlan.cs": 335,

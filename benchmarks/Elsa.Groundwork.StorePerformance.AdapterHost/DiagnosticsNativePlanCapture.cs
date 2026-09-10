@@ -247,19 +247,7 @@ internal static class DiagnosticsNativePlanCapture
             StructuredEvidence = structuredEvidence
         };
 
-        try
-        {
-            DiagnosticsNativePlanContract.ValidateStructuredEvidence(
-                request.Provider,
-                request.Adapter,
-                routeEvidence,
-                observed.Version);
-        }
-        catch (PerformanceContractException exception)
-        {
-            throw new PerformanceContractException($"{exception.Message} (route '{specification.RouteIdentity}')");
-        }
-
+        Named($"route '{route}'", () => DiagnosticsNativePlanContract.ValidateStructuredEvidence(request.Provider, request.Adapter, routeEvidence, observed.Version));
         return routeEvidence;
     }
 
@@ -584,20 +572,7 @@ internal static class DiagnosticsNativePlanCapture
         {
             var unit = DiagnosticsNativePlanContract.LogicalUnitIdForTable(specification.TableName);
             var pointRead = specification.OperationKind == DiagnosticsTraceDetailOperationKind.PrimaryKeyRead;
-            // The constituent's reads are the collected observations of its unit that carry the route's own
-            // key or predicate; the store's other reads of the same unit inside the window (the durability
-            // probe's total counts, whose shape every provider withholds) are not its pages.
-            var observed = observations
-                .Where(observation => string.Equals(observation.Operation, pointRead ? "PointRead" : "BoundedQuery", StringComparison.Ordinal) &&
-                                      string.Equals(observation.Target?.LogicalUnitId, unit, StringComparison.Ordinal) &&
-                                      string.Equals(observation.ShapeAvailability, "Collected", StringComparison.Ordinal) &&
-                                      (pointRead
-                                          ? observation.PointRead?.KeyBounds.Any(bound =>
-                                              bound.BindingRole == "Key" && string.Equals(bound.LogicalColumn, specification.PredicateColumn, StringComparison.Ordinal)) == true
-                                          : observation.BoundedQuery is { IncludesTotalCount: false } query &&
-                                            query.Predicate?.Facts.Any(fact =>
-                                                fact is { BindingRole: "Caller" } && string.Equals(fact.LogicalColumn, specification.PredicateColumn, StringComparison.Ordinal)) == true))
-                .ToArray();
+            var observed = observations.Where(observation => DiagnosticsNativePlanContract.IsConstituentObservation(observation, specification)).ToArray();
             if (observed.Length == 0 || observed.Length > specification.MaxInvocationCount)
                 throw new PerformanceContractException(
                     $"Diagnostics trace-detail constituent '{specification.RouteIdentity}' observed {observed.Length} typed reads of '{unit}'; expected a finite positive count no greater than {specification.MaxInvocationCount}.");
@@ -633,26 +608,25 @@ internal static class DiagnosticsNativePlanCapture
             {
                 StructuredEvidence = observed[0]
             };
-            try
-            {
-                if (pointRead)
-                {
-                    // Every fanned-out point read of the constituent is admitted; the constituent retains the first.
-                    foreach (var read in observed)
-                        DiagnosticsNativePlanContract.ValidateStructuredTraceDetailConstituent(
-                            request.Provider, request.Adapter, constituent with { StructuredEvidence = read }, observedProviderVersion);
-                }
-                else
-                    DiagnosticsNativePlanContract.ValidateStructuredTraceDetailConstituent(
-                        request.Provider, request.Adapter, constituent, observedProviderVersion);
-            }
-            catch (PerformanceContractException exception)
-            {
-                throw new PerformanceContractException($"{exception.Message} (constituent '{constituent.RouteIdentity}')");
-            }
+            // Every fanned-out point read of the constituent is admitted; the constituent retains the first.
+            foreach (var read in pointRead ? observed : [observed[0]])
+                Named($"constituent '{constituent.RouteIdentity}'", () => DiagnosticsNativePlanContract.ValidateStructuredTraceDetailConstituent(
+                    request.Provider, request.Adapter, constituent with { StructuredEvidence = read }, observedProviderVersion));
             evidence.Add(constituent);
         }
         return evidence;
+    }
+
+    private static void Named(string label, Action validate)
+    {
+        try
+        {
+            validate();
+        }
+        catch (PerformanceContractException exception)
+        {
+            throw new PerformanceContractException($"{exception.Message} ({label})");
+        }
     }
 
     private static async Task<int> InvokeBoundedResourceRouteWithoutExplainAssertionAsync(

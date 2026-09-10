@@ -463,7 +463,7 @@ public static partial class DiagnosticsNativePlanContract
     /// <summary>
     /// A provider may answer a keyset continuation page's lexicographic disjunction by scanning the
     /// expected index once per branch and merging the scans on the route's ordering without a blocking
-    /// sort (MongoDB's SORT_MERGE). Every input is the expected index against the target, the merge keys
+    /// sort (MongoDB's sort-merge stage). Every input is the expected index against the target, the merge keys
     /// are the route's complete ordering, and only limit, fetch and projection work surrounds them.
     /// </summary>
     private static void ValidateOrderedMergePlan(
