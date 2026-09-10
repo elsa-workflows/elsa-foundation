@@ -11,7 +11,7 @@ public sealed class EfDatabaseMigratorTests
     {
         await using var fixture = await SqliteMigratorFixture.CreateAsync();
         await EfDatabaseMigrator.ApplyAsync(fixture.Context, EfProviderNames.Sqlite);
-        Assert.True(await fixture.Context.Items.AnyAsync() == false);
+        Assert.False(await fixture.Context.Items.AnyAsync());
         fixture.Context.Items.Add(new MigratorItem { Name = "alpha" });
         await fixture.Context.SaveChangesAsync();
         Assert.Equal("alpha", (await fixture.Context.Items.SingleAsync()).Name);
@@ -64,7 +64,7 @@ public sealed class EfDatabaseMigratorTests
 
         public static async ValueTask<SqliteMigratorFixture> CreateAsync()
         {
-            var path = Path.Combine(Path.GetTempPath(), $"elsa-ef-migrate-{Guid.NewGuid():N}.db");
+            var path = Path.Join(Path.GetTempPath(), $"elsa-ef-migrate-{Guid.NewGuid():N}.db");
             var options = new DbContextOptionsBuilder<MigratorContext>()
                 .UseSqlite($"Data Source={path}")
                 .Options;

@@ -150,8 +150,8 @@ public sealed class SqliteEfSecretRepositoryTests
     [Fact]
     public async Task Validate_fails_when_the_initial_migration_is_pending()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"elsa-secrets-ef-pending-{Guid.NewGuid():N}.db");
-        var connection = new SqliteConnection($"Data Source={path}");
+        var path = Path.Join(Path.GetTempPath(), $"elsa-secrets-ef-pending-{Guid.NewGuid():N}.db");
+        await using var connection = new SqliteConnection($"Data Source={path}");
         await connection.OpenAsync();
         try
         {
@@ -167,7 +167,6 @@ public sealed class SqliteEfSecretRepositoryTests
         }
         finally
         {
-            await connection.DisposeAsync();
             File.Delete(path);
         }
     }
@@ -216,7 +215,7 @@ public sealed class SqliteEfSecretRepositoryTests
 
         public static async ValueTask<SqliteFixture> CreateAsync()
         {
-            var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"elsa-secrets-ef-{Guid.NewGuid():N}.db");
+            var path = System.IO.Path.Join(System.IO.Path.GetTempPath(), $"elsa-secrets-ef-{Guid.NewGuid():N}.db");
             var connection = new SqliteConnection($"Data Source={path}");
             await connection.OpenAsync();
             var options = new DbContextOptionsBuilder<SecretsSqliteDbContext>()

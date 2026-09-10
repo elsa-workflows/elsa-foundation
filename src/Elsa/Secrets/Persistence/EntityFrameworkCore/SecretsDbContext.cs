@@ -41,10 +41,10 @@ public abstract class SecretsDbContext : DbContext
     private void StampConcurrencyTokens()
     {
         // IsRowVersion() on Sqlite inserts NULL. Stamp an explicit token on every provider.
-        foreach (var entry in ChangeTracker.Entries<SecretRecord>())
+        foreach (var entry in ChangeTracker.Entries<SecretRecord>()
+                     .Where(candidate => candidate.State is EntityState.Added or EntityState.Modified))
         {
-            if (entry.State is EntityState.Added or EntityState.Modified)
-                entry.Property(record => record.ConcurrencyToken).CurrentValue = Guid.NewGuid().ToByteArray();
+            entry.Property(record => record.ConcurrencyToken).CurrentValue = Guid.NewGuid().ToByteArray();
         }
     }
 }

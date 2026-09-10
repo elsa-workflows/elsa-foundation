@@ -50,12 +50,8 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
     [Fact]
     public void Policy_and_module_packages_stay_provider_free()
     {
-        var policy = PackageIncludes(Path.Combine(
-            RepoRoot,
-            "src/Elsa/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"));
-        var module = PackageIncludes(Path.Combine(
-            RepoRoot,
-            "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj"));
+        var policy = PackageIncludes(RepoPath("src", "Elsa", "Persistence", "EntityFramework", "Elsa.Persistence.EntityFramework.csproj"));
+        var module = PackageIncludes(RepoPath("src", "Elsa", "Secrets", "Persistence", "EntityFrameworkCore", "Elsa.Secrets.Persistence.EntityFrameworkCore.csproj"));
 
         Assert.Equal(PolicyPackages, policy);
         Assert.Equal(ModulePackages, module);
@@ -66,9 +62,9 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
     [Fact]
     public void Tooling_project_is_the_only_secrets_ef_package_that_references_provider_engines()
     {
-        var tooling = PackageIncludes(Path.Combine(
-            RepoRoot,
-            "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling.csproj"));
+        var tooling = PackageIncludes(RepoPath(
+            "src", "Elsa", "Secrets", "Persistence", "EntityFrameworkCore", "Tooling",
+            "Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling.csproj"));
         Assert.Contains("Microsoft.EntityFrameworkCore.Design", tooling);
         Assert.Contains("Microsoft.EntityFrameworkCore.Sqlite", tooling);
         Assert.Contains("Microsoft.EntityFrameworkCore.SqlServer", tooling);
@@ -90,7 +86,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
     [Fact]
     public void Workbench_does_not_reference_the_secrets_ef_module()
     {
-        var workbench = XDocument.Load(Path.Combine(RepoRoot, "src/Apps/Elsa.Workbench/Elsa.Workbench.csproj"));
+        var workbench = XDocument.Load(RepoPath("src", "Apps", "Elsa.Workbench", "Elsa.Workbench.csproj"));
         var references = workbench.Descendants("ProjectReference")
             .Select(element => element.Attribute("Include")?.Value)
             .OfType<string>()
@@ -108,6 +104,8 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
+    private static string RepoPath(params string[] segments) => Path.Join([RepoRoot, ..segments]);
+
     private static string RepoRoot
     {
         get
@@ -115,7 +113,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
             var directory = new DirectoryInfo(AppContext.BaseDirectory);
             while (directory is not null)
             {
-                if (File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
+                if (File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
                     return directory.FullName;
                 directory = directory.Parent;
             }

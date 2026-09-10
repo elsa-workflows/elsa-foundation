@@ -170,7 +170,15 @@ public static class EfRelationalProviderBinding
         {
             return Assembly.Load(assemblyName).GetType(typeName, throwOnError: false);
         }
-        catch (Exception)
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+        catch (FileLoadException)
+        {
+            return null;
+        }
+        catch (BadImageFormatException)
         {
             return null;
         }
