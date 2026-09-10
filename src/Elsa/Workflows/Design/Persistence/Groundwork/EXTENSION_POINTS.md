@@ -53,7 +53,8 @@ specializes after its base registration must use
 would create an invalid duplicate replacement registration. Both pre-composition preservation and
 post-composition replacement are covered by registration tests.
 `IDesignAtomicWriter` owns replay-safe multi-document mutation, durable operation markers, and
-uncertain-commit reconciliation for both workflow and activity design commands.
+uncertain-commit reconciliation for workflow-design commands. The activity-design package defines a
+separate public `IDesignAtomicWriter` and must not share this DI contract.
 
 `IDraftOriginator` is the provider-feature replacement seam used by the Groundwork create and
 clone commands. It owns identity allocation, per-draft locking, validation, atomic persistence,
@@ -88,20 +89,27 @@ Over-limit values **fail projection validation rather than truncate**, per the r
 (the `AtomicityProjectionOverLimitRejection` contract). All workflow-design projected members are
 keyword strings or `DateTime` (`ValueKind`); there are no numeric projected members in this lane.
 
-## Design atomic writer and shared operation document
+## Design atomic writer and per-lane operation ledger
 
-`IDesignAtomicWriter` (defined in `Elsa.Persistence.Groundwork.Querying`, default
-`GroundworkDesignAtomicWrite`) owns replay-safe multi-document mutation: durable operation markers,
-staged writes, and uncertain-commit reconciliation for both workflow- and activity-design commands.
-Its durable ledger is the shared `designOperation` document declared by
-`GroundworkDesignAtomicWriteStorageManifest` (owner `elsa.design.atomic-write`, route
-`design-atomic-write`, topology requirement `multi-document-transactions`). Both design lanes
-contribute `GroundworkDesignAtomicWriteStorageManifestSource` via `TryAddEnumerable`, so the operation
-document is declared exactly once regardless of composition order.
+`IDesignAtomicWriter` (defined in this package, default `GroundworkDesignAtomicWrite`) owns
+replay-safe multi-document mutation for workflow-design commands: durable operation markers,
+staged writes, and uncertain-commit reconciliation. Its ledger is this lane's
+`workflowDesignOperation` unit (`WorkflowsDesignStorageManifest.DesignOperationDocumentKind`).
+
+The activity-design package defines a separate public `IDesignAtomicWriter` (default
+`GroundworkDesignAtomicWrite` in `Elsa.Activities.Design.Persistence.Groundwork`) and an
+`activityDesignOperation` ledger. The two types collide in a dual-lane host if unified into one
+DI contract (`TryAddScoped` would keep only one implementation), and the two units must not share
+an id — see `DesignLedgerIsolationTests`. Crash-safety and replay stay per-catalog; cross-lane work
+goes through the post-commit outbox.
+
+Retry/replay/commit classification is shared as
+`Elsa.Persistence.Groundwork.DesignAtomic.DesignAtomicWriteProtocol`. Marker identity, document
+kind, material fingerprinting, and commit/rollback remain in each lane.
 
 ## Design post-commit outbox — extend
 
-The same manifest owns a second document, `designPostCommitIntent`. A design mutation whose lanes are on
+A design mutation whose lanes are on
 different Groundwork targets becomes done when the design commit lands, but anything it derives on another
 target has to be written afterwards, by the caller. An intent staged **inside** the design commit is durable
 at exactly that instant, so the derived write gains a second driver and no longer depends on the caller

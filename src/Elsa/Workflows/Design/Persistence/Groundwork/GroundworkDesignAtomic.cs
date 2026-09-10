@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Elsa.Persistence.Groundwork.DesignAtomic;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Models;
@@ -137,7 +138,7 @@ public sealed class GroundworkDesignAtomicWrite(
         CancellationToken cancellationToken = default) =>
         ExecuteAsync(request, null, stage, cancellationToken);
 
-    public async Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
+    public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
         GroundworkDesignAtomicWriteRequest request,
         Func<CancellationToken, Task>? beforeAttempt,
         Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
@@ -149,32 +150,75 @@ public sealed class GroundworkDesignAtomicWrite(
         if (timeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(reconciliationTimeout));
 
+        var documentKind = WorkflowsDesignStorageManifest.DesignOperationDocumentKind;
         var markerId = MarkerId(request.Operation);
-        var existing = ReadMarker(markerId);
-        if (existing is not null)
-            return Resolve(existing, request, GroundworkDesignAtomicWriteStatus.Replayed);
+        GroundworkDesignAtomicWriteContext? context = null;
 
-        if (beforeAttempt is not null)
-            await beforeAttempt(cancellationToken);
-
-        for (var attempt = 1; ; attempt++)
+        var lane = new DesignAtomicWriteLane<GroundworkDesignStorage.DesignUnitOfWork, GroundworkDesignOperationMarker, GroundworkDesignAtomicWriteStageResult, GroundworkDesignAtomicWriteResult>
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
+            DocumentKind = documentKind,
+            MarkerId = markerId,
+            LoadMarker = _ => Task.FromResult(ReadMarker(markerId)),
+            BeginScope = () =>
             {
-                return await ExecuteAttemptAsync(request, markerId, stage, cancellationToken);
-            }
-            catch (GroundworkDesignOperationMarkerRaceException)
+                var unitOfWork = storage.BeginUnitOfWork(
+                    request.MutatedUnits.Append(documentKind).ToArray());
+                context = new GroundworkDesignAtomicWriteContext(
+                    unitOfWork,
+                    storage.ForUnitOfWork(unitOfWork));
+                return unitOfWork;
+            },
+            SaveMarker = (scope, staged, _) =>
             {
-                var winner = ReadMarker(markerId);
-                if (winner is not null)
-                    return Resolve(winner, request, GroundworkDesignAtomicWriteStatus.Replayed);
-                if (attempt >= MarkerRaceAttemptBudget)
-                    throw new GroundworkDesignUncertainCommitException(
-                        $"Design operation marker '{markerId}' conflicted, but the winner could not be reloaded.");
-                await Task.Delay(MarkerRaceBackoffStep * attempt, clock, cancellationToken);
-            }
-            catch (GroundworkDesignUncertainCommitException)
+                if (string.IsNullOrWhiteSpace(staged.AuthoritativeResultFingerprint) ||
+                    string.IsNullOrWhiteSpace(staged.AuthoritativeResultJson))
+                    throw new InvalidDataException("An accepted design operation must provide an authoritative result.");
+
+                var marker = new GroundworkDesignOperationMarker(
+                    request.Operation.OperationKind,
+                    request.Operation.OperationKey,
+                    request.RequestFingerprint,
+                    staged.AuthoritativeResultFingerprint,
+                    staged.AuthoritativeResultJson,
+                    clock.GetUtcNow());
+                scope.Stage(documentKind, MarkerValues(markerId, marker), WriteOptions.CreateOnly);
+                return Task.CompletedTask;
+            },
+            Commit = (scope, _) =>
+            {
+                BatchWriteReport report;
+                try
+                {
+                    report = scope.Commit();
+                }
+                catch (BatchWriteException exception)
+                {
+                    if (IsOperationMarkerConflict(exception.Outcomes))
+                        throw new GroundworkDesignOperationMarkerRaceException();
+                    throw new GroundworkDesignWriteProviderException(
+                        "Groundwork rejected the design-operation batch.", exception);
+                }
+
+                if (!report.IsSuccessful)
+                {
+                    if (IsOperationMarkerConflict(report.Outcomes))
+                        throw new GroundworkDesignOperationMarkerRaceException();
+                    var failed = report.Outcomes
+                        .Where(item => item.Disposition == RowWriteDisposition.Applied && !item.Outcome.Succeeded)
+                        .ToArray();
+                    if (failed.Length != 0)
+                        throw new GroundworkDesignWriteProviderException(
+                            "Groundwork rejected the design-operation batch.",
+                            new BatchWriteException("Groundwork returned unsuccessful design-operation outcomes.", failed));
+                    return Task.FromResult(DesignAtomicCommitDisposition.Rejected);
+                }
+
+                return Task.FromResult(DesignAtomicCommitDisposition.Committed);
+            },
+            Rollback = scope => scope.Rollback(),
+            ClassifyMarkerRace = static exception => exception is GroundworkDesignOperationMarkerRaceException,
+            ClassifyUncertainCommit = static exception => exception is GroundworkDesignUncertainCommitException,
+            OnUncertainCommit = async (_, _) =>
             {
                 using var reconciliation = new CancellationTokenSource(timeout);
                 var backoff = MarkerRaceBackoffStep;
@@ -197,89 +241,31 @@ public sealed class GroundworkDesignAtomicWrite(
                     backoff = TimeSpan.FromMilliseconds(
                         Math.Min(backoff.TotalMilliseconds * 2, 250));
                 }
-            }
-        }
-    }
+            },
+            TryReconcileAfterCommit = static (_, _) => Task.FromResult<GroundworkDesignAtomicWriteResult?>(null),
+            Delay = (attempt, ct) => Task.Delay(MarkerRaceBackoffStep * attempt, clock, ct),
+            IsAccepted = static staged => staged.IsAccepted,
+            OnCommitted = static staged => GroundworkDesignAtomicWriteResult.Committed(
+                staged.AuthoritativeResultFingerprint!,
+                staged.AuthoritativeResultJson!),
+            OnReplay = marker => Resolve(marker, request, GroundworkDesignAtomicWriteStatus.Replayed),
+            OnRejected = static () => GroundworkDesignAtomicWriteResult.Rejected(),
+            MarkerRaceAttemptBudget = MarkerRaceAttemptBudget,
+            ThrowIfCancellationRequestedEachAttempt = true,
+            RollbackOnAttemptFailure = true,
+            CreateExhaustedMarkerRaceException = static (_, id) => new GroundworkDesignUncertainCommitException(
+                $"Design operation marker '{id}' conflicted, but the winner could not be reloaded.")
+        };
 
-    private async Task<GroundworkDesignAtomicWriteResult> ExecuteAttemptAsync(
-        GroundworkDesignAtomicWriteRequest request,
-        string markerId,
-        Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
-        CancellationToken cancellationToken)
-    {
-        using var unitOfWork = storage.BeginUnitOfWork(
-            request.MutatedUnits.Append(WorkflowsDesignStorageManifest.DesignOperationDocumentKind).ToArray());
-        var context = new GroundworkDesignAtomicWriteContext(
-            unitOfWork,
-            storage.ForUnitOfWork(unitOfWork));
-        try
-        {
-            var staged = await stage(context, cancellationToken);
-            ArgumentNullException.ThrowIfNull(staged);
-            if (!staged.IsAccepted)
+        return DesignAtomicWriteProtocol.ExecuteAsync(
+            lane,
+            (scope, ct) =>
             {
-                unitOfWork.Rollback();
-                return GroundworkDesignAtomicWriteResult.Rejected();
-            }
-            if (string.IsNullOrWhiteSpace(staged.AuthoritativeResultFingerprint) ||
-                string.IsNullOrWhiteSpace(staged.AuthoritativeResultJson))
-                throw new InvalidDataException("An accepted design operation must provide an authoritative result.");
-
-            var marker = new GroundworkDesignOperationMarker(
-                request.Operation.OperationKind,
-                request.Operation.OperationKey,
-                request.RequestFingerprint,
-                staged.AuthoritativeResultFingerprint,
-                staged.AuthoritativeResultJson,
-                clock.GetUtcNow());
-            unitOfWork.Stage(
-                WorkflowsDesignStorageManifest.DesignOperationDocumentKind,
-                MarkerValues(markerId, marker),
-                WriteOptions.CreateOnly);
-            BatchWriteReport report;
-            try
-            {
-                report = unitOfWork.Commit();
-            }
-            catch (BatchWriteException exception)
-            {
-                if (IsOperationMarkerConflict(exception.Outcomes))
-                    throw new GroundworkDesignOperationMarkerRaceException();
-                throw new GroundworkDesignWriteProviderException(
-                    "Groundwork rejected the design-operation batch.", exception);
-            }
-
-            if (!report.IsSuccessful)
-            {
-                if (IsOperationMarkerConflict(report.Outcomes))
-                    throw new GroundworkDesignOperationMarkerRaceException();
-                var failed = report.Outcomes
-                    .Where(item => item.Disposition == RowWriteDisposition.Applied && !item.Outcome.Succeeded)
-                    .ToArray();
-                if (failed.Length != 0)
-                    throw new GroundworkDesignWriteProviderException(
-                        "Groundwork rejected the design-operation batch.",
-                        new BatchWriteException("Groundwork returned unsuccessful design-operation outcomes.", failed));
-                return GroundworkDesignAtomicWriteResult.Rejected();
-            }
-            return GroundworkDesignAtomicWriteResult.Committed(
-                staged.AuthoritativeResultFingerprint,
-                staged.AuthoritativeResultJson);
-        }
-        catch (GroundworkDesignOperationMarkerRaceException)
-        {
-            TryRollback(unitOfWork);
-            throw;
-        }
-        catch (GroundworkDesignUncertainCommitException)
-        {
-            throw;
-        }
-        catch
-        {
-            TryRollback(unitOfWork);
-            throw;
-        }
+                _ = scope;
+                return stage(context!, ct);
+            },
+            beforeAttempt,
+            cancellationToken);
     }
 
     private GroundworkDesignOperationMarker? ReadMarker(string markerId)
@@ -367,12 +353,6 @@ public sealed class GroundworkDesignAtomicWrite(
         outcomes.Any(item =>
             StringComparer.Ordinal.Equals(item.Write.Unit.Id.Value, WorkflowsDesignStorageManifest.DesignOperationDocumentKind) &&
             item.Outcome.Status == WriteOutcomeStatus.ConcurrencyConflict);
-
-    private static void TryRollback(GroundworkDesignStorage.DesignUnitOfWork unitOfWork)
-    {
-        try { unitOfWork.Rollback(); }
-        catch { }
-    }
 }
 
 public sealed record GroundworkDesignOperationMarker(

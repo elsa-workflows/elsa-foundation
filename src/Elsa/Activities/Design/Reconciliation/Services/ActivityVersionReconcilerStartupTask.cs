@@ -17,16 +17,13 @@ public sealed class ActivityVersionReconcilerStartupTask(ILogger<ActivityVersion
     {
         var lockKey = nameof(ActivityVersionReconcilerStartupTask);
         var timeout = TimeSpan.FromMilliseconds(options.Value.LockTimeoutMs);
-        await using var @lock = await distributedLockProvider.TryAcquireLockAsync(lockKey, timeout, cancellationToken);
+        var acquired = await distributedLockProvider.TryRunUnderDistributedLock(
+            lockKey, timeout, reconciler.Reconcile, cancellationToken);
 
-        if (@lock is null)
+        if (!acquired)
         {
             if(logger.IsEnabled(LogLevel.Information))
                 logger.LogInformation("Could not retrieve lock '{key}'; because it was claimed by another instance", lockKey);
-
-            return;
         }
-
-        await reconciler.Reconcile(cancellationToken);
     }
 }

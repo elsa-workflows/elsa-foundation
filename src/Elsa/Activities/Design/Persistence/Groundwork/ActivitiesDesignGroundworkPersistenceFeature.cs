@@ -8,8 +8,10 @@ namespace Elsa.Activities.Design.Persistence.Groundwork;
 /// <summary>
 /// Backs the reusable-activity design persistence ports with Groundwork, on a target of the host's choosing.
 /// <para>
-/// The activities-design and workflows-design lanes share one design-operation ledger, so both must name the
-/// same target. Naming different ones is rejected when the manifest binding is recorded.
+/// This lane owns a private <c>activityDesignOperation</c> ledger. The workflow-design lane owns a
+/// separate <c>workflowDesignOperation</c> ledger; the two catalogs may bind to different Groundwork
+/// targets (split-database topology). Cross-lane work goes through the post-commit outbox rather than
+/// a shared operation document.
 /// </para>
 /// </summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
@@ -19,12 +21,12 @@ namespace Elsa.Activities.Design.Persistence.Groundwork;
 [ShellFeature(
     name: "ActivitiesDesignGroundworkPersistence",
     DisplayName = "Activities Design Groundwork Persistence",
-    Description = "Persists reusable-activity definitions, versions, drafts, dependencies and management projections through Groundwork. Binds to a named Groundwork target, which must be the same one the workflows-design lane names.")]
+    Description = "Persists reusable-activity definitions, versions, drafts, dependencies and management projections through Groundwork. Binds to a named Groundwork target; the workflow-design lane may use a different target.")]
 public class ActivitiesDesignGroundworkPersistenceFeature : IShellFeature
 {
     [ManifestSetting(
         DisplayName = "Target",
-        Description = "The Groundwork target holding the reusable-activity catalog. Defaults to 'default'. Must match the workflows-design lane's target, because the two share one design-operation ledger.",
+        Description = "The Groundwork target holding the reusable-activity catalog. Defaults to 'default'. Independent of the workflows-design lane's target; each catalog owns its own operation ledger.",
         Category = "Persistence")]
     public string? Target { get; set; }
 

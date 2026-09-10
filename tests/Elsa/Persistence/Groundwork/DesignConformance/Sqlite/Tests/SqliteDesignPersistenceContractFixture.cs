@@ -34,8 +34,8 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-// These fixtures sit between the design lane and the v1 querying lane, which still declare
-// same-named atomic-write types. The design lane is the one under test here.
+// Activities and Workflows Groundwork each declare a public IDesignAtomicWriter (and related
+// DTOs) in their own namespace. The workflow-design lane is the one under test here.
 using IDesignAtomicWriter = Elsa.Workflows.Design.Persistence.Groundwork.IDesignAtomicWriter;
 using GroundworkDesignAtomicWriteRequest = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignAtomicWriteRequest;
 using GroundworkDesignOperationIdentity = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignOperationIdentity;

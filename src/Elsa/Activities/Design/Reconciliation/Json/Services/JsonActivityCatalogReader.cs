@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Elsa.Activities.Design.Reconciliation.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Json.Contracts;
 using Elsa.Activities.Design.Reconciliation.Json.Exceptions;
@@ -14,7 +13,7 @@ namespace Elsa.Activities.Design.Reconciliation.Json.Services;
 /// </summary>
 /// <remarks>
 /// Each model's <c>Descriptor</c> is typed <c>object</c>, so the serializer binds it to a
-/// <see cref="JsonElement"/> rather than a concrete descriptor. The reconciling handler persists that
+/// <see cref="System.Text.Json.JsonElement"/> rather than a concrete descriptor. The reconciling handler persists that
 /// opaque payload together with the entry's stable provider and consumer key/schema identities; the
 /// design domain never deserializes it. The JSON file may therefore carry arbitrary provider payload;
 /// the identity fields and <c>descriptor</c> are the structurally meaningful runtime bridge here.
@@ -25,39 +24,12 @@ public sealed class JsonActivityCatalogReader(
 {
     public IReadOnlyList<ActivityVersionReconciliationModel> Read(string filePath, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(filePath))
-            throw new InvalidActivityCatalogJsonException(filePath ?? string.Empty, "no file path was configured.");
-
-        if (!File.Exists(filePath))
-            throw new InvalidActivityCatalogJsonException(filePath, "the file does not exist.");
-
-        string json;
-
-        try
-        {
-            json = File.ReadAllText(filePath);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            throw new InvalidActivityCatalogJsonException(filePath, "the file could not be read.", exception);
-        }
-
-        ActivityVersionReconciliationModel[]? models;
-
-        try
-        {
-            models = payloadSerializer.Deserialize<ActivityVersionReconciliationModel[]>(json);
-        }
-        catch (JsonException exception)
-        {
-            throw new InvalidActivityCatalogJsonException(filePath, "the file is not a valid JSON array of reconciliation models.", exception);
-        }
-
-        if (models is null)
-            throw new InvalidActivityCatalogJsonException(filePath, "the file deserialized to null.");
+        var models = PayloadCatalogFile.ReadArray<ActivityVersionReconciliationModel>(
+            filePath,
+            payloadSerializer,
+            static (path, reason, inner) => new InvalidActivityCatalogJsonException(path, reason, inner));
 
         logger.LogDebug("Read {Count} reconciliation model(s) from JSON catalog '{FilePath}'.", models.Length, filePath);
-
         return models;
     }
 }
