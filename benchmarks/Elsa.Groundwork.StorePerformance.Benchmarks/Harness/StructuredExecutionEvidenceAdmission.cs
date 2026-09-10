@@ -16,7 +16,7 @@ public static partial class DiagnosticsNativePlanContract
             ["sqlite"] = new HashSet<string>(StringComparer.Ordinal)
             {
                 "structured-log-recent", "structured-log-replay", "metrics-by-last-seen", "logs-by-last-seen",
-                "resources-by-last-seen", "resources-by-status", "resources-by-service"
+                "traces-by-last-seen", "resources-by-last-seen", "resources-by-status", "resources-by-service"
             },
             ["postgresql"] = new HashSet<string>(StringComparer.Ordinal)
             {
