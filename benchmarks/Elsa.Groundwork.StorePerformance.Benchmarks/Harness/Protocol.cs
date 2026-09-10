@@ -624,8 +624,10 @@ public static class ArtifactAdmission
                     throw new PerformanceContractException($"Raw provider-plan evidence is missing or does not match its digest for route {route.RouteIdentity}.");
                 ArtifactStore.ValidateRawPlanFile(rawPlanPath);
             }
+            // Every diagnostics route on every provider is admitted from typed evidence; a raw-only route
+            // is not admissible any more (#1594).
             if (diagnosticsWorkload && !typedRoute)
-                DiagnosticsNativePlanContract.ValidateEnvelope(request.Provider, request.Adapter, route, rawPlanPath!);
+                throw new PerformanceContractException($"Diagnostics route '{route.RouteIdentity}' has no typed admission on provider '{request.Provider}'.");
             if (string.Equals(request.Adapter, RuntimeNativePlanContract.GroundworkAdapter, StringComparison.Ordinal) &&
                 workload.Id is (RuntimeBookmarkLookupWorkload.WorkloadId or
                     RuntimeTriggerBindingStimulusLookupWorkload.WorkloadId or
@@ -885,71 +887,13 @@ public static class ArtifactAdmission
     {
         if (!string.Equals(request.Adapter, DiagnosticsNativePlanContract.GroundworkAdapter, StringComparison.Ordinal))
             throw new PerformanceContractException("Only Groundwork may publish provider-native trace-detail constituent evidence.");
-
+        // Trace-detail constituents are admitted from typed Groundwork observations only (#1594).
         foreach (var constituent in constituents)
-        {
-            if (constituent.StructuredEvidence is not null)
-            {
-                DiagnosticsNativePlanContract.ValidateStructuredTraceDetailConstituent(
-                    request.Provider,
-                    request.Adapter,
-                    constituent,
-                    expectedProviderVersion: null);
-                continue;
-            }
-            if (string.IsNullOrWhiteSpace(constituent.RawPlanReference))
-            {
-                DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
-                    request.Provider,
-                    request.Adapter,
-                    constituent,
-                    null);
-                continue;
-            }
-
-            if (!ArtifactStore.SafeRawPlanReference(constituent.RawPlanReference) ||
-                !IsSha256(constituent.RawPlanSha256))
-                throw new PerformanceContractException(
-                    $"Trace-detail constituent '{constituent.RouteIdentity}' has an unsafe or undigested raw-plan reference.");
-            var path = ArtifactStore.RawPlanPath(outputDirectory, constituent.RawPlanReference);
-            if (!File.Exists(path) || ArtifactStore.HashFile(path) != constituent.RawPlanSha256)
-                throw new PerformanceContractException(
-                    $"Raw provider-plan evidence is missing or does not match its digest for trace-detail constituent {constituent.RouteIdentity}.");
-            ArtifactStore.ValidateRawPlanFile(path);
-            DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
+            DiagnosticsNativePlanContract.ValidateStructuredTraceDetailConstituent(
                 request.Provider,
                 request.Adapter,
                 constituent,
-                path);
-
-            var pages = constituent.Pages ?? [];
-            var expectedPageCount = checked((constituent.PublicRowBound + constituent.FiniteLimit - 1) / constituent.FiniteLimit);
-            if (pages.Count != expectedPageCount - 1 ||
-                pages.Select(page => page.PageIndex).SequenceEqual(Enumerable.Range(1, pages.Count)) == false)
-                throw new PerformanceContractException(
-                    $"Trace-detail constituent '{constituent.RouteIdentity}' must retain its initial page and every continuation page exactly once.");
-            foreach (var page in pages)
-            {
-                if (!ArtifactStore.SafeRawPlanReference(page.RawPlanReference) || !IsSha256(page.RawPlanSha256) || string.IsNullOrWhiteSpace(page.CommandText))
-                    throw new PerformanceContractException(
-                        $"Trace-detail constituent '{constituent.RouteIdentity}' has an unsafe, undigested, or empty continuation page artifact.");
-                var pagePath = ArtifactStore.RawPlanPath(outputDirectory, page.RawPlanReference);
-                if (!File.Exists(pagePath) || ArtifactStore.HashFile(pagePath) != page.RawPlanSha256)
-                    throw new PerformanceContractException(
-                        $"Raw provider-plan evidence is missing or does not match its digest for trace-detail page {page.PageIndex} of {constituent.RouteIdentity}.");
-                ArtifactStore.ValidateRawPlanFile(pagePath);
-                DiagnosticsNativePlanContract.ValidateTraceDetailConstituent(
-                    request.Provider,
-                    request.Adapter,
-                    constituent with
-                    {
-                        RawPlanReference = page.RawPlanReference,
-                        RawPlanSha256 = page.RawPlanSha256,
-                        CommandText = page.CommandText
-                    },
-                    pagePath);
-            }
-        }
+                expectedProviderVersion: null);
     }
 
     private static void ValidateSecretConcurrency(
