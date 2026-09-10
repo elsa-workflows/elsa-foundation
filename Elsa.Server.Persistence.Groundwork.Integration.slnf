@@ -29,12 +29,14 @@
       "src/Elsa/Foundation/Identity/Persistence/Groundwork/Elsa.Foundation.Identity.Persistence.Groundwork.csproj",
       "src/Elsa/Locking/Core/Elsa.Locking.Core.csproj",
       "src/Elsa/Mediator/Core/Elsa.Mediator.Core.csproj",
+      "src/Elsa/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
       "src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj",
       "src/Elsa/Pipelines/Core/Elsa.Pipelines.Core.csproj",
       "src/Elsa/Primitives/Hosting/Elsa.Primitives.Hosting.csproj",
       "src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj",
       "src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj",
       "src/Elsa/Secrets/Elsa.Secrets.csproj",
+      "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj",
       "src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj",
       "src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj",
       "src/Elsa/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj",
@@ -69,6 +71,7 @@
       "tests/Elsa/Persistence/Groundwork/PostgreSql/UnifiedHost/Tests/Elsa.Persistence.Groundwork.PostgreSql.UnifiedHost.Tests.csproj",
       "tests/Elsa/Persistence/Groundwork/SqlServer/UnifiedHost/Tests/Elsa.Persistence.Groundwork.SqlServer.UnifiedHost.Tests.csproj",
       "tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj",
+      "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj",
       "tests/Elsa/Secrets/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Secrets.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj",
       "tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests.csproj"
     ]
