@@ -110,7 +110,10 @@ internal static class StructuredEvidenceMapper
         plan.FailureCategory?.ToString(),
         plan.CollectionCommandCount,
         plan.WinningPlan?.Nodes.Select(Map).ToArray(),
-        plan.WinningPlan?.ObservedRootOrder?.ToArray());
+        plan.WinningPlan?.ObservedRootOrder?.ToArray())
+    {
+        WithheldReason = plan.WithheldReason?.ToString()
+    };
 
     private static StructuredPlanNode Map(ProviderPlanNode node) => new(
         node.Id,
