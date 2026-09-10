@@ -11,7 +11,7 @@ public sealed class PayloadCatalogFileTests : IDisposable
     [Fact]
     public void ReadArray_MissingPath_ThrowsFactoryException()
     {
-        var path = Path.Combine(Path.GetTempPath(), "payload-catalog-missing-" + Guid.NewGuid().ToString("N") + ".json");
+        var path = Path.Join(Path.GetTempPath(), "payload-catalog-missing-" + Guid.NewGuid().ToString("N") + ".json");
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
             PayloadCatalogFile.ReadArray<string>(path, new StubSerializer(), Factory));
@@ -69,7 +69,8 @@ public sealed class PayloadCatalogFileTests : IDisposable
 
     private string WriteTemp(string content)
     {
-        var path = Path.Combine(Path.GetTempPath(), "payload-catalog-" + Guid.NewGuid().ToString("N") + ".json");
+        var fileName = "payload-catalog-" + Guid.NewGuid().ToString("N") + ".json";
+        var path = Path.Join(Path.GetTempPath(), fileName);
         File.WriteAllText(path, content);
         _tempFiles.Add(path);
         return path;

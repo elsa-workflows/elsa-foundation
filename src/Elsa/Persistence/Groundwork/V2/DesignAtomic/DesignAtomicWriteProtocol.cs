@@ -148,7 +148,7 @@ public static class DesignAtomicWriteProtocol
         {
             lane.Rollback(scope);
         }
-        catch
+        catch (Exception)
         {
             // Preserve the provider's original failure when rollback itself fails.
         }

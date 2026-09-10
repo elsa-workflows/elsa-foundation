@@ -94,7 +94,7 @@ public sealed class GroundworkDesignAtomicWrite(GroundworkV2ActivityDesignStore 
                     if (winner is not null)
                         return ResolveReconciled(winner, request);
                 }
-                catch
+                catch (Exception)
                 {
                     // Preserve the provider's original failure when reconciliation cannot classify it.
                 }
