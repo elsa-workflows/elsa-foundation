@@ -476,9 +476,9 @@ public static partial class DiagnosticsNativePlanContract
         IReadOnlySet<string> passThrough,
         bool admitted)
     {
-        if (!admitted || merges.Length != 1)
-            throw Reject("An ordered merge of index scans is admitted only for a keyset continuation page, once.");
-        var merge = merges[0];
+        if (!admitted)
+            throw Reject("An ordered merge of index scans is admitted only for a keyset continuation page.");
+        // The planner may nest merges (a merge of merged branches); every merge orders on the route's keys.
         if (access.Length < 2)
             throw Reject("An ordered merge must combine at least two scans of the expected index.");
         foreach (var scan in access)
@@ -491,23 +491,25 @@ public static partial class DiagnosticsNativePlanContract
         }
         foreach (var node in nodes)
         {
-            if (!ReferenceEquals(node, merge) && !AccessOperations.Contains(node.Operation) && !passThrough.Contains(node.Operation))
+            var merge = merges.Contains(node);
+            if (!merge && !AccessOperations.Contains(node.Operation) && !passThrough.Contains(node.Operation))
                 throw Reject($"Structured winning-plan evidence carries unexpected native work '{node.Operation}'.");
             if (node.SortPurpose is not null)
                 throw Reject("An index-search route must not observe a sort purpose.");
+            if (merge)
+                ValidateNativeSortKeys(
+                    node.Details?.NativeSortKeys ?? throw Reject("The ordered merge did not observe its merge keys."),
+                    specification, "Ordered merge");
             if (node.Details is not { } details)
                 continue;
             if (details.Spill?.Spilled == true)
                 throw Reject("Structured winning-plan evidence observed a spill.");
-            if (!ReferenceEquals(node, merge) && details.NativeSortKeys is not null)
+            if (!merge && details.NativeSortKeys is not null)
                 throw Reject("An index-search route must not observe native sort keys.");
             if (string.Equals(details.NativeLimit.Kind, "Explicit", StringComparison.Ordinal) &&
                 details.NativeLimit.Value != nativeFetchLimit)
                 throw Reject("Structured winning-plan evidence observed a native bound other than the route's lookahead limit.");
         }
-        ValidateNativeSortKeys(
-            merge.Details?.NativeSortKeys ?? throw Reject("The ordered merge did not observe its merge keys."),
-            specification, "Ordered merge");
     }
 
     private static PerformanceContractException Reject(string detail) =>

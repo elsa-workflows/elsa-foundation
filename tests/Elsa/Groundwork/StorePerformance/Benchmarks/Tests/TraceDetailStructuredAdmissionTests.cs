@@ -74,6 +74,13 @@ public sealed class TraceDetailStructuredAdmissionTests
         DiagnosticsNativePlanContract.ValidateStructuredTraceDetailConstituent("mongodb", Adapter, Spans("mongodb", mergedPages: true), Version);
     }
 
+    /// <summary>The planner may merge merged branches; every merge orders on the route's keys.</summary>
+    [Fact]
+    public void Continuation_page_may_nest_ordered_merges()
+    {
+        DiagnosticsNativePlanContract.ValidateStructuredTraceDetailConstituent("mongodb", Adapter, Spans("mongodb", mergedPages: true, nestedMerge: true), Version);
+    }
+
     [Fact]
     public void First_page_may_not_be_an_ordered_merge()
     {
@@ -115,7 +122,8 @@ public sealed class TraceDetailStructuredAdmissionTests
         Func<StructuredPredicateFact, StructuredPredicateFact>? rewriteContinuation = null,
         bool rewriteEqualities = false,
         bool mergedPages = false,
-        string[]? mergeKeys = null)
+        string[]? mergeKeys = null,
+        bool nestedMerge = false)
     {
         var specification = DiagnosticsNativePlanContract.TraceDetailConstituents(Adapter)
             .Single(item => item.RouteIdentity == "trace-detail/spans-by-trace-key-start-id");
@@ -130,7 +138,7 @@ public sealed class TraceDetailStructuredAdmissionTests
             Enumerable.Range(1, pages - 1)
                 .Select(page => new DiagnosticsTraceDetailPageEvidence(page, "", "", "")
                 {
-                    StructuredEvidence = Page(provider, specification, route, continuation: true, rewriteContinuation, rewriteEqualities, mergedPages, mergeKeys)
+                    StructuredEvidence = Page(provider, specification, route, continuation: true, rewriteContinuation, rewriteEqualities, mergedPages, mergeKeys, nestedMerge)
                 })
                 .ToArray())
         {
@@ -146,7 +154,8 @@ public sealed class TraceDetailStructuredAdmissionTests
         Func<StructuredPredicateFact, StructuredPredicateFact>? rewriteContinuation,
         bool rewriteEqualities,
         bool merged = false,
-        string[]? mergeKeys = null)
+        string[]? mergeKeys = null,
+        bool nestedMerge = false)
     {
         var ordering = specification.Ordering;
         var scope = provider != "mongodb";
@@ -190,18 +199,28 @@ public sealed class TraceDetailStructuredAdmissionTests
                 [
                     new(0, null, "Limit", null, null, null, null, null),
                     new(1, 0, "Materialize", null, null, null, null, null),
-                    new(2, 1, "MergeOrdered", null, null, null, null, null, new(
-                        (mergeKeys ?? ordering.Select(term => term.Column).ToArray())
-                            .Select(column => DiagnosticsNativePlanContract.IsOrdinalStringOrderColumn(column)
-                                ? new StructuredOrderTerm(column, "Ascending", null, ["PhysicalSearchKey"], "Ordinal")
-                                : new StructuredOrderTerm(column, "Ascending", null, [], "Exact")).ToArray(),
-                        new("Unknown", null), null)),
+                    new(2, 1, "MergeOrdered", null, null, null, null, null, MergeDetails(mergeKeys ?? ordering.Select(term => term.Column).ToArray())),
                     new(3, 2, "Materialize", null, null, null, null, null),
                     new(4, 3, "IndexScan", Target, Index, specification.IndexName, false, null),
-                    new(5, 2, "IndexScan", Target, Index, specification.IndexName, false, null)
+                    nestedMerge
+                        ? new(5, 2, "MergeOrdered", null, null, null, null, null, MergeDetails(ordering.Select(term => term.Column).ToArray()))
+                        : new(5, 2, "IndexScan", Target, Index, specification.IndexName, false, null),
+                    .. nestedMerge
+                        ? new StructuredPlanNode[]
+                        {
+                            new(6, 5, "IndexScan", Target, Index, specification.IndexName, false, null),
+                            new(7, 5, "IndexScan", Target, Index, specification.IndexName, false, null)
+                        }
+                        : []
                 ]
                 : [new(0, null, "IndexSearch", Target, Index, specification.IndexName, false, null)]));
     }
+
+    private static StructuredPlanNodeDetails MergeDetails(string[] columns) => new(
+        columns.Select(column => DiagnosticsNativePlanContract.IsOrdinalStringOrderColumn(column)
+            ? new StructuredOrderTerm(column, "Ascending", null, ["PhysicalSearchKey"], "Ordinal")
+            : new StructuredOrderTerm(column, "Ascending", null, [], "Exact")).ToArray(),
+        new("Unknown", null), null);
 
     private static StructuredExecutionIdentity Identity() => new(
         TypedDiagnosticsEvidence.CaptureId, Guid.Parse("44444444-4444-4444-4444-444444444444"),
