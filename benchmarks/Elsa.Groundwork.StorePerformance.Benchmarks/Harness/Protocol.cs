@@ -894,7 +894,7 @@ public static class ArtifactAdmission
                 request.Provider,
                 request.Adapter,
                 constituent,
-                expectedProviderVersion: null);
+                request.ProviderVersion);
     }
 
     private static void ValidateSecretConcurrency(

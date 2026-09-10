@@ -38,7 +38,7 @@ public static partial class DiagnosticsNativePlanContract
         string provider,
         string adapter,
         DiagnosticsTraceDetailConstituentEvidence constituent,
-        string? expectedProviderVersion)
+        string expectedProviderVersion)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(provider);
         ArgumentException.ThrowIfNullOrWhiteSpace(adapter);
@@ -89,16 +89,24 @@ public static partial class DiagnosticsNativePlanContract
         }
     }
 
-    private static void ValidateObservation(StructuredExecutionEvidence evidence, string operation, string unit, string? expectedProviderVersion)
+    private static void ValidateObservation(
+        string provider,
+        StructuredExecutionEvidence evidence,
+        string operation,
+        string unit,
+        string expectedProviderVersion)
     {
         if (!string.Equals(evidence.Operation, operation, StringComparison.Ordinal) ||
             !string.Equals(evidence.Outcome, "Succeeded", StringComparison.Ordinal) ||
             !string.Equals(evidence.ShapeAvailability, "Collected", StringComparison.Ordinal) ||
             evidence.Target is null || !string.Equals(evidence.Target.LogicalUnitId, unit, StringComparison.Ordinal))
             throw Reject($"Trace-detail evidence is not a collected, succeeded {operation} of '{unit}'.");
-        if (string.IsNullOrWhiteSpace(evidence.Provider))
-            throw Reject("Trace-detail evidence did not identify its provider.");
-        if (expectedProviderVersion is not null && !string.Equals(evidence.ProviderVersion, expectedProviderVersion, StringComparison.Ordinal))
+        // The observation must come from the provider and the exact server version this run measured;
+        // staged evidence from another provider or version is not this run's proof.
+        if (!string.Equals(evidence.Provider, ProviderDisplayName(provider), StringComparison.OrdinalIgnoreCase))
+            throw Reject($"Trace-detail evidence was not observed on {ProviderDisplayName(provider)}.");
+        if (string.IsNullOrWhiteSpace(expectedProviderVersion) ||
+            !string.Equals(evidence.ProviderVersion, expectedProviderVersion, StringComparison.Ordinal))
             throw Reject("Trace-detail evidence did not identify the observed provider version.");
     }
 
@@ -112,9 +120,9 @@ public static partial class DiagnosticsNativePlanContract
         StructuredExecutionEvidence evidence,
         string unit,
         DiagnosticsTraceDetailConstituentSpec specification,
-        string? expectedProviderVersion)
+        string expectedProviderVersion)
     {
-        ValidateObservation(evidence, "PointRead", unit, expectedProviderVersion);
+        ValidateObservation(provider, evidence, "PointRead", unit, expectedProviderVersion);
         var scopePredicate = ExpectedStorageScopePredicate(provider, specification.StorageScopeRequired);
         var expectedBinding = scopePredicate ? "Predicate" : "PhysicalTarget";
         if (!string.Equals(evidence.Target.ScopeBinding, expectedBinding, StringComparison.Ordinal))
@@ -166,9 +174,9 @@ public static partial class DiagnosticsNativePlanContract
         string unit,
         DiagnosticsTraceDetailConstituentSpec specification,
         int pageIndex,
-        string? expectedProviderVersion)
+        string expectedProviderVersion)
     {
-        ValidateObservation(evidence, "BoundedQuery", unit, expectedProviderVersion);
+        ValidateObservation(provider, evidence, "BoundedQuery", unit, expectedProviderVersion);
         var routeSpecification = RouteSpecificationFor(specification);
         var scopePredicate = ExpectedStorageScopePredicate(provider, specification.StorageScopeRequired);
         var nativeFetchLimit = ExpectedNativeFetchLimit(routeSpecification);
@@ -193,13 +201,20 @@ public static partial class DiagnosticsNativePlanContract
     {
         static string BoundOperator(RuntimeNativeOrderTerm term) =>
             term.Direction == RuntimeNativeOrderDirection.Descending ? "UpperBound" : "LowerBound";
+        // A fact on an ordinal identity term must compare strings ordinally; every other term compares
+        // its value exactly. A mismatched type or comparison is a different ordering, not this route's.
+        static bool HasTermSemantics(StructuredPredicateFact fact, RuntimeNativeOrderTerm term) =>
+            IsOrdinalStringOrderColumn(term.Column)
+                ? fact.ValueType == "String" && fact.Comparison == "Ordinal"
+                : fact.Comparison == "Exact";
         static bool IsBound(StructuredPredicateFact fact, RuntimeNativeOrderTerm term) =>
             fact is not null &&
             string.Equals(fact.LogicalColumn, term.Column, StringComparison.Ordinal) &&
             fact.Operator == BoundOperator(term) &&
             fact.BoundInclusivity == "Exclusive" &&
             fact.BindingRole == "Continuation" &&
-            fact.BindingId is not null;
+            fact.BindingId is not null &&
+            HasTermSemantics(fact, term);
         switch (continuation.Form)
         {
             case "Lexicographic":
@@ -211,7 +226,8 @@ public static partial class DiagnosticsNativePlanContract
                     if (branch.Equalities.Count != index ||
                         branch.Equalities.Where((equality, position) => equality is null ||
                             !string.Equals(equality.LogicalColumn, ordering[position].Column, StringComparison.Ordinal) ||
-                            equality.Operator != "Equal" || equality.BindingRole != "Continuation" || equality.BindingId is null).Any() ||
+                            equality.Operator != "Equal" || equality.BindingRole != "Continuation" || equality.BindingId is null ||
+                            !HasTermSemantics(equality, ordering[position])).Any() ||
                         !IsBound(branch.Boundary, ordering[index]))
                         throw Reject($"Trace-detail page {pageIndex} of '{routeIdentity}' continuation branch {index} is not the route's keyset branch.");
                 }
