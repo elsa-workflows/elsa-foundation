@@ -41,6 +41,10 @@ public sealed record SecretDocument(
         JsonSerializer.Deserialize<SecretDocument>(payload, SecretsEfJson.Options)
         ?? throw new InvalidOperationException("Secret document content is invalid.");
 
+    internal static SecretDocument Parse(JsonElement payload) =>
+        payload.Deserialize<SecretDocument>(SecretsEfJson.Options)
+        ?? throw new InvalidOperationException("Secret document content is invalid.");
+
     public string ToPayload() => JsonSerializer.Serialize(this, SecretsEfJson.Options);
 
     public SecretRecord ToRecord(byte[]? concurrencyToken = null) => new()
