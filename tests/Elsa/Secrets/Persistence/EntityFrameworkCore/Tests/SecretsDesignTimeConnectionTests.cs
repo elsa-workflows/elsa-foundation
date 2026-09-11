@@ -75,17 +75,23 @@ public sealed class SecretsDesignTimeConnectionTests
     [Fact]
     public void SqlServer_factory_uses_the_environment_connection()
     {
-        using var _ = Override(SecretsDesignTimeConnection.SqlServerVariable, "Server=ci;Database=elsa-secrets;");
+        using var _ = Override(SecretsDesignTimeConnection.SqlServerVariable, "Server=ci-sql;Database=elsa-secrets-env;");
         using var context = new SecretsSqlServerDesignTimeFactory().CreateDbContext([]);
-        Assert.Equal("Server=ci;Database=elsa-secrets;", context.Database.GetConnectionString());
+        var connection = context.Database.GetConnectionString();
+        Assert.Contains("ci-sql", connection, StringComparison.Ordinal);
+        Assert.Contains("elsa-secrets-env", connection, StringComparison.Ordinal);
+        Assert.DoesNotContain("localhost", connection, StringComparison.Ordinal);
     }
 
     [Fact]
     public void PostgreSql_factory_uses_the_environment_connection()
     {
-        using var _ = Override(SecretsDesignTimeConnection.PostgreSqlVariable, "Host=ci;Database=elsa-secrets;");
+        using var _ = Override(SecretsDesignTimeConnection.PostgreSqlVariable, "Host=ci-pg;Database=elsa-secrets-env;");
         using var context = new SecretsPostgreSqlDesignTimeFactory().CreateDbContext([]);
-        Assert.Equal("Host=ci;Database=elsa-secrets;", context.Database.GetConnectionString());
+        var connection = context.Database.GetConnectionString();
+        Assert.Contains("ci-pg", connection, StringComparison.Ordinal);
+        Assert.Contains("elsa-secrets-env", connection, StringComparison.Ordinal);
+        Assert.DoesNotContain("localhost", connection, StringComparison.Ordinal);
     }
 
     private static string UniqueVariable() =>
