@@ -80,14 +80,14 @@ public sealed class SecretsPersistenceGateOwnershipTests
     [Fact]
     public void Default_workbench_shells_keep_groundwork_secrets()
     {
-        foreach (var relative in new[]
+        foreach (var segments in new[]
                  {
                      "src/Apps/Elsa.Workbench/shells.json",
                      "docker/compose/elsa-workbench.shells.json"
-                 })
+                 }.Select(relative => relative.Split('/')))
         {
             using var document = System.Text.Json.JsonDocument.Parse(
-                File.ReadAllText(RepoPath(relative.Split('/'))),
+                File.ReadAllText(RepoPath(segments)),
                 new System.Text.Json.JsonDocumentOptions
                 {
                     CommentHandling = System.Text.Json.JsonCommentHandling.Skip,

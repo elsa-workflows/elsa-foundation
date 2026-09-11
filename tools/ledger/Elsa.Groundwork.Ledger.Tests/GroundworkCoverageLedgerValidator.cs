@@ -322,9 +322,14 @@ internal sealed class GroundworkCoverageLedgerValidator
         if (relativePath is null)
             return;
 
-        var path = Path.GetFullPath(Path.Combine(
-            _compositionEvidenceRoot,
-            relativePath.Replace('/', Path.DirectorySeparatorChar)));
+        var relativeSegments = relativePath.Replace('/', Path.DirectorySeparatorChar);
+        if (Path.IsPathRooted(relativeSegments))
+        {
+            findings.Add($"composition-conditional: artifact '{relativePath}' is unavailable.");
+            return;
+        }
+
+        var path = Path.GetFullPath(Path.Combine(_compositionEvidenceRoot, relativeSegments));
         var rootPrefix = _compositionEvidenceRoot.EndsWith(Path.DirectorySeparatorChar)
             ? _compositionEvidenceRoot
             : _compositionEvidenceRoot + Path.DirectorySeparatorChar;

@@ -375,7 +375,11 @@ public sealed class GroundworkCoverageLedgerTests
 
         var artifactPath = Path.Combine(
             RepoRoot,
-            "specs/094-harden-groundwork-stores/evidence/composition/host-selection-ef-secrets-pilot.json");
+            "specs",
+            "094-harden-groundwork-stores",
+            "evidence",
+            "composition",
+            "host-selection-ef-secrets-pilot.json");
         var artifact = JsonNode.Parse(File.ReadAllText(artifactPath))!.AsObject();
         var covered = artifact["coveredEntryIds"]!.AsArray().Select(row => row!.GetValue<string>()).ToArray();
         var omitted = artifact["omittedEntryIds"]!.AsArray().Select(row => row!.GetValue<string>()).ToArray();
