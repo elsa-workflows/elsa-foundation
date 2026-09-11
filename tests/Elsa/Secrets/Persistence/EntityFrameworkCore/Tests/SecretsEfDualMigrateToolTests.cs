@@ -119,7 +119,7 @@ public sealed class SecretsEfDualMigrateToolTests
 
         var root = RepoPath();
         if (File.Exists(Path.Join(root, ".tools", "dotnet-ef")))
-            return _dotnetEf = true;
+            return Remember(true);
 
         TryRestoreDotnetTools(root);
         var start = new ProcessStartInfo("dotnet", ["ef", "--version"])
@@ -133,19 +133,25 @@ public sealed class SecretsEfDualMigrateToolTests
         {
             using var process = Process.Start(start);
             if (process is null)
-                return _dotnetEf = false;
+                return Remember(false);
             if (!process.WaitForExit(60_000))
             {
                 try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
-                return _dotnetEf = false;
+                return Remember(false);
             }
 
-            return _dotnetEf = process.ExitCode == 0;
+            return Remember(process.ExitCode == 0);
         }
         catch (Exception)
         {
-            return _dotnetEf = false;
+            return Remember(false);
         }
+    }
+
+    private static bool Remember(bool value)
+    {
+        _dotnetEf = value;
+        return value;
     }
 
     private static void TryRestoreDotnetTools(string root)
