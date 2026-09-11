@@ -26,7 +26,7 @@ This is a point-in-time report from direct repo facts. It is not a constitution 
 
 ## Test Visibility
 
-- Source projects without a direct test-project reference: 6
+- Source projects without a direct test-project reference: 5
 - This is only a visibility signal; tests may cover behavior indirectly through higher-level projects.
 
 ## Spec 006 State
