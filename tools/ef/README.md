@@ -65,7 +65,8 @@ passes that configuration and `--no-build` to each EF command. A caller that has
 the same checkout and configuration may set `ELSA_SECRETS_EF_SKIP_BUILD=1` to avoid competing
 writes to loaded build outputs during a parallel test or CI process. That explicit caller assumes
 responsibility for artifact freshness; clean operator checkouts should keep the default one-build
-safety net.
+safety net. The repository test harness derives the active Debug/Release configuration from its
+assembly and declares the Tooling project as a build dependency before opting into this mode.
 
 `pending` is the CI-safe check for all three providers. The current Build & test job restores
 repository-local tools before build and test; if that job invokes this check, no extra restore is

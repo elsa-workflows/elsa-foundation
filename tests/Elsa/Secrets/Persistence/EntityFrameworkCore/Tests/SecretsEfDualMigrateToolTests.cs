@@ -143,6 +143,84 @@ public sealed class SecretsEfDualMigrateToolTests
         }
     }
 
+    [SkippableTheory]
+    [InlineData(true, true, "local")]
+    [InlineData(false, true, "manifest")]
+    [InlineData(false, false, "global")]
+    public void Ef_tool_resolution_follows_the_documented_precedence(
+        bool hasLocalTool,
+        bool hasManifest,
+        string expectedTool)
+    {
+        Skip.If(OperatingSystem.IsWindows(), "The recording shims require Unix executable permissions.");
+
+        var shimRoot = Path.Join(Path.GetTempPath(), $"elsa-secrets-ef-precedence-{Guid.NewGuid():N}");
+        var isolatedRoot = Path.Join(shimRoot, "repo");
+        var isolatedScriptDirectory = Path.Join(isolatedRoot, "tools", "ef");
+        var recordingLog = Path.Join(shimRoot, "calls.log");
+        Directory.CreateDirectory(isolatedScriptDirectory);
+
+        try
+        {
+            File.Copy(
+                RepoPath("tools", "ef", "secrets-ef-lib.sh"),
+                Path.Join(isolatedScriptDirectory, "secrets-ef-lib.sh"));
+            WriteExecutableShim(isolatedScriptDirectory, "dual-migrate.sh", """
+                #!/usr/bin/env bash
+                set -euo pipefail
+                source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/secrets-ef-lib.sh"
+                secrets_ef_init
+                secrets_ef --version
+                """);
+            WriteExecutableShim(shimRoot, "dotnet", """
+                #!/usr/bin/env bash
+                set -euo pipefail
+                [[ "${1:-}" == "ef" ]] || exit 97
+                printf 'manifest\n' >> "$ELSA_SECRETS_EF_RECORDING_LOG"
+                """);
+            WriteExecutableShim(shimRoot, "dotnet-ef", """
+                #!/usr/bin/env bash
+                set -euo pipefail
+                printf 'global\n' >> "$ELSA_SECRETS_EF_RECORDING_LOG"
+                """);
+
+            if (hasManifest)
+            {
+                var configDirectory = Path.Join(isolatedRoot, ".config");
+                Directory.CreateDirectory(configDirectory);
+                File.WriteAllText(Path.Join(configDirectory, "dotnet-tools.json"), "{}");
+            }
+
+            if (hasLocalTool)
+            {
+                var localToolDirectory = Path.Join(isolatedRoot, ".tools");
+                Directory.CreateDirectory(localToolDirectory);
+                WriteExecutableShim(localToolDirectory, "dotnet-ef", """
+                    #!/usr/bin/env bash
+                    set -euo pipefail
+                    printf 'local\n' >> "$ELSA_SECRETS_EF_RECORDING_LOG"
+                    """);
+            }
+
+            var inheritedPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+            var result = RunDualMigrate(
+                [],
+                extraEnv: new Dictionary<string, string?>
+                {
+                    ["ELSA_SECRETS_EF_RECORDING_LOG"] = recordingLog,
+                    ["PATH"] = $"{shimRoot}{Path.PathSeparator}{inheritedPath}"
+                },
+                rootOverride: isolatedRoot);
+
+            Assert.True(result.ExitCode == 0, result.Describe());
+            Assert.Equal([expectedTool], File.ReadAllLines(recordingLog));
+        }
+        finally
+        {
+            Directory.Delete(shimRoot, recursive: true);
+        }
+    }
+
     [Fact]
     public void Dual_migrate_script_uses_the_module_assembly_nuplane_loads()
     {

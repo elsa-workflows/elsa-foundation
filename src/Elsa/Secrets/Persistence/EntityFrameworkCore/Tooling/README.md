@@ -23,6 +23,8 @@ generation or dual-migrate runs so a stale global tool cannot select a different
 `dual-migrate.sh` builds this tooling project once by default. A parallel CI/test caller that has
 already built the same checkout and configuration may set `ELSA_SECRETS_EF_SKIP_BUILD=1` to avoid
 concurrent writes to loaded outputs; doing so makes that caller responsible for artifact freshness.
+Repository tests pair that mode with an explicit Tooling project build dependency and pass their
+actual assembly configuration to the script.
 
 Equivalent per-context commands:
 

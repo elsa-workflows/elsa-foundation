@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Reflection;
 using System.Text;
 
 namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.Support;
@@ -112,6 +113,10 @@ internal static class DualMigrateProcessRunner
         var environment = extraEnvironment is null
             ? new Dictionary<string, string?>()
             : new Dictionary<string, string?>(extraEnvironment);
+        var configuration = typeof(DualMigrateProcessRunner).Assembly
+                                .GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration
+                            ?? throw new InvalidOperationException("The test assembly does not declare its build configuration.");
+        environment["ELSA_SECRETS_EF_CONFIGURATION"] = configuration;
         environment["ELSA_SECRETS_EF_SKIP_BUILD"] = "1";
         return Run(args, environment);
     }
