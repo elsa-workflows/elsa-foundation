@@ -118,14 +118,14 @@ public sealed class GroundworkSourceActivityPublicationCommand(
                 ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
                 ActivitiesDesignStorageManifest.ActivityDefinitionVersionCollection,
                 commit.CatalogVersion,
-                GroundworkActivitiesDesignDocumentSerialization.Create(payloadSerializer),
+                GroundworkActivitiesDesignDocumentSerialization.Get(payloadSerializer),
                 0));
         }
         else
         {
             var existingVersion = ReadDesign<ActivityDefinitionVersion>(
                 catalogDocument,
-                GroundworkActivitiesDesignDocumentSerialization.Create(payloadSerializer));
+                GroundworkActivitiesDesignDocumentSerialization.Get(payloadSerializer));
             if (!StringComparer.Ordinal.Equals(existingVersion.DefinitionId, commit.CatalogVersion.DefinitionId) ||
                 !StringComparer.Ordinal.Equals(existingVersion.Version, commit.CatalogVersion.Version) ||
                 !StringComparer.Ordinal.Equals(existingVersion.Hash, commit.CatalogVersion.Hash))
@@ -214,7 +214,7 @@ public sealed class GroundworkSourceActivityPublicationCommand(
             return true;
         var current = ReadDesign<ActivityDefinitionVersion>(
             currentDocument,
-            GroundworkActivitiesDesignDocumentSerialization.Create(payloadSerializer));
+            GroundworkActivitiesDesignDocumentSerialization.Get(payloadSerializer));
         return SemVer.TryParse(candidate.Version, out var candidateVersion) &&
                SemVer.TryParse(current.Version, out var currentVersion) &&
                candidateVersion > currentVersion;

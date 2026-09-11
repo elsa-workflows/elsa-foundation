@@ -43,7 +43,7 @@ public sealed class GroundworkAddActivityDefinitionVersionCommand(
 
         var accessContext = accessContextAccessor.Current;
         accessContext.EnsureTenantScope(version.TenantId);
-        var versionJson = GroundworkActivitiesDesignDocumentSerialization.Create(payloadSerializer);
+        var versionJson = GroundworkActivitiesDesignDocumentSerialization.Get(payloadSerializer);
         var requestMaterial = VersionAddRequestMaterial.From(version);
         var lockKey = ActivityDesignPersistenceLockKeys.PublicationDefinitionKey(version.DefinitionId);
         await using var lockHandle = await lockProvider.AcquireLockAsync(
