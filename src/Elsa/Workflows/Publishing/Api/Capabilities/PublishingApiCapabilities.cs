@@ -18,6 +18,8 @@ public static class PublishingApiCapabilities
             new("activity-publication", "design/activities/drafts/{draftId}/publish", templated: true),
             new("activity-publication-receipt", "design/activities/publications/{idempotencyKey}", templated: true),
             new("workflow-publish", "publishing/workflows/{versionId}/publish", templated: true),
+            new("publication-slot-unpublish", "publishing/workflows/{definitionId}/slots/{slotName}", templated: true),
+            new("publication-slot-restore", "publishing/workflows/{definitionId}/slots/{slotName}/restore", templated: true),
             new("publication-record", "publishing/publications/{publicationId}", templated: true),
             new("workflow-executable-export", "publishing/workflows/{versionId}/executable-export", templated: true),
             new("publication-policy", "publishing/workflows/{definitionId}/policy", templated: true),

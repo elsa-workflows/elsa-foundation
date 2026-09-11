@@ -97,11 +97,14 @@ The version route excludes the reserved literal `drafts`, so the two test-run ro
 
 Activation-slot reads are runtime-owned: `GET /runtime/workflows/activation-slots/{definitionId}` and
 `GET /runtime/workflows/activation-slots/{definitionId}/{slotName}` are served by `Elsa.Workflows.Runtime.Api`.
-Publishing keeps the two slot lifecycle commands above, whose responses may include the publication journal view.
-The runtime view is unjoined by design, so a client that needs the design version behind an occupied slot
-resolves the runtime slot first and then, for an entry whose `sourceKind` is publishing, follows its
-`activeActivationId` through `GET publishing/publications/{publicationId}` (the `publication-record` relation).
-An id that names no record answers `404` problem details, so a failed lookup is never read as "no version".
+Publishing keeps the two slot lifecycle commands above, advertised as the `publication-slot-unpublish` and
+`publication-slot-restore` relations so a capability-driven client can still derive their URLs now that the
+`publication-slots` relation those reads used to share is gone. Their responses may include the publication
+journal view. The runtime view is unjoined by design, so a client that needs the design version behind an
+occupied slot resolves the runtime slot first and then, for an entry whose `sourceKind` is publishing, follows
+its `activeActivationId` through `GET publishing/publications/{publicationId}` (the `publication-record`
+relation). An id that names no record answers `404` problem details, so a failed lookup is never read as "no
+version".
 
 Activity publication clients must preflight immediately before publish and submit the returned
 opaque review token, one exact offered version, and a caller-stable idempotency key. Replaying the
