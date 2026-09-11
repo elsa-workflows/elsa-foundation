@@ -17,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\Testing\Elsa.Testing.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj" />
     <ProjectReference Include="../../../../../../../src/Elsa/Workflows/Design/Persistence/Groundwork/Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
@@ -28,7 +29,6 @@
 
   <ItemGroup>
     <Compile Include="../../../UnifiedHost/Tests/FakePayloadSerializer.cs" Link="FakePayloadSerializer.cs" />
-    <Compile Include="../../../UnifiedHost/Tests/FakeSystemClock.cs" Link="FakeSystemClock.cs" />
     <Compile Include="../../../UnifiedHost/Tests/UnifiedGroundworkHostContract.cs" Link="UnifiedGroundworkHostContract.cs" />
   </ItemGroup>
 </Project>

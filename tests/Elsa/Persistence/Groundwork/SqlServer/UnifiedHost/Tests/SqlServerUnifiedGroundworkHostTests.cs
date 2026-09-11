@@ -11,6 +11,7 @@ using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInject
 using Groundwork.SqlServer;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Elsa.Testing;
 
 namespace Elsa.Persistence.Groundwork.SqlServer.UnifiedHost.Tests;
 

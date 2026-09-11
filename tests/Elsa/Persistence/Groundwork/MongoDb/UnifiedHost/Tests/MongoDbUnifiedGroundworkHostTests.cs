@@ -12,6 +12,7 @@ using Groundwork.MongoDb;
 using MongoDB.Driver;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Elsa.Testing;
 
 namespace Elsa.Persistence.Groundwork.MongoDb.UnifiedHost.Tests;
 
