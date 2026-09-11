@@ -3,7 +3,7 @@ using Elsa.Workflows.Runtime.Core.Services.Coalescing;
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
-/// Ambient, explicitly-scoped accessor for the active checkpoint-coalescing session (E3-6, RT-10). Mirrors the
+/// Ambient, explicitly-scoped accessor for the active checkpoint-coalescing session. Mirrors the
 /// push/pop shape of <see cref="IRuntimeExecutionOwnershipContextAccessor"/>: the drain coordinator establishes a
 /// coalescing session for the duration of a drain, and the coalescing store/queue/outbox/state-store decorators
 /// resolve it to redirect reads and writes onto the in-memory working set instead of the durable stores. When no

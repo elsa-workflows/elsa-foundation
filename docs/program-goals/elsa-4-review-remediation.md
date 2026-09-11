@@ -96,7 +96,7 @@ then the W16/W17/W19/W21 parallel wave ([#465](https://github.com/elsa-workflows
   tracing + API error contract. MS-9 introduces the first `ActivitySource` in the repo — an
   `IWorkflowEngineTracer` replacement contract (`Elsa.Workflows.Runtime.Core.Diagnostics`)
   whose allocation-free no-op default (`NullWorkflowEngineTracer`) is swapped by the opt-in
-  `WorkflowsRuntimeTracing` shell feature (`Elsa.Workflows.Runtime.Tracing`) for the real
+  `WorkflowsRuntimeTracing` shell feature (`Elsa.Workflows.Runtime`) for the real
   `ActivitySourceWorkflowEngineTracer`. Four behaviour-preserving span sites on source
   `Elsa.Workflows.Runtime` (drain → dispatch → activity.execute / checkpoint.commit): no new
   awaits in the fenced drain/commit sequences, no W12 slot reordering, tags set only via

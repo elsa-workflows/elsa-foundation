@@ -38,39 +38,10 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     private readonly TimeProvider _timeProvider;
 
     /// <summary>
-    /// Creates the in-memory commit store. RT-8: the seven telescoping constructors collapsed into this single primary
-    /// constructor with every backing store optional. All parameters default to <c>null</c> so both the terse test
-    /// constructions and the DI activation (which injects every registered backing store, unchanged) resolve to the same
-    /// shape — W9's coalescing decorators keep wrapping this registration without modification.
+    /// Creates the in-memory commit store. Every backing store is optional and defaults to <c>null</c>, so terse test
+    /// constructions and the DI activation (which injects every registered backing store) share this one constructor,
+    /// and the coalescing decorators keep wrapping this registration without modification.
     /// </summary>
-    public InMemoryRuntimeCheckpointCommitStore(
-        IWorkflowExecutionStateStore? workflowExecutionStateStore,
-        IActivityExecutionStateStore? activityExecutionStateStore,
-        IBookmarkStateStore? bookmarkStateStore,
-        IDurableValueStateStore? durableValueStateStore,
-        IIncidentStateStore? incidentStateStore,
-        IExecutionLivenessStateStore? operationalStateStore,
-        ISchedulerStateStore? schedulerStateStore,
-        IActivityExecutionInspectionWriter? activityExecutionInspectionWriter,
-        IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager,
-        InMemoryRuntimeCheckpointStoreState? state,
-        TimeProvider? timeProvider)
-        : this(
-            workflowExecutionStateStore,
-            activityExecutionStateStore,
-            bookmarkStateStore,
-            durableValueStateStore,
-            incidentStateStore,
-            operationalStateStore,
-            schedulerStateStore,
-            activityExecutionInspectionWriter,
-            rootWriteLeaseManager,
-            state,
-            timeProvider,
-            workflowDispatchStore: null)
-    {
-    }
-
     public InMemoryRuntimeCheckpointCommitStore(
         IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
         IActivityExecutionStateStore? activityExecutionStateStore = null,
@@ -105,66 +76,6 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         _schedulerWorkQueue = schedulerWorkQueue;
         _alterationStore = alterationStore;
         _timeProvider = timeProvider ?? TimeProvider.System;
-    }
-
-    public InMemoryRuntimeCheckpointCommitStore(
-        IWorkflowExecutionStateStore? workflowExecutionStateStore,
-        IActivityExecutionStateStore? activityExecutionStateStore,
-        IBookmarkStateStore? bookmarkStateStore,
-        IDurableValueStateStore? durableValueStateStore,
-        IIncidentStateStore? incidentStateStore,
-        IExecutionLivenessStateStore? operationalStateStore,
-        ISchedulerStateStore? schedulerStateStore,
-        IActivityExecutionInspectionWriter? activityExecutionInspectionWriter,
-        IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager,
-        InMemoryRuntimeCheckpointStoreState? state,
-        TimeProvider? timeProvider,
-        IActivityScopeCleanupStore? activityScopeCleanupStore,
-        IActivityExecutionHierarchyWriter? activityExecutionHierarchyWriter)
-        : this(
-            workflowExecutionStateStore,
-            activityExecutionStateStore,
-            bookmarkStateStore,
-            durableValueStateStore,
-            incidentStateStore,
-            operationalStateStore,
-            schedulerStateStore,
-            activityExecutionInspectionWriter,
-            rootWriteLeaseManager,
-            state,
-            timeProvider,
-            activityScopeCleanupStore,
-            activityExecutionHierarchyWriter,
-            workflowDispatchStore: null)
-    {
-    }
-
-    public InMemoryRuntimeCheckpointCommitStore(
-        IWorkflowExecutionStateStore? workflowExecutionStateStore,
-        IActivityExecutionStateStore? activityExecutionStateStore,
-        IBookmarkStateStore? bookmarkStateStore,
-        IDurableValueStateStore? durableValueStateStore,
-        IIncidentStateStore? incidentStateStore,
-        IExecutionLivenessStateStore? operationalStateStore,
-        ISchedulerStateStore? schedulerStateStore,
-        IActivityExecutionInspectionWriter? activityExecutionInspectionWriter,
-        IActivityScopeCleanupStore? activityScopeCleanupStore,
-        IActivityExecutionHierarchyWriter? activityExecutionHierarchyWriter)
-        : this(
-            workflowExecutionStateStore,
-            activityExecutionStateStore,
-            bookmarkStateStore,
-            durableValueStateStore,
-            incidentStateStore,
-            operationalStateStore,
-            schedulerStateStore,
-            activityExecutionInspectionWriter,
-            rootWriteLeaseManager: null,
-            state: null,
-            timeProvider: null,
-            activityScopeCleanupStore: activityScopeCleanupStore,
-            activityExecutionHierarchyWriter: activityExecutionHierarchyWriter)
-    {
     }
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
@@ -228,20 +139,14 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ValidateConsumedSchedulerWorkItems(commit);
         ValidateWorkflowExecutionStateChange(commit.StateChanges.WorkflowExecution);
         await ValidateWorkflowTestScopesAsync(commit, cancellationToken);
-        ValidateSchedulerStateChange(commit);
-        ValidateActivityExecutionStateChanges(commit);
-        ValidateActivityExecutionInspectionChanges(commit);
-        ValidateBookmarkStateChanges(commit);
-        ValidateDurableValueStateChanges(commit);
-        await ValidateIncidentStateChangesAsync(commit, cancellationToken);
-        ValidateOperationalStateChanges(commit);
+        await ValidateProjectedStateChangesAsync(commit, cancellationToken);
         await ValidateWorkflowDispatchChangesAsync(commit, cancellationToken);
         await ValidateWorkflowDispatchCancellationsAsync(commit, cancellationToken);
         await ValidateAlterationJobTerminalChangeAsync(commit, cancellationToken);
         await ExecuteWithWorkflowExecutionRootWriteLeaseAsync(commit, async ct =>
         {
             // Fence-checked consume first: a claim-lost outcome throws before any other state is mutated, so a stale
-            // claimant's commit persists nothing (WU-1 / spec 105).
+            // claimant's commit persists nothing (spec 105).
             await ApplyConsumedSchedulerWorkItemsAsync(commit.StateChanges.ConsumedSchedulerWorkItems, ct);
             await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, ct);
             await ApplySchedulerStateChangeAsync(commit.StateChanges.Scheduler, ct);
@@ -629,11 +534,6 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
     internal ValueTask<WorkflowDispatchRedriveResult> RedriveAsync(
         WorkflowDispatchRedriveRequest request,
-        CancellationToken cancellationToken = default)
-        => RedriveAsync(request, accessContext: null, cancellationToken);
-
-    internal ValueTask<WorkflowDispatchRedriveResult> RedriveAsync(
-        WorkflowDispatchRedriveRequest request,
         PersistenceAccessContext? accessContext,
         CancellationToken cancellationToken = default)
     {
@@ -967,117 +867,65 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         }
     }
 
-    private void ValidateSchedulerStateChange(RuntimeCheckpointCommit commit)
-    {
-        if (_schedulerStateStore is null || commit.StateChanges.Scheduler is null)
-            return;
-
-        var stateChange = commit.StateChanges.Scheduler;
-
-        if (stateChange.Operation != RuntimeStateChangeOperation.Upsert)
-            throw new InvalidOperationException($"The in-memory checkpoint commit store can only project scheduler state '{RuntimeStateChangeOperation.Upsert}' changes.");
-
-        if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.WorkflowExecutionId))
-            throw new InvalidOperationException("Scheduler state change StateId must match SchedulerState.WorkflowExecutionId.");
-
-        if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.WorkflowExecutionId))
-            throw new InvalidOperationException("Scheduler state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
-    }
-
-    private void ValidateActivityExecutionStateChanges(RuntimeCheckpointCommit commit)
-    {
-        if (_activityExecutionStateStore is null)
-            return;
-
-        foreach (var stateChange in commit.StateChanges.ActivityExecutions)
-        {
-            if (stateChange.Operation != RuntimeStateChangeOperation.Upsert)
-                throw new InvalidOperationException($"The in-memory checkpoint commit store can only project activity execution state '{RuntimeStateChangeOperation.Upsert}' changes.");
-
-            if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.Execution.ActivityExecutionId))
-                throw new InvalidOperationException("Activity execution state change StateId must match ActivityExecution.ActivityExecutionId.");
-
-            if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.Execution.WorkflowExecutionId))
-                throw new InvalidOperationException("Activity execution state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
-        }
-    }
-
-    private void ValidateActivityExecutionInspectionChanges(RuntimeCheckpointCommit commit)
-    {
-        if (_activityExecutionInspectionWriter is null)
-            return;
-
-        foreach (var stateChange in commit.StateChanges.ActivityExecutionInspections)
-        {
-            if (stateChange.Operation != RuntimeStateChangeOperation.Upsert)
-                throw new InvalidOperationException($"The in-memory checkpoint commit store can only project activity execution inspection '{RuntimeStateChangeOperation.Upsert}' changes.");
-
-            if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.ActivityExecutionId))
-                throw new InvalidOperationException("Activity execution inspection state change StateId must match ActivityExecutionInspectionProjection.ActivityExecutionId.");
-
-            if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.WorkflowExecutionId))
-                throw new InvalidOperationException("Activity execution inspection WorkflowExecutionId must match the checkpoint workflow execution ID.");
-        }
-    }
-
-    private void ValidateBookmarkStateChanges(RuntimeCheckpointCommit commit)
-    {
-        if (_bookmarkStateStore is null)
-            return;
-
-        foreach (var stateChange in commit.StateChanges.Bookmarks)
-        {
-            if (stateChange.Operation is not RuntimeStateChangeOperation.Upsert and not RuntimeStateChangeOperation.Delete)
-                throw new InvalidOperationException($"The in-memory checkpoint commit store can only project bookmark state '{RuntimeStateChangeOperation.Upsert}' or '{RuntimeStateChangeOperation.Delete}' changes.");
-
-            // RuntimeCheckpointStateChangeSet also enforces this; the commit store repeats it to keep the projection boundary self-validating.
-            if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.BookmarkId))
-                throw new InvalidOperationException("Bookmark state change StateId must match BookmarkState.BookmarkId.");
-
-            if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.WorkflowExecutionId))
-                throw new InvalidOperationException("Bookmark state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
-        }
-    }
-
-    private void ValidateDurableValueStateChanges(RuntimeCheckpointCommit commit)
-    {
-        if (_durableValueStateStore is null)
-            return;
-
-        foreach (var stateChange in commit.StateChanges.DurableValues)
-        {
-            if (stateChange.Operation is not RuntimeStateChangeOperation.Upsert and not RuntimeStateChangeOperation.Delete)
-                throw new InvalidOperationException($"The in-memory checkpoint commit store can only project durable value state '{RuntimeStateChangeOperation.Upsert}' or '{RuntimeStateChangeOperation.Delete}' changes.");
-
-            // RuntimeCheckpointStateChangeSet also enforces this; the commit store repeats it to keep the projection boundary self-validating.
-            if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.DurableValueId))
-                throw new InvalidOperationException("Durable value state change StateId must match DurableValueState.DurableValueId.");
-
-            if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.WorkflowExecutionId))
-                throw new InvalidOperationException("Durable value state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
-        }
-    }
-
-    private async ValueTask ValidateIncidentStateChangesAsync(
+    /// <summary>
+    /// Validates the state kinds projected into configured backing stores. A kind whose store is not configured is
+    /// skipped here and ignored by the apply phase.
+    /// </summary>
+    private async ValueTask ValidateProjectedStateChangesAsync(
         RuntimeCheckpointCommit commit,
         CancellationToken cancellationToken)
     {
-        if (_incidentStateStore is null)
-            return;
-
-        foreach (var stateChange in commit.StateChanges.Incidents)
+        var changes = commit.StateChanges;
+        if (_schedulerStateStore is not null && changes.Scheduler is { } scheduler)
         {
-            if (stateChange.Operation is not RuntimeStateChangeOperation.Append and not RuntimeStateChangeOperation.Upsert)
-                throw new InvalidOperationException($"The in-memory checkpoint commit store can only project incident state '{RuntimeStateChangeOperation.Append}' or '{RuntimeStateChangeOperation.Upsert}' changes.");
+            ValidateStateChanges(
+                commit, [scheduler], "Scheduler", "SchedulerState.WorkflowExecutionId",
+                state => state.WorkflowExecutionId, state => state.WorkflowExecutionId,
+                RuntimeStateChangeOperation.Upsert);
+        }
 
-            // RuntimeCheckpointStateChangeSet also enforces this; the commit store repeats it to keep the projection boundary self-validating.
-            if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.IncidentId))
-                throw new InvalidOperationException("Incident state change StateId must match IncidentState.IncidentId.");
+        if (_activityExecutionStateStore is not null)
+        {
+            ValidateStateChanges(
+                commit, changes.ActivityExecutions, "Activity execution", "ActivityExecution.ActivityExecutionId",
+                state => state.Execution.ActivityExecutionId, state => state.Execution.WorkflowExecutionId,
+                RuntimeStateChangeOperation.Upsert);
+        }
 
-            if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.WorkflowExecutionId))
-                throw new InvalidOperationException("Incident state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
+        if (_activityExecutionInspectionWriter is not null)
+        {
+            ValidateStateChanges(
+                commit, changes.ActivityExecutionInspections, "Activity execution inspection", "ActivityExecutionInspectionProjection.ActivityExecutionId",
+                state => state.ActivityExecutionId, state => state.WorkflowExecutionId,
+                RuntimeStateChangeOperation.Upsert);
+        }
 
-            if (stateChange.Operation == RuntimeStateChangeOperation.Upsert)
+        if (_bookmarkStateStore is not null)
+        {
+            ValidateStateChanges(
+                commit, changes.Bookmarks, "Bookmark", "BookmarkState.BookmarkId",
+                state => state.BookmarkId, state => state.WorkflowExecutionId,
+                RuntimeStateChangeOperation.Upsert, RuntimeStateChangeOperation.Delete);
+        }
+
+        if (_durableValueStateStore is not null)
+        {
+            ValidateStateChanges(
+                commit, changes.DurableValues, "Durable value", "DurableValueState.DurableValueId",
+                state => state.DurableValueId, state => state.WorkflowExecutionId,
+                RuntimeStateChangeOperation.Upsert, RuntimeStateChangeOperation.Delete);
+        }
+
+        if (_incidentStateStore is not null)
+        {
+            ValidateStateChanges(
+                commit, changes.Incidents, "Incident", "IncidentState.IncidentId",
+                state => state.IncidentId, state => state.WorkflowExecutionId,
+                RuntimeStateChangeOperation.Append, RuntimeStateChangeOperation.Upsert);
+
+            // Write-once outcomes are checked against the store only after every incident change passed the rules above,
+            // the same order the Groundwork checkpoint writer uses.
+            foreach (var stateChange in changes.Incidents.Where(change => change.Operation == RuntimeStateChangeOperation.Upsert))
             {
                 var existing = await _incidentStateStore.FindAsync(
                     stateChange.State.WorkflowExecutionId,
@@ -1086,30 +934,47 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                 IncidentStateTransitionValidator.EnsureResolutionOutcomeIsWriteOnce(existing, stateChange.State);
             }
         }
+
+        if (_operationalStateStore is not null)
+        {
+            ValidateStateChanges(
+                commit, changes.Operational, "Operational", "ExecutionLivenessState.OperationalStateId",
+                state => state.OperationalStateId, state => state.WorkflowExecutionId,
+                RuntimeStateChangeOperation.Upsert);
+            var ownershipStateId = InMemoryExecutionLivenessStateStore.GetOwnershipStateId(commit.WorkflowExecutionId);
+            if (changes.Operational.Any(stateChange => StringComparer.Ordinal.Equals(stateChange.State.OperationalStateId, ownershipStateId)))
+                throw new InvalidOperationException("Checkpoint operational changes cannot overwrite the reserved execution-ownership state.");
+        }
     }
 
-    private void ValidateOperationalStateChanges(RuntimeCheckpointCommit commit)
+    /// <summary>
+    /// The projection-boundary rules every state kind shares: an allowed operation, a <c>StateId</c> equal to the state's
+    /// own identity, and membership of the checkpoint's workflow execution. <paramref name="kind"/> is the sentence-case
+    /// label the messages are built from, e.g. <c>"Durable value"</c>.
+    /// </summary>
+    private static void ValidateStateChanges<TState>(
+        RuntimeCheckpointCommit commit,
+        IEnumerable<RuntimeStateChange<TState>> stateChanges,
+        string kind,
+        string stateIdMember,
+        Func<TState, string> stateId,
+        Func<TState, string> workflowExecutionId,
+        params RuntimeStateChangeOperation[] allowedOperations)
     {
-        if (_operationalStateStore is null)
-            return;
-
-        foreach (var stateChange in commit.StateChanges.Operational)
+        foreach (var stateChange in stateChanges)
         {
-            if (stateChange.Operation != RuntimeStateChangeOperation.Upsert)
-                throw new InvalidOperationException($"The in-memory checkpoint commit store can only project operational state '{RuntimeStateChangeOperation.Upsert}' changes.");
-
-            // RuntimeCheckpointStateChangeSet also enforces this; the commit store repeats it to keep the projection boundary self-validating.
-            if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.OperationalStateId))
-                throw new InvalidOperationException("Operational state change StateId must match ExecutionLivenessState.OperationalStateId.");
-
-            if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.WorkflowExecutionId))
-                throw new InvalidOperationException("Operational state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
-            if (StringComparer.Ordinal.Equals(
-                    stateChange.State.OperationalStateId,
-                    InMemoryExecutionLivenessStateStore.GetOwnershipStateId(commit.WorkflowExecutionId)))
+            if (!allowedOperations.Contains(stateChange.Operation))
             {
-                throw new InvalidOperationException("Checkpoint operational changes cannot overwrite the reserved execution-ownership state.");
+                var allowed = string.Join(" or ", allowedOperations.Select(operation => $"'{operation}'"));
+                throw new InvalidOperationException($"The in-memory checkpoint commit store can only project {kind.ToLowerInvariant()} state {allowed} changes.");
             }
+
+            // RuntimeCheckpointStateChangeSet also enforces this for its collections; the commit store repeats it to keep the projection boundary self-validating.
+            if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateId(stateChange.State)))
+                throw new InvalidOperationException($"{kind} state change StateId must match {stateIdMember}.");
+
+            if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, workflowExecutionId(stateChange.State)))
+                throw new InvalidOperationException($"{kind} state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
         }
     }
 

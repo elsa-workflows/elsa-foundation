@@ -7,8 +7,8 @@ namespace Elsa.Workflows.Runtime.Distributed;
 /// wire shapes unchanged.
 /// </summary>
 /// <remarks>
-/// The names follow the constitution S=E6 rules: camelCase, no protected-term collisions, stable across the W14 type
-/// renames. Do not change a literal value without a schema version bump and an upcaster, exactly as
+/// The names follow the constitution S=E6 rules: camelCase, no protected-term collisions, stable across
+/// type renames. Do not change a literal value without a schema version bump and an upcaster, exactly as
 /// <c>ElsaRuntimeStorageManifest</c> treats its runtime document kinds.
 /// </remarks>
 public static class DistributedRuntimeStorageManifest
@@ -27,7 +27,7 @@ public static class DistributedRuntimeStorageManifest
     public const string ExecutionCommandTransportDocumentKind = "executionCommandTransport";
 
     /// <summary>
-    /// Durable per-execution placement lease (W27). One document per workflow execution records which node currently
+    /// Durable per-execution placement lease. One document per workflow execution records which node currently
     /// hosts its workflow-execution actor, so placement routing survives node death and a survivor can take over when
     /// the lease expires. The persisted <c>ExecutionPlacementLease</c> shape is frozen by the committed
     /// <c>Fixtures/v1/executionPlacement.json</c> golden fixture (drift-test-protected), exactly as the transport kind

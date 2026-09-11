@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// Resolves provider-owned execution agents. Providers enforce one active mailbox per workflow execution id.
 /// </summary>
 /// <remarks>
-/// This is the enforcement point of the single-writer ownership contract (RT-2): all command dispatch for a workflow
+/// This is the enforcement point of the single-writer ownership contract: all command dispatch for a workflow
 /// execution MUST route through its agent mailbox, which serializes entry so that at most one drain runs per execution
 /// at a time. Downstream components (drainer, scheduler queue, checkpoint committer) rely on this guarantee; the
 /// committer additionally fences checkpoint commits with an execution lease so a superseded writer that bypassed the

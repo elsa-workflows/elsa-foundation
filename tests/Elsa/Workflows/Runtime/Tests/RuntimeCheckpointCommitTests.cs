@@ -613,6 +613,31 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task InMemoryCheckpointCommitStore_RejectsSchedulerStateIdMismatchBeforeRecordingWrite()
+    {
+        // RuntimeCheckpointStateChangeSet validates StateId only for its collections, so this is the one kind where the
+        // store's own StateId rule is the only guard.
+        var schedulerStateStore = new InMemorySchedulerStateStore();
+        var writer = new InMemoryRuntimeCheckpointCommitStore(schedulerStateStore: schedulerStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.ActivityScheduled) with
+        {
+            StateChanges = NewStateChanges(
+                schedulerStateChange: new RuntimeStateChange<SchedulerState>(
+                    StateId: "wfexec-2",
+                    Operation: RuntimeStateChangeOperation.Upsert,
+                    State: _schedulerState,
+                    Metadata: new Dictionary<string, string>()))
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
+
+        Assert.Contains("SchedulerState.WorkflowExecutionId", exception.Message);
+        Assert.Empty(writer.ListCommits());
+        Assert.Empty(await schedulerStateStore.ListAsync());
+    }
+
+    [Fact]
     public async Task InMemoryCheckpointCommitStore_DoesNotProjectConflictingSchedulerReplay()
     {
         var schedulerStateStore = new InMemorySchedulerStateStore();
@@ -683,6 +708,28 @@ public sealed class RuntimeCheckpointCommitTests
         Assert.Contains("Upsert", exception.Message);
         Assert.Empty(writer.ListCommits());
         Assert.Empty(await activityStateStore.ListAllAsync("wfexec-1"));
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointCommitStore_RejectsActivityStateFromDifferentWorkflowBeforeRecordingWrite()
+    {
+        var activityStateStore = new InMemoryActivityExecutionStateStore();
+        var writer = new InMemoryRuntimeCheckpointCommitStore(activityExecutionStateStore: activityStateStore);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.ActivityStarted) with
+        {
+            StateChanges = NewStateChanges(activityState: _activityState with
+            {
+                Execution = _activityState.Execution with { WorkflowExecutionId = "wfexec-2" }
+            })
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
+
+        Assert.Contains("WorkflowExecutionId", exception.Message);
+        Assert.Empty(writer.ListCommits());
+        Assert.Empty(await activityStateStore.ListAllAsync("wfexec-1"));
+        Assert.Empty(await activityStateStore.ListAllAsync("wfexec-2"));
     }
 
     [Fact]

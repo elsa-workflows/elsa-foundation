@@ -3,7 +3,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
-/// Describes the stimuli a start-trigger activity reacts to, at publish time (W7, E3-1). One provider is
+/// Describes the stimuli a start-trigger activity reacts to, at publish time. One provider is
 /// registered per trigger activity type (e.g. the event/signal trigger); the trigger extractor asks each
 /// provider to describe a node it recognizes. A provider returns
 /// <see cref="ActivityTriggerStimulusResult.NotRecognized"/> for an activity type it does not own — the

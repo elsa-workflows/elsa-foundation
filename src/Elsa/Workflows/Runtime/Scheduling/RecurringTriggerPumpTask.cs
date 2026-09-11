@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Workflows.Runtime.Scheduling;
 
 /// <summary>
-/// Recurring background pump that fires due <see cref="RecurringTriggerSchedule"/>s (W16). Each tick runs one
+/// Recurring background pump that fires due <see cref="RecurringTriggerSchedule"/>s. Each tick runs one
 /// bounded sweep: it loads at most <see cref="RecurringTriggerPumpOptions.MaxSchedulesPerTick"/> due schedules
 /// and, for each, dispatches the schedule's start stimulus through <see cref="IStimulusRouter"/> in
 /// <see cref="StimulusRoutingMode.StartOnly"/> mode — starting a new workflow instance with no execution id,
@@ -34,10 +34,10 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// occurrence strictly after <i>now</i> (via <see cref="IRecurringScheduleCalculator"/>) and fires exactly once.
 /// </para>
 /// <para>
-/// <b>Claim-first (single fire, W20-ready).</b> The cursor is advanced through the store's compare-and-swap
+/// <b>Claim-first (single fire).</b> The cursor is advanced through the store's compare-and-swap
 /// (<see cref="IRecurringTriggerScheduleStore.TryAdvanceAsync"/>) <i>before</i> the start is dispatched, so at
 /// most one worker fires a given occurrence even if several sweep concurrently — the single-node realization of
-/// the cluster-safe claim a future distributed store (W20) keeps. A crash between the claim and the dispatch
+/// the cluster-safe claim a future distributed store keeps. A crash between the claim and the dispatch
 /// loses that one fire, which is the accepted at-most-once trade: the next occurrence still fires, and the
 /// backlog is never replayed.
 /// </para>

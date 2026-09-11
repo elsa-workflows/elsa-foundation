@@ -56,7 +56,7 @@ public sealed class BlockingIncidentWorkflowFaultObserverTests
         await harness.SaveBlockingIncident(new IncidentResolutionOutcome(
             IncidentResolutionActionKinds.WaitForIntervention,
             _now,
-            strategy: new Elsa.Workflows.Primitives.Models.IncidentStrategyReference("Fault", "1"),
+            strategy: new Elsa.Primitives.Models.IncidentStrategyReference("Fault", "1"),
             systemSource: null));
 
         await harness.Observer.OnDrainedAsync(harness.Envelope, harness.DrainResult);

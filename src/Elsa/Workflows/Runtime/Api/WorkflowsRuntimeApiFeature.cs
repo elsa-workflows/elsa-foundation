@@ -55,7 +55,7 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature
     public virtual void ConfigureServices(IServiceCollection services)
     {
         services.AddElsaEndpoints();
-        // The runtime execution spine is host-agnostic (RT-4): it is composed here so the API endpoints can drive it,
+        // The runtime execution spine is host-agnostic: it is composed here so the API endpoints can drive it,
         // but a non-HTTP host (worker, test harness, another module) can compose the same runtime via
         // AddWorkflowRuntime() without this API feature. See RuntimeCoreServiceCollectionExtensions.
         services.AddWorkflowRuntime();

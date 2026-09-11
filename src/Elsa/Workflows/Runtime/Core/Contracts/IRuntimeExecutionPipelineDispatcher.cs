@@ -13,7 +13,7 @@ public interface IRuntimeExecutionPipelineDispatcher
     /// Selects the pipeline for <paramref name="workItem"/>, builds its context, and invokes the pipeline around
     /// <c>() => handler.HandleAsync(workItem, cancellationToken)</c>. The optional <paramref name="ambientServices"/>
     /// (the drain's workflow-scoped provider) is staged on the dispatch workspace so slot-invoked handlers read it
-    /// explicitly instead of via an AsyncLocal service locator (RT-7).
+    /// explicitly instead of via an AsyncLocal service locator.
     /// </summary>
     ValueTask DispatchAsync(
         RuntimeSchedulerWorkItem workItem,

@@ -73,7 +73,7 @@ public interface IWorkflowSchedulerWorkQueue
 
     /// <summary>
     /// Fence-checked consumption used to fold a claimed work item's deletion into a checkpoint commit's unit-of-work
-    /// (WU-1 / spec 105). Deletes the item only while its current claim owner and fencing token match
+    /// (spec 105). Deletes the item only while its current claim owner and fencing token match
     /// <paramref name="consumed"/> (renewal-stable fence). Returns <see cref="RuntimeSchedulerWorkClaimTransitionStatus.Succeeded"/>
     /// when the item is deleted, <see cref="RuntimeSchedulerWorkClaimTransitionStatus.AlreadyApplied"/> when it is already
     /// gone under this exact claim (idempotent replay), and <see cref="RuntimeSchedulerWorkClaimTransitionStatus.Stale"/>

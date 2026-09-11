@@ -126,38 +126,31 @@ public sealed class RuntimeActivityExecutionInspectionTests
     {
         var store = new InMemoryActivityExecutionInspectionStore();
         var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, null, null, null, store);
-        var projection = Projection("wf-1", "ae-1", "authored-a", sequence: 1);
-        var commit = new RuntimeCheckpointCommit(
-            CommitId: "commit-1",
-            Checkpoint: new RuntimeCheckpoint(
-                CheckpointId: "checkpoint-1",
-                Name: "ActivityStarted",
-                WorkflowExecutionId: "wf-1",
-                OccurredAt: DateTimeOffset.UnixEpoch,
-                ActivityExecutionIds: ["ae-1"],
-                Metadata: new Dictionary<string, string>()),
-            StateChanges: new RuntimeCheckpointStateChangeSet(
-                workflowExecution: null,
-                scheduler: null,
-                activityExecutions: [],
-                bookmarks: [],
-                durableValues: [],
-                incidents: [],
-                operational: [],
-                activityExecutionInspections:
-                [
-                    new RuntimeStateChange<ActivityExecutionInspectionProjection>(
-                        StateId: "ae-1",
-                        Operation: RuntimeStateChangeOperation.Upsert,
-                        State: projection,
-                        Metadata: new Dictionary<string, string>())
-                ]),
-            PostCommitIntents: [],
-            Metadata: new Dictionary<string, string>());
+        var commit = InspectionCommit(RuntimeStateChangeOperation.Upsert, Projection("wf-1", "ae-1", "authored-a", sequence: 1));
 
         await writer.CommitAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
 
         Assert.NotNull(await store.FindAsync("wf-1", "ae-1"));
+    }
+
+    [Theory]
+    [InlineData(RuntimeStateChangeOperation.Delete, "wf-1", "Upsert")]
+    [InlineData(RuntimeStateChangeOperation.Upsert, "wf-2", "WorkflowExecutionId")]
+    public async Task CheckpointWriter_Rejects_Invalid_ActivityExecutionInspection_Before_Writing(
+        RuntimeStateChangeOperation operation,
+        string projectionWorkflowExecutionId,
+        string expectedMessageFragment)
+    {
+        var store = new InMemoryActivityExecutionInspectionStore();
+        var writer = new InMemoryRuntimeCheckpointCommitStore(activityExecutionInspectionWriter: store);
+        var commit = InspectionCommit(operation, Projection(projectionWorkflowExecutionId, "ae-1", "authored-a", sequence: 1));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            writer.CommitAsync(commit, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
+
+        Assert.Contains(expectedMessageFragment, exception.Message);
+        Assert.Null(await store.FindAsync(projectionWorkflowExecutionId, "ae-1"));
+        Assert.Empty(writer.ListCommits());
     }
 
     [Theory]
@@ -329,6 +322,37 @@ public sealed class RuntimeActivityExecutionInspectionTests
         Assert.Equal(status, projection.Status);
         Assert.Equal(status.ToString(), view.Status);
     }
+
+    private static RuntimeCheckpointCommit InspectionCommit(
+        RuntimeStateChangeOperation operation,
+        ActivityExecutionInspectionProjection projection) =>
+        new(
+            CommitId: "commit-1",
+            Checkpoint: new RuntimeCheckpoint(
+                CheckpointId: "checkpoint-1",
+                Name: "ActivityStarted",
+                WorkflowExecutionId: "wf-1",
+                OccurredAt: DateTimeOffset.UnixEpoch,
+                ActivityExecutionIds: [projection.ActivityExecutionId],
+                Metadata: new Dictionary<string, string>()),
+            StateChanges: new RuntimeCheckpointStateChangeSet(
+                workflowExecution: null,
+                scheduler: null,
+                activityExecutions: [],
+                bookmarks: [],
+                durableValues: [],
+                incidents: [],
+                operational: [],
+                activityExecutionInspections:
+                [
+                    new RuntimeStateChange<ActivityExecutionInspectionProjection>(
+                        StateId: projection.ActivityExecutionId,
+                        Operation: operation,
+                        State: projection,
+                        Metadata: new Dictionary<string, string>())
+                ]),
+            PostCommitIntents: [],
+            Metadata: new Dictionary<string, string>());
 
     private static ActivityExecutionInspectionProjection Projection(
         string workflowExecutionId,

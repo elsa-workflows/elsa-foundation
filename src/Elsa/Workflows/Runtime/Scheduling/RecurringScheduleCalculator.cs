@@ -6,7 +6,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Scheduling;
 
 /// <summary>
-/// Computes the next occurrence of a <see cref="RecurringTriggerSchedule"/> from its recurrence spec (W16).
+/// Computes the next occurrence of a <see cref="RecurringTriggerSchedule"/> from its recurrence spec.
 /// This is the one place that understands the two <see cref="RecurringScheduleKind"/>s — the schedule indexer
 /// uses it to seed the initial <see cref="RecurringTriggerSchedule.NextOccurrence"/> at publish time, and the
 /// recurring-trigger pump uses it to advance the cursor after a fire.

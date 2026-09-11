@@ -38,7 +38,7 @@ public static class OidcAuthenticationServiceCollectionExtensions
         // present. Without it, bearer-token validation (JwtBearer) remains the default challenge and
         // unauthenticated API calls return 401 as designed. Binding a real provider from shell
         // configuration (so ClientId/Authority arrive without an explicit configure delegate) is
-        // W18 scope, not W4.
+        // out of scope here.
         if (!string.IsNullOrWhiteSpace(options.ClientId))
             authentication.AddOpenIdConnect(options.AuthenticationScheme, _ => { });
 

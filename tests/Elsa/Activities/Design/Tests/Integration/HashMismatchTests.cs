@@ -1,7 +1,7 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
-using Elsa.Activities.Design.Reconciliation.Core;
-using Elsa.Activities.Design.Reconciliation.Core.Models;
+using Elsa.Activities.Design.Core.Reconciliation;
+using Elsa.Activities.Design.Core.Reconciliation.Models;
 using Elsa.Primitives.Enums;
 using Elsa.Primitives.Models;
 using Xunit;

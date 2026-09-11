@@ -1,6 +1,6 @@
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
-using Elsa.Activities.Design.Reconciliation.Core;
+using Elsa.Activities.Design.Core.Reconciliation;
 using Elsa.Samples.Nuplane.Activities.Activities;
 using Elsa.Samples.Nuplane.Activities.Reconciliation;
 using Microsoft.Extensions.DependencyInjection;

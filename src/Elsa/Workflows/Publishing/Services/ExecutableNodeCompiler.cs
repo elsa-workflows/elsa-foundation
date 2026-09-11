@@ -19,7 +19,7 @@ namespace Elsa.Workflows.Publishing.Services;
 
 /// <summary>
 /// Compiles the authored activity tree into the executable node tree and indexes its resume targets.
-/// Extracted from <see cref="WorkflowExecutableCompiler"/> (W30b, #418): the compiler resolves the source and
+/// Extracted from <see cref="WorkflowExecutableCompiler"/> (#418): the compiler resolves the source and
 /// assembles the artifact, while node/child-slot/structure compilation and [ResumeTarget] reflection live here.
 /// Consumes the single-walk <see cref="ActivityTreeProjection"/> so children are never re-projected.
 /// </summary>
@@ -687,7 +687,7 @@ public sealed class ExecutableNodeCompiler(
 
                 ValidateResumeTargetSignature(activityType, method);
 
-                // Node-scoped resume-target ids (lifting the W8 one-instance-per-workflow limit): the map key
+                // Node-scoped resume-target ids (lifting the one-instance-per-workflow limit): the map key
                 // embeds the executable node id, so multiple instances of the same resume-target activity
                 // (e.g. two Delay nodes, or two synthesized BPMN timer catch events) coexist. Activities keep
                 // registering by their local attribute id — the resume resolver falls back to matching

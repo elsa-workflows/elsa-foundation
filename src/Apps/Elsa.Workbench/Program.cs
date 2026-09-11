@@ -42,7 +42,7 @@ using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Locking.FileSystem;
 using Elsa.Mediator;
 using Elsa.Modularity.Api;
-using Elsa.Modularity.Attention;
+using Elsa.Modularity.Api.Attention;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Nuplane.Extensions;
 using Elsa.Modularity.Nuplane.Services;
@@ -93,9 +93,10 @@ ConsoleLogStreamingSetup.InstallConsoleStreamHookIfEnabled(args);
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("shells.json", optional: true, reloadOnChange: true);
 // Environment overlay (e.g. shells.Production.json), layered on top of the dev/demo defaults in shells.json.
-// This keeps `git clone && dotnet run` (Development) working out of the box on in-memory stores + ephemeral
-// keys + a seeded well-known admin, while Production hardens to durable stores, a persistent signing key
-// (secret), and a configured initial admin (password supplied as a secret — never committed).
+// This keeps `git clone && dotnet run` (Development) working out of the box on ephemeral identity keys, committed
+// demo-only runtime keys (the durable runtime refuses ephemeral ones) and a seeded well-known admin, while
+// Production blanks those demo values and hardens to durable identity stores, persistent keys (secrets), and a
+// configured initial admin (password supplied as a secret — never committed).
 builder.Configuration.AddJsonFile($"shells.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true);
 // WebApplication.CreateBuilder adds environment variables before these shell files. Re-add the environment and
 // command-line providers after the shell layers so container environment variables override shells.json, while
@@ -285,7 +286,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             // selector becomes the default authenticate/challenge scheme, so an unauthenticated call is
             // rejected with 401. All of these are enabled in the default shell (see shells.json) with
             // IsDevelopmentOrDemo set for local dev (in-memory stores, ephemeral keys, seeded admin).
-            // W18 note (resolved): the earlier guard kept the token-issuance endpoints out of the default
+            // Note (resolved): the earlier guard kept the token-issuance endpoints out of the default
             // shell because enabling them without an ITokenService would fault endpoint registration. The
             // OpenIddict module now supplies that service, so the fault condition no longer exists and the
             // features are enabled.
@@ -317,7 +318,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(DiagnosticsGroundworkPersistenceFeature).Assembly,
             typeof(OpenTelemetryFeature).Assembly,
 
-            // Engine self-instrumentation (MS-9): puts the WorkflowsRuntimeTracing feature in the catalog so it can be
+            // Engine self-instrumentation: puts the WorkflowsRuntimeTracing feature in the catalog so it can be
             // enabled via shells.json, replacing the no-op tracer with the ActivitySource-backed one. The host-local
             // OpenTelemetryEngineTracingBridge feature (below, in WithHostAssemblies) subscribes that source and forwards
             // the spans into the OpenTelemetry ingestion store so Studio's timing view is populated.

@@ -24,7 +24,7 @@ public sealed class RuntimeActivityInvokeMiddleware(IWorkflowEngineTracer? trace
             // Clear before running so the pipeline terminal can detect a missing Invoke slot (an unconsumed handler).
             context.Workspace.InvokeHandler = null;
 
-            // MS-9: the activity-execution span wraps only the handler invocation and nests under the dispatch span via
+            // The activity-execution span wraps only the handler invocation and nests under the dispatch span via
             // Activity.Current. The InvokeHandler clear above stays before the span starts so terminal-detection is
             // unchanged; null when tracing is inactive.
             using var activity = _tracer.StartActivityExecution(context.WorkItem);

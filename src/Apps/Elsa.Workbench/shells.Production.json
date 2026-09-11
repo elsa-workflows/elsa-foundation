@@ -21,6 +21,9 @@
             "WorkflowAlterationPayloadProtectionKeys": {
               "development-demo-only": ""
             }
+          },
+          "GroundworkWorkflowRuntime": {
+            "RecoveryContinuationSigningKey": ""
           }
         }
       }

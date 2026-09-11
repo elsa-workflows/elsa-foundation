@@ -1,4 +1,4 @@
-using Elsa.Activities.Design.Reconciliation.Core;
+using Elsa.Activities.Design.Core.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Json;
 using Elsa.Activities.Design.Reconciliation.Json.Options;
 using Microsoft.Extensions.DependencyInjection;

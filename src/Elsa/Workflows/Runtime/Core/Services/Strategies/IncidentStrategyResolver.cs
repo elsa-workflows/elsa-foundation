@@ -1,4 +1,4 @@
-using Elsa.Workflows.Primitives.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 

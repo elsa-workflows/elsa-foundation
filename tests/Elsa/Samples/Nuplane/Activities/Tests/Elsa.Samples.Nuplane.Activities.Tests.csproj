@@ -11,7 +11,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\samples\Elsa.Samples.Nuplane.Activities\Elsa.Samples.Nuplane.Activities.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Activities\Design\Reconciliation\Core\Elsa.Activities.Design.Reconciliation.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
   </ItemGroup>
 

@@ -1,8 +1,8 @@
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// The recurring-start schedule a Timer/Cron start-trigger activity node declares, described at publish time
-/// (W16). A recurring-schedule provider reads the published node's literal inputs and returns this descriptor;
+/// The recurring-start schedule a Timer/Cron start-trigger activity node declares, described at publish time.
+/// A recurring-schedule provider reads the published node's literal inputs and returns this descriptor;
 /// the schedule indexer turns it into a durable <see cref="RecurringTriggerSchedule"/> (computing the initial
 /// <see cref="RecurringTriggerSchedule.NextOccurrence"/> from the recurrence spec).
 /// </summary>

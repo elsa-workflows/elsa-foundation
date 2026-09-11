@@ -18,7 +18,7 @@
     <ProjectReference Include="..\..\..\..\Elsa\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Elsa\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\..\Elsa\Foundation\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
-    <ProjectReference Include="..\..\..\..\Elsa\Activities\Design\Reconciliation\Core\Elsa.Activities.Design.Reconciliation.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Elsa\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Elsa\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\..\Models\Elsa3.Models.csproj" />
     <ProjectReference Include="..\..\..\..\Elsa\Serialization\Core\Elsa.Serialization.Core.csproj" />

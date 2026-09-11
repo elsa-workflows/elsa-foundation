@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Publishing.Services;
 /// <summary>
 /// Walks an authored activity tree exactly once, capturing every node in traversal order together with a
 /// memoized child projection per node, and validates structural invariants. Extracted from
-/// <see cref="WorkflowExecutableCompiler"/> (W30b, #418) to eliminate the previous double traversal: the
+/// <see cref="WorkflowExecutableCompiler"/> (#418) to eliminate the previous double traversal: the
 /// compiler used to project children once while flattening and again while compiling each node.
 /// </summary>
 public sealed class ActivityTreeProjector(IActivityStructureService activityStructureService)

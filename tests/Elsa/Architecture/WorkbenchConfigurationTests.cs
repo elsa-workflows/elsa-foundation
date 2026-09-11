@@ -20,32 +20,30 @@ public sealed class WorkbenchConfigurationTests
         Assert.True(commandLine > environmentVariables, "Command-line arguments must retain precedence over environment variables.");
     }
 
-    [Fact]
-    public void Production_shell_overlay_clears_the_committed_development_admin_password()
+    [Theory]
+    [InlineData("FoundationIdentityAspNetCoreIdentityGroundwork:SeedAdminPassword")]
+    [InlineData("GroundworkWorkflowRuntime:RecoveryContinuationSigningKey")]
+    public void Production_shell_overlay_clears_a_committed_development_secret(string featureSetting)
     {
-        var workbenchDirectory = Path.Join(RepoRoot, "src", "Apps", "Elsa.Workbench");
-        const string passwordPath =
-            "CShells:Shells:default:Features:FoundationIdentityAspNetCoreIdentityGroundwork:SeedAdminPassword";
+        var path = $"CShells:Shells:default:Features:{featureSetting}";
 
-        var productionConfiguration = new ConfigurationBuilder()
-            .SetBasePath(workbenchDirectory)
-            .AddJsonFile("shells.json")
-            .AddJsonFile("shells.Production.json")
-            .Build();
+        Assert.False(string.IsNullOrEmpty(BuildShellConfiguration()[path]), "shells.json must carry the development value.");
+        Assert.True(string.IsNullOrEmpty(BuildShellConfiguration("shells.Production.json")[path]));
+        Assert.Equal(
+            "environment-override",
+            BuildShellConfiguration("shells.Production.json", new() { [path] = "environment-override" })[path]);
+    }
 
-        Assert.True(string.IsNullOrEmpty(productionConfiguration[passwordPath]));
-
-        var environmentOverride = new ConfigurationBuilder()
-            .SetBasePath(workbenchDirectory)
-            .AddJsonFile("shells.json")
-            .AddJsonFile("shells.Production.json")
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                [passwordPath] = "environment-override"
-            })
-            .Build();
-
-        Assert.Equal("environment-override", environmentOverride[passwordPath]);
+    private static IConfiguration BuildShellConfiguration(
+        string? overlay = null,
+        Dictionary<string, string?>? environment = null)
+    {
+        var builder = new ConfigurationBuilder()
+            .SetBasePath(Path.Join(RepoRoot, "src", "Apps", "Elsa.Workbench"))
+            .AddJsonFile("shells.json");
+        if (overlay is not null)
+            builder.AddJsonFile(overlay);
+        return builder.AddInMemoryCollection(environment ?? []).Build();
     }
 
     private static string RepoRoot { get; } = FindRepoRoot();

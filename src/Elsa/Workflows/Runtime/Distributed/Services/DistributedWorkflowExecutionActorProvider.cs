@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Services;
 /// lease-handover window they transiently can.
 /// </para>
 /// <para>
-/// Fencing is the safety layer, and it is authoritative. Every drain acquires W5's monotonic execution fencing token
+/// Fencing is the safety layer, and it is authoritative. Every drain acquires a monotonic execution fencing token
 /// from the shared liveness store; the checkpoint committer re-checks that token at commit time and rejects any write
 /// whose token is not the highest observed. So even if placement routing is wrong for a window — even if a dead node
 /// resurrects mid-drain and reaches its commit — its stale, lower fencing token is rejected and its writes never land.

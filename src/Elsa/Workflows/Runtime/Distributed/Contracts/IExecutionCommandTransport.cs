@@ -7,14 +7,14 @@ namespace Elsa.Workflows.Runtime.Distributed.Contracts;
 /// Durable cross-node command inbox for workflow executions. When a command arrives on a node that does not own an
 /// execution's placement, it is sent here; the owning node's placement pump leases pending items and dispatches them to
 /// its local in-process actor. This is the routing substrate — it decides <em>where</em> a command runs, not whether a
-/// commit is safe (that is W5's fencing lease, enforced at checkpoint commit).
+/// commit is safe (that is the single-writer fencing lease, enforced at checkpoint commit).
 /// </summary>
 /// <remarks>
 /// Delivery is <b>at-least-once</b>. Dequeue is ack-based, not destructive-before-dispatch: <see cref="LeaseAsync"/>
 /// hides an item behind a visibility lease instead of removing it, and only <see cref="AckAsync"/> removes it after the
 /// owning node has dispatched and durably committed. If a node dies after leasing but before ack, the lease expires and
 /// the item becomes visible again, so the survivor that claims placement re-leases and re-drives it on failover. This
-/// mirrors W2's queue semantics and the ack-based hold-until-commit dequeue recorded in
+/// mirrors the runtime's queue semantics and the ack-based hold-until-commit dequeue recorded in
 /// <c>docs/runtime-durable-resumption.md</c>; the fencing token checked at checkpoint commit is what prevents a
 /// re-driven command from producing a second durable execution.
 /// </remarks>

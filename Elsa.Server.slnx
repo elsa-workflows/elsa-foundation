@@ -77,7 +77,6 @@
   </Folder>
   <Folder Name="/src/Elsa/Activities/Design/Reconciliation/">
     <Project Path="src/Elsa/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj" />
-    <Project Path="src/Elsa/Activities/Design/Reconciliation/Core/Elsa.Activities.Design.Reconciliation.Core.csproj" />
     <Project Path="src/Elsa/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation.csproj" />
     <Project Path="src/Elsa/Activities/Design/Reconciliation/Json/Elsa.Activities.Design.Reconciliation.Json.csproj" />
   </Folder>
@@ -142,7 +141,6 @@
     <Project Path="src/Elsa/Expressions/JavaScript/Core/Elsa.Expressions.JavaScript.Core.csproj" />
     <Project Path="src/Elsa/Expressions/JavaScript/Elsa.Expressions.JavaScript.csproj" />
     <Project Path="src/Elsa/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj" />
-    <Project Path="src/Elsa/Expressions/JavaScript/Primitives/Elsa.Expressions.JavaScript.Primitives.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Expressions/JavaScript/Rendering/">
     <Project Path="src/Elsa/Expressions/JavaScript/Rendering/Core/Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
@@ -179,7 +177,6 @@
     <Project Path="src/Elsa/Mediator/Elsa.Mediator.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Modularity/">
-    <Project Path="src/Elsa/Modularity/Attention/Elsa.Modularity.Attention.csproj" />
     <Project Path="src/Elsa/Modularity/Api/Elsa.Modularity.Api.csproj" />
     <Project Path="src/Elsa/Modularity/Core/Elsa.Modularity.Core.csproj" />
     <Project Path="src/Elsa/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj" />
@@ -206,7 +203,6 @@
     <Project Path="src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Secrets/">
-    <Project Path="src/Elsa/Secrets/Attention/Elsa.Secrets.Attention.csproj" />
     <Project Path="src/Elsa/Secrets/Api/Elsa.Secrets.Api.csproj" />
     <Project Path="src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj" />
     <Project Path="src/Elsa/Secrets/Elsa.Secrets.csproj" />
@@ -233,7 +229,6 @@
   </Folder>
   <Folder Name="/src/Elsa/Workflows/">
     <Project Path="src/Elsa/Workflows/ExecutionEvidence/Elsa.Workflows.ExecutionEvidence.csproj" />
-    <Project Path="src/Elsa/Workflows/Primitives/Elsa.Workflows.Primitives.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Workflows/Dashboard/">
     <Project Path="src/Elsa/Workflows/Dashboard/Elsa.Workflows.Dashboard.csproj" />
@@ -253,7 +248,6 @@
     <Project Path="src/Elsa/Workflows/Design/Persistence/Groundwork/Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Workflows/Design/Reconciliation/">
-    <Project Path="src/Elsa/Workflows/Design/Reconciliation/Core/Elsa.Workflows.Design.Reconciliation.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj" />
     <Project Path="src/Elsa/Workflows/Design/Reconciliation/Git/Elsa.Workflows.Design.Reconciliation.Git.csproj" />
     <Project Path="src/Elsa/Workflows/Design/Reconciliation/Json/Elsa.Workflows.Design.Reconciliation.Json.csproj" />
@@ -272,7 +266,6 @@
   </Folder>
   <Folder Name="/src/Elsa/Workflows/Runtime/">
     <Project Path="src/Elsa/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
-    <Project Path="src/Elsa/Workflows/Runtime/Attention/Elsa.Workflows.Runtime.Attention.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Elsa.Workflows.Runtime.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj" />
@@ -280,7 +273,6 @@
     <Project Path="src/Elsa/Workflows/Runtime/ReferenceGarbageCollection/Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj" />
-    <Project Path="src/Elsa/Workflows/Runtime/Tracing/Elsa.Workflows.Runtime.Tracing.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Workflows/Runtime/Reconciliation/">
     <Project Path="src/Elsa/Workflows/Runtime/Reconciliation/Core/Elsa.Workflows.Runtime.Reconciliation.Core.csproj" />
@@ -453,9 +445,6 @@
   <Folder Name="/tests/Elsa/Modularity/">
     <Project Path="tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj" />
   </Folder>
-  <Folder Name="/tests/Elsa/Modularity/Attention/">
-    <Project Path="tests/Elsa/Modularity/Attention/Tests/Elsa.Modularity.Attention.Tests.csproj" />
-  </Folder>
   <Folder Name="/tests/Elsa/Primitives/">
     <Project Path="tests/Elsa/Primitives/Tests/Elsa.Primitives.Tests.csproj" />
   </Folder>
@@ -533,9 +522,6 @@
   <Folder Name="/tests/Elsa/Secrets/Persistence/Groundwork/V2/ProviderMatrix/">
     <Project Path="tests/Elsa/Secrets/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Secrets.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj" />
   </Folder>
-  <Folder Name="/tests/Elsa/Secrets/Attention/">
-    <Project Path="tests/Elsa/Secrets/Attention/Tests/Elsa.Secrets.Attention.Tests.csproj" />
-  </Folder>
   <Folder Name="/tests/Elsa/Studio/" />
   <Folder Name="/tests/Elsa/Studio/Preferences/">
     <Project Path="tests/Elsa/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj" />
@@ -589,9 +575,6 @@
   <Folder Name="/tests/Elsa/Workflows/Runtime/">
     <Project Path="tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj" />
   </Folder>
-  <Folder Name="/tests/Elsa/Workflows/Runtime/Attention/">
-    <Project Path="tests/Elsa/Workflows/Runtime/Attention/Tests/Elsa.Workflows.Runtime.Attention.Tests.csproj" />
-  </Folder>
   <Folder Name="/tests/Elsa/Workflows/Runtime/Api/">
     <Project Path="tests/Elsa/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj" />
   </Folder>
@@ -614,9 +597,6 @@
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Runtime/Scheduling/">
     <Project Path="tests/Elsa/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Elsa/Workflows/Runtime/Tracing/">
-    <Project Path="tests/Elsa/Workflows/Runtime/Tracing/Tests/Elsa.Workflows.Runtime.Tracing.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa3/" />
   <Folder Name="/tests/Elsa3/Mapping/">

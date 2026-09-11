@@ -34,7 +34,7 @@ namespace Elsa.Workflows.Runtime.Distributed;
 [ShellFeature(
     name: "WorkflowsRuntimeDistributed",
     DisplayName = "Workflows Runtime Distributed",
-    Description = "Clusters the workflow-execution actor subsystem: replaces the in-process actor provider with a distributed one that routes commands by per-execution placement lease and a durable cross-node command transport, and runs a placement pump that renews leases and re-drives backlog on failover. Double execution is prevented by W5's fencing token at checkpoint commit. Compose alongside the Tasks feature.",
+    Description = "Clusters the workflow-execution actor subsystem: replaces the in-process actor provider with a distributed one that routes commands by per-execution placement lease and a durable cross-node command transport, and runs a placement pump that renews leases and re-drives backlog on failover. Double execution is prevented by the single-writer fencing token at checkpoint commit. Compose alongside the Tasks feature.",
     DependsOn = new object[] { "Tasks" })]
 public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
 {

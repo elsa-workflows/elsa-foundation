@@ -25,8 +25,6 @@
       "src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj",
       "src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj",
       "src/Elsa/Tasks/Schedules/Elsa.Tasks.Schedules.csproj",
-      "src/Elsa/Workflows/Primitives/Elsa.Workflows.Primitives.csproj",
-      "src/Elsa/Workflows/Runtime/Attention/Elsa.Workflows.Runtime.Attention.csproj",
       "src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj",
       "src/Elsa/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed.csproj",
       "src/Elsa/Workflows/Runtime/Elsa.Workflows.Runtime.csproj",

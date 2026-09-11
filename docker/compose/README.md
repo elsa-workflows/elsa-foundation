@@ -56,6 +56,7 @@ docker run -d --name elsa-workbench \
   -e ASPNETCORE_ENVIRONMENT=Production \
   -e Elsa__ModuleManagement__ApiKey=elsa-docker-demo-key \
   -e Cors__AllowedOrigins__0=http://localhost:14000 \
+  -e CShells__Shells__default__Features__GroundworkWorkflowRuntime__RecoveryContinuationSigningKey=elsa-docker-demo-recovery-continuation-key \
   -v elsa-workbench-packages:/app/packages \
   elsaworkflows/elsa-workbench:latest
 
@@ -88,7 +89,9 @@ one from its own [Docker Hub tag list](https://hub.docker.com/r/elsaworkflows/el
 Demo credentials and the demo-only warning are the same as the [table in section 4](#4-services-ports-and-demo-credentials).
 
 > ⚠️ `elsa-docker-demo-key` and the wide-open CORS origin are **demo-only** — change the key on both
-> sides and scope CORS before exposing this anywhere.
+> sides and scope CORS before exposing this anywhere. The same goes for the recovery continuation signing
+> key: in `Production` the server's default shell refuses to activate without one (see
+> [`docs/docker.md`](../../docs/docker.md#demo-persistence-composition)).
 
 ---
 
@@ -263,6 +266,13 @@ CShells__Shells__default__Features__GroundworkProviderPostgreSql__ConnectionStri
 Elsa__ModuleManagement__ApiKey=<your-key>
 # elsa-studio
 Studio__BackendModuleManagementApiKey=<your-key>
+```
+
+**Override the recovery continuation signing key** — at least 32 UTF-8 bytes, the same on every
+server node:
+
+```
+CShells__Shells__default__Features__GroundworkWorkflowRuntime__RecoveryContinuationSigningKey=<your-key>
 ```
 
 ---
