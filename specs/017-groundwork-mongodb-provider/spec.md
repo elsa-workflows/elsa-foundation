@@ -4,7 +4,8 @@
 
 **Created**: 2026-06-10
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: #18 (restatused 2026-09-10 from git evidence)
 
 **Input**: User description: "Groundwork G5 MongoDB provider. Add Groundwork.MongoDb provider package that materializes native collections and indexes from Groundwork manifests, implements the portable IDocumentStore contract over MongoDB collections, records schema history, enforces declared unique indexes, rejects undeclared queries, supports optimistic concurrency, and validates behavior with container-backed MongoDB tests."
 

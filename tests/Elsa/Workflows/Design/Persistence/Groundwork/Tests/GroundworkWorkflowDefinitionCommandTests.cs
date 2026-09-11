@@ -21,6 +21,7 @@ using Elsa.Persistence.Groundwork.Composition;
 using Groundwork.Kernel;
 using Groundwork.Store;
 using Xunit;
+using Elsa.Testing;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
 
@@ -837,7 +838,7 @@ public class GroundworkWorkflowDefinitionCommandTests
         var command = new GroundworkSaveWorkflowDefinitionCommand(Storage(), AtomicWrite(), _clock, _accessContext);
         definition.Name = "Updated";
         var createdAt = definition.CreatedAt;
-        _clock.Advance();
+        _clock.Advance(TimeSpan.FromMinutes(1));
 
         await command.Execute(NextKey(), definition, CancellationToken.None);
 
@@ -879,7 +880,7 @@ public class GroundworkWorkflowDefinitionCommandTests
         var promote = PromoteCommand();
         var draft = await DraftStore().FindByWorkflowDefinitionIdAsync("definition-1");
         var versionId = await promote.Execute(NextKey(), draft!.Id, CancellationToken.None);
-        _clock.Advance();
+        _clock.Advance(TimeSpan.FromMinutes(1));
         var secondDraftId = await createDraft.Execute(NextKey(), "definition-1", EmptyState(), cancellationToken: CancellationToken.None);
         var delete = PermanentDeleteCommand();
 
@@ -1008,7 +1009,7 @@ public class GroundworkWorkflowDefinitionCommandTests
     {
         var createDraft = CreateCommand();
         var firstDraftId = await createDraft.Execute(NextKey(), "definition-1", EmptyState(), cancellationToken: CancellationToken.None);
-        _clock.Advance();
+        _clock.Advance(TimeSpan.FromMinutes(1));
         var secondDraftId = await createDraft.Execute(NextKey(), "definition-1", EmptyState(), cancellationToken: CancellationToken.None);
 
         var current = await DraftStore().FindByWorkflowDefinitionIdAsync("definition-1");
@@ -1194,13 +1195,6 @@ public class GroundworkWorkflowDefinitionCommandTests
         public int GenerateCount => Volatile.Read(ref _next);
 
         public string Generate() => $"id-{Interlocked.Increment(ref _next)}";
-    }
-
-    private sealed class FakeSystemClock : ISystemClock
-    {
-        public DateTimeOffset UtcNow { get; private set; } = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
-
-        public void Advance() => UtcNow = UtcNow.AddMinutes(1);
     }
 
     private sealed class InMemoryLockProvider : IDistributedLockProvider

@@ -757,7 +757,7 @@ performance verdict or coverage-ledger row advances.
 Hosted CI initially rejected the checkpoint because the benchmark test project did not follow the
 domain-tree path convention and the EF comparator had been placed in the EF-free Groundwork
 conformance project. The remediation moved protocol tests to
-`tests/Elsa/Groundwork/StorePerformance/Benchmarks/Tests`, moved the EF-vs-Groundwork SQLite
+`tools/ledger/StorePerformance/Benchmarks/Tests` (formerly `tests/Elsa/Groundwork/StorePerformance/Benchmarks/Tests`), moved the EF-vs-Groundwork SQLite
 correctness case into the already-EF-owning Foundation Identity test project, and removed the new EF
 edge from Groundwork conformance. After a forced full restore, the benchmark suite passed 16/16, the
 two SQLite correctness targets passed 2/2, and the project-path, Groundwork EF-free boundary, and
@@ -1427,6 +1427,40 @@ reported one evidence-only P2: adding `IgnoreLeaseOwner` made the committed **17
 and **249/249** complete-project, so this documentation-only disposition records those verified
 counts. No code, workload vector, task, ledger, provider, EF oracle, production registration,
 package, solution, or shell changed in the disposition.
+
+### Secrets conditional-composition Phase 4 closeout
+
+Phase 4 issue #1631 and implementation PR #1646 make the Secrets evidence obligation conditional
+on the persistence feature selected by the host. The canonical ownership and invariants remain in
+the [coverage-ledger contract](contracts/coverage-ledger.md) and
+[storage-composition contract](contracts/storage-composition.md).
+This checkpoint records the acceptance evidence without advancing any Groundwork row or accepting
+ADR 0072.
+
+| Acceptance criterion | Current evidence | Verdict |
+|---|---|---|
+| EF Secrets is independent of Groundwork-only obligations | `host-selection-ef-secrets-pilot.json` covers the other 34 rows and omits only `secrets-repository`; the dedicated `Secrets EF composition` CI job owns the PostgreSQL shell proof outside the Groundwork matrix. | PASS |
+| Groundwork Secrets coverage remains selected and enforced | `host-selection-all35.json` retains `secrets-repository`; the Groundwork native provider job still runs the Secrets SQLite, SQL Server, PostgreSQL, and MongoDB matrix. | PASS |
+| Unrelated Groundwork and runtime obligations remain intact | Schema `maxItems: 1` and the constant `secrets-repository` conditional entry prevent runtime checkpoint, queue, placement, outbox, timer, distributed-lock, diagnostics, IAM, or publishing rows from being called down. | PASS |
+| Architecture, ledger, and documentation explain conditional ownership | Ledger schema/validator gates bind both composition artifacts, owner paths, digests, and payloads; architecture ownership tests reject a broader conditional set and preserve both test families plus the Groundwork-default shell. The current-state contracts describe the 35-row Groundwork composition and 34-row EF alternate. | PASS |
+| Workbench remains Groundwork-default | The default shell continues to select `SecretsGroundworkPersistence`; the post-merge SQLite-default HTTP workflow performance gate is the production-shaped host proof. | PASS |
+| No untested persistence mode is introduced | Registration remains mutually exclusive per shell; the selected family owns its own composition and provider evidence. Exact-head independent/Copilot review and hosted gate links must be recorded on #1631 and its closeout PR. | PR GATE |
+
+The implementation baseline was reverified on `main` SHA
+`6787ec0aa089cba368201c86fdd2fbbcf6ca105e`: [CI](https://github.com/elsa-workflows/elsa-foundation/actions/runs/34615715360),
+[HTTP workflow performance](https://github.com/elsa-workflows/elsa-foundation/actions/runs/34615715347),
+[Maps](https://github.com/elsa-workflows/elsa-foundation/actions/runs/34615714513), and
+[solution filters](https://github.com/elsa-workflows/elsa-foundation/actions/runs/34615714646) all
+passed. Local closeout verification passed architecture **260/260** and the focused EF-selected
+composition filter **7/7**; the linked hosted PostgreSQL job passed the complete project **8/8**.
+Groundwork-selected local SQLite passed **1/1**, while the unavailable local native
+providers were transparently skipped and remain proven by the linked hosted four-provider matrix.
+Map and solution-filter freshness checks also passed. Exact closeout-head review and CI remain PR
+evidence and are not inferred from this baseline record.
+
+The implementation and this closeout do not delete Groundwork Secrets, change Workbench defaults,
+add MongoDB EF, call down Runtime hot-path coverage, or accept the still-proposed ADR 0072. The
+Foundation Host/Nuplane path remains tracked separately by #1644.
 
 ## 8. Readiness audit
 

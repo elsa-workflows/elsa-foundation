@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-post-commit-outbox-recording`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #49, #50 (restatused 2026-09-10 from git evidence)
 **Input**: Continue the Runtime Execution Seam after adding the in-memory post-commit outbox store. The committer should now record committed post-commit intents into the outbox store before immediate dispatch, without implementing a full processor.
 
 ## Scenarios & Tests

@@ -10,6 +10,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.Logging;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
+using Elsa.Testing;
 
 namespace Elsa.Activities.DispatchWorkflow.Tests;
 
@@ -185,7 +187,7 @@ public sealed class WorkflowDispatchDeliveryFailureProjectorTests
         var failing = new RuntimePostCommitOutboxProcessor(
             outbox,
             new StubDispatcher(failure),
-            new FixedTimeProvider(Now.AddSeconds(1)),
+            new FakeTimeProvider(Now.AddSeconds(1)),
             DefaultRuntimeFaultCapturePolicy.CreateDefault(),
             dispatchStore,
             [new WorkflowDispatchDeliveryFailureProjector(dispatchStore)],
@@ -195,7 +197,7 @@ public sealed class WorkflowDispatchDeliveryFailureProjectorTests
         var consuming = new RuntimePostCommitOutboxProcessor(
             outbox,
             new StubDispatcher(),
-            new FixedTimeProvider(Now.AddSeconds(2)),
+            new FakeTimeProvider(Now.AddSeconds(2)),
             DefaultRuntimeFaultCapturePolicy.CreateDefault(),
             dispatchStore,
             logger);
@@ -442,33 +444,4 @@ public sealed class WorkflowDispatchDeliveryFailureProjectorTests
         public ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default) =>
             exception is null ? ValueTask.CompletedTask : ValueTask.FromException(exception);
     }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
-
-    private sealed class RecordingLogger<T> : ILogger<T>
-    {
-        public List<LogEntry> Entries { get; } = [];
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-        public bool IsEnabled(LogLevel logLevel) => true;
-        public void Log<TState>(
-            LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception? exception,
-            Func<TState, Exception?, string> formatter)
-        {
-            var fields = state is IEnumerable<KeyValuePair<string, object?>> structured
-                ? structured.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)
-                : new Dictionary<string, object?> { ["Message"] = formatter(state, exception) };
-            Entries.Add(new LogEntry(eventId, fields, exception));
-        }
-    }
-
-    private sealed record LogEntry(
-        EventId EventId,
-        IReadOnlyDictionary<string, object?> Fields,
-        Exception? Exception);
 }

@@ -32,7 +32,7 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 - **Kind:** Contributor (feature-owned permission contribution to the shared catalog).
 - **Register:** `services.AddPermissionContributor<MyContributor>()` (or `services.TryAddEnumerable(ServiceDescriptor.Singleton<IPermissionContributor, MyContributor>())`).
 - **Consumed by:** `CompositePermissionCatalog`, which canonicalizes keys for lookup while retaining declared spelling and provenance. The default identity permissions are contributed by `DefaultIdentityPermissionCatalog`; canonical duplicates, padded keys, wildcard definitions, and wildcard implication targets fail during catalog construction with both ownership sources in the diagnostic.
-- **Known implementations:** `DefaultIdentityPermissionCatalog` (identity permissions), `ModuleManagementPermissionContributor` (`Elsa.Modularity.Api`), `ExtensionBuilderPermissionContributor` (`Elsa.Modularity.ExtensionBuilder`) — the two host-control features that own `module-management.*` / `extension-builder.*` permissions per ADR 0037 *(cross-domain)*.
+- **Known implementations:** `DefaultIdentityPermissionCatalog` (identity permissions), `ModuleManagementPermissionContributor` (`Elsa.Modularity.Api`) — the host-control feature that owns the `module-management.*` permissions per ADR 0037 *(cross-domain)*.
 
 ### `IPermissionResourceHandler`
 

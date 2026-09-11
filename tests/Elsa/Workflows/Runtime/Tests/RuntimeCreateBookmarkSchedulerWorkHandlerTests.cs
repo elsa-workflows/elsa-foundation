@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Middleware;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
@@ -429,7 +430,7 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
                 checkpointCommitStore ?? _checkpointWriter, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             notifier);
 
     private RuntimeSchedulerWorkItem NewCreateBookmarkWorkItem(
@@ -548,11 +549,6 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
     {
         using var document = JsonDocument.Parse(json);
         return document.RootElement.Clone();
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private sealed class CancelAfterCommitStore(

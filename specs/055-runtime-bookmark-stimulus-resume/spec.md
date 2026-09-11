@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-bookmark-stimulus-resume`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #57, #58 (restatused 2026-09-10 from git evidence)
 **Input**: Continue the Runtime Execution Seam after bookmark state projection and bookmark resume contract. Bookmark state and artifact resume resolution exist, but runtime has no stimulus lookup or dispatch seam that turns a matched bookmark into workflow-agent work.
 
 ## Scenarios & Tests

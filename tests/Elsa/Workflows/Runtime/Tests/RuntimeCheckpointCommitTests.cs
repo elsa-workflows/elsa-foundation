@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
@@ -1156,7 +1157,7 @@ public sealed class RuntimeCheckpointCommitTests
     [Fact]
     public async Task InMemoryCheckpointCommitStore_BlocksSuccessorOwnershipUntilFencedCommitIsRecorded()
     {
-        var clock = new FixedTimeProvider(_now);
+        var clock = new FakeTimeProvider(_now);
         var operationalStateStore = new InMemoryExecutionLivenessStateStore();
         var firstOwner = NewOwnershipService(operationalStateStore, clock, "worker-1");
         var secondOwner = NewOwnershipService(operationalStateStore, clock, "worker-2");
@@ -1189,7 +1190,7 @@ public sealed class RuntimeCheckpointCommitTests
     [Fact]
     public async Task InMemoryCheckpointCommitStore_BlocksDirectOwnershipReplacementUntilFencedCommitIsRecorded()
     {
-        var clock = new FixedTimeProvider(_now);
+        var clock = new FakeTimeProvider(_now);
         var operationalStateStore = new InMemoryExecutionLivenessStateStore();
         var lease = await NewOwnershipService(operationalStateStore, clock, "worker-1")
             .AcquireAsync("wfexec-1");
@@ -1224,7 +1225,7 @@ public sealed class RuntimeCheckpointCommitTests
     [Fact]
     public async Task InMemoryCheckpointCommitStore_RejectsReservedOwnershipProjectionWithoutMutatingLease()
     {
-        var clock = new FixedTimeProvider(_now);
+        var clock = new FakeTimeProvider(_now);
         var operationalStateStore = new InMemoryExecutionLivenessStateStore();
         var lease = await NewOwnershipService(operationalStateStore, clock, "worker-1")
             .AcquireAsync("wfexec-1");
@@ -1720,11 +1721,6 @@ public sealed class RuntimeCheckpointCommitTests
             BookmarkStatePageQuery query,
             CancellationToken cancellationToken = default) =>
             _inner.ListPageAsync(query, cancellationToken);
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private sealed class ThrowingWorkflowExecutionStateStore : IWorkflowExecutionStateStore

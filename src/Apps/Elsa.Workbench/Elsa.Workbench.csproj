@@ -28,10 +28,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Compile Remove="extension-builder\**\*.cs" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<Content Update="shells.baseline.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
@@ -90,6 +86,11 @@
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
 		<ProjectReference Include="..\..\Elsa\Secrets\Persistence\Groundwork\Elsa.Secrets.Persistence.Groundwork.csproj" />
+		<!--
+			Opt-in Secrets EF catalog (pilot #1630). WithHostAssemblies() makes SecretsEntityFrameworkCore
+			enablable via shells.json. Default shells keep SecretsGroundworkPersistence; do not enable both.
+		-->
+		<ProjectReference Include="..\..\Elsa\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="..\..\Elsa\Secrets\Attention\Elsa.Secrets.Attention.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Dashboard\Elsa.Workflows.Dashboard.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\JavaScript\Elsa.Workflows.Design.JavaScript.csproj" />
@@ -114,7 +115,6 @@
 		<ProjectReference Include="..\..\Elsa\Modularity\Api\Elsa.Modularity.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Attention\Elsa.Modularity.Attention.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Core\Elsa.Modularity.Core.csproj" />
-		<ProjectReference Include="..\..\Elsa\Modularity\ExtensionBuilder\Elsa.Modularity.ExtensionBuilder.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Nuplane\Elsa.Modularity.Nuplane.csproj" />
 		<ProjectReference Include="..\..\Elsa\Persistence\Groundwork\V2\Elsa.Persistence.Groundwork.V2.csproj" />
 		<ProjectReference Include="..\..\Elsa\Primitives\Primitives\Elsa.Primitives.csproj" />

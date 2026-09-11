@@ -22,8 +22,9 @@ public sealed class PublishingApiContractCompatibilityTests
     public void Every_contract_type_is_publicly_exported_by_the_api_assembly()
     {
         // T117 moved slot reads to Runtime.Api, retiring the three publishing read contracts while
-        // keeping PublicationSlotView for the unpublish/restore lifecycle commands.
-        Assert.Equal(65, ContractTypes.Length);
+        // keeping PublicationSlotView for the unpublish/restore lifecycle commands. #1625 then added
+        // GetPublicationRecord, the request for the Publishing-owned read of one journal record.
+        Assert.Equal(66, ContractTypes.Length);
 
         var apiAssembly = typeof(WorkflowsPublishingApiFeature).Assembly;
 
@@ -63,12 +64,12 @@ public sealed class PublishingApiContractCompatibilityTests
                                                        type != typeof(RuntimePreflightProblemDetails)).ToArray();
         var legacyHash = PublicShapeHash(legacyTypes);
         Assert.Equal(
-            "c3346b31bcc5fa4fcdf7fe21e409a4d2740f1ec51c08588c04d5e2adbd2e494b",
+            "6da080e5a8c7ca047054a85e33275527d95d5368d602cef2e93bf742e13a2f5d",
             legacyHash);
 
         var actualHash = PublicShapeHash(ContractTypes);
         Assert.True(
-            actualHash == "5e7bcfb8542ce1e17769b8641191371fa204022bd30f03fe6592ec33acf8f5ba",
+            actualHash == "4b611e9a8c350fbd911ea59e396acabf1cd157aca36df1cdef593f99a72ea658",
             $"The Publishing API public-shape hash changed to {actualHash}.");
     }
 

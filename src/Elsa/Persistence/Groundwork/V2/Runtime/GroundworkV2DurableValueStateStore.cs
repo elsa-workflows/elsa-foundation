@@ -14,24 +14,14 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// provider optimistic concurrency. A save conflict is surfaced as a deterministic retryable failure;
 /// delete returns false when the row changed or disappeared before the conditional delete completed.
 /// </remarks>
-public sealed class GroundworkV2DurableValueStateStore : IDurableValueStateStore
+public sealed class GroundworkV2DurableValueStateStore : GroundworkV2RuntimeStoreBase, IDurableValueStateStore
 {
-    private readonly IGroundworkStorageSessionSource sessions;
-    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
-    private readonly string? targetName;
-    private readonly StorageUnit unit;
-
     public GroundworkV2DurableValueStateStore(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,
         string? targetName = null)
+        : base(sessions, accessContextAccessor, targetName, "durable-value state", ElsaRuntimeV2StorageManifest.DurableValueStateDocumentKind)
     {
-        ArgumentNullException.ThrowIfNull(sessions);
-        ArgumentNullException.ThrowIfNull(accessContextAccessor);
-        this.sessions = sessions;
-        this.accessContextAccessor = accessContextAccessor;
-        this.targetName = targetName;
-        unit = sessions.Unit(ElsaRuntimeV2StorageManifest.DurableValueStateDocumentKind, targetName);
     }
 
     public ValueTask<DurableValueState> SaveAsync(
@@ -120,7 +110,7 @@ public sealed class GroundworkV2DurableValueStateStore : IDurableValueStateStore
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var workflow = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField);
         var durableValue = Column(table, ElsaRuntimeV2StorageManifest.DurableValueIdField);
         var request = new QueryRequest(
@@ -136,22 +126,7 @@ public sealed class GroundworkV2DurableValueStateStore : IDurableValueStateStore
             result.NextContinuationToken));
     }
 
-    private IStorageSession Open()
-    {
-        var context = accessContextAccessor.Current;
-        if (context.Scope is null || context.AcrossScopes)
-        {
-            throw new InvalidOperationException(
-                "Groundwork durable-value state requires one explicit persistence scope; global and across-scope access are refused.");
-        }
-
-        return sessions.Open(
-            unit.Id.Value,
-            StorageAccess.Scoped(new StorageScope(context.Scope.Value)),
-            targetName);
-    }
-
-    private static WriteOutcome UpdateExisting(
+    private WriteOutcome UpdateExisting(
         IStorageSession session,
         StorageValues values,
         StoredEntry existing,
@@ -166,18 +141,11 @@ public sealed class GroundworkV2DurableValueStateStore : IDurableValueStateStore
 
         var revision = existing.Version ??
                        throw new InvalidDataException("Groundwork durable-value row did not return an optimistic revision.");
-        if (session is not IConcurrencyStorageSession concurrency)
-            throw new NotSupportedException(
-                "The selected Groundwork provider does not advertise optimistic durable-value concurrency.");
-
-        return concurrency.ConditionalUpsert(values, WriteOptions.IfVersion(revision));
+        return ConditionalUpsert(session, values, revision);
     }
 
     private static DurableValueState Deserialize(IReadOnlyDictionary<string, object?> values) =>
         GroundworkV2DurableValueStorageConventions.Deserialize(values);
-
-    private static bool IsSaved(WriteOutcomeStatus status) =>
-        status is WriteOutcomeStatus.Inserted or WriteOutcomeStatus.Updated or WriteOutcomeStatus.Upserted or WriteOutcomeStatus.Replayed;
 
     private static void ValidateState(DurableValueState state)
     {
@@ -191,31 +159,4 @@ public sealed class GroundworkV2DurableValueStateStore : IDurableValueStateStore
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(durableValueId);
     }
-
-    private static Predicate Equal(ColumnRef column, string value) =>
-        new Predicate.Equal(column, QueryConstant.Of(column, value));
-
-    private ColumnRef Column(TableId table, string name)
-    {
-        var definition = unit.Columns.SingleOrDefault(column =>
-            StringComparer.Ordinal.Equals(column.Name, name))
-            ?? throw new InvalidOperationException(
-                $"Groundwork durable-value unit '{unit.Id.Value}' does not declare query column '{name}'.");
-        var type = definition.Type switch
-        {
-            PortableType.String => QueryType.String,
-            PortableType.DateTimeOffset => QueryType.DateTimeOffset,
-            PortableType.Int32 => QueryType.Int32,
-            PortableType.Int64 => QueryType.Int64,
-            PortableType.Boolean => QueryType.Boolean,
-            _ => throw new InvalidOperationException(
-                $"Groundwork durable-value query column '{name}' has unsupported type '{definition.Type}'.")
-        };
-        return new ColumnRef(table, name, type, definition.IsNullable, definition.MaxLength);
-    }
-
-    private static Paging PagingFor(int limit, string? continuationToken) =>
-        continuationToken is null
-            ? Paging.Keyset(limit)
-            : Paging.Continuation(continuationToken, limit);
 }

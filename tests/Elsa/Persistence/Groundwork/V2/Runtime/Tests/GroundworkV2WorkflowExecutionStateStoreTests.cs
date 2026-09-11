@@ -13,6 +13,7 @@ using Groundwork.SqlServer;
 using Groundwork.Store;
 using Xunit;
 using Xunit.Sdk;
+using Elsa.Persistence.Groundwork.V2.Testing;
 
 namespace Elsa.Persistence.Groundwork.V2.Runtime.Tests;
 
@@ -355,12 +356,6 @@ public sealed class GroundworkV2WorkflowExecutionStateStoreTests
             _ => throw new ArgumentOutOfRangeException(nameof(providerName), providerName, null)
         };
 
-    private sealed class TestAccessContextAccessor(PersistenceAccessContext current)
-        : IPersistenceAccessContextAccessor
-    {
-        public PersistenceAccessContext Current { get; } = current;
-    }
-
     private sealed class DirectSessionSource(IStorageProviderConnection connection, StorageUnit unit)
         : IGroundworkStorageSessionSource
     {
@@ -386,33 +381,6 @@ public sealed class GroundworkV2WorkflowExecutionStateStoreTests
         {
             Assert.Equal(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind, unitId);
             return unit;
-        }
-
-        private sealed class RecordingSession(IStorageSession inner, ICollection<QueryRequest> requests)
-            : SynchronousStorageSessionTestDouble, IStorageSession, IConcurrencyStorageSession
-        {
-            public StorageUnit Unit => inner.Unit;
-            public StorageAccess Access => inner.Access;
-            public StoredEntry? Read(StorageKey key) => inner.Read(key);
-
-            public QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null)
-            {
-                requests.Add(request);
-                return inner.Query(request, options);
-            }
-
-            public AggregationResult Aggregate(AggregationQuery query) => inner.Aggregate(query);
-            public WriteOutcome Insert(StorageValues values, WriteOptions? options = null) => inner.Insert(values, options);
-            public WriteOutcome Update(StorageValues values, WriteOptions? options = null) => inner.Update(values, options);
-            public WriteOutcome Upsert(StorageValues values, WriteOptions? options = null) => inner.Upsert(values, options);
-            public WriteOutcome Delete(StorageKey key, WriteOptions? options = null) => inner.Delete(key, options);
-            public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) =>
-                inner.Append(operationId, values);
-
-            public WriteOutcome ConditionalUpsert(StorageValues values, WriteOptions? options = null) =>
-                inner is IConcurrencyStorageSession concurrency
-                    ? concurrency.ConditionalUpsert(values, options)
-                    : throw new NotSupportedException();
         }
     }
 

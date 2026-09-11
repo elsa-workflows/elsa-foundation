@@ -6,11 +6,11 @@ Status: brainstorm decisions locked for the Runtime Execution Seam discussion. T
 
 Program goal state: [Runtime Execution Seam](../program-goals/runtime-execution-seam.md).
 
-Source evidence: [Elsa Core runtime execution layer analysis](elsa-core-runtime-execution-layer-analysis.md).
+Source evidence: [Elsa Core runtime execution layer analysis](archive/elsa-core-runtime-execution-layer-analysis.md).
 
-Related decisions: [Elsa 4 runtime serialization brainstorm decisions](elsa-4-runtime-serialization-brainstorm-decisions.md).
+Related decisions: [Elsa 4 runtime serialization brainstorm decisions](archive/elsa-4-runtime-serialization-brainstorm-decisions.md).
 
-Addendum queue: [Elsa 4 runtime execution addendum topics](elsa-4-runtime-execution-addendum-topics.md).
+Addendum queue: [Elsa 4 runtime execution addendum topics](archive/elsa-4-runtime-execution-addendum-topics.md).
 
 Parent queue: [Elsa Core runtime broken windows brainstorm](elsa-core-runtime-broken-windows-brainstorm.md).
 
@@ -436,5 +436,5 @@ Elsa 3 live instance state includes object-heavy workflow state, active activity
 
 These decisions should feed the next report/specification layer:
 
-- [Elsa 4 runtime execution actionable plan](elsa-4-runtime-execution-action-plan.md)
+- [Elsa 4 runtime execution actionable plan](archive/elsa-4-runtime-execution-action-plan.md)
 - A later Speckit specification for the executable artifact and first runtime execution slice.

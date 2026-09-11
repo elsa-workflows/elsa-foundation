@@ -8,6 +8,7 @@ using Groundwork.Query.Model;
 using Groundwork.Sqlite;
 using Groundwork.Store;
 using Xunit;
+using Elsa.Persistence.Groundwork.V2.Testing;
 
 namespace Elsa.Persistence.Groundwork.V2.Runtime.Tests;
 
@@ -293,11 +294,6 @@ public sealed class GroundworkV2WorkflowDispatchStoreTests
             Now,
             new Dictionary<string, string> { ["safe-code"] = "dispatch" },
             testScope);
-    }
-
-    private sealed class TestAccessContextAccessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
-    {
-        public PersistenceAccessContext Current { get; } = current;
     }
 
     private sealed class DirectSessionSource(IStorageProviderConnection connection, StorageUnit unit) : IGroundworkStorageSessionSource

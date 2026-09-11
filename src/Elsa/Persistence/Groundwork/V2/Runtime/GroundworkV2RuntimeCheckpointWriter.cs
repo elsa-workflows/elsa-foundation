@@ -18,7 +18,7 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// bridge, open a second transaction for outbox/dispatch state, or provide a migration fallback. The
 /// create-only checkpoint marker is the final staged row and is the durable replay authority.
 /// </remarks>
-public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointCommitStore
+public sealed class GroundworkV2RuntimeCheckpointWriter : GroundworkV2RuntimeStoreBase, IRuntimeCheckpointCommitStore
 {
     private static readonly string[] CommitUnitIds =
     [
@@ -41,10 +41,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         ElsaRuntimeV2StorageManifest.CheckpointCommitDocumentKind
     ];
 
-    private readonly IGroundworkStorageSessionSource sessions;
-    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
     private readonly IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager;
-    private readonly string? targetName;
     private readonly TimeProvider timeProvider;
 
     public GroundworkV2RuntimeCheckpointWriter(
@@ -53,13 +50,9 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         string? targetName = null,
         TimeProvider? timeProvider = null,
         IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager = null)
+        : base(sessions, accessContextAccessor, targetName, "runtime checkpoint", null)
     {
-        ArgumentNullException.ThrowIfNull(sessions);
-        ArgumentNullException.ThrowIfNull(accessContextAccessor);
-        this.sessions = sessions;
-        this.accessContextAccessor = accessContextAccessor;
         this.rootWriteLeaseManager = rootWriteLeaseManager;
-        this.targetName = targetName;
         this.timeProvider = timeProvider ?? TimeProvider.System;
     }
 
@@ -73,13 +66,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         ArgumentException.ThrowIfNullOrWhiteSpace(commit.CommitId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var context = accessContextAccessor.Current ??
-                      throw new InvalidOperationException("Runtime persistence access context is missing.");
-        if (context.Scope is null || context.AcrossScopes)
-        {
-            throw new InvalidOperationException(
-                "Groundwork runtime checkpoints require one explicit persistence scope; global and across-scope access are refused.");
-        }
+        var context = RequireScopedContext();
 
         ValidateCommitBoundary(commit);
         EnsureTenantScope(context, commit);
@@ -130,8 +117,8 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
         string fingerprint,
         CancellationToken cancellationToken)
     {
-        using var unitOfWork = sessions.BeginUnitOfWork(access, BatchWriteOptions.Exact, CommitUnitIds, targetName);
-        var stage = new StageContext(sessions, targetName, unitOfWork, access, commit, fingerprint, cancellationToken, timeProvider);
+        using var unitOfWork = Sessions.BeginUnitOfWork(access, BatchWriteOptions.Exact, CommitUnitIds, TargetName);
+        var stage = new StageContext(Sessions, TargetName, unitOfWork, access, commit, fingerprint, cancellationToken, timeProvider);
         try
         {
             // The fence touch is intentionally the first staged mutation. Every other row, including the marker,
@@ -213,11 +200,11 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
 
     private void RequireCommitCapabilities(RuntimeCheckpointCommit commit)
     {
-        if (sessions is not IGroundworkStorageCapabilitySource capabilitySource)
+        if (Sessions is not IGroundworkStorageCapabilitySource capabilitySource)
             throw new NotSupportedException(
                 "Groundwork runtime checkpoint commits require provider capability evidence.");
 
-        var capabilities = capabilitySource.Capabilities(targetName);
+        var capabilities = capabilitySource.Capabilities(TargetName);
         if (!capabilities.Any(capability => capability.Id.Equals(WellKnownCapabilities.AtomicCommit)))
         {
             throw new NotSupportedException(
@@ -503,7 +490,7 @@ public sealed class GroundworkV2RuntimeCheckpointWriter : IRuntimeCheckpointComm
     /// </summary>
     private StoredEntry? ReadRowSerialized(string unitId, StorageAccess access, string id)
     {
-        var session = sessions.Open(sessions.Unit(unitId, targetName).Id.Value, access, targetName);
+        var session = Sessions.Open(UnitFor(unitId).Id.Value, access, TargetName);
         lock (session)
         {
             return session.Read(GroundworkRuntimeRowStore.Key(id));

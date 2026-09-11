@@ -28,7 +28,7 @@
 - [x] T013 [US3] Assert exact route names/tags, owner, Minimal authoring, security disposition, policies, and schemas in `tests/Elsa/Foundation/Identity/Tests/Api/MinimalIdentityEndpointMetadataTests.cs`.
 - [x] T014 [US3] Add repeated real-surface collectibility cycles for both owners in `tests/Elsa/Architecture/Wave3IdentityMinimalApiCollectibilityTests.cs`.
 - [x] T015 Remove only the nine owner FastEndpoints classes/project references and ratchet `tests/Elsa/Architecture/Baselines/fastendpoints-transition-exceptions.json` from 143/8 to 134/6.
-- [x] T016 Update unified identity-policy documentation in `docs/reference/identity-configuration.md`, `docs/reference/authentication-architecture.md`, and publish `docs/reports/foundation-identity-wave3-minimal-api.md`.
+- [x] T016 Update unified identity-policy documentation in `docs/reference/identity-configuration.md`, `docs/reference/authentication-architecture.md`, and publish `docs/reports/archive/foundation-identity-wave3-minimal-api.md`.
 
 ## Phase 5: Repository Gates
 

@@ -43,7 +43,7 @@ tests/Elsa/Foundation/Identity/Tests/
 ├── Api/TokenEndpointTests.cs
 └── Baselines/identity-*.json
 tests/Elsa/Architecture/Wave3IdentityMinimalApiCollectibilityTests.cs
-docs/reports/foundation-identity-wave3-minimal-api.md
+docs/reports/archive/foundation-identity-wave3-minimal-api.md
 ```
 
 ## Design

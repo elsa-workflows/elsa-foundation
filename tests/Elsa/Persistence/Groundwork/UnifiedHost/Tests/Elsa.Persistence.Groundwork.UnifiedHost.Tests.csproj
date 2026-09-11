@@ -37,6 +37,7 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Publishing\Persistence\Groundwork\Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
 
 </Project>

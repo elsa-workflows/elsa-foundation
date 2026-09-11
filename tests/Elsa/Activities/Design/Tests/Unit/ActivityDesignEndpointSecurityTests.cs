@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Api.Authorization;
 using Elsa.Activities.Design.Tests.Api.Support;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Testing;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -99,11 +100,4 @@ public sealed class ActivityDesignEndpointSecurityTests
         Assert.Single(endpoints, endpoint =>
             endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods is [var method] &&
             new Elsa.Api.Compatibility.Testing.Manifests.EndpointIdentity(endpoint.RoutePattern.RawText!, method) == route.Endpoint);
-
-    private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
-    {
-        public IServiceProvider ServiceProvider { get; } = serviceProvider;
-        public ICollection<EndpointDataSource> DataSources { get; } = [];
-        public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
-    }
 }

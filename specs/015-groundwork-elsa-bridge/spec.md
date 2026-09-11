@@ -4,7 +4,8 @@
 
 **Created**: 2026-06-10
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: #18 (restatused 2026-09-10 from git evidence)
 
 **Input**: User description: "Groundwork Elsa bridge and first opt-in module validation. Add an Elsa.Persistence.Groundwork integration package that can register Groundwork manifests and providers, materialize startup plans through Elsa startup tasks, expose diagnostics for registered manifests/providers/materialization status, and validate a low-risk Secrets-like module manifest through tests without adding Elsa concepts to Groundwork packages."
 

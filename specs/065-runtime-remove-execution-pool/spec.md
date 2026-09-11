@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-remove-execution-pool`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #67, #68 (restatused 2026-09-10 from git evidence)
 **Input**: Continue runtime execution seam cleanup after actor-style execution agents exist. `IWorkflowExecutionPool` is an unused legacy-shaped contract that does not carry pinned executable identity, cancellation, checkpoint semantics, or actor mailbox ownership.
 
 ## Scenarios & Tests

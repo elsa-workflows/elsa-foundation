@@ -4,7 +4,8 @@
 
 **Created**: 2026-06-10
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: #18 (restatused 2026-09-10 from git evidence)
 
 **Input**: User description: "Define the G1 Groundwork core manifest and planner kernel: generic storage manifests, storage units, workload classifications, index declarations, provider capabilities, materialization plans, schema history contracts, relational planning, document planning, and validation tests with no Elsa package references."
 

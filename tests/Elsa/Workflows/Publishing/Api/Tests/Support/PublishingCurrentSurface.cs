@@ -3,7 +3,8 @@ using Elsa.Api.Compatibility.Testing.Manifests;
 namespace Elsa.Workflows.Publishing.Api.Tests.Support;
 
 /// <summary>
-/// The live Publishing route surface after the executable-closure export was added.
+/// The live Publishing route surface after the executable-closure export and the publication-record read
+/// were added.
 /// </summary>
 /// <remarks>
 /// <see cref="PublishingCompatibilityCases.Manifest"/> remains the immutable pre-export corpus. This type
@@ -19,7 +20,14 @@ public static class PublishingCurrentSurface
             "/publishing/workflows/version-route/executable-export",
             "read",
             200,
-            "none")
+            "none"),
+        new PublishingRoute(
+            "Publications.Get",
+            new EndpointIdentity("/publishing/publications/{publicationId}", "GET"),
+            "/publishing/publications/publication-route",
+            "read",
+            200,
+            "GetPublicationRecord")
     ];
 
     public static IReadOnlyList<PublishingRoute> Manifest { get; } =
@@ -33,6 +41,7 @@ public static class PublishingCurrentSurface
         return route.Id switch
         {
             "WorkflowExecutable.Export" => "WorkflowArtifactClosure",
+            "Publications.Get" => "PublicationView",
             _ => route.Response
         };
     }

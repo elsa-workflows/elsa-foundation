@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -213,7 +214,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
                 activityExecutionInspectionWriter: inspectionStore,
                 rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
             var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), CommitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
-            var timeProvider = new FixedTimeProvider(now);
+            var timeProvider = new FakeTimeProvider(now);
             Observer = new PoisonedSchedulerWorkIncidentObserver(PoisonStore, IncidentStore, committer, timeProvider);
             FaultObserver = new BlockingIncidentWorkflowFaultObserver(
                 IncidentStore,
@@ -291,11 +292,6 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
                 sequence: 1,
                 metadata: new Dictionary<string, string>());
         }
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 
     /// <summary>Simulates a projection-column overflow (GW-PHYSICAL-037): every incident write throws.</summary>

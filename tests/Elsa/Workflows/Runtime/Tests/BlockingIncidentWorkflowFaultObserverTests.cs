@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -201,7 +202,7 @@ public sealed class BlockingIncidentWorkflowFaultObserverTests
                 ActivityStore,
                 new RuntimeActivityExecutionInspectionAccumulator(InspectionStore),
                 committer,
-                new FixedTimeProvider(now));
+                new FakeTimeProvider(now));
             Envelope = NewEnvelope();
             DrainResult = new RuntimeSchedulerDrainResult("wfexec-1", now, now, []);
         }
@@ -286,10 +287,5 @@ public sealed class BlockingIncidentWorkflowFaultObserverTests
                 sequence: 1,
                 metadata: new Dictionary<string, string>());
         }
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

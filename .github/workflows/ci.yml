@@ -85,9 +85,7 @@ jobs:
         # Run the fast unit tests only. Any test project that references
         # Testcontainers spins up Docker containers, so exclude those by reference --
         # the shared solution-filter generator parses PackageReference elements rather than
-        # matching comments or other raw text. Historical BeforeCapture executables are evidence
-        # projects rather than product-solution projects, so a solution filter must omit them
-        # as well; MSBuild rejects a filter that names a project absent from the solution.
+        # matching comments or other raw text.
         run: |
           container_roots_file=$(mktemp)
           trap 'rm -f "$container_roots_file"' EXIT
@@ -106,9 +104,6 @@ jobs:
 
           keep=()
           while IFS= read -r p; do
-            case "$p" in
-              */Capture/*.BeforeCapture.csproj) continue ;;
-            esac
             if [[ -z "${container_tests[$p]+x}" ]]; then
               keep+=("$p")
             fi
@@ -149,7 +144,7 @@ jobs:
   groundwork-v2-native-provider-matrix:
     name: Groundwork v2 native provider matrix
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -227,6 +222,9 @@ jobs:
       - name: Restore Groundwork v2 runtime native proofs
         run: dotnet restore tests/Elsa/Persistence/Groundwork/V2/Runtime/Tests/Elsa.Persistence.Groundwork.V2.Runtime.Tests.csproj -p:WarningsNotAsErrors=NU1603
 
+      - name: Restore the Groundwork Secrets native provider matrix
+        run: dotnet restore tests/Elsa/Secrets/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Secrets.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj -p:WarningsNotAsErrors=NU1603
+
       - name: Test current Groundwork v2 runtime families on every native provider
         env:
           GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX: 1
@@ -237,6 +235,22 @@ jobs:
           tests/Elsa/Persistence/Groundwork/V2/Runtime/Tests/Elsa.Persistence.Groundwork.V2.Runtime.Tests.csproj
           -c Release --no-restore
           --filter 'FullyQualifiedName~GroundworkV2RuntimeRegistrationTests|FullyQualifiedName~GroundworkV2WorkflowTestScopeStoreTests|FullyQualifiedName~GroundworkV2WorkflowExecutableStoreTests|FullyQualifiedName~GroundworkV2ExecutableActivityTemplateStoreTests|FullyQualifiedName~GroundworkV2WorkflowExecutableSourceReferenceStoreTests|FullyQualifiedName~GroundworkV2WorkflowRuntimeAttentionQueryTests|FullyQualifiedName~GroundworkV2WorkflowAlterationStoreTests|FullyQualifiedName~GroundworkV2BookmarkStateStoreTests|FullyQualifiedName~GroundworkV2WorkflowSchedulerWorkQueueTests'
+          -p:WarningsNotAsErrors=NU1603
+
+      # Secrets Groundwork four-provider coverage is owned by the Groundwork-selected composition
+      # (#1631). It must not live in the Secrets EF job: an EF-selected shell does not register
+      # the Groundwork secrets source. Reuse this job's databases so SQLite is not the only
+      # executed provider.
+      - name: Prove Groundwork Secrets on every native provider
+        env:
+          GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX: 1
+          GROUNDWORK_V2_POSTGRESQL_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
+          GROUNDWORK_V2_MONGODB_CONNECTION_STRING: mongodb://127.0.0.1:27017/elsa_v2_secrets?replicaSet=groundworkv2&directConnection=true
+        run: >-
+          dotnet test
+          tests/Elsa/Secrets/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Secrets.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj
+          -c Release --no-restore
+          --filter 'FullyQualifiedName~GroundworkV2SecretsProviderMatrixTests'
           -p:WarningsNotAsErrors=NU1603
 
       - name: Restore diagnostics v2 native proofs
@@ -294,52 +308,16 @@ jobs:
           --filter 'FullyQualifiedName~ActivityDraftTestRunProviderMatrixTests'
           -p:WarningsNotAsErrors=NU1603
 
-  # Feature 094 container-free ratchets. The whole architecture project runs so a
-  # renamed or newly added gate cannot silently fall out of a brittle test filter.
-  groundwork-fast:
-    name: Groundwork fast gates
-    needs: build-and-test
+  # Phase 4 (#1631): Secrets EF composition is independent of Groundwork Secrets matrix
+  # obligations. This job owns the EF-selected path only. Groundwork-default Workbench
+  # remains proven by build-and-test plus the Groundwork v2 native provider matrix job.
+  secrets-ef-composition:
+    name: Secrets EF composition
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      # GROUNDWORK_LEDGER_BASE_REF used to be a job-level env set straight from
-      # github.event.pull_request.base.sha, which is empty on push and workflow_dispatch.
-      # GroundworkCoverageLedgerTransitionTests skips itself on an empty value but treats an
-      # unresolvable one as a hard finding ("checkout must fetch immutable baseline history"),
-      # so the push baseline has to be validated rather than assumed: it is better for the
-      # transition guard alone to opt out than for the whole architecture job -- EF ratchet,
-      # continuity and dependency gates included -- to go red on a baseline artifact.
-      #
-      # On push the baseline is github.event.before, the commit main pointed at before this
-      # push, which is exactly what the landed change transitioned FROM. main forbids force
-      # pushes and deletions, so that commit is always a reachable ancestor here and never the
-      # all-zero branch-creation sha; both are still screened out, because this job should not
-      # be the thing that discovers a branch-protection setting was relaxed.
-      - name: Resolve the coverage-ledger baseline commit
-        env:
-          PULL_REQUEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PUSH_BEFORE_SHA: ${{ github.event.before }}
-        run: |
-          base="${PULL_REQUEST_BASE_SHA:-$PUSH_BEFORE_SHA}"
-          case "$base" in
-            *[!0]*) ;;     # holds a non-zero character, so it is a real sha
-            *) base="" ;;  # empty (workflow_dispatch), or the all-zero sha
-          esac
-          if [ -n "$base" ] && ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
-            echo "::notice::Coverage-ledger baseline $base is not reachable in this checkout; the transition guard will skip."
-            base=""
-          fi
-          if [ -z "$base" ]; then
-            echo "No coverage-ledger baseline; the transition guard skips, every other ratchet still runs."
-          else
-            echo "Coverage-ledger baseline: $base"
-          fi
-          echo "GROUNDWORK_LEDGER_BASE_REF=$base" >> "$GITHUB_ENV"
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -353,14 +331,65 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      # The EF surface ratchet inspects project.assets.json for every repository project, including
-      # deliberately out-of-solution frozen-oracle projects. Use the fail-closed discovery driver;
-      # a solution restore is not proof that every repository project was restored.
-      - name: Restore every repository project for architecture ratchets
-        run: bash tools/architecture/restore-zero-ef-certification.sh --force-evaluate --receipt artifacts/zero-ef/restore-receipt.json
+      - name: Start PostgreSQL for the Secrets EF shell proof
+        run: |
+          docker run --detach --name secrets-ef-postgresql --publish 5432:5432 \
+            --env POSTGRES_HOST_AUTH_METHOD=trust postgres:17.6-alpine3.22
+          for attempt in {1..60}; do
+            if docker exec secrets-ef-postgresql pg_isready -U postgres > /dev/null; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker logs secrets-ef-postgresql
+              exit 1
+            fi
+            sleep 1
+          done
 
-      - name: Validate Groundwork ledger, continuity, dependency, and EF ratchets
-        run: dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+      - name: Restore the Secrets EF PostgreSQL shell proof
+        run: dotnet restore tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj -p:WarningsNotAsErrors=NU1603
+
+      # Configuration-driven CShells composition, migration/validation, CRUD/OCC, runtime
+      # resolution, restart persistence, and the packed-module child-host proof. Npgsql is
+      # the only relational provider package in this project.
+      - name: Prove Secrets EF composition on PostgreSQL
+        env:
+          ELSA_SECRETS_EF_POSTGRESQL_TEST_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
+        run: >-
+          dotnet test
+          tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj
+          -c Release --no-restore
+          -p:WarningsNotAsErrors=NU1603
+
+  # Container-free architecture guards (dependency direction, endpoint security, feature
+  # composition, the EF dependency allowlist). The whole project runs so a renamed or newly
+  # added guard cannot silently fall out of a brittle test filter. The spec 094 coverage-ledger
+  # and benchmark-evidence suites moved to tools/ledger and run from groundwork-ledger.yml.
+  groundwork-fast:
+    name: Architecture guards
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Run the architecture guards
+        run: dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release -p:WarningsNotAsErrors=NU1603
 
   # A red main has to reach a human. GitHub's own failure notification for a push does go to
   # whoever pushed, which is a better channel than the one the nightly uses -- but on
@@ -371,6 +400,7 @@ jobs:
     needs:
       - build-and-test
       - groundwork-v2-native-provider-matrix
+      - secrets-ef-composition
       - groundwork-fast
     if: ${{ failure() && github.event_name == 'push' }}
     permissions:

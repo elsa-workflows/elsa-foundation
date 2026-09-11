@@ -4,6 +4,7 @@ Reports are point-in-time findings. They may become work units, but they are not
 
 ## Current reports
 
+- [Secrets EF persistence pilot verdict and conditional replacement plan 2026-09](secrets-ef-persistence-pilot-verdict-2026-09.md) - successful narrow technical pilot for provider-derived EF contexts, dual migration modes, and per-shell EF/Groundwork selection; records exact evidence, unresolved governance/host-readiness boundaries, and a gated module-by-module replacement sequence.
 - [Wave 4 Agent REST and SSE API migration 2026-08](wave-4-agent-api-migration-2026-08.md) - exact eleven-route FastEndpoints-before HTTP/OpenAPI evidence, shared Agent permissions, SSE framing/cancellation, mixed coexistence, and collectible owner lifecycle.
 - [Structured Logs Minimal API migration 2026-08](structured-logs-minimal-api-migration-2026-08.md) - streaming program wave: exact HTTP/SSE/OpenAPI parity, Foundation authorization and FastEndpoints coexistence, production dependency retirement, and repeated clean collection after real OpenAPI generation with no module-owned transformer contexts.
 - [Secrets Minimal API migration 2026-08](secrets-minimal-api-migration-2026-08.md) - representative ten-operation CRUD/security migration: immutable HTTP and OpenAPI parity, tenant isolation, granular Foundation authorization, sensitive-data non-disclosure, real FastEndpoints coexistence, clean route/traffic/service release, and an honestly retained collectible context after actual ASP.NET OpenAPI generation.
@@ -11,7 +12,7 @@ Reports are point-in-time findings. They may become work units, but they are not
 - [Endpoint framework and authorization spike 2026-08](endpoint-framework-authorization-spike-2026-08.md) - issue #1329 evidence and recommendation: adopt Minimal APIs as the target for all first-party REST APIs, use FastEndpoints coexistence only for staged migration, unify authorization on Foundation policies, atomically publish validated CShells endpoint manifests, and forbid FastEndpoints in dynamically unloadable endpoint assemblies.
 - [Elsa 4 architecture review 2026-07](elsa-4-architecture-review-2026-07.md) - consolidated full-codebase review with verified findings and improvement roadmap (W1-W21). Detail sub-reports and per-work-unit implementation briefs: [elsa-4-architecture-review-2026-07/](elsa-4-architecture-review-2026-07/README.md).
 - [Simplification review 2026-07](simplification-review-2026-07.md) - YAGNI/DRY/modernization pass over the tree after the W1-W21 roadmap landed; public-API surface, build-config duplication, missing style enforcement, and the accretion pressure behind the project/LoC/type growth. Static analysis only, not compile-verified.
-- [Elsa 4 activity contract parity audit 2026-07](elsa-4-activity-contract-parity-2026-07.md) - member-level diff of every out-of-the-box activity's inputs, outputs and outcomes against Elsa 3, with regenerable evidence. Supersedes [elsa-4-activity-gaps.md](elsa-4-activity-gaps.md).
+- [Elsa 4 activity contract parity audit 2026-07](elsa-4-activity-contract-parity-2026-07.md) - member-level diff of every out-of-the-box activity's inputs, outputs and outcomes against Elsa 3, with regenerable evidence. Supersedes [elsa-4-activity-gaps.md](archive/elsa-4-activity-gaps.md).
 - [Elsa 4 activity behavioural drive 2026-08](elsa-4-activity-behavioural-drive-2026-08.md) - the behavioural half of that audit: every activity driven through a real workflow engine, with declared outcomes, outputs and required inputs measured against what the engine actually committed. Records the contract-surface snapshot guard, the fixes applied, and the REST e2e coverage still outstanding.
 - [Subtractive obligation amendment 2026-08](subtractive-obligation-amendment-2026-08.md) - proposed framework constitution §2.25: a periodic consolidation review with standing to retire specs, superseded guards and stale catalog entries, and an evidence bar forbidding census-driven removal. Also records why the proposed §2.16.1 aggregate-growth trigger was **not** pursued: measured like-for-like, project count grew 2.25× against 6.32× LoC.
 - [Simplification review decisions 2026-08](simplification-review-decisions-2026-08.md) - build-verified follow-up to the above. Records the §9 items that are governance decisions rather than refactors, and corrects three findings that did not survive compilation: the `internal sealed` sweep is barred by constitution §2.23.3, and the `*.Unified` provider base measured net +74 lines.
@@ -36,16 +37,11 @@ Reports are point-in-time findings. They may become work units, but they are not
 - [CShells composition evidence](cshells-composition-evidence.md)
 - [Runtime execution pre-spec handoff](runtime-execution-pre-spec-handoff.md)
 - [Elsa Core runtime broken windows brainstorm](elsa-core-runtime-broken-windows-brainstorm.md)
-- [Elsa Core runtime execution layer analysis](elsa-core-runtime-execution-layer-analysis.md)
-- [Elsa 4 runtime serialization brainstorm decisions](elsa-4-runtime-serialization-brainstorm-decisions.md)
 - [Elsa 4 runtime execution brainstorm decisions](elsa-4-runtime-execution-brainstorm-decisions.md)
-- [Elsa 4 runtime execution action plan](elsa-4-runtime-execution-action-plan.md)
-- [Elsa 4 runtime execution addendum topics](elsa-4-runtime-execution-addendum-topics.md)
-- [Elsa 4 runtime terminology decisions](elsa-4-runtime-terminology-decisions.md)
-- [Constitution draft history](constitution-draft-history.md)
-- [Constitution amendment index](constitution-amendment-index.md)
-- [Framework constitution draft history](constitution-history-framework.md)
-- [Elsa constitution draft history](constitution-history-elsa.md)
+
+## Archive
+
+[archive/](archive/README.md) holds reports that are no longer current (superseded, folded into ADRs or the constitutions, or older than 2026-08 with no live reader). Git history is authoritative for them; they may cite paths that no longer exist. The constitution draft-history family now lives there, minus the raw history extracts and amendment index, which were deleted on 2026-09-10 in favour of git history.
 
 ## Planned reports
 

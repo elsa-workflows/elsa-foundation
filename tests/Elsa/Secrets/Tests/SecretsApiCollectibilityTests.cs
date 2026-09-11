@@ -21,7 +21,7 @@ public sealed class SecretsApiCollectibilityTests
     {
         for (var cycle = 0; cycle < 10; cycle++)
         {
-            using var evidenceCycle = SecretsCollectibleFixture.Create();
+            using var evidenceCycle = SecretsCollectibleModule.Create();
             var evidence = evidenceCycle.VerifyCollection(ReleaseCollectionAttempts);
             Assert.True(evidence.Collected, evidence.Diagnostic);
             Assert.Equal(RetentionStage.Clean, evidence.Stage);
@@ -34,11 +34,11 @@ public sealed class SecretsApiCollectibilityTests
     [Fact]
     public void Materialized_route_and_json_are_exercised_before_release()
     {
-        using var cycle = SecretsCollectibleFixture.Create(RetentionStage.Route);
+        using var cycle = SecretsCollectibleModule.Create(RetentionStage.Route);
 
-        Assert.Equal(10, cycle.RouteCount);
-        Assert.True(cycle.JsonExercised, "A representative JSON request must execute before unload verification.");
-        Assert.False(cycle.DocumentationGenerated);
+        Assert.Equal(10, cycle.Observation!.RouteCount);
+        Assert.True(cycle.Observation.JsonExercised, "A representative JSON request must execute before unload verification.");
+        Assert.False(cycle.Observation.DocumentationGenerated);
 
         var retained = cycle.VerifyCollection();
         Assert.False(retained.Collected);
@@ -53,9 +53,9 @@ public sealed class SecretsApiCollectibilityTests
     [Fact]
     public void OpenApi_generation_is_exercised_and_framework_retention_is_reported_honestly()
     {
-        using var cycle = SecretsCollectibleFixture.Create(generateDocumentation: true);
+        using var cycle = SecretsCollectibleModule.Create(generateDocumentation: true);
 
-        Assert.True(cycle.DocumentationGenerated, "The real ASP.NET OpenAPI document provider must generate the consumed Secrets paths.");
+        Assert.True(cycle.Observation!.DocumentationGenerated, "The real ASP.NET OpenAPI document provider must generate the consumed Secrets paths.");
         var evidence = cycle.VerifyCollection(ReleaseCollectionAttempts);
 
         Assert.False(evidence.Collected);
@@ -66,7 +66,7 @@ public sealed class SecretsApiCollectibilityTests
     [Fact]
     public void Service_provider_retention_releases_after_disposal()
     {
-        using var cycle = SecretsCollectibleFixture.Create(RetentionStage.Services);
+        using var cycle = SecretsCollectibleModule.Create(RetentionStage.Services);
         var retained = cycle.VerifyCollection();
         Assert.False(retained.Collected);
         Assert.Equal(RetentionStage.Services, retained.Stage);
@@ -80,7 +80,7 @@ public sealed class SecretsApiCollectibilityTests
     [Fact]
     public void Serializer_and_documentation_retention_is_classified_without_a_false_release_claim()
     {
-        using var cycle = SecretsCollectibleFixture.Create(RetentionStage.Serializer);
+        using var cycle = SecretsCollectibleModule.Create(RetentionStage.Serializer);
         var retained = cycle.VerifyCollection();
         Assert.False(retained.Collected);
         Assert.Equal(RetentionStage.Serializer, retained.Stage);
@@ -92,13 +92,15 @@ public sealed class SecretsApiCollectibilityTests
     [Fact]
     public void Evidence_contains_only_weak_collectible_handles()
     {
-        using var cycle = SecretsCollectibleFixture.Create();
+        using var cycle = SecretsCollectibleModule.Create();
         cycle.ReleaseRetention();
         var evidence = cycle.VerifyCollection(ReleaseCollectionAttempts);
 
         Assert.True(evidence.Collected, evidence.Diagnostic);
-        Assert.DoesNotContain(typeof(Type), typeof(UnloadEvidence).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Select(field => field.FieldType));
-        Assert.DoesNotContain(typeof(Assembly), typeof(UnloadEvidence).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Select(field => field.FieldType));
+        var evidenceFieldTypes = typeof(UnloadEvidence)
+            .GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .Select(field => field.FieldType);
+        Assert.DoesNotContain(typeof(Type), evidenceFieldTypes);
+        Assert.DoesNotContain(typeof(Assembly), evidenceFieldTypes);
     }
-
 }

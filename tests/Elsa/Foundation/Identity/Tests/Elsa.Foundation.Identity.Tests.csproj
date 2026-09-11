@@ -39,13 +39,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<None Include="Baselines\identity-http-fastendpoints.json" CopyToOutputDirectory="PreserveNewest" />
-		<None Include="Baselines\identity-openapi-fastendpoints.json" CopyToOutputDirectory="PreserveNewest" />
-		<None Include="Baselines\identity-openapi-fastendpoints.raw.json" CopyToOutputDirectory="PreserveNewest" />
-		<None Include="Baselines\identity-approved-differences.json" CopyToOutputDirectory="PreserveNewest" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<Using Include="Xunit" />
 	</ItemGroup>
 

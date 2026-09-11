@@ -1,5 +1,5 @@
 <!--
-Draft history moved to ../../docs/reports/constitution-draft-history.md.
+Draft history moved to ../../docs/reports/archive/constitution-draft-history.md.
 This constitution file is the generic quality-gate layer: gates, allowed exceptions,
 ratification state, and governance. Canonical term lookup lives in ../../docs/glossary/.
 

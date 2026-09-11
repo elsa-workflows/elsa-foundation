@@ -93,10 +93,10 @@ assert:
 - restart/replay without duplicate effects;
 - no sensitive payload appears in plan/job JSON.
 
-Run existing relevant black-box suites against the rebuilt server:
+Run the in-process contract suite (`tests/Elsa/Architecture/RuntimeAlterationApiContractTests.cs`; it replaced the retired
+`e2e-tests/write-endpoints/Test-RuntimeWrites.ps1`), then the existing relevant black-box suites against the rebuilt server:
 
 ```bash
-pwsh ./e2e-tests/write-endpoints/Test-RuntimeWrites.ps1
 pwsh ./e2e-tests/persistence-querying/Test-InstancePaging.ps1
 pwsh ./e2e-tests/orchestration-controls/Test-SuspendResume.ps1
 pwsh ./e2e-tests/durability/Test-RestartRecovery.ps1

@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-activity-fault-incidents`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #64, #65 (restatused 2026-09-10 from git evidence)
 **Input**: Continue Runtime Execution Seam Slice 7 after incident contracts exist. Activity invocation faults should create minimal runtime incident continuation state through a named checkpoint instead of only mutating activity state.
 
 ## Scenarios & Tests

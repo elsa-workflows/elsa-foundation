@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using ParallelActivity = Elsa.Activities.Parallel.Activities.Parallel;
+using Elsa.Testing;
 
 namespace Elsa.Activities.Design.Tests.Unit;
 
@@ -678,17 +679,17 @@ public sealed class ClrAssemblyScannerTests
         var primitives = typeof(ClrActivityDescriptor).Assembly;
         var simpleName = primitives.GetName().Name!;
         using var folder = TempAssemblyFolder.WithCopyOf(primitives);
-        var logger = new CapturingLogger();
+        var logger = new RecordingLogger<ClrAssemblyScanner>();
 
         _ = CreateScanner(logger).Scan(folder.Path);
 
-        Assert.Contains(logger.Warnings, w => w.Contains(simpleName, StringComparison.Ordinal));
+        Assert.Contains(logger.Warnings, w => w.Message.Contains(simpleName, StringComparison.Ordinal));
     }
 
     [Fact]
     public void DuplicateResolverPath_IsIgnoredWithoutWarning()
     {
-        var logger = new CapturingLogger();
+        var logger = new RecordingLogger<ClrAssemblyScanner>();
         var scanner = CreateScanner(logger);
         var path = typeof(ClrActivityDescriptor).Assembly.Location;
 
@@ -764,26 +765,6 @@ public sealed class ClrAssemblyScannerTests
         var method = typeof(ClrAssemblyScanner).GetMethod("BuildResolverPaths", BindingFlags.Instance | BindingFlags.NonPublic);
         var result = method?.Invoke(scanner, [folderDlls]);
         return Assert.IsAssignableFrom<IReadOnlyCollection<string>>(result);
-    }
-
-    /// <summary>
-    /// Minimal <see cref="ILogger{T}"/> double that captures formatted <see cref="LogLevel.Warning"/>
-    /// messages. The project takes no logging-test package, so this hand-rolled double is the
-    /// zero-dependency way to assert a warning fired.
-    /// </summary>
-    private sealed class CapturingLogger : ILogger<ClrAssemblyScanner>
-    {
-        public List<string> Warnings { get; } = [];
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-        {
-            if (logLevel == LogLevel.Warning)
-                Warnings.Add(formatter(state, exception));
-        }
     }
 
     private sealed class TempAssemblyFolder : IDisposable

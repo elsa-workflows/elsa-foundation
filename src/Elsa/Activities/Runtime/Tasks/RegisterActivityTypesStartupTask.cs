@@ -31,10 +31,10 @@ namespace Elsa.Activities.Runtime.Tasks;
 /// Source of types: the union of (a) the runtime-loaded assemblies (framework activities — composed into the
 /// host) and (b) the assemblies surfaced by every registered <see cref="IFeatureAssemblyProvider"/>. The
 /// provider set is the same authoritative source the modular feature catalog uses, so it covers
-/// dynamically-loaded / externally-uploaded extension-builder activities whose assemblies are loaded into the
+/// dynamically-loaded package activities whose assemblies are loaded into the
 /// runtime on a shell (re)load but are not guaranteed to appear in <see cref="AppDomain.CurrentDomain"/>. This
 /// task re-runs on every shell (re)build (it is an <see cref="IStartupTask"/>, replayed by the shell-tasks
-/// initializer), so when an extension-builder activity package becomes available both the activity type and its
+/// initializer), so when an activity package becomes available both the activity type and its
 /// I/O element types are picked up the next time the shell composes.
 /// </para>
 /// <para>
@@ -86,7 +86,7 @@ public sealed class RegisterActivityTypesStartupTask : IStartupTask
     }
 
     // Baseline (runtime-loaded) assemblies unioned with the assemblies surfaced by every registered
-    // IFeatureAssemblyProvider — the modular host's package/extension-builder assemblies. De-duplicated by
+    // IFeatureAssemblyProvider — the modular host's package assemblies. De-duplicated by
     // assembly identity so an assembly present in both sources is scanned once; the registration itself is
     // idempotent regardless.
     private async Task<IReadOnlyCollection<Assembly>> CollectAssembliesAsync(CancellationToken cancellationToken)

@@ -10,8 +10,10 @@
 
 The executable coverage denominator preserves the original 32 runtime, IAM, secrets, and
 distributed-runtime rows. A program-owner-ratified 2026-07-25 amendment adds the durable Structured
-Logs and OpenTelemetry store rows, bringing the current denominator to 34 without weakening the
-ALL32 floor. Storage composition and scope adoption also own the selected Workflows Design,
+Logs and OpenTelemetry store rows, bringing that checkpoint to 34 without weakening the ALL32
+floor. Subsequent ledger additions bring the current Groundwork-selected denominator to 35; the
+EF-selected Secrets pilot alternate covers the other 34 rows and omits only `secrets-repository`.
+Storage composition and scope adoption also own the selected Workflows Design,
 Activities Design, and Publishing manifest units; those units do not add ledger rows.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -196,7 +198,7 @@ An Elsa performance owner receives representative #645 workloads with verified o
 - **FR-006**: Every selected in-scope feature family MUST contribute its durable requirements to one host-selected storage composition before the host serves work.
 - **FR-007**: Composition validation MUST reject missing, duplicate, incompatible, or unsupported durable requirements with a diagnostic that identifies the owning features.
 - **FR-008**: A production-shaped host MUST prove that runtime, in-scope IAM, secrets, and distributed stores can be enabled together, used through their public contracts, disposed, and reopened over the same durable database.
-- **FR-009**: Every in-scope storage unit, including the selected Workflows Design, Activities Design, and Publishing manifest units outside the current 34-row coverage denominator, MUST be classified as tenant-scoped, explicitly global, or externally owner-classified, with a storage reason for every explicitly global unit; operation access MUST be classified separately as ordinary, privileged, ordinary-read/privileged-write, or externally owner-classified, with an authorization reason for every policy containing privileged access.
+- **FR-009**: Every in-scope storage unit, including the selected Workflows Design, Activities Design, and Publishing manifest units outside the current 35-row Groundwork-selected coverage denominator, MUST be classified as tenant-scoped, explicitly global, or externally owner-classified, with a storage reason for every explicitly global unit; operation access MUST be classified separately as ordinary, privileged, ordinary-read/privileged-write, or externally owner-classified, with an authorization reason for every policy containing privileged access.
 - **FR-010**: Tenant scope MUST be enforced for direct loads, writes, deletes, queries, mutations, recovery, and units of work at the persistence boundary; wrong-scope operations MUST NOT disclose whether another tenant's record exists.
 - **FR-011**: Privileged access MUST reject ordinary callers and record the access scope, named purpose, and outcome without exposing tenant identifiers as unbounded telemetry labels.
 - **FR-012**: Execution ownership MUST issue unique, strictly increasing fencing tokens across independent processes, release, failure, and restart.

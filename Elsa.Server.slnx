@@ -5,6 +5,7 @@
   <Folder Name="/benchmarks/Elsa/Activities/Runtime/">
     <Project Path="benchmarks/Elsa/Activities/Runtime/Benchmarks/Elsa.Activities.Runtime.Benchmarks.csproj" />
   </Folder>
+  <Folder Name="/benchmarks/Elsa/Diagnostics/" />
   <Folder Name="/benchmarks/Elsa/Diagnostics/OpenTelemetry/">
     <Project Path="benchmarks/Elsa.Diagnostics.OpenTelemetry.TraceListBenchmark/Elsa.Diagnostics.OpenTelemetry.TraceListBenchmark.csproj" />
   </Folder>
@@ -26,6 +27,13 @@
     <File Path="NuGet.config" />
   </Folder>
   <Folder Name="/tools/" />
+  <Folder Name="/tools/ledger/">
+    <Project Path="tools/ledger/Elsa.Groundwork.Ledger.Tests/Elsa.Groundwork.Ledger.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/ledger/StorePerformance/">
+    <Project Path="tools/ledger/StorePerformance/AdapterHost/Tests/Elsa.Groundwork.StorePerformance.AdapterHost.Tests.csproj" />
+    <Project Path="tools/ledger/StorePerformance/Benchmarks/Tests/Elsa.Groundwork.StorePerformance.Benchmarks.Tests.csproj" />
+  </Folder>
   <Folder Name="/tools/maps/">
     <Project Path="tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj" />
   </Folder>
@@ -174,10 +182,10 @@
     <Project Path="src/Elsa/Modularity/Attention/Elsa.Modularity.Attention.csproj" />
     <Project Path="src/Elsa/Modularity/Api/Elsa.Modularity.Api.csproj" />
     <Project Path="src/Elsa/Modularity/Core/Elsa.Modularity.Core.csproj" />
-    <Project Path="src/Elsa/Modularity/ExtensionBuilder/Elsa.Modularity.ExtensionBuilder.csproj" />
     <Project Path="src/Elsa/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Persistence/">
+    <Project Path="src/Elsa/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Persistence/Groundwork/">
     <Project Path="src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj" />
@@ -214,14 +222,15 @@
   <Folder Name="/src/Elsa/Secrets/Persistence/">
     <Project Path="src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj" />
   </Folder>
-  <Folder Name="/src/Elsa/Serialization/Core/" />
-  <Folder Name="/src/Elsa/Serialization/SystemText/" />
+  <Folder Name="/src/Elsa/Secrets/Persistence/EntityFrameworkCore/">
+    <Project Path="src/Elsa/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
+    <Project Path="src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling.csproj" />
+  </Folder>
   <Folder Name="/src/Elsa/Tasks/">
     <Project Path="src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj" />
     <Project Path="src/Elsa/Tasks/Elsa.Tasks.csproj" />
     <Project Path="src/Elsa/Tasks/Schedules/Elsa.Tasks.Schedules.csproj" />
   </Folder>
-  <Folder Name="/src/Elsa/Tasks/Core/" />
   <Folder Name="/src/Elsa/Workflows/">
     <Project Path="src/Elsa/Workflows/ExecutionEvidence/Elsa.Workflows.ExecutionEvidence.csproj" />
     <Project Path="src/Elsa/Workflows/Primitives/Elsa.Workflows.Primitives.csproj" />
@@ -297,7 +306,9 @@
   </Folder>
   <Folder Name="/src/Elsa3/Mapping/" />
   <Folder Name="/tests/" />
-  <Folder Name="/tests/Elsa/" />
+  <Folder Name="/tests/Elsa/">
+    <Project Path="tests/Elsa/Testing/Elsa.Testing.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Activities/">
     <Project Path="tests/Elsa/Activities/Testing/Elsa.Activities.Testing.csproj" />
   </Folder>
@@ -382,6 +393,8 @@
   <Folder Name="/tests/Elsa/Diagnostics/OpenTelemetry/">
     <Project Path="tests/Elsa/Diagnostics/OpenTelemetry/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Diagnostics/OpenTelemetry/Persistence/" />
+  <Folder Name="/tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/" />
   <Folder Name="/tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2/">
     <Project Path="tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.V2.Tests.csproj" />
   </Folder>
@@ -397,6 +410,8 @@
   <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/">
     <Project Path="tests/Elsa/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/Persistence/" />
+  <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/" />
   <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/V2/">
     <Project Path="tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests.csproj" />
   </Folder>
@@ -419,6 +434,7 @@
     <Project Path="tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/ProcessProbe/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.ProcessProbe.csproj" />
     <Project Path="tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/V2/" />
   <Folder Name="/tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/V2/ProviderMatrix/">
     <Project Path="tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/V2/ProviderMatrix/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.V2.ProviderMatrix.Tests.csproj" />
   </Folder>
@@ -426,19 +442,13 @@
   <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/Groundwork/V2/" />
   <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/Groundwork/V2/ProviderMatrix/">
     <Project Path="tests/Elsa/Foundation/Identity/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Groundwork/" />
-  <Folder Name="/tests/Elsa/Groundwork/StorePerformance/" />
   <Folder Name="/tests/Elsa/Groundwork/ProviderEvidenceImporter/">
     <Project Path="tests/Elsa/Groundwork/ProviderEvidenceImporter/Tests/Elsa.Groundwork.ProviderEvidenceImporter.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Elsa/Groundwork/StorePerformance/AdapterHost/">
-    <Project Path="tests/Elsa/Groundwork/StorePerformance/AdapterHost/Tests/Elsa.Groundwork.StorePerformance.AdapterHost.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Elsa/Groundwork/StorePerformance/Benchmarks/">
-    <Project Path="tests/Elsa/Groundwork/StorePerformance/Benchmarks/Tests/Elsa.Groundwork.StorePerformance.Benchmarks.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Modularity/">
     <Project Path="tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj" />
@@ -453,6 +463,9 @@
     <Project Path="tests/Elsa/Primitives/Hosting/Tests/Elsa.Primitives.Hosting.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/" />
+  <Folder Name="/tests/Elsa/Persistence/EntityFramework/">
+    <Project Path="tests/Elsa/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj" />
   </Folder>
@@ -464,6 +477,7 @@
     <Project Path="tests/Elsa/Persistence/Groundwork/V2/Runtime/Tests/Elsa.Persistence.Groundwork.V2.Runtime.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/DesignConformance/">
+    <Project Path="tests/Elsa/Persistence/Groundwork/DesignConformance/Target/Elsa.Persistence.Groundwork.DesignConformance.Target.csproj" />
     <Project Path="tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/Elsa.Persistence.Groundwork.DesignConformance.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/DesignConformance/MongoDb/">
@@ -478,12 +492,15 @@
   <Folder Name="/tests/Elsa/Persistence/Groundwork/DesignConformance/Sqlite/">
     <Project Path="tests/Elsa/Persistence/Groundwork/DesignConformance/Sqlite/Tests/Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Persistence/Groundwork/MongoDb/" />
   <Folder Name="/tests/Elsa/Persistence/Groundwork/MongoDb/UnifiedHost/">
     <Project Path="tests/Elsa/Persistence/Groundwork/MongoDb/UnifiedHost/Tests/Elsa.Persistence.Groundwork.MongoDb.UnifiedHost.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Persistence/Groundwork/PostgreSql/" />
   <Folder Name="/tests/Elsa/Persistence/Groundwork/PostgreSql/UnifiedHost/">
     <Project Path="tests/Elsa/Persistence/Groundwork/PostgreSql/UnifiedHost/Tests/Elsa.Persistence.Groundwork.PostgreSql.UnifiedHost.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Persistence/Groundwork/SqlServer/" />
   <Folder Name="/tests/Elsa/Persistence/Groundwork/SqlServer/UnifiedHost/">
     <Project Path="tests/Elsa/Persistence/Groundwork/SqlServer/UnifiedHost/Tests/Elsa.Persistence.Groundwork.SqlServer.UnifiedHost.Tests.csproj" />
   </Folder>
@@ -498,6 +515,18 @@
   <Folder Name="/tests/Elsa/Secrets/">
     <Project Path="tests/Elsa/Secrets/Tests/Elsa.Secrets.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Secrets/Persistence/EntityFrameworkCore/">
+    <Project Path="tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/">
+    <Project Path="tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe.csproj" />
+    <Project Path="tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/">
+    <Project Path="tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Secrets/Persistence/" />
+  <Folder Name="/tests/Elsa/Secrets/Persistence/Groundwork/" />
   <Folder Name="/tests/Elsa/Secrets/Persistence/Groundwork/V2/">
     <Project Path="tests/Elsa/Secrets/Persistence/Groundwork/V2/Tests/Elsa.Secrets.Persistence.Groundwork.V2.Tests.csproj" />
   </Folder>

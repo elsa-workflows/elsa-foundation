@@ -1,275 +1,438 @@
 ---
 status: proposed
 date: 2026-09-10
-decision_context: Product discussion plus Claude second-opinion correction plus spike PR #1622 (Variant A); drafted at Sipke Schoorstra's request. Remains proposed until he accepts.
+decision_context: Spike PR #1622, completed Secrets EF pilot #1626, and verdict PR #1655; revision direction authorized by Sipke Schoorstra on 2026-09-11, with acceptance of the final text still pending.
 ---
 
 # EF-first relational persistence with provider-derived contexts
 
-Status: proposed (2026-09-10). Drafted from the persistence spike and the product discussion;
-**not accepted** until Sipke accepts.
+Status: proposed (2026-09-11 revision). Sipke authorized revising the ADR in this bounded
+direction after reviewing the pilot verdict. That authorization is **not** acceptance of this final
+text; acceptance requires an explicit decision after exact-head review.
 
-Program goal: `none/free-flow`. This is a product-direction record, not an implementation unit of
-[Zero-EF Persistence](../program-goals/zero-ef-persistence.md). Acceptance would narrow
-[ADR 0042](0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md) for new simple
-modules; it does not rewrite Groundwork runtime stores.
+Program goal: `none/free-flow`. If accepted, this ADR narrows
+[ADR 0042](0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md) for
+individually admitted relational modules. It does not schedule a replacement wave, switch a host
+default, delete a Groundwork adapter, or decide Runtime persistence.
 
-Spike evidence: [PR #1622](https://github.com/elsa-workflows/elsa-foundation/pull/1622)
-(`spikes/persistence-ef-vs-fluentmigrator/`). Variant A (provider-derived EF contexts) won against
-FluentMigrator for a Secrets-shaped pilot.
+Primary evidence:
+
+- [Secrets EF pilot program #1626](https://github.com/elsa-workflows/elsa-foundation/issues/1626)
+- [Pilot verdict and conditional replacement plan](../reports/secrets-ef-persistence-pilot-verdict-2026-09.md)
+- [Provider-derived contexts versus FluentMigrator spike #1622](https://github.com/elsa-workflows/elsa-foundation/pull/1622)
+- [Human decision and governance reconciliation #1628](https://github.com/elsa-workflows/elsa-foundation/issues/1628)
 
 ---
 
 ## Context
 
-Elsa 3 persisted through store abstractions with concrete EF Core and Mongo adapters. Schema
-evolution multiplied as *module × provider* projects: each domain that needed SQLite, SQL Server,
-and PostgreSQL shipped three migration assemblies, and the owned persistence surface grew with every
-new module.
+ADR 0042 made Groundwork the only first-party durable persistence family in Elsa Foundation, apart
+from the later vendor-owned OpenIddict exception. It removed a parallel EF implementation estate and
+the provider-project multiplication that accompanied it.
 
-Elsa 4 / Groundwork V2 solved the multi-provider schema problem on one path — `StorageUnit` plus
-`Schema.Apply`, including Mongo — and that remains the current relational-plus-Mongo
-implementation family in this repository
-([ADR 0042](0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md),
-[ADR 0065](0065-groundwork-persistence-targets-are-named-and-lanes-bind-to-them.md)). The cost was
-Elsa wrapping: adapters, evidence, and host composition around Groundwork became heavy relative to
-what a shape-simple module actually needs. The product preference is to **minimize owned
-persistence code** for those modules.
+That decision exposed a different cost. For shape-simple relational modules, Elsa-owned Groundwork
+adapters, schema wrapping, composition, and evidence can be heavier than a conventional EF Core
+implementation. The product preference is to minimize Elsa-owned persistence code where doing so
+does not weaken provider-blind contracts, migration safety, or operational evidence.
 
-Nuplane makes a further constraint load-bearing. The host reconciles NuGet packages, loads
-assemblies, and CShells discovers features. There is no provider-pack primitive. An open feature
-model means **shared host EF migrations are unworkable**: the host cannot own a single migrations
-assembly that enumerates every module that might later be enabled.
+Nuplane and CShells make the packaging and lifecycle constraints load-bearing:
 
-Two apply modes are both required:
+- features are discovered and activated dynamically;
+- migrations must travel with the feature that owns the schema;
+- shell-scoped services are recreated on activation and reload;
+- CShells does not run shell-scoped `IHostedService` instances;
+- operators need both runtime and out-of-process migration modes;
+- the domain contract must not expose EF, Groundwork, provider SQL, or `IQueryable`.
 
-- **Runtime auto-migrate** after a feature is enabled and the CShells/Nuplane host reloads.
-- **CI/CD out-of-process migrate** (and optionally validate) so an environment can start with
-  auto-migrate off and refuse to run if migrations are pending.
+The spike in PR #1622 compared provider-derived EF contexts with FluentMigrator for a
+Secrets-shaped module. Provider-derived contexts won on owned-code cost, operational familiarity,
+model-drift protection, and migration locking. It also established that one `DbContext` type owns
+one model snapshot per assembly, so three provider migration sets require three derived context
+types.
 
-Most customers run one engine. Fine-grained multi-engine composition must remain possible.
+The completed Secrets pilot then tested that direction in product code. It proved:
 
-Spike [PR #1622](https://github.com/elsa-workflows/elsa-foundation/pull/1622) compared two schema
-approaches for a Secrets-shaped pilot (one table, OCC, per-module history, provider guard,
-`MigrateAsync` vs FluentMigrator). Variant A won on owned-code cost, operational familiarity, and
-the EF 9 migrate lock. Claude's correction, confirmed by generating two folders from two derived
-types: **one `DbContext` type owns one `ModelSnapshot` per assembly**. Three provider migration
-sets cannot live on a single context type.
+- one provider-blind `ISecretRepository` contract can be served by either EF or Groundwork;
+- one module package can carry SQLite, SQL Server, and PostgreSQL derived contexts and migrations
+  while referencing EF Core Relational rather than provider engines;
+- runtime `AutoMigrate`, startup `Validate`, and out-of-process apply can use the same artifacts;
+- shell activation and reload require `IShellInitializer` in addition to the host lifecycle;
+- a shell can select EF or Groundwork for Secrets, never both;
+- each selected family must own its own composition and evidence path;
+- OCC, physical types, normalization, and persisted search keys are provider-specific contracts;
+- Workbench can remain Groundwork-default while an EF composition is opt-in.
+
+The pilot did **not** prove existing-domain data conversion, arbitrary cross-module multi-engine
+composition, MongoDB parity, the current Foundation Host directory-feed route, or Runtime hot-path
+suitability.
 
 ## Problem
 
-The repository needs a persistence direction that:
+Elsa Foundation needs a relational persistence policy that:
 
-1. Uses EF Core as the relational family without recreating the Elsa 3 module×provider explosion.
-2. Leaves Mongo as an optional second family, not a tax on every module.
-3. Travels with the feature so Nuplane can enable a module without a host-owned migration catalog.
-4. Supports both in-process auto-migrate and out-of-process CI/CD apply.
-5. Does not silently apply the wrong dialect, share one migrations history across modules, or
-   assume a single OCC mapping for every provider.
-6. Does not freeze a Groundwork rewrite of the runtime hot path (checkpoint, queue, placement)
-   into the same decision.
+1. Uses mainstream EF Core when that materially reduces Elsa-owned code for an eligible module.
+2. Preserves provider-blind domain contracts and provider-appropriate persistence semantics.
+3. Works with dynamically enabled features without a host-owned global migration catalog.
+4. Supports runtime and operator-controlled migration modes over one artifact set.
+5. Prevents wrong-provider apply, cross-module migration-history collisions, and dual-family
+   registration.
+6. Makes conversion, rollback, composition, and evidence obligations explicit before replacing an
+   existing Groundwork adapter.
+7. Keeps Groundwork where document, Mongo, Runtime, or operational workload semantics make it the
+   better family.
+8. Does not infer broad product policy from a successful one-table pilot.
 
-ADR 0042's "Groundwork only" completion criterion is the standing product rule until this ADR is
-accepted. This draft records the intended narrowing, not a silent reinterpretation.
+## Decision process
+
+### Step 1 — Preserve the standing boundary during investigation
+
+ADR 0042 remained authoritative throughout the spike and pilot. A scoped architecture-ratchet
+exception allowed the pilot to run; it did not silently establish product policy. Groundwork
+remained the Workbench default.
+
+### Step 2 — Compare schema strategies with executable evidence
+
+PR #1622 evaluated:
+
+- provider-derived EF contexts with generated migrations;
+- FluentMigrator migrations with EF data access and a separate model-drift gate.
+
+Provider-derived contexts were selected for the pilot. FluentMigrator reduced generated snapshot
+volume but added a second schema DSL, runner stack, and drift service while still needing
+provider-conditional types and OCC behavior.
+
+### Step 3 — Run a bounded product pilot
+
+Program #1626 implemented Secrets end to end through four phases: EF policy and module, dual
+migration modes, opt-in shell composition, and selected-family evidence ownership. Corrective PRs
+closed review and operator gaps rather than treating the first green implementation as sufficient.
+
+### Step 4 — Audit the pilot against product-policy criteria
+
+The final report evaluated provider support, contract neutrality, migration lifecycle, dynamic
+composition, architecture containment, Workbench compatibility, and residual risks. It classified
+the technical pilot as successful and the broader rollout as undecided.
+
+### Step 5 — Separate direction, final text, and rollout authority
+
+On 2026-09-11, Sipke authorized revising ADR 0072 toward a bounded EF-first relational lane. This
+records that direction and the pilot lessons. Three distinct gates remain:
+
+1. **Revision direction:** authorized.
+2. **Final ADR text:** still proposed until explicitly accepted after exact-head review.
+3. **Module rollout:** separately admitted and planned; ADR acceptance alone schedules nothing.
+
+## Decision criteria
+
+An acceptable policy must satisfy all of these:
+
+- **Owned-code economy:** EF must reduce, not merely relocate, Elsa-maintained infrastructure.
+- **Contract neutrality:** domain callers remain independent of persistence family and engine.
+- **Dynamic ownership:** migrations and lifecycle behavior travel with the feature.
+- **Operator safety:** apply, validate, diagnostics, locking, and rollback are explicit.
+- **Provider honesty:** dialect, OCC, types, normalization, indexing, and query behavior are tested
+  per provider.
+- **Compositional clarity:** one selected family owns registration and evidence for one domain in a
+  shell.
+- **Reversibility:** an existing implementation is not deleted before conversion and rollback are
+  proven.
+- **Evidence proportionality:** a simple-domain pilot cannot authorize Runtime or document-store
+  replacement.
 
 ## Decisions
 
-### D1 — Relational family is EF Core; Mongo is an optional second family
+### D1 — EF Core is an allowed first-party relational family for admitted modules
 
-New simple domain modules persist relationally with EF Core. Mongo is optional and separate: not
-every module needs it, and Mongo migrations/drivers do not ride inside these DbContexts.
+Once this ADR is accepted, new or existing modules may use first-party EF Core only after they pass
+the admission gate in D2. This is a bounded lane, not a repository-wide rewrite and not a declaration
+that EF is best for every durable workload.
 
-The **runtime hot path stays off this migration** until a later ADR. Groundwork V2 remains the
-current relational-plus-Mongo path for runtime checkpoint, queue, and placement.
+“EF-first” means: for an admitted, shape-simple relational module, evaluate the standard EF recipe
+before inventing or expanding another Elsa-owned persistence framework. It does not mean automatic
+conversion of existing Groundwork modules.
 
-**Groundwork freeze for domains that move to EF.** Stop adding new Groundwork adapters and stop
-expanding evidence ledgers for those domains. Keep Groundwork where it already is, including
-runtime, until that later ADR. This is a freeze of *new* Groundwork work on the moving domains,
-not a deletion of existing Groundwork modules in this PR.
+### D2 — Admission is per module and precedes implementation
 
-### D2 — One EF module package per domain module; migrations travel with the feature
+A module is eligible only when all of these are demonstrated:
 
-Not one migrations project per provider. The module package references
-`Microsoft.EntityFrameworkCore` and `Microsoft.EntityFrameworkCore.Relational` only. The host
-brings exactly one provider package (SQLite, SQL Server, or PostgreSQL in the default packs).
+1. Its persistence contract is provider-blind and bounded; callers consume no `DbContext`,
+   `IQueryable`, provider SQL, or EF entity.
+2. Relational persistence is the intended product family; MongoDB or document-family parity is not
+   a mandatory promise for that module.
+3. Transaction, concurrency, ordering, query, tenancy, retention, and consistency semantics can be
+   written as module-owned tests.
+4. The workload is not a Runtime/G8 hot-path or dependent on Groundwork operational primitives.
+5. Three provider-derived migration sets remain reviewable; otherwise the D14 threshold is
+   evaluated before proceeding.
+6. For an existing module, data conversion, mixed-version behavior, cutover, rollback, evidence
+   retention, and operational ownership are explicit acceptance gates.
 
-Generated migrations travel with the feature so enabling it in Nuplane also enables the schema it
-owns. A host-wide migrations project cannot enumerate an open feature set, and a design-time-only
-assembly that nothing loads at apply time cannot hold the only copy. Snapshots ship in the
-assembly that owns the derived context (the module when they compile against Relational; otherwise
-the host's one provider package — D3).
+Failing a condition means keep Groundwork or open a focused architecture decision. It does not mean
+weakening the gate to preserve a rollout plan.
 
-### D3 — Provider-derived DbContext types
+No second module is pre-approved by this ADR. Issue
+[#1654](https://github.com/elsa-workflows/elsa-foundation/issues/1654) owns the candidate and
+transaction-boundary inventory after acceptance.
 
-One `DbContext` type cannot own three provider snapshots. Each SQL provider gets a derived
-context with its own `Migrations/` folder and `ModelSnapshot`.
+### D3 — One module package owns the relational model and migrations
 
-Shape:
+An EF persistence module references `Microsoft.EntityFrameworkCore` and
+`Microsoft.EntityFrameworkCore.Relational`. Provider engines are supplied by the host's selected
+composition, not referenced directly by the module.
 
-- `SecretsDbContext` — shared model and store configuration (module package).
-- `SecretsSqliteDbContext` / `SecretsSqlServerDbContext` / `SecretsPostgreSqlDbContext` — each
-  with its own migrations and snapshot.
+The module package owns:
 
-The host registers the derived context that matches its provider. Design-time generation and
-runtime apply both target that derived type.
+- the shared model and store implementation;
+- the provider-derived contexts;
+- each provider's migrations and model snapshot;
+- feature registration and selected-family guards.
 
-Derived types and their snapshots ship where Nuplane can load them with the feature while the
-**module** package still references Relational only (D2). If a provider generator emits types
-that need the provider package to compile, that derived context and its snapshot live in the
-host's **one** provider package (or a companion that package already pulls) — not in two extra
-module-owned provider projects. That is the Elsa 3 matrix this decision refuses.
+If a provider generator emits provider-dependent compiled types, that derived context and snapshot
+may live in an existing host provider package or companion already pulled by it. Do not recreate the
+Elsa 3 matrix of one provider project per domain merely to preserve this packaging sentence.
 
-### D4 — Design-time tooling stays out of the module package
+### D4 — Each relational provider gets a derived context and snapshot
 
-`IDesignTimeDbContextFactory` implementations and `dotnet-ef` live in a tooling or host-provider
-project, not in the module package that Nuplane loads. The module stays free of provider engines
-and of `Microsoft.EntityFrameworkCore.Design`. Generation is invoked from that tooling project
-and writes into the per-provider `Migrations/` folders that ship with the derived context (D3).
-The spike kept generated files in the tooling project for isolation; the product assembly that
-Nuplane (or the host's one provider package) loads at apply time must contain them.
+One `DbContext` type cannot own several provider snapshots in one assembly. Each supported
+provider gets a derived type, for example:
 
-A repository script generates migrations per provider. CI fails on pending model changes **per
-provider** (each derived context's snapshot against that provider's model).
+- `SecretsSqliteDbContext`
+- `SecretsSqlServerDbContext`
+- `SecretsPostgreSqlDbContext`
 
-### D5 — Per-module migrations history table
+Shared model configuration stays in the module's base context or configuration types. Design-time
+generation and runtime apply both target the same derived type and migration set.
 
-Each module uses its own history table, for example `__EFMigrationsHistory_<Module>`
-(`__EFMigrationsHistory_ElsaSecrets` in the spike). Two modules in one database must not share
-`__EFMigrationsHistory`. The table name is configured on the provider `Use*` options, not as a
-magic property of the base context type.
+### D5 — Migration lifecycle covers both host and shell activation
 
-### D6 — Dual apply modes
+The shared EF policy must support the actual hosting lifecycle:
 
-**In-process (Nuplane / feature enable).** After feature enablement and CShells reload, a
-persistence feature's startup or post-reload hook resolves the provider-derived `DbContext` and
-calls `Database.MigrateAsync()`. EF Core 9 already takes `IHistoryRepository.AcquireDatabaseLockAsync`
-on that path. Hosts that call `IMigrator.Migrate` or apply pending migrations themselves must take
-the same lock or they race.
+- an `IHostedService` covers ordinary host-scoped startup where applicable;
+- an `IShellInitializer` covers shell activation and reload because CShells does not execute
+  shell-scoped hosted services.
 
-**Out-of-process (CI/CD).** Apply with `dotnet ef database update --context <DerivedContext>`
-against the environment connection string, or a tiny host that news the derived context and
-calls `Migrate()`. The app may start with auto-migrate **off** and fail closed if migrations are
-pending.
+Both paths resolve the provider-derived context selected for that shell and apply the configured
+policy. Registration alone is not evidence; activation, reload, and failure behavior are tested.
 
-Both modes are required. Neither is a substitute for the other.
+### D6 — Runtime and out-of-process modes use the same artifacts
 
-### D7 — Provider guard
+Every admitted module supports:
 
-Refuse apply when the live `Database.ProviderName` does not match the derived context's expected
-provider. The spike's `ProviderGuard.Ensure` throws before SQL in that case. A Sqlite file opened
-through a PostgreSQL-derived context must not run PostgreSQL migrations.
+- **AutoMigrate:** apply pending migrations during the applicable host/shell lifecycle.
+- **Validate:** fail closed when migrations or required persisted projections are stale.
+- **Out-of-process apply:** target the provider-derived context through `dotnet ef` or an equally
+  narrow operator host.
 
-The host still selects the derived context from configuration. The guard is the last line of
-defense, not the composition mechanism.
+The modes use the same compiled migration artifacts. Runtime policy is configurable; an environment
+may disable automatic apply and require operator-controlled migration.
 
-### D8 — Shared policy package, not a second Groundwork
+### D7 — History, provider pairing, and concurrent apply fail safely
 
-A small shared package — name flexible, `Elsa.Persistence.EntityFramework` is the working title —
-owns history-table naming, the provider guard, migrate-lock guidance, and startup policy
-(auto-migrate on vs fail-if-pending). Keep it a **policy surface**. It is not a second Groundwork,
-not a universal Elsa `DbContext` base that modules must inherit, and not a place to accumulate
-entity configuration.
+Each module owns a distinct migrations history table, such as
+`__EFMigrationsHistory_ElsaSecrets`. Different modules must not share the default history table.
 
-Framework [§2.9](../../.specify/memory/constitution-framework.md#29-persistence-base-context--application-level)
-already forbids mandating an application base `DbContext`. Module-owned derived contexts remain
-first-class. Any `ElsaDbContextBase` reuse is opt-in ([constitution §E2.5](../../.specify/memory/constitution.md#e25-elsadbcontextbase--opt-in-capability-not-requirement))
-and is not required by this ADR.
+Apply refuses to run when the live `Database.ProviderName` does not match the selected derived
+context. Concurrent apply uses EF's migration lock path or an explicitly equivalent lock; callers
+must not bypass it with an unlocked custom migrator.
 
-### D9 — OCC / types are per provider
+### D8 — Persistence semantics are provider-specific contracts
 
-Do not assume `IsRowVersion()` as a cross-provider default. The spike showed the Sqlite provider
-inserting `NULL` into an `IsRowVersion` column, which then fails `NOT NULL`. Use an explicit
-concurrency-token strategy per provider (the spike stamped a 16-byte GUID in `SaveChanges` and
-mapped `IsConcurrencyToken()`; SQL Server may keep `rowversion` later). The same caution applies
-to Guid affinity and JSON column types.
+Do not assume `IsRowVersion()`, one Guid affinity, one JSON type, runtime Unicode casing, or one
+index/query shape works across providers.
 
-### D10 — Pilot first; no big-bang Groundwork rewrite
+Each provider implementation proves its own:
 
-**Secrets** (or an equivalent shape-simple module) is the first product implementation of this
-pattern. New modules prefer it. Existing Groundwork modules are not rewritten in the same unit.
+- optimistic-concurrency token and conflict behavior;
+- physical types and null/default behavior;
+- indexes, uniqueness, paging, and bounded query plans;
+- normalization and persisted search-key algorithm;
+- diagnostics and redaction behavior.
 
-This ADR does not implement Secrets EF product code. Acceptance unblocks a Secrets pilot
-implementation plan.
+Persisted normalization/search-key algorithms are versioned compatibility contracts. A mapping table
+is not regenerated in place when runtime or Unicode data changes; a new algorithm id, backfill, and
+old/new lookup-continuity proof are required.
 
-### D11 — FluentMigrator is deferred
+### D9 — One persistence family is selected per domain per shell
 
-The spike preferred Variant A. Revisit FluentMigrator only if N-module × 3-provider snapshot
-review becomes the dominant cost. If it is revisited, a CI EF model-drift gate is mandatory
-(`IMigrationsModelDiffer` plus `IDatabaseModelFactory` as in the spike's Variant B). Without that
-gate, EF's model and FluentMigrator's schema diverge silently.
+EF and Groundwork implementations of the same domain are mutually exclusive and fail fast regardless
+of registration order. Domain contracts do not gain caller switches or dual-write behavior.
 
-FluentMigrator is not dialect-free: Guid, JSON, and OCC still needed `IfDatabase` in the spike.
-Taking it later is not an escape from the provider matrix; it is a second schema DSL plus a
-runner stack plus a drift service.
+Composition and evidence follow the selected family:
+
+- EF-selected composition proves the EF feature and omits the Groundwork store feature/ledger row.
+- Groundwork-selected composition retains its Groundwork feature and evidence obligations.
+
+Neither family can require the other family's ledger as a condition of readiness.
+
+### D10 — Cross-module relational-engine topology is deferred, not implied
+
+Each EF persistence feature binds to exactly one provider-derived context in a shell. The Secrets
+pilot proved that boundary for one module.
+
+This ADR does not decide whether one shell may safely bind different EF modules to different
+relational engines. Default host packs may choose one relational engine consistently. A multi-engine
+host must not be claimed or standardized until #1654 inventories connection ownership, transaction
+boundaries, migration ordering, diagnostics, and operator UX and a follow-up decision records the
+contract.
+
+### D11 — Groundwork remains for document, Runtime, and specialized operational workloads
+
+MongoDB remains an optional second family, outside these EF contexts. A module that requires a
+document store keeps or adds a document-family adapter with its own evidence.
+
+Runtime checkpoint, execution state and logs, scheduler queues, durable command inboxes, timers,
+outbox, mailbox and agent ownership, placement, transport, leases, fencing, and distributed locks
+remain on Groundwork for this direction. Reconsidering them requires a dedicated ADR plus workload
+evidence for correctness, contention, crash recovery, idempotency, and performance.
+
+OpenIddict remains at the vendor persistence boundary established by ADR 0042. Do not merge its
+vendor `DbContext` with Elsa IAM contexts.
+
+### D12 — Default changes and retirement are separate decisions
+
+Adding an EF implementation does not switch a checked-in host default. A default change requires a
+separate PR with production-shaped evidence for that host.
+
+For an existing domain:
+
+1. add and prove the EF option;
+2. rehearse conversion, cutover, rollback, and mixed-version behavior;
+3. switch the default separately, if explicitly approved;
+4. retain Groundwork through the rollback window;
+5. retire Groundwork only after a separate compatibility and evidence decision.
+
+No dual-write is introduced. The Groundwork adapter is the rollback path until retirement.
+
+### D13 — Shared EF infrastructure stays a small policy surface
+
+`Elsa.Persistence.EntityFramework` may own history naming, provider pairing, migration policy,
+locking guidance, and host/shell lifecycle integration. It must not become another universal
+persistence framework, accumulate domain entity mappings, or require modules to inherit from an
+Elsa-specific base context.
+
+Consumer-owned `DbContext` types remain first-class under framework §2.9 and Elsa §E2.5.
+
+### D14 — FluentMigrator remains a measured escape hatch
+
+Provider-derived contexts are the default for this lane. Revisit FluentMigrator only when measured
+module-by-provider snapshot churn becomes the dominant maintenance cost.
+
+Any revisit requires:
+
+- a provider matrix for physical types and migration behavior;
+- an EF model-versus-database drift gate;
+- migration locking and operator tooling;
+- evidence that the reduced snapshot surface outweighs the second schema DSL and runner stack.
+
+It is not a shortcut around provider-specific semantics.
+
+### D15 — Production-readiness claims require the production-shaped route
+
+The pilot's package-feed composition proof is valid for the bounded technical verdict. It does not
+prove the current Foundation Host/Nuplane directory-feed route can safely share unsigned
+`CShells.Abstractions` identity or reject a zero-feature shell.
+
+Issue [#1644](https://github.com/elsa-workflows/elsa-foundation/issues/1644) must close before that
+directory-feed route is called production-ready. Issue
+[#1653](https://github.com/elsa-workflows/elsa-foundation/issues/1653) owns a real Secrets HTTP CRUD
+and restart journey with EF selected. These evidence gates do not themselves authorize another
+module or a default switch.
 
 ## Consequences
 
-**Once accepted:**
+If accepted:
 
-- ADR 0042's "Groundwork as the only first-party durable family" is narrowed: new simple modules
-  ship EF Core with provider-derived contexts; Groundwork remains for runtime checkpoint, queue,
-  and placement until a later ADR, and stays frozen for domains that move to EF.
-- Secrets (or equivalent) becomes the first implementation plan. This ADR is the direction; that
-  plan is the work unit.
-- Module authors maintain one module package plus three derived-context migration folders, not
-  three provider projects. Snapshot volume grows with modules × providers; D11 is the escape
-  hatch if that volume dominates.
-- Hosts pick one relational provider package. Multi-engine remains a composition concern, not a
-  reason to put three providers in one module.
-- Architecture guards that currently ratchet toward zero first-party EF will need a scoped
-  allowlist for these module packages, analogous to the OpenIddict vendor exception already in
-  ADR 0042. That allowlist change is part of the pilot, not this record.
+- ADR 0042 is narrowed from “Groundwork-only first-party persistence” to allow the bounded EF
+  relational lane above.
+- The shipped Secrets EF module becomes the first conforming implementation, while Workbench stays
+  Groundwork-default.
+- Architecture guards retain a small explicit first-party EF allowlist instead of treating the
+  pilot exception as policy.
+- Every admitted relational module maintains provider-derived contexts and migration snapshots for
+  its supported providers.
+- Existing-domain replacements carry conversion and rollback work that the greenfield Secrets pilot
+  did not need.
+- Groundwork remains a first-party family; this ADR does not set a date for its removal.
+- Snapshot and provider evidence cost becomes visible per module rather than hidden in a shared host
+  migration estate.
 
-**Deferred, not decided here:**
+Costs and risks:
 
-- `shells.json` provider presets.
-- Oracle in the default packs — out until demand.
-- Runtime hot-path persistence family. Groundwork stays until a dedicated ADR.
-- Mongo adapters for modules that need a document family; those stay a second family.
+- generated migrations remain a module × provider review surface;
+- provider-specific behavior requires separate tests and operational diagnostics;
+- supporting two implementation families increases composition and compatibility responsibility
+  during each transition window;
+- the admission gate can correctly conclude that Groundwork remains the better fit.
 
 ## Alternatives considered
 
-**Keep or simplify Groundwork for all domains.** Rejected for new simple modules. Groundwork V2
-already solved multi-provider schema including Mongo, but Elsa wrapping is the cost this direction
-exists to avoid. Runtime keeps Groundwork; the freeze (D1) stops expanding that wrapping onto
-Secrets-shaped domains.
+### Keep Groundwork as the only first-party family
 
-**Shared host migrations.** Rejected. Nuplane's open feature model has no closed module catalog
-the host can migrate on behalf of. Migrations travel with the feature (D2).
+This remains the standing policy until acceptance. It minimizes framework diversity and preserves
+document/provider neutrality, but it retains Elsa-owned adapter and evidence cost even for simple
+relational modules. The Secrets pilot showed that EF can reduce that cost without changing the
+domain contract, so an absolute prohibition is no longer the recommended direction.
 
-**FluentMigrator schema plus EF for data access** (spike Variant B, PR #1622). Deferred, not
-chosen (D11). One handwritten migration set is smaller than two generated snapshots for a single
-table, but the owned surface is a second DSL, a runner stack, and a mandatory drift gate. FM is
-still provider-conditional. `MigrateAsync` already locks; FM does not buy a lock for free.
+### Shared host migrations
 
-**One context type with three migration folders.** Rejected. EF Core binds one `ModelSnapshot` to
-one `DbContext` type per assembly. Confirmed in the spike by generating two folders from two
-derived types. That constraint is why D3 exists.
+Rejected. Nuplane has an open feature set; a host-owned migration catalog cannot know every module
+that may later be installed. Schema artifacts travel with the owning feature.
 
-## Follow-ups
+### One context with several migration folders
 
-1. Sipke accepts or amends this ADR. Status stays `proposed` until then.
-2. After acceptance: Secrets (or equivalent) EF pilot implementation plan. No product EF code in
-   this PR.
-3. After the pilot: scoped EF-surface allowlist, per-provider CI model-drift on the derived
-   contexts, and a generate-migrations script in the repo.
-4. `shells.json` provider preset — later.
-5. Oracle default-pack demand — later, if any.
-6. Runtime checkpoint/queue/placement family — later ADR; Groundwork until then.
-7. Delete or promote `spikes/persistence-ef-vs-fluentmigrator/` after the ADR is accepted and the
-   pilot no longer needs it.
+Rejected. EF binds one model snapshot to one `DbContext` type per assembly. Provider-derived
+contexts are the supported isolation boundary.
 
-## Linked decisions and evidence
+### One provider project per module
 
-- [PR #1622](https://github.com/elsa-workflows/elsa-foundation/pull/1622) — Variant A vs Variant B
-  spike; recommendation, LOC-ish counts, footguns, Nuplane hook points.
-- [ADR 0042](0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md) — standing
-  "Groundwork only" rule this draft would narrow.
-- [ADR 0065](0065-groundwork-persistence-targets-are-named-and-lanes-bind-to-them.md) — named
-  Groundwork targets; still the composition model for Groundwork lanes.
-- Groundwork V2 (`StorageUnit` + `Schema.Apply`) — current relational-plus-Mongo path, frozen for
-  new simple modules that move to EF, retained for runtime until a later ADR.
-- Framework §2.9 / Elsa §E2.5 — consumer-owned `DbContext` types remain first-class; no mandated
-  Elsa base context.
-- Framework §2.20 — provider packages stay in the host; the module package does not reference
-  provider engines.
+Rejected as the default. It recreates the Elsa 3 project matrix. Provider engines belong to the
+host composition unless generated provider-dependent code makes an existing host-provider companion
+necessary.
+
+### FluentMigrator plus EF data access
+
+Deferred under D14. It reduces generated snapshots but adds a second schema language, runner, drift
+gate, and locking surface while remaining provider-conditional.
+
+### Dual-write EF and Groundwork
+
+Rejected. It creates ambiguous authority, divergence and recovery semantics, and a much larger
+operational surface. Conversion is explicit and Groundwork remains the rollback path.
+
+### Convert Runtime with the same recipe
+
+Rejected for this decision. Secrets is a shape-simple business record; Runtime stores include
+leases, queues, fencing, outbox, placement, and crash-recovery semantics. They need a separate ADR
+and workload evidence.
+
+## Decision and rollout record
+
+| Date | State | Record |
+|---|---|---|
+| 2026-09-10 | Proposed | PR #1623 drafted the provider-derived EF direction from spike #1622. |
+| 2026-09-11 | Pilot concluded | Program #1626 and report PR #1655 recorded a successful bounded technical pilot and deferred product policy. |
+| 2026-09-11 | Revision authorized | Sipke authorized revising ADR 0072 in the bounded direction: separately admitted shape-simple relational modules, Groundwork retained for Runtime/document/specialized workloads. |
+| Pending | Final acceptance | Sipke reviews the exact final text after review convergence and explicitly accepts or rejects it. |
+| Pending | Rollout | If accepted, #1654 may inventory candidates and create separately authorized module issues. No module is scheduled by this ADR alone. |
+
+## Follow-ups and ownership
+
+- [#1628](https://github.com/elsa-workflows/elsa-foundation/issues/1628): review and explicitly
+  accept or reject the final ADR text; reconcile ADR 0042 and the Zero-EF program goal.
+- [#1622](https://github.com/elsa-workflows/elsa-foundation/pull/1622): if this ADR is accepted,
+  close the spike PR as superseded by the product pilot and this decision while retaining its
+  permalink; do not merge duplicate spike product code.
+- [#1644](https://github.com/elsa-workflows/elsa-foundation/issues/1644): make the current
+  Foundation Host/Nuplane directory-feed route production-ready.
+- [#1653](https://github.com/elsa-workflows/elsa-foundation/issues/1653): prove EF-selected Secrets
+  through a production-shaped HTTP CRUD and restart journey.
+- [#1654](https://github.com/elsa-workflows/elsa-foundation/issues/1654): after acceptance, inventory
+  module eligibility, transactions, conversion, rollback, and multi-engine topology before creating
+  implementation issues.
+- [#1657](https://github.com/elsa-workflows/elsa-foundation/issues/1657): eliminate the concurrent
+  `dotnet ef` Tooling build-host race found by the post-main pilot gate.
+- [#646](https://github.com/elsa-workflows/elsa-foundation/issues/646): retain broad native-provider
+  and performance evidence for persistence workloads.
+
+The broader rollout remains `none/free-flow` until an accepted governance record deliberately
+creates or selects a program-goal bucket.

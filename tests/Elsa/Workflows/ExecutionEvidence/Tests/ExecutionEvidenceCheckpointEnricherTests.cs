@@ -1,3 +1,4 @@
+using Elsa.Testing;
 using Elsa.Workflows.ExecutionEvidence.Contracts;
 using Elsa.Workflows.ExecutionEvidence.Models;
 using Elsa.Workflows.ExecutionEvidence.Services;
@@ -15,7 +16,7 @@ namespace Elsa.Workflows.ExecutionEvidence.Tests;
 public sealed class ExecutionEvidenceCheckpointEnricherTests
 {
     private readonly InMemoryExecutionEvidenceStore _store = new();
-    private readonly CapturingLogger _logger = new();
+    private readonly RecordingLogger<ExecutionEvidenceCheckpointEnricher> _logger = new();
     private readonly ExecutionEvidenceCheckpointEnricher _enricher;
 
     public ExecutionEvidenceCheckpointEnricherTests() => _enricher = new(_store, logger: _logger);
@@ -317,7 +318,7 @@ public sealed class ExecutionEvidenceCheckpointEnricherTests
 
         Assert.Same(commit, result);
         var warning = Assert.Single(_logger.Warnings);
-        Assert.IsType<InvalidOperationException>(warning);
+        Assert.IsType<InvalidOperationException>(warning.Exception);
     }
 
     [Fact]
@@ -426,29 +427,5 @@ public sealed class ExecutionEvidenceCheckpointEnricherTests
         public ExecutionEvidencePage ListByCorrelation(string correlationId, long afterSequence) => throw new NotSupportedException();
 
         public void Clear(string? workflowExecutionId) => throw new NotSupportedException();
-    }
-
-    /// <summary>
-    /// A capture failure must be visible: its only other symptom is a downstream test failing on missing evidence,
-    /// which reads as a workflow bug rather than a collector bug.
-    /// </summary>
-    private sealed class CapturingLogger : ILogger<ExecutionEvidenceCheckpointEnricher>
-    {
-        public List<Exception?> Warnings { get; } = [];
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(
-            LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception? exception,
-            Func<TState, Exception?, string> formatter)
-        {
-            if (logLevel == LogLevel.Warning)
-                Warnings.Add(exception);
-        }
     }
 }

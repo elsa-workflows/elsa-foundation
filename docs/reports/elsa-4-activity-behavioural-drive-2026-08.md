@@ -157,7 +157,9 @@ real port, not just a string in an attribute.
 
 ### The intrinsic authoring catalog is discoverable and sufficient
 
-`e2e-tests/get-endpoints/Test-IntrinsicAuthoringCatalog.ps1`
+`tests/Elsa/Activities/Design/Api/Tests/IntrinsicAuthoringCatalogTests.cs` (the REST script
+`e2e-tests/get-endpoints/Test-IntrinsicAuthoringCatalog.ps1` originally cited here was retired with the
+`get-endpoints` suite on 2026-09-10)
 
 `GET /design/activities/catalog` now offers five intrinsic descriptors — `Set`, `SetOutput`,
 `SetCorrelationId`, `SetInstanceName`, `Finish` — and withholds `Merge`, `Reduce`, `Control`, `Return`.

@@ -11,7 +11,7 @@ namespace Elsa.Secrets.Persistence.Groundwork;
 [ShellFeature(
     name: "SecretsGroundworkPersistence",
     DisplayName = "Secrets Groundwork Persistence",
-    Description = "Replaces the default in-memory secrets repository with a Groundwork-backed repository."
+    Description = "Replaces the default in-memory secrets repository with a Groundwork-backed repository. Do not enable another Secrets persistence backend in the same shell. Groundwork Secrets matrix and ledger obligations apply only when this feature is selected."
 )]
 public class SecretsGroundworkPersistenceFeature : IShellFeature
 {

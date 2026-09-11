@@ -4,6 +4,7 @@ using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Secrets.Attention.Tests;
 
@@ -21,7 +22,7 @@ public sealed class SecretsAttentionContributorTests
             Secret("soon", SecretStatus.Active, Now.AddDays(10), "soon-value"),
             Secret("later", SecretStatus.Active, Now.AddDays(11), "later-value")
         ]);
-        var contributor = new SecretsAttentionContributor(repository, new FixedTimeProvider(Now));
+        var contributor = new SecretsAttentionContributor(repository, new FakeTimeProvider(Now));
 
         var result = await contributor.EvaluateAsync(Context(1, new Dictionary<string, string> { ["soonExpiringDays"] = "10" }));
 
@@ -44,7 +45,7 @@ public sealed class SecretsAttentionContributorTests
             .Concat(Enumerable.Range(0, 7).Select(index => Secret($"expired-{index:D3}", SecretStatus.Active, Now.AddDays(-index - 1))))
             .ToArray();
         var repository = new StubRepository(secrets);
-        var contributor = new SecretsAttentionContributor(repository, new FixedTimeProvider(Now));
+        var contributor = new SecretsAttentionContributor(repository, new FakeTimeProvider(Now));
 
         var result = await contributor.EvaluateAsync(Context(1));
 
@@ -62,7 +63,7 @@ public sealed class SecretsAttentionContributorTests
         secret.DisplayName = "Provider API key";
         secret.Description = "credential-description";
         secret.Versions[0].Payload.Metadata["token"] = "payload-metadata";
-        var contributor = new SecretsAttentionContributor(new StubRepository([secret]), new FixedTimeProvider(Now));
+        var contributor = new SecretsAttentionContributor(new StubRepository([secret]), new FakeTimeProvider(Now));
 
         var first = Assert.Single((await contributor.EvaluateAsync(Context(1))).Items);
         var second = Assert.Single((await contributor.EvaluateAsync(Context(1))).Items);
@@ -84,7 +85,7 @@ public sealed class SecretsAttentionContributorTests
     {
         var secret = Secret("secret-id", SecretStatus.Revoked, Now.AddDays(90));
         var repository = new StubRepository([secret]);
-        var contributor = new SecretsAttentionContributor(repository, new FixedTimeProvider(Now));
+        var contributor = new SecretsAttentionContributor(repository, new FakeTimeProvider(Now));
         var first = Assert.Single((await contributor.EvaluateAsync(Context(1))).Items);
 
         secret.UpdatedAt = Now.AddMinutes(1);
@@ -97,7 +98,7 @@ public sealed class SecretsAttentionContributorTests
     public async Task ReportsUnavailableWhenTenantContextOrThresholdIsInvalid()
     {
         var repository = new StubRepository([]);
-        var contributor = new SecretsAttentionContributor(repository, new FixedTimeProvider(Now));
+        var contributor = new SecretsAttentionContributor(repository, new FakeTimeProvider(Now));
 
         var noTenant = await contributor.EvaluateAsync(new(
             new(new ClaimsPrincipal(), null), new(1), new Dictionary<string, string>()));
@@ -115,7 +116,7 @@ public sealed class SecretsAttentionContributorTests
     {
         var contributor = new SecretsAttentionContributor(
             new StubRepository([Secret("wrong-tenant", SecretStatus.Revoked, Now, tenantId: "tenant-2")]),
-            new FixedTimeProvider(Now));
+            new FakeTimeProvider(Now));
 
         var result = await contributor.EvaluateAsync(Context(1));
 
@@ -127,7 +128,7 @@ public sealed class SecretsAttentionContributorTests
     [Fact]
     public async Task ConsumesOneDownstreamCallAndRequiresSecretsReadPermission()
     {
-        var contributor = new SecretsAttentionContributor(new StubRepository([]), new FixedTimeProvider(Now));
+        var contributor = new SecretsAttentionContributor(new StubRepository([]), new FakeTimeProvider(Now));
 
         await Assert.ThrowsAsync<AttentionBudgetExceededException>(async () => await contributor.EvaluateAsync(Context(0)));
 
@@ -201,10 +202,5 @@ public sealed class SecretsAttentionContributorTests
         public ValueTask<Secret?> FindAsync(string tenantId, string normalizedName, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<bool> TryAddAsync(Secret secret, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask SaveAsync(Secret secret, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

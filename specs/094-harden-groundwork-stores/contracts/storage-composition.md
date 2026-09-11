@@ -67,27 +67,34 @@ The test matrix includes:
 
 The same selected feature set must compile on every mandatory provider without changing core contracts or domain behavior.
 
-## 34-row host-selection evidence
+## Secrets EF-selected composition (Phase 4 / #1631)
 
-The checked-in coverage ledger carries one digest-verified `host-selection-all34` composition record.
-Its selected source identities cover the complete host composition. Runtime, IAM, Secrets, and
-Distributed Runtime preserve the original 32-row denominator; the ratified 2026-07-25 amendment adds
-the durable Structured Logs and OpenTelemetry rows contributed by `elsa-diagnostics`. Design,
-Activities Design, and Publishing remain selected composition sources but do not claim ledger rows.
+Selecting `SecretsEntityFrameworkCore` instead of `SecretsGroundworkPersistence` omits the Groundwork `elsa-secrets` source. Host-selection evidence for that shell is `evidence/composition/host-selection-ef-secrets-pilot.json`: the other Groundwork families stay selected, and `secrets-repository` is omitted rather than deleted. Workbench default remains the Groundwork-selected `host-selection-all35` composition. Either/or per host; never both sources in one shell.
 
-This record is composition evidence, not provider conformance evidence and not a new durability
+## Current host-selection evidence
+
+The checked-in coverage ledger carries the digest-verified Groundwork-selected
+`host-selection-all35` composition record and the digest-verified EF-selected
+`host-selection-ef-secrets-pilot` alternate. The primary record covers all 35 current rows. The
+alternate covers the other 34 rows and explicitly omits only `secrets-repository`, whose evidence
+is owned by the unselected Groundwork Secrets feature. Design, Activities Design, and Publishing
+remain selected composition sources but do not claim ledger rows.
+
+These records are composition evidence, not provider conformance evidence and not a new durability
 authority. In particular:
 
 - `iam-user`, `iam-role`, and `iam-external-identity` remain adapter-only links to authority `#644`;
 - `runtime-diagnostics-settings` remains linked source/evidence owned by authority `#660`;
 - each ledger entry retains its own delivery owner, status, and four-provider evidence obligations;
-- the composition artifact proves only that host selection cannot silently omit or duplicate a current
+- the composition artifacts prove only that host selection cannot silently omit or duplicate a current
   durable requirement.
 
-The ledger validator compares the composition record with the exact 34-row denominator, checks the
-external-authority links and their reviewed relationships against the row-level authority fields, and verifies the durable artifact at
-`evidence/composition/host-selection-all34.json` by SHA-256 and payload equality. The earlier
-`host-selection-all32` artifact remains immutable historical evidence.
+The ledger validator compares the primary composition record with the exact 35-row denominator,
+checks the external-authority links and their reviewed relationships against the row-level authority
+fields, and verifies the durable artifact at `evidence/composition/host-selection-all35.json` by
+SHA-256 and payload equality. It also verifies that the alternate artifact covers the exact other 34
+rows, omits only `secrets-repository`, and retains the same external-authority links. The earlier
+`host-selection-all32` and `host-selection-all34` artifacts remain immutable historical evidence.
 
 ## Scope/session acquisition
 

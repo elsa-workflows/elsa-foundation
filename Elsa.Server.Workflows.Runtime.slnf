@@ -74,6 +74,7 @@
       "tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj",
       "tests/Elsa/Activities/Testing/Elsa.Activities.Testing.csproj",
       "tests/Elsa/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj",
+      "tests/Elsa/Testing/Elsa.Testing.csproj",
       "tests/Elsa/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj",
       "tests/Elsa/Workflows/Runtime/Attention/Tests/Elsa.Workflows.Runtime.Attention.Tests.csproj",
       "tests/Elsa/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj",

@@ -5,6 +5,7 @@ using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Dashboard.Tests;
 
@@ -31,7 +32,7 @@ public sealed class WorkflowPortfolioServiceTests
             new InMemoryWorkflowPortfolioDataSource(definitions, drafts, references),
             publisher,
             new WorkflowPortfolioOptions { MaximumConcurrentValidations = 4 },
-            new FixedTimeProvider(Now));
+            new FakeTimeProvider(Now));
 
         var result = await service.QueryAsync("tenant-a");
 
@@ -50,7 +51,7 @@ public sealed class WorkflowPortfolioServiceTests
             new InMemoryWorkflowPortfolioDataSource([], [], []),
             new ValidationPublisher(new HashSet<string>(StringComparer.Ordinal)),
             new WorkflowPortfolioOptions(),
-            new FixedTimeProvider(Now));
+            new FakeTimeProvider(Now));
 
         await Assert.ThrowsAsync<WorkflowRunHealthQueryException>(async () => await service.QueryAsync(""));
     }
@@ -119,10 +120,5 @@ public sealed class WorkflowPortfolioServiceTests
                 current = previous;
             }
         }
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

@@ -5,6 +5,7 @@ using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Persistence.Groundwork.UnifiedHost.Tests;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
+using Elsa.Testing;
 using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;

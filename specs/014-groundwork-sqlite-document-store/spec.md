@@ -4,7 +4,8 @@
 
 **Created**: 2026-06-10
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: #18 (restatused 2026-09-10 from git evidence)
 
 **Input**: User description: "Implement G2 SQLite portable document store MVP for Groundwork: document envelope, SQLite tables, generic field indexes, materialization/schema history, save/load/delete, transactional index maintenance, declared-index queries, and optimistic concurrency."
 

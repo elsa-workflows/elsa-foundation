@@ -36,23 +36,6 @@ public sealed class StructuredLogsApiDependencyTests
         Assert.Contains("IWebShellFeature", source, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void Structured_logs_transition_baseline_contains_no_legacy_endpoint_registrations()
-    {
-        var baseline = File.ReadAllText(Path.Join(
-            RepoRoot,
-            "tests",
-            "Elsa",
-            "Architecture",
-            "Baselines",
-            "fastendpoints-transition-exceptions.json"));
-
-        Assert.DoesNotContain("Elsa.Diagnostics.StructuredLogs.Endpoints.RecentEndpoint", baseline, StringComparison.Ordinal);
-        Assert.DoesNotContain("Elsa.Diagnostics.StructuredLogs.Endpoints.SourcesEndpoint", baseline, StringComparison.Ordinal);
-        Assert.DoesNotContain("Elsa.Diagnostics.StructuredLogs.Endpoints.StreamEndpoint", baseline, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"followUp\": \"#1349\"", baseline, StringComparison.Ordinal);
-    }
-
     private static string RepoRoot { get; } = FindRepoRoot();
 
     private static string FindRepoRoot()

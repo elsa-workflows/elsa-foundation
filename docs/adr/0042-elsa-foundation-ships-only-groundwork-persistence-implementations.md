@@ -1,9 +1,13 @@
 # Elsa Foundation Ships Only Groundwork Persistence Implementations
 
-> **Proposed direction (not yet accepted):** [ADR 0072](0072-ef-first-relational-persistence-with-provider-derived-contexts.md)
-> drafts an EF-first relational family for new simple modules, with Groundwork frozen for those
-> domains and retained for runtime checkpoint/queue/placement until a later ADR. This ADR remains
-> in force until 0072 is accepted.
+> **Pending amendment (proposed ADR 0072, not accepted):**
+> [ADR 0072](0072-ef-first-relational-persistence-with-provider-derived-contexts.md) records the
+> bounded EF-first relational direction evaluated by the completed
+> [Secrets EF pilot](../reports/secrets-ef-persistence-pilot-verdict-2026-09.md). The pilot's scoped
+> EF allowlist is technical evidence, not an amendment of this accepted ADR. This ADR remains in
+> force until the final ADR 0072 text is explicitly accepted. Groundwork remains the Workbench
+> default and the retained family for Runtime, document/Mongo, and operationally specialized
+> workloads.
 
 Status: accepted (2026-07-12; ratified through the maintainer grilling and PR #630 review; the targeted constitution amendment remains separately pending consensus and compliance evidence).
 
