@@ -134,6 +134,23 @@ public sealed class SqliteEfSecretRepositoryTests
     }
 
     [Fact]
+    public async Task Save_concurrent_create_completes_both_calls_with_one_final_row()
+    {
+        var saveBarrier = new SaveBarrierInterceptor(2);
+        await using var first = await SqliteFixture.CreateAsync(saveBarrier);
+        await using var second = await first.CreateSiblingAsync();
+
+        await Task.WhenAll(
+            first.Repository.SaveAsync(Secret("tenant-a", "racing.unconditional-create", "first")).AsTask(),
+            second.Repository.SaveAsync(Secret("tenant-a", "racing.unconditional-create", "second")).AsTask());
+
+        Assert.Equal(1, await first.Context.Secrets.CountAsync());
+        first.Context.ChangeTracker.Clear();
+        var stored = await first.Repository.FindAsync("tenant-a", "racing.unconditional-create");
+        Assert.Contains(stored!.LatestActiveVersion!.Payload.Value, new[] { "first", "second" });
+    }
+
+    [Fact]
     public async Task Save_is_unconditional_when_a_concurrent_writer_changes_the_tracked_row()
     {
         await using var first = await SqliteFixture.CreateAsync();
