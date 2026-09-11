@@ -124,6 +124,44 @@ public sealed class EfCoreSurfaceRatchetTests
         Assert.DoesNotContain(
             snapshot.TransitiveEfPackageConsumers,
             entry => entry.Contains("Microsoft.EntityFrameworkCore.Relational", StringComparison.Ordinal));
+        Assert.Empty(snapshot.EfFreeBoundaryViolations);
+    }
+
+    [Fact]
+    public void Scanner_reports_ef_free_boundary_that_reaches_the_secrets_ef_pilot()
+    {
+        using var fixture = new TemporaryRepository();
+        fixture.Write("src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        fixture.Write("src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup>
+                <ProjectReference Include="..\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.Write(
+            "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj",
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup>
+                <PackageReference Include="Microsoft.EntityFrameworkCore" />
+              </ItemGroup>
+            </Project>
+            """);
+
+        var snapshot = new EfCoreSurfaceScanner(fixture.Path).Scan();
+
+        Assert.Contains(
+            "src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj reaches EF project src/Elsa/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj",
+            snapshot.EfFreeBoundaryViolations);
+        Assert.Contains(
+            "src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj reaches EF package Microsoft.EntityFrameworkCore",
+            snapshot.EfFreeBoundaryViolations);
+        Assert.DoesNotContain(
+            snapshot.EfFreeBoundaryViolations,
+            violation => violation.StartsWith("src/Elsa/Secrets/Core/", StringComparison.Ordinal));
     }
 
     [Fact]

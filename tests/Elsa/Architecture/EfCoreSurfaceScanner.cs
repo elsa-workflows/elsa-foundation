@@ -479,11 +479,14 @@ internal sealed class EfCoreSurfaceScanner
         var efBoundaryViolations = boundaryProjects.SelectMany(project =>
         {
             var violations = new List<string>();
+            // Boundary walks stay complete, including the Secrets EF pilot. A .Core / .Groundwork
+            // project that reaches the pilot is a leak; only shrink-only *inventory* omits those
+            // catalog edges (Workbench is not an EF-free boundary).
             violations.AddRange(reachable[project.FullPath]
                 .Where(efProjectPaths.Contains)
-                .Where(reference => !Adr0072SecretsEfPilot.IsSurfacePath(projectsByPath[reference].RelativePath))
                 .Select(reference => $"{project.RelativePath} reaches EF project {projectsByPath[reference].RelativePath}"));
-            violations.AddRange(InventoryReachable(project, reachable, projectsByPath)
+            violations.AddRange(reachable[project.FullPath]
+                .Append(project.FullPath)
                 .SelectMany(reference => projectsByPath[reference].PackageReferences)
                 .Where(IsEfPackage)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -539,8 +542,9 @@ internal sealed class EfCoreSurfaceScanner
     }
 
     /// <summary>
-    /// Reachable projects for shrink-only inventory, excluding the reviewed Secrets EF / policy
-    /// trees. A host catalog reference (Workbench) must not import that tree's EF package edges.
+    /// Reachable projects for shrink-only <em>inventory</em>, excluding the reviewed Secrets EF /
+    /// policy trees. A host catalog reference (Workbench) must not import that tree's EF package
+    /// edges. Do not use this for EF-free boundary walks.
     /// </summary>
     private static IEnumerable<string> InventoryReachable(
         ProjectInfo project,
