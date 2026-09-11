@@ -64,7 +64,8 @@ The completed Secrets pilot then tested that direction in product code. It prove
 - shell activation and reload require `IShellInitializer` in addition to the host lifecycle;
 - a shell can select EF or Groundwork for Secrets, never both;
 - each selected family must own its own composition and evidence path;
-- OCC, physical types, normalization, and persisted search keys are provider-specific contracts;
+- provider-specific OCC, physical types, and storage mechanics can preserve fixed module-level
+  conflict, normalization, and search-key contracts;
 - Workbench can remain Groundwork-default while an EF composition is opt-in.
 
 The measured cost comparison disproved the code-reduction premise for Secrets. Even after excluding
@@ -396,9 +397,10 @@ Costs and risks:
 ### Keep Groundwork as the only first-party family
 
 This remains the standing policy until acceptance. It minimizes framework diversity and preserves
-document/provider neutrality, but it retains Elsa-owned adapter and evidence cost even for simple
-relational modules. The Secrets pilot showed that EF can reduce that cost without changing the
-domain contract, so an absolute prohibition is no longer the recommended direction.
+document/provider neutrality. The Secrets pilot showed that EF can serve the same domain contract
+with familiar relational tooling and model-drift protection, but at greater owned-code cost for this
+module. The proposed lane therefore depends on per-module evidence of benefits other than code-size
+reduction; without that case, keeping Groundwork is the correct result.
 
 ### Shared host migrations
 
