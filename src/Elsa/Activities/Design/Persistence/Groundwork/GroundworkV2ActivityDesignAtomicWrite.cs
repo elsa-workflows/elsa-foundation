@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Elsa.Persistence.Groundwork.DesignAtomic;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 
@@ -41,108 +42,91 @@ public sealed class GroundworkDesignAtomicWrite(GroundworkV2ActivityDesignStore 
         ArgumentNullException.ThrowIfNull(stage);
         cancellationToken.ThrowIfCancellationRequested();
 
+        var documentKind = ActivitiesDesignStorageManifest.DesignOperationDocumentKind;
         var markerId = MarkerId(request.Operation);
-        var existing = await store.LoadAsync(
-            ActivitiesDesignStorageManifest.DesignOperationDocumentKind, markerId, cancellationToken);
-        if (existing is not null)
-            return Resolve(existing, request);
+        GroundworkDesignAtomicWriteContext? context = null;
 
-        if (beforeAttempt is not null)
-            await beforeAttempt(cancellationToken);
-
-        for (var attempt = 1; ; attempt++)
+        var lane = new DesignAtomicWriteLane<ActivityDesignUnitOfWork, ActivityDesignDocument, GroundworkDesignAtomicWriteStageResult, GroundworkDesignAtomicWriteResult>
         {
-            try
+            DocumentKind = documentKind,
+            MarkerId = markerId,
+            LoadMarker = ct => store.LoadAsync(documentKind, markerId, ct),
+            BeginScope = () =>
             {
-                return await ExecuteAttemptAsync(request, markerId, stage, cancellationToken);
-            }
-            catch (ActivityDesignWriteConflictException) when (attempt < 4)
+                var unitOfWork = store.Begin(new ActivityDesignCommitScope(
+                    request.MutatedDocumentKinds.Append(documentKind).ToArray()));
+                context = new GroundworkDesignAtomicWriteContext(unitOfWork);
+                return unitOfWork;
+            },
+            SaveMarker = async (_, staged, ct) =>
             {
-                // A create-only marker conflict may be observed before the winner is durable.
-                // Retry the exact operation a bounded number of times without re-running the
-                // caller's preflight callback.
-                await Task.Delay(TimeSpan.FromMilliseconds(25 * attempt), cancellationToken);
-                var winner = await store.LoadAsync(
-                    ActivitiesDesignStorageManifest.DesignOperationDocumentKind,
+                var marker = new DesignOperationMarker(
+                    request.Operation.OperationKind,
+                    request.Operation.OperationKey,
+                    request.CanonicalRequestFingerprint,
+                    staged.AuthoritativeResultFingerprint!,
+                    staged.AuthoritativeResultJson!);
+                await context!.SaveAsync(new ActivityDesignSaveRequest(
+                    documentKind,
                     markerId,
-                    cancellationToken);
-                if (winner is not null)
-                    return Resolve(winner, request);
-            }
-            catch (ActivityDesignWriteConflictException)
+                    ActivitiesDesignStorageManifest.SchemaVersion,
+                    JsonSerializer.Serialize(marker, JsonOptions),
+                    ExpectedVersion: 0), ct);
+            },
+            Commit = async (scope, ct) =>
             {
-                var winner = await store.LoadAsync(
-                    ActivitiesDesignStorageManifest.DesignOperationDocumentKind,
-                    markerId,
-                    cancellationToken);
-                if (winner is not null)
-                    return Resolve(winner, request);
-
-                throw;
-            }
-        }
-    }
-
-    private async Task<GroundworkDesignAtomicWriteResult> ExecuteAttemptAsync(
-        GroundworkDesignAtomicWriteRequest request,
-        string markerId,
-        Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
-        CancellationToken cancellationToken)
-    {
-        using var unitOfWork = store.Begin(new ActivityDesignCommitScope(
-            request.MutatedDocumentKinds.Append(ActivitiesDesignStorageManifest.DesignOperationDocumentKind).ToArray()));
-        var context = new GroundworkDesignAtomicWriteContext(unitOfWork);
-        var staged = await stage(context, cancellationToken);
-        ArgumentNullException.ThrowIfNull(staged);
-        if (!staged.IsAccepted)
-        {
-            unitOfWork.Rollback();
-            return GroundworkDesignAtomicWriteResult.Rejected();
-        }
-
-        var marker = new DesignOperationMarker(
-            request.Operation.OperationKind,
-            request.Operation.OperationKey,
-            request.CanonicalRequestFingerprint,
-            staged.AuthoritativeResultFingerprint!,
-            staged.AuthoritativeResultJson!);
-        await context.SaveAsync(new ActivityDesignSaveRequest(
-            ActivitiesDesignStorageManifest.DesignOperationDocumentKind,
-            markerId,
-            ActivitiesDesignStorageManifest.SchemaVersion,
-            JsonSerializer.Serialize(marker, JsonOptions),
-            ExpectedVersion: 0), cancellationToken);
-        try
-        {
-            await unitOfWork.CommitAsync(cancellationToken);
-        }
-        catch (ActivityDesignWriteConflictException)
-        {
-            throw;
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            // A provider may acknowledge the commit only after the durable transaction has
-            // completed. The marker is the authoritative classification for that ambiguity;
-            // do not stage the mutation a second time when it is already durable.
-            try
+                await scope.CommitAsync(ct);
+                return DesignAtomicCommitDisposition.Committed;
+            },
+            Rollback = scope => scope.Rollback(),
+            ClassifyMarkerRace = static exception => exception is ActivityDesignWriteConflictException,
+            ClassifyUncertainCommit = static _ => false,
+            OnUncertainCommit = static (_, _) => throw new InvalidOperationException(
+                "Activity-design atomic writes reconcile uncertain commits after Commit, not in the retry loop."),
+            TryReconcileAfterCommit = async (_, _) =>
             {
-                var winner = await store.LoadAsync(
-                    ActivitiesDesignStorageManifest.DesignOperationDocumentKind,
-                    markerId,
-                    CancellationToken.None);
-                if (winner is not null)
-                    return ResolveReconciled(winner, request);
-            }
-            catch
-            {
-                // Preserve the provider's original failure when reconciliation cannot classify it.
-            }
+                // A provider may acknowledge the commit only after the durable transaction has
+                // completed. The marker is the authoritative classification for that ambiguity;
+                // do not stage the mutation a second time when it is already durable.
+                try
+                {
+                    var winner = await store.LoadAsync(documentKind, markerId, CancellationToken.None);
+                    if (winner is not null)
+                        return ResolveReconciled(winner, request);
+                }
+                catch (Exception exception) when (exception is not (
+                    OutOfMemoryException or
+                    StackOverflowException or
+                    AccessViolationException))
+                {
+                    // Preserve the provider's original failure when reconciliation cannot
+                    // classify it. Load/Resolve throw InvalidDataException, InvalidOperationException,
+                    // JsonException, and provider exceptions — not only ActivityDesign* types.
+                }
 
-            throw;
-        }
-        return GroundworkDesignAtomicWriteResult.Committed(
-            staged.AuthoritativeResultFingerprint!, staged.AuthoritativeResultJson!);
+                return null;
+            },
+            // A create-only marker conflict may be observed before the winner is durable.
+            // Retry the exact operation a bounded number of times without re-running the
+            // caller's preflight callback.
+            Delay = static (attempt, ct) => Task.Delay(TimeSpan.FromMilliseconds(25 * attempt), ct),
+            IsAccepted = static staged => staged.IsAccepted,
+            OnCommitted = static staged => GroundworkDesignAtomicWriteResult.Committed(
+                staged.AuthoritativeResultFingerprint!, staged.AuthoritativeResultJson!),
+            OnReplay = marker => Resolve(marker, request),
+            OnRejected = static () => GroundworkDesignAtomicWriteResult.Rejected(),
+            DelayBeforeMarkerReload = true
+        };
+
+        return await DesignAtomicWriteProtocol.ExecuteAsync(
+            lane,
+            (scope, ct) =>
+            {
+                _ = scope;
+                return stage(context!, ct);
+            },
+            beforeAttempt,
+            cancellationToken);
     }
 
     private static GroundworkDesignAtomicWriteResult Resolve(
