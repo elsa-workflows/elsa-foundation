@@ -129,9 +129,13 @@ nor treats it as a Secrets regression.
 
 ## Conditional Groundwork-to-EF replacement plan
 
-This plan is **not active implementation authority**. It becomes executable only after #1628
-records explicit human acceptance of the final ADR text, including another review round if the ADR
-is revised. Until then, ADR 0042 and the active
+The replacement portions of this plan are **not active implementation authority**. #1644 and #1653
+are independent production-readiness/evidence follow-ups and may proceed under their existing issue
+authority. #1654, the existing-domain replacement waves, and the delivery template remain blocked
+until #1628 records explicit human acceptance of final ADR text that authorizes separately gated
+existing-domain replacement; accepting the current PR #1623 draft unchanged would authorize only
+new simple modules. If the ADR is revised, it requires another review round before acceptance.
+Until then, ADR 0042 and the active
 [Zero-EF Persistence](../program-goals/zero-ef-persistence.md) goal remain authoritative.
 
 ### Admission rule
@@ -262,8 +266,11 @@ accept**, adding the pilot's material lessons before acceptance:
 3. OCC, physical types, normalization, and persisted search keys are provider-specific contracts,
    not a portable `IsRowVersion()` or runtime-casing convention.
 4. #1644 must close before the Foundation Host directory-feed route is called production-ready.
-5. Every existing-domain replacement must include an explicit data conversion and rollback gate;
-   the greenfield Secrets pilot did not prove that part.
+5. Existing-domain replacement must be decided explicitly. The recommendation is to authorize it
+   only for separately admitted, shape-simple domains; otherwise constrain the replacement waves
+   and delivery template to new modules.
+6. Every authorized existing-domain replacement must include an explicit data conversion and
+   rollback gate; the greenfield Secrets pilot did not prove that part.
 
 Sipke must record **accept**, **revise**, or **reject** in #1628. No agent should infer the answer
 from this successful pilot.
