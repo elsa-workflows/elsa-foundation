@@ -29,7 +29,7 @@ docker compose --profile studio up --build
 | Service      | URL                     | Notes                                   |
 |--------------|-------------------------|-----------------------------------------|
 | Elsa.Workbench  | http://localhost:13000  | Root path returns `{"status":"Healthy"}`|
-| Elsa Studio  | http://localhost:14000  | Management UI (Blazor WebAssembly)      |
+| Elsa Studio  | http://localhost:14000  | Management UI (Blazor WebAssembly). Sign in as `admin` / `Password123!`. |
 | PostgreSQL   | localhost:5432          | user/pw/db: `elsa` / `elsa` / `elsa`    |
 
 Without the Studio image, run just the backend subset:
@@ -62,8 +62,15 @@ tree and the build needs repo-root `Directory.Packages.props`, the `.slnx`, and 
 
 ```bash
 docker build -f src/Apps/Elsa.Workbench/Dockerfile -t elsa-workbench:local .
-docker run --rm -p 13000:8080 elsa-workbench:local
+docker run --rm -p 13000:8080 \
+  -e CShells__Shells__default__Features__GroundworkWorkflowRuntime__RecoveryContinuationSigningKey=elsa-docker-demo-recovery-continuation-key \
+  -e 'CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityGroundwork__SeedAdminPassword=Password123!' \
+  -e "CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | openssl pkcs8 -topk8 -nocrypt -outform DER | base64)" \
+  elsa-workbench:local
 ```
+
+With no `ASPNETCORE_ENVIRONMENT` the container runs as `Production`, which needs the recovery continuation
+signing key and the two identity secrets above (see [Environment variables](#environment-variables)).
 
 The image:
 
@@ -88,8 +95,10 @@ maps to nuget.org. All feeds are public (no auth).
 
 ## Configuration surface
 
-Configuration layers, lowest to highest precedence: `appsettings.json` → mounted `shells.json` →
-environment variables. Standard .NET double-underscore (`__`) env keys override any config path.
+Configuration layers, lowest to highest precedence: `appsettings.json` → `shells.json` (baked in, or
+mounted) → `shells.{Environment}.json` → environment variables. The image ships `shells.Production.json`,
+so in `Production` that overlay wins over anything in a mounted `shells.json`; only environment variables
+can override it. Standard .NET double-underscore (`__`) env keys override any config path.
 
 ### Environment variables
 
@@ -101,6 +110,8 @@ environment variables. Standard .NET double-underscore (`__`) env keys override 
 | `Cors__AllowedOrigins__0`, `__1`, … | Browser origins allowed by the `ElsaStudio` CORS policy. The Studio container's **published host origin** must be listed. | `http://localhost:14000` |
 | `CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentity__AllowedReturnUrlOrigins__0`, `__1`, … | Origins the development login provider may redirect back to after sign-in. Add the Studio origin when Studio is hosted separately from the backend. | `http://localhost:14000` |
 | `CShells__Shells__default__Features__GroundworkWorkflowRuntime__RecoveryContinuationSigningKey` | HMAC key for durable recovery continuations: at least 32 UTF-8 bytes, identical on every node. Required whenever durable runtime persistence is composed; without it the default shell fails activation. | `elsa-docker-demo-recovery-continuation-key` |
+| `CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityGroundwork__SeedAdminPassword` | Password for the `admin` account that `shells.Production.json` seeds. The overlay blanks it, and a seed username without a password fails default shell activation (`/health/ready` returns `503 shell_activation_failed`). | `Password123!` |
+| `CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey` | Base64 PKCS#8 RSA private key that signs access tokens; whitespace in the value is ignored. The overlay turns off OpenIddict development mode, so without a key every request returns 500. See [identity configuration](reference/identity-configuration.md#foundationidentityopeniddict). | a demo key committed in the compose files |
 | `CShells__Shells__default__Features__GroundworkProviderPostgreSql__ConnectionString` | Optional: override the Postgres connection string without editing the mounted `shells.json`. | *(commented out)* |
 
 `Cors:AllowedOrigins` defaults (in `appsettings.json`) are localhost dev values for running the
@@ -193,6 +204,13 @@ Studio wiring (see `docker-compose.yml`):
 
 ## Troubleshooting
 
+- **`/health/ready` returns `503 shell_activation_failed`, and the log shows "SeedAdminUserName is configured
+  but SeedAdminPassword is not"** — the container runs in `Production` without the seed password. Set
+  `CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityGroundwork__SeedAdminPassword`.
+  Setting it in a mounted `shells.json` has no effect, because `shells.Production.json` blanks it.
+- **Every request returns 500 with "No signing key is configured for the OpenIddict identity module"** —
+  set `CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey` (see
+  [Environment variables](#environment-variables)).
 - **`/` returns 500 with `FeatureNotFoundException: WorkflowsRuntimeResumption`** — the host is
   missing the `Elsa.Workflows.Runtime.Resumption` project reference that every Groundwork
   persistence provider depends on. It is wired in `Elsa.Workbench.csproj` / `Program.cs`; rebuild the

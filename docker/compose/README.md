@@ -50,13 +50,17 @@ docker compose -f docker-compose.images.yml up
 Same result without Compose — start the server, then Studio pointed at it:
 
 ```bash
-# Elsa.Workbench (SQLite default composition; the volume is the Nuplane package feed)
+# Elsa.Workbench (SQLite default composition; the volume is the Nuplane package feed).
+# The last three -e flags are the secrets Production requires: the recovery continuation signing key,
+# the seed admin password, and a freshly generated access-token signing key (needs openssl on your machine).
 docker run -d --name elsa-workbench \
   -p 13000:8080 \
   -e ASPNETCORE_ENVIRONMENT=Production \
   -e Elsa__ModuleManagement__ApiKey=elsa-docker-demo-key \
   -e Cors__AllowedOrigins__0=http://localhost:14000 \
   -e CShells__Shells__default__Features__GroundworkWorkflowRuntime__RecoveryContinuationSigningKey=elsa-docker-demo-recovery-continuation-key \
+  -e 'CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityGroundwork__SeedAdminPassword=Password123!' \
+  -e "CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | openssl pkcs8 -topk8 -nocrypt -outform DER | base64)" \
   -v elsa-workbench-packages:/app/packages \
   elsaworkflows/elsa-workbench:latest
 
@@ -70,6 +74,7 @@ docker run -d --name elsa-studio \
 ```
 
 Then open **http://localhost:14000** (Studio); it calls **http://localhost:13000** (the server).
+Sign in as `admin` / `Password123!`.
 
 ### Pointing Studio at the server backend
 
@@ -88,10 +93,11 @@ independently (they are built by separate pipelines), so their run numbers do no
 one from its own [Docker Hub tag list](https://hub.docker.com/r/elsaworkflows/elsa-workbench/tags).
 Demo credentials and the demo-only warning are the same as the [table in section 4](#4-services-ports-and-demo-credentials).
 
-> ⚠️ `elsa-docker-demo-key` and the wide-open CORS origin are **demo-only** — change the key on both
-> sides and scope CORS before exposing this anywhere. The same goes for the recovery continuation signing
-> key: in `Production` the server's default shell refuses to activate without one (see
-> [`docs/docker.md`](../../docs/docker.md#demo-persistence-composition)).
+> ⚠️ `elsa-docker-demo-key`, the `admin` password, the signing keys committed in the compose files, and
+> the wide-open CORS origin are **demo-only**. Change the management key on both sides, replace the identity
+> secrets (see [Identity in Production](#identity-in-production)) and the recovery continuation signing key,
+> and scope CORS before exposing this anywhere. In `Production` the server's default shell refuses to activate
+> without the recovery key (see [`docs/docker.md`](../../docs/docker.md#demo-persistence-composition)).
 
 ---
 
@@ -192,6 +198,8 @@ those go through the server-side Studio management bridge, which holds the Elsa 
 |---|---|
 | Postgres user / password / database | `elsa` / `elsa` / `elsa` |
 | Elsa host management key | `elsa-docker-demo-key` |
+| Studio / Workbench sign-in (seeded administrator) | `admin` / `Password123!` |
+| Access-token signing key | the demo RSA key committed in both compose files |
 
 The Elsa host management key wires the server-side Studio management bridge to the server: the
 server's `Elsa__ModuleManagement__ApiKey` **must match** Studio's
@@ -200,6 +208,22 @@ leaves the two containers — the browser neither sees nor sends it.
 
 > ⚠️ **These are demo-only values.** Change every credential and key — and lock down the exposed
 > Postgres port — before using this for anything beyond local experimentation.
+
+### Identity in Production
+
+Both compose files run the server with `ASPNETCORE_ENVIRONMENT=Production`. The image ships
+`shells.Production.json`, which is layered over `shells.json` (the baked-in one or the mounted
+`elsa-workbench.shells.json`). It turns off development mode for both identity features, seeds an
+`admin` account, and blanks its password. Only environment variables sit above that overlay, so the
+compose files supply two identity secrets as env vars:
+
+| Variable (prefix `CShells__Shells__default__Features__`) | Without it |
+|---|---|
+| `FoundationIdentityAspNetCoreIdentityGroundwork__SeedAdminPassword` | The default shell fails activation: `/health/ready` returns `503 shell_activation_failed`. |
+| `FoundationIdentityOpenIddict__SigningKey` | The shell activates, but every request returns 500 ("No signing key is configured"). |
+
+For the rest of the identity settings, see
+[`docs/reference/identity-configuration.md`](../../docs/reference/identity-configuration.md).
 
 ---
 
@@ -274,6 +298,22 @@ server node:
 ```
 CShells__Shells__default__Features__GroundworkWorkflowRuntime__RecoveryContinuationSigningKey=<your-key>
 ```
+
+**Replace the demo identity secrets** on the `elsa-workbench` service. The signing key is a base64 PKCS#8
+RSA private key:
+
+```bash
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | openssl pkcs8 -topk8 -nocrypt -outform DER | base64
+```
+
+```
+CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityGroundwork__SeedAdminPassword=<your-password>
+CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey=<base64-key>
+```
+
+The admin account is created only if it doesn't exist yet, so changing the password variable later leaves
+an existing account's password as it was. To seed it again with a new password, wipe the data
+(`docker compose down -v`).
 
 ---
 

@@ -61,6 +61,37 @@ services:
       # default shell refuses to activate without it. It must be an env var: the image's shells.Production.json
       # blanks any value in the mounted shells.json. Demo-only; change it for anything beyond local use.
       CShells__Shells__default__Features__GroundworkWorkflowRuntime__RecoveryContinuationSigningKey: elsa-docker-demo-recovery-continuation-key
+      # Identity secrets. The image's shells.Production.json turns off development mode for both identity
+      # features and blanks the seed password, and it sits above the mounted shells.json, so these must be env
+      # vars. Without the password the default shell fails activation; without the key every request returns
+      # 500. Demo-only values; change both for anything beyond local use.
+      # Password for the seeded "admin" account (the overlay supplies the username) you sign in to Studio with.
+      CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityGroundwork__SeedAdminPassword: "Password123!"
+      # Base64 PKCS#8 RSA private key that signs access tokens; line breaks are ignored. Generate your own with:
+      #   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | openssl pkcs8 -topk8 -nocrypt -outform DER | base64
+      CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey: >-
+        MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC8C9xQXKNpZZXYWGx7bz1lw3cO
+        /zVPumTsAmXR4IWfaX3YZW86yUKVMZwwaL1AWNy6zIFEIbKQbtjJTZ6jdT13gVP9HKI7G94WZAkX
+        QSD3CKcRiii8pMVnqdRR0Xt3GwyQ1Fh9k8zAKQp0QBQrDiQsXWCex2bbqz/og0Ykybw0MyRUmpl1
+        kprX4/QpdL+odevdHvyoya4gcdRY4BEfB6Osa2KCNBDHl5CD/d1AHawgNZqHFIbkbiH9xT9VmdZL
+        sk0FyljUAwQAIOl5ETexYZG3mJNrBwVDsxQjRQZMBhqQLS/HfBYcOaTh4VFvsRLqn0eoB7zyDFTV
+        0Vq7MkvontRvAgMBAAECggEACjXrGnfA0Rom4nPkeBNYjx3nohTxsKw+4C+TXcgpw/C3AyqxgD5w
+        uhnS9Eyg+TDvYZBY9PmO/yXSIoeoUdj03Hg475rqwRRzS7NIaNzzsEgCVB9fX4/G22IEIFr5r9KC
+        gn61PSRczz1yXRgH3MOFQN2qeGn8gM2yAQBmAk7sJ8gGpUu5xUWxpnAPxPtqXfqw4rkVDo8I693v
+        TqRIljfYfRp0vT1W0VeUjxVWhnjckBoAIFuFIa0C9JSy9t6glMY+XF41wuFKwRX//n/iJqJQgcSX
+        WB6yH//UaIZfkKxR8QFZcODSMjaaCAxWkDETDccGHACA/HsbUJv6QchibiQLyQKBgQD6IFyucRVo
+        h078B1hyu3fKJPZEIzioe0cbSAcKgLWRUL8UBrercWxS54WsInfkVrG5+tHMScJL1gD3KnnShHdv
+        R5BUlk5EtvBhQfSk5+yZZIspVBEpTiiq57EKZDirDka7859LWa6aq923O8U3yH8ZdRzYi8qLUwrO
+        Di/EQfQQ/QKBgQDAdk2q/+xngBtH8VisIxImB6mMRd6gQf82CfJxpuoJXo37xilJLOEL4JyGf1hl
+        K0WoP+cNEo9NnKUd8GuEwq+3xWU+J1hW6izp0zBRYYDMQnmu2C+8m4go3IvEuYWUeAP+0mmvDYbD
+        Ck3pYLvMgiCKUb5OgMWcUkiPuwIE3A082wKBgBs+HxoY0v4Zjq7Alg+Y/4kS0YfGVktzceE0zR+F
+        uUDkjIs/2A1iQywcb2C6OFi0YJMjEGqxtenQmzZQeAhHyUJjhwLPhCLT0galymGTqR9j5gxQTbYz
+        /xXuOkgpdkqbOXULKdRpJi1Ofs2QQwC6Y62AJe4n+52FI+4heW5kyJJ5AoGBAJeECz0V4XzR46hN
+        nmtV6NG7soTV9J/hlRNr3UwQBat+nvSZWqNbC4iYOWHBG0v6Nwpv1Gv8Moj9Sxg4z8xioIdihYPa
+        4bb7AITMV/uZcRZdNwKo+1vWbekNR5OGIl1x5mNULxM66N7fW9rg5rfnscpy9AlFY0zfknRk2wAM
+        ZPeFAoGAI8ueMwrQDfJ6Q0fBj2ah0wdU84XZ9xdHajBIVrGuIsYBH0lSoq1wTPk1FvKwyZnnXESl
+        u+O+NLeJuPF2qjgTc2UX6Gt9cI1CVa++5IQIXqx45dKD1pIDskJGly6MD7Ez1Ps1iykBhYYDnsxS
+        rP6K4lXoYB89C+dKJAPF+CCPCH8=
       # The connection string is supplied by the mounted shells.json below. To override
       # it without editing that file, uncomment the next line:
       # CShells__Shells__default__Features__GroundworkProviderPostgreSql__ConnectionString: "Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa"

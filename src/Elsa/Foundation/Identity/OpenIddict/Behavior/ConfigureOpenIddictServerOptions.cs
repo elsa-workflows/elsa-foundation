@@ -75,7 +75,7 @@ internal sealed class ConfigureOpenIddictServerOptions(
                 rsa.Dispose();
                 throw new InvalidOperationException(
                     "The configured OpenIddict signing key must be a base64-encoded PKCS#8 RSA private key. Generate one with: " +
-                    "openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -outform DER | base64", exception);
+                    "openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | openssl pkcs8 -topk8 -nocrypt -outform DER | base64", exception);
             }
 
             return new RsaSecurityKey(rsa) { KeyId = "elsa-identity-signing" };
