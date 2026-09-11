@@ -197,11 +197,12 @@ Owner: #1654, blocked on #1628.
 - **Studio Preferences:** strongest candidate for the second canary because its current surface is
   small and key/value-shaped, but not pre-approved. Its inventory must still prove tenancy,
   concurrency, conversion, and host-composition semantics.
-- **Publishing:** **not pre-approved**. Ordinary workflow publication already uses ordered writes
-  with compensation. Reusable-activity publication is the cross-lane outlier governed by ADR 0066:
-  its Runtime, Design, and Publishing receipt steps must preserve both the co-located atomic fast path
-  and the split-lane ordering, idempotency, and recovery path. Do not independently migrate that
-  receipt path until #1654 proves those rules across the selected persistence families.
+- **Publishing:** **hold all replacement paths** pending #1654. Ordinary workflow publication
+  crosses lanes through ordered writes and compensation. Reusable-activity publication has both the
+  ADR 0066 co-located atomic fast path and a split-lane ordered, idempotent, recoverable path. A
+  Publishing-store change can affect either protocol; do not migrate it until #1654 inventories and
+  proves the transaction, ordering, compensation, idempotency, and recovery semantics across the
+  selected persistence families.
 - **Dashboard:** **hold** until its Design/Runtime projection and consistency dependencies are
   inventoried. Small store size does not make cross-domain projections simple.
 - **Workflows Design and Activities Design:** **not automatic replacements**. Current architecture
