@@ -173,7 +173,7 @@ public sealed class IncidentResolutionBatchExecutor(
     }
 
     private async ValueTask<ResolvedAction> ResolveActionAsync(
-        Elsa.Workflows.Primitives.Models.IncidentStrategyReference strategy,
+        Elsa.Primitives.Models.IncidentStrategyReference strategy,
         IncidentState incident,
         WorkflowExecutionState workflow,
         WorkflowExecutable executable,

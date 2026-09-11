@@ -10,7 +10,7 @@ using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
-using Elsa.Activities.Design.Reconciliation.Core.Models;
+using Elsa.Activities.Design.Core.Reconciliation.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;

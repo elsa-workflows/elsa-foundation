@@ -13,7 +13,6 @@ public class DesignContractSuiteShapeTests
         [
             "Elsa.Activities.Design.Core",
             "Elsa.Activities.Design.Persistence.Core",
-            "Elsa.Activities.Design.Reconciliation.Core",
             "Elsa.Activities.Runtime.Core",
             "Elsa.Events.Core",
             "Elsa.Expressions.Core",
@@ -26,7 +25,6 @@ public class DesignContractSuiteShapeTests
             "Elsa.Workflows.Design.Core",
             "Elsa.Workflows.Design.Persistence.Core",
             "Elsa.Workflows.Design.Validations.Core",
-            "Elsa.Workflows.Primitives",
             "Elsa.Workflows.Runtime.Core",
             "Microsoft.Extensions.DependencyInjection",
             "Microsoft.Extensions.DependencyInjection.Abstractions",

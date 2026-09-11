@@ -42,7 +42,7 @@ using Elsa.Foundation.Identity.Persistence.Groundwork;
 using Elsa.Locking.FileSystem;
 using Elsa.Mediator;
 using Elsa.Modularity.Api;
-using Elsa.Modularity.Attention;
+using Elsa.Modularity.Api.Attention;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Nuplane.Extensions;
 using Elsa.Modularity.Nuplane.Services;

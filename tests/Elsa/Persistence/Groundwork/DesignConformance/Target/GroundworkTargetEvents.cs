@@ -1,5 +1,5 @@
 using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Activities.Design.Reconciliation.Core;
+using Elsa.Activities.Design.Core.Reconciliation;
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Strategies;
 using Elsa.Persistence.Groundwork.DesignConformance.Tests;

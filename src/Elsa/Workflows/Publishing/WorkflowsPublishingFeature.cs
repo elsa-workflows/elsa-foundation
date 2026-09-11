@@ -7,7 +7,7 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
-using Elsa.Workflows.Design.Reconciliation.Core;
+using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;

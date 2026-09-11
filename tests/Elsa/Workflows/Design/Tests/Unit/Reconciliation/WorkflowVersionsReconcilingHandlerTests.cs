@@ -2,7 +2,7 @@ using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Reconciliation.Contracts;
-using Elsa.Workflows.Design.Reconciliation.Core;
+using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Design.Reconciliation.Handlers;
 using Elsa.Workflows.Design.Reconciliation.Models;
 using Xunit;

@@ -1,7 +1,7 @@
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Tests.Infrastructure;
-using Elsa.Workflows.Primitives.Models;
+using Elsa.Primitives.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using static Elsa.Workflows.Design.Tests.Infrastructure.UpdateDraftTestKit;

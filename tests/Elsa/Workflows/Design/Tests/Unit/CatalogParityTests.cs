@@ -1,11 +1,10 @@
-using Elsa.Activities.Design.Reconciliation.Core;
+using Elsa.Activities.Design.Core.Reconciliation;
 using Elsa.Events.Core.Contracts;
 using Elsa.Expressions.JavaScript.Rendering.Core.Events;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Events;
-using Elsa.Workflows.Design.Reconciliation.Core;
+using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Design.Validations.Core.Events;
-using System.Reflection;
 using System.Text.RegularExpressions;
 using Xunit;
 
@@ -13,21 +12,23 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 
 /// <summary>
 /// SC-019 + SC-020 + Unit C FR-031 + research item R4: parametrised parity test driven by
-/// the <see cref="CoreAssembliesWithCatalogs"/> table. Each row is a
-/// <c>(Type anchorType, string projectName)</c> pair where <c>anchorType</c>'s assembly is
+/// the <see cref="CoreNamespacesWithCatalogs"/> table. Each row is a
+/// <c>(Type anchorType, string projectName)</c> pair where <c>anchorType</c>'s namespace is
 /// scanned for all public non-abstract concrete <see cref="IEvent"/> types and
 /// <c>projectName</c> identifies the project whose directory contains the per-domain catalog.
 /// <para>
 /// Two properties are verified:
-/// (a) every event in the assembly has a corresponding <c>### Xxx</c> heading in the catalog;
+/// (a) every event in the namespace has a corresponding <c>### Xxx</c> heading in the catalog;
 /// (b) every <c>### Xxx</c> heading in the catalog maps to a real event in at least one of
-///     the assemblies registered for that catalog (handles the multi-assembly case where two
-///     Core assemblies publish into the same feature catalog).
+///     the namespaces registered for that catalog (handles the case where two Core namespaces
+///     publish into the same feature catalog).
+/// Scanning by namespace rather than assembly lets one Core assembly feed several catalogs:
+/// Elsa.Workflows.Design.Core carries both the design mutation events and the reconciliation events.
 /// </para>
 /// <para>
-/// To add a new domain: add one <c>yield return</c> line to <see cref="CoreAssembliesWithCatalogs"/>.
-/// For domains where two assemblies publish events into the same catalog add one row per assembly;
-/// the reverse-direction test unions all assemblies for that catalog automatically.
+/// To add a new domain: add one <c>yield return</c> line to <see cref="CoreNamespacesWithCatalogs"/>.
+/// For domains where two namespaces publish events into the same catalog add one row per namespace;
+/// the reverse-direction test unions all namespaces for that catalog automatically.
 /// </para>
 /// </summary>
 /// <remarks>
@@ -47,11 +48,11 @@ public sealed class CatalogParityTests
 
     /// <summary>
     /// Table of (anchorType, projectName) pairs.
-    /// anchorType — a type whose Assembly is scanned for IEvent types.
+    /// anchorType — a type whose namespace is scanned for IEvent types.
     /// projectName — the project whose directory contains the EXTENSION_POINTS.md catalog.
-    /// Add one line per assembly/catalog pair to extend coverage.
+    /// Add one line per namespace/catalog pair to extend coverage.
     /// </summary>
-    public static IEnumerable<object[]> CoreAssembliesWithCatalogs()
+    public static IEnumerable<object[]> CoreNamespacesWithCatalogs()
     {
         // Workflows.Design mutation events → composition root at Elsa.Workflows.Design.Api
         yield return [typeof(DraftCreated), "Elsa.Workflows.Design.Api"];
@@ -68,10 +69,10 @@ public sealed class CatalogParityTests
     }
 
     [Theory]
-    [MemberData(nameof(CoreAssembliesWithCatalogs))]
+    [MemberData(nameof(CoreNamespacesWithCatalogs))]
     public void Every_event_has_a_catalog_heading(Type anchorType, string projectName)
     {
-        var events = PublishedEventTypesIn(anchorType.Assembly).Select(t => t.Name).ToHashSet();
+        var events = PublishedEventTypesIn(anchorType).Select(t => t.Name).ToHashSet();
         var headings = ReadCatalogHeadings(projectName);
 
         var missing = events.Except(headings).ToList();
@@ -83,21 +84,19 @@ public sealed class CatalogParityTests
     }
 
     [Theory]
-    [MemberData(nameof(CoreAssembliesWithCatalogs))]
+    [MemberData(nameof(CoreNamespacesWithCatalogs))]
     public void Every_catalog_heading_maps_to_a_real_event(Type anchorType, string projectName)
     {
-        // For multi-assembly catalogs (e.g. Elsa.Activities.Runtime receives events from
-        // both Elsa.Activities.Runtime.Core and Elsa.Activities.Design.Core) the reverse
-        // check must union ALL assemblies registered for this catalog so that headings
-        // contributed by a sibling assembly don't appear stale.
-        // anchorType.Assembly seeds the union; all other registered assemblies for the
-        // same catalog are appended and de-duplicated.
-        var events = new[] { anchorType.Assembly }
-            .Concat(CoreAssembliesWithCatalogs()
+        // For catalogs fed by several namespaces the reverse check must union ALL anchors
+        // registered for this catalog so that headings contributed by a sibling namespace
+        // don't appear stale. anchorType seeds the union; all other registered anchors for
+        // the same catalog are appended and de-duplicated.
+        var events = new[] { anchorType }
+            .Concat(CoreNamespacesWithCatalogs()
                 .Where(row => (string)row[1] == projectName)
-                .Select(row => ((Type)row[0]).Assembly))
+                .Select(row => (Type)row[0]))
             .Distinct()
-            .SelectMany(a => PublishedEventTypesIn(a))
+            .SelectMany(PublishedEventTypesIn)
             .Select(t => t.Name)
             .ToHashSet();
 
@@ -110,8 +109,9 @@ public sealed class CatalogParityTests
         );
     }
 
-    private static IEnumerable<Type> PublishedEventTypesIn(Assembly assembly) =>
-        assembly.GetTypes()
+    private static IEnumerable<Type> PublishedEventTypesIn(Type anchorType) =>
+        anchorType.Assembly.GetTypes()
+            .Where(t => t.Namespace == anchorType.Namespace)
             .Where(t => t is { IsClass: true, IsAbstract: false, IsPublic: true })
             .Where(t => typeof(IEvent).IsAssignableFrom(t));
 

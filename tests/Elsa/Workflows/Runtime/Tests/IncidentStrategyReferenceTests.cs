@@ -1,4 +1,4 @@
-using Elsa.Workflows.Primitives.Models;
+using Elsa.Primitives.Models;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;

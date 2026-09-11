@@ -1,6 +1,6 @@
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Clr.Contracts;
-using Elsa.Activities.Design.Reconciliation.Core.Models;
+using Elsa.Activities.Design.Core.Reconciliation.Models;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;

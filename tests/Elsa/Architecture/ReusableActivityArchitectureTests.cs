@@ -149,7 +149,7 @@ public sealed class ReusableActivityArchitectureTests
         [
             "src/Elsa/Activities/Design/Core/Contracts/IActivityDefinitionVersion.cs",
             "src/Elsa/Activities/Design/Core/Models/ActivityDefinitionVersionModel.cs",
-            "src/Elsa/Activities/Design/Reconciliation/Core/Models/ActivityVersionReconciliationModel.cs",
+            "src/Elsa/Activities/Design/Core/Reconciliation/Models/ActivityVersionReconciliationModel.cs",
             "src/Elsa/Activities/Design/Api/Commands/AddDefinition.cs",
             "src/Elsa/Activities/Design/Api/Commands/AddVersion.cs",
             "src/Elsa/Activities/Design/Api/Models/ActivityDefinitionVersionDetailsView.cs"

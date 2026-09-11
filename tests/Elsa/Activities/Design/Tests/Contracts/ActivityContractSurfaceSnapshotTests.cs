@@ -2,7 +2,7 @@ using System.Reflection;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Persistence.Core.Services;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
-using Elsa.Activities.Design.Reconciliation.Core.Models;
+using Elsa.Activities.Design.Core.Reconciliation.Models;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using BpmnProcess = Elsa.Activities.Bpmn.Activities.BpmnProcess;

@@ -1,7 +1,7 @@
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Activities.Design.Reconciliation;
-using Elsa.Activities.Design.Reconciliation.Core;
+using Elsa.Activities.Design.Core.Reconciliation;
 using Elsa.Events;
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;

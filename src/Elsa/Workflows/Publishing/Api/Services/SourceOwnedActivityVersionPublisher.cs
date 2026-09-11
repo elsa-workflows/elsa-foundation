@@ -5,7 +5,7 @@ using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Activities.Design.Reconciliation.Core;
+using Elsa.Activities.Design.Core.Reconciliation;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Stores;
