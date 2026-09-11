@@ -37,6 +37,7 @@
       "src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj",
       "src/Elsa/Secrets/Elsa.Secrets.csproj",
       "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj",
+      "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling.csproj",
       "src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj",
       "src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj",
       "src/Elsa/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj",

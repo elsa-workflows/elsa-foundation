@@ -1,5 +1,4 @@
-using System.Diagnostics;
-using System.Text;
+using Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.Support;
 using Microsoft.Data.Sqlite;
 using Xunit;
 
@@ -28,7 +27,7 @@ public sealed class SecretsEfDualMigrateToolTests
     }
 
     [SkippableFact]
-    public void Dual_migrate_builds_once_and_reuses_non_default_configuration_for_each_ef_call()
+    public void Dual_migrate_prefers_the_manifest_tool_builds_once_and_reuses_the_configuration()
     {
         Skip.If(OperatingSystem.IsWindows(), "The recording shims require Unix executable permissions.");
 
@@ -42,61 +41,75 @@ public sealed class SecretsEfDualMigrateToolTests
                 #!/usr/bin/env bash
                 set -euo pipefail
 
-                [[ "${1:-}" == "build" ]] || exit 97
+                command="${1:-}"
                 shift
-                configuration=""
-                disable_build_servers=0
-                while [[ $# -gt 0 ]]; do
-                  case "$1" in
-                    --configuration)
-                      configuration="${2:?}"
-                      shift 2
-                      ;;
-                    --disable-build-servers)
-                      disable_build_servers=1
-                      shift
-                      ;;
-                    *)
-                      shift
-                      ;;
-                  esac
-                done
-                printf 'build|%s|%s\n' "$configuration" "$disable_build_servers" >> "$ELSA_SECRETS_EF_RECORDING_LOG"
+                case "$command" in
+                  build)
+                    configuration=""
+                    disable_build_servers=0
+                    while [[ $# -gt 0 ]]; do
+                      case "$1" in
+                        --configuration)
+                          configuration="${2:?}"
+                          shift 2
+                          ;;
+                        --disable-build-servers)
+                          disable_build_servers=1
+                          shift
+                          ;;
+                        *)
+                          shift
+                          ;;
+                      esac
+                    done
+                    printf 'build|%s|%s\n' "$configuration" "$disable_build_servers" >> "$ELSA_SECRETS_EF_RECORDING_LOG"
+                    ;;
+                  ef)
+                    [[ "${1:-}" == "migrations" && "${2:-}" == "has-pending-model-changes" ]] || exit 98
+                    shift 2
+                    context=""
+                    configuration=""
+                    no_build=0
+                    while [[ $# -gt 0 ]]; do
+                      case "$1" in
+                        --context)
+                          context="${2:?}"
+                          shift 2
+                          ;;
+                        --configuration)
+                          configuration="${2:?}"
+                          shift 2
+                          ;;
+                        --no-build)
+                          no_build=1
+                          shift
+                          ;;
+                        *)
+                          shift
+                          ;;
+                      esac
+                    done
+                    printf 'manifest-ef|%s|%s|%s\n' "$context" "$configuration" "$no_build" >> "$ELSA_SECRETS_EF_RECORDING_LOG"
+                    printf 'No changes have been made to the model since the last migration.\n'
+                    ;;
+                  *)
+                    exit 97
+                    ;;
+                esac
                 """);
             WriteExecutableShim(shimRoot, "dotnet-ef", """
                 #!/usr/bin/env bash
                 set -euo pipefail
 
-                [[ "${1:-}" == "migrations" && "${2:-}" == "has-pending-model-changes" ]] || exit 98
-                shift 2
-                context=""
-                configuration=""
-                no_build=0
-                while [[ $# -gt 0 ]]; do
-                  case "$1" in
-                    --context)
-                      context="${2:?}"
-                      shift 2
-                      ;;
-                    --configuration)
-                      configuration="${2:?}"
-                      shift 2
-                      ;;
-                    --no-build)
-                      no_build=1
-                      shift
-                      ;;
-                    *)
-                      shift
-                      ;;
-                  esac
-                done
-                printf 'ef|%s|%s|%s\n' "$context" "$configuration" "$no_build" >> "$ELSA_SECRETS_EF_RECORDING_LOG"
-                printf 'No changes have been made to the model since the last migration.\n'
+                printf 'global-ef\n' >> "$ELSA_SECRETS_EF_RECORDING_LOG"
+                exit 96
                 """);
             var isolatedRoot = Path.Join(shimRoot, "repo");
             var isolatedScriptDirectory = Path.Join(isolatedRoot, "tools", "ef");
+            var isolatedConfigDirectory = Path.Join(isolatedRoot, ".config");
             Directory.CreateDirectory(isolatedScriptDirectory);
+            Directory.CreateDirectory(isolatedConfigDirectory);
+            File.WriteAllText(Path.Join(isolatedConfigDirectory, "dotnet-tools.json"), "{}");
             File.Copy(
                 RepoPath("tools", "ef", "dual-migrate.sh"),
                 Path.Join(isolatedScriptDirectory, "dual-migrate.sh"));
@@ -118,11 +131,89 @@ public sealed class SecretsEfDualMigrateToolTests
             Assert.Equal(
                 [
                     "build|Canary|1",
-                    "ef|SecretsSqliteDbContext|Canary|1",
-                    "ef|SecretsSqlServerDbContext|Canary|1",
-                    "ef|SecretsPostgreSqlDbContext|Canary|1"
+                    "manifest-ef|SecretsSqliteDbContext|Canary|1",
+                    "manifest-ef|SecretsSqlServerDbContext|Canary|1",
+                    "manifest-ef|SecretsPostgreSqlDbContext|Canary|1"
                 ],
                 File.ReadAllLines(recordingLog));
+        }
+        finally
+        {
+            Directory.Delete(shimRoot, recursive: true);
+        }
+    }
+
+    [SkippableTheory]
+    [InlineData(true, true, "local")]
+    [InlineData(false, true, "manifest")]
+    [InlineData(false, false, "global")]
+    public void Ef_tool_resolution_follows_the_documented_precedence(
+        bool hasLocalTool,
+        bool hasManifest,
+        string expectedTool)
+    {
+        Skip.If(OperatingSystem.IsWindows(), "The recording shims require Unix executable permissions.");
+
+        var shimRoot = Path.Join(Path.GetTempPath(), $"elsa-secrets-ef-precedence-{Guid.NewGuid():N}");
+        var isolatedRoot = Path.Join(shimRoot, "repo");
+        var isolatedScriptDirectory = Path.Join(isolatedRoot, "tools", "ef");
+        var recordingLog = Path.Join(shimRoot, "calls.log");
+        Directory.CreateDirectory(isolatedScriptDirectory);
+
+        try
+        {
+            File.Copy(
+                RepoPath("tools", "ef", "secrets-ef-lib.sh"),
+                Path.Join(isolatedScriptDirectory, "secrets-ef-lib.sh"));
+            WriteExecutableShim(isolatedScriptDirectory, "dual-migrate.sh", """
+                #!/usr/bin/env bash
+                set -euo pipefail
+                source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/secrets-ef-lib.sh"
+                secrets_ef_init
+                secrets_ef --version
+                """);
+            WriteExecutableShim(shimRoot, "dotnet", """
+                #!/usr/bin/env bash
+                set -euo pipefail
+                [[ "${1:-}" == "ef" ]] || exit 97
+                printf 'manifest\n' >> "$ELSA_SECRETS_EF_RECORDING_LOG"
+                """);
+            WriteExecutableShim(shimRoot, "dotnet-ef", """
+                #!/usr/bin/env bash
+                set -euo pipefail
+                printf 'global\n' >> "$ELSA_SECRETS_EF_RECORDING_LOG"
+                """);
+
+            if (hasManifest)
+            {
+                var configDirectory = Path.Join(isolatedRoot, ".config");
+                Directory.CreateDirectory(configDirectory);
+                File.WriteAllText(Path.Join(configDirectory, "dotnet-tools.json"), "{}");
+            }
+
+            if (hasLocalTool)
+            {
+                var localToolDirectory = Path.Join(isolatedRoot, ".tools");
+                Directory.CreateDirectory(localToolDirectory);
+                WriteExecutableShim(localToolDirectory, "dotnet-ef", """
+                    #!/usr/bin/env bash
+                    set -euo pipefail
+                    printf 'local\n' >> "$ELSA_SECRETS_EF_RECORDING_LOG"
+                    """);
+            }
+
+            var inheritedPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+            var result = RunDualMigrate(
+                [],
+                extraEnv: new Dictionary<string, string?>
+                {
+                    ["ELSA_SECRETS_EF_RECORDING_LOG"] = recordingLog,
+                    ["PATH"] = $"{shimRoot}{Path.PathSeparator}{inheritedPath}"
+                },
+                rootOverride: isolatedRoot);
+
+            Assert.True(result.ExitCode == 0, result.Describe());
+            Assert.Equal([expectedTool], File.ReadAllLines(recordingLog));
         }
         finally
         {
@@ -175,8 +266,9 @@ public sealed class SecretsEfDualMigrateToolTests
     public void Pending_is_clean_for_each_derived_context()
     {
         Skip.IfNot(HasDotnetEf(), "dotnet-ef is not available.");
-        var result = RunDualMigrate(["pending"]);
+        var result = RunDualMigrateFromExistingBuild(["pending"]);
         Assert.True(result.ExitCode == 0, result.Describe());
+        Assert.Contains("use existing EF tooling build", result.Output, StringComparison.Ordinal);
         Assert.Contains("has-pending-model-changes --context SecretsSqliteDbContext", result.Output, StringComparison.Ordinal);
         Assert.Contains("has-pending-model-changes --context SecretsSqlServerDbContext", result.Output, StringComparison.Ordinal);
         Assert.Contains("has-pending-model-changes --context SecretsPostgreSqlDbContext", result.Output, StringComparison.Ordinal);
@@ -191,7 +283,7 @@ public sealed class SecretsEfDualMigrateToolTests
         var path = Path.Join(Path.GetTempPath(), $"elsa-secrets-ef-dual-default-{Guid.NewGuid():N}.db");
         try
         {
-            var result = RunDualMigrate(
+            var result = RunDualMigrateFromExistingBuild(
                 [],
                 extraEnv: new Dictionary<string, string?>
                 {
@@ -220,7 +312,7 @@ public sealed class SecretsEfDualMigrateToolTests
         var path = Path.Join(Path.GetTempPath(), $"elsa-secrets-ef-dual-all-{Guid.NewGuid():N}.db");
         try
         {
-            var skipped = RunDualMigrate(
+            var skipped = RunDualMigrateFromExistingBuild(
                 ["apply", "--all"],
                 extraEnv: new Dictionary<string, string?>
                 {
@@ -234,7 +326,7 @@ public sealed class SecretsEfDualMigrateToolTests
             Assert.Contains("skip SecretsPostgreSqlDbContext", skipped.Output, StringComparison.Ordinal);
             Assert.True(await TableExistsAsync(path, SecretsEfModule.TableName));
 
-            var required = RunDualMigrate(
+            var required = RunDualMigrateFromExistingBuild(
                 ["apply", "--all"],
                 extraEnv: new Dictionary<string, string?>
                 {
@@ -261,7 +353,7 @@ public sealed class SecretsEfDualMigrateToolTests
         var path = Path.Join(Path.GetTempPath(), $"elsa-secrets-ef-dual-{Guid.NewGuid():N}.db");
         try
         {
-            var result = RunDualMigrate(
+            var result = RunDualMigrateFromExistingBuild(
                 ["apply", "--sqlite"],
                 extraEnv: new Dictionary<string, string?>
                 {
@@ -280,134 +372,18 @@ public sealed class SecretsEfDualMigrateToolTests
         }
     }
 
-    private static bool? _dotnetEf;
+    private static bool HasDotnetEf() => DualMigrateProcessRunner.HasDotnetEf();
 
-    private static bool HasDotnetEf()
-    {
-        if (_dotnetEf is { } cached)
-            return cached;
-
-        var root = RepoPath();
-        if (File.Exists(Path.Join(root, ".tools", "dotnet-ef")))
-            return Remember(true);
-
-        TryRestoreDotnetTools(root);
-        var start = new ProcessStartInfo("dotnet", ["ef", "--version"])
-        {
-            WorkingDirectory = root,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-        CopyDotnetEnvironment(start.Environment);
-        try
-        {
-            using var process = Process.Start(start);
-            if (process is null)
-                return Remember(false);
-            if (!process.WaitForExit(60_000))
-            {
-                try
-                {
-                    process.Kill(entireProcessTree: true);
-                }
-                catch (InvalidOperationException exception)
-                {
-                    Debug.WriteLine(exception);
-                }
-
-                return Remember(false);
-            }
-
-            return Remember(process.ExitCode == 0);
-        }
-        catch (InvalidOperationException)
-        {
-            return Remember(false);
-        }
-        catch (System.ComponentModel.Win32Exception)
-        {
-            return Remember(false);
-        }
-    }
-
-    private static bool Remember(bool value)
-    {
-        _dotnetEf = value;
-        return value;
-    }
-
-    private static void TryRestoreDotnetTools(string root)
-    {
-        var start = new ProcessStartInfo("dotnet", ["tool", "restore"])
-        {
-            WorkingDirectory = root,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-        CopyDotnetEnvironment(start.Environment);
-        try
-        {
-            using var process = Process.Start(start);
-            process?.WaitForExit(60_000);
-        }
-        catch (InvalidOperationException)
-        {
-            // pending / apply --sqlite then skip.
-        }
-        catch (System.ComponentModel.Win32Exception)
-        {
-            // pending / apply --sqlite then skip.
-        }
-    }
-
-    private static ScriptResult RunDualMigrate(
+    private static DualMigrateProcessRunner.ScriptResult RunDualMigrate(
         IReadOnlyList<string> args,
         IReadOnlyDictionary<string, string?>? extraEnv = null,
         string? rootOverride = null)
-    {
-        var root = rootOverride ?? RepoPath();
-        var script = Path.Join(root, "tools", "ef", "dual-migrate.sh");
-        var start = new ProcessStartInfo("bash")
-        {
-            WorkingDirectory = root,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-        start.ArgumentList.Add(script);
-        foreach (var arg in args)
-            start.ArgumentList.Add(arg);
+        => DualMigrateProcessRunner.Run(args, extraEnv, rootOverride);
 
-        CopyDotnetEnvironment(start.Environment);
-        if (extraEnv is not null)
-        {
-            foreach (var (key, value) in extraEnv)
-            {
-                if (value is null)
-                    start.Environment.Remove(key);
-                else
-                    start.Environment[key] = value;
-            }
-        }
-
-        using var process = Process.Start(start)
-                            ?? throw new InvalidOperationException("bash could not be started.");
-        var outputTask = process.StandardOutput.ReadToEndAsync();
-        var errorTask = process.StandardError.ReadToEndAsync();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(180));
-        try
-        {
-            process.WaitForExitAsync(timeout.Token).GetAwaiter().GetResult();
-        }
-        catch (OperationCanceledException)
-        {
-            KillProcessTree(process);
-            throw new TimeoutException($"dual-migrate.sh {string.Join(' ', args)} did not exit within 180s.");
-        }
-
-        var output = outputTask.GetAwaiter().GetResult();
-        var error = errorTask.GetAwaiter().GetResult();
-        return new ScriptResult(process.ExitCode, output, error);
-    }
+    private static DualMigrateProcessRunner.ScriptResult RunDualMigrateFromExistingBuild(
+        IReadOnlyList<string> args,
+        IReadOnlyDictionary<string, string?>? extraEnv = null)
+        => DualMigrateProcessRunner.RunFromExistingBuild(args, extraEnv);
 
     private static string WriteExecutableShim(string directory, string name, string contents)
     {
@@ -420,27 +396,6 @@ public sealed class SecretsEfDualMigrateToolTests
             path,
             UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         return path;
-    }
-
-    private static void KillProcessTree(Process process)
-    {
-        try
-        {
-            process.Kill(entireProcessTree: true);
-        }
-        catch (InvalidOperationException)
-        {
-            // The process may already have exited; cleanup is best-effort.
-        }
-    }
-
-    private static void CopyDotnetEnvironment(IDictionary<string, string?> environment)
-    {
-        var path = Environment.GetEnvironmentVariable("PATH") ?? "";
-        var dotnetRoot = Environment.GetEnvironmentVariable("DOTNET_ROOT");
-        if (!string.IsNullOrWhiteSpace(dotnetRoot))
-            environment["DOTNET_ROOT"] = dotnetRoot;
-        environment["PATH"] = path;
     }
 
     private static async Task<bool> TableExistsAsync(string path, string table)
@@ -481,17 +436,4 @@ public sealed class SecretsEfDualMigrateToolTests
         throw new DirectoryNotFoundException("Could not find repository root.");
     }
 
-    private sealed record ScriptResult(int ExitCode, string Output, string Error)
-    {
-        public string Describe()
-        {
-            var text = new StringBuilder();
-            text.Append("exit ").Append(ExitCode);
-            if (!string.IsNullOrWhiteSpace(Output))
-                text.AppendLine().Append(Output);
-            if (!string.IsNullOrWhiteSpace(Error))
-                text.AppendLine().Append(Error);
-            return text.ToString();
-        }
-    }
 }

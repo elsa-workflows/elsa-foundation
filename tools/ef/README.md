@@ -25,7 +25,7 @@ Set it on the factory's `Use*` options (`MigrationsHistoryTable`), not as a magi
 See `src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/README.md`.
 
 ```bash
-dotnet tool restore   # installs dotnet-ef 10.0.x from .config/dotnet-tools.json
+dotnet tool restore   # restores the pinned dotnet-ef 10.0.10 from .config/dotnet-tools.json
 # or: dotnet tool install dotnet-ef --version 10.0.10 --tool-path .tools
 
 bash tools/ef/generate-ef-migrations.sh <MigrationName>
@@ -33,6 +33,12 @@ bash tools/ef/dual-migrate.sh pending
 bash tools/ef/dual-migrate.sh apply --sqlite
 bash tools/ef/dual-migrate.sh all
 ```
+
+The helper resolves EF tooling in this order: an executable repository-local `.tools/dotnet-ef`,
+the repository-manifest `dotnet ef` after `dotnet tool restore`, and only then a `dotnet-ef`
+executable on `PATH`. This prevents a stale global tool from silently overriding the repository's
+pinned version. The explicit `--tool-path .tools` installation is useful for a clean operator
+checkout; the manifest path is the normal CI path.
 
 ## Dual-migrate (out of process / CI)
 
@@ -53,8 +59,56 @@ Apply connections:
   `--all` / default, skipped when unset unless `ELSA_SECRETS_EF_REQUIRE_ALL=1`.
 - PostgreSql: `ELSA_SECRETS_EF_POSTGRESQL` (same explicit-vs-all rule).
 
-`pending` is the CI-safe check for all three providers. Wire `bash tools/ef/dual-migrate.sh pending`
-into a workflow only when a job already restores `dotnet-ef`; the current Build & test job does not.
+`ELSA_SECRETS_EF_CONFIGURATION` selects the MSBuild configuration used for the one tooling build
+and every EF call; it defaults to `Release`. The script builds the tooling project once, then
+passes that configuration and `--no-build` to each EF command. A caller that has already built
+the same checkout and configuration may set `ELSA_SECRETS_EF_SKIP_BUILD=1` to avoid competing
+writes to loaded build outputs during a parallel test or CI process. That explicit caller assumes
+responsibility for artifact freshness; clean operator checkouts should keep the default one-build
+safety net. The repository test harness derives the active Debug/Release configuration from its
+assembly and declares the Tooling project as a build dependency before opting into this mode.
+
+`pending` is the CI-safe check for all three providers. The current Build & test job restores
+repository-local tools before build and test; if that job invokes this check, no extra restore is
+needed. Any other job must run `dotnet tool restore` (or install the explicit `.tools` tool) first.
+
+## What the checks mean
+
+The checks cover different failure classes:
+
+- `pending` runs `migrations has-pending-model-changes` for every derived context. It compares the
+  current EF model with that context's committed model snapshot and does not inspect database
+  history. A failure means a migration is missing from source; it is not proof that a database has
+  unapplied migrations.
+- `apply` runs `database update` against the selected provider and applies compiled migrations
+  missing from `__EFMigrationsHistory_ElsaSecrets`. SQL Server and PostgreSQL require their
+  provider-specific connection environment variable and a reachable database. SQLite uses
+  `ELSA_SECRETS_EF_SQLITE` when set; otherwise the script creates a temporary database and removes
+  it on exit, which validates the artifact but does not update a deployment database.
+- Runtime `MigratePolicy=Validate` calls EF's pending-database-migration check and fails closed
+  when the database history is behind. It does not replace the source/model `pending` check.
+
+## Deployment and rollback boundary
+
+Use an explicit provider selector (`apply --sqlite`, `apply --sqlserver`, or
+`apply --postgresql`) and set its matching `ELSA_SECRETS_EF_*` connection for the target database.
+Omitting `ELSA_SECRETS_EF_SQLITE` intentionally targets only the disposable fallback. Before
+applying to a deployment database, take a backup, quiesce writes, and run `pending`. Use a short-lived least-privilege deployment identity
+with the DDL rights needed for that provider; after the schema is verified, run the application
+with its least-privilege runtime identity. Do not enable `SecretsEntityFrameworkCore` together
+with `SecretsGroundworkPersistence` in the same shell.
+
+After `apply` succeeds, verify the selected database's
+`__EFMigrationsHistory_ElsaSecrets` contains the expected migration IDs and that the expected
+`elsa_secrets` table shape is present before deploying the application with
+`MigratePolicy=Validate`. If `pending` or `apply` fails, stop the rollout and inspect both the
+provider schema and history before retrying; a failed command is not deployment proof.
+
+Prefer additive/expand-contract schema changes so an application binary can be rolled back only
+after compatibility is checked. Do not blindly run a down-migration as an application rollback:
+`WidenLookupKeys.Down` narrows SQL Server/PostgreSQL lookup columns back to 64 characters and can
+fail or lose values longer than that. Use a verified backup restore or a forward migration for
+schema recovery; treat application rollback and schema recovery as separate decisions.
 
 Runtime (in-process) apply after CShells enable or reload uses the same `EfMigratePolicy` /
 `EfDatabaseMigrator` path as a plain host. That is not a substitute for this out-of-process tool.
