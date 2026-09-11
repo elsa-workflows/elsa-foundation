@@ -4,6 +4,8 @@ using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Xunit;
 
 namespace Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests;
@@ -11,6 +13,22 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests;
 [Collection(PostgresContainerCollection.Name)]
 public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture fixture)
 {
+    [Fact]
+    public void UseNpgsql_sets_the_provider_history_table_when_the_engine_is_loaded()
+    {
+        var builder = new DbContextOptionsBuilder();
+        EfRelationalProviderBinding.UseNpgsql(
+            builder,
+            "Host=localhost;Database=x;Username=postgres;Password=postgres",
+            SecretsEfModule.HistoryTableName,
+            typeof(SecretsPostgreSqlDbContext).Assembly.GetName().Name);
+
+        var relational = builder.Options.Extensions.OfType<RelationalOptionsExtension>().SingleOrDefault()
+                         ?? throw new InvalidOperationException("Npgsql binding did not install a relational extension.");
+        Assert.Equal(SecretsEfModule.HistoryTableName, relational.MigrationsHistoryTableName);
+        Assert.Contains("Npgsql", relational.GetType().Name, StringComparison.Ordinal);
+    }
+
     [SkippableFact]
     public async Task Migrate_crud_revision_and_search_work_on_postgres()
     {
@@ -22,9 +40,18 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
                 .MigrationsHistoryTable(SecretsEfModule.HistoryTableName))
             .Options;
         await using var context = new SecretsPostgreSqlDbContext(options);
-        await EfDatabaseMigrator.ApplyAsync(context, SecretsPostgreSqlDbContext.ExpectedProviderName);
+        var migrator = context.GetService<IMigrator>();
+        await migrator.MigrateAsync("20260910210216_Initial");
 
         var repository = new EfSecretRepository(context);
+        await repository.SaveAsync(Secret("tenant-a", "before.upgrade", "preserved", scope: "Finance"));
+        await EfDatabaseMigrator.ApplyAsync(context, SecretsPostgreSqlDbContext.ExpectedProviderName);
+        Assert.Equal(
+            "before.upgrade",
+            Assert.Single((await repository.ListPageAsync(
+                "tenant-a",
+                new SecretRepositoryListRequest(scope: "FINANCE"))).Items).Name);
+
         var revisions = Assert.IsAssignableFrom<IRevisionAwareSecretRepository>(repository);
         Assert.True(await repository.TryAddAsync(Secret("tenant-a", "payments.api", "alpha", "Payments API")));
         Assert.False(await repository.TryAddAsync(Secret("tenant-a", "payments.api", "duplicate")));
@@ -49,6 +76,14 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
             "tenant-a",
             new SecretRepositoryListRequest(activeOnly: true, now: now, take: 10));
         Assert.Contains(active.Items, secret => secret.Name == "offset.future");
+
+        var longScope = new string('s', 100) + "München";
+        await repository.SaveAsync(Secret("tenant-a", "long.lookup", "long", scope: longScope));
+        Assert.Contains(
+            (await repository.ListPageAsync(
+                "tenant-a",
+                new SecretRepositoryListRequest(scope: longScope.ToUpperInvariant()))).Items,
+            secret => secret.Name == "long.lookup");
     }
 
     [SkippableFact]
@@ -72,13 +107,15 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
         string name,
         string value,
         string? displayName = null,
-        DateTimeOffset? expiresAt = null) => new()
+        DateTimeOffset? expiresAt = null,
+        string? scope = null) => new()
     {
         TenantId = tenantId,
         Name = name,
         DisplayName = displayName ?? name,
         TypeName = SecretTypeNames.Text,
         StoreName = SecretStoreNames.Encrypted,
+        Scope = scope,
         Versions =
         [
             new SecretVersion

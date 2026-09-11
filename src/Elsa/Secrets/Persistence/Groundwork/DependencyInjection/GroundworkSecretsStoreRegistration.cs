@@ -8,6 +8,8 @@ namespace Elsa.Secrets.Persistence.Groundwork.DependencyInjection;
 
 public static class GroundworkSecretsStoreRegistration
 {
+    private const string RepositoryBackendName = "groundwork";
+
     public static IServiceCollection AddGroundworkSecretsStore(
         this IServiceCollection services,
         string? targetName = null)
@@ -16,9 +18,9 @@ public static class GroundworkSecretsStoreRegistration
             .Select(descriptor => descriptor.ImplementationInstance)
             .OfType<SecretRepositoryBackend>()
             .FirstOrDefault();
-        SecretRepositoryBackend.EnsureCompatible(existingBackend?.Name, SecretRepositoryBackend.Groundwork);
+        SecretRepositoryBackend.EnsureCompatible(existingBackend?.Name, RepositoryBackendName);
         if (existingBackend is null)
-            services.AddSingleton(new SecretRepositoryBackend(SecretRepositoryBackend.Groundwork));
+            services.AddSingleton(new SecretRepositoryBackend(RepositoryBackendName));
         services.AddGroundworkStorageUnit(SecretsGroundworkStorageSchema.CreateUnit(), targetName);
         services.RemoveAll<ISecretRepository>();
         services.AddScoped<ISecretRepository>(provider => new GroundworkSecretRepository(

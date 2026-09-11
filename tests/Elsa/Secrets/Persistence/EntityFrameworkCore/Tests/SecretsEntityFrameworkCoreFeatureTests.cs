@@ -15,6 +15,20 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests;
 public sealed class SecretsEntityFrameworkCoreFeatureTests
 {
     [Fact]
+    public void Connection_string_manifest_setting_is_secret()
+    {
+        var property = typeof(SecretsEntityFrameworkCoreFeature).GetProperty(nameof(SecretsEntityFrameworkCoreFeature.ConnectionString));
+        var setting = Assert.Single(
+            property!.GetCustomAttributesData(),
+            attribute => attribute.AttributeType.FullName ==
+                         "Elsa.Platform.PackageManifest.Generator.Hints.ManifestSettingAttribute");
+
+        Assert.Contains(
+            setting.NamedArguments,
+            argument => argument.MemberName == "Secret" && argument.TypedValue.Value is true);
+    }
+
+    [Fact]
     public void Feature_registers_the_repository_and_sqlite_context()
     {
         var feature = new SecretsEntityFrameworkCoreFeature
@@ -30,6 +44,9 @@ public sealed class SecretsEntityFrameworkCoreFeatureTests
         using var second = provider.CreateScope();
         var repository = first.ServiceProvider.GetRequiredService<ISecretRepository>();
         Assert.IsType<EfSecretRepository>(repository);
+        Assert.Equal("entity-framework", Assert.Single(services
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<SecretRepositoryBackend>()).Name);
         Assert.IsAssignableFrom<IRevisionAwareSecretRepository>(repository);
         Assert.IsType<SecretsSqliteDbContext>(first.ServiceProvider.GetRequiredService<SecretsDbContext>());
         Assert.NotSame(repository, second.ServiceProvider.GetRequiredService<ISecretRepository>());
@@ -43,15 +60,15 @@ public sealed class SecretsEntityFrameworkCoreFeatureTests
     public void Registration_refuses_a_prior_groundwork_backend()
     {
         var services = new ServiceCollection();
-        services.AddSingleton(new SecretRepositoryBackend(SecretRepositoryBackend.Groundwork));
+        services.AddSingleton(new SecretRepositoryBackend("groundwork"));
         var exception = Assert.Throws<InvalidOperationException>(() =>
             services.AddSecretsEntityFrameworkCore(new SecretsEntityFrameworkCoreOptions
             {
                 Provider = "Sqlite",
                 ConnectionString = "Data Source=:memory:"
             }));
-        Assert.Contains(SecretRepositoryBackend.Groundwork, exception.Message, StringComparison.Ordinal);
-        Assert.Contains(SecretRepositoryBackend.EntityFramework, exception.Message, StringComparison.Ordinal);
+        Assert.Contains("groundwork", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("entity-framework", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

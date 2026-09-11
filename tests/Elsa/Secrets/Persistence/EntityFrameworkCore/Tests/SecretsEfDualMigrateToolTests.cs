@@ -285,24 +285,34 @@ public sealed class SecretsEfDualMigrateToolTests
 
         using var process = Process.Start(start)
                             ?? throw new InvalidOperationException("bash could not be started.");
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        if (!process.WaitForExit(180_000))
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(180));
+        try
         {
-            try
-            {
-                process.Kill(entireProcessTree: true);
-            }
-            catch (InvalidOperationException)
-            {
-                // The process may already have exited; cleanup is best-effort
-                // before the timeout is rethrown.
-            }
-
+            process.WaitForExitAsync(timeout.Token).GetAwaiter().GetResult();
+        }
+        catch (OperationCanceledException)
+        {
+            KillProcessTree(process);
             throw new TimeoutException($"dual-migrate.sh {string.Join(' ', args)} did not exit within 180s.");
         }
 
+        var output = outputTask.GetAwaiter().GetResult();
+        var error = errorTask.GetAwaiter().GetResult();
         return new ScriptResult(process.ExitCode, output, error);
+    }
+
+    private static void KillProcessTree(Process process)
+    {
+        try
+        {
+            process.Kill(entireProcessTree: true);
+        }
+        catch (InvalidOperationException)
+        {
+            // The process may already have exited; cleanup is best-effort.
+        }
     }
 
     private static void CopyDotnetEnvironment(IDictionary<string, string?> environment)
