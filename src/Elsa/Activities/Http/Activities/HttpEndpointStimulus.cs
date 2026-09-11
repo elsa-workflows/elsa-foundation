@@ -7,7 +7,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Activities.Http.Activities;
 
 /// <summary>
-/// Derives the stimulus identity of an <see cref="HttpEndpoint"/> start trigger (W16, on the W7 seam). It maps an
+/// Derives the stimulus identity of an <see cref="HttpEndpoint"/> start trigger (on the trigger-stimulus seam). It maps an
 /// endpoint's <c>(template, method)</c> pair to the opaque <c>(StimulusType, StimulusHash)</c> routing pair the
 /// engine already uses — it does not invent a second routing key. Both the publish-time trigger extractor (via
 /// <see cref="HttpEndpointTriggerStimulusProvider"/>) and the request middleware that raises the stimulus for an

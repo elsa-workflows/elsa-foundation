@@ -29,7 +29,6 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Events;
 using Elsa.Workflows.Publishing.Core.Models;
-using Elsa.Workflows.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;

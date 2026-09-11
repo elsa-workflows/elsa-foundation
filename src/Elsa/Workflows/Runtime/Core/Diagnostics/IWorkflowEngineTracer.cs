@@ -4,7 +4,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Diagnostics;
 
 /// <summary>
-/// Starts engine-phase tracing spans for the four workflow runtime hot-path phases (MS-9): drain cycle, dispatch,
+/// Starts engine-phase tracing spans for the four workflow runtime hot-path phases: drain cycle, dispatch,
 /// activity execution, and checkpoint commit. Implementations MUST be allocation-free and side-effect-free when
 /// tracing is disabled (return <c>null</c>), so instrumenting the fenced drain/commit path never changes execution
 /// semantics.

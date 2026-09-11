@@ -2,7 +2,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
 /// The result of asking an <see cref="Elsa.Workflows.Runtime.Core.Contracts.IActivityTriggerStimulusProvider"/>
-/// to describe a published trigger node (W7, E3-1; spec 089 D). It separates two states the older
+/// to describe a published trigger node (spec 089 D). It separates two states the older
 /// "return an empty collection" convention could not tell apart:
 /// <list type="bullet">
 /// <item><description><see cref="NotRecognized"/> — the provider does not own this activity type; the trigger

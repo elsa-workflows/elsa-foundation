@@ -5,7 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Core\Elsa.Activities.Design.Reconciliation.Core.csproj" />
+    <ProjectReference Include="..\..\Core\Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
   </ItemGroup>
 

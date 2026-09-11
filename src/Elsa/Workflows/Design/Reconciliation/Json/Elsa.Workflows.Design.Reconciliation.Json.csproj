@@ -8,7 +8,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Elsa.Workflows.Design.Reconciliation.csproj" />
-    <ProjectReference Include="..\Core\Elsa.Workflows.Design.Reconciliation.Core.csproj" />
     <ProjectReference Include="..\..\Core\Elsa.Workflows.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Serialization\Core\Elsa.Serialization.Core.csproj" />
   </ItemGroup>

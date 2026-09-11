@@ -4,7 +4,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Services;
 
 /// <summary>
-/// Default <see cref="IWorkflowTriggerIndexer"/> (W7, E3-1). It extracts the trigger bindings for a published
+/// Default <see cref="IWorkflowTriggerIndexer"/>. It extracts the trigger bindings for a published
 /// executable and replaces the artifact's prior bindings with the current set: it first deletes every binding
 /// owned by the artifact, then writes the freshly extracted ones, so a republished version's triggers fully
 /// supersede the previous version's and no stale trigger from an earlier version can still start a workflow.

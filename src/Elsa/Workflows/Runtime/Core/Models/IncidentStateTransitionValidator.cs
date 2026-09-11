@@ -43,8 +43,8 @@ public static class IncidentStateTransitionValidator
     }
 
     private static bool ReferencesAreIdentical(
-        Elsa.Workflows.Primitives.Models.IncidentStrategyReference? existing,
-        Elsa.Workflows.Primitives.Models.IncidentStrategyReference? candidate) =>
+        Elsa.Primitives.Models.IncidentStrategyReference? existing,
+        Elsa.Primitives.Models.IncidentStrategyReference? candidate) =>
         existing is null
             ? candidate is null
             : existing.Equals(candidate);

@@ -1,4 +1,4 @@
-using Elsa.Activities.Design.Reconciliation.Core.Models;
+using Elsa.Activities.Design.Core.Reconciliation.Models;
 
 namespace Elsa.Activities.Design.Reconciliation.Clr.Contracts;
 

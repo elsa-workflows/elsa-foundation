@@ -1,7 +1,7 @@
 namespace Elsa.Workflows.Runtime.Core.Diagnostics;
 
 /// <summary>
-/// Stable naming conventions for the workflow runtime engine's own distributed-tracing spans (MS-9). These are the
+/// Stable naming conventions for the workflow runtime engine's own distributed-tracing spans. These are the
 /// <b>engine self-instrumentation</b> conventions — the names a listener (an OpenTelemetry SDK <c>AddSource</c> or a
 /// bare <see cref="System.Diagnostics.ActivityListener"/>) subscribes to. They are unrelated to the
 /// <c>Elsa.Diagnostics.OpenTelemetry</c> ingestion domain, which receives OTLP telemetry pushed by <i>other</i>

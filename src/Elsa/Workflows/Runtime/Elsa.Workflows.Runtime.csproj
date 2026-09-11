@@ -1,12 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Attention\Core\Elsa.Attention.Core.csproj" />
     <ProjectReference Include="..\..\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
@@ -15,9 +19,9 @@
 
   <ItemGroup>
     <!-- Sibling runtime projects live under the same domain root; keep SDK globs scoped to this project. -->
-    <Compile Remove="Api/**/*;Attention/**/*;Core/**/*;Distributed/**/*;Http/**/*;JavaScript/**/*;Reconciliation/**/*;ReferenceGarbageCollection/**/*;Resumption/**/*;Scheduling/**/*;Tracing/**/*" />
-    <EmbeddedResource Remove="Api/**/*;Attention/**/*;Core/**/*;Distributed/**/*;Http/**/*;JavaScript/**/*;Reconciliation/**/*;ReferenceGarbageCollection/**/*;Resumption/**/*;Scheduling/**/*;Tracing/**/*" />
-    <None Remove="Api/**/*;Attention/**/*;Core/**/*;Distributed/**/*;Http/**/*;JavaScript/**/*;Reconciliation/**/*;ReferenceGarbageCollection/**/*;Resumption/**/*;Scheduling/**/*;Tracing/**/*" />
+    <Compile Remove="Api/**/*;Core/**/*;Distributed/**/*;Http/**/*;JavaScript/**/*;Reconciliation/**/*;ReferenceGarbageCollection/**/*;Resumption/**/*;Scheduling/**/*" />
+    <EmbeddedResource Remove="Api/**/*;Core/**/*;Distributed/**/*;Http/**/*;JavaScript/**/*;Reconciliation/**/*;ReferenceGarbageCollection/**/*;Resumption/**/*;Scheduling/**/*" />
+    <None Remove="Api/**/*;Core/**/*;Distributed/**/*;Http/**/*;JavaScript/**/*;Reconciliation/**/*;ReferenceGarbageCollection/**/*;Resumption/**/*;Scheduling/**/*" />
   </ItemGroup>
 
 </Project>

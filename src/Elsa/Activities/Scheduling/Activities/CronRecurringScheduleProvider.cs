@@ -4,7 +4,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Activities.Scheduling.Activities;
 
 /// <summary>
-/// The <see cref="IRecurringTriggerScheduleProvider"/> for the <see cref="Cron"/> start trigger (W16). It
+/// The <see cref="IRecurringTriggerScheduleProvider"/> for the <see cref="Cron"/> start trigger. It
 /// recognizes published <see cref="Cron"/> nodes and derives their recurrence spec from the authored
 /// <see cref="Cron.Expression"/> literal, so the schedule indexer writes a recurring schedule keyed by the same
 /// stimulus the trigger index binds. The pump fires that schedule to start a new instance on each occurrence.

@@ -10,7 +10,7 @@ namespace Elsa.Activities.Flowchart.Internal;
 /// cancellation. Loop-iteration numbering derives from the explicit monotonic per-owner counter in
 /// <see cref="FlowchartExecutionState.LoopIterationCounters"/> (<see cref="ResolveTargetScope"/>), decoupled
 /// from the live scope count — this is what lets stale loop-iteration scopes be pruned on persistence
-/// without a later iteration reusing an earlier key (#382 / W32).
+/// without a later iteration reusing an earlier key (#382).
 /// </summary>
 internal static class FlowchartScopeResolver
 {
@@ -20,11 +20,11 @@ internal static class FlowchartScopeResolver
     /// <see cref="ExecutionScopeKind.LoopIteration"/> scope, walking up the scope tree, or <c>null</c> outside
     /// a loop.
     /// <para>
-    /// ADR 0064 WU-4: the key used to be copied from the emitting path onto every new one, which made the scope
+    /// ADR 0064: the key used to be copied from the emitting path onto every new one, which made the scope
     /// tree and the key two independent records of the same fact — and two records of one fact can disagree.
     /// Deriving it means a path's iteration identity is whatever its scope says it is, by construction. This
     /// changes where the key comes from, not what it is: numbering still comes from the monotonic per-owner
-    /// <see cref="FlowchartExecutionState.LoopIterationCounters"/> (#382 / W32), so pruning a completed
+    /// <see cref="FlowchartExecutionState.LoopIterationCounters"/> (#382), so pruning a completed
     /// iteration's scope still cannot let a later iteration reuse an earlier key.
     /// </para>
     /// </summary>

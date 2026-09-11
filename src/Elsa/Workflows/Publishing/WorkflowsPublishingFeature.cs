@@ -7,7 +7,7 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
-using Elsa.Workflows.Design.Reconciliation.Core;
+using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -82,7 +82,7 @@ public class WorkflowsPublishingFeature : IShellFeature
         // It is also the publication check permanent deletion requires, so a host that does not compose this
         // feature refuses the operation outright instead of deleting unverified (#1283).
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDefinitionPermanentDeletionGuard, PublishedWorkflowDeletionGuard>());
-        // W30b (#418): WorkflowExecutableCompiler decomposition collaborators. Registered at the compiler's own
+        // #418: WorkflowExecutableCompiler decomposition collaborators. Registered at the compiler's own
         // scoped lifetime so each is independently resolvable, replaceable, and unit-testable.
         services.TryAddSingleton<IValueConversionProfileRegistry>(BuiltInValueConversionProfileRegistry.Instance);
         services.TryAddScoped<ValueConversionPlanResolver>();

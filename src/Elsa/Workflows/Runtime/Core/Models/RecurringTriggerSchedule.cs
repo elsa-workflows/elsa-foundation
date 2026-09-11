@@ -2,7 +2,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
 /// A durable, persisted recurring start schedule for a Timer/Cron start-trigger activity in a published
-/// workflow (W16, on W7's trigger seam). Unlike a <see cref="DurableTimer"/> — which resumes one suspended
+/// workflow (on the trigger-stimulus seam). Unlike a <see cref="DurableTimer"/> — which resumes one suspended
 /// execution at a one-shot deadline — a recurring schedule has <b>no execution id</b>: it starts a <i>new</i>
 /// workflow instance every time it fires. The hosted recurring-trigger pump reads due schedules and dispatches
 /// the start stimulus identified by (<see cref="StimulusType"/>, <see cref="StimulusHash"/>) through the
@@ -21,7 +21,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// never replays the backlog of occurrences that elapsed while it was down.
 /// </para>
 /// <para>
-/// <b>Cluster-safety hook (W20).</b> The cursor is advanced through a compare-and-swap on
+/// <b>Cluster-safety hook.</b> The cursor is advanced through a compare-and-swap on
 /// <see cref="NextOccurrence"/> (see <c>IRecurringTriggerScheduleStore.TryAdvanceAsync</c>), so exactly one
 /// worker can claim a given occurrence. Single-node hosts get this for free; a future clustered store keeps the
 /// same CAS contract to make the pump cluster-safe without changing the pump.

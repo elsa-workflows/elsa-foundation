@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
 /// <summary>
 /// Default <see cref="IRuntimeCoalescingDrainScopeFactory"/>. Creates a <see cref="RuntimeCoalescingSession"/> per drain,
 /// pushes it onto the ambient <see cref="IRuntimeCoalescingSessionAccessor"/>, and flushes the folded segment through
-/// the <see cref="RuntimeCheckpointCommitter"/> at quiescence so W5 ownership fencing gates the single durable write.
+/// the <see cref="RuntimeCheckpointCommitter"/> at quiescence so single-writer ownership fencing gates the single durable write.
 /// </summary>
 public sealed class RuntimeCoalescingDrainScopeFactory(
     IRuntimeCoalescingSessionAccessor sessionAccessor,
@@ -60,7 +60,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
 
             var flushCommit = BuildFlushCommit();
 
-            // Routed through the committer so ownership fencing (W5) gates the single durable write. The coalescing
+            // Routed through the committer so ownership fencing gates the single durable write. The coalescing
             // commit-store decorator recognises the CoalescedFlush marker, applies the folded state to the durable
             // inner store, advances the durable queue, and deactivates the session.
             await checkpointCommitter.CommitAsync(flushCommit, cancellationToken);

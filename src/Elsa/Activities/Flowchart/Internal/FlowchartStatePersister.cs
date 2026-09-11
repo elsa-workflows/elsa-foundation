@@ -154,7 +154,7 @@ public sealed class FlowchartStatePersister
     /// Extends the retained scope set with each retained scope's ancestors, stopping at (and including) the
     /// first <see cref="ExecutionScopeKind.LoopIteration"/> one.
     /// <para>
-    /// ADR 0064 WU-4 derives a path's iteration key by walking up to its nearest enclosing loop iteration, so
+    /// ADR 0064 derives a path's iteration key by walking up to its nearest enclosing loop iteration, so
     /// that walk must not run off a pruned parent. Without this, a live path inside a race scope nested in a
     /// loop iteration would keep its own scope but lose the loop scope above it, and the derived key would
     /// silently read <c>null</c>. Stopping at the first loop iteration is what keeps this bounded: iteration

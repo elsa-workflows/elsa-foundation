@@ -1,7 +1,7 @@
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// The stimulus identity a start-trigger activity node reacts to, described at publish time (W7, E3-1).
+/// The stimulus identity a start-trigger activity node reacts to, described at publish time.
 /// It is the opaque <c>(StimulusType, StimulusHash)</c> routing pair the engine already uses on bookmarks,
 /// optionally scoped to a passive correlation value; the trigger extractor turns it into a durable
 /// <see cref="WorkflowTriggerBinding"/>.

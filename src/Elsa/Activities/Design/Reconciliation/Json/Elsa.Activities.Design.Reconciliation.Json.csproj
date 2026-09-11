@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\Core\Elsa.Activities.Design.Reconciliation.Core.csproj" />
+    <ProjectReference Include="..\..\Core\Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Serialization\Core\Elsa.Serialization.Core.csproj" />
   </ItemGroup>
 

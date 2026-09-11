@@ -66,7 +66,7 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
             // the workflow's cancellation token; the ambient client timeout is disabled to avoid double-timeout.
             .ConfigureHttpClient(client => client.Timeout = System.Threading.Timeout.InfiniteTimeSpan);
 
-        // Contribute the HttpEndpoint start-trigger's stimulus provider (W7 seam) so the publish-time trigger
+        // Contribute the HttpEndpoint start-trigger's stimulus provider so the publish-time trigger
         // extractor can recognize published HttpEndpoint nodes and index them. Enumerable so other activity
         // features add their own providers.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityTriggerStimulusProvider, HttpEndpointTriggerStimulusProvider>());

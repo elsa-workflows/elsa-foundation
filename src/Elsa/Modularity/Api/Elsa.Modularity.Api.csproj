@@ -11,6 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Attention\Core\Elsa.Attention.Core.csproj" />
     <ProjectReference Include="..\Core\Elsa.Modularity.Core.csproj" />
     <ProjectReference Include="..\Nuplane\Elsa.Modularity.Nuplane.csproj" />
     <ProjectReference Include="..\..\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />

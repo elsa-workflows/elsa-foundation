@@ -5,7 +5,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <summary>
 /// Stores <see cref="RuntimeSchedulerPoisonRecord"/>s for scheduler work handler crashes, keyed by workflow
 /// execution ID and work item ID. Lets a handler crash be recorded (and, when the domain retry policy asks,
-/// re-driven) instead of being silently dropped after dequeue (RT-1 gap b).
+/// re-driven) instead of being silently dropped after dequeue.
 /// </summary>
 public interface IWorkflowSchedulerPoisonStore
 {

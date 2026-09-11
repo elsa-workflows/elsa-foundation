@@ -4,7 +4,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
-/// Writes the durable trigger index for a published workflow executable (W7, E3-1). Invoked from the publish
+/// Writes the durable trigger index for a published workflow executable. Invoked from the publish
 /// flow after the executable is stored; it replaces the artifact's prior trigger bindings with the current set
 /// so a republished version's triggers supersede the previous version's.
 /// </summary>

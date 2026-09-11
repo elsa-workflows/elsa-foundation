@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Elsa.Workflows.Runtime.Api.Coalescing;
 
 /// <summary>
-/// Opt-in wiring for the burst-coalescing checkpoint persistence policy (E3-6, RT-10). Call this after the workflows
+/// Opt-in wiring for the burst-coalescing checkpoint persistence policy. Call this after the workflows
 /// runtime services are registered to trade a bounded crash-replay window for Elsa-3-style single-write-per-burst
 /// durability on straight-line segments. The default runtime keeps the Immediate policy, so this is a deliberate,
 /// reversible selection; when it is not called every runtime store is a byte-for-byte pass-through as before.

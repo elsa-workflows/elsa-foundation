@@ -56,7 +56,7 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
 
         try
         {
-            // RT-11: reuse the single per-work-item parse rather than deserializing the payload again.
+            // Reuse the single per-work-item parse rather than deserializing the payload again.
             var completionPayload = RuntimeCompleteActivityPayloadMemo.Deserialize(workItem);
             return completionPayload?.CompletionKind != SchedulerCompletionKind.ParentCompletionEvaluation;
         }
@@ -243,7 +243,7 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
             requiresPayloadMessage: "CompleteActivity scheduler work item requires a complete activity payload.",
             resolvedToNullMessage: "CompleteActivity scheduler work item payload resolved to null.",
             invalidPayloadMessage: "CompleteActivity scheduler work item payload is not a valid complete activity payload.",
-            // RT-11: reuse the single per-work-item parse rather than deserializing the payload again.
+            // Reuse the single per-work-item parse rather than deserializing the payload again.
             deserialize: static (item, _) => RuntimeCompleteActivityPayloadMemo.Deserialize(item),
             isPayloadValidationException: static exception =>
                 exception is JsonException or NotSupportedException ||

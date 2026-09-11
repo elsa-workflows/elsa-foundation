@@ -6,7 +6,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Services;
 
 /// <summary>
-/// Default <see cref="IWorkflowTriggerBindingExtractor"/> (W7, E3-1). It walks the published executable's node
+/// Default <see cref="IWorkflowTriggerBindingExtractor"/>. It walks the published executable's node
 /// tree, selects the nodes the compiler marked as start-triggers (via
 /// <see cref="TriggerNodeMetadata.ExecutionTypeKey"/>), and resolves each one's stimulus identity through the
 /// registered <see cref="IActivityTriggerStimulusProvider"/> set — deriving the durable trigger index over the

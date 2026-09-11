@@ -5,7 +5,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Models;
 /// <summary>
 /// A best-effort routing claim asserting that one node currently hosts the workflow-execution actor for a workflow
 /// execution id. Placement governs <b>routing</b> (which node drains an execution) so at most one node drains at a
-/// time; it is deliberately <b>not</b> the correctness backstop. Double durable-execution is prevented by W5 single-writer
+/// time; it is deliberately <b>not</b> the correctness backstop. Double durable-execution is prevented by single-writer
 /// fencing (<c>IRuntimeExecutionOwnershipService</c> / <c>RuntimeCheckpointCommitter</c>), which rejects a superseded
 /// writer's commit even if placement routing is momentarily wrong. See the package README for the full
 /// placement=routing / fencing=safety argument.

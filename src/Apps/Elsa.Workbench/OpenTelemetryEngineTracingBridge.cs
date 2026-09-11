@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Workbench;
 
 /// <summary>
-/// Host-local composition seam that bridges the workflow engine's self-instrumentation (MS-9) into the OpenTelemetry
+/// Host-local composition seam that bridges the workflow engine's self-instrumentation into the OpenTelemetry
 /// ingestion domain so Studio's timing view is populated on a self-contained demo server.
 /// </summary>
 /// <remarks>

@@ -2,7 +2,7 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Reconciliation.Contracts;
-using Elsa.Workflows.Design.Reconciliation.Core;
+using Elsa.Workflows.Design.Core.Reconciliation;
 
 namespace Elsa.Workflows.Design.Reconciliation.Handlers;
 

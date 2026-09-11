@@ -3,6 +3,16 @@ Draft history moved to ../../docs/reports/archive/constitution-draft-history.md.
 This constitution file is the Elsa-specific quality-gate layer: gates, allowed exceptions,
 ratification state, and governance. Canonical term lookup lives in ../../docs/glossary/.
 
+Sync Impact Report (4.0.0 -> 4.0.1, 2026-09-11)
+- Bump rationale: PATCH. Factual sync with the tree; no gate added, removed, or redefined.
+- Modified: Pinned tree, the `Elsa.Workflows.Primitives` domain row removed. Its one live type,
+  `IncidentStrategyReference`, moved to `Elsa.Primitives`; its three constant classes had no callers.
+- Modified: §E5 minimum-project-size note. The primitives worked example now names
+  `Elsa.Primitives.Hosting`, and one sentence records that an exemption permits a small project
+  without requiring one: the 2026-09 maintainability pass merged eight small projects into their parents.
+- Source: owner-approved maintainability plan, Phase 2 wave 2.
+- Templates requiring updates: none.
+
 Sync Impact Report (3.4.0 -> 3.5.0, 2026-08-07)
 - Bump rationale: MINOR. Materially expanded Elsa-specific guidance; no rule removed or redefined
   incompatibly.
@@ -42,7 +52,7 @@ Ratification: RATIFIED 2026-08-08 by Sipke Schoorstra, on his authority alone; J
 -->
 # Elsa Workflow Engine Constitution
 
-**Version:** 4.0.0
+**Version:** 4.0.1
 **Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance > Amendment process calls for consensus among Joey Barten, Sipke Schoorstra, and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Section-level gates still marked draft, provisional, or pending architecture-review ratification — whether via their own `Status:` line (§E5) or inline wording (§E2.8 Model X, §E2.9, §E2.9.7) — remain so and are **not** covered by this ratification.
 **Layer:** Elsa-specific specialization of the [Modular Software Design Framework Constitution](constitution-framework.md).
 **Derives from:** framework constitution **v4.0.0**.
@@ -146,7 +156,6 @@ owns always-fresh enumeration and project counts)*:
 | `Elsa.Workflows.Design` | Designs workflow definitions: contracts, models, validations, reconciliation, and design-time persistence. | `Elsa.Workflows.Design.Core`, `Elsa.Workflows.Design.{Api,JavaScript}`, `Elsa.Workflows.Design.{Reconciliation,Validations}.*`, `Elsa.Workflows.Design.Persistence.*` |
 | `Elsa.Workflows.Runtime` | Executes workflows: instances, execution pipeline, bookmarks, runtime persistence. | `Elsa.Workflows.Runtime.Core`, `Elsa.Workflows.Runtime.{Api,Http,JavaScript}` |
 | `Elsa.Workflows.Publishing` | Publishes executable workflow artifacts from designed definitions. | `Elsa.Workflows.Publishing.Api`, `Elsa.Workflows.Publishing.Api.Core` |
-| `Elsa.Workflows.Primitives` | Shares workflow primitives used by both Design and Runtime. | `Elsa.Workflows.Primitives` |
 | `Elsa3` | Imports Elsa 3 definitions one-way at the migration boundary (§E2.7). | `Elsa3.Models`, `Elsa3.Mapping`, `Elsa3.Activities.Design.Import` |
 
 Three domains listed in earlier drafts — `Elsa.Scheduling`, `Elsa.Messaging`,
@@ -441,7 +450,7 @@ Rationale, rejected alternatives and the supporting measurements are recorded in
 
 **Reversibility.** If, e.g., `Elsa.Serialization.Newtonsoft` and `Elsa.Serialization.SystemText` become demanded by applications outside Elsa, they could graduate into separately published features that Elsa's other features pull in via NuGet. The packaging is reversible per framework §2.16 (refactor-cost test) — preserving NuGet identity insulates consumers from the restructuring.
 
-**Minimum project size (framework §2.16.1 — Elsa interpretive note).** Elsa's tree intentionally contains many sub-100-LoC projects; the 2026-07-04 audit ([MD-5 amendment report](../../docs/reports/elsa-4-w21-md5-minimum-project-size-amendment.md)) found all 13 of them exempt under the §2.16.1 exemption test, so the guidance ratifies the current shape rather than triggering a merge campaign. Worked examples per exception class: contracts-only `.Core` seams (`Elsa.Locking.Core`, `Elsa.Caching.Core`), primitives projects (`Elsa.Workflows.Primitives`, `Elsa.Expressions.JavaScript.Primitives`), provider leaves (`Elsa.Locking.FileSystem`, `Elsa.Persistence.EFCore.Sqlite`), the §E2.7 migration boundary (`Elsa3.Activities.Design.Import`), Layer-2 helpers (`Elsa.Serialization.Newtonsoft`), and independently-composable `[ShellFeature]` units / cross-domain contribution seams (`Elsa.Expressions.JavaScript.Libraries`, `Elsa.Http.JavaScript`). New sub-100-LoC projects that fit none of the six classes need the one-sentence justification of §2.16.1.
+**Minimum project size (framework §2.16.1 — Elsa interpretive note).** Elsa's tree intentionally contains many sub-100-LoC projects; the 2026-07-04 audit ([MD-5 amendment report](../../docs/reports/elsa-4-w21-md5-minimum-project-size-amendment.md)) found all 13 of them exempt under the §2.16.1 exemption test, so the guidance ratifies the current shape rather than triggering a merge campaign. An exemption permits a small project; it does not require one: the 2026-09 maintainability pass merged eight of them into their parents where no dependency-direction or packaging reason held them apart. Worked examples per exception class: contracts-only `.Core` seams (`Elsa.Locking.Core`, `Elsa.Caching.Core`), primitives projects (`Elsa.Primitives.Hosting`), provider leaves (`Elsa.Locking.FileSystem`, `Elsa.Persistence.EFCore.Sqlite`), the §E2.7 migration boundary (`Elsa3.Activities.Design.Import`), Layer-2 helpers (`Elsa.Serialization.Newtonsoft`), and independently-composable `[ShellFeature]` units / cross-domain contribution seams (`Elsa.Expressions.JavaScript.Libraries`, `Elsa.Http.JavaScript`). New sub-100-LoC projects that fit none of the six classes need the one-sentence justification of §2.16.1.
 
 **Nuplane strategy.** Elsa adopts **Strategy B** per framework §3: the host pins the Line A baseline contracts; Nuplane dynamically loads Layer-3 implementations, helper libraries, and optional features. A domain's `.Core` is not host-pinned, because a clean host carries no domains; Nuplane promotes it to a shared assembly within that domain's subtree when the domain is installed, for first-party and third-party domains alike. Strategy A is not adopted as Elsa's default, but is not hard-excluded for specific deployment contexts.
 
@@ -509,4 +518,4 @@ Same rules as framework §4.2 applied to constitutional content:
 
 ---
 
-**Version:** 4.0.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-08-08 | **Derives from framework constitution:** v4.0.0
+**Version:** 4.0.1 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-09-11 | **Derives from framework constitution:** v4.0.0

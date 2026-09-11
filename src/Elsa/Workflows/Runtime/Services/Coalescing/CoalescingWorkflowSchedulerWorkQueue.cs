@@ -105,7 +105,7 @@ public sealed class CoalescingWorkflowSchedulerWorkQueue(
         return await _inner.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
     }
 
-    // Atomic checkpoint consumption (WU-1 / spec 105) only reaches the durable queue on the Immediate path: the committer
+    // Atomic checkpoint consumption (spec 105) only reaches the durable queue on the Immediate path: the committer
     // suppresses the consume-fold while a coalescing session owns the execution, so this is always a pass-through to the
     // durable inner queue.
     public ValueTask<RuntimeSchedulerWorkClaimTransitionResult> ConsumeClaimedAsync(

@@ -6,7 +6,7 @@ using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
-using Elsa.Workflows.Primitives.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Publishing;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Requests;

@@ -4,7 +4,7 @@ public sealed record RuntimeCheckpointCommitStoreResult(
     IReadOnlyCollection<string> PendingPostCommitWorkIds)
 {
     /// <summary>
-    /// The claimed scheduler work-item ids the store durably deleted inside this commit's unit-of-work (WU-1 / spec 105),
+    /// The claimed scheduler work-item ids the store durably deleted inside this commit's unit-of-work (spec 105),
     /// or the ids recorded on the replay marker when the commit was a redelivery. The committer asserts this matches the
     /// consume-changes it folded and, when non-empty, marks the ambient claim consumed so the drainer skips the separate
     /// acknowledgement. Empty on the legacy/coalesced paths.

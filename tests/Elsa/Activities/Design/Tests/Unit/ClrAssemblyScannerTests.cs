@@ -4,7 +4,7 @@ using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
-using Elsa.Activities.Design.Reconciliation.Core.Models;
+using Elsa.Activities.Design.Core.Reconciliation.Models;
 using Elsa.Activities.Design.Persistence.Core.Services;
 using Elsa.Activities.Design.Tests.ClrFixture;
 using Elsa.Activities.Runtime.Core;

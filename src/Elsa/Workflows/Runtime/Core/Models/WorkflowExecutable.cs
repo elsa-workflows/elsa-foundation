@@ -1,6 +1,6 @@
 using System.Collections.ObjectModel;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Workflows.Primitives.Models;
+using Elsa.Primitives.Models;
 using System.Text.Json.Serialization;
 
 namespace Elsa.Workflows.Runtime.Core.Models;

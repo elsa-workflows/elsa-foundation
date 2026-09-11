@@ -106,8 +106,11 @@ public sealed class EventNamingTests
     {
         // After Unit 1's event unification, the FR-018 / FR-018a events in this .Core all
         // implement the single IEvent marker. Scan for it so future additions are picked up.
+        // The scan is scoped to the draft-event namespace: the same assembly also carries the
+        // workflow-version reconciliation events, which are not part of the draft surface.
         return typeof(DraftCreated).Assembly
             .GetTypes()
+            .Where(t => t.Namespace == typeof(DraftCreated).Namespace)
             .Where(t => t is { IsClass: true, IsAbstract: false, IsPublic: true })
             .Where(t => typeof(IEvent).IsAssignableFrom(t))
             .Select(t => t.Name)

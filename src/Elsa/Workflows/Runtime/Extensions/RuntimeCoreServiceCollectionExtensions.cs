@@ -21,7 +21,7 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Workflows.Runtime.Core.Extensions;
 
 /// <summary>
-/// Host-agnostic composition root for the workflow runtime (ADR 0029 / RT-4). Registers the runtime execution spine —
+/// Host-agnostic composition root for the workflow runtime (ADR 0029). Registers the runtime execution spine —
 /// stores, scheduler, drainer, coordinator, command processor, the workflow/activity execution pipelines, and every
 /// scheduler work handler — independently of any HTTP/API host, so a worker, a test harness, or another module can
 /// compose and drive the runtime without the API feature. The API feature (<c>WorkflowsRuntimeApiFeature</c>)
@@ -99,7 +99,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         // restores the pre-#542 unbounded-growth behavior byte-for-byte.
         services.TryAddSingleton<RuntimeActorEvictionOptions>();
 
-        // MS-9 self-instrumentation: the engine hot path (drain/dispatch/activity-execute/checkpoint-commit) resolves an
+        // Engine self-instrumentation: the engine hot path (drain/dispatch/activity-execute/checkpoint-commit) resolves an
         // IWorkflowEngineTracer. The default is a no-op that returns null spans at zero cost, so the fenced drain/commit
         // path is byte-for-byte unchanged unless WorkflowsRuntimeTracingFeature replaces it with the ActivitySource-backed
         // tracer (which itself stays free until a listener attaches).
@@ -169,10 +169,10 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<ISchedulerStateStore, InMemorySchedulerStateStore>();
         services.TryAddSingleton<RuntimeExecutionOwnershipOptions>();
         services.TryAddSingleton<IRuntimeExecutionOwnershipContextAccessor, AsyncLocalRuntimeExecutionOwnershipContextAccessor>();
-        // WU-1 / spec 105: scoped transport shared by the same-scope drainer and checkpoint committer so a checkpoint
+        // spec 105: scoped transport shared by the same-scope drainer and checkpoint committer so a checkpoint
         // commit can fold the claimed work item's acknowledgement into its unit-of-work.
         services.TryAddScoped<IRuntimeConsumedSchedulerWorkClaimAccessor, RuntimeConsumedSchedulerWorkClaimAccessor>();
-        // Live-drain delivery marker (WU-2). Always registered because Immediate is the default cost model: the drain
+        // Live-drain delivery marker. Always registered because Immediate is the default cost model: the drain
         // orchestrator pushes a scope while it owns an execution so the post-commit outbox processor delivers
         // EnqueueSchedulerWork intents in-memory. The coalescing feature leaves this untouched; it never pushes a scope.
         services.TryAddSingleton<IRuntimeLiveDrainDeliveryAccessor, AsyncLocalRuntimeLiveDrainDeliveryAccessor>();
@@ -320,7 +320,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IRuntimeCheckpointCadenceResolver, RuntimeCheckpointCadenceResolver>();
         services.TryAddScoped<IRuntimePostCommitIntentDispatcher, RuntimePostCommitIntentDispatcher>();
         services.AddRuntimePostCommitIntentHandler<RuntimeSchedulerPostCommitIntentDispatcher>(RuntimePostCommitIntentKinds.EnqueueSchedulerWork);
-        // WU-3 / spec 109: the in-process-hop fast path is on by default. A host or a guardrail test can disable it by
+        // spec 109: the in-process-hop fast path is on by default. A host or a guardrail test can disable it by
         // registering RuntimeInProcessHopFastPathOptions { Enabled = false } before this call; the durable deserialize
         // path then runs everywhere and MUST commit byte-identical state (ADR 0031 follow-up (c)).
         services.TryAddSingleton<RuntimeInProcessHopFastPathOptions>();

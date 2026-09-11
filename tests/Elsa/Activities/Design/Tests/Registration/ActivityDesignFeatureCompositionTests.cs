@@ -13,7 +13,7 @@ using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Clr;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
-using Elsa.Activities.Design.Reconciliation.Core;
+using Elsa.Activities.Design.Core.Reconciliation;
 using Elsa.Activities.Runtime;
 using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Extensions;

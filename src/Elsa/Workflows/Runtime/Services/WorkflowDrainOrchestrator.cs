@@ -23,7 +23,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     /// Creates the orchestrator. C1 (#1227): the six telescoping constructors collapsed into this single primary
     /// constructor: five required collaborators followed by optional collaborators that default to their
     /// no-op/system implementations. The ownership service and the ownership context accessor are <b>required by
-    /// construction</b> so the RT-2 single-writer lease, which fences every checkpoint commit made during the drain
+    /// construction</b> so the single-writer lease, which fences every checkpoint commit made during the drain
     /// and cancels the drain when the lease is lost, can never be silently disabled by picking a narrower
     /// constructor. The drain observers are required for the same reason: they decide fault outcomes (blocking
     /// incidents, poison projection, incident strategy resolution), so the set must be handed in deliberately.
@@ -69,7 +69,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         if (!string.Equals(request.WorkflowExecutionId, envelope.WorkflowExecutionId, StringComparison.Ordinal))
             throw new InvalidOperationException($"Scheduler drain request workflow execution ID '{request.WorkflowExecutionId}' does not match command envelope workflow execution ID '{envelope.WorkflowExecutionId}'.");
 
-        // Single-writer ownership (RT-2): claim a fencing lease for this drain and expose it as the active ownership
+        // Single-writer ownership: claim a fencing lease for this drain and expose it as the active ownership
         // scope so every checkpoint commit made during the drain is fenced against it. Acquiring writes a lease +
         // heartbeat to operational state, giving the recovery scanner real data. Renewal keeps long-running drains from
         // expiring their own lease; process failure leaves the lease in place so interrupted execution stays detectable,
@@ -189,7 +189,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             return await DrainImmediateAsync(envelope, request, cancellationToken);
 
         // Coalescing path: establish the ambient session for the drain, then fold-and-flush the buffered segment at
-        // quiescence. The flush runs inside the active ownership scope so W5 fencing gates the single durable write. If
+        // quiescence. The flush runs inside the active ownership scope so single-writer fencing gates the single durable write. If
         // the drain throws, the flush is skipped and the scope is disposed with its buffer discarded, so a crash
         // mid-segment replays from the last flushed state plus durable scheduler-queue redelivery. A null cadence (no
         // resolver registered) coalesces with the host-configured cap, byte-identical to pre-R5 behavior.
@@ -200,10 +200,10 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         return drainResult;
     }
 
-    // Immediate persistence for a single drain. While this live drain owns the execution (bounded by the RT-2
+    // Immediate persistence for a single drain. While this live drain owns the execution (bounded by the
     // single-writer lease), push a delivery scope so the post-commit outbox processor delivers EnqueueSchedulerWork
-    // intents in-memory (idempotent enqueue + direct Delivered mark) instead of taking the durable claim round-trip
-    // (WU-2). Deliberately NOT used on the coalescing path: there the overlay session is authoritative and folds
+    // intents in-memory (idempotent enqueue + direct Delivered mark) instead of taking the durable claim round-trip.
+    // Deliberately NOT used on the coalescing path: there the overlay session is authoritative and folds
     // continuations itself. Reused both when no coalescing factory is registered and when a per-run authored Immediate
     // cadence opts this run out of coalescing on an otherwise-coalesced host (ADR 0032 R5).
     private async ValueTask<RuntimeSchedulerDrainResult> DrainImmediateAsync(
