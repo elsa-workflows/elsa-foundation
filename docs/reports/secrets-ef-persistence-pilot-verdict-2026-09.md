@@ -198,11 +198,10 @@ Owner: #1654, blocked on #1628.
 - **Studio Preferences:** strongest candidate for the second canary because its current surface is
   small and key/value-shaped, but not pre-approved. Its inventory must still prove tenancy,
   concurrency, conversion, and host-composition semantics.
-- **Publishing:** **hold all replacement paths** pending #1654. Ordinary workflow publication
-  and reusable-activity publication cross persistence lanes under the canonical topology, ordering,
-  recovery, and co-located fast-path rules in
+- **Publishing:** **hold all replacement paths** pending #1654. Ordinary workflow publication has
+  its existing ordered-write/compensation protocol; reusable-activity publication is governed by
   [ADR 0066](../adr/0066-reusable-activity-publication-orders-writes-instead-of-one-transaction.md).
-  Do not migrate Publishing until #1654 inventories every affected path and proves those rules
+  Do not migrate Publishing until #1654 inventories every affected path and proves both protocols
   across the selected persistence families.
 - **Dashboard:** **hold** until its Design/Runtime projection and consistency dependencies are
   inventoried. Small store size does not make cross-domain projections simple.
