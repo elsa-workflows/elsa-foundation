@@ -1,3 +1,4 @@
+using System.IO;
 using System.Reflection;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
@@ -35,7 +36,15 @@ internal static class SecretsHostCatalog
             {
                 loaded.Add(Assembly.Load(name));
             }
-            catch (Exception)
+            catch (FileNotFoundException)
+            {
+                // Optional host references stay optional, matching WithHostAssemblies skip-on-miss.
+            }
+            catch (FileLoadException)
+            {
+                // Optional host references stay optional, matching WithHostAssemblies skip-on-miss.
+            }
+            catch (BadImageFormatException)
             {
                 // Optional host references stay optional, matching WithHostAssemblies skip-on-miss.
             }
