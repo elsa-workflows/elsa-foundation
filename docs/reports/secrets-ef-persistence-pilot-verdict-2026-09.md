@@ -120,8 +120,9 @@ nor treats it as a Secrets regression.
 
 ## Conditional Groundwork-to-EF replacement plan
 
-This plan is **not active implementation authority**. It becomes executable only if #1628 accepts
-or revises ADR 0072 accordingly. Until then, ADR 0042 and the active
+This plan is **not active implementation authority**. It becomes executable only after #1628
+records explicit human acceptance of the final ADR text, including another review round if the ADR
+is revised. Until then, ADR 0042 and the active
 [Zero-EF Persistence](../program-goals/zero-ef-persistence.md) goal remain authoritative.
 
 ### Admission rule
@@ -145,6 +146,8 @@ not mean weakening the condition to keep a wave moving.
 ### Wave 0 — decide and reconcile governance
 
 Owner: #1628.
+
+Current broader-rollout state: `none/free-flow`. No replacement module is admitted or scheduled.
 
 - Explicitly accept, revise, or reject ADR 0072.
 - Merge/close PR #1623 and dispose of spike PR #1622 without losing its evidence.
