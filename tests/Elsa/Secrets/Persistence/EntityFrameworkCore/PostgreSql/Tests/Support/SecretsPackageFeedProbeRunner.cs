@@ -20,16 +20,16 @@ internal sealed class SecretsPackageFeed : IAsyncDisposable
 
     public static async Task<SecretsPackageFeed> CreateAsync(CancellationToken cancellationToken = default)
     {
-        var root = Path.Combine(Path.GetTempPath(), $"elsa-secrets-package-feed-{Guid.NewGuid():N}");
-        var packageDirectory = Path.Combine(root, "packages");
-        var extractionDirectory = Path.Combine(root, "extracted");
+        var root = Path.Join(Path.GetTempPath(), $"elsa-secrets-package-feed-{Guid.NewGuid():N}");
+        var packageDirectory = Path.Join(root, "packages");
+        var extractionDirectory = Path.Join(root, "extracted");
         Directory.CreateDirectory(packageDirectory);
         Directory.CreateDirectory(extractionDirectory);
 
         try
         {
             var repositoryRoot = FindRepositoryRoot();
-            var project = Path.Combine(
+            var project = Path.Join(
                 repositoryRoot,
                 "src",
                 "Elsa",
@@ -64,10 +64,10 @@ internal sealed class SecretsPackageFeed : IAsyncDisposable
             var packagePath = Directory.EnumerateFiles(packageDirectory, $"{PackageId}.*.nupkg")
                 .Single(path => !path.EndsWith(".symbols.nupkg", StringComparison.OrdinalIgnoreCase));
             ZipFile.ExtractToDirectory(packagePath, extractionDirectory);
-            var nuplaneMetadataPath = Path.Combine(extractionDirectory, "nuplane.json");
+            var nuplaneMetadataPath = Path.Join(extractionDirectory, "nuplane.json");
             if (!File.Exists(nuplaneMetadataPath))
                 throw new FileNotFoundException("The packed Secrets EF module did not contain root Nuplane metadata.", nuplaneMetadataPath);
-            var moduleAssemblyPath = Path.Combine(extractionDirectory, "lib", "net10.0", PackageId + ".dll");
+            var moduleAssemblyPath = Path.Join(extractionDirectory, "lib", "net10.0", PackageId + ".dll");
             if (!File.Exists(moduleAssemblyPath))
                 throw new FileNotFoundException("The packed Secrets EF module DLL was not found.", moduleAssemblyPath);
 
@@ -152,7 +152,7 @@ internal sealed class SecretsPackageFeed : IAsyncDisposable
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null)
         {
-            if (File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
+            if (File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
                 return directory.FullName;
             directory = directory.Parent;
         }
@@ -167,8 +167,13 @@ internal sealed class SecretsPackageFeed : IAsyncDisposable
             if (!process.HasExited)
                 process.Kill(entireProcessTree: true);
         }
-        catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
+        catch (InvalidOperationException exception)
         {
+            Trace.TraceWarning($"Could not kill the timed-out process '{process.Id}': {exception.Message}");
+        }
+        catch (System.ComponentModel.Win32Exception exception)
+        {
+            Trace.TraceWarning($"Could not kill the timed-out process '{process.Id}': {exception.Message}");
         }
 
         try
@@ -176,8 +181,17 @@ internal sealed class SecretsPackageFeed : IAsyncDisposable
             process.WaitForExitAsync(CancellationToken.None).Wait(TimeSpan.FromSeconds(10));
             Task.WhenAll(outputTask, errorTask).Wait(TimeSpan.FromSeconds(10));
         }
-        catch (Exception exception) when (exception is AggregateException or InvalidOperationException or TimeoutException)
+        catch (AggregateException exception)
         {
+            Trace.TraceWarning($"Could not reap the timed-out process '{process.Id}': {exception.Message}");
+        }
+        catch (InvalidOperationException exception)
+        {
+            Trace.TraceWarning($"Could not reap the timed-out process '{process.Id}': {exception.Message}");
+        }
+        catch (TimeoutException exception)
+        {
+            Trace.TraceWarning($"Could not reap the timed-out process '{process.Id}': {exception.Message}");
         }
     }
 
@@ -204,7 +218,10 @@ internal static class SecretsPackageFeedProbeRunner
         string migratePolicy,
         CancellationToken cancellationToken = default)
     {
-        var probePath = Path.Combine(AppContext.BaseDirectory, "PackageFeedProbe", ProbeAssemblyName);
+        var probeFileName = Path.GetFileName(ProbeAssemblyName);
+        if (!string.Equals(probeFileName, ProbeAssemblyName, StringComparison.Ordinal))
+            throw new InvalidOperationException("The package-feed probe assembly name must be a file name.");
+        var probePath = Path.Join(AppContext.BaseDirectory, "PackageFeedProbe", probeFileName);
         if (!File.Exists(probePath))
             throw new FileNotFoundException("The copied Secrets package-feed probe was not found.", probePath);
 
@@ -254,8 +271,13 @@ internal static class SecretsPackageFeedProbeRunner
                 if (!process.HasExited)
                     process.Kill(entireProcessTree: true);
             }
-            catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
+            catch (InvalidOperationException exception)
             {
+                Trace.TraceWarning($"Could not kill the timed-out package-feed probe: {exception.Message}");
+            }
+            catch (System.ComponentModel.Win32Exception exception)
+            {
+                Trace.TraceWarning($"Could not kill the timed-out package-feed probe: {exception.Message}");
             }
 
             try
@@ -263,8 +285,13 @@ internal static class SecretsPackageFeedProbeRunner
                 await process.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
                 await Task.WhenAll(outputTask, errorTask).WaitAsync(TimeSpan.FromSeconds(10));
             }
-            catch (Exception exception) when (exception is InvalidOperationException or TimeoutException)
+            catch (InvalidOperationException exception)
             {
+                Trace.TraceWarning($"Could not reap the timed-out package-feed probe: {exception.Message}");
+            }
+            catch (TimeoutException exception)
+            {
+                Trace.TraceWarning($"Could not reap the timed-out package-feed probe: {exception.Message}");
             }
 
             cancellationToken.ThrowIfCancellationRequested();

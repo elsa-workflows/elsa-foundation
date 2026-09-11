@@ -52,19 +52,44 @@ internal static class Program
             Console.WriteLine($"{{\"status\":\"ok\",\"mode\":\"{migratePolicy}\",\"provider\":\"{ExpectedProvider}\",\"processId\":{Environment.ProcessId}}}");
             return 0;
         }
-        catch (Exception exception)
+        catch (InvalidOperationException exception)
         {
-            // Keep connection credentials out of child diagnostics while retaining the exception category
-            // the parent uses to distinguish load/provider/identity failures.
-            var message = RedactConnectionSecrets(exception.ToString(), connectionString);
-            Console.Error.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
-            {
-                status = "error",
-                exceptionType = exception.GetType().Name,
-                message
-            }));
-            return 1;
+            return ReportFailure(exception, connectionString);
         }
+        catch (ArgumentException exception)
+        {
+            return ReportFailure(exception, connectionString);
+        }
+        catch (FileNotFoundException exception)
+        {
+            return ReportFailure(exception, connectionString);
+        }
+        catch (FileLoadException exception)
+        {
+            return ReportFailure(exception, connectionString);
+        }
+        catch (BadImageFormatException exception)
+        {
+            return ReportFailure(exception, connectionString);
+        }
+        catch (NpgsqlException exception)
+        {
+            return ReportFailure(exception, connectionString);
+        }
+    }
+
+    private static int ReportFailure(Exception exception, string? connectionString)
+    {
+        // Keep connection credentials out of child diagnostics while retaining the exception category
+        // the parent uses to distinguish load/provider/identity failures.
+        var message = RedactConnectionSecrets(exception.ToString(), connectionString);
+        Console.Error.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
+        {
+            status = "error",
+            exceptionType = exception.GetType().Name,
+            message
+        }));
+        return 1;
     }
 
     private static string RedactConnectionSecrets(string message, string? connectionString)
