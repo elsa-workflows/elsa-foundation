@@ -2,14 +2,11 @@ namespace Elsa.Secrets.Core.Contracts;
 
 /// <summary>
 /// Names the durable <see cref="ISecretRepository"/> implementation selected for a shell.
-/// Groundwork and EF both record this so enabling both features fails with an
-/// order-independent diagnostic instead of silent last-registration-wins.
+/// Persistence registrations record this so selecting incompatible implementations fails
+/// with an order-independent diagnostic instead of silent last-registration-wins.
 /// </summary>
 public sealed record SecretRepositoryBackend(string Name)
 {
-    public const string Groundwork = "groundwork";
-    public const string EntityFramework = "entity-framework";
-
     public static void EnsureCompatible(string? existing, string incoming)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(incoming);

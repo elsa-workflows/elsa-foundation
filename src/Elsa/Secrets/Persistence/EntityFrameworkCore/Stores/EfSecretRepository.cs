@@ -8,6 +8,7 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 public sealed class EfSecretRepository(SecretsDbContext context) : ISecretRepository, IRevisionAwareSecretRepository, IPagedSecretRepository
 {
     private const int MaximumSubstringSearchCatalogRows = 10_000;
+    private const int MaximumUnconditionalSaveAttempts = 3;
 
     public async ValueTask<Secret?> FindAsync(
         string tenantId,
@@ -81,6 +82,7 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
         try
         {
             await context.SaveChangesAsync(cancellationToken);
+            context.ChangeTracker.Clear();
             return true;
         }
         catch (DbUpdateException exception) when (IsUniqueConstraintViolation(exception))
@@ -101,20 +103,40 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
         ArgumentNullException.ThrowIfNull(secret);
         ValidateIdentity(secret.TenantId, secret.Name);
         var document = SecretDocument.FromSecret(secret);
-        var existing = await context.Secrets.FindAsync([secret.TenantId, secret.Name], cancellationToken);
-        if (existing is null)
-            context.Secrets.Add(document.ToRecord());
-        else
-            document.CopyProjectionsTo(existing);
+        for (var attempt = 0; attempt < MaximumUnconditionalSaveAttempts; attempt++)
+        {
+            var existing = await context.Secrets.FindAsync([secret.TenantId, secret.Name], cancellationToken);
+            if (existing is null)
+                context.Secrets.Add(document.ToRecord());
+            else
+                document.CopyProjectionsTo(existing);
 
-        try
-        {
-            await context.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await context.SaveChangesAsync(cancellationToken);
+                return;
+            }
+            catch (DbUpdateConcurrencyException) when (attempt + 1 < MaximumUnconditionalSaveAttempts)
+            {
+                // SaveAsync is an unconditional last-write-wins operation. Refresh after another
+                // writer wins the optimistic race, then apply this caller's complete document.
+                context.ChangeTracker.Clear();
+            }
+            catch (DbUpdateException exception)
+                when (attempt + 1 < MaximumUnconditionalSaveAttempts && IsUniqueConstraintViolation(exception))
+            {
+                // A concurrent creator may win between FindAsync and INSERT. Refresh and turn the
+                // operation into an update on the next attempt rather than reporting a conflict.
+                context.ChangeTracker.Clear();
+            }
+            catch (DbUpdateException exception)
+            {
+                context.ChangeTracker.Clear();
+                throw new InvalidOperationException($"Could not save secret '{secret.Name}'.", exception);
+            }
         }
-        catch (DbUpdateException exception)
-        {
-            throw new InvalidOperationException($"Could not save secret '{secret.Name}'.", exception);
-        }
+
+        throw new InvalidOperationException($"Could not save secret '{secret.Name}'.");
     }
 
     public async ValueTask<SecretRevisionSaveResult> SaveWithRevisionAsync(
@@ -155,6 +177,12 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
             await context.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException)
+        {
+            context.ChangeTracker.Clear();
+            return new SecretRevisionSaveResult(SecretRevisionSaveStatus.Conflict);
+        }
+        catch (DbUpdateException exception)
+            when (expectedToken is null && IsUniqueConstraintViolation(exception))
         {
             context.ChangeTracker.Clear();
             return new SecretRevisionSaveResult(SecretRevisionSaveStatus.Conflict);

@@ -4,6 +4,7 @@ using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
 
 namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests;
@@ -78,6 +79,77 @@ public sealed class SqliteEfSecretRepositoryTests
         var page = await repository.ListPageAsync("tenant-a", new SecretRepositoryListRequest(skip: 1, take: 2));
         Assert.Equal(5, page.TotalCount);
         Assert.Equal(["payments.alpha", "payments.configuration"], page.Items.Select(secret => secret.Name));
+    }
+
+    [Fact]
+    public async Task Lookup_facets_support_long_non_ascii_values_with_ordinal_ignore_case()
+    {
+        await using var fixture = await SqliteFixture.CreateAsync();
+        var typeName = new string('t', 100) + "é";
+        var storeName = new string('s', 100) + "München";
+        var scope = new string('p', 100) + "straße";
+        var secret = Secret("tenant-a", "long.lookup", "value");
+        secret.TypeName = typeName;
+        secret.StoreName = storeName;
+        secret.Scope = scope;
+
+        await fixture.Repository.SaveAsync(secret);
+
+        var page = await fixture.Repository.ListPageAsync(
+            "tenant-a",
+            new SecretRepositoryListRequest(
+                typeName: typeName.ToUpperInvariant(),
+                storeName: storeName.ToUpperInvariant(),
+                scope: scope.ToUpperInvariant()));
+
+        Assert.Equal(secret.Name, Assert.Single(page.Items).Name);
+        var record = await fixture.Context.Secrets.AsNoTracking().SingleAsync();
+        Assert.Equal(SecretsSearchKeys.LookupKey(typeName), record.TypeNameLookupKey);
+        Assert.Equal(SecretsSearchKeys.LookupKey(storeName), record.StoreNameLookupKey);
+        Assert.Equal(SecretsSearchKeys.LookupKey(scope), record.ScopeLookupKey);
+        Assert.All(
+            new[] { record.TypeNameLookupKey, record.StoreNameLookupKey, record.ScopeLookupKey },
+            key => Assert.True(key!.Length > 64));
+    }
+
+    [Fact]
+    public async Task SaveWithRevision_concurrent_create_returns_conflict_for_the_loser()
+    {
+        var saveBarrier = new SaveBarrierInterceptor(2);
+        await using var first = await SqliteFixture.CreateAsync(saveBarrier);
+        await using var second = await first.CreateSiblingAsync();
+        var revisions = new[]
+        {
+            Assert.IsAssignableFrom<IRevisionAwareSecretRepository>(first.Repository),
+            Assert.IsAssignableFrom<IRevisionAwareSecretRepository>(second.Repository)
+        };
+        var secret = Secret("tenant-a", "racing.create", "value");
+
+        var results = await Task.WhenAll(
+            revisions.Select(repository => repository.SaveWithRevisionAsync(secret, expectedRevision: null).AsTask()));
+
+        Assert.Contains(results, result => result.Status == SecretRevisionSaveStatus.Saved);
+        Assert.Contains(results, result => result.Status == SecretRevisionSaveStatus.Conflict);
+        Assert.Equal(1, await first.Context.Secrets.CountAsync());
+    }
+
+    [Fact]
+    public async Task Save_is_unconditional_when_a_concurrent_writer_changes_the_tracked_row()
+    {
+        await using var first = await SqliteFixture.CreateAsync();
+        await using var second = await first.CreateSiblingAsync();
+        var seed = Secret("tenant-a", "racing.update", "seed");
+        await first.Repository.SaveAsync(seed);
+
+        // Load an intentionally stale tracked row in the second context before the first writer
+        // advances the optimistic token. SaveAsync must refresh and apply the later writer.
+        _ = await second.Context.Secrets.FindAsync([seed.TenantId, seed.Name]);
+        await first.Repository.SaveAsync(Secret("tenant-a", "racing.update", "first"));
+        await second.Repository.SaveAsync(Secret("tenant-a", "racing.update", "second"));
+
+        Assert.Equal(
+            "second",
+            (await first.Repository.FindAsync("tenant-a", "racing.update"))!.LatestActiveVersion!.Payload.Value);
     }
 
     [Fact]
@@ -214,12 +286,20 @@ public sealed class SqliteEfSecretRepositoryTests
 
     private sealed class SqliteFixture : IAsyncDisposable
     {
-        private SqliteFixture(string path, SqliteConnection connection, SecretsSqliteDbContext context, ISecretRepository repository)
+        private SqliteFixture(
+            string path,
+            SqliteConnection connection,
+            SecretsSqliteDbContext context,
+            ISecretRepository repository,
+            IInterceptor? interceptor,
+            bool deletePath = true)
         {
             Path = path;
             Connection = connection;
             Context = context;
             Repository = repository;
+            _interceptor = interceptor;
+            _deletePath = deletePath;
         }
 
         private string Path { get; }
@@ -227,7 +307,29 @@ public sealed class SqliteEfSecretRepositoryTests
         public SecretsSqliteDbContext Context { get; }
         public ISecretRepository Repository { get; }
 
-        public static async ValueTask<SqliteFixture> CreateAsync()
+        public async ValueTask<SqliteFixture> CreateSiblingAsync()
+        {
+            var connection = new SqliteConnection($"Data Source={Path}");
+            try
+            {
+                await connection.OpenAsync();
+                var options = new DbContextOptionsBuilder<SecretsSqliteDbContext>()
+                    .UseSqlite(connection, sqlite => sqlite
+                        .MigrationsAssembly(typeof(SecretsSqliteDbContext).Assembly.GetName().Name)
+                        .MigrationsHistoryTable(SecretsEfModule.HistoryTableName))
+                    .AddInterceptors(_interceptor is null ? [] : [_interceptor])
+                    .Options;
+                var context = new SecretsSqliteDbContext(options);
+                return new SqliteFixture(Path, connection, context, new EfSecretRepository(context), _interceptor, deletePath: false);
+            }
+            catch
+            {
+                await connection.DisposeAsync();
+                throw;
+            }
+        }
+
+        public static async ValueTask<SqliteFixture> CreateAsync(IInterceptor? interceptor = null)
         {
             var path = System.IO.Path.Join(System.IO.Path.GetTempPath(), $"elsa-secrets-ef-{Guid.NewGuid():N}.db");
             var connection = new SqliteConnection($"Data Source={path}");
@@ -238,12 +340,13 @@ public sealed class SqliteEfSecretRepositoryTests
                     .UseSqlite(connection, sqlite => sqlite
                         .MigrationsAssembly(typeof(SecretsSqliteDbContext).Assembly.GetName().Name)
                         .MigrationsHistoryTable(SecretsEfModule.HistoryTableName))
+                    .AddInterceptors(interceptor is null ? [] : [interceptor])
                     .Options;
                 var context = new SecretsSqliteDbContext(options);
                 try
                 {
                     await EfDatabaseMigrator.ApplyAsync(context, SecretsSqliteDbContext.ExpectedProviderName);
-                    return new SqliteFixture(path, connection, context, new EfSecretRepository(context));
+                    return new SqliteFixture(path, connection, context, new EfSecretRepository(context), interceptor);
                 }
                 catch (Exception)
                 {
@@ -263,7 +366,29 @@ public sealed class SqliteEfSecretRepositoryTests
         {
             await Context.DisposeAsync();
             await Connection.DisposeAsync();
-            File.Delete(Path);
+            if (_deletePath)
+                File.Delete(Path);
+        }
+
+        private readonly bool _deletePath;
+        private readonly IInterceptor? _interceptor;
+    }
+
+    private sealed class SaveBarrierInterceptor(int participantCount) : SaveChangesInterceptor
+    {
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _arrivals;
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Increment(ref _arrivals) == participantCount)
+                _release.TrySetResult();
+
+            await _release.Task.WaitAsync(cancellationToken);
+            return result;
         }
     }
 }

@@ -3,72 +3,81 @@ using System;
 using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.PostgreSql
+namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.SqlServer
 {
-    [DbContext(typeof(SecretsPostgreSqlDbContext))]
-    partial class SecretsPostgreSqlDbContextModelSnapshot : ModelSnapshot
+    [DbContext(typeof(SecretsSqlServerDbContext))]
+    [Migration("20260911010804_WidenLookupKeys")]
+    partial class WidenLookupKeys
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "10.0.10")
-                .HasAnnotation("Relational:MaxIdentifierLength", 63);
+                .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
-            // NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns omitted: the module stays provider-free.
+            // SqlServerModelBuilderExtensions.UseIdentityColumns omitted: the module stays provider-free.
 
             modelBuilder.Entity("Elsa.Secrets.Persistence.EntityFrameworkCore.Entities.SecretRecord", b =>
                 {
                     b.Property<string>("TenantId")
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_BIN2");
 
                     b.Property<string>("NormalizedName")
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_BIN2");
 
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
                         .IsRequired()
-                        .HasColumnType("bytea");
+                        .HasColumnType("varbinary(16)");
 
                     b.Property<string>("DisplayNameSearchKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("HasNonExpiringActiveVersion")
-                        .HasColumnType("boolean");
+                        .HasColumnType("bit");
 
                     b.Property<DateTimeOffset?>("MaxActiveVersionExpiresAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("NameSearchKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Payload")
                         .IsRequired()
-                        .HasColumnType("jsonb");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ScopeLookupKey")
-                        .HasColumnType("text");
+                        .HasColumnType("nvarchar(max)")
+                        .UseCollation("Latin1_General_BIN2");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("StoreNameLookupKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("nvarchar(max)")
+                        .UseCollation("Latin1_General_BIN2");
 
                     b.Property<string>("TypeNameLookupKey")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("nvarchar(max)")
+                        .UseCollation("Latin1_General_BIN2");
 
                     b.HasKey("TenantId", "NormalizedName");
 
