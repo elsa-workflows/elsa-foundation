@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
@@ -209,6 +210,8 @@ public sealed class SecretsProjectionContractTests
         await using var fixture = await SqliteProjectionFixture.CreateAsync();
         var damaged = SecretDocument.FromSecret(CreateSecret("text", "z.damaged")).ToRecord();
         damaged.Payload = $"{{\"not-json\" {leakedPayload}";
+        var good = SecretDocument.FromSecret(CreateSecret("\u019B", "a.legacy"));
+        fixture.Context.Secrets.Add((good with { TypeNameLookupKey = "\u019B" }).ToRecord());
         fixture.Context.Secrets.Add(damaged);
         await fixture.Context.SaveChangesAsync();
         fixture.Context.ChangeTracker.Clear();
@@ -216,22 +219,156 @@ public sealed class SecretsProjectionContractTests
         var startup = await Assert.ThrowsAsync<SecretsProjectionException>(
             () => SecretsProjectionContract.EnsureCurrentAsync(fixture.Context));
         AssertRowDiagnostic(startup, "tenant-a", "z.damaged", leakedPayload);
-        Assert.IsType<JsonException>(startup.InnerException);
-
-        var good = SecretDocument.FromSecret(CreateSecret("\u019B", "a.legacy"));
-        fixture.Context.Secrets.Add((good with { TypeNameLookupKey = "\u019B" }).ToRecord());
-        await fixture.Context.SaveChangesAsync();
-        fixture.Context.ChangeTracker.Clear();
+        Assert.IsAssignableFrom<JsonException>(startup.InnerException);
 
         var reindex = await Assert.ThrowsAsync<SecretsProjectionException>(
             () => SecretsProjectionContract.ReindexAsync(fixture.Context));
         AssertRowDiagnostic(reindex, "tenant-a", "z.damaged", leakedPayload);
-        Assert.IsType<JsonException>(reindex.InnerException);
+        Assert.IsAssignableFrom<JsonException>(reindex.InnerException);
 
         fixture.Context.ChangeTracker.Clear();
         var leftover = await fixture.Context.Secrets.AsNoTracking()
             .SingleAsync(record => record.NormalizedName == "a.legacy");
         Assert.Equal("\u019B", leftover.TypeNameLookupKey);
+    }
+
+    [Theory]
+    [InlineData("missing-secret")]
+    [InlineData("null-secret")]
+    [InlineData("missing-versions")]
+    [InlineData("null-versions")]
+    [InlineData("null-version")]
+    public async Task Structurally_invalid_document_is_redacted_and_scoped_to_its_row(string corruption)
+    {
+        const string leakedPayload = "STRUCTURAL-PAYLOAD-LEAK-MARKER";
+        await using var fixture = await SqliteProjectionFixture.CreateAsync();
+        var malformed = SecretDocument.FromSecret(CreateSecret("text", $"invalid.{corruption}")).ToRecord();
+        var payload = JsonNode.Parse(malformed.Payload)!.AsObject();
+        var serializedSecret = payload["secret"]!.AsObject();
+        payload["redactionProbe"] = leakedPayload;
+        switch (corruption)
+        {
+            case "missing-secret":
+                payload.Remove("secret");
+                break;
+            case "null-secret":
+                payload["secret"] = null;
+                break;
+            case "missing-versions":
+                serializedSecret.Remove("versions");
+                break;
+            case "null-versions":
+                serializedSecret["versions"] = null;
+                break;
+            case "null-version":
+                serializedSecret["versions"]!.AsArray()[0] = null;
+                break;
+            default:
+                throw new InvalidOperationException($"Unknown test corruption '{corruption}'.");
+        }
+
+        malformed.Payload = payload.ToJsonString();
+        Assert.Contains(leakedPayload, malformed.Payload, StringComparison.Ordinal);
+        fixture.Context.Secrets.Add(malformed);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var exception = await Assert.ThrowsAsync<SecretsProjectionException>(
+            () => SecretsProjectionContract.EnsureCurrentAsync(fixture.Context));
+        AssertRowDiagnostic(exception, "tenant-a", $"invalid.{corruption}", leakedPayload);
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+    }
+
+    [Fact]
+    public async Task Ill_formed_utf16_json_is_redacted_and_scoped_to_its_row()
+    {
+        const string leakedPayload = "UTF16-PAYLOAD-LEAK-MARKER";
+        await using var fixture = await SqliteProjectionFixture.CreateAsync();
+        var malformed = SecretDocument.FromSecret(CreateSecret("text", "invalid.utf16")).ToRecord();
+        var payload = JsonNode.Parse(malformed.Payload)!.AsObject();
+        payload["redactionProbe"] = leakedPayload;
+        malformed.Payload = payload.ToJsonString().Replace(
+            "\"typeName\":\"text\"",
+            "\"typeName\":\"\\uD800\"",
+            StringComparison.Ordinal);
+        Assert.Contains("\\uD800", malformed.Payload, StringComparison.Ordinal);
+        fixture.Context.Secrets.Add(malformed);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var exception = await Assert.ThrowsAsync<SecretsProjectionException>(
+            () => SecretsProjectionContract.EnsureCurrentAsync(fixture.Context));
+        AssertRowDiagnostic(exception, "tenant-a", "invalid.utf16", leakedPayload);
+        Assert.IsAssignableFrom<JsonException>(exception.InnerException);
+    }
+
+    [Fact]
+    public async Task Invalid_projected_value_is_redacted_and_scoped_to_its_row()
+    {
+        const string leakedPayload = "PROJECTED-VALUE-PAYLOAD-LEAK-MARKER";
+        await using var fixture = await SqliteProjectionFixture.CreateAsync();
+        var malformed = SecretDocument.FromSecret(CreateSecret("text", "invalid.projected-value")).ToRecord();
+        var payload = JsonNode.Parse(malformed.Payload)!.AsObject();
+        payload["redactionProbe"] = leakedPayload;
+        payload["secret"]!["typeName"] = null;
+        malformed.Payload = payload.ToJsonString();
+        fixture.Context.Secrets.Add(malformed);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var exception = await Assert.ThrowsAsync<SecretsProjectionException>(
+            () => SecretsProjectionContract.EnsureCurrentAsync(fixture.Context));
+        AssertRowDiagnostic(exception, "tenant-a", "invalid.projected-value", leakedPayload);
+        Assert.IsType<ArgumentNullException>(exception.InnerException);
+    }
+
+    [Fact]
+    public async Task Required_payload_properties_follow_case_insensitive_deserializer_semantics()
+    {
+        await using var fixture = await SqliteProjectionFixture.CreateAsync();
+        var record = SecretDocument.FromSecret(CreateSecret("text", "case-insensitive-shape")).ToRecord();
+        var payload = JsonNode.Parse(record.Payload)!.AsObject();
+        var serializedSecret = payload["secret"]!.AsObject();
+        serializedSecret["Versions"] = serializedSecret["versions"]!.DeepClone();
+        serializedSecret.Remove("versions");
+        payload["Secret"] = serializedSecret.DeepClone();
+        payload.Remove("secret");
+        record.Payload = payload.ToJsonString();
+        fixture.Context.Secrets.Add(record);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        await SecretsProjectionContract.EnsureCurrentAsync(fixture.Context);
+    }
+
+    [Fact]
+    public async Task Null_version_entry_rolls_back_the_current_reindex_batch()
+    {
+        const string leakedPayload = "NULL-VERSION-PAYLOAD-LEAK-MARKER";
+        await using var fixture = await SqliteProjectionFixture.CreateAsync();
+        var repairable = SecretDocument.FromSecret(CreateSecret("\u019B", "a.repairable"));
+        fixture.Context.Secrets.Add((repairable with { TypeNameLookupKey = "\u019B" }).ToRecord());
+
+        var malformed = SecretDocument.FromSecret(CreateSecret("text", "z.null-version")).ToRecord();
+        var payload = JsonNode.Parse(malformed.Payload)!.AsObject();
+        var serializedSecret = payload["secret"]!.AsObject();
+        serializedSecret["description"] = leakedPayload;
+        serializedSecret["versions"]!.AsArray()[0] = null;
+        malformed.Payload = payload.ToJsonString();
+        fixture.Context.Secrets.Add(malformed);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var exception = await Assert.ThrowsAsync<SecretsProjectionException>(
+            () => SecretsProjectionContract.ReindexAsync(fixture.Context));
+        AssertRowDiagnostic(exception, "tenant-a", "z.null-version", leakedPayload);
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+        await fixture.Context.SaveChangesAsync();
+        var rolledBack = await fixture.Context.Secrets.AsNoTracking()
+            .SingleAsync(record => record.NormalizedName == "a.repairable");
+        Assert.Equal("\u019B", rolledBack.TypeNameLookupKey);
     }
 
     [Fact]
@@ -266,6 +403,54 @@ public sealed class SecretsProjectionContractTests
         var corrupt = await fixture.Context.Secrets.AsNoTracking()
             .SingleAsync(record => record.NormalizedName == "z.row-key");
         Assert.Equal("embedded-name", SecretDocument.Parse(corrupt.Payload).NormalizedName);
+    }
+
+    [Theory]
+    [InlineData("tenantId", "foreign-tenant")]
+    [InlineData("normalizedName", "foreign-name")]
+    public async Task Stored_document_identity_mismatch_fails_closed_even_when_nested_secret_matches_the_row(
+        string propertyName,
+        string foreignValue)
+    {
+        const string leakedPayload = "IDENTITY-PAYLOAD-LEAK-MARKER";
+        await using var fixture = await SqliteProjectionFixture.CreateAsync();
+        var record = SecretDocument.FromSecret(CreateSecret("text", "stored-identity")).ToRecord();
+        var payload = JsonNode.Parse(record.Payload)!.AsObject();
+        payload[propertyName] = foreignValue;
+        payload["secret"]!["description"] = leakedPayload;
+        record.Payload = payload.ToJsonString();
+        fixture.Context.Secrets.Add(record);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var exception = await Assert.ThrowsAsync<SecretsProjectionException>(
+            () => SecretsProjectionContract.EnsureCurrentAsync(fixture.Context));
+        AssertRowDiagnostic(exception, "tenant-a", "stored-identity", leakedPayload);
+        Assert.Null(exception.InnerException);
+    }
+
+    [Theory]
+    [InlineData("tenantId", "foreign-tenant")]
+    [InlineData("name", "foreign-name")]
+    public async Task Nested_secret_identity_mismatch_fails_closed_when_stored_document_matches_the_row(
+        string propertyName,
+        string foreignValue)
+    {
+        const string leakedPayload = "NESTED-IDENTITY-PAYLOAD-LEAK-MARKER";
+        await using var fixture = await SqliteProjectionFixture.CreateAsync();
+        var record = SecretDocument.FromSecret(CreateSecret("text", "nested-identity")).ToRecord();
+        var payload = JsonNode.Parse(record.Payload)!.AsObject();
+        payload["redactionProbe"] = leakedPayload;
+        payload["secret"]![propertyName] = foreignValue;
+        record.Payload = payload.ToJsonString();
+        fixture.Context.Secrets.Add(record);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var exception = await Assert.ThrowsAsync<SecretsProjectionException>(
+            () => SecretsProjectionContract.EnsureCurrentAsync(fixture.Context));
+        AssertRowDiagnostic(exception, "tenant-a", "nested-identity", leakedPayload);
+        Assert.Null(exception.InnerException);
     }
 
     [Fact]

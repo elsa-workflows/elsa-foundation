@@ -196,6 +196,30 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
         Assert.Equal(concurrentWriter.ConcurrencyToken, stored.ConcurrencyToken);
     }
 
+    [SkippableFact]
+    public async Task Projection_reindex_uses_translatable_keyset_pages_on_postgres()
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
+        var connectionString = await fixture.CreateIsolatedDatabaseAsync();
+        await using var context = CreateContext(connectionString);
+        await EfDatabaseMigrator.ApplyAsync(context, SecretsPostgreSqlDbContext.ExpectedProviderName);
+
+        const string legacyRuntimeKey = "\u019B";
+        for (var index = 0; index < 101; index++)
+        {
+            var current = SecretDocument.FromSecret(Secret("tenant-a", $"keyset.{index:D3}", "value"));
+            context.Secrets.Add((current with { TypeNameLookupKey = legacyRuntimeKey }).ToRecord());
+        }
+
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        Assert.Equal(101, await SecretsProjectionContract.ReindexAsync(context));
+        await SecretsProjectionContract.EnsureCurrentAsync(context);
+        var expectedTypeKey = SecretsSearchKeys.LookupKey(SecretTypeNames.Text);
+        Assert.Equal(101, await context.Secrets.CountAsync(record => record.TypeNameLookupKey == expectedTypeKey));
+    }
+
     private static SecretsPostgreSqlDbContext CreateContext(
         string connectionString,
         params IInterceptor[] interceptors)

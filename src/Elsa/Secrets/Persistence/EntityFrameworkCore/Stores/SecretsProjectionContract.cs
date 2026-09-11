@@ -28,7 +28,14 @@ public static class SecretsProjectionContract
         while (true)
         {
             var records = await TakePageAsync(context.Secrets.AsNoTracking(), after, cancellationToken);
-            if (records.Any(record => !IsCurrent(record)))
+            var hasLegacyProjections = false;
+            foreach (var record in records)
+            {
+                if (!IsCurrent(record))
+                    hasLegacyProjections = true;
+            }
+
+            if (hasLegacyProjections)
             {
                 throw new InvalidOperationException(
                     "One or more Secrets rows do not use persisted projection " +
@@ -58,31 +65,39 @@ public static class SecretsProjectionContract
         while (true)
         {
             await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
-            var records = await TakePageAsync(context.Secrets, after, cancellationToken);
-            var updatedBatch = 0;
-
-            foreach (var record in records)
+            try
             {
-                var (stored, current) = ReadDocuments(record);
-                if (Matches(record, stored, current))
-                    continue;
+                var records = await TakePageAsync(context.Secrets, after, cancellationToken);
+                var updatedBatch = 0;
 
-                current.CopyProjectionsTo(record);
-                updatedBatch++;
+                foreach (var record in records)
+                {
+                    var (stored, current) = ReadDocuments(record);
+                    if (Matches(record, stored, current))
+                        continue;
+
+                    current.CopyProjectionsTo(record);
+                    updatedBatch++;
+                }
+
+                if (updatedBatch > 0)
+                    await context.SaveProjectionChangesAsync(cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
+                updatedTotal += updatedBatch;
+                var done = records.Count < BatchSize;
+                if (!done)
+                    after = Cursor(records[^1]);
+                context.ChangeTracker.Clear();
+
+                if (done)
+                    return updatedTotal;
             }
-
-            if (updatedBatch > 0)
-                await context.SaveProjectionChangesAsync(cancellationToken);
-
-            await transaction.CommitAsync(cancellationToken);
-            updatedTotal += updatedBatch;
-            var done = records.Count < BatchSize;
-            if (!done)
-                after = Cursor(records[^1]);
-            context.ChangeTracker.Clear();
-
-            if (done)
-                return updatedTotal;
+            catch
+            {
+                context.ChangeTracker.Clear();
+                throw;
+            }
         }
     }
 
@@ -120,15 +135,26 @@ public static class SecretsProjectionContract
     private static (SecretDocument Stored, SecretDocument Current) ReadDocuments(SecretRecord record)
     {
         SecretDocument stored;
+        SecretDocument current;
         try
         {
-            stored = SecretDocument.Parse(record.Payload);
+            using var json = JsonDocument.Parse(record.Payload);
+            ValidatePayloadStructure(json.RootElement);
+            stored = SecretDocument.Parse(json.RootElement);
+            if (stored.Secret is null)
+                throw new InvalidOperationException("The serialized document has no authoritative Secret.");
+            if (stored.Secret.Versions is null)
+                throw new InvalidOperationException("The serialized Secret has no version collection.");
+            if (stored.Secret.Versions.Any(static version => version is null))
+                throw new InvalidOperationException("The serialized Secret contains an invalid version entry.");
+
+            current = SecretDocument.FromSecret(stored.Secret);
         }
         catch (JsonException exception)
         {
             throw SecretsProjectionException.ForPayload(record, exception);
         }
-        catch (ArgumentNullException exception)
+        catch (NotSupportedException exception)
         {
             throw SecretsProjectionException.ForPayload(record, exception);
         }
@@ -136,15 +162,46 @@ public static class SecretsProjectionContract
         {
             throw SecretsProjectionException.ForPayload(record, exception);
         }
+        catch (ArgumentException exception)
+        {
+            throw SecretsProjectionException.ForPayload(record, exception);
+        }
 
-        var current = SecretDocument.FromSecret(stored.Secret);
-        if (!string.Equals(current.TenantId, record.TenantId, StringComparison.Ordinal) ||
+        if (!string.Equals(stored.TenantId, record.TenantId, StringComparison.Ordinal) ||
+            !string.Equals(stored.NormalizedName, record.NormalizedName, StringComparison.Ordinal) ||
+            !string.Equals(current.TenantId, record.TenantId, StringComparison.Ordinal) ||
             !string.Equals(current.NormalizedName, record.NormalizedName, StringComparison.Ordinal))
         {
             throw SecretsProjectionException.ForIdentity(record);
         }
 
         return (stored, current);
+    }
+
+    private static void ValidatePayloadStructure(JsonElement root)
+    {
+        if (!TryGetProperty(root, "secret", out var secret) || secret.ValueKind != JsonValueKind.Object)
+            throw new InvalidOperationException("The serialized document has no authoritative Secret object.");
+        if (!TryGetProperty(secret, "versions", out var versions) || versions.ValueKind != JsonValueKind.Array)
+            throw new InvalidOperationException("The serialized Secret has no version array.");
+        if (versions.EnumerateArray().Any(static version => version.ValueKind == JsonValueKind.Null))
+            throw new InvalidOperationException("The serialized Secret contains an invalid version entry.");
+    }
+
+    private static bool TryGetProperty(JsonElement element, string propertyName, out JsonElement value)
+    {
+        value = default;
+        var found = false;
+        foreach (var property in element.EnumerateObject())
+        {
+            if (!string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            value = property.Value;
+            found = true;
+        }
+
+        return found;
     }
 
     private static bool Matches(SecretRecord record, SecretDocument stored, SecretDocument current) =>
