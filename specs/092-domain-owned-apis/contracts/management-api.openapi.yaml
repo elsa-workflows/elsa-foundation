@@ -450,6 +450,22 @@ paths:
                     items:
                       $ref: '#/components/schemas/VariableTypeDescriptor'
 
+  /publishing/publications/{publicationId}:
+    parameters:
+      - $ref: '#/components/parameters/PublicationId'
+    get:
+      tags: [Publishing]
+      operationId: getPublicationRecord
+      responses:
+        '200':
+          description: The publication journal record, including the design version it published
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Publication'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /publishing/workflows/{versionId}/preflight:
     parameters:
       - $ref: '#/components/parameters/VersionId'
@@ -904,6 +920,13 @@ components:
         type: string
     SlotName:
       name: slotName
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    PublicationId:
+      name: publicationId
       in: path
       required: true
       schema:

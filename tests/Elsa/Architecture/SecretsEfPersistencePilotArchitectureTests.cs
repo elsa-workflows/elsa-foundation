@@ -4,8 +4,8 @@ using Xunit;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Owns the ADR 0072 Secrets EF pilot allowlist. The shrink-only EF surface baseline excludes these
-/// paths the same way it excludes OpenIddict vendor sources; this test is the exact inventory.
+/// Owns the ADR 0072 Secrets EF pilot allowlist. <see cref="EfCoreDependencyGuardTests"/> exempts these
+/// paths, but not the projects that depend on them; this test is the exact inventory.
 /// ADR 0042 still forbids first-party EF until 0072 is accepted.
 /// </summary>
 public sealed class SecretsEfPersistencePilotArchitectureTests
@@ -56,12 +56,18 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Entities/SecretRecord.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260910210216_Initial.Designer.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260910210216_Initial.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260911011058_WidenLookupKeys.Designer.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260911011058_WidenLookupKeys.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/SecretsPostgreSqlDbContextModelSnapshot.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260910210213_Initial.Designer.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260910210213_Initial.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260911010804_WidenLookupKeys.Designer.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260911010804_WidenLookupKeys.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/SecretsSqlServerDbContextModelSnapshot.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260910210210_Initial.Designer.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260910210210_Initial.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260911010717_WidenLookupKeys.Designer.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260911010717_WidenLookupKeys.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/SecretsSqliteDbContextModelSnapshot.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/SecretsDbContext.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/SecretsEfMigrationHostedService.cs",
@@ -95,7 +101,8 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsHostCatalog.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsPersistenceCompositionTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsPersistenceHostJourneyTests.cs",
-        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SqliteEfSecretRepositoryTests.cs"
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SqliteEfSecretRepositoryTests.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/Support/DualMigrateProcessRunner.cs"
     ];
 
     [Fact]
@@ -108,7 +115,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
                 "tests/Elsa/Persistence/EntityFramework/",
                 "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/"
             ],
-            EfCoreSurfaceScanner.Adr0072SecretsEfPilot.SurfacePathPrefixes);
+            EfCoreDependencyGuardTests.Adr0072SecretsEfPilot.SurfacePathPrefixes);
     }
 
     [Fact]
@@ -135,25 +142,13 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
     [Fact]
     public void Pilot_sources_are_the_exact_reviewed_inventory()
     {
-        var actual = EfCoreSurfaceScanner.Adr0072SecretsEfPilot.SurfacePathPrefixes
+        var actual = EfCoreDependencyGuardTests.Adr0072SecretsEfPilot.SurfacePathPrefixes
             .SelectMany(prefix => Directory.EnumerateFiles(RepoPath(prefix.TrimEnd('/').Split('/')), "*.cs", SearchOption.AllDirectories)
                 .Select(path => Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/')))
             .Where(path => !path.Contains("/obj/", StringComparison.Ordinal) && !path.Contains("/bin/", StringComparison.Ordinal))
             .Order(StringComparer.Ordinal)
             .ToArray();
         Assert.Equal(PilotSources, actual);
-    }
-
-    [Fact]
-    public void Shrink_only_snapshot_does_not_inventory_the_pilot_trees()
-    {
-        var snapshot = new EfCoreSurfaceScanner(RepoRoot).Scan();
-        var leaked = snapshot.Categories()
-            .SelectMany(category => category.Value.Select(entry => $"{category.Key}: {entry}"))
-            .Where(entry => EfCoreSurfaceScanner.Adr0072SecretsEfPilot.SurfacePathPrefixes.Any(prefix =>
-                entry.Contains(prefix, StringComparison.Ordinal)))
-            .ToArray();
-        Assert.True(leaked.Length == 0, string.Join(Environment.NewLine, leaked));
     }
 
     [Fact]

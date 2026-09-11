@@ -9,9 +9,7 @@ namespace Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests;
 /// </summary>
 public sealed class SqliteWorkflowDesignLifecycleContractSuite : WorkflowDesignLifecycleContractSuite
 {
-    private readonly GroundworkBaselineTelemetry _telemetry = new();
-
     protected override async Task<IDesignPersistenceContractFixture> CreateFixtureAsync(
         CancellationToken cancellationToken = default) =>
-        await SqliteDesignPersistenceContractFixture.CreateAsync(_telemetry, cancellationToken);
+        await SqliteDesignPersistenceContractFixture.CreateAsync(cancellationToken);
 }

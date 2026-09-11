@@ -4,7 +4,8 @@
 
 **Created**: 2026-08-15
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: #1360 (restatused 2026-09-10 from git evidence)
 
 **Input**: User description: "Migrate the complete Studio Preferences REST surface as the first production canary while preserving its complete HTTP, OpenAPI, authorization, coexistence, and unloadability contracts."
 

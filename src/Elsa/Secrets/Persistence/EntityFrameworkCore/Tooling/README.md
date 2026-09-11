@@ -16,6 +16,16 @@ dotnet tool restore
 bash tools/ef/generate-ef-migrations.sh <MigrationName>
 ```
 
+The repository manifest pins `dotnet-ef` to 10.0.10. The shared helper first honors an explicit
+executable `.tools/dotnet-ef`, then invokes the restored manifest through `dotnet ef`; a global
+`dotnet-ef` is only a fallback when no repository manifest exists. Restore the manifest before
+generation or dual-migrate runs so a stale global tool cannot select a different EF version.
+`dual-migrate.sh` builds this tooling project once by default. A parallel CI/test caller that has
+already built the same checkout and configuration may set `ELSA_SECRETS_EF_SKIP_BUILD=1` to avoid
+concurrent writes to loaded outputs; doing so makes that caller responsible for artifact freshness.
+Repository tests pair that mode with an explicit Tooling project build dependency and pass their
+actual assembly configuration to the script.
+
 Equivalent per-context commands:
 
 ```bash
@@ -33,6 +43,26 @@ Repeat with `SecretsSqlServerDbContext` / `Migrations/SqlServer` and
 Factories set `MigrationsHistoryTable(__EFMigrationsHistory_ElsaSecrets)`. Connection strings
 come from `ELSA_SECRETS_EF_SQLITE`, `ELSA_SECRETS_EF_SQLSERVER`, and
 `ELSA_SECRETS_EF_POSTGRESQL` when set; `dotnet ef --connection` still overrides.
+
+## Migration and deployment safety
+
+Each provider has an independent migration set and snapshot. Review all three generated outputs;
+`migrations has-pending-model-changes` detects source model/snapshot drift, while
+`database update` and runtime `MigratePolicy=Validate` use the database's
+`__EFMigrationsHistory_ElsaSecrets` to detect unapplied compiled migrations. One check does not
+replace the other.
+
+Use the deployment sequence in [tools/ef/README.md](../../../../../../tools/ef/README.md): back
+up and quiesce writes, run `pending`, select exactly one provider and apply it with a short-lived
+least-privilege migration identity, verify migration history and table shape, then start the application with
+`MigratePolicy=Validate`. Keep `SecretsGroundworkPersistence` disabled when this feature is
+enabled. A failed apply stops the rollout; inspect migration history and table shape before retrying.
+
+Prefer additive/expand-contract migrations so an application rollback can be considered
+separately from schema recovery. Do not blindly invoke a down-migration. In particular,
+`WidenLookupKeys.Down` narrows SQL Server/PostgreSQL columns from unbounded text to 64 characters,
+which is unsafe when longer lookup keys exist; use a verified backup restore or a forward fix
+instead.
 
 If a provider snapshot emits `*ModelBuilderExtensions` calls that need the provider
 package to compile, rewrite them to Relational `HasColumnType` / annotations so the

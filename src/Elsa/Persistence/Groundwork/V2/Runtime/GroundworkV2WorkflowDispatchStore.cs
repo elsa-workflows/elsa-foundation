@@ -15,8 +15,7 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// every operation explicitly, and keeps direct/query/delete paths on the same row identity used by the
 /// v2 checkpoint writer.
 /// </remarks>
-public sealed class GroundworkV2WorkflowDispatchStore :
-    IWorkflowDispatchStore,
+public sealed class GroundworkV2WorkflowDispatchStore : GroundworkV2RuntimeStoreBase, IWorkflowDispatchStore,
     IWorkflowDispatchQueryStore,
     IWorkflowDispatchDeleteStore,
     IWorkflowDispatchRetentionRootStore,
@@ -25,22 +24,12 @@ public sealed class GroundworkV2WorkflowDispatchStore :
 {
     private const int MaxTransitionAttempts = 16;
 
-    private readonly IGroundworkStorageSessionSource sessions;
-    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
-    private readonly string? targetName;
-    private readonly StorageUnit unit;
-
     public GroundworkV2WorkflowDispatchStore(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,
         string? targetName = null)
+        : base(sessions, accessContextAccessor, targetName, "workflow dispatch", ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind)
     {
-        ArgumentNullException.ThrowIfNull(sessions);
-        ArgumentNullException.ThrowIfNull(accessContextAccessor);
-        this.sessions = sessions;
-        this.accessContextAccessor = accessContextAccessor;
-        this.targetName = targetName;
-        unit = sessions.Unit(ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind, targetName);
     }
 
     public ValueTask<WorkflowDispatchRecord> SaveAsync(
@@ -371,17 +360,16 @@ public sealed class GroundworkV2WorkflowDispatchStore :
         DateTimeOffset admittedAt,
         CancellationToken cancellationToken)
     {
-        using var unitOfWork = sessions.BeginUnitOfWork(
-            Access,
+        using var unitOfWork = Sessions.BeginUnitOfWork(
+            ScopedAccess,
             BatchWriteOptions.Exact,
             [
                 ElsaRuntimeV2StorageManifest.WorkflowTestScopeDocumentKind,
                 ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind
             ],
-            targetName);
-        var scopeSession = unitOfWork.OpenSession(sessions.Unit(
-            ElsaRuntimeV2StorageManifest.WorkflowTestScopeDocumentKind, targetName));
-        var dispatchSession = unitOfWork.OpenSession(unit);
+            TargetName);
+        var scopeSession = unitOfWork.OpenSession(UnitFor(ElsaRuntimeV2StorageManifest.WorkflowTestScopeDocumentKind));
+        var dispatchSession = unitOfWork.OpenSession(Unit);
         var dispatchKey = GroundworkRuntimeRowStore.Key(
             GroundworkV2WorkflowDispatchStorageConventions.PhysicalId(dispatchId));
         var dispatchEntry = dispatchSession.Read(dispatchKey)
@@ -405,7 +393,7 @@ public sealed class GroundworkV2WorkflowDispatchStore :
             candidate = record.TransitionTo(WorkflowDispatchStatus.Started, effectiveAt);
             disposition = WorkflowDispatchAdmissionDisposition.Admitted;
             unitOfWork.Stage(RowWrite.ConditionalUpsert(
-                sessions.Unit(ElsaRuntimeV2StorageManifest.WorkflowTestScopeDocumentKind, targetName),
+                UnitFor(ElsaRuntimeV2StorageManifest.WorkflowTestScopeDocumentKind),
                 scopeEntry.Values,
                 WriteOptions.IfVersion(scopeEntry.Version ?? throw new InvalidDataException(
                     $"Workflow test scope '{record.TestScope.ScopeId}' did not expose an optimistic revision."))));
@@ -417,7 +405,7 @@ public sealed class GroundworkV2WorkflowDispatchStore :
         }
 
         unitOfWork.Stage(RowWrite.ConditionalUpsert(
-            unit,
+            Unit,
             GroundworkV2WorkflowDispatchStorageConventions.Values(candidate),
             WriteOptions.IfVersion(dispatchEntry.Version ?? throw new InvalidDataException(
                 $"Workflow dispatch '{dispatchId}' did not expose an optimistic revision."))));
@@ -453,7 +441,7 @@ public sealed class GroundworkV2WorkflowDispatchStore :
         bool? SameTimestampContinuation = null,
         bool LexicographicContinuation = false)
     {
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var predicates = new List<Predicate>();
         AddEqual(predicates, table, ElsaRuntimeV2StorageManifest.ParentWorkflowExecutionIdField, query.ParentWorkflowExecutionId);
         AddEqual(predicates, table, ElsaRuntimeV2StorageManifest.ChildWorkflowExecutionIdField, query.ChildWorkflowExecutionId);
@@ -553,26 +541,6 @@ public sealed class GroundworkV2WorkflowDispatchStore :
             $"Groundwork workflow-dispatch row '{dispatchId}' did not expose an optimistic revision."));
     }
 
-    private IStorageSession Open() => sessions.Open(unit.Id.Value, Access, targetName);
-
-    private StorageAccess Access
-    {
-        get
-        {
-            var context = accessContextAccessor.Current ??
-                          throw new InvalidOperationException("Workflow-dispatch persistence access context is missing.");
-            if (context.Scope is null || context.AcrossScopes)
-            {
-                throw new InvalidOperationException(
-                    "Groundwork workflow dispatches require one explicit persistence scope; global and across-scope access are refused.");
-            }
-
-            return StorageAccess.Scoped(new StorageScope(context.Scope.Value));
-        }
-    }
-
-    private void EnsureTenant(string? tenantId) => accessContextAccessor.Current.EnsureTenantScope(tenantId);
-
     private WorkflowDispatchRecord EnsureTenantAndReturn(WorkflowDispatchRecord record)
     {
         EnsureTenant(record.TenantId);
@@ -591,20 +559,6 @@ public sealed class GroundworkV2WorkflowDispatchStore :
         return record;
     }
 
-    private static WriteOutcome ConditionalUpsert(
-        IStorageSession session,
-        StorageValues values,
-        long revision)
-    {
-        if (session is not IConcurrencyStorageSession concurrency)
-        {
-            throw new NotSupportedException(
-                "The selected Groundwork provider does not advertise optimistic workflow-dispatch concurrency.");
-        }
-
-        return concurrency.ConditionalUpsert(values, WriteOptions.IfVersion(revision));
-    }
-
     private void AddEqual(
         ICollection<Predicate> predicates,
         TableId table,
@@ -615,25 +569,6 @@ public sealed class GroundworkV2WorkflowDispatchStore :
             return;
         var column = Column(table, field);
         predicates.Add(new Predicate.Equal(column, QueryConstant.Of(column, value)));
-    }
-
-    private ColumnRef Column(TableId table, string name)
-    {
-        var definition = unit.Columns.SingleOrDefault(column =>
-            StringComparer.Ordinal.Equals(column.Name, name))
-            ?? throw new InvalidOperationException(
-                $"Groundwork workflow-dispatch unit '{unit.Id.Value}' does not declare query column '{name}'.");
-        var type = definition.Type switch
-        {
-            PortableType.String => QueryType.String,
-            PortableType.DateTimeOffset => QueryType.DateTimeOffset,
-            PortableType.Int32 => QueryType.Int32,
-            PortableType.Int64 => QueryType.Int64,
-            PortableType.Boolean => QueryType.Boolean,
-            _ => throw new InvalidOperationException(
-                $"Groundwork workflow-dispatch query column '{name}' has unsupported type '{definition.Type}'.")
-        };
-        return new ColumnRef(table, name, type, definition.IsNullable, definition.MaxLength);
     }
 
     private static bool Matches(WorkflowDispatchRecord record, WorkflowDispatchQuery query) =>
@@ -710,12 +645,6 @@ public sealed class GroundworkV2WorkflowDispatchStore :
                 return false;
         }
     }
-
-    private static bool IsSaved(WriteOutcomeStatus status) => status is
-        WriteOutcomeStatus.Inserted or
-        WriteOutcomeStatus.Updated or
-        WriteOutcomeStatus.Upserted or
-        WriteOutcomeStatus.Replayed;
 
     private static void ValidateDispatchId(string dispatchId) =>
         GroundworkV2WorkflowDispatchStorageConventions.PhysicalId(dispatchId);

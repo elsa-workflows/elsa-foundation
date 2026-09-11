@@ -4,7 +4,9 @@
 
 **Created**: 2026-06-22
 
-**Status**: Draft
+**Status**: Superseded
+
+Superseded: the Extension Builder module was removed on 2026-09-10 (owner decision in the maintainability review); this spec is kept as history.
 
 **Input**: Coordinator handoff: "Extension Builder — backend pipeline (trusted-team v1). Lets a trusted user create and edit a .NET project workspace, build it server-side into a NuGet package, promote the validated package into a Nuplane-loadable feed, and have CShells expose the resulting capability at runtime — with status, diagnostics/logs, and rollback throughout. Backend pipeline only; the UI is a separate spec in elsa-foundation-studio."
 

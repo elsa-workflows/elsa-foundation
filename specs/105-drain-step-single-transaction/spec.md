@@ -4,7 +4,8 @@
 
 **Created**: 2026-07-19
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: #791 (restatused 2026-09-10 from git evidence)
 
 **Input**: WU-1 of the runtime engine-performance effort under the [Runtime Execution Seam](../../docs/program-goals/runtime-execution-seam.md) bucket. Fold the scheduler work-item acknowledgement (post-dispatch `CompleteClaimAsync`) into the same durable unit-of-work as the checkpoint commit, so a drain step performs one durable transaction instead of two. Implementable now under ratified [ADR 0020](../../docs/adr/0020-runtime-checkpoint-commit-post-commit-work.md).
 

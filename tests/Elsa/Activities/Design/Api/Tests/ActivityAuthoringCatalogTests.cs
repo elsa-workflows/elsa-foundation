@@ -5,6 +5,7 @@ using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Testing;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -153,12 +154,5 @@ public sealed class ActivityAuthoringCatalogTests
 
     private static void AssertProperties(Type type, params string[] names) =>
         Assert.All(names, name => Assert.NotNull(type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance)));
-
-    private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
-    {
-        public IServiceProvider ServiceProvider { get; } = serviceProvider;
-        public ICollection<EndpointDataSource> DataSources { get; } = [];
-        public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
-    }
 
 }

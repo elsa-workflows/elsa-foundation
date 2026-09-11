@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
@@ -333,12 +334,7 @@ public sealed class StimulusRouterTests
             startDispatcher,
             resumeDispatcher,
             deduplicator ?? new InMemoryStimulusStartDeduplicator(),
-            new FixedTimeProvider(_now));
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
+            new FakeTimeProvider(_now));
 
     private static StimulusDispatchRequest Request(
         StimulusRoutingMode mode = StimulusRoutingMode.StartAndResume,

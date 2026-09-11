@@ -13,26 +13,16 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// identity, due time, and claim order remain projected from one validated envelope, so direct operations,
 /// claim transitions, and checkpoint cleanup address the same row. All transitions use provider CAS.
 /// </remarks>
-public sealed class GroundworkV2DurableTimerStateStore : IDurableTimerStore
+public sealed class GroundworkV2DurableTimerStateStore : GroundworkV2RuntimeStoreBase, IDurableTimerStore
 {
     private const int MaxTransitionAttempts = 16;
-
-    private readonly IGroundworkStorageSessionSource sessions;
-    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
-    private readonly string? targetName;
-    private readonly StorageUnit unit;
 
     public GroundworkV2DurableTimerStateStore(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,
         string? targetName = null)
+        : base(sessions, accessContextAccessor, targetName, "durable-timer state", ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind)
     {
-        ArgumentNullException.ThrowIfNull(sessions);
-        ArgumentNullException.ThrowIfNull(accessContextAccessor);
-        this.sessions = sessions;
-        this.accessContextAccessor = accessContextAccessor;
-        this.targetName = targetName;
-        unit = sessions.Unit(ElsaRuntimeV2StorageManifest.DurableTimerDocumentKind, targetName);
     }
 
     public bool SupportsClaimTransitions => true;
@@ -72,7 +62,7 @@ public sealed class GroundworkV2DurableTimerStateStore : IDurableTimerStore
     {
         RuntimeStorePageRequest.ValidateLimit(limit, nameof(limit));
         cancellationToken.ThrowIfCancellationRequested();
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var dueTime = Column(table, ElsaRuntimeV2StorageManifest.DurableTimerDueTimeField);
         var timerId = Column(table, ElsaRuntimeV2StorageManifest.DurableTimerIdField);
         var result = Open().Query(new QueryRequest(
@@ -84,7 +74,7 @@ public sealed class GroundworkV2DurableTimerStateStore : IDurableTimerStore
             ],
             Projection.All,
             Paging.Keyset(limit)),
-            unit.CreateQueryRenderOptions(ElsaRuntimeV2StorageManifest.DurableTimerByDueTimeAndTimerIdIndex));
+            Unit.CreateQueryRenderOptions(ElsaRuntimeV2StorageManifest.DurableTimerByDueTimeAndTimerIdIndex));
         return ValueTask.FromResult<IReadOnlyCollection<DurableTimer>>(
             result.Rows.Select(Deserialize).Select(envelope => envelope.Timer).ToArray());
     }
@@ -108,7 +98,7 @@ public sealed class GroundworkV2DurableTimerStateStore : IDurableTimerStore
     {
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var workflow = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField);
         var timerId = Column(table, ElsaRuntimeV2StorageManifest.DurableTimerIdField);
         var result = Open().Query(new QueryRequest(
@@ -158,7 +148,7 @@ public sealed class GroundworkV2DurableTimerStateStore : IDurableTimerStore
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
         var session = Open();
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var claimOrder = Column(table, ElsaRuntimeV2StorageManifest.DurableTimerClaimOrderKeyField);
         var result = session.Query(new QueryRequest(
             table,
@@ -287,21 +277,6 @@ public sealed class GroundworkV2DurableTimerStateStore : IDurableTimerStore
         });
     }
 
-    private IStorageSession Open()
-    {
-        var context = accessContextAccessor.Current;
-        if (context.Scope is null || context.AcrossScopes)
-        {
-            throw new InvalidOperationException(
-                "Groundwork durable-timer state requires one explicit persistence scope; global and across-scope access are refused.");
-        }
-
-        return sessions.Open(
-            unit.Id.Value,
-            StorageAccess.Scoped(new StorageScope(context.Scope.Value)),
-            targetName);
-    }
-
     private static GroundworkV2DurableTimerEnvelope Deserialize(StoredEntry entry) =>
         GroundworkV2DurableTimerStorageConventions.Deserialize(entry.Values.Values);
 
@@ -367,25 +342,8 @@ public sealed class GroundworkV2DurableTimerStateStore : IDurableTimerStore
         envelope.Timer.DueTime <= now &&
         (envelope.VisibleAfter is null || envelope.VisibleAfter <= now);
 
-    private static WriteOutcome ConditionalUpsert(
-        IStorageSession session,
-        StorageValues values,
-        long revision)
-    {
-        if (session is not IConcurrencyStorageSession concurrency)
-        {
-            throw new NotSupportedException(
-                "The selected Groundwork provider does not advertise optimistic durable-timer concurrency.");
-        }
-
-        return concurrency.ConditionalUpsert(values, WriteOptions.IfVersion(revision));
-    }
-
     private static string PhysicalId(string workflowExecutionId, string timerId) =>
         GroundworkV2DurableTimerStorageConventions.PhysicalId(workflowExecutionId, timerId);
-
-    private static bool IsSaved(WriteOutcomeStatus status) =>
-        status is WriteOutcomeStatus.Inserted or WriteOutcomeStatus.Updated or WriteOutcomeStatus.Upserted or WriteOutcomeStatus.Replayed;
 
     private static void ValidateIdentity(string workflowExecutionId, string timerId)
     {
@@ -401,35 +359,8 @@ public sealed class GroundworkV2DurableTimerStateStore : IDurableTimerStore
         throw new InvalidDataException("Groundwork durable-timer query row did not contain a valid physical ID.");
     }
 
-    private static Predicate Equal(ColumnRef column, object value) =>
-        new Predicate.Equal(column, QueryConstant.Of(column, value));
-
     private static Predicate Due(ColumnRef column, object value) =>
         new Predicate.Range(column, null, Bound.Inclusive(QueryConstant.Of(column, value)));
-
-    private ColumnRef Column(TableId table, string name)
-    {
-        var definition = unit.Columns.SingleOrDefault(column =>
-            StringComparer.Ordinal.Equals(column.Name, name))
-            ?? throw new InvalidOperationException(
-                $"Groundwork durable-timer unit '{unit.Id.Value}' does not declare query column '{name}'.");
-        var type = definition.Type switch
-        {
-            PortableType.String => QueryType.String,
-            PortableType.DateTimeOffset => QueryType.DateTimeOffset,
-            PortableType.Int32 => QueryType.Int32,
-            PortableType.Int64 => QueryType.Int64,
-            PortableType.Boolean => QueryType.Boolean,
-            _ => throw new InvalidOperationException(
-                $"Groundwork durable-timer query column '{name}' has unsupported type '{definition.Type}'.")
-        };
-        return new ColumnRef(table, name, type, definition.IsNullable, definition.MaxLength);
-    }
-
-    private static Paging PagingFor(int limit, string? continuationToken) =>
-        continuationToken is null
-            ? Paging.Keyset(limit)
-            : Paging.Continuation(continuationToken, limit);
 
     private static InvalidOperationException TransitionDidNotSettle(
         string transition,

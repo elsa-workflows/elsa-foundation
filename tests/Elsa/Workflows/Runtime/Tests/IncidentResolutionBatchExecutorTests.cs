@@ -10,6 +10,7 @@ using Elsa.Workflows.Runtime.Core.Services.Coalescing;
 using Elsa.Workflows.Runtime.Core.Services.Strategies;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
@@ -291,7 +292,7 @@ public sealed class IncidentResolutionBatchExecutorTests
                 ExecutableStore,
                 _scope.ServiceProvider.GetRequiredService<IIncidentStrategyResolver>(),
                 committer,
-                new FixedTimeProvider(Now),
+                new FakeTimeProvider(Now),
                 _scope.ServiceProvider.GetServices<IncidentStrategySafeIntentRegistration>());
             Envelope = new WorkflowExecutionCommandEnvelope(
                 "envelope-strategy",
@@ -530,10 +531,5 @@ public sealed class IncidentResolutionBatchExecutorTests
                 throw new InvalidOperationException("Simulated crash after durable commit.");
             return result;
         }
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

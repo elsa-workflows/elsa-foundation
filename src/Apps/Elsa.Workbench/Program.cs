@@ -44,8 +44,6 @@ using Elsa.Mediator;
 using Elsa.Modularity.Api;
 using Elsa.Modularity.Attention;
 using Elsa.Modularity.Core.Contracts;
-using Elsa.Modularity.ExtensionBuilder;
-using Elsa.Modularity.ExtensionBuilder.Extensions;
 using Elsa.Modularity.Nuplane.Extensions;
 using Elsa.Modularity.Nuplane.Services;
 using Elsa.Persistence.Groundwork.Runtime;
@@ -171,17 +169,6 @@ builder.Services
 builder.Services.AddSingleton(new ShellReadinessState(TimeProvider.System));
 builder.Services.AddSingleton<DefaultShellWarmup>();
 builder.Services.AddHostedService(services => services.GetRequiredService<DefaultShellWarmup>());
-
-// ExtensionBuilder is a root-hosted subsystem (root singletons + a background build worker + management
-// endpoints mapped on the root route builder below), not a shell feature — its process-global state and
-// hosted worker cannot live in a shell container. It lives in the Elsa.Modularity.ExtensionBuilder module
-// and is composed here at the application root, gated by a plain host config switch (defaults to on;
-// endpoints are additionally gated by the management API key). Both the root composition and the endpoint
-// mapping (see MapElsaExtensionBuilderApi below) honor the switch, so setting it to false genuinely stops
-// the subsystem — effective on the next startup.
-var extensionBuilderEnabled = !bool.TryParse(configuration["Elsa:ExtensionBuilder:Enabled"], out var ebEnabled) || ebEnabled;
-if (extensionBuilderEnabled)
-    builder.Services.AddElsaExtensionBuilder(configuration);
 
 builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
 {
@@ -403,8 +390,6 @@ app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-workb
     .AllowPublic("health", "Reports whether the Workbench root host is responding.");
 app.MapShellReadiness();
 app.MapElsaModuleManagementApi();
-if (extensionBuilderEnabled)
-    app.MapElsaExtensionBuilderApi();
 app.MapShells();
 
 // Explicit auth middleware placed after MapShells: ShellMiddleware (added by MapShells) swaps

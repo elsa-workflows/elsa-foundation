@@ -28,10 +28,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Compile Remove="extension-builder\**\*.cs" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<Content Update="shells.baseline.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
@@ -119,7 +115,6 @@
 		<ProjectReference Include="..\..\Elsa\Modularity\Api\Elsa.Modularity.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Attention\Elsa.Modularity.Attention.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Core\Elsa.Modularity.Core.csproj" />
-		<ProjectReference Include="..\..\Elsa\Modularity\ExtensionBuilder\Elsa.Modularity.ExtensionBuilder.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Nuplane\Elsa.Modularity.Nuplane.csproj" />
 		<ProjectReference Include="..\..\Elsa\Persistence\Groundwork\V2\Elsa.Persistence.Groundwork.V2.csproj" />
 		<ProjectReference Include="..\..\Elsa\Primitives\Primitives\Elsa.Primitives.csproj" />

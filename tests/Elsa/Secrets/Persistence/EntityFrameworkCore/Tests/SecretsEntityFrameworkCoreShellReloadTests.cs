@@ -5,12 +5,15 @@ using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Persistence.EntityFramework;
-using Microsoft.EntityFrameworkCore;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.Support;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -75,6 +78,48 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
         }
     }
 
+    [SkippableFact]
+    public async Task Older_database_is_rejected_then_real_operator_apply_allows_fresh_validate()
+    {
+        Skip.IfNot(DualMigrateProcessRunner.HasDotnetEf(), "dotnet-ef is not available.");
+        var path = NewDbPath();
+        try
+        {
+            await CreateInitialSchemaAsync(path);
+
+            await using (var validatingHost = await StartHostAsync(path, EfMigratePolicy.Validate))
+            {
+                var registry = validatingHost.Services.GetRequiredService<IShellRegistry>();
+                var exception = await Assert.ThrowsAnyAsync<Exception>(() => registry.GetOrActivateAsync(ShellName));
+                var message = Flatten(exception);
+                Assert.Contains(nameof(SecretsSqliteDbContext), message, StringComparison.Ordinal);
+                Assert.Contains("20260911010717_WidenLookupKeys", message, StringComparison.Ordinal);
+            }
+
+            var result = DualMigrateProcessRunner.RunFromExistingBuild(
+                ["apply", "--sqlite"],
+                new Dictionary<string, string?>
+                {
+                    ["ELSA_SECRETS_EF_SQLITE"] = SqliteConnectionString(path),
+                    ["ELSA_SECRETS_EF_SQLSERVER"] = null,
+                    ["ELSA_SECRETS_EF_POSTGRESQL"] = null,
+                    ["ELSA_SECRETS_EF_REQUIRE_ALL"] = null
+                });
+            Assert.True(result.ExitCode == 0, result.Describe());
+            Assert.Contains("database update --context SecretsSqliteDbContext", result.Output, StringComparison.Ordinal);
+            Assert.Contains("20260911010717_WidenLookupKeys", result.Output, StringComparison.Ordinal);
+
+            await using var freshHost = await StartHostAsync(path, EfMigratePolicy.Validate);
+            var freshRegistry = freshHost.Services.GetRequiredService<IShellRegistry>();
+            var shell = await freshRegistry.GetOrActivateAsync(ShellName);
+            await AssertSchemaAndRepositoryAsync(shell.ServiceProvider);
+        }
+        finally
+        {
+            DeleteSqliteFiles(path);
+        }
+    }
+
     [Fact]
     public async Task Validate_succeeds_on_reload_after_schema_is_applied()
     {
@@ -115,6 +160,17 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
         var applied = (await context.Database.GetAppliedMigrationsAsync()).ToArray();
         Assert.NotEmpty(applied);
         Assert.Empty(await context.Database.GetPendingMigrationsAsync());
+    }
+
+    private static async Task CreateInitialSchemaAsync(string path)
+    {
+        var options = new DbContextOptionsBuilder<SecretsSqliteDbContext>()
+            .UseSqlite(SqliteConnectionString(path), sqlite => sqlite
+                .MigrationsAssembly(typeof(SecretsSqliteDbContext).Assembly.GetName().Name)
+                .MigrationsHistoryTable(SecretsEfModule.HistoryTableName))
+            .Options;
+        await using var context = new SecretsSqliteDbContext(options);
+        await context.GetService<IMigrator>().MigrateAsync("20260910210210_Initial");
     }
 
     private static async Task DropSecretsSchemaAsync(string path)

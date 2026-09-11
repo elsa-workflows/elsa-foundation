@@ -6,6 +6,7 @@ using Elsa.Http.Tests.Support;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using MsOptions = Microsoft.Extensions.Options.Options;
+using Elsa.Testing;
 
 namespace Elsa.Http.Tests;
 

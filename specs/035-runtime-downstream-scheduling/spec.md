@@ -6,7 +6,8 @@
 
 **Feature Branch**: `codex/runtime-downstream-scheduling`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #37, #38 (restatused 2026-09-10 from git evidence)
 **Input**: Continue deterministic activity completion propagation after checkpoint commit dispatch exists.
 
 ## Scenarios & Tests

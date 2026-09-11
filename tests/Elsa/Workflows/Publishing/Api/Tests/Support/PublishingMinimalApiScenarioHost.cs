@@ -29,6 +29,9 @@ internal sealed class PublishingMinimalApiScenarioHost(WebApplication app) : IAs
 {
     public HttpClient Client { get; } = app.GetTestClient();
 
+    /// <summary>The composed graph, so a test can drive the same services the mapped routes read.</summary>
+    public IServiceProvider Services => app.Services;
+
     public static async Task<PublishingMinimalApiScenarioHost> StartAsync(
         Func<IServiceProvider, IRequestSender>? requestSenderFactory = null,
         IWorkflowExecutableCompiler? compiler = null,

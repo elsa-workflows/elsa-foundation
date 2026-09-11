@@ -14,6 +14,7 @@ using Groundwork.SqlServer;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Xunit.Sdk;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Persistence.Groundwork.V2.Runtime.Tests;
 
@@ -125,7 +126,7 @@ public sealed class GroundworkV2WorkflowRuntimeAttentionQueryTests : IAsyncDispo
         var missingTenant = new GroundworkV2WorkflowRuntimeAttentionQuery(
             source,
             new FixedAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))),
-            new FixedTimeProvider(Now));
+            new FakeTimeProvider(Now));
         var unavailable = await missingTenant.QueryAsync(
             new(new AttentionQueryContext(new ClaimsPrincipal(), null), 5));
         Assert.False(unavailable.IsAvailable);
@@ -185,7 +186,7 @@ public sealed class GroundworkV2WorkflowRuntimeAttentionQueryTests : IAsyncDispo
         var result = await new GroundworkV2WorkflowRuntimeAttentionQuery(
             nativeSource,
             Access("tenant-a"),
-            new FixedTimeProvider(Now)).QueryAsync(Request(5));
+            new FakeTimeProvider(Now)).QueryAsync(Request(5));
 
         Assert.Equal(2, result.TotalCount);
         Assert.Equal(
@@ -221,7 +222,7 @@ public sealed class GroundworkV2WorkflowRuntimeAttentionQueryTests : IAsyncDispo
         PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
 
     private GroundworkV2WorkflowRuntimeAttentionQuery Query(PersistenceAccessContext context) =>
-        new(source, new FixedAccessContextAccessor(context), new FixedTimeProvider(Now));
+        new(source, new FixedAccessContextAccessor(context), new FakeTimeProvider(Now));
 
     private GroundworkV2WorkflowExecutionStateStore Store(string tenant) =>
         new(source, new FixedAccessContextAccessor(PersistenceAccessContext.Scoped(new PersistenceScope(tenant))));
@@ -294,11 +295,6 @@ public sealed class GroundworkV2WorkflowRuntimeAttentionQueryTests : IAsyncDispo
     private sealed class FixedAccessContextAccessor(PersistenceAccessContext context) : IPersistenceAccessContextAccessor
     {
         public PersistenceAccessContext Current { get; } = context;
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private sealed class DirectSessionSource(

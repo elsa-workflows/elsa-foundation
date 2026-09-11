@@ -16,7 +16,7 @@ namespace Elsa.Activities.Design.Tests.Unit;
 /// The proof for the revised FR-004 (research D8): an activity with a complex-typed AND an enum-typed input,
 /// run through the reflection-only scanner → the runtime registration startup pass → the compiler's resolution
 /// logic, resolves each input back to its REAL CLR type — NOT <c>object</c> — with the stored token being an
-/// alias only (never an assembly-qualified name). Also covers the dynamically-loaded extension-builder path:
+/// alias only (never an assembly-qualified name). Also covers the dynamically-loaded package path:
 /// activities surfaced by an <see cref="IFeatureAssemblyProvider"/> (and NOT the host AppDomain) register too.
 /// </summary>
 public sealed class ActivityIoTypeRegistrationTests
@@ -94,10 +94,10 @@ public sealed class ActivityIoTypeRegistrationTests
     }
 
     [Fact]
-    public async Task ExtensionBuilderActivityIoTypes_RegisteredViaFeatureAssemblyProvider()
+    public async Task DynamicallyLoadedActivityIoTypes_RegisteredViaFeatureAssemblyProvider()
     {
         // Exclude the host AppDomain (baseAssemblies → empty) so the ONLY source is the provider-supplied
-        // assembly — i.e. the dynamically-loaded extension-builder activity path, not the framework scan.
+        // assembly — i.e. the dynamically-loaded package activity path, not the framework scan.
         var registry = SeedPrimitives(new WellKnownTypeRegistry());
         var provider = new StubFeatureAssemblyProvider(typeof(ComplexInputFixtureActivity).Assembly);
         var task = CreateTask(registry, providers: [provider], baseAssemblies: static () => []);

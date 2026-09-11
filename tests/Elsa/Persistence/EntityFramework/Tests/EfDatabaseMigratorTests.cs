@@ -1,5 +1,7 @@
 using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Xunit;
 
 namespace Elsa.Persistence.EntityFramework.Tests;
@@ -30,23 +32,36 @@ public sealed class EfDatabaseMigratorTests
     public async Task Validate_succeeds_when_the_model_is_already_applied()
     {
         await using var fixture = await SqliteMigratorFixture.CreateAsync();
-        await fixture.Context.Database.EnsureCreatedAsync();
+        await EfDatabaseMigrator.ApplyAsync(fixture.Context, EfProviderNames.Sqlite);
         await EfDatabaseMigrator.ApplyAsync(fixture.Context, EfProviderNames.Sqlite, EfMigratePolicy.Validate);
     }
 
     [Fact]
-    public async Task Validate_fails_when_migrations_are_pending()
+    public async Task Validate_fails_when_a_later_database_migration_is_pending()
     {
         await using var fixture = await SqliteMigratorFixture.CreateAsync();
-        // EnsureCreated applies the model without recording migrations, so GetPendingMigrations
-        // still reports the Initial migration when one exists. This fixture has no migrations
-        // assembly, so Validate is a no-op pending list (empty) — prove the unknown-policy branch
-        // and an explicit pending failure via a dedicated pending-aware context instead.
+        var migrations = fixture.Context.Database.GetMigrations().ToArray();
+        Assert.Equal([EfTestMigrationIds.Initial, EfTestMigrationIds.AddDescription], migrations);
+
+        await fixture.Context.Database.MigrateAsync(EfTestMigrationIds.Initial);
+        var pending = (await fixture.Context.Database.GetPendingMigrationsAsync()).ToArray();
+        Assert.Equal([EfTestMigrationIds.AddDescription], pending);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            EfDatabaseMigrator.ApplyAsync(fixture.Context, EfProviderNames.Sqlite, EfMigratePolicy.Validate));
+        Assert.Contains(EfTestMigrationIds.AddDescription, exception.Message, StringComparison.Ordinal);
+
+        await EfDatabaseMigrator.ApplyAsync(fixture.Context, EfProviderNames.Sqlite);
+        await EfDatabaseMigrator.ApplyAsync(fixture.Context, EfProviderNames.Sqlite, EfMigratePolicy.Validate);
+        Assert.Empty(await fixture.Context.Database.GetPendingMigrationsAsync());
+    }
+
+    [Fact]
+    public async Task Invalid_policy_is_rejected_after_the_provider_guard()
+    {
+        await using var fixture = await SqliteMigratorFixture.CreateAsync();
         var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            EfDatabaseMigrator.ApplyAsync(
-                fixture.Context,
-                EfProviderNames.Sqlite,
-                (EfMigratePolicy)99));
+            EfDatabaseMigrator.ApplyAsync(fixture.Context, EfProviderNames.Sqlite, (EfMigratePolicy)99));
         Assert.Equal("policy", exception.ParamName);
     }
 
@@ -66,10 +81,10 @@ public sealed class EfDatabaseMigratorTests
         {
             var path = Path.Join(Path.GetTempPath(), $"elsa-ef-migrate-{Guid.NewGuid():N}.db");
             var options = new DbContextOptionsBuilder<MigratorContext>()
-                .UseSqlite($"Data Source={path}")
+                .UseSqlite($"Data Source={path}", sqlite => sqlite
+                    .MigrationsAssembly(typeof(EfDatabaseMigratorTests).Assembly.GetName().Name))
                 .Options;
             var context = new MigratorContext(options);
-            await context.Database.EnsureCreatedAsync();
             return new SqliteMigratorFixture(path, context);
         }
 
@@ -77,17 +92,62 @@ public sealed class EfDatabaseMigratorTests
         {
             await Context.DisposeAsync();
             File.Delete(path);
+            File.Delete($"{path}-wal");
+            File.Delete($"{path}-shm");
         }
     }
 
-    private sealed class MigratorContext(DbContextOptions<MigratorContext> options) : DbContext(options)
+    internal sealed class MigratorContext(DbContextOptions<MigratorContext> options) : DbContext(options)
     {
         public DbSet<MigratorItem> Items => Set<MigratorItem>();
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+            modelBuilder.Entity<MigratorItem>().ToTable("Items");
     }
 
-    private sealed class MigratorItem
+    public sealed class MigratorItem
     {
         public int Id { get; set; }
         public string Name { get; set; } = "";
+        public string? Description { get; set; }
     }
+}
+
+internal static class EfTestMigrationIds
+{
+    public const string Initial = "20260911000000_Initial";
+    public const string AddDescription = "20260911000001_AddDescription";
+}
+
+[DbContext(typeof(EfDatabaseMigratorTests.MigratorContext))]
+[Migration(EfTestMigrationIds.Initial)]
+public sealed class EfTestInitialMigration : Migration
+{
+    protected override void Up(MigrationBuilder migrationBuilder) =>
+        migrationBuilder.CreateTable(
+            name: "Items",
+            columns: table => new
+            {
+                Id = table.Column<int>(type: "INTEGER", nullable: false)
+                    .Annotation("Sqlite:Autoincrement", true),
+                Name = table.Column<string>(type: "TEXT", nullable: false)
+            },
+            constraints: table => table.PrimaryKey("PK_Items", x => x.Id));
+
+    protected override void Down(MigrationBuilder migrationBuilder) => migrationBuilder.DropTable("Items");
+}
+
+[DbContext(typeof(EfDatabaseMigratorTests.MigratorContext))]
+[Migration(EfTestMigrationIds.AddDescription)]
+public sealed class EfTestAddDescriptionMigration : Migration
+{
+    protected override void Up(MigrationBuilder migrationBuilder) =>
+        migrationBuilder.AddColumn<string>(
+            name: "Description",
+            table: "Items",
+            type: "TEXT",
+            nullable: true);
+
+    protected override void Down(MigrationBuilder migrationBuilder) =>
+        migrationBuilder.DropColumn(name: "Description", table: "Items");
 }

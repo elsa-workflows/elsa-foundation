@@ -20,6 +20,7 @@ using Groundwork.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
+using Elsa.Testing;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
 
@@ -193,11 +194,6 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
     private sealed class StubEventPublisher : IInlineEventPublisher, IDeferredEventPublisher
     {
         public Task Publish(IEvent @event, CancellationToken cancellationToken = default) => Task.CompletedTask;
-    }
-
-    private sealed class FakeSystemClock : ISystemClock
-    {
-        public DateTimeOffset UtcNow { get; } = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
     }
 
     private sealed class StubLockProvider : IDistributedLockProvider

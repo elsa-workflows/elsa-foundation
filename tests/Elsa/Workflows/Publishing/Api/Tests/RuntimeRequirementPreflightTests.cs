@@ -11,6 +11,7 @@ using Elsa.Workflows.Runtime.Services;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
@@ -55,7 +56,7 @@ public sealed class RuntimeRequirementPreflightTests
             executables,
             templates,
             new RuntimeRequirementChecker(consumers, drivers, TestWellKnownTypeRegistry.Create(), new JsonPayloadSerializer(new JsonPayloadConverterRegistry())),
-            new FixedTimeProvider(Now));
+            new FakeTimeProvider(Now));
 
         var result = await service.RunAsync(RuntimeRequirementPreflight.ActiveRetainedArtifactsScope, null);
 
@@ -97,7 +98,7 @@ public sealed class RuntimeRequirementPreflightTests
                 new RuntimeDurableValueStorageDriverRegistry([]),
                 TestWellKnownTypeRegistry.Create(),
                 new JsonPayloadSerializer(new JsonPayloadConverterRegistry())),
-            new FixedTimeProvider(Now));
+            new FakeTimeProvider(Now));
 
         var selected = await service.RunAsync(
             RuntimeRequirementPreflight.ActiveRetainedArtifactsScope,
@@ -196,10 +197,5 @@ public sealed class RuntimeRequirementPreflightTests
             new Dictionary<string, string>(),
             Now,
             [new("elsa.json")]);
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset value) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => value;
     }
 }

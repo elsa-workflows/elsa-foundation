@@ -15,9 +15,9 @@ public sealed class SecretRecordConfiguration : IEntityTypeConfiguration<SecretR
         builder.Property(record => record.NormalizedName).HasMaxLength(SecretNameConstraints.MaximumLength).IsRequired();
         builder.Property(record => record.NameSearchKey).IsRequired();
         builder.Property(record => record.DisplayNameSearchKey).IsRequired();
-        builder.Property(record => record.TypeNameLookupKey).HasMaxLength(64).IsRequired();
-        builder.Property(record => record.StoreNameLookupKey).HasMaxLength(64).IsRequired();
-        builder.Property(record => record.ScopeLookupKey).HasMaxLength(64);
+        builder.Property(record => record.TypeNameLookupKey).IsRequired();
+        builder.Property(record => record.StoreNameLookupKey).IsRequired();
+        builder.Property(record => record.ScopeLookupKey);
         builder.Property(record => record.Status).HasMaxLength(32).IsRequired();
         builder.Property(record => record.HasNonExpiringActiveVersion).IsRequired();
         builder.Property(record => record.Payload).IsRequired();

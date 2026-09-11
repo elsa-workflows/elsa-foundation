@@ -37,8 +37,7 @@ Expect zero build errors, fresh maps, no changed-file formatting drift, and a cl
 
 Rebuild Workbench, deploy a fresh SQLite Groundwork schema, launch the server, then run:
 
-- `e2e-tests/get-endpoints/Test-PublishingGets.ps1`
-- `e2e-tests/write-endpoints/Test-PublishingWrites.ps1`
+- the in-process `tests/Elsa/Workflows/Publishing/Api/Tests/PublishingApiContractTests.cs` (replaces the retired `get-endpoints`/`write-endpoints` Publishing scripts);
 - affected reusable-activity publication, upgrade, workflow/activity test-run, pinning, outcome, and nesting scripts;
 - the new Publishing lifecycle script covering runtime preflight, snapshot review/publish, policy CAS, slot unpublish/restore, publication receipt replay, activity test-run lookup/cancel, and route/body precedence.
 

@@ -86,6 +86,7 @@
       "tests/Elsa/Activities/Testing/Elsa.Activities.Testing.csproj",
       "tests/Elsa/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj",
       "tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj",
+      "tests/Elsa/Testing/Elsa.Testing.csproj",
       "tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj",
       "tests/Elsa/Workflows/Design/CodeGeneration/Tests/Elsa.Workflows.Design.CodeGeneration.Tests.csproj",
       "tests/Elsa/Workflows/Design/Persistence/Groundwork/Tests/Elsa.Workflows.Design.Persistence.Groundwork.Tests.csproj",

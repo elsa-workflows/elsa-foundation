@@ -1,4 +1,5 @@
 using Elsa.Api.AspNetCore;
+using Elsa.Testing;
 using Elsa.Workflows.Design.Api;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -20,11 +21,4 @@ internal static class WorkflowDesignEndpointTestSupport
     public static RouteEndpoint Find(RouteEndpoint[] endpoints, string route, string method) =>
         endpoints.Single(endpoint => endpoint.RoutePattern.RawText == route &&
             endpoint.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods.Contains(method, StringComparer.OrdinalIgnoreCase) == true);
-
-    private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
-    {
-        public IServiceProvider ServiceProvider { get; } = serviceProvider;
-        public ICollection<EndpointDataSource> DataSources { get; } = [];
-        public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
-    }
 }

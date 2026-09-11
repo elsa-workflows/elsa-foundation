@@ -4,7 +4,8 @@
 
 **Created**: 2026-07-16
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: 48ac1f28e, #791, #1033 (restatused 2026-09-10 from git evidence)
 
 **Input**: Replace the Elsa 3 memory-block activity/value model with role-specific bindings,
 invocation-owned input and result records, scoped variables, typed activity state and triggers, and a

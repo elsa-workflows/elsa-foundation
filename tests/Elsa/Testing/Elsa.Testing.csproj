@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Cross-module test-support library (not a test project): the small, dependency-light doubles that used to be
+    copy-pasted into individual suites. Keep the dependency envelope minimal - anything that needs a module's
+    own contracts belongs in that module family's *.Testing project instead.
+  -->
+  <PropertyGroup>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- TestEndpointRouteBuilder implements IEndpointRouteBuilder, which lives in the shared framework. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- FakeSystemClock implements Elsa.Primitives.Contracts.ISystemClock. -->
+    <ProjectReference Include="..\..\..\src\Elsa\Primitives\Primitives\Elsa.Primitives.csproj" />
+  </ItemGroup>
+
+</Project>

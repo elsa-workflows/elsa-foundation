@@ -4,7 +4,8 @@
 
 **Created**: 2026-06-10
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: #18 (restatused 2026-09-10 from git evidence)
 
 **Input**: User description: "Groundwork G6 runtime-defined entities. Add an opt-in Elsa.Persistence.Groundwork runtime entity surface that maps published runtime-defined entity definitions and instances onto Groundwork document storage without requiring a physical table per runtime entity. Definitions declare fields and indexes; publishing creates a Groundwork manifest; instances can be saved and queried by declared indexes through IDocumentStore. Validate with SQLite-backed tests."
 

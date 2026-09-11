@@ -122,6 +122,7 @@ public sealed class DomainManagementApiCompositionTests
         new("/publishing/workflows/preflight", "POST"),
         new("/publishing/workflows/{definitionId}/slots/{slotName}", "DELETE"),
         new("/publishing/workflows/{definitionId}/slots/{slotName}/restore", "POST"),
+        new("/publishing/publications/{publicationId}", "GET"),
         new("/publishing/workflows/{definitionId}/policy", "GET"),
         new("/publishing/workflows/{definitionId}/policy", "PUT"),
         new("/publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/publish", "POST"),

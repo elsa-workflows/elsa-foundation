@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Attention\Api\Elsa.Attention.Api.csproj" />
+    <ProjectReference Include="..\..\..\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
 
   <ItemGroup>

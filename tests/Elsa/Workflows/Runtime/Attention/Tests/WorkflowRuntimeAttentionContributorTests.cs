@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Attention.Tests;
 
@@ -85,7 +86,7 @@ public sealed class WorkflowRuntimeAttentionContributorTests
             now.AddMinutes(-124),
             null));
 
-        var adapter = new InMemoryWorkflowRuntimeAttentionQuery(executions, incidents, new FixedTimeProvider(now));
+        var adapter = new InMemoryWorkflowRuntimeAttentionQuery(executions, incidents, new FakeTimeProvider(now));
         var result = await adapter.QueryAsync(new(new(new ClaimsPrincipal(), "tenant-1"), 5));
 
         Assert.Equal(125, result.TotalCount);
@@ -159,9 +160,4 @@ public sealed class WorkflowRuntimeAttentionContributorTests
         null,
         tenantId,
         new Dictionary<string, string>());
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 }

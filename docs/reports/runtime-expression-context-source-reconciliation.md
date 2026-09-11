@@ -13,7 +13,7 @@ The Runtime Execution Seam bucket carries several pre-implementation planning re
 - [Elsa Core runtime expression-context wiring analysis](elsa-core-runtime-expression-context-wiring-analysis.md)
 - [Runtime execution pre-spec handoff](runtime-execution-pre-spec-handoff.md)
 - [Elsa 4 runtime execution brainstorm decisions](elsa-4-runtime-execution-brainstorm-decisions.md)
-- [Elsa 4 runtime execution action plan](elsa-4-runtime-execution-action-plan.md)
+- [Elsa 4 runtime execution action plan](archive/elsa-4-runtime-execution-action-plan.md)
 
 Substantial runtime work has since merged (#205/#210 scoped variables, #260 SetOutput/SetName, #286 workflow-scope variable write-back, #310 checkpoint-folded write-back, #308/#317 fault handling, specs 079/080, ADRs 0020/0026/0027/0028). Several premises those reports encode are now stale. This report establishes the current baseline so the next ADR/spec starts from code, not from overtaken planning notes.
 

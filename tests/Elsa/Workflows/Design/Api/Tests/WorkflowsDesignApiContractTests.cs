@@ -40,6 +40,7 @@ using Elsa.Workflows.Design.Api.Endpoints.Definitions.Restore;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.SoftDelete;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.UpdateMetadata;
 using Elsa.Workflows.Design.Api.Tests.Support;
+using Elsa.Testing;
 
 namespace Elsa.Workflows.Design.Api.Tests;
 
@@ -419,13 +420,6 @@ public sealed class WorkflowsDesignApiContractTests
         };
         request.Headers.TryAddWithoutValidation(AuthorizationHost.IdentityHeader, "trusted-manage");
         return request;
-    }
-
-    private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
-    {
-        public IServiceProvider ServiceProvider { get; } = serviceProvider;
-        public ICollection<EndpointDataSource> DataSources { get; } = [];
-        public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
     }
 
     internal sealed class AuthorizationHost(IHost host) : IAsyncDisposable

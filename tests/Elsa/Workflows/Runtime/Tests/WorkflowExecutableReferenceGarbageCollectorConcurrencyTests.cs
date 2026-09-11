@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
@@ -246,7 +247,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorConcurrencyTests
             executableStore,
             sourceReferenceStore,
             new InMemoryWorkflowExecutionStateStore(),
-            timeProvider ?? new FixedTimeProvider(_now),
+            timeProvider ?? new FakeTimeProvider(_now),
             NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance);
 
     private WorkflowExecutable Executable(string artifactId, DateTimeOffset createdAt, params WorkflowExecutable[] dependencies) =>
@@ -288,11 +289,6 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorConcurrencyTests
             CreatedAt: _now,
             PublishedAt: _now,
             Scope: WorkflowExecutableReferenceScope.Published);
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 
     private sealed class MutableTimeProvider(DateTimeOffset now) : TimeProvider
     {

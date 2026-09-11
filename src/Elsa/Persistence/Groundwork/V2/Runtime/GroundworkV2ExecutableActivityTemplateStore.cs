@@ -14,28 +14,19 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// work. The adapter never overwrites immutable content and reconciles create races by re-reading the
 /// winning rows. No v1 document-store or migration path is part of this current-only contract.
 /// </remarks>
-public sealed class GroundworkV2ExecutableActivityTemplateStore : IExecutableActivityTemplateStore
+public sealed class GroundworkV2ExecutableActivityTemplateStore : GroundworkV2RuntimeStoreBase, IExecutableActivityTemplateStore
 {
     private const int MaximumDeleteAttempts = 8;
 
-    private readonly IGroundworkStorageSessionSource sessions;
-    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
-    private readonly string? targetName;
-    private readonly StorageUnit templateUnit;
     private readonly StorageUnit claimUnit;
 
     public GroundworkV2ExecutableActivityTemplateStore(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,
         string? targetName = null)
+        : base(sessions, accessContextAccessor, targetName, "executable activity template", ElsaRuntimeV2StorageManifest.ExecutableActivityTemplateDocumentKind)
     {
-        ArgumentNullException.ThrowIfNull(sessions);
-        ArgumentNullException.ThrowIfNull(accessContextAccessor);
-        this.sessions = sessions;
-        this.accessContextAccessor = accessContextAccessor;
-        this.targetName = targetName;
-        templateUnit = sessions.Unit(ElsaRuntimeV2StorageManifest.ExecutableActivityTemplateDocumentKind, targetName);
-        claimUnit = sessions.Unit(ElsaRuntimeV2StorageManifest.ExecutableActivityTemplateHashClaimDocumentKind, targetName);
+        claimUnit = UnitFor(ElsaRuntimeV2StorageManifest.ExecutableActivityTemplateHashClaimDocumentKind);
     }
 
     public async ValueTask SaveAsync(
@@ -44,7 +35,7 @@ public sealed class GroundworkV2ExecutableActivityTemplateStore : IExecutableAct
     {
         GroundworkV2ExecutableActivityTemplateStorageConventions.Validate(template);
         cancellationToken.ThrowIfCancellationRequested();
-        _ = Access;
+        _ = ScopedAccess;
         RequireAtomicCommit();
 
         var existingById = await FindAsync(template.TemplateId, cancellationToken);
@@ -93,7 +84,7 @@ public sealed class GroundworkV2ExecutableActivityTemplateStore : IExecutableAct
     {
         var physicalId = GroundworkV2ExecutableActivityTemplateStorageConventions.PhysicalId(templateId);
         cancellationToken.ThrowIfCancellationRequested();
-        var entry = OpenTemplate().Read(GroundworkRuntimeRowStore.Key(physicalId));
+        var entry = Open().Read(GroundworkRuntimeRowStore.Key(physicalId));
         if (entry is null)
             return ValueTask.FromResult<ExecutableActivityTemplate?>(null);
 
@@ -110,10 +101,10 @@ public sealed class GroundworkV2ExecutableActivityTemplateStore : IExecutableAct
     {
         GroundworkV2ExecutableActivityTemplateStorageConventions.HashClaimId(templateHash);
         cancellationToken.ThrowIfCancellationRequested();
-        var table = new TableId(templateUnit.Name);
+        var table = new TableId(Unit.Name);
         var hash = Column(table, ElsaRuntimeV2StorageManifest.TemplateHashField);
         var templateId = Column(table, ElsaRuntimeV2StorageManifest.ExecutableActivityTemplateIdField);
-        var result = OpenTemplate().Query(new QueryRequest(
+        var result = Open().Query(new QueryRequest(
             table,
             Equal(hash, templateHash),
             [new OrderTerm(templateId, OrderDirection.Ascending, NullOrder.Last)],
@@ -136,10 +127,10 @@ public sealed class GroundworkV2ExecutableActivityTemplateStore : IExecutableAct
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
-        var table = new TableId(templateUnit.Name);
+        var table = new TableId(Unit.Name);
         var collection = Column(table, ElsaRuntimeV2StorageManifest.CollectionField);
         var templateId = Column(table, ElsaRuntimeV2StorageManifest.ExecutableActivityTemplateIdField);
-        var result = OpenTemplate().Query(new QueryRequest(
+        var result = Open().Query(new QueryRequest(
             table,
             Equal(collection, ElsaRuntimeV2StorageManifest.ExecutableActivityTemplateDocumentKind),
             [new OrderTerm(templateId, OrderDirection.Ascending, NullOrder.Last)],
@@ -157,13 +148,13 @@ public sealed class GroundworkV2ExecutableActivityTemplateStore : IExecutableAct
     {
         var physicalId = GroundworkV2ExecutableActivityTemplateStorageConventions.PhysicalId(templateId);
         cancellationToken.ThrowIfCancellationRequested();
-        _ = Access;
+        _ = ScopedAccess;
         RequireAtomicCommit();
 
         for (var attempt = 0; attempt < MaximumDeleteAttempts; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var templateEntry = OpenTemplate().Read(GroundworkRuntimeRowStore.Key(physicalId));
+            var templateEntry = Open().Read(GroundworkRuntimeRowStore.Key(physicalId));
             if (templateEntry is null)
                 return false;
 
@@ -172,7 +163,7 @@ public sealed class GroundworkV2ExecutableActivityTemplateStore : IExecutableAct
                 throw new InvalidDataException(
                     $"Groundwork executable activity template physical identity collision detected for '{templateId}'.");
 
-            var claimEntry = OpenClaim().Read(GroundworkRuntimeRowStore.Key(
+            var claimEntry = OpenScoped(claimUnit).Read(GroundworkRuntimeRowStore.Key(
                 GroundworkV2ExecutableActivityTemplateStorageConventions.HashClaimId(template.TemplateHash)));
             if (claimEntry is not null)
             {
@@ -181,7 +172,7 @@ public sealed class GroundworkV2ExecutableActivityTemplateStore : IExecutableAct
             }
 
             using var unitOfWork = BeginAtomicUnitOfWork();
-            StageDelete(unitOfWork, templateUnit, physicalId, templateEntry);
+            StageDelete(unitOfWork, Unit, physicalId, templateEntry);
             if (claimEntry is not null)
             {
                 StageDelete(
@@ -273,7 +264,7 @@ public sealed class GroundworkV2ExecutableActivityTemplateStore : IExecutableAct
     {
         using var unitOfWork = BeginAtomicUnitOfWork();
         unitOfWork.Stage(RowWrite.Insert(
-            templateUnit,
+            Unit,
             GroundworkV2ExecutableActivityTemplateStorageConventions.Values(template),
             WriteOptions.CreateOnly));
         unitOfWork.Stage(RowWrite.Insert(
@@ -322,7 +313,7 @@ public sealed class GroundworkV2ExecutableActivityTemplateStore : IExecutableAct
     {
         cancellationToken.ThrowIfCancellationRequested();
         var claimId = GroundworkV2ExecutableActivityTemplateStorageConventions.HashClaimId(templateHash);
-        var entry = OpenClaim().Read(GroundworkRuntimeRowStore.Key(claimId));
+        var entry = OpenScoped(claimUnit).Read(GroundworkRuntimeRowStore.Key(claimId));
         if (entry is null)
             return null;
         var claim = GroundworkV2ExecutableActivityTemplateStorageConventions.DeserializeClaim(entry.Values.Values);
@@ -379,18 +370,12 @@ public sealed class GroundworkV2ExecutableActivityTemplateStore : IExecutableAct
         new(
             $"Template hash '{template.TemplateHash}' is already bound to id '{existingTemplateId}', not '{template.TemplateId}'.");
 
-    private IStorageSession OpenTemplate() => sessions.Open(templateUnit.Id.Value, Access, targetName);
 
-    private IStorageSession OpenClaim() => sessions.Open(claimUnit.Id.Value, Access, targetName);
 
-    private IUnitOfWork BeginAtomicUnitOfWork() => sessions.BeginUnitOfWork(
-        Access,
-        BatchWriteOptions.Exact,
-        [
+    private IUnitOfWork BeginAtomicUnitOfWork() => BeginAtomicUnitOfWork([
             ElsaRuntimeV2StorageManifest.ExecutableActivityTemplateDocumentKind,
             ElsaRuntimeV2StorageManifest.ExecutableActivityTemplateHashClaimDocumentKind
-        ],
-        targetName);
+        ]);
 
     private async ValueTask<BatchWriteReport> CommitAsync(
         IUnitOfWork unitOfWork,
@@ -441,56 +426,10 @@ public sealed class GroundworkV2ExecutableActivityTemplateStore : IExecutableAct
             WriteOptions.IfVersion(version)));
     }
 
-    private StorageAccess Access
-    {
-        get
-        {
-            var context = accessContextAccessor.Current;
-            if (context.Scope is null || context.AcrossScopes)
-            {
-                throw new InvalidOperationException(
-                    "Groundwork executable activity templates require one explicit persistence scope; global and across-scope access are refused.");
-            }
-
-            return StorageAccess.Scoped(new StorageScope(context.Scope.Value));
-        }
-    }
-
     private void RequireAtomicCommit()
     {
-        if (sessions is not IGroundworkStorageCapabilitySource capabilitySource ||
-            !capabilitySource.Capabilities(targetName).Any(capability =>
-                capability.Id.Equals(WellKnownCapabilities.AtomicCommit)))
-        {
+        if (!HasAtomicCommit)
             throw new NotSupportedException(
                 "Groundwork executable activity template creation and deletion require the provider's evidenced atomic-commit capability.");
-        }
     }
-
-    private ColumnRef Column(TableId table, string name)
-    {
-        var definition = templateUnit.Columns.SingleOrDefault(column =>
-            StringComparer.Ordinal.Equals(column.Name, name))
-            ?? throw new InvalidOperationException(
-                $"Groundwork executable activity template unit '{templateUnit.Id.Value}' does not declare query column '{name}'.");
-        var type = definition.Type switch
-        {
-            PortableType.String => QueryType.String,
-            PortableType.DateTimeOffset => QueryType.DateTimeOffset,
-            PortableType.Int32 => QueryType.Int32,
-            PortableType.Int64 => QueryType.Int64,
-            PortableType.Boolean => QueryType.Boolean,
-            _ => throw new InvalidOperationException(
-                $"Groundwork executable activity template query column '{name}' has unsupported type '{definition.Type}'.")
-        };
-        return new ColumnRef(table, name, type, definition.IsNullable, definition.MaxLength);
-    }
-
-    private static Predicate Equal(ColumnRef column, string value) =>
-        new Predicate.Equal(column, QueryConstant.Of(column, value));
-
-    private static Paging PagingFor(int limit, string? continuationToken) =>
-        continuationToken is null
-            ? Paging.Keyset(limit)
-            : Paging.Continuation(continuationToken, limit);
 }

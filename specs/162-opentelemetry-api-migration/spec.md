@@ -4,7 +4,8 @@
 
 **Created**: 2026-08-16
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: #1386 (restatused 2026-09-10 from git evidence)
 
 **Input**: User description: Migrate the eleven Elsa.Diagnostics.OpenTelemetry shell HTTP registrations to owner-local Minimal API mappings while retaining the three root OTLP routes and preserving HTTP, OpenAPI, SSE, protobuf, and authentication behavior.
 

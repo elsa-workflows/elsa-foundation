@@ -4,7 +4,8 @@
 
 **Created**: 2026-07-08
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: #585, #604, #605, #609 (restatused 2026-09-10 from git evidence)
 
 **Input**: User description: "Bring the foundation's HttpEndpoint capability to full behavioral parity with elsa-core's Elsa.Http module: start-input delivery, per-method routing, route templates, content parsing, authorization/fault handling/limits, mid-workflow HttpEndpoint resume, and synchronous request/response via the spec-069 request-affine execution seam. Decomposed into five sequenced sub-units (A–E), each landable as its own branch/PR. Approved design plan with verified code facts: ~/.claude/plans/agile-swimming-matsumoto.md."
 

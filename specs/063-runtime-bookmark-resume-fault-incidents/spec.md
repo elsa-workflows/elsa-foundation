@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-bookmark-resume-fault-incidents`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #65, #66 (restatused 2026-09-10 from git evidence)
 **Input**: Continue Runtime Execution Seam Slice 7 after invocation faults record incidents. Bookmark resume faults still mutate activity state directly and should use the same minimal runtime incident continuation state.
 
 ## Scenarios & Tests

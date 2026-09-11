@@ -8,7 +8,7 @@ Elsa 4's persistence layer is actually **two separate stacks** wearing one name:
 1. **Design-time / definition persistence** (`Elsa.*.Design.Persistence.{Core,Groundwork,EFCore}`, `Elsa.Diagnostics.*.Persistence.EFCore`) — a genuinely DRY, template-method EF Core framework (`EFCorePersistenceShellFeatureBase<TDbContext>`) shared by Workflows, Activities, StructuredLogs and OpenTelemetry.
 2. **Runtime / suspended-execution persistence** (`Elsa.Workflows.Runtime.Core` contracts + `Elsa.Persistence.Groundwork` bridge) — a well-modeled *split continuation state* domain (`WorkflowExecutionState`, `ActivityExecutionState`, `BookmarkState`, `DurableValueState`, `IncidentState`, `OperationalState`, a post-commit outbox, and a checkpoint commit ledger), backed by an **external, pre-1.0 preview package** ("Groundwork", `0.0.1-preview.*`) rather than the in-repo EF Core stack.
 
-The architecture is intentional and documented (`docs/program-goals/groundwork-persistence-readiness.md`, `docs/reports/groundwork-runtime-evaluation.md`) as an incremental, benchmark-gated migration. That governance discipline is a genuine strength. However, digging into the actual code surfaces the exact class of problems this review was asked to hunt for:
+The architecture is intentional and documented (`docs/program-goals/groundwork-persistence-readiness.md`, `docs/reports/archive/groundwork-runtime-evaluation.md`) as an incremental, benchmark-gated migration. That governance discipline is a genuine strength. However, digging into the actual code surfaces the exact class of problems this review was asked to hunt for:
 
 - **There is no persisted-state schema/version stamp that is ever read or acted upon.** A single constant (`"1.0.0"`) is written to every document and never checked on load, never bumped, and there is no upcasting mechanism anywhere in the codebase. For a workflow engine, this means "what happens when a new engine version loads old state" is currently **undefined** — the answer today is "hope the record shape didn't change."
 - **The durability chain has a real hole even when the durable option is switched on.** The scheduler work queue — the thing that says "what runs next" — has no Groundwork-backed implementation at all and remains process-memory-only, and nothing in the reviewed code re-drives the durable post-commit outbox after a crash. State can be perfectly durable and yet the workflow never resumes.
@@ -110,7 +110,7 @@ The entire runtime persistence bridge does not comply and is not on that list:
 ---
 
 ### PS-4 — HIGH: Architecture decision docs say "no"/"not yet" to exactly what the code already does
-`docs/reports/groundwork-runtime-evaluation.md` is a "G8 decision artifact" whose header states *"This report does not migrate workflow runtime stores"* and whose matrix marks:
+`docs/reports/archive/groundwork-runtime-evaluation.md` is a "G8 decision artifact" whose header states *"This report does not migrate workflow runtime stores"* and whose matrix marks:
 - **Workflow checkpoint state → `BenchmarkGate`**: *"Needs atomic state-change persistence, conflict handling, retry evidence, and checkpoint diagnostics"* before use.
 - **Post-commit intents and outbox → `NoGo` (specialized provider)**: *"Requires outbox ordering, retry, idempotency, and partial-processing recovery semantics"* — explicitly **not** appropriate for the generic document store.
 

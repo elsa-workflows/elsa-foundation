@@ -35,8 +35,7 @@ Stop Workbench, remove its SQLite database and schema-lock files, rebuild, apply
 then start the `http` profile exactly as documented in `e2e-tests/README.md`. Run:
 
 ```bash
-pwsh ./e2e-tests/get-endpoints/Test-DesignActivityGets.ps1
-pwsh ./e2e-tests/write-endpoints/Test-DesignActivityWrites.ps1
+# GET / write status-and-shape checks now run in-process: tests/Elsa/Activities/Design/Tests/Api/ActivitiesDesignApiContractTests.cs
 pwsh ./e2e-tests/reusable-activities/Test-ReusableActivity.ps1
 pwsh ./e2e-tests/reusable-activities/Test-ReusableActivityPinning.ps1
 pwsh ./e2e-tests/reusable-activities/Test-ActivityUpgradePlan.ps1

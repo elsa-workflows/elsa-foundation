@@ -15,6 +15,9 @@
 #   ELSA_SECRETS_EF_SQLSERVER   Required to apply the SqlServer context.
 #   ELSA_SECRETS_EF_POSTGRESQL  Required to apply the PostgreSql context.
 #   ELSA_SECRETS_EF_REQUIRE_ALL=1  Fail when a non-Sqlite connection is missing.
+#   ELSA_SECRETS_EF_CONFIGURATION  MSBuild configuration for the tooling build and EF calls.
+#                                  Default: Release.
+#   ELSA_SECRETS_EF_SKIP_BUILD=1   Use an already-built checkout. The caller owns artifact freshness.
 #
 # Hooks (per derived context):
 #   dotnet ef database update --context <Derived>
@@ -49,10 +52,34 @@ EOF
 ef_common=(
   --project "$secrets_ef_module"
   --startup-project "$secrets_ef_startup"
+  --configuration "${ELSA_SECRETS_EF_CONFIGURATION:-Release}"
+  --no-build
 )
+
+ef_build_done=0
+
+ensure_compiled() {
+  if (( ef_build_done )); then
+    return
+  fi
+
+  if [[ "${ELSA_SECRETS_EF_SKIP_BUILD:-}" == "1" ]]; then
+    echo "  use existing EF tooling build (--configuration ${ELSA_SECRETS_EF_CONFIGURATION:-Release})"
+    ef_build_done=1
+    return
+  fi
+
+  echo "  build EF tooling once (--configuration ${ELSA_SECRETS_EF_CONFIGURATION:-Release})"
+  dotnet build "$secrets_ef_startup" \
+    --configuration "${ELSA_SECRETS_EF_CONFIGURATION:-Release}" \
+    --disable-build-servers \
+    --nologo
+  ef_build_done=1
+}
 
 run_pending() {
   local row context
+  ensure_compiled
   echo "Secrets EF: fail-if-pending model changes for each derived context"
   for row in "${secrets_ef_contexts[@]}"; do
     secrets_ef_split "$row"
@@ -111,6 +138,7 @@ apply_one() {
       ;;
   esac
 
+  ensure_compiled
   echo "  database update --context $context"
   # Factories read ELSA_SECRETS_EF_*. Do not pass --connection: that puts credentials
   # on the process command line.

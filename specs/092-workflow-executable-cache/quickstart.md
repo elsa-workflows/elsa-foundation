@@ -31,7 +31,7 @@ Required p95 budgets:
 - first workflow response after ready: ≤750 ms;
 - warm workflow response: ≤50 ms.
 
-Preserve raw reports and exact repository/binary/data provenance in `docs/reports/shell-activation-performance-2026-07.md`.
+Preserve raw reports and exact repository/binary/data provenance in `docs/reports/archive/shell-activation-performance-2026-07.md`.
 
 Built-in Groundwork runtime and unified features enable executable caching by default with capacity `256`.
 For a causal executable-cache comparison, change only

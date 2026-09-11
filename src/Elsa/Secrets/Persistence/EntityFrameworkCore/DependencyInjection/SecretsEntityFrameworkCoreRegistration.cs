@@ -12,6 +12,8 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.DependencyInjection;
 
 public static class SecretsEntityFrameworkCoreRegistration
 {
+    private const string RepositoryBackendName = "entity-framework";
+
     public static IServiceCollection AddSecretsEntityFrameworkCore(
         this IServiceCollection services,
         SecretsEntityFrameworkCoreOptions options)
@@ -23,7 +25,7 @@ public static class SecretsEntityFrameworkCoreRegistration
         var migrationsAssembly = typeof(SecretsDbContext).Assembly.GetName().Name;
 
         services.AddSingleton(options);
-        SelectSecretRepositoryBackend(services, SecretRepositoryBackend.EntityFramework);
+        SelectSecretRepositoryBackend(services, RepositoryBackendName);
         services.RemoveAll<ISecretRepository>();
 
         switch (provider)

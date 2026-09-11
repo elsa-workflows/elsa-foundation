@@ -9,6 +9,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Services;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
@@ -79,7 +80,7 @@ public sealed class PublicationActivationTests
             _publications,
             _executables,
             _references,
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
         var slot = await handler.Handle(new UnpublishPublicationSlot("definition-1", "default"), CancellationToken.None);
 
@@ -104,7 +105,7 @@ public sealed class PublicationActivationTests
             _publications,
             _executables,
             _references,
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
         var refusal = await Assert.ThrowsAsync<PublicationActivationException>(() =>
             handler.Handle(new UnpublishPublicationSlot("definition-1", "default"), CancellationToken.None));
 
@@ -116,14 +117,14 @@ public sealed class PublicationActivationTests
     }
 
     private PublicationActivator NewActivator(IWorkflowTriggerIndexer? indexer = null) =>
-        new(NewCoordinator(indexer), _publications, new FixedTimeProvider(_now));
+        new(NewCoordinator(indexer), _publications, new FakeTimeProvider(_now));
 
     private WorkflowActivationCoordinator NewCoordinator(IWorkflowTriggerIndexer? indexer = null) =>
         new(
             _authority,
             _references,
             TestRootWriteLeases.Create(_executables),
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             indexer ?? new NoopTriggerIndexer(),
             new NoopTriggerBindingStore());
 
@@ -262,10 +263,5 @@ public sealed class PublicationActivationTests
             WorkflowTriggerBindingTypePageQuery query,
             CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new WorkflowTriggerBindingPage(query, [], 0, null));
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

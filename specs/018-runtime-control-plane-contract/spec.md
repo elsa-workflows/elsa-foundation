@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-control-plane-contract`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #20 (restatused 2026-09-10 from git evidence)
 **Input**: Locked Runtime Execution Seam addendum decision: pause/unpause are runtime control-plane policy with explicit scopes and are distinct from durable suspension/resume.
 
 ## Scenarios & Tests

@@ -5,7 +5,7 @@
 > The question this answers: *which activities are missing inputs, missing outputs, missing outcomes, or
 > missing entirely?*
 >
-> **Supersedes** [`elsa-4-activity-gaps.md`](elsa-4-activity-gaps.md), which is stale — it lists the HTTP
+> **Supersedes** [`elsa-4-activity-gaps.md`](archive/elsa-4-activity-gaps.md), which is stale — it lists the HTTP
 > activities, `Delay`, `Timer` and `Cron` as missing; all four exist today.
 >
 > **Evidence.** [`evidence/activity-contract-parity/`](evidence/activity-contract-parity/) — the extracted
