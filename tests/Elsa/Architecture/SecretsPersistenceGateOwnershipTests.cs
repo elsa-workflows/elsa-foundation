@@ -86,7 +86,7 @@ public sealed class SecretsPersistenceGateOwnershipTests
             "docker/compose/elsa-workbench.shells.json"
         };
         var shellConfigPaths = relativePaths.Select(static relative => RepoPath(relative.Split('/')));
-        foreach (var shellConfigPath in shellConfigPaths)
+        var featuresByShellConfig = shellConfigPaths.Select(static shellConfigPath =>
         {
             using var document = System.Text.Json.JsonDocument.Parse(
                 File.ReadAllText(shellConfigPath),
@@ -95,11 +95,14 @@ public sealed class SecretsPersistenceGateOwnershipTests
                     CommentHandling = System.Text.Json.JsonCommentHandling.Skip,
                     AllowTrailingCommas = true
                 });
-            var features = document.RootElement
+            return document.RootElement
                 .GetProperty("CShells").GetProperty("Shells").GetProperty("default").GetProperty("Features")
                 .EnumerateObject()
                 .Select(property => property.Name)
                 .ToHashSet(StringComparer.Ordinal);
+        });
+        foreach (var features in featuresByShellConfig)
+        {
             Assert.Contains("SecretsGroundworkPersistence", features);
             Assert.DoesNotContain("SecretsEntityFrameworkCore", features);
         }
