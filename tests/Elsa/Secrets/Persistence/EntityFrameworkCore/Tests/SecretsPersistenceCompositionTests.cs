@@ -10,7 +10,6 @@ using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Secrets.Persistence.Groundwork;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -22,7 +21,8 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests;
 /// Phase 3: a shell selects EF or Groundwork, never both. Default hosts stay on Groundwork
 /// (see <c>SecretsEfPersistencePilotArchitectureTests</c>). Configuration-driven cases
 /// bind features from JSON the same way Workbench <c>shells.json</c> does, after the host
-/// catalogs both assemblies. Full Workbench process journeys stay out of this slice.
+/// catalog discovers feature assemblies. Create/resolve/restart journeys live in
+/// <see cref="SecretsPersistenceHostJourneyTests"/>.
 /// </summary>
 public sealed class SecretsPersistenceCompositionTests
 {
@@ -95,9 +95,8 @@ public sealed class SecretsPersistenceCompositionTests
         builder.Services.AddCShellsAspNetCore(shells =>
         {
             shells
-                .WithAssemblies(
-                    typeof(SecretsEntityFrameworkCoreFeature).Assembly,
-                    typeof(SecretsGroundworkPersistenceFeature).Assembly)
+                .WithHostAssemblies()
+                .WithAssemblies(SecretsHostCatalog.Assemblies())
                 .AddShell(ShellName, shell =>
                 {
                     shell.WithFeature<SecretsEntityFrameworkCoreFeature>(feature =>
@@ -124,7 +123,7 @@ public sealed class SecretsPersistenceCompositionTests
     [Fact]
     public async Task Configuration_selects_entity_framework_from_the_assembly_catalog()
     {
-        await using var app = await StartConfiguredHostAsync(
+        await using var app = await SecretsHostCatalog.StartAsync(
             """
             {
               "CShells": {
@@ -155,7 +154,7 @@ public sealed class SecretsPersistenceCompositionTests
     [Fact]
     public async Task Configuration_refuses_both_features_from_the_assembly_catalog()
     {
-        await using var app = await StartConfiguredHostAsync(
+        await using var app = await SecretsHostCatalog.StartAsync(
             """
             {
               "CShells": {
@@ -181,36 +180,6 @@ public sealed class SecretsPersistenceCompositionTests
         Assert.Contains(SecretRepositoryBackend.Groundwork, flattened, StringComparison.Ordinal);
         Assert.Contains(SecretRepositoryBackend.EntityFramework, flattened, StringComparison.Ordinal);
         Assert.Contains("Enable only one Secrets persistence feature", flattened, StringComparison.Ordinal);
-    }
-
-    private static async Task<WebApplication> StartConfiguredHostAsync(string shellsJson)
-    {
-        var path = Path.Join(Path.GetTempPath(), $"elsa-secrets-composition-{Guid.NewGuid():N}.json");
-        await File.WriteAllTextAsync(path, shellsJson);
-        try
-        {
-            var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Development });
-            builder.WebHost.UseUrls("http://127.0.0.1:0");
-            builder.Logging.ClearProviders();
-            builder.Configuration.AddJsonFile(path, optional: false, reloadOnChange: false);
-            builder.Services.AddCShellsAspNetCore(shells =>
-            {
-                shells
-                    .WithAssemblies(
-                        typeof(SecretsEntityFrameworkCoreFeature).Assembly,
-                        typeof(SecretsGroundworkPersistenceFeature).Assembly)
-                    .WithConfigurationProvider(builder.Configuration);
-            });
-
-            var app = builder.Build();
-            app.MapShells();
-            await app.StartAsync();
-            return app;
-        }
-        finally
-        {
-            File.Delete(path);
-        }
     }
 
     private static string BackendName(IServiceCollection services) =>
