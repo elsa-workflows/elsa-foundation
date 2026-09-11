@@ -17,8 +17,9 @@
 #   ELSA_SECRETS_EF_REQUIRE_ALL=1  Fail when a non-Sqlite connection is missing.
 #
 # Hooks (per derived context):
-#   dotnet ef database update --context <Derived> --connection <cs>
+#   dotnet ef database update --context <Derived>
 #   dotnet ef migrations has-pending-model-changes --context <Derived>
+# Factories read ELSA_SECRETS_EF_* so connection strings stay off the process command line.
 set -euo pipefail
 
 # shellcheck source=secrets-ef-lib.sh
@@ -38,8 +39,8 @@ pending  Fail if any derived Secrets context has pending model changes.
 
 apply    Apply compiled migrations for the selected derived contexts.
          Sqlite uses ELSA_SECRETS_EF_SQLITE or a temp file.
-         SqlServer / PostgreSql require ELSA_SECRETS_EF_SQLSERVER /
-         ELSA_SECRETS_EF_POSTGRESQL (or pass --sqlite only).
+         --sqlserver / --postgresql fail when the matching env is unset.
+         --all skips a missing non-Sqlite env unless ELSA_SECRETS_EF_REQUIRE_ALL=1.
 
 all      pending, then apply (default).
 EOF
@@ -61,27 +62,38 @@ run_pending() {
   done
 }
 
-sqlite_connection() {
+sqlite_temp_file=""
+
+cleanup_sqlite_temp() {
+  if [[ -n "${sqlite_temp_file:-}" ]]; then
+    rm -f "$sqlite_temp_file" "${sqlite_temp_file}-wal" "${sqlite_temp_file}-shm"
+  fi
+}
+
+ensure_sqlite_env() {
   if [[ -n "${ELSA_SECRETS_EF_SQLITE:-}" ]]; then
-    printf '%s' "$ELSA_SECRETS_EF_SQLITE"
     return
   fi
-  printf 'Data Source=%s' "$(mktemp "${TMPDIR:-/tmp}/elsa-secrets-ef-XXXXXX.db")"
+  # BSD mktemp requires the X's at the end of the template.
+  sqlite_temp_file="$(mktemp "${TMPDIR:-/tmp}/elsa-secrets-ef.XXXXXX")"
+  export ELSA_SECRETS_EF_SQLITE="Data Source=${sqlite_temp_file}"
+  trap cleanup_sqlite_temp EXIT
 }
 
 apply_one() {
   local context="$1"
   local env_name="$2"
-  local connection=""
+  local want="$3"
 
   case "$context" in
     SecretsSqliteDbContext)
-      connection="$(sqlite_connection)"
+      ensure_sqlite_env
       ;;
     *)
-      connection="${!env_name:-}"
-      if [[ -z "$connection" ]]; then
-        if [[ "${ELSA_SECRETS_EF_REQUIRE_ALL:-}" == "1" ]]; then
+      if [[ -z "${!env_name:-}" ]]; then
+        # Skip-without-env is only for --all / default. An explicit engine must fail
+        # so callers cannot treat a no-op as "this engine was updated".
+        if [[ "$want" != "all" || "${ELSA_SECRETS_EF_REQUIRE_ALL:-}" == "1" ]]; then
           echo "error: $env_name is required to apply $context" >&2
           exit 1
         fi
@@ -92,7 +104,9 @@ apply_one() {
   esac
 
   echo "  database update --context $context"
-  secrets_ef database update --context "$context" --connection "$connection" "${ef_common[@]}"
+  # Factories read ELSA_SECRETS_EF_*. Do not pass --connection: that puts credentials
+  # on the process command line.
+  secrets_ef database update --context "$context" "${ef_common[@]}"
 }
 
 run_apply() {
@@ -118,7 +132,7 @@ run_apply() {
         exit 2
         ;;
     esac
-    apply_one "$secrets_ef_context" "$secrets_ef_env"
+    apply_one "$secrets_ef_context" "$secrets_ef_env" "$want"
   done
 }
 

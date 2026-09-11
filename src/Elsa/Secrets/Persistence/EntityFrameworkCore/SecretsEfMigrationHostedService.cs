@@ -16,8 +16,6 @@ public sealed class SecretsEfMigrationHostedService(
     IServiceScopeFactory scopes,
     SecretsEntityFrameworkCoreOptions options) : IHostedService, IShellInitializer
 {
-    private int applied;
-
     public Task InitializeAsync(CancellationToken cancellationToken = default) =>
         ApplyAsync(cancellationToken);
 
@@ -27,12 +25,9 @@ public sealed class SecretsEfMigrationHostedService(
 
     private async Task ApplyAsync(CancellationToken cancellationToken)
     {
-        // Same instance can be resolved as both IHostedService and IShellInitializer. MigrateAsync
-        // is idempotent; skip the second call on this instance so a copied root descriptor cannot
-        // start two concurrent applies. A CShells reload builds a new provider and a new instance.
-        if (Interlocked.Exchange(ref applied, 1) == 1)
-            return;
-
+        // Same instance is resolved as both IHostedService and IShellInitializer. MigrateAsync is
+        // idempotent, and a failed Validate must still fail if this instance is asked again.
+        // Concurrent applies are serialized by EF's migration lock.
         await using var scope = scopes.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<SecretsDbContext>();
         var expected = EfRelationalProviderBinding.ExpectedProviderName(options.Provider);

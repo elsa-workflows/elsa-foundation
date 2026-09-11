@@ -27,7 +27,7 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
     private const string ShellName = "secrets-ef-migrate";
 
     [Fact]
-    public async Task AutoMigrate_applies_on_activation_and_again_after_reload()
+    public async Task AutoMigrate_applies_on_activation_and_again_after_reload_drops_the_schema()
     {
         var path = NewDbPath();
         try
@@ -37,6 +37,10 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
 
             var first = await registry.GetOrActivateAsync(ShellName);
             await AssertSchemaAndRepositoryAsync(first.ServiceProvider);
+
+            await DropSecretsSchemaAsync(path);
+            Assert.False(await TableExistsAsync(path, SecretsEfModule.TableName));
+            Assert.False(await TableExistsAsync(path, SecretsEfModule.HistoryTableName));
 
             var reload = await registry.ReloadAsync(ShellName);
             if (reload.Drain is not null)
@@ -49,7 +53,7 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
         }
         finally
         {
-            File.Delete(path);
+            DeleteSqliteFiles(path);
         }
     }
 
@@ -67,7 +71,7 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
         }
         finally
         {
-            File.Delete(path);
+            DeleteSqliteFiles(path);
         }
     }
 
@@ -97,7 +101,7 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
         }
         finally
         {
-            File.Delete(path);
+            DeleteSqliteFiles(path);
         }
     }
 
@@ -113,6 +117,28 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
         Assert.Empty(await context.Database.GetPendingMigrationsAsync());
     }
 
+    private static async Task DropSecretsSchemaAsync(string path)
+    {
+        await using var connection = new SqliteConnection(SqliteConnectionString(path));
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            $"DROP TABLE IF EXISTS \"{SecretsEfModule.TableName}\"; " +
+            $"DROP TABLE IF EXISTS \"{SecretsEfModule.HistoryTableName}\";";
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<bool> TableExistsAsync(string path, string table)
+    {
+        await using var connection = new SqliteConnection(SqliteConnectionString(path));
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $name";
+        command.Parameters.AddWithValue("$name", table);
+        var count = (long)(await command.ExecuteScalarAsync() ?? 0L);
+        return count == 1;
+    }
+
     private static async Task<WebApplication> StartHostAsync(string path, EfMigratePolicy policy)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Development });
@@ -125,7 +151,7 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
                 .AddShell(ShellName, shell => shell.WithFeature<SecretsEntityFrameworkCoreFeature>(feature =>
                 {
                     feature.Provider = "Sqlite";
-                    feature.ConnectionString = $"Data Source={path}";
+                    feature.ConnectionString = SqliteConnectionString(path);
                     feature.MigratePolicy = policy;
                 }));
         });
@@ -136,8 +162,18 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
         return app;
     }
 
+    private static string SqliteConnectionString(string path) =>
+        $"Data Source={path};Cache=Shared;Pooling=False";
+
     private static string NewDbPath() =>
         Path.Join(Path.GetTempPath(), $"elsa-secrets-ef-shell-{Guid.NewGuid():N}.db");
+
+    private static void DeleteSqliteFiles(string path)
+    {
+        File.Delete(path);
+        File.Delete($"{path}-wal");
+        File.Delete($"{path}-shm");
+    }
 
     private static string Flatten(Exception exception)
     {

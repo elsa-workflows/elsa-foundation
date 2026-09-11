@@ -5,7 +5,7 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling;
 /// overrides this when present. Otherwise an environment variable lets CI/ops point at a real
 /// engine without editing factories.
 /// </summary>
-internal static class SecretsDesignTimeConnection
+public static class SecretsDesignTimeConnection
 {
     public const string SqliteVariable = "ELSA_SECRETS_EF_SQLITE";
     public const string SqlServerVariable = "ELSA_SECRETS_EF_SQLSERVER";

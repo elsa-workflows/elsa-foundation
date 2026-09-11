@@ -11,14 +11,13 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests;
 public sealed class SecretsEfMigrationHostedServiceTests
 {
     [Fact]
-    public async Task AutoMigrate_applies_on_hosted_start_and_is_a_no_op_on_the_same_instance_initializer()
+    public async Task AutoMigrate_applies_on_hosted_start_and_stays_idempotent_on_the_same_instance()
     {
         await using var fixture = await MigrationHostFixture.CreateAsync(EfMigratePolicy.AutoMigrate);
         await fixture.Lifecycle.StartAsync(CancellationToken.None);
         Assert.True(await TableExistsAsync(fixture, SecretsEfModule.TableName));
         Assert.True(await TableExistsAsync(fixture, SecretsEfModule.HistoryTableName));
 
-        // Same instance: IShellInitializer must not start a second concurrent apply.
         await fixture.Lifecycle.InitializeAsync(CancellationToken.None);
         Assert.True(await TableExistsAsync(fixture, SecretsEfModule.TableName));
     }
@@ -38,7 +37,6 @@ public sealed class SecretsEfMigrationHostedServiceTests
         await fixture.Lifecycle.InitializeAsync(CancellationToken.None);
 
         var reloaded = fixture.Provider.GetRequiredService<SecretsEfMigrationHostedService>();
-        // The fixture registers one singleton. A CShells reload builds a new provider; emulate that.
         await using var second = await MigrationHostFixture.CreateAsync(
             EfMigratePolicy.AutoMigrate,
             fixture.Path);
@@ -59,6 +57,19 @@ public sealed class SecretsEfMigrationHostedServiceTests
     }
 
     [Fact]
+    public async Task Validate_fails_again_when_retried_on_the_same_instance()
+    {
+        await using var fixture = await MigrationHostFixture.CreateAsync(EfMigratePolicy.Validate);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            fixture.Lifecycle.InitializeAsync(CancellationToken.None));
+
+        var retry = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            fixture.Lifecycle.InitializeAsync(CancellationToken.None));
+        Assert.Contains("pending migrations", retry.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.False(await TableExistsAsync(fixture, SecretsEfModule.TableName));
+    }
+
+    [Fact]
     public async Task Validate_succeeds_after_AutoMigrate_on_a_reloaded_instance()
     {
         await using var applied = await MigrationHostFixture.CreateAsync(EfMigratePolicy.AutoMigrate);
@@ -73,7 +84,9 @@ public sealed class SecretsEfMigrationHostedServiceTests
 
     private static async Task<bool> TableExistsAsync(MigrationHostFixture fixture, string table)
     {
-        await using var command = fixture.Connection.CreateCommand();
+        await using var connection = new SqliteConnection(fixture.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $name";
         command.Parameters.AddWithValue("$name", table);
         var count = (long)(await command.ExecuteScalarAsync() ?? 0L);
@@ -84,50 +97,57 @@ public sealed class SecretsEfMigrationHostedServiceTests
     {
         private MigrationHostFixture(
             string path,
-            SqliteConnection connection,
+            string connectionString,
             ServiceProvider provider,
             SecretsEfMigrationHostedService lifecycle)
         {
             Path = path;
-            Connection = connection;
+            ConnectionString = connectionString;
             Provider = provider;
             Lifecycle = lifecycle;
         }
 
         public string Path { get; }
-        public SqliteConnection Connection { get; }
+        public string ConnectionString { get; }
         public ServiceProvider Provider { get; }
         public SecretsEfMigrationHostedService Lifecycle { get; }
 
-        public static async ValueTask<MigrationHostFixture> CreateAsync(
+        public static ValueTask<MigrationHostFixture> CreateAsync(
             EfMigratePolicy policy,
             string? existingPath = null)
         {
             var path = existingPath ?? System.IO.Path.Join(
                 System.IO.Path.GetTempPath(),
                 $"elsa-secrets-ef-lifecycle-{Guid.NewGuid():N}.db");
-            var connection = new SqliteConnection($"Data Source={path}");
-            await connection.OpenAsync();
+            // One connection string for EF and assertions. Pooling=False avoids a leftover
+            // pool connection locking the file when a second fixture (reload / Validate)
+            // opens the same path.
+            var connectionString = $"Data Source={path};Cache=Shared;Pooling=False";
             var services = new ServiceCollection()
-                .AddSingleton(connection)
                 .AddSecretsEntityFrameworkCore(new SecretsEntityFrameworkCoreOptions
                 {
                     Provider = "Sqlite",
-                    ConnectionString = connection.ConnectionString,
+                    ConnectionString = connectionString,
                     MigratePolicy = policy
                 });
             var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             var lifecycle = provider.GetRequiredService<SecretsEfMigrationHostedService>();
             Assert.Same(lifecycle, Assert.Single(provider.GetServices<IHostedService>()));
             Assert.Same(lifecycle, Assert.Single(provider.GetServices<IShellInitializer>()));
-            return new MigrationHostFixture(path, connection, provider, lifecycle);
+            return ValueTask.FromResult(new MigrationHostFixture(path, connectionString, provider, lifecycle));
         }
 
         public async ValueTask DisposeAsync()
         {
             await Provider.DisposeAsync();
-            await Connection.DisposeAsync();
-            File.Delete(Path);
+            DeleteSqliteFiles(Path);
         }
+    }
+
+    internal static void DeleteSqliteFiles(string path)
+    {
+        File.Delete(path);
+        File.Delete($"{path}-wal");
+        File.Delete($"{path}-shm");
     }
 }

@@ -42,7 +42,8 @@ module stays provider-free. Do not add SqlServer/Npgsql PackageReferences to the
 
 ```bash
 bash tools/ef/dual-migrate.sh pending   # has-pending-model-changes per derived context
-bash tools/ef/dual-migrate.sh apply     # database update; Sqlite always, others if env set
+bash tools/ef/dual-migrate.sh apply     # database update; --all skips missing non-Sqlite env
+bash tools/ef/dual-migrate.sh apply --sqlserver   # fails when ELSA_SECRETS_EF_SQLSERVER is unset
 bash tools/ef/dual-migrate.sh all
 ```
 

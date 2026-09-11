@@ -41,7 +41,7 @@ bash tools/ef/dual-migrate.sh all
 | Command | Hook | Needs a database |
 |---|---|---|
 | `pending` | `dotnet ef migrations has-pending-model-changes --context <Derived>` | no |
-| `apply` | `dotnet ef database update --context <Derived> --connection <cs>` | yes |
+| `apply` | `dotnet ef database update --context <Derived>` (factories read `ELSA_SECRETS_EF_*`) | yes |
 
 Both run for each derived Secrets context (`SecretsSqliteDbContext`,
 `SecretsSqlServerDbContext`, `SecretsPostgreSqlDbContext`).
@@ -49,8 +49,9 @@ Both run for each derived Secrets context (`SecretsSqliteDbContext`,
 Apply connections:
 
 - Sqlite: `ELSA_SECRETS_EF_SQLITE` or a temp file.
-- SqlServer: `ELSA_SECRETS_EF_SQLSERVER` (skipped when unset unless `ELSA_SECRETS_EF_REQUIRE_ALL=1`).
-- PostgreSql: `ELSA_SECRETS_EF_POSTGRESQL` (same skip / require rule).
+- SqlServer: `ELSA_SECRETS_EF_SQLSERVER`. Required for `apply --sqlserver`. Under
+  `--all` / default, skipped when unset unless `ELSA_SECRETS_EF_REQUIRE_ALL=1`.
+- PostgreSql: `ELSA_SECRETS_EF_POSTGRESQL` (same explicit-vs-all rule).
 
 `pending` is the CI-safe check for all three providers. Wire `bash tools/ef/dual-migrate.sh pending`
 into a workflow only when a job already restores `dotnet-ef`; the current Build & test job does not.
