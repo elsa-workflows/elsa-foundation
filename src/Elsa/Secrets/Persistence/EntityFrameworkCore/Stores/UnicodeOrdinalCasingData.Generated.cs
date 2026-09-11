@@ -1,15 +1,17 @@
 namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 
-// Pinned from the .NET 10 invariant-uppercase projection used by the merged Phase 1 EF pilot.
-// The baseline is Unicode 16.0.0 UnicodeData.txt plus the 26 Phase 1 runtime mappings called out below.
+// Canonical persisted-key projection selected after the merged Phase 1 EF pilot exposed that
+// .NET 10 invariant casing can consume different Unicode data on different hosts. The baseline is
+// Unicode 16.0.0 UnicodeData.txt plus the 26 Phase 1 development-host mappings called out below.
 // Source: https://www.unicode.org/Public/16.0.0/ucd/UnicodeData.txt
 // SHA-256 (source UnicodeData.txt): ff58e5823bd095166564a006e47d111130813dcf8bf234ef79fa51a870edb48f
 // Copyright © 1991-2024 Unicode, Inc. Distributed under the Unicode Terms of Use.
 //
-// This is the complete pinned Phase 1 mapping table (BMP and supplementary scalars). It is
+// This is the complete canonical mapping table (BMP and supplementary scalars). It is
 // intentionally data-only: runtime casing APIs must not participate in this contract. It shares
-// Groundwork 0.4.0-preview.30's Unicode-16 mappings except that Phase 1 mapped U+017F and the
-// 25 scalars U+16EBB..U+16ED3. Tests pin this compatibility boundary exhaustively.
+// Groundwork 0.4.0-preview.30's Unicode-16 mappings except for U+017F and the 25 scalars
+// U+16EBB..U+16ED3 observed in the Phase 1 development environment. Tests pin this compatibility
+// boundary exhaustively; the current host runtime is deliberately not a compatibility oracle.
 internal static class UnicodeOrdinalCasingData
 {
     public const string UnicodeVersion = "16.0.0+phase1-dotnet10-delta";

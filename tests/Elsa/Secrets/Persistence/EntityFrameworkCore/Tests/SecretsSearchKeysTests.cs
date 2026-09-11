@@ -9,7 +9,7 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests;
 public sealed class SecretsSearchKeysTests
 {
     [Fact]
-    public void Projection_identity_pins_the_phase_1_dotnet_10_mapping_and_records_groundwork_v1()
+    public void Projection_identity_pins_the_portable_mapping_and_records_groundwork_v1()
     {
         Assert.Equal("16.0.0+phase1-dotnet10-delta", SecretsSearchKeys.UnicodeVersion);
         Assert.Equal(
@@ -38,23 +38,22 @@ public sealed class SecretsSearchKeysTests
         Assert.Equal(expected, SecretsSearchKeys.SearchKey(value));
     }
 
-    [Fact]
-    public void Projection_is_byte_compatible_with_phase_1_runtime_keys_for_every_unicode_scalar()
+    [Theory]
+    [InlineData(0x019B, 0xA7DC)]
+    [InlineData(0x0264, 0xA7CB)]
+    [InlineData(0x1C8A, 0x1C89)]
+    [InlineData(0xA7CD, 0xA7CC)]
+    [InlineData(0xA7CF, 0xA7CE)]
+    [InlineData(0xA7D3, 0xA7D2)]
+    [InlineData(0xA7D5, 0xA7D4)]
+    [InlineData(0xA7DB, 0xA7DA)]
+    [InlineData(0x10D70, 0x10D50)]
+    public void Projection_uses_pinned_unicode_data_instead_of_the_host_runtime(int scalar, int expected)
     {
-        var mismatches = new List<string>();
-        for (var scalar = 0; scalar <= 0x10FFFF; scalar++)
-        {
-            if (scalar is >= 0xD800 and <= 0xDFFF)
-                continue;
+        var value = char.ConvertFromUtf32(scalar);
 
-            var value = char.ConvertFromUtf32(scalar);
-            var runtime = value.ToUpperInvariant();
-            var pinned = SecretsSearchKeys.LookupKey(value);
-            if (!string.Equals(runtime, pinned, StringComparison.Ordinal))
-                mismatches.Add($"U+{scalar:X}: runtime={CodePoints(runtime)}, pinned={CodePoints(pinned)}");
-        }
-
-        Assert.True(mismatches.Count == 0, string.Join(Environment.NewLine, mismatches));
+        Assert.Equal(char.ConvertFromUtf32(expected), SecretsSearchKeys.LookupKey(value));
+        Assert.Equal(char.ConvertFromUtf32(expected), SecretsSearchKeys.SearchKey(value));
     }
 
     [Fact]
@@ -96,8 +95,4 @@ public sealed class SecretsSearchKeysTests
 
         return result.ToString();
     }
-
-    private static string CodePoints(string value) => string.Join(
-        "+",
-        value.EnumerateRunes().Select(rune => $"U+{rune.Value:X}"));
 }

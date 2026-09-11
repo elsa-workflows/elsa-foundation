@@ -125,8 +125,11 @@ public sealed class SecretsPersistenceCompositionTests
     [Fact]
     public async Task Configuration_selects_entity_framework_from_the_assembly_catalog()
     {
-        await using var app = await SecretsHostCatalog.StartAsync(
-            """
+        var path = Path.Join(Path.GetTempPath(), $"elsa-secrets-composition-{Guid.NewGuid():N}.db");
+        try
+        {
+            await using var app = await SecretsHostCatalog.StartAsync(
+                $$"""
             {
               "CShells": {
                 "Shells": {
@@ -135,7 +138,7 @@ public sealed class SecretsPersistenceCompositionTests
                     "Features": {
                       "SecretsEntityFrameworkCore": {
                         "Provider": "Sqlite",
-                        "ConnectionString": "Data Source=:memory:",
+                        "ConnectionString": "Data Source={{path.Replace("\\", "/")}};Pooling=False",
                         "MigratePolicy": "AutoMigrate"
                       }
                     }
@@ -145,12 +148,19 @@ public sealed class SecretsPersistenceCompositionTests
             }
             """);
 
-        var shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
-        await using var scope = shell.ServiceProvider.CreateAsyncScope();
-        Assert.IsType<EfSecretRepository>(scope.ServiceProvider.GetRequiredService<ISecretRepository>());
-        Assert.Equal(
-            EntityFrameworkBackend,
-            scope.ServiceProvider.GetRequiredService<SecretRepositoryBackend>().Name);
+            var shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+            await using var scope = shell.ServiceProvider.CreateAsyncScope();
+            Assert.IsType<EfSecretRepository>(scope.ServiceProvider.GetRequiredService<ISecretRepository>());
+            Assert.Equal(
+                EntityFrameworkBackend,
+                scope.ServiceProvider.GetRequiredService<SecretRepositoryBackend>().Name);
+        }
+        finally
+        {
+            File.Delete(path);
+            File.Delete($"{path}-wal");
+            File.Delete($"{path}-shm");
+        }
     }
 
     [Fact]

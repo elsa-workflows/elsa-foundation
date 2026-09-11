@@ -79,9 +79,19 @@ History table: `__EFMigrationsHistory_ElsaSecrets`.
 
 Case-insensitive search and Type/Store/Scope lookup keys use the Elsa-owned
 `elsa-secrets-unicode-ordinal-ignore-case-v1-bcbcc4bf0951b182137ed0f42681f30bafda7777f500c42203cf58bb7e4eaaa1`
-projection. Its generated table is pinned to Unicode 16 plus the 26 mappings already emitted by
-.NET 10 when Phase 1 began writing rows. Runtime casing APIs are no longer used, so upgrading the
-host runtime cannot silently change new keys while older rows retain different bytes.
+projection. Its generated table is pinned to Unicode 16 plus the 26 mappings observed on the .NET
+10 development host when Phase 1 began writing rows. Phase 1's runtime casing API did not define
+portable bytes: .NET can consume different Unicode data on different operating systems. Runtime
+casing APIs are no longer used, so changing a host runtime or its Unicode data cannot silently
+change newly persisted keys.
+
+Before upgrading a database written by the pre-contract Phase 1 pilot, quiesce writers and run the
+provider-specific `dual-migrate.sh apply` command. After applying compiled migrations it reindexes
+the stored projection columns and document copies from the authoritative `Secret` payload in bounded
+transactions while preserving concurrency tokens. Rows created on a host whose runtime casing data differed from this
+pinned table otherwise remain unreadable through canonical lookups. Host startup audits every row
+in bounded, read-only batches and fails closed with the repair command instead of silently serving a
+partially readable store.
 
 The casing projection matches Groundwork's Unicode-16 mapping for every scalar except the exact,
 exhaustively tested boundary `U+017F` and `U+16EBB` through `U+16ED3`. Groundwork also persists a
@@ -110,10 +120,12 @@ bash tools/ef/dual-migrate.sh apply --sqlite
 ```
 
 `pending` is `dotnet ef migrations has-pending-model-changes` per derived context.
-`apply` is `dotnet ef database update --context <Derived>`. Runtime AutoMigrate / Validate
-uses the same compiled migrations in this module, but the checks are different: `pending`
+`apply` runs `dotnet ef database update --context <Derived>` and then the managed projection
+reindexer for that same context. Runtime AutoMigrate / Validate uses the same compiled migrations
+in this module, but the checks are different: `pending`
 compares the source model to its snapshot without reading database history, whereas runtime
-`Validate` checks whether the selected database has unapplied compiled migrations. Recommended
+`Validate` checks whether the selected database has unapplied compiled migrations; both runtime
+policies also reject legacy projection bytes until the operator reindex completes. Recommended
 deployment order is `pending`, backup/quiesce, provider-specific `apply`, history/table-shape
 verification, then application startup with `MigratePolicy=Validate`.
 

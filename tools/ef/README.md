@@ -47,7 +47,7 @@ checkout; the manifest path is the normal CI path.
 | Command | Hook | Needs a database |
 |---|---|---|
 | `pending` | `dotnet ef migrations has-pending-model-changes --context <Derived>` | no |
-| `apply` | `dotnet ef database update --context <Derived>` (factories read `ELSA_SECRETS_EF_*`) | yes |
+| `apply` | `dotnet ef database update`, then managed legacy-projection reindex for `<Derived>` (factories read `ELSA_SECRETS_EF_*`) | yes |
 
 Both run for each derived Secrets context (`SecretsSqliteDbContext`,
 `SecretsSqlServerDbContext`, `SecretsPostgreSqlDbContext`).
@@ -80,13 +80,18 @@ The checks cover different failure classes:
   current EF model with that context's committed model snapshot and does not inspect database
   history. A failure means a migration is missing from source; it is not proof that a database has
   unapplied migrations.
-- `apply` runs `database update` against the selected provider and applies compiled migrations
-  missing from `__EFMigrationsHistory_ElsaSecrets`. SQL Server and PostgreSQL require their
+- `apply` runs `database update` against the selected provider, applies compiled migrations
+  missing from `__EFMigrationsHistory_ElsaSecrets`, then reindexes projection fields in bounded
+  transactions. The repair targets fields
+  written by the pre-contract host-runtime casing algorithm, derives them from
+  the stored document, preserves concurrency tokens, and is idempotent. SQL Server and PostgreSQL require their
   provider-specific connection environment variable and a reachable database. SQLite uses
   `ELSA_SECRETS_EF_SQLITE` when set; otherwise the script creates a temporary database and removes
   it on exit, which validates the artifact but does not update a deployment database.
 - Runtime `MigratePolicy=Validate` calls EF's pending-database-migration check and fails closed
-  when the database history is behind. It does not replace the source/model `pending` check.
+  when the database history is behind. Both runtime policies then audit the pinned projection
+  contract and fail closed when operator reindex is still required. Neither runtime path rewrites
+  legacy rows, and neither replaces the source/model `pending` check.
 
 ## Deployment and rollback boundary
 

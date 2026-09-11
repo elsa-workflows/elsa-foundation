@@ -1,6 +1,7 @@
 using CShells.Lifecycle;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -32,5 +33,6 @@ public sealed class SecretsEfMigrationHostedService(
         var context = scope.ServiceProvider.GetRequiredService<SecretsDbContext>();
         var expected = EfRelationalProviderBinding.ExpectedProviderName(options.Provider);
         await EfDatabaseMigrator.ApplyAsync(context, expected, options.MigratePolicy, cancellationToken);
+        await SecretsProjectionContract.EnsureCurrentAsync(context, cancellationToken);
     }
 }

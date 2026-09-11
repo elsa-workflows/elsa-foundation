@@ -6,9 +6,10 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>
 /// Elsa-owned, persisted-key projection pinned to the Unicode 16.0.0 simple-uppercase table plus
-/// the 26 mappings emitted by .NET 10 when the Phase 1 storage contract was established.
-/// Runtime casing APIs are intentionally excluded so a host runtime upgrade cannot silently
-/// change lookup or search keys already stored by the Secrets EF module.
+/// the 26 mappings observed on the .NET 10 development host when the Phase 1 pilot was established.
+/// Phase 1's runtime casing API did not define portable bytes because .NET can consume different
+/// Unicode data on different hosts. Runtime casing APIs are therefore intentionally excluded so a
+/// host runtime or operating-system upgrade cannot silently change persisted lookup or search keys.
 /// </summary>
 internal static class SecretsUnicodeOrdinalIgnoreCaseV1
 {
