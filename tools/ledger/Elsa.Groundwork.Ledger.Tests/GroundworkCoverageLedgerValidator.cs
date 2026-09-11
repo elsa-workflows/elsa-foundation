@@ -253,8 +253,7 @@ internal sealed class GroundworkCoverageLedgerValidator
             .Where(entry => StringValue(entry, "id") is not null)
             .GroupBy(entry => StringValue(entry, "id")!, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
-        var conditionalEntries = ledger["compositionConditionalEntries"] as JsonArray;
-        if (conditionalEntries is null)
+        if (ledger["compositionConditionalEntries"] is not JsonArray conditionalEntries)
             return;
 
         var coveredByDefault = ledger["compositionEvidence"] is JsonObject defaultComposition
@@ -275,8 +274,7 @@ internal sealed class GroundworkCoverageLedgerValidator
                 continue;
             }
 
-            var ownership = entry["compositionOwnership"] as JsonObject;
-            if (ownership is null)
+            if (entry["compositionOwnership"] is not JsonObject ownership)
             {
                 findings.Add($"composition-conditional: coverage row '{entryId}' must declare compositionOwnership.");
                 continue;
@@ -373,7 +371,12 @@ internal sealed class GroundworkCoverageLedgerValidator
         foreach (var missing in expectedCovered.Where(id => !covered.Contains(id)).Order(StringComparer.Ordinal))
             findings.Add($"composition-conditional: EF-selected composition is missing Groundwork row '{missing}'.");
         foreach (var unexpected in covered.Where(id => !expectedCovered.Contains(id)).Order(StringComparer.Ordinal))
-            findings.Add($"composition-conditional: EF-selected composition must not cover Groundwork-only row '{unexpected}'.");
+        {
+            findings.Add(
+                omitted.Contains(unexpected)
+                    ? $"composition-conditional: EF-selected composition must not cover Groundwork-only row '{unexpected}'."
+                    : $"composition-conditional: EF-selected composition covers '{unexpected}' which is not in the current ledger denominator.");
+        }
 
         var selected = StringArray(artifact, "selectedFeatureIdentities");
         if (selected.Contains("elsa-secrets", StringComparer.Ordinal))

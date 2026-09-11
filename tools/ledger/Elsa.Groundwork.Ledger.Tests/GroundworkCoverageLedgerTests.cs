@@ -615,7 +615,8 @@ public sealed class GroundworkCoverageLedgerTests
             findings,
             "$.entries: baseline entry 'distributed-command-transport' is missing.",
             "$.entries: baseline entry 'runtime-activity-execution-inspection' occurs 2 times; expected exactly once.",
-            "composition evidence: coverage row 'distributed-command-transport' is outside the reviewed ledger denominator.");
+            "composition evidence: coverage row 'distributed-command-transport' is outside the reviewed ledger denominator.",
+            "composition-conditional: EF-selected composition covers 'distributed-command-transport' which is not in the current ledger denominator.");
     }
 
     [Theory]
