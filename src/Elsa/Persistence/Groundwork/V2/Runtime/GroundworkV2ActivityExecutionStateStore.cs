@@ -10,7 +10,6 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// <summary>Current-only Groundwork v2 activity-execution state store.</summary>
 public sealed class GroundworkV2ActivityExecutionStateStore : GroundworkV2RuntimeStoreBase, IActivityExecutionStateStore
 {
-
     public GroundworkV2ActivityExecutionStateStore(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,

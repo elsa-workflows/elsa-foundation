@@ -18,7 +18,6 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// </remarks>
 public sealed class GroundworkV2BookmarkStateStore : GroundworkV2RuntimeStoreBase, IBookmarkStateStore, IBookmarkStimulusIndex
 {
-
     public GroundworkV2BookmarkStateStore(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,

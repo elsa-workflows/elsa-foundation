@@ -16,7 +16,6 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// </remarks>
 public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : GroundworkV2RuntimeStoreBase, IWorkflowExecutableSourceReferenceStore
 {
-
     public GroundworkV2WorkflowExecutableSourceReferenceStore(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,

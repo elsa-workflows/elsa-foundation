@@ -14,7 +14,6 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// </remarks>
 public sealed class GroundworkV2WorkflowHoldStateStore : GroundworkV2RuntimeStoreBase, IWorkflowHoldStateStore
 {
-
     public GroundworkV2WorkflowHoldStateStore(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,

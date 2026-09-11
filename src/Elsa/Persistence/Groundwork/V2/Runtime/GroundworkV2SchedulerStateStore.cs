@@ -10,7 +10,6 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// <summary>Current-only Groundwork v2 scheduler-state store.</summary>
 public sealed class GroundworkV2SchedulerStateStore : GroundworkV2RuntimeStoreBase, ISchedulerStateStore
 {
-
     public GroundworkV2SchedulerStateStore(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,

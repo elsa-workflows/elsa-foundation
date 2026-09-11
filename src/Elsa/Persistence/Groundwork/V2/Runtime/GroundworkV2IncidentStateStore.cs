@@ -14,7 +14,6 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// </remarks>
 public sealed class GroundworkV2IncidentStateStore : GroundworkV2RuntimeStoreBase, IIncidentStateStore
 {
-
     public GroundworkV2IncidentStateStore(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,

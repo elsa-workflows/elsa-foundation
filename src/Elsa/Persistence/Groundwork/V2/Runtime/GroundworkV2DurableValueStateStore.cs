@@ -16,7 +16,6 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// </remarks>
 public sealed class GroundworkV2DurableValueStateStore : GroundworkV2RuntimeStoreBase, IDurableValueStateStore
 {
-
     public GroundworkV2DurableValueStateStore(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,

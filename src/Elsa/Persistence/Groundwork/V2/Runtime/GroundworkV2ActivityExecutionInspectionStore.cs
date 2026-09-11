@@ -15,7 +15,6 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// </remarks>
 public sealed class GroundworkV2ActivityExecutionInspectionStore : GroundworkV2RuntimeStoreBase, IActivityExecutionInspectionStore, IActivityExecutionInspectionWriter
 {
-
     public GroundworkV2ActivityExecutionInspectionStore(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,

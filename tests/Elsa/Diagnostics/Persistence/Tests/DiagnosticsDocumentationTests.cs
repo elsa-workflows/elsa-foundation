@@ -51,6 +51,18 @@ public sealed class DiagnosticsDocumentationTests
         Assert.Contains(OwningCatalog, rootIndex, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Constitution §2.6.2 requires every contract to declare its kind. The kind label is a fixed token, not
+    /// prose, so asserting it does not tie the documentation's wording to the build.
+    /// </summary>
+    [Theory]
+    [InlineData("src/Elsa/Diagnostics/Persistence/Draining/DiagnosticsDrainContracts.cs")]
+    [InlineData("src/Elsa/Diagnostics/Persistence/Observability/DiagnosticsPersistenceObservability.cs")]
+    public void Replacement_contracts_declare_their_kind(string contractFile)
+    {
+        Assert.Contains("Replacement contract", File.ReadAllText(RepositoryPath(contractFile)), StringComparison.Ordinal);
+    }
+
     private static string RepositoryPath(string relativePath, [CallerFilePath] string sourceFile = "") =>
         Path.GetFullPath(Path.Combine(Path.GetDirectoryName(sourceFile)!, "../../../../..", relativePath));
 }
