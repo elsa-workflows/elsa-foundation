@@ -4,6 +4,7 @@ Reports are point-in-time findings. They may become work units, but they are not
 
 ## Current reports
 
+- [Secrets EF persistence pilot verdict and conditional replacement plan 2026-09](secrets-ef-persistence-pilot-verdict-2026-09.md) - successful narrow technical pilot for provider-derived EF contexts, dual migration modes, and per-shell EF/Groundwork selection; records exact evidence, unresolved governance/host-readiness boundaries, and a gated module-by-module replacement sequence.
 - [Wave 4 Agent REST and SSE API migration 2026-08](wave-4-agent-api-migration-2026-08.md) - exact eleven-route FastEndpoints-before HTTP/OpenAPI evidence, shared Agent permissions, SSE framing/cancellation, mixed coexistence, and collectible owner lifecycle.
 - [Structured Logs Minimal API migration 2026-08](structured-logs-minimal-api-migration-2026-08.md) - streaming program wave: exact HTTP/SSE/OpenAPI parity, Foundation authorization and FastEndpoints coexistence, production dependency retirement, and repeated clean collection after real OpenAPI generation with no module-owned transformer contexts.
 - [Secrets Minimal API migration 2026-08](secrets-minimal-api-migration-2026-08.md) - representative ten-operation CRUD/security migration: immutable HTTP and OpenAPI parity, tenant isolation, granular Foundation authorization, sensitive-data non-disclosure, real FastEndpoints coexistence, clean route/traffic/service release, and an honestly retained collectible context after actual ASP.NET OpenAPI generation.
