@@ -1,14 +1,13 @@
 # Elsa Foundation Ships Only Groundwork Persistence Implementations
 
-> **Pending amendment (proposed ADR 0072, not accepted):** [PR #1623](https://github.com/elsa-workflows/elsa-foundation/pull/1623)
-> and [PR #1624](https://github.com/elsa-workflows/elsa-foundation/pull/1624) review a Secrets EF
-> persistence pilot. This accepted ADR still permits only the OpenIddict vendor exception below.
-> The architecture ratchet may exclude the proposed pilot path prefixes so that review can proceed;
-> that exclusion is not an accepted amendment of this ADR. Accepting 0072 is what would formally
-> narrow the first-party EF rule. Groundwork stays the default Secrets store; Workbench catalogs
-> the Secrets EF feature for opt-in composition and is not switched onto EF. Phase 4 (#1631)
-> makes Groundwork Secrets matrix and ledger obligations conditional on selecting Groundwork
-> so they do not block the EF-selected composition; that is not an ADR 0072 acceptance.
+> **Pending amendment (proposed ADR 0072, not accepted):**
+> [ADR 0072](0072-ef-first-relational-persistence-with-provider-derived-contexts.md) records the
+> bounded EF-first relational direction evaluated by the completed
+> [Secrets EF pilot](../reports/secrets-ef-persistence-pilot-verdict-2026-09.md). The pilot's scoped
+> EF allowlist is technical evidence, not an amendment of this accepted ADR. This ADR remains in
+> force until the final ADR 0072 text is explicitly accepted. Groundwork remains the Workbench
+> default and the retained family for Runtime, document/Mongo, and operationally specialized
+> workloads.
 
 Status: accepted (2026-07-12; ratified through the maintainer grilling and PR #630 review; the targeted constitution amendment remains separately pending consensus and compliance evidence).
 
