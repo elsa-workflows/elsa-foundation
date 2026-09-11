@@ -1,4 +1,5 @@
 using Elsa.Activities.DispatchWorkflow.Runtime.Services;
+using Elsa.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -57,7 +58,7 @@ public sealed class WorkflowDispatchReadinessInitializerTests
 
         await initializer.InitializeAsync(CancellationToken.None);
 
-        Assert.Equal([LogLevel.Information], logger.Levels);
+        Assert.Equal([LogLevel.Information], logger.Entries.Select(entry => entry.Level));
     }
 
     [Fact]
@@ -118,21 +119,5 @@ public sealed class WorkflowDispatchReadinessInitializerTests
         public ValueTask<WorkflowDispatchRedriveResult> RedriveAsync(
             WorkflowDispatchRedriveRequest request,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    }
-
-    private sealed class RecordingLogger<T> : ILogger<T>
-    {
-        public List<LogLevel> Levels { get; } = [];
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(
-            LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception? exception,
-            Func<TState, Exception?, string> formatter) => Levels.Add(logLevel);
     }
 }

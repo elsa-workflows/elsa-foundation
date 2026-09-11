@@ -4,7 +4,8 @@
 
 **Created**: 2026-07-28
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: #1082 (restatused 2026-09-10 from git evidence)
 
 **Input**: User description: "Allow an authorized workflow author to request an exact forward semantic version when promoting a draft, while preserving automatic next-major promotion, authoritative uniqueness and monotonicity checks, idempotency, and explicit capability discovery for compatible Studio clients."
 

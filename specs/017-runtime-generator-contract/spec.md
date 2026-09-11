@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-generator-contract`
 **Created**: 2026-06-10
-**Status**: Draft
+**Status**: Implemented
+Implemented: #19 (restatused 2026-09-10 from git evidence)
 **Input**: Locked Runtime Execution Seam addendum decision: generators are in-workflow activities that emit execution events over time.
 
 ## Scenarios & Tests

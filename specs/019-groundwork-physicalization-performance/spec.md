@@ -4,7 +4,8 @@
 
 **Created**: 2026-06-10
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: #18 (restatused 2026-09-10 from git evidence)
 
 **Input**: User description: "Groundwork G7 physicalization and performance. Add opt-in optimized physicalization for hot storage units while preserving the portable document-store contract and portable default. Providers should materialize optimized physical structures from manifest intent, route eligible equality queries through those structures, and prove at least one relational provider plus MongoDB can use the optimized path without changing caller APIs."
 

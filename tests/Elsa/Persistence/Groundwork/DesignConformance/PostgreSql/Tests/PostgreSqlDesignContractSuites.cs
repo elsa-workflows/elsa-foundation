@@ -12,11 +12,9 @@ namespace Elsa.Persistence.Groundwork.DesignConformance.PostgreSql.Tests;
 public sealed class PostgreSqlWorkflowDesignContractSuite(PostgreSqlDesignProviderFixture container)
     : WorkflowDesignContractSuite
 {
-    private readonly GroundworkBaselineTelemetry _telemetry = new();
-
     protected override async Task<IDesignPersistenceContractFixture> CreateFixtureAsync(
         CancellationToken cancellationToken = default) =>
-        await PostgreSqlDesignPersistenceContractFixture.CreateAsync(container, _telemetry, cancellationToken);
+        await PostgreSqlDesignPersistenceContractFixture.CreateAsync(container, cancellationToken);
 }
 
 /// <summary>Executes the provider-neutral activity-design contract on the composed PostgreSQL target.</summary>
@@ -24,11 +22,9 @@ public sealed class PostgreSqlWorkflowDesignContractSuite(PostgreSqlDesignProvid
 public sealed class PostgreSqlActivityDesignContractSuite(PostgreSqlDesignProviderFixture container)
     : ActivityDesignContractSuite
 {
-    private readonly GroundworkBaselineTelemetry _telemetry = new();
-
     protected override async Task<IDesignPersistenceContractFixture> CreateFixtureAsync(
         CancellationToken cancellationToken = default) =>
-        await PostgreSqlDesignPersistenceContractFixture.CreateAsync(container, _telemetry, cancellationToken);
+        await PostgreSqlDesignPersistenceContractFixture.CreateAsync(container, cancellationToken);
 }
 
 /// <summary>
@@ -39,18 +35,16 @@ public sealed class PostgreSqlActivityDesignContractSuite(PostgreSqlDesignProvid
 public sealed class PostgreSqlAtomicityContractSuite(PostgreSqlDesignProviderFixture container)
     : DesignAtomicityContractSuite
 {
-    private readonly GroundworkBaselineTelemetry _telemetry = new();
-
     protected override DesignPersistenceContractProfile ContractProfile => DesignPersistenceContractProfiles.Target;
 
     protected override async Task<IDesignPersistenceContractFixture> CreateFixtureAsync(
         CancellationToken cancellationToken = default) =>
-        await PostgreSqlDesignPersistenceContractFixture.CreateAsync(container, _telemetry, cancellationToken);
+        await PostgreSqlDesignPersistenceContractFixture.CreateAsync(container, cancellationToken);
 
     [Fact]
     public async Task Public_create_draft_command_publishes_DraftCreated_only_after_the_draft_is_durable()
     {
-        await using var fixture = await PostgreSqlDesignPersistenceContractFixture.CreateAsync(container, _telemetry);
+        await using var fixture = await PostgreSqlDesignPersistenceContractFixture.CreateAsync(container);
         await fixture.ValidateReadinessAsync();
 
         using var scope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA);
@@ -81,13 +75,11 @@ public sealed class PostgreSqlAtomicityContractSuite(PostgreSqlDesignProviderFix
 public sealed class PostgreSqlIsolationAndRestartContractSuite(PostgreSqlDesignProviderFixture container)
     : DesignIsolationAndRestartContractSuite
 {
-    private readonly GroundworkBaselineTelemetry _telemetry = new();
-
     protected override DesignPersistenceContractProfile ContractProfile => DesignPersistenceContractProfiles.Target;
 
     protected override async Task<IDesignPersistenceContractFixture> CreateFixtureAsync(
         CancellationToken cancellationToken = default) =>
-        await PostgreSqlDesignPersistenceContractFixture.CreateAsync(container, _telemetry, cancellationToken);
+        await PostgreSqlDesignPersistenceContractFixture.CreateAsync(container, cancellationToken);
 }
 
 /// <summary>Executes the T037 workflow query-shape parity contract on the composed PostgreSQL target.</summary>
@@ -95,11 +87,9 @@ public sealed class PostgreSqlIsolationAndRestartContractSuite(PostgreSqlDesignP
 public sealed class PostgreSqlWorkflowDesignQueryContractSuite(PostgreSqlDesignProviderFixture container)
     : WorkflowDesignQueryContractSuite
 {
-    private readonly GroundworkBaselineTelemetry _telemetry = new();
-
     protected override async Task<IDesignPersistenceContractFixture> CreateFixtureAsync(
         CancellationToken cancellationToken = default) =>
-        await PostgreSqlDesignPersistenceContractFixture.CreateAsync(container, _telemetry, cancellationToken);
+        await PostgreSqlDesignPersistenceContractFixture.CreateAsync(container, cancellationToken);
 }
 
 /// <summary>Executes the T038 activity query-shape parity contract on the composed PostgreSQL target.</summary>
@@ -107,11 +97,9 @@ public sealed class PostgreSqlWorkflowDesignQueryContractSuite(PostgreSqlDesignP
 public sealed class PostgreSqlActivityDesignQueryContractSuite(PostgreSqlDesignProviderFixture container)
     : ActivityDesignQueryContractSuite
 {
-    private readonly GroundworkBaselineTelemetry _telemetry = new();
-
     protected override async Task<IDesignPersistenceContractFixture> CreateFixtureAsync(
         CancellationToken cancellationToken = default) =>
-        await PostgreSqlDesignPersistenceContractFixture.CreateAsync(container, _telemetry, cancellationToken);
+        await PostgreSqlDesignPersistenceContractFixture.CreateAsync(container, cancellationToken);
 }
 
 /// <summary>Executes the T039 scale/batching contract on the composed PostgreSQL target.</summary>
@@ -119,11 +107,9 @@ public sealed class PostgreSqlActivityDesignQueryContractSuite(PostgreSqlDesignP
 public sealed class PostgreSqlDesignQueryScaleContractSuite(PostgreSqlDesignProviderFixture container)
     : DesignQueryScaleContractSuite
 {
-    private readonly GroundworkBaselineTelemetry _telemetry = new();
-
     protected override DesignPersistenceContractProfile ContractProfile => DesignPersistenceContractProfiles.Target;
 
     protected override async Task<IDesignPersistenceContractFixture> CreateFixtureAsync(
         CancellationToken cancellationToken = default) =>
-        await PostgreSqlDesignPersistenceContractFixture.CreateAsync(container, _telemetry, cancellationToken);
+        await PostgreSqlDesignPersistenceContractFixture.CreateAsync(container, cancellationToken);
 }

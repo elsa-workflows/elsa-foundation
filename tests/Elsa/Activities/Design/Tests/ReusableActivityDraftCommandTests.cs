@@ -13,6 +13,7 @@ using Elsa.Activities.Design.Tests.Fixtures;
 using Elsa.Primitives.Contracts;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Activities.Design.Tests;
 
@@ -980,7 +981,7 @@ public sealed class ReusableActivityDraftCommandTests
     private sealed class Harness
     {
         private readonly FixedIdentityGenerator _ids;
-        private readonly FixedTimeProvider _time = new(new DateTimeOffset(2026, 7, 15, 12, 0, 0, TimeSpan.Zero));
+        private readonly FakeTimeProvider _time = new(new DateTimeOffset(2026, 7, 15, 12, 0, 0, TimeSpan.Zero));
         private readonly TestAuthoringContext _context;
 
         public Harness(
@@ -1272,13 +1273,6 @@ public sealed class ReusableActivityDraftCommandTests
     {
         private int _current;
         public string Generate() => $"{prefix}-{Interlocked.Increment(ref _current)}";
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        private DateTimeOffset _now = now;
-        public override DateTimeOffset GetUtcNow() => _now;
-        public void Advance(TimeSpan duration) => _now = _now.Add(duration);
     }
 
     private sealed class CommitThenThrowForkCommand(IApplyActivityForkCandidateCommand inner) : IApplyActivityForkCandidateCommand

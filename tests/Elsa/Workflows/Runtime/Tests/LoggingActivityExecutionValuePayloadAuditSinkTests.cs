@@ -1,3 +1,4 @@
+using Elsa.Testing;
 using Elsa.Workflows.Runtime.Api.Contracts;
 using Elsa.Workflows.Runtime.Api.Services;
 using Microsoft.Extensions.Logging;
@@ -60,30 +61,5 @@ public sealed class LoggingActivityExecutionValuePayloadAuditSinkTests
                 cancellation.Token).AsTask());
 
         Assert.Empty(logger.Entries);
-    }
-
-    private sealed class RecordingLogger<T> : ILogger<T>
-    {
-        public List<LogEntry> Entries { get; } = [];
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(
-            LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception? exception,
-            Func<TState, Exception?, string> formatter) =>
-            Entries.Add(new(
-                logLevel,
-                formatter(state, exception),
-                state is IEnumerable<KeyValuePair<string, object?>> fields ? fields.ToArray() : []));
-
-        public sealed record LogEntry(
-            LogLevel Level,
-            string Message,
-            IReadOnlyList<KeyValuePair<string, object?>> Fields);
     }
 }

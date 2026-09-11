@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-bookmark-state-projection`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #43, #44 (restatused 2026-09-10 from git evidence)
 **Input**: Continue the Runtime Execution Seam after activity execution state projection. Checkpoint commits already carry bookmark state changes; the default in-memory writer should project those changes into a bookmark state store without implementing the full bookmark lookup index or resume dispatcher.
 
 ## Scenarios & Tests

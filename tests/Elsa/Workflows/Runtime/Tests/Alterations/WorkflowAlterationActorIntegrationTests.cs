@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests.Alterations;
 
@@ -151,7 +152,7 @@ public sealed class WorkflowAlterationActorIntegrationTests
     {
         var store = new InMemoryWorkflowAlterationStore();
         var originalClaim = await AdmitSealAndClaimAsync(store);
-        var later = new FixedTimeProvider(Now.AddMinutes(2));
+        var later = new FakeTimeProvider(Now.AddMinutes(2));
         var planService = new WorkflowAlterationPlanService(
             new WorkflowAlterationRegistry([]),
             NewProtector(),
@@ -374,10 +375,5 @@ public sealed class WorkflowAlterationActorIntegrationTests
                 new WorkflowExecutionCommandDispatchResult("envelope", job.WorkflowExecutionId, WorkflowExecutionCommandDispatchStatus.Accepted, Now),
                 new WorkflowExecutionActorDescriptor(job.WorkflowExecutionId, "actor", "test", WorkflowExecutionActorStatus.Active, WorkflowExecutionActorCapabilities.None, Now)));
         }
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

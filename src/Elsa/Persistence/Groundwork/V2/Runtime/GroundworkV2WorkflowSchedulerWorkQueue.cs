@@ -16,33 +16,22 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// The projection-only pending-workflow discovery route returns candidates; the subsequent queue read performs
 /// the full identity validation before any work item is used.
 /// </remarks>
-public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
-    IWorkflowSchedulerWorkQueue,
+public sealed class GroundworkV2WorkflowSchedulerWorkQueue : GroundworkV2RuntimeStoreBase, IWorkflowSchedulerWorkQueue,
     IWorkflowSchedulerWorkClaimInspection
 {
     private const int MaxTransitionAttempts = 16;
-
-    private readonly IGroundworkStorageSessionSource sessions;
-    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
-    private readonly string? targetName;
-    private readonly StorageUnit unit;
 
     public GroundworkV2WorkflowSchedulerWorkQueue(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,
         string? targetName = null)
+        : base(sessions, accessContextAccessor, targetName, "scheduler work", ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind)
     {
-        ArgumentNullException.ThrowIfNull(sessions);
-        ArgumentNullException.ThrowIfNull(accessContextAccessor);
-        this.sessions = sessions;
-        this.accessContextAccessor = accessContextAccessor;
-        this.targetName = targetName;
-        unit = sessions.Unit(ElsaRuntimeV2StorageManifest.SchedulerWorkItemDocumentKind, targetName);
     }
 
     public bool SupportsClaimTransitions =>
-        sessions is IGroundworkStorageCapabilitySource capabilitySource &&
-        capabilitySource.Capabilities(targetName).Any(capability =>
+        Sessions is IGroundworkStorageCapabilitySource capabilitySource &&
+        capabilitySource.Capabilities(TargetName).Any(capability =>
             capability.Id.Equals(BatchWriteCapabilities.CompareAndDelete));
 
     public ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(
@@ -86,7 +75,7 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
         cancellationToken.ThrowIfCancellationRequested();
         ValidateWorkflowExecutionId(query.WorkflowExecutionId);
 
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var workflow = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField);
         var order = Column(table, ElsaRuntimeV2StorageManifest.SchedulerWorkOrderKeyField);
         var result = Open().Query(new QueryRequest(
@@ -95,7 +84,7 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
             [new OrderTerm(order, OrderDirection.Ascending, NullOrder.Last)],
             Projection.All,
             PagingFor(query.Limit, query.ContinuationToken)),
-            unit.CreateQueryRenderOptions(ElsaRuntimeV2StorageManifest.BySchedulerWorkOrderIndex));
+            Unit.CreateQueryRenderOptions(ElsaRuntimeV2StorageManifest.BySchedulerWorkOrderIndex));
 
         return ValueTask.FromResult(new RuntimeStorePage<RuntimeSchedulerWorkItem>(
             query,
@@ -176,10 +165,10 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
         RuntimeStorePageRequest.ValidateLimit(limit, nameof(limit));
         cancellationToken.ThrowIfCancellationRequested();
 
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var workflow = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField);
         var collection = Column(table, ElsaRuntimeV2StorageManifest.CollectionField);
-        var options = unit.CreateQueryRenderOptions(
+        var options = Unit.CreateQueryRenderOptions(
             ElsaRuntimeV2StorageManifest.SchedulerWorkPendingExecutionIdentityIndex);
         var result = Open().Query(new QueryRequest(
             table,
@@ -422,21 +411,6 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
         });
     }
 
-    private IStorageSession Open()
-    {
-        var context = accessContextAccessor.Current;
-        if (context.Scope is null || context.AcrossScopes)
-        {
-            throw new InvalidOperationException(
-                "Groundwork scheduler work requires one explicit persistence scope; global and across-scope access are refused.");
-        }
-
-        return sessions.Open(
-            unit.Id.Value,
-            StorageAccess.Scoped(new StorageScope(context.Scope.Value)),
-            targetName);
-    }
-
     private static RuntimeSchedulerWorkItem ExistingItem(
         StoredEntry entry,
         string workflowExecutionId,
@@ -483,21 +457,8 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
         envelope.ClaimToken == claim.FencingToken &&
         StringComparer.Ordinal.Equals(envelope.ClaimOwnerId, claim.OwnerId);
 
-    private static WriteOutcome ConditionalUpsert(
-        IStorageSession session,
-        GroundworkV2SchedulerWorkEnvelope envelope,
-        long revision)
-    {
-        if (session is not IConcurrencyStorageSession concurrency)
-        {
-            throw new NotSupportedException(
-                "The selected Groundwork provider does not advertise optimistic scheduler-work concurrency.");
-        }
-
-        return concurrency.ConditionalUpsert(
-            GroundworkV2SchedulerWorkStorageConventions.Values(envelope),
-            WriteOptions.IfVersion(revision));
-    }
+    private WriteOutcome ConditionalUpsert(IStorageSession session, GroundworkV2SchedulerWorkEnvelope envelope, long revision) =>
+        ConditionalUpsert(session, GroundworkV2SchedulerWorkStorageConventions.Values(envelope), revision);
 
     private StoredEntry? FirstOrdered(IStorageSession session, string workflowExecutionId)
     {
@@ -564,9 +525,6 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
         entry.Version ?? throw new InvalidDataException(
             "Groundwork scheduler-work row did not return an optimistic revision.");
 
-    private static bool IsSaved(WriteOutcomeStatus status) =>
-        status is WriteOutcomeStatus.Inserted or WriteOutcomeStatus.Updated or WriteOutcomeStatus.Upserted or WriteOutcomeStatus.Replayed;
-
     private static void ValidateIdentity(string workflowExecutionId, string workItemId)
     {
         ValidateWorkflowExecutionId(workflowExecutionId);
@@ -595,30 +553,4 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueue :
             (workItemId is null ? string.Empty : $" and work item '{workItemId}'") +
             $" did not settle after {MaxTransitionAttempts} compare-and-swap attempts.");
 
-    private ColumnRef Column(TableId table, string name, bool nullableOverride = false)
-    {
-        var definition = unit.Columns.SingleOrDefault(column =>
-            StringComparer.Ordinal.Equals(column.Name, name))
-            ?? throw new InvalidOperationException(
-                $"Groundwork scheduler-work unit '{unit.Id.Value}' does not declare query column '{name}'.");
-        var type = definition.Type switch
-        {
-            PortableType.String => QueryType.String,
-            PortableType.DateTimeOffset => QueryType.DateTimeOffset,
-            PortableType.Int32 => QueryType.Int32,
-            PortableType.Int64 => QueryType.Int64,
-            PortableType.Boolean => QueryType.Boolean,
-            _ => throw new InvalidOperationException(
-                $"Groundwork scheduler-work query column '{name}' has unsupported type '{definition.Type}'.")
-        };
-        return new ColumnRef(table, name, type, nullableOverride || definition.IsNullable, definition.MaxLength);
-    }
-
-    private static Predicate Equal(ColumnRef column, string value) =>
-        new Predicate.Equal(column, QueryConstant.Of(column, value));
-
-    private static Paging PagingFor(int limit, string? continuationToken) =>
-        continuationToken is null
-            ? Paging.Keyset(limit)
-            : Paging.Continuation(continuationToken, limit);
 }

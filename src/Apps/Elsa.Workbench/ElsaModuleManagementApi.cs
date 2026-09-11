@@ -5,7 +5,6 @@ using System.Xml.Linq;
 using Elsa.Api.AspNetCore;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Models;
-using Elsa.Modularity.ExtensionBuilder;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;

@@ -2,9 +2,8 @@
 
 Status: **ratified 2026-08-02** by Sipke — applied as framework constitution **§2.25**
 (v3.1.0 → v3.2.0), with an Elsa-side re-pin to framework v3.2.0 (Elsa constitution v3.3.0 → v3.4.0)
-and no Elsa specialization required. Provenance recorded in the
-[amendment index](constitution-amendment-index.md) and the
-[framework history](constitution-history-framework.md). Produced from §9.13 of the
+and no Elsa specialization required. Provenance was recorded in the
+constitution amendment index and framework history reports (retired 2026-09-10; see git history). Produced from §9.13 of the
 [simplification review](simplification-review-2026-07.md).
 
 **§3 below is the part that did NOT ship**: the companion §2.16.1 aggregate-growth trigger was

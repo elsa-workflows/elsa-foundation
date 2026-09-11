@@ -7,29 +7,20 @@ using Groundwork.Store;
 
 namespace Elsa.Persistence.Groundwork.Runtime;
 
-public sealed class GroundworkV2WorkflowActivationAuthority : IWorkflowActivationAuthority
+public sealed class GroundworkV2WorkflowActivationAuthority : GroundworkV2RuntimeStoreBase, IWorkflowActivationAuthority
 {
     private const int MaxTransitionAttempts = 16;
-    private readonly IGroundworkStorageSessionSource sessions;
-    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
     private readonly GroundworkStorageTransactionFactory transactions;
-    private readonly string? targetName;
-    private readonly StorageUnit unit;
 
     public GroundworkV2WorkflowActivationAuthority(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,
         GroundworkStorageTransactionFactory transactions,
         string? targetName = null)
+        : base(sessions, accessContextAccessor, targetName, "workflow activation authority", ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDocumentKind)
     {
-        ArgumentNullException.ThrowIfNull(sessions);
-        ArgumentNullException.ThrowIfNull(accessContextAccessor);
         ArgumentNullException.ThrowIfNull(transactions);
-        this.sessions = sessions;
-        this.accessContextAccessor = accessContextAccessor;
         this.transactions = transactions;
-        this.targetName = targetName;
-        unit = sessions.Unit(ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDocumentKind, targetName);
     }
 
     public ValueTask<WorkflowActivationSlot?> FindAsync(string workflowDefinitionId, string slotName, CancellationToken cancellationToken = default)
@@ -43,7 +34,7 @@ public sealed class GroundworkV2WorkflowActivationAuthority : IWorkflowActivatio
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowDefinitionId);
         cancellationToken.ThrowIfCancellationRequested();
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var definition = Column(table, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotDefinitionIdField);
         var slotName = Column(table, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotNameField);
         var predicate = new Predicate.Equal(definition, QueryConstant.Of(definition, workflowDefinitionId));
@@ -124,11 +115,11 @@ public sealed class GroundworkV2WorkflowActivationAuthority : IWorkflowActivatio
 
     private async ValueTask<TransitionWriteOutcome> CommitAsync(WorkflowActivationSlot slot, StoredEntry? existing, CancellationToken cancellationToken)
     {
-        using var transaction = transactions.Begin("workflow-activation-authority", [unit.Id.Value], targetName);
+        using var transaction = transactions.Begin("workflow-activation-authority", [Unit.Id.Value], TargetName);
         if (existing is null)
-            transaction.StageInsert(unit.Id.Value, GroundworkV2WorkflowActivationSlotStorageConventions.Values(slot), WriteOptions.CreateOnly);
+            transaction.StageInsert(Unit.Id.Value, GroundworkV2WorkflowActivationSlotStorageConventions.Values(slot), WriteOptions.CreateOnly);
         else
-            transaction.Stage(unit.Id.Value, GroundworkV2WorkflowActivationSlotStorageConventions.Values(slot, clearInactiveProjection: true), WriteOptions.IfVersion(existing.Version ?? throw new InvalidDataException("Activation-slot row did not expose an optimistic revision.")));
+            transaction.Stage(Unit.Id.Value, GroundworkV2WorkflowActivationSlotStorageConventions.Values(slot, clearInactiveProjection: true), WriteOptions.IfVersion(existing.Version ?? throw new InvalidDataException("Activation-slot row did not expose an optimistic revision.")));
         BatchWriteReport report;
         try
         {
@@ -160,29 +151,15 @@ public sealed class GroundworkV2WorkflowActivationAuthority : IWorkflowActivatio
 
     private async ValueTask<bool> IsLiveInAnotherSlotAsync(string activationId, string slotId, CancellationToken cancellationToken)
     {
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var active = Column(table, ElsaRuntimeV2StorageManifest.WorkflowActivationSlotActiveActivationIdField);
         var result = Open().Query(new QueryRequest(table, new Predicate.Equal(active, QueryConstant.Of(active, activationId)), [new OrderTerm(Column(table, ElsaRuntimeV2StorageManifest.IdField), OrderDirection.Ascending, NullOrder.Last)], Projection.All, Paging.Keyset(2)));
         cancellationToken.ThrowIfCancellationRequested();
         return result.Rows.Select(values => Read(values)).Any(slot => !StringComparer.Ordinal.Equals(slot.SlotId, slotId));
     }
 
-    private IStorageSession Open()
-    {
-        var context = accessContextAccessor.Current ?? throw new InvalidOperationException("Workflow activation persistence access context is missing.");
-        if (context.Scope is null || context.AcrossScopes)
-            throw new InvalidOperationException("Groundwork workflow activation authority requires one explicit persistence scope.");
-        return sessions.Open(unit.Id.Value, StorageAccess.Scoped(new StorageScope(context.Scope.Value)), targetName);
-    }
-
     private WorkflowActivationSlot Read(StoredEntry entry) => GroundworkV2WorkflowActivationSlotStorageConventions.Deserialize(entry.Values.Values);
     private WorkflowActivationSlot Read(IReadOnlyDictionary<string, object?> values) => GroundworkV2WorkflowActivationSlotStorageConventions.Deserialize(values);
-    private ColumnRef Column(TableId table, string name)
-    {
-        var definition = unit.Columns.Single(column => StringComparer.Ordinal.Equals(column.Name, name));
-        var type = definition.Type switch { PortableType.String => QueryType.String, _ => throw new InvalidOperationException($"Unsupported activation-slot query column type '{definition.Type}'.") };
-        return new ColumnRef(table, name, type, definition.IsNullable, definition.MaxLength);
-    }
     private static string SlotId(string definition, string name, CancellationToken cancellationToken) { cancellationToken.ThrowIfCancellationRequested(); return WorkflowActivationSlotIdentity.Create(definition, name); }
     private static WorkflowActivationSlot Empty(string id, string definition, string name, DateTimeOffset updatedAt) => new(id, definition, name, null, null, 0, updatedAt);
     private static WorkflowActivationTransition Conflict(WorkflowActivationSlot slot, WorkflowActivationConflict conflict, string message) => new(false, slot, Conflict: conflict, Diagnostic: message);

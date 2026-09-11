@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -29,7 +30,7 @@ public sealed class RuntimeExecutionOwnershipTests
     public async Task ConcurrentIndependentServices_IssueUniqueStrictlyIncreasingFencingTokens()
     {
         var store = new InMemoryExecutionLivenessStateStore();
-        var clock = new FixedTimeProvider(_now);
+        var clock = new FakeTimeProvider(_now);
         var first = new RuntimeExecutionOwnershipService(
             store,
             clock,
@@ -84,7 +85,7 @@ public sealed class RuntimeExecutionOwnershipTests
             }));
         var ownership = new RuntimeExecutionOwnershipService(
             store,
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             new RuntimeExecutionOwnershipOptions { OwnerId = "owner-under-test", LeaseDuration = TimeSpan.FromMinutes(1) });
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -204,7 +205,7 @@ public sealed class RuntimeExecutionOwnershipTests
         var accessor = new AsyncLocalRuntimeExecutionOwnershipContextAccessor();
         var commitStore = new InMemoryRuntimeCheckpointCommitStore(
             operationalStateStore: livenessStore,
-            timeProvider: new FixedTimeProvider(_now));
+            timeProvider: new FakeTimeProvider(_now));
         var committer = new RuntimeCheckpointCommitter(
             new ImmediateRuntimeCheckpointPersistencePolicy(),
             commitStore,
@@ -307,7 +308,7 @@ public sealed class RuntimeExecutionOwnershipTests
             OwnerId = "owner-under-test",
             LeaseDuration = TimeSpan.FromMinutes(1)
         };
-        return new RuntimeExecutionOwnershipService(store, new FixedTimeProvider(_now), options);
+        return new RuntimeExecutionOwnershipService(store, new FakeTimeProvider(_now), options);
     }
 
     private RuntimeCheckpointCommit NewCommit(string commitId) =>
@@ -330,11 +331,6 @@ public sealed class RuntimeExecutionOwnershipTests
                 operational: []),
             PostCommitIntents: [],
             Metadata: new Dictionary<string, string>());
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 
     private sealed class MutableTimeProvider(DateTimeOffset now) : TimeProvider
     {

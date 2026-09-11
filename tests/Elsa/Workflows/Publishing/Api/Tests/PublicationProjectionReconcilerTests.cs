@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
@@ -156,7 +157,7 @@ public sealed class PublicationProjectionReconcilerTests
                 executableStore,
                 indexer,
                 bindingStore,
-                new FixedTimeProvider(now),
+                new FakeTimeProvider(now),
                 scheduleStore,
                 [observer]);
             var publication = new PublicationRecord(
@@ -269,10 +270,5 @@ public sealed class PublicationProjectionReconcilerTests
             await scheduleStore.PrepareActivationAsync(activationId, [schedule], cancellationToken);
             return [binding];
         }
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

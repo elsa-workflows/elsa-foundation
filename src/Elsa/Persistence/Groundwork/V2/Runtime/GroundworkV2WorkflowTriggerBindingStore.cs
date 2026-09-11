@@ -16,28 +16,19 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// and cleanup use one provider unit of work over the binding and projection-state units; no document
 /// bridge, migration path, or unconditional write fallback is involved.
 /// </remarks>
-public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBindingStore
+public sealed class GroundworkV2WorkflowTriggerBindingStore : GroundworkV2RuntimeStoreBase, IWorkflowTriggerBindingStore
 {
     private const string ProjectionKind = "triggerBindings";
 
-    private readonly IGroundworkStorageSessionSource sessions;
-    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
-    private readonly string? targetName;
-    private readonly StorageUnit bindingUnit;
     private readonly StorageUnit projectionStateUnit;
 
     public GroundworkV2WorkflowTriggerBindingStore(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,
         string? targetName = null)
+        : base(sessions, accessContextAccessor, targetName, "workflow trigger binding", ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingDocumentKind)
     {
-        ArgumentNullException.ThrowIfNull(sessions);
-        ArgumentNullException.ThrowIfNull(accessContextAccessor);
-        this.sessions = sessions;
-        this.accessContextAccessor = accessContextAccessor;
-        this.targetName = targetName;
-        bindingUnit = sessions.Unit(ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingDocumentKind, targetName);
-        projectionStateUnit = sessions.Unit(ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind, targetName);
+        projectionStateUnit = UnitFor(ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind);
     }
 
     public ValueTask<WorkflowTriggerBinding> SaveAsync(
@@ -47,7 +38,7 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
         GroundworkV2WorkflowTriggerBindingStorageConventions.Validate(binding);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var session = OpenBindingSession();
+        var session = Open();
         var key = GroundworkRuntimeRowStore.Key(binding.TriggerBindingId);
         var values = GroundworkV2WorkflowTriggerBindingStorageConventions.Values(binding);
         var existing = session.Read(key);
@@ -88,7 +79,7 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
         RequireAtomicCommit();
 
         using var unitOfWork = BeginUnitOfWork();
-        var bindingSession = unitOfWork.OpenSession(bindingUnit);
+        var bindingSession = unitOfWork.OpenSession(Unit);
         var stateSession = unitOfWork.OpenSession(projectionStateUnit);
         var existingState = ReadProjectionState(stateSession, activationId);
         var existingRows = ListAllByActivation(bindingSession, activationId, cancellationToken);
@@ -112,7 +103,7 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
             if (desiredById.ContainsKey(existing.Binding.TriggerBindingId))
                 StageUpsert(unitOfWork, desiredById[existing.Binding.TriggerBindingId], existing.Version);
             else
-                StageDelete(unitOfWork, bindingUnit, existing.Binding.TriggerBindingId, existing.Version);
+                StageDelete(unitOfWork, Unit, existing.Binding.TriggerBindingId, existing.Version);
         }
 
         foreach (var binding in prepared.Where(binding => !existingById.ContainsKey(binding.TriggerBindingId)))
@@ -134,8 +125,8 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
             // or a partially visible projection as an idempotent success.
             try
             {
-                var stateAfter = ReadProjectionState(OpenProjectionStateSession(), activationId);
-                var rowsAfter = ListAllByActivation(OpenBindingSession(), activationId, cancellationToken);
+                var stateAfter = ReadProjectionState(OpenScoped(projectionStateUnit), activationId);
+                var rowsAfter = ListAllByActivation(Open(), activationId, cancellationToken);
                 if (stateAfter is { State.IsActive: false } &&
                     ProjectionMatches(stateAfter.Value.State, rowsAfter) &&
                     ProjectionsEqual(rowsAfter, prepared))
@@ -174,7 +165,7 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
         RequireAtomicCommit();
 
         using var unitOfWork = BeginUnitOfWork();
-        var bindingSession = unitOfWork.OpenSession(bindingUnit);
+        var bindingSession = unitOfWork.OpenSession(Unit);
         var stateSession = unitOfWork.OpenSession(projectionStateUnit);
         var candidate = ReadProjectionState(stateSession, activationId)
             ?? throw new InvalidOperationException(
@@ -244,12 +235,12 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
         RequireAtomicCommit();
 
         using var unitOfWork = BeginUnitOfWork();
-        var bindingSession = unitOfWork.OpenSession(bindingUnit);
+        var bindingSession = unitOfWork.OpenSession(Unit);
         var stateSession = unitOfWork.OpenSession(projectionStateUnit);
         var rows = ListAllByActivation(bindingSession, activationId, cancellationToken);
         var state = ReadProjectionState(stateSession, activationId);
         foreach (var row in rows)
-            StageDelete(unitOfWork, bindingUnit, row.Binding.TriggerBindingId, row.Version);
+            StageDelete(unitOfWork, Unit, row.Binding.TriggerBindingId, row.Version);
         if (state is not null)
         {
             unitOfWork.Stage(RowWrite.Delete(
@@ -270,7 +261,7 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
         RequireAtomicCommit();
 
         using var unitOfWork = BeginUnitOfWork();
-        var bindingSession = unitOfWork.OpenSession(bindingUnit);
+        var bindingSession = unitOfWork.OpenSession(Unit);
         var stateSession = unitOfWork.OpenSession(projectionStateUnit);
         var rows = ListAll(bindingSession, Equal(ElsaRuntimeV2StorageManifest.ArtifactIdField, artifactId), cancellationToken);
         var activationRows = rows
@@ -298,7 +289,7 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
         }
 
         foreach (var row in rows)
-            StageDelete(unitOfWork, bindingUnit, row.Binding.TriggerBindingId, row.Version);
+            StageDelete(unitOfWork, Unit, row.Binding.TriggerBindingId, row.Version);
         foreach (var (activationId, version) in statesToDelete)
         {
             unitOfWork.Stage(RowWrite.Delete(
@@ -361,14 +352,14 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var result = OpenBindingSession().Query(new QueryRequest(
-            new TableId(bindingUnit.Name),
+        var result = Open().Query(new QueryRequest(
+            new TableId(Unit.Name),
             predicate,
             [new OrderTerm(Column(ElsaRuntimeV2StorageManifest.TriggerBindingIdField), OrderDirection.Ascending, NullOrder.Last)],
             Projection.All,
             PagingFor(query.Limit, query.ContinuationToken),
             ResultShape.TotalCount.Instance),
-            bindingUnit.CreateQueryRenderOptions(selectedIndex));
+            Unit.CreateQueryRenderOptions(selectedIndex));
         var totalCount = result.TotalCount ?? throw new InvalidDataException(
             "Groundwork trigger-binding query did not return its requested filtered total count.");
         return new WorkflowTriggerBindingPage(
@@ -396,7 +387,7 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
         {
             cancellationToken.ThrowIfCancellationRequested();
             var result = session.Query(new QueryRequest(
-                new TableId(bindingUnit.Name),
+                new TableId(Unit.Name),
                 predicate,
                 [new OrderTerm(Column(ElsaRuntimeV2StorageManifest.TriggerBindingIdField), OrderDirection.Ascending, NullOrder.Last)],
                 Projection.All,
@@ -497,14 +488,14 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
         long expectedVersion)
     {
         unitOfWork.Stage(RowWrite.Upsert(
-            bindingUnit,
+            Unit,
             GroundworkV2WorkflowTriggerBindingStorageConventions.Values(binding),
             WriteOptions.IfVersion(expectedVersion)));
     }
 
     private void StageInsert(IUnitOfWork unitOfWork, WorkflowTriggerBinding binding) =>
         unitOfWork.Stage(RowWrite.Insert(
-            bindingUnit,
+            Unit,
             GroundworkV2WorkflowTriggerBindingStorageConventions.Values(binding),
             WriteOptions.CreateOnly));
 
@@ -574,52 +565,21 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
         return state;
     }
 
-    private IStorageSession OpenBindingSession() => sessions.Open(
-        bindingUnit.Id.Value,
-        Access,
-        targetName);
 
-    private IStorageSession OpenProjectionStateSession() => sessions.Open(
-        projectionStateUnit.Id.Value,
-        Access,
-        targetName);
 
-    private IUnitOfWork BeginUnitOfWork() => sessions.BeginUnitOfWork(
-        Access,
-        BatchWriteOptions.Exact,
-        [
+    private IUnitOfWork BeginUnitOfWork() => BeginAtomicUnitOfWork([
             ElsaRuntimeV2StorageManifest.WorkflowTriggerBindingDocumentKind,
             ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind
-        ],
-        targetName);
-
-    private StorageAccess Access
-    {
-        get
-        {
-            var context = accessContextAccessor.Current ??
-                          throw new InvalidOperationException("Workflow trigger-binding persistence access context is missing.");
-            if (context.Scope is null || context.AcrossScopes)
-            {
-                throw new InvalidOperationException(
-                    "Groundwork workflow trigger bindings require one explicit persistence scope; global and across-scope access are refused.");
-            }
-
-            return StorageAccess.Scoped(new StorageScope(context.Scope.Value));
-        }
-    }
+        ]);
 
     private void RequireAtomicCommit()
     {
-        if (sessions is not IGroundworkStorageCapabilitySource capabilitySource ||
-            !capabilitySource.Capabilities(targetName).Any(capability => capability.Id.Equals(WellKnownCapabilities.AtomicCommit)))
-        {
+        if (!HasAtomicCommit)
             throw new NotSupportedException(
                 "Groundwork workflow trigger-binding activation changes require the provider's evidenced atomic-commit capability.");
-        }
     }
 
-    private static WriteOutcome ConditionalUpsert(
+    private WriteOutcome ConditionalUpsert(
         IStorageSession session,
         StorageValues values,
         StoredEntry existing,
@@ -628,37 +588,15 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
         _ = GroundworkV2WorkflowTriggerBindingStorageConventions.Deserialize(existing.Values.Values);
         var revision = existing.Version ?? throw new InvalidDataException(
             $"Groundwork workflow trigger-binding row '{binding.TriggerBindingId}' did not expose an optimistic revision.");
-        if (session is not IConcurrencyStorageSession concurrency)
-            throw new NotSupportedException(
-                "The selected Groundwork provider does not advertise optimistic workflow trigger-binding concurrency.");
-        return concurrency.ConditionalUpsert(values, WriteOptions.IfVersion(revision));
+        return ConditionalUpsert(session, values, revision);
     }
 
-    private ColumnRef Column(string name)
-    {
-        var definition = bindingUnit.Columns.SingleOrDefault(column =>
-            StringComparer.Ordinal.Equals(column.Name, name))
-            ?? throw new InvalidOperationException(
-                $"Groundwork trigger-binding unit '{bindingUnit.Id.Value}' does not declare query column '{name}'.");
-        var type = definition.Type switch
-        {
-            PortableType.String => QueryType.String,
-            PortableType.Boolean => QueryType.Boolean,
-            _ => throw new InvalidOperationException(
-                $"Groundwork trigger-binding query column '{name}' has unsupported type '{definition.Type}'.")
-        };
-        return new ColumnRef(new TableId(bindingUnit.Name), name, type, definition.IsNullable, definition.MaxLength);
-    }
+    private ColumnRef Column(string name) => Column(new TableId(Unit.Name), name);
 
     private Predicate Equal(string field, object value) =>
         new Predicate.Equal(Column(field), QueryConstant.Of(Column(field), value));
 
     private static Predicate And(params Predicate[] predicates) => new Predicate.And(predicates);
-
-    private static Paging PagingFor(int limit, string? continuationToken) =>
-        continuationToken is null
-            ? Paging.Keyset(limit)
-            : Paging.Continuation(continuationToken, limit);
 
     private static string ProjectionStateId(string activationId) =>
         $"{ProjectionKind}:{activationId.Length}:{activationId}";
@@ -709,9 +647,6 @@ public sealed class GroundworkV2WorkflowTriggerBindingStore : IWorkflowTriggerBi
             _ => throw new InvalidDataException(
                 $"Groundwork activation projection state is missing required string field '{field}'.")
         };
-
-    private static bool IsSaved(WriteOutcomeStatus status) =>
-        status is WriteOutcomeStatus.Inserted or WriteOutcomeStatus.Updated or WriteOutcomeStatus.Upserted or WriteOutcomeStatus.Replayed;
 
     private static async ValueTask CommitAsync(IUnitOfWork unitOfWork, CancellationToken cancellationToken)
     {

@@ -12,24 +12,14 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// Each control-plane state has one stable row identity. Reads require one explicit persistence
 /// scope, while workflow and global enumeration are provider-owned bounded keyset queries.
 /// </remarks>
-public sealed class GroundworkV2WorkflowHoldStateStore : IWorkflowHoldStateStore
+public sealed class GroundworkV2WorkflowHoldStateStore : GroundworkV2RuntimeStoreBase, IWorkflowHoldStateStore
 {
-    private readonly IGroundworkStorageSessionSource sessions;
-    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
-    private readonly string? targetName;
-    private readonly StorageUnit unit;
-
     public GroundworkV2WorkflowHoldStateStore(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,
         string? targetName = null)
+        : base(sessions, accessContextAccessor, targetName, "workflow-hold state", ElsaRuntimeV2StorageManifest.WorkflowHoldStateDocumentKind)
     {
-        ArgumentNullException.ThrowIfNull(sessions);
-        ArgumentNullException.ThrowIfNull(accessContextAccessor);
-        this.sessions = sessions;
-        this.accessContextAccessor = accessContextAccessor;
-        this.targetName = targetName;
-        unit = sessions.Unit(ElsaRuntimeV2StorageManifest.WorkflowHoldStateDocumentKind, targetName);
     }
 
     public ValueTask<WorkflowHoldState> SaveAsync(
@@ -94,7 +84,7 @@ public sealed class GroundworkV2WorkflowHoldStateStore : IWorkflowHoldStateStore
         CancellationToken cancellationToken)
     {
         var session = Open();
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var collection = Column(table, ElsaRuntimeV2StorageManifest.CollectionField);
         var predicates = new List<Predicate>
         {
@@ -140,25 +130,7 @@ public sealed class GroundworkV2WorkflowHoldStateStore : IWorkflowHoldStateStore
         return rows;
     }
 
-    private IStorageSession Open()
-    {
-        var context = accessContextAccessor.Current ??
-                      throw new InvalidOperationException(
-                          "Groundwork workflow-hold persistence access context is missing.");
-        if (context.Scope is null || context.AcrossScopes)
-        {
-            throw new InvalidOperationException(
-                "Groundwork workflow-hold state requires one explicit persistence scope; " +
-                "global and across-scope access are refused.");
-        }
-
-        return sessions.Open(
-            unit.Id.Value,
-            StorageAccess.Scoped(new StorageScope(context.Scope.Value)),
-            targetName);
-    }
-
-    private static WriteOutcome UpdateExisting(
+    private WriteOutcome UpdateExisting(
         IStorageSession session,
         StorageValues values,
         StoredEntry existing,
@@ -168,13 +140,7 @@ public sealed class GroundworkV2WorkflowHoldStateStore : IWorkflowHoldStateStore
         EnsureIdentity(previous, controlPlaneStateId);
         var version = existing.Version ?? throw new InvalidDataException(
             "Groundwork workflow-hold row did not return an optimistic revision.");
-        if (session is not IConcurrencyStorageSession concurrency)
-        {
-            throw new NotSupportedException(
-                "The selected Groundwork provider does not advertise optimistic workflow-hold concurrency.");
-        }
-
-        return concurrency.ConditionalUpsert(values, WriteOptions.IfVersion(version));
+        return ConditionalUpsert(session, values, version);
     }
 
     private static void EnsureIdentity(
@@ -198,44 +164,4 @@ public sealed class GroundworkV2WorkflowHoldStateStore : IWorkflowHoldStateStore
                 "Groundwork workflow-hold row workflow identity does not match its requested query.");
         }
     }
-
-    private ColumnRef Column(TableId table, string name)
-    {
-        var definition = unit.Columns.SingleOrDefault(column =>
-            StringComparer.Ordinal.Equals(column.Name, name))
-            ?? throw new InvalidOperationException(
-                $"Groundwork workflow-hold unit '{unit.Id.Value}' does not declare query column '{name}'.");
-        var type = definition.Type switch
-        {
-            PortableType.String => QueryType.String,
-            PortableType.DateTimeOffset => QueryType.DateTimeOffset,
-            PortableType.Int32 => QueryType.Int32,
-            PortableType.Int64 => QueryType.Int64,
-            PortableType.Boolean => QueryType.Boolean,
-            _ => throw new InvalidOperationException(
-                $"Groundwork workflow-hold query column '{name}' has unsupported type '{definition.Type}'.")
-        };
-        return new ColumnRef(table, name, type, definition.IsNullable, definition.MaxLength);
-    }
-
-    private static Predicate Equal(ColumnRef column, string value) =>
-        new Predicate.Equal(column, QueryConstant.Of(column, value));
-
-    private static Predicate Combine(IReadOnlyList<Predicate> predicates) => predicates.Count switch
-    {
-        0 => Predicate.AlwaysTrue.Instance,
-        1 => predicates[0],
-        _ => new Predicate.And(predicates)
-    };
-
-    private static Paging PagingFor(int limit, string? continuationToken) =>
-        continuationToken is null
-            ? Paging.Keyset(limit)
-            : Paging.Continuation(continuationToken, limit);
-
-    private static bool IsSaved(WriteOutcomeStatus status) =>
-        status is WriteOutcomeStatus.Inserted or
-        WriteOutcomeStatus.Updated or
-        WriteOutcomeStatus.Upserted or
-        WriteOutcomeStatus.Replayed;
 }

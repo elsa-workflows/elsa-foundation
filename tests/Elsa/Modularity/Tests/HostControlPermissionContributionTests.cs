@@ -1,12 +1,11 @@
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Modularity.Api.Authorization;
-using Elsa.Modularity.ExtensionBuilder.Authorization;
 using Xunit;
 
 namespace Elsa.Modularity.Tests;
 
 /// <summary>
-/// Verifies that the module-management and Extension Builder features contribute their coarse
+/// Verifies that the module-management feature contributes its coarse
 /// host-control permissions to the shared permission catalog per ADR 0037, with <c>manage</c> implying
 /// <c>read</c>, and that the aggregated catalog resolves them alongside the default identity permissions.
 /// </summary>
@@ -15,15 +14,14 @@ public sealed class HostControlPermissionContributionTests
     private readonly CompositePermissionCatalog _catalog = new(
     [
         new DefaultIdentityPermissionCatalog(),
-        new ModuleManagementPermissionContributor(),
-        new ExtensionBuilderPermissionContributor()
+        new ModuleManagementPermissionContributor()
     ]);
 
-    [Theory]
-    [InlineData(ModuleManagementPermissionKeys.Read, ModuleManagementPermissionKeys.Manage)]
-    [InlineData(ExtensionBuilderPermissionKeys.Read, ExtensionBuilderPermissionKeys.Manage)]
-    public void FeatureContributesReadAndManageWithManageImplyingRead(string readKey, string manageKey)
+    [Fact]
+    public void FeatureContributesReadAndManageWithManageImplyingRead()
     {
+        const string readKey = ModuleManagementPermissionKeys.Read;
+        const string manageKey = ModuleManagementPermissionKeys.Manage;
         var read = _catalog.Find(readKey);
         var manage = _catalog.Find(manageKey);
 
@@ -40,8 +38,6 @@ public sealed class HostControlPermissionContributionTests
 
         Assert.Contains("module-management.read", keys);
         Assert.Contains("module-management.manage", keys);
-        Assert.Contains("extension-builder.read", keys);
-        Assert.Contains("extension-builder.manage", keys);
     }
 
     [Fact]

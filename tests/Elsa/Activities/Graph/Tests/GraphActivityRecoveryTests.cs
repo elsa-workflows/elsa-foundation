@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Activities.Graph.Tests;
 
@@ -26,7 +27,7 @@ public sealed class GraphActivityRecoveryTests
         var state = State("outer", null, "outer", ActivityExecutionStatus.Running);
         await stateStore.SaveAsync(state);
         var workItem = WorkItem(WorkflowExecutionCommandKind.InvokeActivity, "fault", executionScopeId: "outer");
-        var recorder = new ActivityFaultIncidentRecorder(new FixedTimeProvider(Now));
+        var recorder = new ActivityFaultIncidentRecorder(new FakeTimeProvider(Now));
 
         await recorder.CommitAsync(new ActivityFaultIncidentRecordRequest(
             committer,
@@ -344,10 +345,4 @@ public sealed class GraphActivityRecoveryTests
         };
 
     private const string WorkflowId = "workflow-execution";
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
-
 }

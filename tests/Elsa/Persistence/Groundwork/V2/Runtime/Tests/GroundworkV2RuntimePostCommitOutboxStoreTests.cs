@@ -12,6 +12,7 @@ using Groundwork.Store;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Xunit;
+using Elsa.Persistence.Groundwork.V2.Testing;
 
 namespace Elsa.Persistence.Groundwork.V2.Runtime.Tests;
 
@@ -615,11 +616,6 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStoreTests
 
     private static string GroundworkV2PostCommitOutboxPhysicalId(string id) =>
         RuntimePostCommitOutboxIdentity.CreateProjectionValue(id);
-
-    private sealed class TestAccessContextAccessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
-    {
-        public PersistenceAccessContext Current => current;
-    }
 
     private sealed class NoIoSessionSource(NoIoSession session, StorageUnit unit) : IGroundworkStorageSessionSource
     {

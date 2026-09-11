@@ -28,6 +28,7 @@ using Elsa.Workflows.Design.Api.Endpoints.Definitions.DeletePermanently;
 using DeletePermanentlyHandler = Elsa.Workflows.Design.Api.Endpoints.Definitions.DeletePermanently.Endpoint;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.Restore;
 using RestoreHandler = Elsa.Workflows.Design.Api.Endpoints.Definitions.Restore.Endpoint;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
@@ -85,7 +86,7 @@ public sealed class WorkflowLifecycleHandlerTests
             new DeleteDefinitionPermanently("delete-before-soft-delete", definition.Id),
             CancellationToken.None));
 
-        await new SoftDeleteHandler(definitions, save, new FixedTimeProvider()).HandleAsync(
+        await new SoftDeleteHandler(definitions, save, new FakeTimeProvider(DateTimeOffset.UnixEpoch)).HandleAsync(
             new SoftDeleteDefinition("soft-delete-1", definition.Id, "cleanup"),
             CancellationToken.None);
         Assert.Equal(DateTimeOffset.UnixEpoch, definition.DeletedAt);
@@ -97,7 +98,7 @@ public sealed class WorkflowLifecycleHandlerTests
         Assert.Null(definition.DeletedAt);
         Assert.Null(definition.DeletedReason);
 
-        await new SoftDeleteHandler(definitions, save, new FixedTimeProvider()).HandleAsync(
+        await new SoftDeleteHandler(definitions, save, new FakeTimeProvider(DateTimeOffset.UnixEpoch)).HandleAsync(
             new SoftDeleteDefinition("soft-delete-2", definition.Id),
             CancellationToken.None);
         await permanentHandler.HandleAsync(
@@ -379,11 +380,6 @@ public sealed class WorkflowLifecycleHandlerTests
     {
         public Task<WorkflowDefinitionVersionDetailsView> ReadAsync(string versionId, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("The version reader must not be invoked after a command failure.");
-    }
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => DateTimeOffset.UnixEpoch;
     }
 
     private sealed class PreflightVersionStore(WorkflowDefinitionVersion latest, bool identityExists) : IWorkflowDefinitionVersionStore

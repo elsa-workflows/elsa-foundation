@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-recovery-scanner`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #51, #52 (restatused 2026-09-10 from git evidence)
 **Input**: Continue Runtime Execution Seam Slice 8 after post-commit outbox delivery. Add the default recovery scanner over operational state without implementing requeue execution, actor placement, or domain retry.
 
 ## Scenarios & Tests

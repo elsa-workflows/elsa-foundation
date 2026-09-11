@@ -18,6 +18,7 @@
     <ProjectReference Include="..\..\..\..\src\Elsa\Agent\Api\Elsa.Agent.Api.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa\Agent\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa\Agent\Workflows\Elsa.Agent.Workflows.csproj" />
+    <ProjectReference Include="..\..\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
 
   <ItemGroup>

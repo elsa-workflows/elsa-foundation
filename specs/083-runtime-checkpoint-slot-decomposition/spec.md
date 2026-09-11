@@ -6,7 +6,8 @@
 
 **Created**: 2026-07-02
 
-**Status**: Draft — establishes the Move 2 decomposition pattern; **seeks architect approval of the pattern before the remaining handlers**.
+**Status**: Implemented — establishes the Move 2 decomposition pattern (first slice); the remaining handlers are spec 084.
+Implemented: #366 (restatused 2026-09-10 from git evidence)
 
 **Input**: Begin ADR 0029 **Move 2** — relocate handlers' inlined phases into their named pipeline slots, per the **slot-invoked handler model** pinned in the [ADR 0029 addendum](../../docs/adr/0029-runtime-execution-flows-through-the-pipelines.md#addendum-2026-07-02-move-2-handler-invocation-model--slot-invoked-handlers). This first slice extracts the shared **Checkpoint** phase (the uniform `RuntimeCheckpointCommitter.CommitAsync` tail) into the workflow pipeline's `Checkpoint` slot, proven on the single simplest handler (`WorkflowCancelSchedulerWorkHandler`). Behavior-preserving.
 

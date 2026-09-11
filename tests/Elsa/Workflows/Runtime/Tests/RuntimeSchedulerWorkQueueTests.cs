@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
@@ -169,7 +170,7 @@ public sealed class RuntimeSchedulerWorkQueueTests
             queue,
             DeferredSchedulerDrainPolicy.Instance,
             NewDrainOrchestrator(),
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
         var envelope = NewEnvelope(1);
 
         await processor.ProcessAsync(envelope);
@@ -215,7 +216,7 @@ public sealed class RuntimeSchedulerWorkQueueTests
             queue,
             DeferredSchedulerDrainPolicy.Instance,
             NewDrainOrchestrator(),
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             states);
         var command = new WorkflowExecutionCommand(
             "command-resume",
@@ -350,11 +351,6 @@ public sealed class RuntimeSchedulerWorkQueueTests
             [],
             new RuntimeExecutionOwnershipService(new InMemoryExecutionLivenessStateStore()),
             new AsyncLocalRuntimeExecutionOwnershipContextAccessor());
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 
     private sealed class DeferredSchedulerDrainPolicy : IWorkflowSchedulerDrainPolicy
     {

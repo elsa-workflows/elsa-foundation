@@ -1,45 +1,36 @@
 # Elsa Foundation
 
-This file is a thin agent-facing index into the workspace's canonical domain vocabulary. Definitions remain authoritative in [`docs/glossary/`](docs/glossary/).
+`elsa-foundation` is the .NET 10 workflow engine "Elsa 4": a set of libraries under `src/Elsa` that a host
+composes into a running server. Term definitions are authoritative in [`docs/glossary/elsa.md`](docs/glossary/elsa.md)
+(Elsa terms) and [`docs/glossary/root.md`](docs/glossary/root.md) (framework terms); this file only orients.
 
-## Workflow runtime
+## Entry point
 
-**Execution Evidence domain**:
-See the canonical “Execution Evidence domain” entry in the [Elsa glossary](docs/glossary/elsa.md).
-_Avoid_: Execution Evidence capability, runtime-core subsystem
+The process starts in [`src/Apps/Elsa.Workbench/Program.cs`](src/Apps/Elsa.Workbench/Program.cs). It builds one
+or more CShells shells from [`src/Apps/Elsa.Workbench/shells.json`](src/Apps/Elsa.Workbench/shells.json); every
+key under `CShells:Shells:default:Features` names an `IShellFeature` class that registers services. A library
+whose feature is not listed there is not running. [How a workflow executes](docs/how-a-workflow-executes.md)
+traces one request from `Program.cs` to a durable checkpoint.
 
-**Execution evidence**:
-See the canonical “Execution evidence” entry in the [Elsa glossary](docs/glossary/elsa.md).
-_Avoid_: spyware, test log, runtime log, best-effort evidence
+## The three planes
 
-**Evidence session**:
-See the canonical “Evidence session” entry in the [Elsa glossary](docs/glossary/elsa.md).
-_Avoid_: global capture, implicit QA capture, test-run scope
+- **Design** (`src/Elsa/Workflows/Design`, `src/Elsa/Activities/Design`): authoring. Definitions, drafts and
+  immutable versions, plus the activity catalog and validations. Nothing here runs a workflow.
+- **Publishing** (`src/Elsa/Workflows/Publishing`): compiles a definition version into a content-addressed
+  `WorkflowExecutable` and saves it through `IWorkflowExecutableStore`. This is the only bridge from Design to Runtime.
+- **Runtime** (`src/Elsa/Workflows/Runtime`, `src/Elsa/Activities/Runtime`): executes executables. Contracts and
+  models live in `src/Elsa/Workflows/Runtime/Core`; the engine (dispatcher, mailbox, drainer, work handlers,
+  checkpoint committer) lives in `src/Elsa/Workflows/Runtime/Services`; the API in `src/Elsa/Workflows/Runtime/Api`.
+  Runtime must not depend on Design.
 
-**Evidence kind**:
-See the canonical “Evidence kind” entry in the [Elsa glossary](docs/glossary/elsa.md).
-_Avoid_: arbitrary event dictionary, unversioned event name
+Activity implementations (`HttpEndpoint`, `Sequence`, `Flowchart`, ...) live under `src/Elsa/Activities/<Name>`.
 
-**Evidence capture profile** and **evidence value disposition**:
-See the canonical entries in the [Elsa glossary](docs/glossary/elsa.md).
-_Avoid_: capture everything, implicit missing value, host capture policy matrix
+## Persistence
 
-**Evidence cursor**:
-See the canonical “Evidence cursor” entry in the [Elsa glossary](docs/glossary/elsa.md).
-_Avoid_: database offset, test retry token
+Every store contract has an in-memory default registered by `AddWorkflowRuntime()` in
+`src/Elsa/Workflows/Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs`. The only durable
+implementations this repository ships are Groundwork-backed (ADR 0042): runtime state under
+`src/Elsa/Persistence/Groundwork/V2/Runtime`, design and publishing state under their own
+`*/Persistence/Groundwork` folders. The Workbench selects SQLite through the `GroundworkProviderSqlite` feature.
 
-**Evidence completeness boundary**:
-See the canonical “Evidence completeness boundary” entry in the [Elsa glossary](docs/glossary/elsa.md).
-_Avoid_: timeout means absent, best-effort completeness
-
-**Evidence retention**:
-See the canonical “Evidence retention” entry in the [Elsa glossary](docs/glossary/elsa.md).
-_Avoid_: per-record expiry, automatic pressure eviction, indefinite QA retention
-
-**Evidence ordering**:
-See the canonical “Evidence ordering” entry in the [Elsa glossary](docs/glossary/elsa.md).
-_Avoid_: global session order, timestamp order, arrival order as causation
-
-**Baseline evidence catalog**:
-See the canonical “Baseline evidence catalog” entry in the [Elsa glossary](docs/glossary/elsa.md).
-_Avoid_: runtime log catalog, implementation event catalog, read-event stream
+Decisions are recorded in [`docs/adr/`](docs/adr/README.md).

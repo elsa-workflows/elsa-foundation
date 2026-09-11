@@ -18,6 +18,6 @@ Expected result: all Groundwork and Elsa tests pass.
 
 ## Review Decision Artifact
 
-Open `docs/reports/groundwork-runtime-evaluation.md`.
+Open `docs/reports/archive/groundwork-runtime-evaluation.md`.
 
 Expected result: the report lists go/no-go recommendations and required evidence gates before runtime migration.

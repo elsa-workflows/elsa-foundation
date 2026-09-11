@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-workflow-state-store`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #41, #42 (restatused 2026-09-10 from git evidence)
 **Input**: Continue the Runtime Execution Seam after workflow start/completion checkpoints. Checkpoint commits now carry `WorkflowExecutionState` changes; the next slice makes those changes queryable as runtime continuation state without introducing a full durable provider.
 
 ## Scenarios & Tests

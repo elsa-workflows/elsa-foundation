@@ -6,8 +6,6 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Services.Alterations;
 
-// The namespace is pinned: the receipt-locked capture tool (tools/compatibility/RuntimeFastEndpointsCapture)
-// references WorkflowAlterationResourceNotFoundException by this exact name and must keep compiling unmodified.
 namespace Elsa.Workflows.Runtime.Api.Handlers.Alterations;
 
 public sealed class WorkflowAlterationPlanApiService(

@@ -11,6 +11,7 @@ using Groundwork.Store;
 using System.Text.Json;
 using Xunit;
 using Xunit.Sdk;
+using Elsa.Persistence.Groundwork.V2.Testing;
 
 namespace Elsa.Persistence.Groundwork.V2.Runtime.Tests;
 
@@ -634,70 +635,21 @@ public sealed class GroundworkV2WorkflowSchedulerWorkQueueTests
             payload.RootElement.Clone());
     }
 
-    private sealed class TestAccessContextAccessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
-    {
-        public PersistenceAccessContext Current { get; } = current;
-    }
-
     private sealed class DirectSessionSource(
         IStorageProviderConnection connection,
         ICollection<QueryRequest>? queryRequests = null,
         Action? beforeFencedDelete = null) : IGroundworkStorageSessionSource
     {
         public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) =>
-            new RecordingSession(
-                connection.OpenSession(ElsaRuntimeV2StorageManifest.Require(unitId), access),
-                queryRequests,
-                beforeFencedDelete);
+            new RecordingSession(connection.OpenSession(ElsaRuntimeV2StorageManifest.Require(unitId), access), queryRequests)
+            {
+                BeforeFencedDelete = beforeFencedDelete
+            };
 
         public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, IReadOnlyList<string> unitIds, string? targetName = null) =>
             connection.BeginUnitOfWork(access, options, unitIds.Select(ElsaRuntimeV2StorageManifest.Require).ToArray());
 
         public StorageUnit Unit(string unitId, string? targetName = null) => ElsaRuntimeV2StorageManifest.Require(unitId);
-    }
-
-    private sealed class RecordingSession(
-        IStorageSession inner,
-        ICollection<QueryRequest>? queryRequests,
-        Action? beforeFencedDelete) : SynchronousStorageSessionTestDouble, IStorageSession, IConcurrencyStorageSession, ICompareAndDeleteStorageSession
-    {
-        private Action? beforeFencedDelete = beforeFencedDelete;
-
-        public StorageUnit Unit => inner.Unit;
-        public StorageAccess Access => inner.Access;
-        public StoredEntry? Read(StorageKey key) => inner.Read(key);
-
-        public QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null)
-        {
-            queryRequests?.Add(request);
-            return inner.Query(request, options);
-        }
-
-        public AggregationResult Aggregate(AggregationQuery query) => inner.Aggregate(query);
-        public WriteOutcome Insert(StorageValues values, WriteOptions? options = null) => inner.Insert(values, options);
-        public WriteOutcome Update(StorageValues values, WriteOptions? options = null) => inner.Update(values, options);
-        public WriteOutcome Upsert(StorageValues values, WriteOptions? options = null) => inner.Upsert(values, options);
-        public WriteOutcome Delete(StorageKey key, WriteOptions? options = null)
-        {
-            BeforeFencedDelete();
-            return inner.Delete(key, options);
-        }
-
-        public WriteOutcome CompareAndDelete(
-            StorageKey key,
-            IReadOnlyDictionary<string, object?> expectedValues,
-            WriteOptions? options = null)
-        {
-            BeforeFencedDelete();
-            return ((ICompareAndDeleteStorageSession)inner).CompareAndDelete(key, expectedValues, options);
-        }
-
-        public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) => inner.Append(operationId, values);
-
-        public WriteOutcome ConditionalUpsert(StorageValues values, WriteOptions? options = null) =>
-            ((IConcurrencyStorageSession)inner).ConditionalUpsert(values, options);
-
-        private void BeforeFencedDelete() => Interlocked.Exchange(ref beforeFencedDelete, null)?.Invoke();
     }
 
     private sealed class RecordingSource(

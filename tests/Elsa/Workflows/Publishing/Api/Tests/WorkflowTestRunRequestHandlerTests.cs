@@ -25,6 +25,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 using WorkflowArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
@@ -495,7 +496,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
             _sourceReferenceStore,
             new InProcessWorkflowExecutionActorProvider(),
             new ShortRuntimeExecutionIdGenerator(),
-            new FixedTimeProvider(view.ExpiresAt!.Value.AddSeconds(1)));
+            new FakeTimeProvider(view.ExpiresAt!.Value.AddSeconds(1)));
 
         var exception = await Assert.ThrowsAsync<WorkflowExecutableReferenceRejectedException>(() =>
             expiredDispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(view.ArtifactId!, "test-run"), WorkflowExecutableReferenceScope.TestRun).AsTask());
@@ -724,20 +725,6 @@ public sealed class WorkflowTestRunRequestHandlerTests
         return services.BuildServiceProvider().GetRequiredService<IActivityStructureService>();
     }
 
-    private sealed class FakeVersionStore(WorkflowDefinitionVersion version) : IWorkflowDefinitionVersionStore
-    {
-        public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) =>
-            version.Id == versionId
-                ? Task.FromResult(version)
-                : throw new ArgumentException($"Workflow definition version with id '{versionId}' does not exist");
-
-        public Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    }
-
     private sealed class StubExpressionValidator(ExpressionDraftValidationResult result) : IExpressionDraftSemanticValidator
     {
         public static readonly StubExpressionValidator Valid = new(new(ExpressionDraftValidationState.Valid, []));
@@ -792,11 +779,6 @@ public sealed class WorkflowTestRunRequestHandlerTests
             Requests.Add(request);
             return inner.DispatchAsync(request, requiredScope, dispatchOptions, cancellationToken);
         }
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private sealed class RejectingWorkflowTestScopeStore : IWorkflowTestScopeStore

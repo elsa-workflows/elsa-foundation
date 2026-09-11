@@ -12,24 +12,14 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// Incident identities are composite workflow-execution/incident identities. All reads require one
 /// explicit persistence scope and all collection reads use provider-owned bounded keyset pages.
 /// </remarks>
-public sealed class GroundworkV2IncidentStateStore : IIncidentStateStore
+public sealed class GroundworkV2IncidentStateStore : GroundworkV2RuntimeStoreBase, IIncidentStateStore
 {
-    private readonly IGroundworkStorageSessionSource sessions;
-    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
-    private readonly string? targetName;
-    private readonly StorageUnit unit;
-
     public GroundworkV2IncidentStateStore(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,
         string? targetName = null)
+        : base(sessions, accessContextAccessor, targetName, "incident state", ElsaRuntimeV2StorageManifest.IncidentStateDocumentKind)
     {
-        ArgumentNullException.ThrowIfNull(sessions);
-        ArgumentNullException.ThrowIfNull(accessContextAccessor);
-        this.sessions = sessions;
-        this.accessContextAccessor = accessContextAccessor;
-        this.targetName = targetName;
-        unit = sessions.Unit(ElsaRuntimeV2StorageManifest.IncidentStateDocumentKind, targetName);
     }
 
     public ValueTask<bool> TryAddAsync(
@@ -118,7 +108,7 @@ public sealed class GroundworkV2IncidentStateStore : IIncidentStateStore
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var workflow = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField);
         var incident = Column(table, ElsaRuntimeV2StorageManifest.IncidentIdField);
         var result = Open().Query(new QueryRequest(
@@ -159,7 +149,7 @@ public sealed class GroundworkV2IncidentStateStore : IIncidentStateStore
         CancellationToken cancellationToken)
     {
         var session = Open();
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var workflow = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField);
         var incident = Column(table, ElsaRuntimeV2StorageManifest.IncidentIdField);
         var predicates = new List<Predicate> { Equal(workflow, workflowExecutionId) };
@@ -204,24 +194,7 @@ public sealed class GroundworkV2IncidentStateStore : IIncidentStateStore
         return rows;
     }
 
-    private IStorageSession Open()
-    {
-        var context = accessContextAccessor.Current ??
-                      throw new InvalidOperationException(
-                          "Groundwork incident-state persistence access context is missing.");
-        if (context.Scope is null || context.AcrossScopes)
-        {
-            throw new InvalidOperationException(
-                "Groundwork incident state requires one explicit persistence scope; global and across-scope access are refused.");
-        }
-
-        return sessions.Open(
-            unit.Id.Value,
-            StorageAccess.Scoped(new StorageScope(context.Scope.Value)),
-            targetName);
-    }
-
-    private static WriteOutcome UpdateExisting(
+    private WriteOutcome UpdateExisting(
         IStorageSession session,
         StorageValues values,
         StoredEntry existing,
@@ -232,13 +205,7 @@ public sealed class GroundworkV2IncidentStateStore : IIncidentStateStore
         IncidentStateTransitionValidator.EnsureResolutionOutcomeIsWriteOnce(previous, state);
         var revision = existing.Version ?? throw new InvalidDataException(
             $"Groundwork incident '{state.IncidentId}' did not return an optimistic revision.");
-        if (session is not IConcurrencyStorageSession concurrency)
-        {
-            throw new NotSupportedException(
-                "The selected Groundwork provider does not advertise optimistic incident-state concurrency.");
-        }
-
-        return concurrency.ConditionalUpsert(values, WriteOptions.IfVersion(revision));
+        return ConditionalUpsert(session, values, revision);
     }
 
     private static void ValidateIdentity(string workflowExecutionId, string incidentId)
@@ -269,44 +236,4 @@ public sealed class GroundworkV2IncidentStateStore : IIncidentStateStore
                 "Groundwork incident-state row identity does not match its requested key.");
         }
     }
-
-    private ColumnRef Column(TableId table, string name)
-    {
-        var definition = unit.Columns.SingleOrDefault(column =>
-            StringComparer.Ordinal.Equals(column.Name, name))
-            ?? throw new InvalidOperationException(
-                $"Groundwork incident-state unit '{unit.Id.Value}' does not declare query column '{name}'.");
-        var type = definition.Type switch
-        {
-            PortableType.String => QueryType.String,
-            PortableType.DateTimeOffset => QueryType.DateTimeOffset,
-            PortableType.Int32 => QueryType.Int32,
-            PortableType.Int64 => QueryType.Int64,
-            PortableType.Boolean => QueryType.Boolean,
-            _ => throw new InvalidOperationException(
-                $"Groundwork incident-state query column '{name}' has unsupported type '{definition.Type}'.")
-        };
-        return new ColumnRef(table, name, type, definition.IsNullable, definition.MaxLength);
-    }
-
-    private static Predicate Equal(ColumnRef column, string value) =>
-        new Predicate.Equal(column, QueryConstant.Of(column, value));
-
-    private static Predicate Combine(IReadOnlyList<Predicate> predicates) => predicates.Count switch
-    {
-        0 => Predicate.AlwaysTrue.Instance,
-        1 => predicates[0],
-        _ => new Predicate.And(predicates)
-    };
-
-    private static Paging PagingFor(int limit, string? continuationToken) =>
-        continuationToken is null
-            ? Paging.Keyset(limit)
-            : Paging.Continuation(continuationToken, limit);
-
-    private static bool IsSaved(WriteOutcomeStatus status) =>
-        status is WriteOutcomeStatus.Inserted or
-        WriteOutcomeStatus.Updated or
-        WriteOutcomeStatus.Upserted or
-        WriteOutcomeStatus.Replayed;
 }

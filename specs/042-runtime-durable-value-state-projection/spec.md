@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-durable-value-state-projection`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #44, #45 (restatused 2026-09-10 from git evidence)
 **Input**: Continue the Runtime Execution Seam after bookmark state projection. Checkpoint commits already carry durable value state changes; the default in-memory writer should project those changes into a durable value state store without implementing full durable value storage providers.
 
 ## Scenarios & Tests

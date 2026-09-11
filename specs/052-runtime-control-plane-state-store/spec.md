@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-control-plane-state-store`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #54, #55 (restatused 2026-09-10 from git evidence)
 **Input**: Continue the Runtime Execution Seam after control-plane pause/unpause terminology contracts exist. Add a narrow control-plane state store and pause-boundary decision provider without implementing administrative APIs or scheduler enforcement.
 
 ## Scenarios & Tests

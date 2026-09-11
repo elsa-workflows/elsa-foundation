@@ -12,11 +12,9 @@ namespace Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests;
 public sealed class MongoDbWorkflowDesignContractSuite(MongoDbDesignProviderFixture container)
     : WorkflowDesignContractSuite
 {
-    private readonly GroundworkBaselineTelemetry _telemetry = new();
-
     protected override async Task<IDesignPersistenceContractFixture> CreateFixtureAsync(
         CancellationToken cancellationToken = default) =>
-        await MongoDbDesignPersistenceContractFixture.CreateAsync(container, _telemetry, cancellationToken);
+        await MongoDbDesignPersistenceContractFixture.CreateAsync(container, cancellationToken);
 }
 
 /// <summary>Executes the provider-neutral activity-design contract on the composed MongoDB target.</summary>
@@ -24,11 +22,9 @@ public sealed class MongoDbWorkflowDesignContractSuite(MongoDbDesignProviderFixt
 public sealed class MongoDbActivityDesignContractSuite(MongoDbDesignProviderFixture container)
     : ActivityDesignContractSuite
 {
-    private readonly GroundworkBaselineTelemetry _telemetry = new();
-
     protected override async Task<IDesignPersistenceContractFixture> CreateFixtureAsync(
         CancellationToken cancellationToken = default) =>
-        await MongoDbDesignPersistenceContractFixture.CreateAsync(container, _telemetry, cancellationToken);
+        await MongoDbDesignPersistenceContractFixture.CreateAsync(container, cancellationToken);
 }
 
 /// <summary>
@@ -40,18 +36,16 @@ public sealed class MongoDbActivityDesignContractSuite(MongoDbDesignProviderFixt
 public sealed class MongoDbAtomicityContractSuite(MongoDbDesignProviderFixture container)
     : DesignAtomicityContractSuite
 {
-    private readonly GroundworkBaselineTelemetry _telemetry = new();
-
     protected override DesignPersistenceContractProfile ContractProfile => DesignPersistenceContractProfiles.Target;
 
     protected override async Task<IDesignPersistenceContractFixture> CreateFixtureAsync(
         CancellationToken cancellationToken = default) =>
-        await MongoDbDesignPersistenceContractFixture.CreateAsync(container, _telemetry, cancellationToken);
+        await MongoDbDesignPersistenceContractFixture.CreateAsync(container, cancellationToken);
 
     [Fact]
     public async Task Public_create_draft_command_publishes_DraftCreated_only_after_the_draft_is_durable()
     {
-        await using var fixture = await MongoDbDesignPersistenceContractFixture.CreateAsync(container, _telemetry);
+        await using var fixture = await MongoDbDesignPersistenceContractFixture.CreateAsync(container);
         await fixture.ValidateReadinessAsync();
 
         using var scope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA);
@@ -82,13 +76,11 @@ public sealed class MongoDbAtomicityContractSuite(MongoDbDesignProviderFixture c
 public sealed class MongoDbIsolationAndRestartContractSuite(MongoDbDesignProviderFixture container)
     : DesignIsolationAndRestartContractSuite
 {
-    private readonly GroundworkBaselineTelemetry _telemetry = new();
-
     protected override DesignPersistenceContractProfile ContractProfile => DesignPersistenceContractProfiles.Target;
 
     protected override async Task<IDesignPersistenceContractFixture> CreateFixtureAsync(
         CancellationToken cancellationToken = default) =>
-        await MongoDbDesignPersistenceContractFixture.CreateAsync(container, _telemetry, cancellationToken);
+        await MongoDbDesignPersistenceContractFixture.CreateAsync(container, cancellationToken);
 }
 
 /// <summary>Executes the T037 workflow query-shape parity contract on the composed MongoDB target.</summary>
@@ -96,11 +88,9 @@ public sealed class MongoDbIsolationAndRestartContractSuite(MongoDbDesignProvide
 public sealed class MongoDbWorkflowDesignQueryContractSuite(MongoDbDesignProviderFixture container)
     : WorkflowDesignQueryContractSuite
 {
-    private readonly GroundworkBaselineTelemetry _telemetry = new();
-
     protected override async Task<IDesignPersistenceContractFixture> CreateFixtureAsync(
         CancellationToken cancellationToken = default) =>
-        await MongoDbDesignPersistenceContractFixture.CreateAsync(container, _telemetry, cancellationToken);
+        await MongoDbDesignPersistenceContractFixture.CreateAsync(container, cancellationToken);
 }
 
 /// <summary>Executes the T038 activity query-shape parity contract on the composed MongoDB target.</summary>
@@ -108,11 +98,9 @@ public sealed class MongoDbWorkflowDesignQueryContractSuite(MongoDbDesignProvide
 public sealed class MongoDbActivityDesignQueryContractSuite(MongoDbDesignProviderFixture container)
     : ActivityDesignQueryContractSuite
 {
-    private readonly GroundworkBaselineTelemetry _telemetry = new();
-
     protected override async Task<IDesignPersistenceContractFixture> CreateFixtureAsync(
         CancellationToken cancellationToken = default) =>
-        await MongoDbDesignPersistenceContractFixture.CreateAsync(container, _telemetry, cancellationToken);
+        await MongoDbDesignPersistenceContractFixture.CreateAsync(container, cancellationToken);
 }
 
 /// <summary>Executes the T039 scale/batching contract on the composed MongoDB target.</summary>
@@ -120,11 +108,9 @@ public sealed class MongoDbActivityDesignQueryContractSuite(MongoDbDesignProvide
 public sealed class MongoDbDesignQueryScaleContractSuite(MongoDbDesignProviderFixture container)
     : DesignQueryScaleContractSuite
 {
-    private readonly GroundworkBaselineTelemetry _telemetry = new();
-
     protected override DesignPersistenceContractProfile ContractProfile => DesignPersistenceContractProfiles.Target;
 
     protected override async Task<IDesignPersistenceContractFixture> CreateFixtureAsync(
         CancellationToken cancellationToken = default) =>
-        await MongoDbDesignPersistenceContractFixture.CreateAsync(container, _telemetry, cancellationToken);
+        await MongoDbDesignPersistenceContractFixture.CreateAsync(container, cancellationToken);
 }

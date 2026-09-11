@@ -4,7 +4,8 @@
 
 **Created**: 2026-06-15
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: ed441e235, #910 (restatused 2026-09-10 from git evidence)
 
 **Input**: User description: "Expose APIs and Studio UI to list, enable, disable, configure, and apply feature changes for the backend-inferred current shell."
 

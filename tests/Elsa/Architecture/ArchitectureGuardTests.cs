@@ -23,11 +23,6 @@ public sealed class ArchitectureGuardTests
     // recorded at the declaration site (csproj comment) and here. Additions require architect review.
     private static readonly HashSet<(string Project, string Target)> AllowedInternalsVisibleTo =
     [
-        // The ExtensionBuilder subsystem is a host-private surface of ~80 interlocking internal types;
-        // publicizing it to satisfy §2.23.3 would promote host-only contracts into public API. It now
-        // lives in its own module (Elsa.Modularity.ExtensionBuilder) which exposes those internals to
-        // the shared modularity test project (MD-3, Elsa 4 architecture review 2026-07).
-        ("Elsa.Modularity.ExtensionBuilder", "Elsa.Modularity.Tests"),
         // Elsa.Workbench keeps a narrow exception for the host-only module-management registry builder
         // (ModuleManagementRegistryBuilder), exercised by ModuleManagementRegistryBuilderTests.
         ("Elsa.Workbench", "Elsa.Modularity.Tests"),
@@ -163,7 +158,17 @@ public sealed class ArchitectureGuardTests
             .ToArray();
         Assert.True(missing.Length == 0, "Missing provider-neutral persistence projects: " + string.Join(", ", missing));
 
-        var violations = new EfCoreSurfaceScanner(RepoRoot).FindProtectedProviderNeutralityViolations();
+        var violations = PersistenceProviderNeutralityBoundary.ProjectNames
+            .Select(projectName => projectsByName[projectName])
+            .SelectMany(project => ReachableProjects(project)
+                .Where(reached => PersistenceProviderNeutralityBoundary.IsConcreteProviderProject(reached.Name, reached.RelativePath))
+                .Select(reached => $"{project.RelativePath} reaches concrete provider project {reached.RelativePath}")
+                .Concat(ReachableProjects(project).Prepend(project)
+                    .SelectMany(PackageReferences)
+                    .Where(PersistenceProviderNeutralityBoundary.IsConcreteProviderPackage)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Select(package => $"{project.RelativePath} reaches concrete provider package {package}")))
+            .ToList();
 
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
@@ -963,7 +968,7 @@ public sealed class ArchitectureGuardTests
 
         var sourceRoot = Path.Combine(RepoRoot, "src");
         var violations = Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
-            .Where(file => !IsGeneratedScratchFile(file) && !IsBuildArtifactFile(file))
+            .Where(file => !IsBuildArtifactFile(file))
             .SelectMany(file =>
             {
                 var code = StripCommentsAndStringLiterals(File.ReadAllText(file));
@@ -1004,7 +1009,7 @@ public sealed class ArchitectureGuardTests
         var onPrefixedDeclaration = new Regex(@"\b(?:class|record|struct)\s+(On[A-Z]\w*)", RegexOptions.Compiled);
 
         var violations = Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
-            .Where(file => !IsGeneratedScratchFile(file) && !IsBuildArtifactFile(file))
+            .Where(file => !IsBuildArtifactFile(file))
             .SelectMany(file =>
             {
                 var code = File.ReadAllText(file);
@@ -1024,8 +1029,6 @@ public sealed class ArchitectureGuardTests
         reference.Name.StartsWith("Elsa.", StringComparison.Ordinal) &&
         reference.Name.Contains(".Design", StringComparison.Ordinal);
 
-    private static bool IsGeneratedScratchFile(string filePath) =>
-        filePath.Replace(Path.DirectorySeparatorChar, '/').Contains("/extension-builder/projects/", StringComparison.Ordinal);
 
     // Build output under src/**/obj and src/**/bin (AssemblyInfo, GlobalUsings.g.cs, EF/source-generator
     // scaffolds) is not source; scanning it would make a token sweep depend on build state.
@@ -1093,35 +1096,11 @@ public sealed class ArchitectureGuardTests
     private static IEnumerable<ProjectInfo> ProjectFiles()
     {
         foreach (var file in Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.csproj", SearchOption.AllDirectories))
-        {
-            var project = ProjectInfo.From(RepoRoot, file);
-            if (IsGeneratedScratchProject(project))
-                continue;
-
-            yield return project;
-        }
+            yield return ProjectInfo.From(RepoRoot, file);
 
         foreach (var file in Directory.EnumerateFiles(Path.Combine(RepoRoot, "tests"), "*.csproj", SearchOption.AllDirectories))
-        {
-            var project = ProjectInfo.From(RepoRoot, file);
-            if (IsHistoricalEvidenceCaptureProject(project))
-                continue;
-
-            yield return project;
-        }
+            yield return ProjectInfo.From(RepoRoot, file);
     }
-
-    // The extension-builder feature writes runtime-generated scratch projects under guid-named
-    // project/snapshot folders (gitignored, never part of the solution). Exclude them from the
-    // domain-tree convention checks so generated artifacts are not enshrined in the slnx.
-    private static bool IsGeneratedScratchProject(ProjectInfo project) =>
-        project.RelativePath.Contains("/extension-builder/projects/", StringComparison.Ordinal);
-
-    // Baseline-first migrations retain an executable capture harness beside their immutable fixtures.
-    // These historical oracle projects are intentionally absent from the product solution and domain tree.
-    private static bool IsHistoricalEvidenceCaptureProject(ProjectInfo project) =>
-        project.Name.EndsWith(".BeforeCapture", StringComparison.Ordinal) &&
-        project.RelativePath.Contains("/Capture/", StringComparison.Ordinal);
 
     private static IEnumerable<SolutionProjectInfo> SolutionProjects()
     {
@@ -1149,6 +1128,21 @@ public sealed class ArchitectureGuardTests
             var normalizedInclude = include.Replace('\\', Path.DirectorySeparatorChar);
             var path = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(project.FullPath)!, normalizedInclude));
             yield return ProjectInfo.From(RepoRoot, path);
+        }
+    }
+
+    private static IEnumerable<ProjectInfo> ReachableProjects(ProjectInfo root)
+    {
+        var visited = new HashSet<string>(StringComparer.Ordinal) { root.FullPath };
+        var pending = new Stack<ProjectInfo>(ProjectReferences(root));
+        while (pending.TryPop(out var project))
+        {
+            if (!visited.Add(project.FullPath))
+                continue;
+
+            yield return project;
+            foreach (var reference in ProjectReferences(project))
+                pending.Push(reference);
         }
     }
 
@@ -1538,4 +1532,47 @@ public sealed class ArchitectureGuardTests
     }
 
     private sealed record SolutionProjectInfo(string Folder, string Path);
+}
+
+// Provider-neutral persistence contract projects must never gain a declared or transitive edge to a
+// concrete provider (Groundwork, EF Core, or a database driver). Reviewed with spec 094; the resolved
+// project.assets.json check that used to accompany it went away with the EF surface ratchet.
+internal static class PersistenceProviderNeutralityBoundary
+{
+    public static IReadOnlyList<string> ProjectNames { get; } =
+    [
+        "Elsa.Workflows.Runtime.Core",
+        "Elsa.Foundation.Identity.Abstractions",
+        "Elsa.Secrets.Core",
+        "Elsa.Workflows.Runtime.Distributed"
+    ];
+
+    public static bool IsConcreteProviderPackage(string packageName) =>
+        IsPackageFamily(packageName, "Groundwork") ||
+        packageName.Contains("EntityFrameworkCore", StringComparison.OrdinalIgnoreCase) ||
+        IsPackageFamily(packageName, "Microsoft.Data.Sqlite") ||
+        IsPackageFamily(packageName, "SQLitePCLRaw") ||
+        IsPackageFamily(packageName, "Microsoft.Data.SqlClient") ||
+        IsPackageFamily(packageName, "System.Data.SqlClient") ||
+        IsPackageFamily(packageName, "Npgsql") ||
+        IsPackageFamily(packageName, "MongoDB");
+
+    public static bool IsConcreteProviderProject(string projectName, string relativePath) =>
+        HasProviderMarker(projectName) || HasProviderMarker(relativePath);
+
+    private static bool IsPackageFamily(string packageName, string family) =>
+        packageName.Equals(family, StringComparison.OrdinalIgnoreCase) ||
+        packageName.StartsWith(family + ".", StringComparison.OrdinalIgnoreCase);
+
+    private static bool HasProviderMarker(string value) =>
+        value.Contains(".Groundwork", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains(".EFCore", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains(".EntityFrameworkCore", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("/Groundwork/", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("/EFCore/", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("/EntityFrameworkCore/", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("/Sqlite/", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("/SqlServer/", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("/PostgreSql/", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("/MongoDb/", StringComparison.OrdinalIgnoreCase);
 }

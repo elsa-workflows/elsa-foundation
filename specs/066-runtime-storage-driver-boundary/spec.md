@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-storage-driver-boundary`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #68, #69 (restatused 2026-09-10 from git evidence)
 **Input**: Continue runtime execution seam cleanup after durable value state exists. The legacy `IStorageDriver`/`IStorageDriverContext` contracts model variable-style object reads and writes and depend on expression variables, which conflicts with the locked durable-value boundary.
 
 ## Scenarios & Tests

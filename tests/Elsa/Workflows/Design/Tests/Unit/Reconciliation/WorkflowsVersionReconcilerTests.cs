@@ -18,6 +18,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Elsa.Testing;
 
 namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation;
 
@@ -258,7 +259,7 @@ public sealed class WorkflowsVersionReconcilerTests
         var defs = new StubDefinitionStore().With(existingDef);
         var versions = new StubVersionStore().With(existingVersion);
         var saveDef = new SpySaveDefinitionCommand();
-        var logger = new CapturingLogger<WorkflowsVersionReconciler>();
+        var logger = new RecordingLogger<WorkflowsVersionReconciler>();
 
         var reconciler = NewReconciler(
             new CapturingSender { ToContribute = [incoming] },
@@ -331,7 +332,7 @@ public sealed class WorkflowsVersionReconcilerTests
 
         var defs = new StubDefinitionStore().With(existingDef);
         var versions = new StubVersionStore().With(existingVersion);
-        var logger = new CapturingLogger<WorkflowsVersionReconciler>();
+        var logger = new RecordingLogger<WorkflowsVersionReconciler>();
         var serializer = new FakePayloadSerializer().With(incomingState, "A").With(storedState, "B");
 
         var reconciler = NewReconciler(
@@ -544,17 +545,6 @@ public sealed class WorkflowsVersionReconcilerTests
         public T Deserialize<T>(string serializedData) => throw new NotSupportedException();
         public T Deserialize<T>(JsonElement serializedData) => throw new NotSupportedException();
         public JsonSerializerOptions GetOptions() => throw new NotSupportedException();
-    }
-
-    private sealed class CapturingLogger<T> : ILogger<T>
-    {
-        public List<(LogLevel Level, string Message)> Entries { get; } = new();
-        public IDisposable BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
-        public bool IsEnabled(LogLevel logLevel) => true;
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-            => Entries.Add((logLevel, formatter(state, exception)));
-
-        private sealed class NullScope : IDisposable { public static readonly NullScope Instance = new(); public void Dispose() { } }
     }
 
     private sealed class CapturingSender : IInlineEventPublisher

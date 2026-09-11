@@ -36,6 +36,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 using static Elsa.Persistence.Groundwork.RegistrationTests.GroundworkProviderRegistrationAssertions;
+using Elsa.Testing;
 
 namespace Elsa.Persistence.Groundwork.UnifiedHost.Tests;
 

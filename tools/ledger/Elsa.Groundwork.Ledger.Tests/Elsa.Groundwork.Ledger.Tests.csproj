@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Spec 094 coverage-ledger bookkeeping: validates specs/094-harden-groundwork-stores/coverage-ledger.json,
+    its evidence attachments, and the performance hand-off receipts. These tests check project-management
+    artifacts, not product behaviour, so they live under tools/ and run from the groundwork-ledger workflow on
+    demand instead of on every pull request. Retire this project when spec 094 closes.
+  -->
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\groundwork\Elsa.Groundwork.ProviderEvidenceImporter\Elsa.Groundwork.ProviderEvidenceImporter.csproj" />
+  </ItemGroup>
+
+</Project>

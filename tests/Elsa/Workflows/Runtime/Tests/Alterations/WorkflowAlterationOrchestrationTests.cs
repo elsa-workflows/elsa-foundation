@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Services.Alterations;
 using Elsa.Workflows.Runtime.Services.Alterations.Handlers;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests.Alterations;
 
@@ -45,7 +46,7 @@ public sealed class WorkflowAlterationOrchestrationTests
             NewSubmission(WorkflowAlterationTargetSelector.ForQuery(new WorkflowAlterationQuerySelector(matchAllAuthorized: true))),
             new WorkflowAlterationOperatorProvenance("operator", null),
             "key-1");
-        var capture = new WorkflowAlterationTargetCaptureTask(store, executions, new FixedTimeProvider(Now));
+        var capture = new WorkflowAlterationTargetCaptureTask(store, executions, new FakeTimeProvider(Now));
 
         await capture.CaptureNextAsync(admission.Plan.PlanId, 1);
         await capture.CaptureNextAsync(admission.Plan.PlanId, 1);
@@ -74,7 +75,7 @@ public sealed class WorkflowAlterationOrchestrationTests
             new WorkflowAlterationOperatorProvenance("operator", null),
             "key-default");
 
-        var sealedPlan = await new WorkflowAlterationTargetCaptureTask(store, executions, new FixedTimeProvider(Now))
+        var sealedPlan = await new WorkflowAlterationTargetCaptureTask(store, executions, new FakeTimeProvider(Now))
             .CaptureNextAsync(admission.Plan.PlanId, 1);
         var job = Assert.Single((await store.PageJobsAsync(admission.Plan.PlanId, 10)).Items);
 
@@ -103,7 +104,7 @@ public sealed class WorkflowAlterationOrchestrationTests
             NewSubmission(WorkflowAlterationTargetSelector.ForExecutionIds(["execution-other"])),
             new WorkflowAlterationOperatorProvenance("operator", null),
             "authority-explicit");
-        var capture = new WorkflowAlterationTargetCaptureTask(store, executions, new FixedTimeProvider(Now));
+        var capture = new WorkflowAlterationTargetCaptureTask(store, executions, new FakeTimeProvider(Now));
 
         await capture.CaptureNextAsync(queryPlan.Plan.PlanId, 10);
         await capture.CaptureNextAsync(explicitPlan.Plan.PlanId, 10);
@@ -143,7 +144,7 @@ public sealed class WorkflowAlterationOrchestrationTests
             new WorkflowAlterationOperatorProvenance("operator", null),
             "authority-metadata-query");
 
-        await new WorkflowAlterationTargetCaptureTask(store, executions, new FixedTimeProvider(Now))
+        await new WorkflowAlterationTargetCaptureTask(store, executions, new FakeTimeProvider(Now))
             .CaptureNextAsync(plan.Plan.PlanId, 10);
 
         var job = Assert.Single((await store.PageJobsAsync(plan.Plan.PlanId, 10)).Items);
@@ -162,7 +163,7 @@ public sealed class WorkflowAlterationOrchestrationTests
             NewSubmission(WorkflowAlterationTargetSelector.ForExecutionIds(["execution-1"])),
             new WorkflowAlterationOperatorProvenance("operator", null),
             "key-1");
-        var capture = new WorkflowAlterationTargetCaptureTask(store, executions, new FixedTimeProvider(Now));
+        var capture = new WorkflowAlterationTargetCaptureTask(store, executions, new FakeTimeProvider(Now));
         await capture.CaptureNextAsync(admission.Plan.PlanId, 10);
 
         var cancelled = await service.CancelAsync(admission.Plan.PlanId);
@@ -291,7 +292,7 @@ public sealed class WorkflowAlterationOrchestrationTests
         var capture = new WorkflowAlterationTargetCaptureTask(
             store,
             executions,
-            new FixedTimeProvider(Now),
+            new FakeTimeProvider(Now),
             new WorkflowAlterationTargetCaptureOptions { MaxConcurrencyRetries = 0 });
 
         var failed = await capture.CaptureNextAsync(admission.Plan.PlanId, 1);
@@ -337,7 +338,7 @@ public sealed class WorkflowAlterationOrchestrationTests
     public async Task ActorDispatcher_UsesDeterministicAtLeastOnceAlterWorkflowCommandWithoutPayloads()
     {
         var provider = new RecordingActorProvider();
-        var dispatcher = new WorkflowAlterationJobDispatcher(provider, new FixedTimeProvider(Now));
+        var dispatcher = new WorkflowAlterationJobDispatcher(provider, new FakeTimeProvider(Now));
         var job = NewRunningJob("job-1", "execution-1");
 
         await dispatcher.DispatchAsync(job);
@@ -367,7 +368,7 @@ public sealed class WorkflowAlterationOrchestrationTests
             ]),
             payloadProtector ?? new TestPayloadProtector(),
             store,
-            new FixedTimeProvider(Now));
+            new FakeTimeProvider(Now));
 
     private static WorkflowAlterationSubmission NewSubmission(WorkflowAlterationTargetSelector target) =>
         new(
@@ -414,11 +415,6 @@ public sealed class WorkflowAlterationOrchestrationTests
 
         public string Unprotect(string planId, string tenantPartition, string canonicalRequestHash, ProtectedWorkflowAlterationPayload payload) =>
             throw new CryptographicException("The key is unavailable.");
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private sealed class SealBeforeUnsealedCancellationStore(

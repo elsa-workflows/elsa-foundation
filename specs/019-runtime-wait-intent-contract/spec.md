@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-wait-intent-contract`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #21 (restatused 2026-09-10 from git evidence)
 **Input**: Locked Runtime Execution Seam addendum decision: wait registrations that depend on Elsa-caused outbound side effects use wait-dependent post-commit intents, not a global bookmark inbox.
 
 ## Scenarios & Tests

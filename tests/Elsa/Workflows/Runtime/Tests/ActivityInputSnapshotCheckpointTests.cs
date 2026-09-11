@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
@@ -87,7 +88,7 @@ public sealed class ActivityInputSnapshotCheckpointTests : IDisposable
             _schedulerWorkQueue,
             new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
-            new FixedTimeProvider(Now),
+            new FakeTimeProvider(Now),
             _serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             _durableValueStateStore,
             workflowExecutionStateStore: _workflowStateStore);
@@ -216,9 +217,4 @@ public sealed class ActivityInputSnapshotCheckpointTests : IDisposable
 
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 }
