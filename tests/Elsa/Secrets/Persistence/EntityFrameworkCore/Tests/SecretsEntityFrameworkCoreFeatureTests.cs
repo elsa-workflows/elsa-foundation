@@ -1,3 +1,4 @@
+using CShells.Lifecycle;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
@@ -50,7 +51,9 @@ public sealed class SecretsEntityFrameworkCoreFeatureTests
         Assert.IsType<SecretsSqliteDbContext>(first.ServiceProvider.GetRequiredService<SecretsDbContext>());
         Assert.NotSame(repository, second.ServiceProvider.GetRequiredService<ISecretRepository>());
         Assert.Equal(ServiceLifetime.Scoped, Assert.Single(services, descriptor => descriptor.ServiceType == typeof(ISecretRepository)).Lifetime);
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IHostedService) && descriptor.ImplementationType == typeof(SecretsEfMigrationHostedService));
+        var hosted = Assert.Single(provider.GetServices<IHostedService>().OfType<SecretsEfMigrationHostedService>());
+        var initializer = Assert.Single(provider.GetServices<IShellInitializer>().OfType<SecretsEfMigrationHostedService>());
+        Assert.Same(hosted, initializer);
     }
 
     [Fact]

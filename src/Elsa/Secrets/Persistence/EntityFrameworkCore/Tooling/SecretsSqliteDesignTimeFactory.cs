@@ -11,7 +11,9 @@ public sealed class SecretsSqliteDesignTimeFactory : IDesignTimeDbContextFactory
     {
         var builder = new DbContextOptionsBuilder<SecretsSqliteDbContext>();
         builder.UseSqlite(
-            "Data Source=elsa-secrets-design.db",
+            SecretsDesignTimeConnection.Resolve(
+                SecretsDesignTimeConnection.SqliteVariable,
+                "Data Source=elsa-secrets-design.db"),
             sqlite => sqlite
                 .MigrationsAssembly(typeof(SecretsSqliteDbContext).Assembly.GetName().Name)
                 .MigrationsHistoryTable(EfMigrationsHistory.TableName(SecretsEfModule.HistoryModuleName)));

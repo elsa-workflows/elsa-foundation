@@ -70,6 +70,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260911010717_WidenLookupKeys.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/SecretsSqliteDbContextModelSnapshot.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/SecretsDbContext.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/SecretsEfMigrationHostedService.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/SecretsEfModule.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/SecretsEntityFrameworkCoreFeature.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/SecretsPostgreSqlDbContext.cs",
@@ -80,6 +81,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/SecretDocument.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/SecretRevisionMapper.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsSearchKeys.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/SecretsDesignTimeConnection.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/SecretsPostgreSqlDesignTimeFactory.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/SecretsSqlServerDesignTimeFactory.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/SecretsSqliteDesignTimeFactory.cs",
@@ -91,7 +93,11 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/PostgresContainerFixture.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/SqlServerContainerFixture.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/SqlServerEfSecretRepositoryTests.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsDesignTimeConnectionTests.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEfDualMigrateToolTests.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEfMigrationHostedServiceTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEntityFrameworkCoreFeatureTests.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEntityFrameworkCoreShellReloadTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SqliteEfSecretRepositoryTests.cs"
     ];
 

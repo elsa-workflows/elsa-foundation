@@ -32,6 +32,13 @@ amendment. Accepting 0072 formally narrows 0042.
 Hosts that call `IMigrator.Migrate` or apply pending migrations themselves **must take the
 same lock** or concurrent hosts race. Do not roll a second lock around `MigrateAsync`.
 
+## Dual apply
+
+`EfDatabaseMigrator.ApplyAsync` is the in-process path (feature enable and CShells reload).
+Out-of-process apply and fail-if-pending for the Secrets pilot live in
+[tools/ef/dual-migrate.sh](../../../../tools/ef/dual-migrate.sh) (`dotnet ef database update`
+and `dotnet ef migrations has-pending-model-changes` per derived context).
+
 ## Provider packages stay in the host
 
 This project has no `PackageReference` to SqlServer, Sqlite, or Npgsql. The host (or a

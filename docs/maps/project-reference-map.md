@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 138
 - Test projects: 108
-- Direct project references: 1201
+- Direct project references: 1202
 
 ## Projects
 
@@ -228,7 +228,7 @@ Records direct project references only.
 | [Elsa.Secrets.Attention.Tests](../../tests/Elsa/Secrets/Attention/Tests/Elsa.Secrets.Attention.Tests.csproj) | test | Elsa.Secrets | - | default | Elsa.Secrets.Attention |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj) | test | Elsa.Secrets | - | default | Elsa.Secrets.Persistence.EntityFrameworkCore |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj) | test | Elsa.Secrets | - | default | Elsa.Secrets.Persistence.EntityFrameworkCore |
-| [Elsa.Secrets.Persistence.EntityFrameworkCore.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Secrets | - | default | Elsa.Secrets.Persistence.EntityFrameworkCore |
+| [Elsa.Secrets.Persistence.EntityFrameworkCore.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Secrets | - | default | Elsa.Secrets.Persistence.EntityFrameworkCore<br>Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling |
 | [Elsa.Secrets.Persistence.Groundwork.V2.ProviderMatrix.Tests](../../tests/Elsa/Secrets/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Secrets.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj) | test | Elsa.Secrets | net10.0 | false | Elsa.Secrets.Persistence.Groundwork |
 | [Elsa.Secrets.Persistence.Groundwork.V2.Tests](../../tests/Elsa/Secrets/Persistence/Groundwork/V2/Tests/Elsa.Secrets.Persistence.Groundwork.V2.Tests.csproj) | test | Elsa.Secrets | net10.0 | false | Elsa.Persistence.Groundwork.Testing<br>Elsa.Secrets.Persistence.Groundwork |
 | [Elsa.Secrets.Tests](../../tests/Elsa/Secrets/Tests/Elsa.Secrets.Tests.csproj) | test | Elsa.Secrets | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Compatibility.Testing<br>Elsa.Expressions<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Secrets<br>Elsa.Secrets.Api<br>Elsa.Secrets.Core<br>Elsa.Workflows.Runtime |

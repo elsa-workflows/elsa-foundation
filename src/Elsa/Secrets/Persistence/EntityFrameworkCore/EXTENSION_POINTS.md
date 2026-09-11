@@ -11,6 +11,10 @@ first-party store.
 
 - **`SecretsEntityFrameworkCoreFeature`**: host-selected provider (`Sqlite` / `SqlServer` / `PostgreSql`), connection string or named connection, and `EfMigratePolicy`. The host must reference the matching EF provider engine; this package does not.
 
+## Lifecycle
+
+- **`SecretsEfMigrationHostedService`**: one instance registered as `IHostedService` (plain hosts / tests) and CShells `IShellInitializer` (enable and reload). It calls `EfDatabaseMigrator.ApplyAsync` with the feature's `EfMigratePolicy`.
+
 ## Derived contexts
 
 `SecretsDbContext` is shared model configuration. `SecretsSqliteDbContext`,

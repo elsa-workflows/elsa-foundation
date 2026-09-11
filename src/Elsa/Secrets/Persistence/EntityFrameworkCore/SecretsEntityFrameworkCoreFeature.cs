@@ -37,7 +37,7 @@ public class SecretsEntityFrameworkCoreFeature : IShellFeature
 
     [ManifestSetting(
         DisplayName = "Migrate policy",
-        Description = "AutoMigrate runs Database.MigrateAsync (EF 9 lock). Validate fails startup when migrations are pending.",
+        Description = "AutoMigrate runs Database.MigrateAsync (EF 9 lock) on feature enable and CShells reload. Validate fails when migrations are pending.",
         Category = "Persistence")]
     public EfMigratePolicy MigratePolicy { get; set; } = EfMigratePolicy.AutoMigrate;
 
