@@ -1,5 +1,6 @@
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Targets;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
@@ -47,6 +48,9 @@ public static class GroundworkV2RuntimeRegistration
         // cannot accidentally construct a scanner without an authenticated continuation boundary. Resolution fails
         // closed until the host supplies a stable signing key through RuntimeRecoveryContinuationOptions.
         services.TryAddSingleton<IRuntimeRecoveryContinuationCodec, HmacRuntimeRecoveryContinuationCodec>();
+        // Registered here as well as in AddWorkflowRuntime so a host that composes only these durable stores (a
+        // worker, a test harness) still fails activation on a missing key rather than on every recovery sweep.
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateRuntimeRecoveryContinuationCodecStartupTask>());
         services.ClaimWorkflowTestScopeProvider(typeof(GroundworkV2WorkflowTestScopeStore));
         foreach (var unit in ElsaRuntimeV2StorageManifest.CreateUnits())
             services.AddGroundworkStorageUnit(unit, target);

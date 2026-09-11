@@ -57,6 +57,10 @@ services:
       Elsa__ModuleManagement__ApiKey: elsa-docker-demo-key
       # CORS: allow the browser origin the Studio app is served from (host-published port).
       Cors__AllowedOrigins__0: "http://localhost:14000"
+      # HMAC key for durable recovery continuations (at least 32 UTF-8 bytes, identical on every node). The
+      # default shell refuses to activate without it. It must be an env var: the image's shells.Production.json
+      # blanks any value in the mounted shells.json. Demo-only; change it for anything beyond local use.
+      CShells__Shells__default__Features__GroundworkWorkflowRuntime__RecoveryContinuationSigningKey: elsa-docker-demo-recovery-continuation-key
       # The connection string is supplied by the mounted shells.json below. To override
       # it without editing that file, uncomment the next line:
       # CShells__Shells__default__Features__GroundworkProviderPostgreSql__ConnectionString: "Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa"
