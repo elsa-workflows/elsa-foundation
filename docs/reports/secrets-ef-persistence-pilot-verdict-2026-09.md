@@ -173,8 +173,9 @@ No default switch or new module migration starts before this wave completes.
 
 ### Wave 1 — close the pilot's production-evidence gaps
 
-- Complete #1644 or explicitly choose a different supported package-feed route before claiming
-  dynamic Foundation Host production readiness.
+- Complete #1644 before calling the current Foundation Host/Nuplane directory-feed route
+  production-ready. Any alternative package-feed route requires its own tracked readiness decision
+  and evidence; it does not close #1644.
 - Complete #1653 so API behavior and EF selection are proven in one production-shaped HTTP/restart
   journey rather than inferred by joining separate in-process suites.
 - Preserve Workbench's Groundwork default. These follow-ups harden evidence; they do not authorize
