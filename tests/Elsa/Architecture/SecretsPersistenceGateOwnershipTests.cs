@@ -85,11 +85,11 @@ public sealed class SecretsPersistenceGateOwnershipTests
             "src/Apps/Elsa.Workbench/shells.json",
             "docker/compose/elsa-workbench.shells.json"
         };
-        var segmentSets = relativePaths.Select(static relative => relative.Split('/'));
-        foreach (var segments in segmentSets)
+        var shellConfigPaths = relativePaths.Select(static relative => RepoPath(relative.Split('/')));
+        foreach (var shellConfigPath in shellConfigPaths)
         {
             using var document = System.Text.Json.JsonDocument.Parse(
-                File.ReadAllText(RepoPath(segments)),
+                File.ReadAllText(shellConfigPath),
                 new System.Text.Json.JsonDocumentOptions
                 {
                     CommentHandling = System.Text.Json.JsonCommentHandling.Skip,
