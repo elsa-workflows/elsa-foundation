@@ -1,6 +1,9 @@
 using CShells;
+using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
+using CShells.Features;
+using CShells.Lifecycle;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;

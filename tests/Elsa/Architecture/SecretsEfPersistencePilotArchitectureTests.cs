@@ -175,24 +175,37 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
                      "docker/compose/elsa-workbench.shells.json"
                  })
         {
-            using var document = System.Text.Json.JsonDocument.Parse(
-                File.ReadAllText(RepoPath(relative.Split('/'))),
-                new System.Text.Json.JsonDocumentOptions
-                {
-                    CommentHandling = System.Text.Json.JsonCommentHandling.Skip,
-                    AllowTrailingCommas = true
-                });
-            var features = document.RootElement
-                .GetProperty("CShells").GetProperty("Shells").GetProperty("default").GetProperty("Features");
             Assert.False(
-                features.TryGetProperty("SecretsEntityFrameworkCore", out _),
+                DefaultShellFeatures(relative).Contains("SecretsEntityFrameworkCore"),
                 $"{relative} must not enable SecretsEntityFrameworkCore; Groundwork remains the default.");
-            if (relative.EndsWith("shells.Production.json", StringComparison.Ordinal))
-                continue;
+        }
+
+        foreach (var relative in new[]
+                 {
+                     "src/Apps/Elsa.Workbench/shells.json",
+                     "docker/compose/elsa-workbench.shells.json"
+                 })
+        {
             Assert.True(
-                features.TryGetProperty("SecretsGroundworkPersistence", out _),
+                DefaultShellFeatures(relative).Contains("SecretsGroundworkPersistence"),
                 $"{relative} must keep SecretsGroundworkPersistence as the default Secrets store.");
         }
+    }
+
+    private static HashSet<string> DefaultShellFeatures(string relative)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(
+            File.ReadAllText(RepoPath(relative.Split('/'))),
+            new System.Text.Json.JsonDocumentOptions
+            {
+                CommentHandling = System.Text.Json.JsonCommentHandling.Skip,
+                AllowTrailingCommas = true
+            });
+        return document.RootElement
+            .GetProperty("CShells").GetProperty("Shells").GetProperty("default").GetProperty("Features")
+            .EnumerateObject()
+            .Select(property => property.Name)
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     private static IReadOnlyList<string> PackageIncludes(string csproj) =>
