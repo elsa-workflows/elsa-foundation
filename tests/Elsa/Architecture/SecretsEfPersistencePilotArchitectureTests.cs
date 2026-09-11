@@ -4,8 +4,8 @@ using Xunit;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Owns the ADR 0072 Secrets EF pilot allowlist. The shrink-only EF surface baseline excludes these
-/// paths the same way it excludes OpenIddict vendor sources; this test is the exact inventory.
+/// Owns the ADR 0072 Secrets EF pilot allowlist. <see cref="EfCoreDependencyGuardTests"/> exempts these
+/// paths, but not the projects that depend on them; this test is the exact inventory.
 /// ADR 0042 still forbids first-party EF until 0072 is accepted.
 /// </summary>
 public sealed class SecretsEfPersistencePilotArchitectureTests
@@ -111,7 +111,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
                 "tests/Elsa/Persistence/EntityFramework/",
                 "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/"
             ],
-            EfCoreSurfaceScanner.Adr0072SecretsEfPilot.SurfacePathPrefixes);
+            EfCoreDependencyGuardTests.Adr0072SecretsEfPilot.SurfacePathPrefixes);
     }
 
     [Fact]
@@ -138,25 +138,13 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
     [Fact]
     public void Pilot_sources_are_the_exact_reviewed_inventory()
     {
-        var actual = EfCoreSurfaceScanner.Adr0072SecretsEfPilot.SurfacePathPrefixes
+        var actual = EfCoreDependencyGuardTests.Adr0072SecretsEfPilot.SurfacePathPrefixes
             .SelectMany(prefix => Directory.EnumerateFiles(RepoPath(prefix.TrimEnd('/').Split('/')), "*.cs", SearchOption.AllDirectories)
                 .Select(path => Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/')))
             .Where(path => !path.Contains("/obj/", StringComparison.Ordinal) && !path.Contains("/bin/", StringComparison.Ordinal))
             .Order(StringComparer.Ordinal)
             .ToArray();
         Assert.Equal(PilotSources, actual);
-    }
-
-    [Fact]
-    public void Shrink_only_snapshot_does_not_inventory_the_pilot_trees()
-    {
-        var snapshot = new EfCoreSurfaceScanner(RepoRoot).Scan();
-        var leaked = snapshot.Categories()
-            .SelectMany(category => category.Value.Select(entry => $"{category.Key}: {entry}"))
-            .Where(entry => EfCoreSurfaceScanner.Adr0072SecretsEfPilot.SurfacePathPrefixes.Any(prefix =>
-                entry.Contains(prefix, StringComparison.Ordinal)))
-            .ToArray();
-        Assert.True(leaked.Length == 0, string.Join(Environment.NewLine, leaked));
     }
 
     [Fact]

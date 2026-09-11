@@ -8,7 +8,9 @@ namespace Elsa.Architecture.Tests;
 /// EF Core may only survive where the <c>Elsa.Workbench</c> host wires the vendor OpenIddict store it
 /// chose for itself. The guard walks the declared csproj graph (no restore, no baseline) and scans
 /// sources, so a new EF edge anywhere else under <c>src/</c> fails and names the offender. To let another
-/// host own an EF vendor store, add it to <see cref="AllowedEfConsumers"/> in the same change.
+/// host own an EF vendor store, add it to <see cref="AllowedEfConsumers"/> in the same change. The proposed
+/// ADR 0072 Secrets EF pilot trees are exempt themselves (see <see cref="Adr0072SecretsEfPilot"/>), but a
+/// project outside them that reaches EF through a pilot project still fails.
 /// </summary>
 public sealed class EfCoreDependencyGuardTests
 {
@@ -29,7 +31,7 @@ public sealed class EfCoreDependencyGuardTests
             .Where(project => Reachable([project.Name], name => Projects[name].References).Any(name => Projects[name].DeclaresEf))
             .Select(project => project.Name);
 
-        var offenders = reachingEf.Except(AllowedClosure()).Order().ToArray();
+        var offenders = reachingEf.Except(AllowedClosure()).Where(name => !Projects[name].IsPilot).Order().ToArray();
 
         Assert.True(offenders.Length == 0, Report("reach an EF Core package outside the allowed consumers and their dependents", offenders));
     }
@@ -38,7 +40,7 @@ public sealed class EfCoreDependencyGuardTests
     public void No_project_outside_the_allowed_closure_declares_an_ef_core_package()
     {
         var offenders = Projects.Values
-            .Where(project => project.DeclaresEf)
+            .Where(project => project.DeclaresEf && !project.IsPilot)
             .Select(project => project.Name)
             .Except(AllowedClosure())
             .Order()
@@ -52,6 +54,7 @@ public sealed class EfCoreDependencyGuardTests
     {
         var offenders = Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
             .Where(file => !IsBuildOutput(file) && !AllowedEfConsumers.Contains(OwningProject(file)))
+            .Where(file => !Adr0072SecretsEfPilot.IsSurfacePath(Path.GetRelativePath(RepoRoot, file).Replace('\\', '/')))
             .Where(file => File.ReadAllText(file).Contains("Microsoft.EntityFrameworkCore", StringComparison.Ordinal))
             .Select(file => Path.GetRelativePath(RepoRoot, file))
             .Order()
@@ -86,7 +89,8 @@ public sealed class EfCoreDependencyGuardTests
                 .ToHashSet(StringComparer.Ordinal);
             var declaresEf = document.Descendants("PackageReference")
                 .Any(x => EfPackagePrefixes.Any(prefix => (x.Attribute("Include")?.Value ?? "").StartsWith(prefix, StringComparison.OrdinalIgnoreCase)));
-            projects.Add(Path.GetFileNameWithoutExtension(file), new Project(Path.GetFileNameWithoutExtension(file), references, declaresEf));
+            var isPilot = Adr0072SecretsEfPilot.IsSurfacePath(Path.GetRelativePath(RepoRoot, file).Replace('\\', '/'));
+            projects.Add(Path.GetFileNameWithoutExtension(file), new Project(Path.GetFileNameWithoutExtension(file), references, declaresEf, isPilot));
         }
         return projects;
     }
@@ -115,5 +119,24 @@ public sealed class EfCoreDependencyGuardTests
         throw new DirectoryNotFoundException("Could not find repository root.");
     }
 
-    private sealed record Project(string Name, HashSet<string> References, bool DeclaresEf);
+    private sealed record Project(string Name, HashSet<string> References, bool DeclaresEf, bool IsPilot);
+
+    /// <summary>
+    /// ADR 0072 (proposed) Secrets EF pilot. ADR 0042 still permits only the OpenIddict vendor exception; this
+    /// prefix exemption is a review-time carve-out, not an accepted amendment.
+    /// <see cref="SecretsEfPersistencePilotArchitectureTests"/> owns the exact package and source inventory.
+    /// </summary>
+    internal static class Adr0072SecretsEfPilot
+    {
+        public static readonly string[] SurfacePathPrefixes =
+        [
+            "src/Elsa/Persistence/EntityFramework/",
+            "src/Elsa/Secrets/Persistence/EntityFrameworkCore/",
+            "tests/Elsa/Persistence/EntityFramework/",
+            "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/"
+        ];
+
+        public static bool IsSurfacePath(string relativePath) =>
+            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
+    }
 }
