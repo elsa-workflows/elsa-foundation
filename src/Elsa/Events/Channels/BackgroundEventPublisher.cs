@@ -73,7 +73,7 @@ public sealed class BackgroundEventPublisher(
             var eventPublisher = scope.ServiceProvider.GetRequiredService<IInlineEventPublisher>();
 
             // Dispatch under host lifetime only. The queued context's own CancellationToken (captured
-            // at enqueue time) is intentionally NOT linked here — see the class remarks on dispatch lifetime.
+            // at enqueue time) is intentionally NOT linked here — see the class remarks on the caller token.
             await eventPublisher.Publish(
                 queuedContext.Event,
                 cancellationToken
