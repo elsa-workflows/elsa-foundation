@@ -69,6 +69,7 @@ internal static class PublishingApiContractSurface
         typeof(ListValueConversionProfiles),
         typeof(PreflightActivityDraftPublication),
         typeof(GetActivityPublicationReceipt),
+        typeof(GetPublicationRecord),
         typeof(GetWorkflowPublicationPolicy),
         typeof(SetWorkflowPublicationPolicy),
         typeof(PreflightWorkflowPublication),

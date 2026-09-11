@@ -78,6 +78,7 @@ All routes are relative to the host's Elsa API base path.
 | `POST` | `publishing/workflows/preflight` | `workflow-publishing.read` | Preflight a supplied workflow snapshot and issue a review token. |
 | `DELETE` | `publishing/workflows/{definitionId}/slots/{slotName}` | `workflow-publishing.manage` | Unpublish the slot authority and its serving projections. |
 | `POST` | `publishing/workflows/{definitionId}/slots/{slotName}/restore` | `workflow-publishing.manage` | Restore the latest eligible retired publication with a new authority transition. |
+| `GET` | `publishing/publications/{publicationId}` | `workflow-publishing.read` | Read one publication journal record, including the design version it published. |
 | `GET` | `publishing/workflows/{definitionId}/policy` | `workflow-publishing.read` | Read the effective workflow/host policy. |
 | `PUT` | `publishing/workflows/{definitionId}/policy` | `workflow-publishing.manage` | CAS-update workflow publication policy. |
 | `POST` | `publishing/workflows/{versionId}/publish` | `workflow-publishing.manage` | Compile, prepare, CAS-activate, reconcile, and return the publication. |
@@ -97,6 +98,10 @@ The version route excludes the reserved literal `drafts`, so the two test-run ro
 Activation-slot reads are runtime-owned: `GET /runtime/workflows/activation-slots/{definitionId}` and
 `GET /runtime/workflows/activation-slots/{definitionId}/{slotName}` are served by `Elsa.Workflows.Runtime.Api`.
 Publishing keeps the two slot lifecycle commands above, whose responses may include the publication journal view.
+The runtime view is unjoined by design, so a client that needs the design version behind an occupied slot
+resolves the runtime slot first and then, for an entry whose `sourceKind` is publishing, follows its
+`activeActivationId` through `GET publishing/publications/{publicationId}` (the `publication-record` relation).
+An id that names no record answers `404` problem details, so a failed lookup is never read as "no version".
 
 Activity publication clients must preflight immediately before publish and submit the returned
 opaque review token, one exact offered version, and a caller-stable idempotency key. Replaying the

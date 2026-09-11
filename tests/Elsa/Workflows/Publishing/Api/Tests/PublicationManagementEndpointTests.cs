@@ -22,6 +22,7 @@ public sealed class PublicationManagementEndpointTests
         { "PublishWorkflowEndpoint", "publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/publish", WorkflowPublishingPermissions.Manage },
         { "UnpublishPublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}", WorkflowPublishingPermissions.Manage },
         { "RestorePublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}/restore", WorkflowPublishingPermissions.Manage },
+        { "GetPublicationRecordEndpoint", "publishing/publications/{publicationId}", WorkflowPublishingPermissions.Read },
         { "GetWorkflowPublicationPolicyEndpoint", "publishing/workflows/{definitionId}/policy", WorkflowPublishingPermissions.Read },
         { "SetWorkflowPublicationPolicyEndpoint", "publishing/workflows/{definitionId}/policy", WorkflowPublishingPermissions.Manage }
     };

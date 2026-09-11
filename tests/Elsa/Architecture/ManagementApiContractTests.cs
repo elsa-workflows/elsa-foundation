@@ -26,6 +26,7 @@ public class ManagementApiContractTests
         "/design/workflows/versions/{versionId}",
         "/expressions/descriptors",
         "/expressions/variable-types",
+        "/publishing/publications/{publicationId}",
         "/publishing/workflows/drafts/test-runs",
         "/publishing/workflows/{definitionId}/policy",
         "/publishing/workflows/{definitionId}/slots/{slotName}",
