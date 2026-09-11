@@ -68,11 +68,13 @@ The completed Secrets pilot then tested that direction in product code. It prove
   conflict, normalization, and search-key contracts;
 - Workbench can remain Groundwork-default while an EF composition is opt-in.
 
-The measured cost comparison disproved the code-reduction premise for Secrets. Even after excluding
-pilot-only tests, its EF implementation carries about 2.5 times the source and 4.5 times the tests of
-the Groundwork adapter, plus three provider migration/snapshot sets and operator tooling. Runtime
-keeps Groundwork, so the shared Groundwork layer cannot be retired by moving ordinary modules. An
-EF-first decision must therefore rest on explicit benefits other than reducing owned code.
+The measured cost comparison disproved the code-reduction premise for Secrets. Excluding the 401
+lines of generated Unicode casing data, its EF module has 1,278 hand-written source lines versus 510
+for Groundwork, about 2.5 times as many. Excluding about 1,350 pilot-only test lines, it retains about
+3,187 test lines versus 690, about 4.5 times as many. It also carries three provider
+migration/snapshot sets and operator tooling. Runtime keeps Groundwork, so the shared Groundwork
+layer cannot be retired by moving ordinary modules. An EF-first decision must therefore rest on
+explicit benefits other than reducing owned code.
 
 The pilot did **not** prove existing-domain data conversion, arbitrary cross-module multi-engine
 composition, MongoDB parity, the current Foundation Host directory-feed route, or Runtime hot-path
@@ -177,10 +179,11 @@ A module is eligible only when all of these are demonstrated:
 3. Transaction, concurrency, ordering, query, tenancy, retention, and consistency semantics can be
    written as module-owned tests.
 4. The workload is not a Runtime/G8 hot-path or dependent on Groundwork operational primitives.
-5. A measured comparison against the Groundwork adapter records source, tests, migrations, tooling,
-   shared-layer effects, and expected schema churn. Explicit non-code-size benefits justify the added
-   EF ownership, and three provider-derived migration sets remain reviewable; otherwise the D14
-   threshold is evaluated before proceeding.
+5. An ownership comparison records source, tests, migrations, tooling, shared-layer effects, and
+   expected schema churn. Existing modules use their actual Groundwork adapter as the baseline. New
+   modules use the closest comparable Groundwork module or, when that estimate could change the
+   decision, a bounded spike of both recipes. Explicit non-code-size benefits justify the added EF
+   ownership, and three provider-derived migration sets remain reviewable.
 6. For an existing module, data conversion, mixed-version behavior, cutover, rollback, evidence
    retention, and operational ownership are explicit acceptance gates.
 
@@ -298,8 +301,9 @@ contract.
 
 ### D11 — Groundwork remains for document, Runtime, and specialized operational workloads
 
-MongoDB remains an optional second family, outside these EF contexts. A module that requires a
-document store keeps or adds a document-family adapter with its own evidence.
+Groundwork remains the first-party document/Mongo family, outside these EF contexts. A module that
+requires a document store keeps its Groundwork adapter or adds one with its own evidence. This ADR
+does not authorize another first-party Mongo implementation.
 
 Runtime checkpoint, execution state and logs, scheduler queues, durable command inboxes, timers,
 outbox, mailbox and agent ownership, placement, transport, leases, fencing, and distributed locks
