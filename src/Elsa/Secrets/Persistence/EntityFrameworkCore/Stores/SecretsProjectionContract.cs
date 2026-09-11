@@ -120,15 +120,24 @@ public static class SecretsProjectionContract
     private static (SecretDocument Stored, SecretDocument Current) ReadDocuments(SecretRecord record)
     {
         SecretDocument stored;
+        SecretDocument current;
         try
         {
             stored = SecretDocument.Parse(record.Payload);
+            if (stored.Secret is null)
+                throw new InvalidOperationException("The serialized document has no authoritative Secret.");
+            if (stored.Secret.Versions is null)
+                throw new InvalidOperationException("The serialized Secret has no version collection.");
+            if (stored.Secret.Versions.Any(static version => version is null))
+                throw new InvalidOperationException("The serialized Secret contains an invalid version entry.");
+
+            current = SecretDocument.FromSecret(stored.Secret);
         }
         catch (JsonException exception)
         {
             throw SecretsProjectionException.ForPayload(record, exception);
         }
-        catch (ArgumentNullException exception)
+        catch (NotSupportedException exception)
         {
             throw SecretsProjectionException.ForPayload(record, exception);
         }
@@ -136,9 +145,14 @@ public static class SecretsProjectionContract
         {
             throw SecretsProjectionException.ForPayload(record, exception);
         }
+        catch (ArgumentException exception)
+        {
+            throw SecretsProjectionException.ForPayload(record, exception);
+        }
 
-        var current = SecretDocument.FromSecret(stored.Secret);
-        if (!string.Equals(current.TenantId, record.TenantId, StringComparison.Ordinal) ||
+        if (!string.Equals(stored.TenantId, record.TenantId, StringComparison.Ordinal) ||
+            !string.Equals(stored.NormalizedName, record.NormalizedName, StringComparison.Ordinal) ||
+            !string.Equals(current.TenantId, record.TenantId, StringComparison.Ordinal) ||
             !string.Equals(current.NormalizedName, record.NormalizedName, StringComparison.Ordinal))
         {
             throw SecretsProjectionException.ForIdentity(record);

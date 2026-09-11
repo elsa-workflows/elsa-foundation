@@ -27,7 +27,7 @@ public sealed class SecretsProjectionException : InvalidOperationException
         new(
             record.TenantId,
             record.NormalizedName,
-            Describe(record, "has a damaged persisted payload that could not be parsed."),
+            Describe(record, "has a damaged or structurally invalid persisted document."),
             innerException);
 
     internal static SecretsProjectionException ForIdentity(SecretRecord record) =>
