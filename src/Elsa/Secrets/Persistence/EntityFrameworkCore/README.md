@@ -63,6 +63,10 @@ History table: `__EFMigrationsHistory_ElsaSecrets`.
 
 See [Tooling/README.md](Tooling/README.md) and [tools/ef/README.md](../../../../../tools/ef/README.md).
 
+The repository pins `dotnet-ef` in `.config/dotnet-tools.json`; run `dotnet tool restore` from
+the repository root. An executable `.tools/dotnet-ef` is an explicit override for an operator
+checkout, while a stale global `dotnet-ef` is never preferred over the repository manifest.
+
 Out of process (no host):
 
 ```bash
@@ -72,4 +76,18 @@ bash tools/ef/dual-migrate.sh apply --sqlite
 
 `pending` is `dotnet ef migrations has-pending-model-changes` per derived context.
 `apply` is `dotnet ef database update --context <Derived>`. Runtime AutoMigrate / Validate
-uses the same compiled migrations in this module.
+uses the same compiled migrations in this module, but the checks are different: `pending`
+compares the source model to its snapshot without reading database history, whereas runtime
+`Validate` checks whether the selected database has unapplied compiled migrations. Recommended
+deployment order is `pending`, backup/quiesce, provider-specific `apply`, history/table-shape
+verification, then application startup with `MigratePolicy=Validate`.
+
+For deployment boundaries, use an explicit provider selector and matching connection, a
+short-lived least-privilege migration identity, and a least-privilege runtime identity after
+verification. Keep `SecretsGroundworkPersistence` disabled in the shell while this backend is
+enabled. Verify the `__EFMigrationsHistory_ElsaSecrets` history table and the `elsa_secrets` table
+shape before rollout; stop on any failure and inspect the database before retrying. Keep schema changes additive where
+possible and roll back application code only after compatibility is checked. Never blindly
+down-migrate: `WidenLookupKeys.Down` narrows SQL Server/PostgreSQL lookup columns to 64
+characters, so longer values can make rollback fail or lose data. Restore a verified backup or
+ship a forward migration for schema recovery.

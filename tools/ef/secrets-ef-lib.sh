@@ -22,9 +22,15 @@ secrets_ef_split() {
 }
 
 secrets_ef() {
-  # Prefer a restored local tool, then PATH. CI/ops: `dotnet tool restore` from the repo root.
+  # An explicit repository tool-path is authoritative.
   if [[ -x "$secrets_ef_root/.tools/dotnet-ef" ]]; then
     "$secrets_ef_root/.tools/dotnet-ef" "$@"
+    return
+  fi
+  # The repository manifest is authoritative before any global PATH tool. Run `dotnet tool
+  # restore` from the repo root first; a stale global dotnet-ef must not silently win.
+  if [[ -f "$secrets_ef_root/.config/dotnet-tools.json" ]]; then
+    dotnet ef "$@"
     return
   fi
   if command -v dotnet-ef >/dev/null 2>&1; then

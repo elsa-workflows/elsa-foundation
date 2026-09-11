@@ -1,5 +1,4 @@
-using System.Diagnostics;
-using System.Text;
+using Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.Support;
 using Microsoft.Data.Sqlite;
 using Xunit;
 
@@ -280,134 +279,13 @@ public sealed class SecretsEfDualMigrateToolTests
         }
     }
 
-    private static bool? _dotnetEf;
+    private static bool HasDotnetEf() => DualMigrateProcessRunner.HasDotnetEf();
 
-    private static bool HasDotnetEf()
-    {
-        if (_dotnetEf is { } cached)
-            return cached;
-
-        var root = RepoPath();
-        if (File.Exists(Path.Join(root, ".tools", "dotnet-ef")))
-            return Remember(true);
-
-        TryRestoreDotnetTools(root);
-        var start = new ProcessStartInfo("dotnet", ["ef", "--version"])
-        {
-            WorkingDirectory = root,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-        CopyDotnetEnvironment(start.Environment);
-        try
-        {
-            using var process = Process.Start(start);
-            if (process is null)
-                return Remember(false);
-            if (!process.WaitForExit(60_000))
-            {
-                try
-                {
-                    process.Kill(entireProcessTree: true);
-                }
-                catch (InvalidOperationException exception)
-                {
-                    Debug.WriteLine(exception);
-                }
-
-                return Remember(false);
-            }
-
-            return Remember(process.ExitCode == 0);
-        }
-        catch (InvalidOperationException)
-        {
-            return Remember(false);
-        }
-        catch (System.ComponentModel.Win32Exception)
-        {
-            return Remember(false);
-        }
-    }
-
-    private static bool Remember(bool value)
-    {
-        _dotnetEf = value;
-        return value;
-    }
-
-    private static void TryRestoreDotnetTools(string root)
-    {
-        var start = new ProcessStartInfo("dotnet", ["tool", "restore"])
-        {
-            WorkingDirectory = root,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-        CopyDotnetEnvironment(start.Environment);
-        try
-        {
-            using var process = Process.Start(start);
-            process?.WaitForExit(60_000);
-        }
-        catch (InvalidOperationException)
-        {
-            // pending / apply --sqlite then skip.
-        }
-        catch (System.ComponentModel.Win32Exception)
-        {
-            // pending / apply --sqlite then skip.
-        }
-    }
-
-    private static ScriptResult RunDualMigrate(
+    private static DualMigrateProcessRunner.ScriptResult RunDualMigrate(
         IReadOnlyList<string> args,
         IReadOnlyDictionary<string, string?>? extraEnv = null,
         string? rootOverride = null)
-    {
-        var root = rootOverride ?? RepoPath();
-        var script = Path.Join(root, "tools", "ef", "dual-migrate.sh");
-        var start = new ProcessStartInfo("bash")
-        {
-            WorkingDirectory = root,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-        start.ArgumentList.Add(script);
-        foreach (var arg in args)
-            start.ArgumentList.Add(arg);
-
-        CopyDotnetEnvironment(start.Environment);
-        if (extraEnv is not null)
-        {
-            foreach (var (key, value) in extraEnv)
-            {
-                if (value is null)
-                    start.Environment.Remove(key);
-                else
-                    start.Environment[key] = value;
-            }
-        }
-
-        using var process = Process.Start(start)
-                            ?? throw new InvalidOperationException("bash could not be started.");
-        var outputTask = process.StandardOutput.ReadToEndAsync();
-        var errorTask = process.StandardError.ReadToEndAsync();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(180));
-        try
-        {
-            process.WaitForExitAsync(timeout.Token).GetAwaiter().GetResult();
-        }
-        catch (OperationCanceledException)
-        {
-            KillProcessTree(process);
-            throw new TimeoutException($"dual-migrate.sh {string.Join(' ', args)} did not exit within 180s.");
-        }
-
-        var output = outputTask.GetAwaiter().GetResult();
-        var error = errorTask.GetAwaiter().GetResult();
-        return new ScriptResult(process.ExitCode, output, error);
-    }
+        => DualMigrateProcessRunner.Run(args, extraEnv, rootOverride);
 
     private static string WriteExecutableShim(string directory, string name, string contents)
     {
@@ -420,27 +298,6 @@ public sealed class SecretsEfDualMigrateToolTests
             path,
             UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         return path;
-    }
-
-    private static void KillProcessTree(Process process)
-    {
-        try
-        {
-            process.Kill(entireProcessTree: true);
-        }
-        catch (InvalidOperationException)
-        {
-            // The process may already have exited; cleanup is best-effort.
-        }
-    }
-
-    private static void CopyDotnetEnvironment(IDictionary<string, string?> environment)
-    {
-        var path = Environment.GetEnvironmentVariable("PATH") ?? "";
-        var dotnetRoot = Environment.GetEnvironmentVariable("DOTNET_ROOT");
-        if (!string.IsNullOrWhiteSpace(dotnetRoot))
-            environment["DOTNET_ROOT"] = dotnetRoot;
-        environment["PATH"] = path;
     }
 
     private static async Task<bool> TableExistsAsync(string path, string table)
@@ -481,17 +338,4 @@ public sealed class SecretsEfDualMigrateToolTests
         throw new DirectoryNotFoundException("Could not find repository root.");
     }
 
-    private sealed record ScriptResult(int ExitCode, string Output, string Error)
-    {
-        public string Describe()
-        {
-            var text = new StringBuilder();
-            text.Append("exit ").Append(ExitCode);
-            if (!string.IsNullOrWhiteSpace(Output))
-                text.AppendLine().Append(Output);
-            if (!string.IsNullOrWhiteSpace(Error))
-                text.AppendLine().Append(Error);
-            return text.ToString();
-        }
-    }
 }
