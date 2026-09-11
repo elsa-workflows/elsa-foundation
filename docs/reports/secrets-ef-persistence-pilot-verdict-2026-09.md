@@ -32,8 +32,8 @@ The product conclusion is therefore conditional:
 
 | Phase | Merged work | Result |
 |---|---|---|
-| 0 + 1: policy and first module | [#1624](https://github.com/elsa-workflows/elsa-foundation/pull/1624), merge `805a289a` | Added the small `Elsa.Persistence.EntityFramework` policy package and `Elsa.Secrets.Persistence.EntityFrameworkCore`; kept domain contracts provider-blind; added one shared model with provider-derived contexts, per-provider migrations, a provider guard, module-specific history, and the reviewed EF-surface exception. |
-| 2: dual migration modes | [#1633](https://github.com/elsa-workflows/elsa-foundation/pull/1633), merge `b619cbf0`; hardening [#1638](https://github.com/elsa-workflows/elsa-foundation/pull/1638), merge `077a07ea`; operator closeout [#1643](https://github.com/elsa-workflows/elsa-foundation/pull/1643), merge `5441cfc4` | Made runtime auto-migrate/validate and `tools/ef/dual-migrate.sh` use the same migration artifacts; added shell-aware initialization, locking/provider checks, operator diagnostics, and model/projection validation. |
+| 0 + 1: policy and first module | [#1624](https://github.com/elsa-workflows/elsa-foundation/pull/1624), merge `805a289a`; cross-phase corrective closeout [#1638](https://github.com/elsa-workflows/elsa-foundation/pull/1638), merge `077a07ea` | Added the small `Elsa.Persistence.EntityFramework` policy package and `Elsa.Secrets.Persistence.EntityFrameworkCore`; kept domain contracts provider-blind; added one shared model with provider-derived contexts, per-provider migrations, a provider guard, module-specific history, and the reviewed EF-surface exception. The cross-phase corrective closed Phase 0 + 1 convergence while also hardening the dual-migration path. |
+| 2: dual migration modes | [#1633](https://github.com/elsa-workflows/elsa-foundation/pull/1633), merge `b619cbf0`; operator closeout [#1643](https://github.com/elsa-workflows/elsa-foundation/pull/1643), merge `5441cfc4` | Made runtime auto-migrate/validate and `tools/ef/dual-migrate.sh` use the same migration artifacts; added shell-aware initialization, locking/provider checks, operator diagnostics, and model/projection validation. |
 | 3: opt-in composition | [#1634](https://github.com/elsa-workflows/elsa-foundation/pull/1634), merge `2c5d87ae`; audit closeout [#1651](https://github.com/elsa-workflows/elsa-foundation/pull/1651), merge `6787ec0a` | Let a host select `SecretsEntityFrameworkCore` or `SecretsGroundworkPersistence`, never both; retained the Groundwork-default Workbench; proved PostgreSQL host composition; hardened projection repair, paging, diagnostics, and rollback behavior. |
 | 4: conditional evidence ownership | [#1646](https://github.com/elsa-workflows/elsa-foundation/pull/1646), merge `addcb178`; evidence closeout [#1652](https://github.com/elsa-workflows/elsa-foundation/pull/1652), merge `0a6a6595` | Kept the 35-row Groundwork-selected composition while adding the 34-row EF alternate that omits only `secrets-repository`; separated EF and Groundwork CI ownership; corrected current-state contracts and recorded the acceptance evidence. |
 
@@ -161,8 +161,9 @@ Current broader-rollout state: `none/free-flow`. No replacement module is admitt
 - Explicitly accept, revise, or reject ADR 0072.
 - Merge/close PR #1623 and dispose of spike PR #1622 without losing its evidence.
 - Reconcile ADR 0042, the Zero-EF program goal, and the EF architecture guard.
-- If accepted, create a named replacement program bucket; do not leave a multi-module rollout as
-  `none/free-flow`.
+- If a broader rollout is later accepted for planning, create a named replacement program bucket;
+  accepting ADR 0072 by itself neither schedules that rollout nor changes its `none/free-flow`
+  state.
 
 No default switch or new module migration starts before this wave completes.
 
