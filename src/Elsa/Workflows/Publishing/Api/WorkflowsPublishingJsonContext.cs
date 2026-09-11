@@ -69,6 +69,7 @@ internal static class WorkflowsPublishingJsonOptions
 [JsonSerializable(typeof(ListValueConversionProfiles))]
 [JsonSerializable(typeof(PreflightActivityDraftPublication))]
 [JsonSerializable(typeof(GetActivityPublicationReceipt))]
+[JsonSerializable(typeof(GetPublicationRecord))]
 [JsonSerializable(typeof(GetWorkflowPublicationPolicy))]
 [JsonSerializable(typeof(SetWorkflowPublicationPolicy))]
 [JsonSerializable(typeof(PreflightWorkflowPublication))]

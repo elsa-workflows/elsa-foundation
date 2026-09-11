@@ -51,7 +51,7 @@ public sealed class PublishingApiContractTests
     private const string Owner = "Elsa.Workflows.Publishing.Api";
 
     [Fact]
-    public void Publishing_mapper_exposes_exactly_the_current_22_operation_manifest()
+    public void Publishing_mapper_exposes_exactly_the_current_23_operation_manifest()
     {
         using var provider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(provider);
@@ -59,7 +59,7 @@ public sealed class PublishingApiContractTests
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
 
         var manifest = EndpointManifestBuilder.Capture(routes.DataSources);
-        Assert.Equal(22, manifest.Entries.Count);
+        Assert.Equal(23, manifest.Entries.Count);
         Assert.Equal(
             PublishingCurrentSurface.Manifest
                 .Select(route => route.Endpoint.ToString())
@@ -87,8 +87,8 @@ public sealed class PublishingApiContractTests
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
 
         var endpoints = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
-        Assert.Equal(22, endpoints.Length);
-        Assert.Equal(22, endpoints.Select(endpoint => endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName)
+        Assert.Equal(23, endpoints.Length);
+        Assert.Equal(23, endpoints.Select(endpoint => endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName)
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Distinct(StringComparer.Ordinal)
             .Count());
@@ -159,7 +159,7 @@ public sealed class PublishingApiContractTests
             .Where(operation => operation.Endpoint.Route.Value.StartsWith("/publishing/", StringComparison.Ordinal) ||
                                 operation.Endpoint.Route.Value.StartsWith("/design/activities/", StringComparison.Ordinal))
             .ToArray();
-        Assert.Equal(22, publishingOperations.Length);
+        Assert.Equal(23, publishingOperations.Length);
 
         var beforeHttp = BaselineFile.Load<HttpCompatibilityObservation[]>(Path.Join(BaselineDirectory, "publishing-http-fastendpoints.json"));
         var beforeOpenApi = BaselineFile.Load<OpenApiEvidenceDocument>(Path.Join(BaselineDirectory, "publishing-openapi-fastendpoints.json"));
@@ -204,9 +204,9 @@ public sealed class PublishingApiContractTests
 
         // The FastEndpoints-to-Minimal-API migration reviewed one OpenAPI difference per operation.
         var approvals = allApprovals.Where(approval => approval.Case == "openapi").ToArray();
-        Assert.Equal(48, approvals.Length);
-        Assert.Equal(24, approvals.Count(approval => !approval.Reverse));
-        Assert.Equal(24, approvals.Count(approval => approval.Reverse));
+        Assert.Equal(50, approvals.Length);
+        Assert.Equal(25, approvals.Count(approval => !approval.Reverse));
+        Assert.Equal(25, approvals.Count(approval => approval.Reverse));
         Assert.All(approvals, approval => Assert.Equal(CompatibilityFacet.OpenApi, approval.Facet));
 
         // Handler absorption reviewed the cases whose frozen rows only ever described the capture
