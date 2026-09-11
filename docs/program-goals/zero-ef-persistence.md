@@ -1,8 +1,17 @@
 # Zero-EF Persistence
 
+> **Historical program — superseded 2026-09-12.** This goal records the completed Groundwork
+> consolidation direction and any residual issue provenance, but it is no longer an active policy or
+> scheduling surface. Accepted
+> [ADR 0072](../adr/0072-ef-first-relational-persistence-with-provider-derived-contexts.md) permits a
+> separately gated EF relational lane. It retains Groundwork as the Workbench default and for
+> Runtime, document/Mongo, and operationally specialized workloads. Unfinished provider/performance
+> obligations remain with their linked issues, including #646; superseding this goal does not claim
+> those obligations passed.
+
 Constitution reconciliation: ratified constitution v4.0.0 retains historical EF implementation examples in §E2.2.1, §E2.5 and §E5. Those examples do not enumerate current shipped APIs after this program's owner-approved deletion. Normative provider-neutrality rules remain unchanged. Updating the constitutional text itself is deferred to its proposal/discussion/ratification process; this program does not claim a new ratification. Current implementation inventory is the generated maps and this program's scope.
 
-Status: active.
+Status: superseded.
 
 Area: Elsa persistence-provider consolidation / Groundwork adoption.
 
@@ -10,7 +19,10 @@ Steward(s): Sipke plus active architects/agents.
 
 ## Purpose
 
-Make Groundwork the only first-party Elsa persistence implementation family, while keeping core persistence contracts and invariants independent of Groundwork. Remove Elsa-owned EF dependencies and implementations; retain the narrowly approved Workbench vendor `OpenIddict.EntityFrameworkCore` store and its necessary support. No Groundwork OpenIddict adapter is required.
+Historical purpose: make Groundwork the only first-party Elsa persistence implementation family,
+while keeping core persistence contracts and invariants independent of Groundwork. That absolute
+first-party boundary is superseded by accepted ADR 0072; the consolidation evidence and linked issue
+history remain useful provenance. No active work should be scheduled from this page.
 
 This is the successor to the completed [Groundwork Persistence Readiness](groundwork-persistence-readiness.md) goal. The earlier goal established and validated the provider-neutral foundation; this goal completes product adoption and removal of the parallel EF Core implementation lane.
 
@@ -33,7 +45,10 @@ This is the successor to the completed [Groundwork Persistence Readiness](ground
 - Reproducing general `IQueryable` or arbitrary LINQ support in Groundwork.
 - Generic map/reduce without a concrete Elsa workload that proves the need.
 
-## Active Objectives
+## Historical Objectives
+
+These objectives are retained for provenance. Any unfinished obligation continues only through its
+linked GitHub issue or another active program goal.
 
 1. Integrate diagnostics #642 and shared EF removal #1484, preserving the test-retention dispositions and historical evidence contracts.
 2. Complete the vendor-host scope restatement #1489 and final guard/leftover cleanup #1490.

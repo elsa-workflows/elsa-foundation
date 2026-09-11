@@ -82,4 +82,4 @@ Numbers are not unique: the folder holds two independent sequences (an early Ext
 | 0069 | [OpenAPI contract types use stable API Core assemblies](0069-openapi-contract-types-use-stable-api-core.md) | Superseded |
 | 0070 | [REST API contracts ship in one assembly per domain](0070-rest-api-contracts-ship-in-one-assembly-per-domain.md) | Proposed |
 | 0071 | [First-party REST APIs use endpoint classes over Minimal APIs](0071-first-party-rest-apis-use-endpoint-classes.md) | Accepted |
-| 0072 | [EF-first relational persistence with provider-derived contexts](0072-ef-first-relational-persistence-with-provider-derived-contexts.md) | Proposed |
+| 0072 | [EF-first relational persistence with provider-derived contexts](0072-ef-first-relational-persistence-with-provider-derived-contexts.md) | Accepted |
