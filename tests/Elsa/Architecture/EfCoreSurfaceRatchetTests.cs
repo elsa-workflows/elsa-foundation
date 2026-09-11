@@ -91,6 +91,42 @@ public sealed class EfCoreSurfaceRatchetTests
     }
 
     [Fact]
+    public void Scanner_excludes_secrets_ef_pilot_catalog_package_edges()
+    {
+        using var fixture = new TemporaryRepository();
+        fixture.Write("src/Apps/Elsa.Workbench/Elsa.Workbench.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup>
+                <ProjectReference Include="..\..\Elsa\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
+                <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+              </ItemGroup>
+            </Project>
+            """);
+        fixture.Write(
+            "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj",
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup>
+                <PackageReference Include="Microsoft.EntityFrameworkCore" />
+                <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+              </ItemGroup>
+            </Project>
+            """);
+
+        var snapshot = new EfCoreSurfaceScanner(fixture.Path).Scan();
+
+        Assert.Empty(snapshot.EfProjects);
+        Assert.Empty(snapshot.DirectEfProjectReferences);
+        Assert.Empty(snapshot.TransitiveEfProjectConsumers);
+        Assert.Equal(
+            ["src/Apps/Elsa.Workbench/Elsa.Workbench.csproj -> Microsoft.EntityFrameworkCore.Sqlite"],
+            snapshot.TransitiveEfPackageConsumers);
+        Assert.DoesNotContain(
+            snapshot.TransitiveEfPackageConsumers,
+            entry => entry.Contains("Microsoft.EntityFrameworkCore.Relational", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Scanner_discovers_ef_projects_omitted_from_the_maintained_solution_and_follows_static_references()
     {
         using var fixture = new TemporaryRepository();

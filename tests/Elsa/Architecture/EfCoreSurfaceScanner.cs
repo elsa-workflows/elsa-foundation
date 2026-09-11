@@ -454,8 +454,7 @@ internal sealed class EfCoreSurfaceScanner
                 .Select(reference => Pair(project.RelativePath, projectsByPath[reference].RelativePath)))
             .Sorted();
         var transitiveEfPackages = inventoryProjects
-            .SelectMany(project => reachable[project.FullPath]
-                .Append(project.FullPath)
+            .SelectMany(project => InventoryReachable(project, reachable, projectsByPath)
                 .SelectMany(reference => projectsByPath[reference].PackageReferences)
                 .Where(IsEfPackage)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -482,9 +481,9 @@ internal sealed class EfCoreSurfaceScanner
             var violations = new List<string>();
             violations.AddRange(reachable[project.FullPath]
                 .Where(efProjectPaths.Contains)
+                .Where(reference => !Adr0072SecretsEfPilot.IsSurfacePath(projectsByPath[reference].RelativePath))
                 .Select(reference => $"{project.RelativePath} reaches EF project {projectsByPath[reference].RelativePath}"));
-            violations.AddRange(reachable[project.FullPath]
-                .Append(project.FullPath)
+            violations.AddRange(InventoryReachable(project, reachable, projectsByPath)
                 .SelectMany(reference => projectsByPath[reference].PackageReferences)
                 .Where(IsEfPackage)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -538,6 +537,18 @@ internal sealed class EfCoreSurfaceScanner
         public static bool IsSurfacePath(string relativePath) =>
             SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
     }
+
+    /// <summary>
+    /// Reachable projects for shrink-only inventory, excluding the reviewed Secrets EF / policy
+    /// trees. A host catalog reference (Workbench) must not import that tree's EF package edges.
+    /// </summary>
+    private static IEnumerable<string> InventoryReachable(
+        ProjectInfo project,
+        IReadOnlyDictionary<string, HashSet<string>> reachable,
+        IReadOnlyDictionary<string, ProjectInfo> projectsByPath) =>
+        reachable[project.FullPath]
+            .Append(project.FullPath)
+            .Where(reference => !Adr0072SecretsEfPilot.IsSurfacePath(projectsByPath[reference].RelativePath));
 
     private static bool IsApprovedOpenIddictVendorPackage(string project, string package) =>
         project switch
