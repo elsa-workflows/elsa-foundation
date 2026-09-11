@@ -28,7 +28,7 @@ public sealed class SecretsSearchKeysTests
     [InlineData("\u0131")]
     [InlineData("\u03C2\u03C3")]
     [InlineData("\U00010428\U0001044F")]
-    [InlineData("\uA7CF\uA7D3\uA7D5")]
+    [InlineData("İstanbul")]
     public void Projection_matches_groundwork_unicode_v1_for_representative_existing_values(string value)
     {
         var expected = DecodeGroundworkComparisonKey(
@@ -77,10 +77,32 @@ public sealed class SecretsSearchKeysTests
     }
 
     [Fact]
-    public void Projection_rejects_ill_formed_utf16_instead_of_persisting_an_unstable_key()
+    public void Projection_rejects_lone_high_surrogate() =>
+        RejectIllFormedUtf16(new string((char)0xD800, 1));
+
+    [Fact]
+    public void Projection_rejects_lone_low_surrogate() =>
+        RejectIllFormedUtf16(new string((char)0xDC00, 1));
+
+    [Fact]
+    public void Projection_rejects_high_surrogate_followed_by_non_low() =>
+        RejectIllFormedUtf16(new string([(char)0xD800, 'A']));
+
+    [Fact]
+    public void Projection_rejects_null()
     {
-        var exception = Assert.Throws<ArgumentException>(() => SecretsSearchKeys.LookupKey("\uD800"));
-        Assert.Contains("well-formed UTF-16", exception.Message, StringComparison.Ordinal);
+        Assert.Throws<ArgumentNullException>(() => SecretsSearchKeys.LookupKey(null!));
+        Assert.Throws<ArgumentNullException>(() => SecretsSearchKeys.SearchKey(null!));
+    }
+
+    private static void RejectIllFormedUtf16(string value)
+    {
+        var lookup = Assert.Throws<ArgumentException>(() => SecretsSearchKeys.LookupKey(value));
+        Assert.Contains("well-formed UTF-16", lookup.Message, StringComparison.Ordinal);
+        Assert.Equal("value", lookup.ParamName);
+        var search = Assert.Throws<ArgumentException>(() => SecretsSearchKeys.SearchKey(value));
+        Assert.Contains("well-formed UTF-16", search.Message, StringComparison.Ordinal);
+        Assert.Equal("value", search.ParamName);
     }
 
     private static string DecodeGroundworkComparisonKey(string key)
