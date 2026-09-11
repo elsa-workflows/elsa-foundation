@@ -49,10 +49,27 @@ EOF
 ef_common=(
   --project "$secrets_ef_module"
   --startup-project "$secrets_ef_startup"
+  --configuration "${ELSA_SECRETS_EF_CONFIGURATION:-Release}"
+  --no-build
 )
+
+ef_build_done=0
+
+ensure_compiled() {
+  if (( ef_build_done )); then
+    return
+  fi
+
+  echo "  build EF tooling once (--configuration ${ELSA_SECRETS_EF_CONFIGURATION:-Release})"
+  dotnet build "$secrets_ef_startup" \
+    --configuration "${ELSA_SECRETS_EF_CONFIGURATION:-Release}" \
+    --nologo
+  ef_build_done=1
+}
 
 run_pending() {
   local row context
+  ensure_compiled
   echo "Secrets EF: fail-if-pending model changes for each derived context"
   for row in "${secrets_ef_contexts[@]}"; do
     secrets_ef_split "$row"
@@ -111,6 +128,7 @@ apply_one() {
       ;;
   esac
 
+  ensure_compiled
   echo "  database update --context $context"
   # Factories read ELSA_SECRETS_EF_*. Do not pass --connection: that puts credentials
   # on the process command line.

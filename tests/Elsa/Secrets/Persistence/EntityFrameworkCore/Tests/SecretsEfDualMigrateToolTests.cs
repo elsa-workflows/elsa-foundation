@@ -25,6 +25,8 @@ public sealed class SecretsEfDualMigrateToolTests
         Assert.Contains(nameof(SecretsSqliteDbContext), lib, StringComparison.Ordinal);
         Assert.Contains(nameof(SecretsSqlServerDbContext), lib, StringComparison.Ordinal);
         Assert.Contains(nameof(SecretsPostgreSqlDbContext), lib, StringComparison.Ordinal);
+        Assert.Contains("--configuration", script, StringComparison.Ordinal);
+        Assert.Contains("--no-build", script, StringComparison.Ordinal);
     }
 
     [Fact]
