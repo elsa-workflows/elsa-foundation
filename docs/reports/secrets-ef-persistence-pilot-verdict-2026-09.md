@@ -195,9 +195,9 @@ Owner: #1654, blocked on #1628.
   concurrency, conversion, and host-composition semantics.
 - **Publishing:** **not pre-approved**. Ordinary workflow publication already uses ordered writes
   with compensation. Reusable-activity publication is the cross-lane outlier governed by ADR 0066:
-  its Runtime, Design, and Publishing receipt steps must preserve the documented ordering,
-  idempotency, co-location, and recovery rules. Do not independently migrate that receipt path until
-  #1654 proves those rules across the selected persistence families.
+  its Runtime, Design, and Publishing receipt steps must preserve both the co-located atomic fast path
+  and the split-lane ordering, idempotency, and recovery path. Do not independently migrate that
+  receipt path until #1654 proves those rules across the selected persistence families.
 - **Dashboard:** **hold** until its Design/Runtime projection and consistency dependencies are
   inventoried. Small store size does not make cross-domain projections simple.
 - **Workflows Design and Activities Design:** **not automatic replacements**. Current architecture
