@@ -11,9 +11,9 @@ public sealed class SecretsSearchKeysTests
     [Fact]
     public void Projection_identity_pins_the_phase_1_dotnet_10_mapping_and_records_groundwork_v1()
     {
-        Assert.Equal("16.0.0+phase1-dotnet10-delta", SecretsSearchKeys.UnicodeVersion);
+        Assert.Equal("15.1.0+phase1-dotnet10", SecretsSearchKeys.UnicodeVersion);
         Assert.Equal(
-            "elsa-secrets-unicode-ordinal-ignore-case-v1-bcbcc4bf0951b182137ed0f42681f30bafda7777f500c42203cf58bb7e4eaaa1",
+            "elsa-secrets-unicode-ordinal-ignore-case-v1-296b59c818b7c72305dc51e37c67ede6f49940a25fd9f861cf4541ba92431523",
             SecretsSearchKeys.UnicodeOrdinalIgnoreCaseAlgorithmId);
         Assert.EndsWith(
             "3206f759667cb9cc764ec243dfb3d322a39970184efab619e80163c36d86818f",
@@ -28,7 +28,7 @@ public sealed class SecretsSearchKeysTests
     [InlineData("\u0131")]
     [InlineData("\u03C2\u03C3")]
     [InlineData("\U00010428\U0001044F")]
-    [InlineData("\uA7CF\uA7D3\uA7D5")]
+    [InlineData("İstanbul")]
     public void Projection_matches_groundwork_unicode_v1_for_representative_existing_values(string value)
     {
         var expected = DecodeGroundworkComparisonKey(
@@ -73,15 +73,40 @@ public sealed class SecretsSearchKeysTests
                 differences.Add(scalar);
         }
 
-        int[] expected = [0x017F, ..Enumerable.Range(0x16EBB, 25)];
+        int[] expected =
+        [
+            0x017F, 0x019B, 0x0264, 0x1C8A, 0xA7CD, 0xA7CF, 0xA7D3, 0xA7D5, 0xA7DB,
+            ..Enumerable.Range(0x10D70, 22)
+        ];
         Assert.Equal(expected, differences);
     }
 
     [Fact]
-    public void Projection_rejects_ill_formed_utf16_instead_of_persisting_an_unstable_key()
+    public void Projection_rejects_lone_high_surrogate() =>
+        RejectIllFormedUtf16(new string((char)0xD800, 1));
+
+    [Fact]
+    public void Projection_rejects_lone_low_surrogate() =>
+        RejectIllFormedUtf16(new string((char)0xDC00, 1));
+
+    [Fact]
+    public void Projection_rejects_high_surrogate_followed_by_non_low() =>
+        RejectIllFormedUtf16(new string([(char)0xD800, 'A']));
+
+    [Fact]
+    public void Projection_rejects_null()
     {
-        var exception = Assert.Throws<ArgumentException>(() => SecretsSearchKeys.LookupKey("\uD800"));
-        Assert.Contains("well-formed UTF-16", exception.Message, StringComparison.Ordinal);
+        Assert.Throws<ArgumentNullException>(() => SecretsSearchKeys.LookupKey(null!));
+        Assert.Throws<ArgumentNullException>(() => SecretsSearchKeys.SearchKey(null!));
+    }
+
+    private static void RejectIllFormedUtf16(string value)
+    {
+        var lookup = Assert.Throws<ArgumentException>(() => SecretsSearchKeys.LookupKey(value));
+        Assert.Contains("well-formed UTF-16", lookup.Message, StringComparison.Ordinal);
+        Assert.Equal("value", lookup.ParamName);
+        var search = Assert.Throws<ArgumentException>(() => SecretsSearchKeys.SearchKey(value));
+        Assert.Contains("well-formed UTF-16", search.Message, StringComparison.Ordinal);
     }
 
     private static string DecodeGroundworkComparisonKey(string key)

@@ -78,17 +78,20 @@ History table: `__EFMigrationsHistory_ElsaSecrets`.
 ### Persisted text projections
 
 Case-insensitive search and Type/Store/Scope lookup keys use the Elsa-owned
-`elsa-secrets-unicode-ordinal-ignore-case-v1-bcbcc4bf0951b182137ed0f42681f30bafda7777f500c42203cf58bb7e4eaaa1`
-projection. Its generated table is pinned to Unicode 16 plus the 26 mappings already emitted by
-.NET 10 when Phase 1 began writing rows. Runtime casing APIs are no longer used, so upgrading the
-host runtime cannot silently change new keys while older rows retain different bytes.
+`elsa-secrets-unicode-ordinal-ignore-case-v1-296b59c818b7c72305dc51e37c67ede6f49940a25fd9f861cf4541ba92431523`
+projection. Its generated table is pinned to the `.NET 10` `ToUpperInvariant` mapping Phase 1 used
+when it began writing rows (ICU 74 / Unicode 15.1 on Linux), not a later UnicodeData.txt snapshot.
+Runtime casing APIs are no longer used, so upgrading the host runtime cannot silently change new
+keys while older rows retain different bytes.
 
-The casing projection matches Groundwork's Unicode-16 mapping for every scalar except the exact,
-exhaustively tested boundary `U+017F` and `U+16EBB` through `U+16ED3`. Groundwork also persists a
-six-hex-digit-per-scalar comparison key and a SHA-256 identity lookup key, while this EF pilot
-persists projected text; their physical fields are intentionally not interchangeable. Ordinary
-long/non-ASCII Type/Store/Scope behavior is exercised through both selected shell backends. Any
-future projection change requires a new algorithm id, an explicit data migration/backfill, and
+The casing projection matches Groundwork's Unicode-16 mapping for every scalar except the
+exhaustively tested Phase-1 / Unicode-16 boundary in `SecretsSearchKeysTests`: `U+017F` (Phase 1
+maps long s to `S`) and the Unicode 16.0 additions ICU 74 does not emit (`U+019B`, `U+0264`,
+`U+1C8A`, `U+A7CD`/`U+A7CF`/`U+A7D3`/`U+A7D5`/`U+A7DB`, and Garay `U+10D70`–`U+10D85`). Groundwork
+also persists a six-hex-digit-per-scalar comparison key and a SHA-256 identity lookup key, while
+this EF pilot persists projected text; their physical fields are intentionally not interchangeable.
+Ordinary long/non-ASCII Type/Store/Scope behavior is exercised through both selected shell backends.
+Any future projection change requires a new algorithm id, an explicit data migration/backfill, and
 compatibility tests; editing v1 in place is forbidden.
 
 ## Generate and apply migrations

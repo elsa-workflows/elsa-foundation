@@ -5,15 +5,15 @@ using System.Text;
 namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>
-/// Elsa-owned, persisted-key projection pinned to the Unicode 16.0.0 simple-uppercase table plus
-/// the 26 mappings emitted by .NET 10 when the Phase 1 storage contract was established.
+/// Elsa-owned, persisted-key projection pinned to the .NET 10 <c>ToUpperInvariant</c> mapping
+/// used when the Phase 1 storage contract was established (ICU 74 / Unicode 15.1 on Linux).
 /// Runtime casing APIs are intentionally excluded so a host runtime upgrade cannot silently
 /// change lookup or search keys already stored by the Secrets EF module.
 /// </summary>
 internal static class SecretsUnicodeOrdinalIgnoreCaseV1
 {
     public const string UnicodeVersion = UnicodeOrdinalCasingData.UnicodeVersion;
-    public const string MappingFingerprint = "bcbcc4bf0951b182137ed0f42681f30bafda7777f500c42203cf58bb7e4eaaa1";
+    public const string MappingFingerprint = "296b59c818b7c72305dc51e37c67ede6f49940a25fd9f861cf4541ba92431523";
     public const string AlgorithmId = "elsa-secrets-unicode-ordinal-ignore-case-v1-" + MappingFingerprint;
 
     static SecretsUnicodeOrdinalIgnoreCaseV1()
