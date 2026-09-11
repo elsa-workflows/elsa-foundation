@@ -11,14 +11,14 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// </summary>
 public sealed class AsyncLocalWorkflowBurstScopeAccessor : IWorkflowBurstScopeAccessor
 {
-    private readonly AsyncLocal<Frame?> _current = new();
+    private readonly AsyncLocal<Frame?> current = new();
 
-    public WorkflowBurstScope? Current => _current.Value?.Scope;
+    public WorkflowBurstScope? Current => current.Value?.Scope;
 
     public IDisposable Push(WorkflowBurstScope? scope)
     {
-        var prior = _current.Value;
-        _current.Value = new Frame(scope, prior);
+        var prior = current.Value;
+        current.Value = new Frame(scope, prior);
         return new PopWhenDisposed(this, prior);
     }
 
@@ -33,7 +33,7 @@ public sealed class AsyncLocalWorkflowBurstScopeAccessor : IWorkflowBurstScopeAc
             if (disposed)
                 return;
 
-            accessor._current.Value = prior;
+            accessor.current.Value = prior;
             disposed = true;
         }
     }

@@ -210,7 +210,6 @@
     <Project Path="src/Elsa/Secrets/Api/Elsa.Secrets.Api.csproj" />
     <Project Path="src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj" />
     <Project Path="src/Elsa/Secrets/Elsa.Secrets.csproj" />
-    <Project Path="src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Studio/" />
   <Folder Name="/src/Elsa/Studio/Preferences/">
@@ -220,7 +219,9 @@
   <Folder Name="/src/Elsa/Studio/Preferences/Persistence/">
     <Project Path="src/Elsa/Studio/Preferences/Persistence/Groundwork/Elsa.Studio.Preferences.Persistence.Groundwork.csproj" />
   </Folder>
-  <Folder Name="/src/Elsa/Secrets/Persistence/" />
+  <Folder Name="/src/Elsa/Secrets/Persistence/">
+    <Project Path="src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj" />
+  </Folder>
   <Folder Name="/src/Elsa/Secrets/Persistence/EntityFrameworkCore/">
     <Project Path="src/Elsa/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
     <Project Path="src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling.csproj" />
