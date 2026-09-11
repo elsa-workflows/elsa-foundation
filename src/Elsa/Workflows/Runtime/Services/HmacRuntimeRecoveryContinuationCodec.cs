@@ -20,7 +20,10 @@ public sealed class HmacRuntimeRecoveryContinuationCodec : IRuntimeRecoveryConti
             if (!options.Value.AllowEphemeralDevelopmentKey)
             {
                 throw new InvalidOperationException(
-                    "Runtime recovery continuation signing key must be configured for durable recovery paging.");
+                    "Runtime recovery continuation signing key must be configured for durable recovery paging. " +
+                    "Set RuntimeRecoveryContinuationOptions.SigningKey to at least 32 UTF-8 bytes, shared by every " +
+                    "node that consumes recovery pages; shell hosts configure it through the durable runtime " +
+                    "persistence feature's RecoveryContinuationSigningKey setting.");
             }
 
             _key = RandomNumberGenerator.GetBytes(32);

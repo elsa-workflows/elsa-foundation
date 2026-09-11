@@ -2,6 +2,7 @@
   "//": "Curated DEMO shell composition for the docker-compose reference stack.",
   "//_purpose": "Mounted into the Elsa.Workbench container at /app/shells.json. It replaces the repo default (SQLite) composition with an explicit Groundwork PostgreSQL provider and lane features. The repo default src/Apps/Elsa.Workbench/shells.json remains the local SQLite composition.",
   "//_persistence": "GroundworkProviderPostgreSql supplies one host-selected Groundwork connection; the explicit runtime, design, distributed, publishing, diagnostics and dashboard features bind their units to its default target. The provider and lane features are separate so a host can name different targets later without consuming a composite preset.",
+  "//_recoverykey": "GroundworkWorkflowRuntime.RecoveryContinuationSigningKey must hold at least 32 UTF-8 bytes and must be identical on every node that consumes durable recovery pages; the runtime recovery scanner refuses to start without it. The value below is demo-only. Override without editing this file via env var CShells__Shells__default__Features__GroundworkWorkflowRuntime__RecoveryContinuationSigningKey.",
   "//_connectionstring": "GroundworkProviderPostgreSql binds its ConnectionString property directly from this feature section (the provider exposes a top-level ConnectionString property, not an Options wrapper). Points at the compose 'postgres' service. Demo-only credentials. Override without editing this file via env var CShells__Shells__default__Features__GroundworkProviderPostgreSql__ConnectionString.",
   "CShells": {
     "Shells": {
@@ -45,7 +46,8 @@
           },
           "GroundworkWorkflowRuntime": {
             "CacheWorkflowExecutables": true,
-            "WorkflowExecutableCacheCapacity": 256
+            "WorkflowExecutableCacheCapacity": 256,
+            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key"
           },
           "ActivitiesDesignGroundworkPersistence": {},
           "WorkflowsDesignGroundworkPersistence": {},

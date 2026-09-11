@@ -126,6 +126,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IActivityExecutionHierarchyCursorCodec, HmacActivityExecutionHierarchyCursorCodec>();
         services.AddOptions<RuntimeRecoveryContinuationOptions>();
         services.TryAddSingleton<IRuntimeRecoveryContinuationCodec, HmacRuntimeRecoveryContinuationCodec>();
+        // The protector is only resolved by the recovery scanner, i.e. from a background sweep. Construct it at
+        // startup so an unusable signing key fails shell activation instead of every sweep (see the startup task).
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateRuntimeRecoveryContinuationCodecStartupTask>());
         services.TryAddSingleton<IRuntimeRecoverySweepCursorStore, InMemoryRuntimeRecoverySweepCursorStore>();
         services.TryAddSingleton<IActivityExecutionHierarchyStore, RuntimeInMemoryActivityExecutionHierarchyStore>();
         services.TryAddSingleton<IActivityExecutionHierarchyReader>(serviceProvider => serviceProvider.GetRequiredService<IActivityExecutionHierarchyStore>());

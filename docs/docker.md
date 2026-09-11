@@ -134,6 +134,13 @@ PostgreSQL provider and persistence-lane composition:
   `WorkflowsRuntimeDistributedGroundworkPersistence` features bind the runtime, workflows-design,
   activities-design, publishing, and distributed lanes to the provider's default target.
 
+- **`GroundworkWorkflowRuntime.RecoveryContinuationSigningKey` is required.** Durable recovery pages carry an
+  HMAC-signed continuation token, so the runtime recovery scanner refuses to construct without a stable key of at
+  least 32 UTF-8 bytes; without one the resumption pump fails every sweep. The compose file carries a demo-only
+  value — override it per deployment with
+  `CShells__Shells__default__Features__GroundworkWorkflowRuntime__RecoveryContinuationSigningKey`, using the same
+  value on every node that consumes recovery pages.
+
 - `DiagnosticsGroundworkPersistence` persists OpenTelemetry and structured logs through the same provider,
   while `SecretsGroundworkPersistence` keeps the secrets lane on Groundwork (the Secrets EF
   feature is catalogued on Workbench but is opt-in — replace this key with `SecretsEntityFrameworkCore`,
