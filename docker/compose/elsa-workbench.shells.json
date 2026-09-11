@@ -3,6 +3,7 @@
   "//_purpose": "Mounted into the Elsa.Workbench container at /app/shells.json. It replaces the repo default (SQLite) composition with an explicit Groundwork PostgreSQL provider and lane features. The repo default src/Apps/Elsa.Workbench/shells.json remains the local SQLite composition.",
   "//_persistence": "GroundworkProviderPostgreSql supplies one host-selected Groundwork connection; the explicit runtime, design, distributed, publishing, diagnostics and dashboard features bind their units to its default target. The provider and lane features are separate so a host can name different targets later without consuming a composite preset.",
   "//_recoverykey": "GroundworkWorkflowRuntime.RecoveryContinuationSigningKey is deliberately absent here. The compose stack runs in Production, where the image's shells.Production.json blanks any value in this file, so docker-compose.yml supplies it as env var CShells__Shells__default__Features__GroundworkWorkflowRuntime__RecoveryContinuationSigningKey. The default shell refuses to activate without it.",
+  "//_identity": "First-party sign-in mirrors the repo default composition: the identity API and the ASP.NET Core Identity login provider are composed here, while shells.Production.json adds the Groundwork identity stores, the admin seed and OpenIddict token issuance. The seed password and the token signing key are secrets that overlay blanks or requires, so docker-compose.yml supplies them as environment variables.",
   "//_connectionstring": "GroundworkProviderPostgreSql binds its ConnectionString property directly from this feature section (the provider exposes a top-level ConnectionString property, not an Options wrapper). Points at the compose 'postgres' service. Demo-only credentials. Override without editing this file via env var CShells__Shells__default__Features__GroundworkProviderPostgreSql__ConnectionString.",
   "CShells": {
     "Shells": {
@@ -33,7 +34,16 @@
           "FoundationAgentAbstractions": {},
           "FoundationAgentApi": {},
           "FoundationIdentityAbstractions": {},
-          "FoundationIdentityOidc": {},
+          "FoundationIdentityApi": {},
+          "FoundationIdentityAspNetCoreIdentity": {
+            "IsDefault": true,
+            "AllowedReturnUrlOrigins": [
+              "http://localhost:14000"
+            ]
+          },
+          "FoundationIdentityOidc": {
+            "IsDefault": false
+          },
           "FoundationWorkflowsAgent": {},
           "GitHubCopilotAgent": {
             "Enabled": true,

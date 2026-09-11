@@ -323,9 +323,10 @@ checking credentials. JSON API callers never carry the field/cookie and are unaf
 browser drops the cookie. Host the Studio SPA **same-origin** so the cookie flows with
 `credentials: include`; cross-origin needs CORS + `SameSite=None; Secure`.
 
-**Production key requirements.** Outside `IsDevelopmentOrDemo`, startup **fails fast** if the
-OpenIddict signing/encryption key is missing — a missing key never silently degrades to an insecure
-default. The `SigningKey` must be a base64-encoded PKCS#8 RSA private key (RS256). The `SecurityDefaultGuard`s
+**Production key requirements.** Outside `IsDevelopmentOrDemo`, a missing OpenIddict signing/encryption
+key fails with an error naming the setting when the server options are first resolved, which happens on the
+first request rather than at startup. A missing key never silently degrades to an insecure default.
+The `SigningKey` must be a base64-encoded PKCS#8 RSA private key (RS256). The `SecurityDefaultGuard`s
 additionally reject short or well-known weak keys, and non-HTTPS provider metadata when HTTPS metadata
 is required. **Recommendation: set a distinct `EncryptionKey` from `SigningKey` in production** — the
 encryption key otherwise defaults to a value domain-separated from the signing key, and separating them

@@ -1,5 +1,8 @@
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Extensions.Configuration;
 using Xunit;
+using YamlDotNet.RepresentationModel;
 
 namespace Elsa.Architecture.Tests;
 
@@ -44,6 +47,47 @@ public sealed class WorkbenchConfigurationTests
         if (overlay is not null)
             builder.AddJsonFile(overlay);
         return builder.AddInMemoryCollection(environment ?? []).Build();
+    }
+
+    // The compose stacks run in Production, where shells.Production.json sits above any shells.json. Only the
+    // compose environment can supply what the overlay blanks or requires, so resolve the same layering here.
+    [Theory]
+    [InlineData("docker-compose.yml", "docker/compose/elsa-workbench.shells.json")]
+    [InlineData("docker-compose.images.yml", "src/Apps/Elsa.Workbench/shells.json")]
+    public void Production_compose_stacks_supply_the_secrets_the_overlay_requires(string composeFile, string shellsJson)
+    {
+        var environment = ReadWorkbenchEnvironment(Path.Join(RepoRoot, "docker", "compose", composeFile));
+        Assert.Equal("Production", environment["ASPNETCORE_ENVIRONMENT"]);
+
+        var features = new ConfigurationBuilder()
+            .AddJsonFile(Path.Join(RepoRoot, shellsJson))
+            .AddJsonFile(Path.Join(RepoRoot, "src", "Apps", "Elsa.Workbench", "shells.Production.json"))
+            .AddInMemoryCollection(environment.Select(x => KeyValuePair.Create(x.Key.Replace("__", ":"), (string?)x.Value)))
+            .Build()
+            .GetSection("CShells:Shells:default:Features");
+
+        Assert.False(string.IsNullOrWhiteSpace(features["FoundationIdentityAspNetCoreIdentityGroundwork:SeedAdminUserName"]));
+        Assert.False(string.IsNullOrWhiteSpace(features["FoundationIdentityAspNetCoreIdentityGroundwork:SeedAdminPassword"]));
+
+        var signingKey = features["FoundationIdentityOpenIddict:SigningKey"];
+        Assert.False(string.IsNullOrWhiteSpace(signingKey));
+        using var rsa = RSA.Create();
+        rsa.ImportPkcs8PrivateKey(Convert.FromBase64String(signingKey), out _);
+
+        var recoveryKey = features["GroundworkWorkflowRuntime:RecoveryContinuationSigningKey"] ?? "";
+        Assert.True(Encoding.UTF8.GetByteCount(recoveryKey) >= 32, "The recovery continuation signing key needs at least 32 UTF-8 bytes.");
+    }
+
+    private static Dictionary<string, string> ReadWorkbenchEnvironment(string composePath)
+    {
+        using var reader = File.OpenText(composePath);
+        var yaml = new YamlStream();
+        yaml.Load(reader);
+
+        var environment = Assert.IsType<YamlMappingNode>(yaml.Documents[0].RootNode["services"]["elsa-workbench"]["environment"]);
+        return environment.Children.ToDictionary(
+            x => Assert.IsType<YamlScalarNode>(x.Key).Value!,
+            x => Assert.IsType<YamlScalarNode>(x.Value).Value!);
     }
 
     private static string RepoRoot { get; } = FindRepoRoot();

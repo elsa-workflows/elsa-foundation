@@ -92,11 +92,14 @@ choice with `OpenIddict.EntityFrameworkCore`; another host may select a differen
 Generate a signing key:
 
 ```bash
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -outform DER | base64
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | openssl pkcs8 -topk8 -nocrypt -outform DER | base64
 ```
 
-(The same command is documented in the remarks of `ConfigureOpenIddictServerOptions`.) Outside
-`IsDevelopmentOrDemo`, startup **fails fast** with a clear error if no signing/encryption key is configured.
+Pipe through `openssl pkcs8 -topk8`: `genpkey -outform DER` on its own writes a PKCS#1 key, which the host
+rejects. (The same command appears in the error `ConfigureOpenIddictServerOptions` throws for a malformed key.)
+Outside `IsDevelopmentOrDemo`, a missing signing/encryption key fails with a clear error when the OpenIddict
+options are first resolved. That is on the first request, not at startup: the shell still activates and
+`/health/ready` reports ready, but every request through it returns 500 until the key is configured.
 
 ### `FoundationIdentityOptions` (shared, bound from the `Elsa:Identity` section if you surface it)
 
@@ -160,8 +163,9 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
     Groundwork Identity schema initialization is owned by the selected Groundwork provider; it does not require
     an ASP.NET Core Identity EF migration step.
 
-If a required signing/encryption key is missing outside `IsDevelopmentOrDemo`, the host throws at startup with a
-message naming the setting to configure — a missing key never silently degrades to an insecure default.
+If a required signing/encryption key is missing outside `IsDevelopmentOrDemo`, requests fail with a message
+naming the setting to configure (see the `SigningKey` note above). A missing key never silently degrades to an
+insecure default.
 
 `IsDevelopmentOrDemo` is also **safe by construction**: if it is left `true` while the host runs in any
 environment other than `Development` (e.g. the unedited default deployed to Production), the host **hard-fails
