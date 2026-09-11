@@ -97,7 +97,8 @@ Demo credentials and the demo-only warning are the same as the [table in section
 > the wide-open CORS origin are **demo-only**. Change the management key on both sides, replace the identity
 > secrets (see [Identity in Production](#identity-in-production)) and the recovery continuation signing key,
 > and scope CORS before exposing this anywhere. In `Production` the server's default shell refuses to activate
-> without the recovery key (see [`docs/docker.md`](../../docs/docker.md#demo-persistence-composition)).
+> without the recovery key (see [`docs/docker.md`](../../docs/docker.md#demo-persistence-composition)) or the
+> identity secrets.
 
 ---
 
@@ -220,7 +221,7 @@ compose files supply two identity secrets as env vars:
 | Variable (prefix `CShells__Shells__default__Features__`) | Without it |
 |---|---|
 | `FoundationIdentityAspNetCoreIdentityGroundwork__SeedAdminPassword` | The default shell fails activation: `/health/ready` returns `503 shell_activation_failed`. |
-| `FoundationIdentityOpenIddict__SigningKey` | The shell activates, but every request returns 500 ("No signing key is configured"). |
+| `FoundationIdentityOpenIddict__SigningKey` | The default shell fails activation: `/health/ready` returns `503 shell_activation_failed` ("No signing key is configured"). |
 
 For the rest of the identity settings, see
 [`docs/reference/identity-configuration.md`](../../docs/reference/identity-configuration.md).

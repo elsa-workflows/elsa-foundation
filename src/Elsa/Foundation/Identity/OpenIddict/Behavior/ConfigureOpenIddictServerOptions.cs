@@ -86,7 +86,8 @@ internal sealed class ConfigureOpenIddictServerOptions(
 
         throw new InvalidOperationException(
             "No signing key is configured for the OpenIddict identity module. Set OpenIddictIdentityOptions.SigningKey " +
-            "(or FoundationIdentityOptions.SigningKey) to a base64-encoded PKCS#8 RSA private key. For local " +
+            "(or FoundationIdentityOptions.SigningKey) to a base64-encoded PKCS#8 RSA private key; shell hosts configure " +
+            "it through the FoundationIdentityOpenIddict feature's SigningKey setting. For local " +
             "development/demo only, IsDevelopmentOrDemo = true uses an ephemeral development key instead — but that " +
             "flag is honored only when the host runs with ASPNETCORE_ENVIRONMENT=Development (the DevelopmentOrDemoGuard " +
             "refuses it elsewhere), and environment-specific configuration overlays (e.g. shells.Production.json " +

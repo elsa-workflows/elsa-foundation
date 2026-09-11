@@ -97,9 +97,9 @@ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | openssl pkcs8 -to
 
 Pipe through `openssl pkcs8 -topk8`: `genpkey -outform DER` on its own writes a PKCS#1 key, which the host
 rejects. (The same command appears in the error `ConfigureOpenIddictServerOptions` throws for a malformed key.)
-Outside `IsDevelopmentOrDemo`, a missing signing/encryption key fails with a clear error when the OpenIddict
-options are first resolved. That is on the first request, not at startup: the shell still activates and
-`/health/ready` reports ready, but every request through it returns 500 until the key is configured.
+Outside `IsDevelopmentOrDemo`, a missing or malformed signing key fails with a clear error when the OpenIddict
+server options are built. The feature builds them at startup, so the error fails shell activation (in Workbench,
+`/health/ready` reports `503 shell_activation_failed`) rather than the first request that authenticates.
 
 ### `FoundationIdentityOptions` (shared, bound from the `Elsa:Identity` section if you surface it)
 
@@ -163,8 +163,8 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
     Groundwork Identity schema initialization is owned by the selected Groundwork provider; it does not require
     an ASP.NET Core Identity EF migration step.
 
-If a required signing/encryption key is missing outside `IsDevelopmentOrDemo`, requests fail with a message
-naming the setting to configure (see the `SigningKey` note above). A missing key never silently degrades to an
+If a required signing/encryption key is missing outside `IsDevelopmentOrDemo`, shell activation fails with a
+message naming the setting to configure (see the `SigningKey` note above). A missing key never silently degrades to an
 insecure default.
 
 `IsDevelopmentOrDemo` is also **safe by construction**: if it is left `true` while the host runs in any
@@ -179,7 +179,7 @@ the administrator seeded from the committed dev credentials). There is no insecu
 shipped `shells.Production.json` resets `IsDevelopmentOrDemo` to `false` for both identity features. In a
 container the default environment is `Production`, so editing (or mounting) `shells.json` with
 `"IsDevelopmentOrDemo": true` has **no effect** — the overlay wins, the flag is `false`, and with no signing
-key configured every request that touches token issuance or validation fails with the
+key configured the default shell fails activation with the
 "No signing key is configured for the OpenIddict identity module" error. This is why the same image behaves
 differently under `ASPNETCORE_ENVIRONMENT=Development` (no `shells.Development.json` exists, so the
 `shells.json` value survives — and the Development environment also satisfies the startup guard above). For a
