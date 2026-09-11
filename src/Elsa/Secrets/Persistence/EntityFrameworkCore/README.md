@@ -1,7 +1,8 @@
 # Elsa.Secrets.Persistence.EntityFrameworkCore
 
 Additive, opt-in EF Core persistence for Secrets. **Groundwork remains the default** durable
-store. This package does not switch Workbench and does not remove Groundwork.
+store. Workbench catalogs this feature so a host can enable it; default `shells.json` files
+keep `SecretsGroundworkPersistence` and do not enable this feature.
 
 ## Proposed ADR 0072 / ADR 0042
 
@@ -18,8 +19,15 @@ in the host or in `Tooling/` (design-time).
 
 ## Enable
 
-CShells feature `SecretsEntityFrameworkCore`. The host must already reference one EF
-provider package.
+CShells feature `SecretsEntityFrameworkCore`. The host must reference this module (Workbench
+already does, via `WithHostAssemblies()`) and exactly one EF provider package. Workbench
+already references `Microsoft.EntityFrameworkCore.Sqlite` for OpenIddict, so Sqlite Secrets
+EF works without another provider package. SqlServer / PostgreSql require the host to add
+that engine.
+
+**Default stays Groundwork.** In `shells.json` (or the docker compose overlay), replace
+`SecretsGroundworkPersistence` with `SecretsEntityFrameworkCore`. Do not leave both keys
+in the same shell — registration throws an `InvalidOperationException` naming both backends.
 
 ```json
 {
@@ -27,6 +35,8 @@ provider package.
     "Shells": {
       "default": {
         "Features": {
+          "Secrets": {},
+          "SecretsApi": {},
           "SecretsEntityFrameworkCore": {
             "Provider": "Sqlite",
             "ConnectionString": "Data Source=elsa-secrets.db",
@@ -39,13 +49,19 @@ provider package.
 }
 ```
 
+Package-feed shells make the same swap: load this package, enable the feature, and omit
+`SecretsGroundworkPersistence`. The package-root `nuplane.json` declares `HostIntegrated`
+loading for its dependency closure because the feature contributes shell DI,
+hosted/initializer lifecycle services, EF contexts, and migrations. A host override must not
+downgrade this package to collectible loading. The current Nuplane-backed Foundation Host route
+still requires the unsigned-CShells identity fix tracked by foundation issue #1644; until that
+lands, use a host-integrated package-feed composition rather than treating Foundation Host
+readiness as proof that the requested feed features activated.
+
 `ConnectionName` looks up `ConnectionStrings:<name>` when `ConnectionString` is omitted.
 `MigratePolicy` is `AutoMigrate` (default) or `Validate` (fail if pending). Both policies
 run when the feature is enabled **and** when CShells reloads the shell (`IShellInitializer`).
 A plain host uses the same instance as `IHostedService`.
-
-Do not enable this feature together with `SecretsGroundworkPersistence` in the same shell:
-both replace `ISecretRepository`, and registration throws if the other backend is already selected.
 
 ## Schema
 
@@ -58,6 +74,32 @@ stored as UTC ticks (`INTEGER`) so active-only expiry comparisons translate.
 Derived contexts: `SecretsSqliteDbContext`, `SecretsSqlServerDbContext`,
 `SecretsPostgreSqlDbContext`. Each has its own `Migrations/` folder and `ModelSnapshot`.
 History table: `__EFMigrationsHistory_ElsaSecrets`.
+
+### Persisted text projections
+
+Case-insensitive search and Type/Store/Scope lookup keys use the Elsa-owned
+`elsa-secrets-unicode-ordinal-ignore-case-v1-bcbcc4bf0951b182137ed0f42681f30bafda7777f500c42203cf58bb7e4eaaa1`
+projection. Its generated table is pinned to Unicode 16 plus the 26 mappings observed on the .NET
+10 development host when Phase 1 began writing rows. Phase 1's runtime casing API did not define
+portable bytes: .NET can consume different Unicode data on different operating systems. Runtime
+casing APIs are no longer used, so changing a host runtime or its Unicode data cannot silently
+change newly persisted keys.
+
+Before upgrading a database written by the pre-contract Phase 1 pilot, quiesce writers and run the
+provider-specific `dual-migrate.sh apply` command. After applying compiled migrations it reindexes
+the stored projection columns and document copies from the authoritative `Secret` payload in bounded
+keyset transactions over `(TenantId, NormalizedName)` while preserving concurrency tokens. Rows created on a host whose runtime casing data differed from this
+pinned table otherwise remain unreadable through canonical lookups. Host startup audits every row
+in bounded, read-only keyset pages over `(TenantId, NormalizedName)` and fails closed with the repair
+command instead of silently serving a partially readable store.
+
+The casing projection matches Groundwork's Unicode-16 mapping for every scalar except the exact,
+exhaustively tested boundary `U+017F` and `U+16EBB` through `U+16ED3`. Groundwork also persists a
+six-hex-digit-per-scalar comparison key and a SHA-256 identity lookup key, while this EF pilot
+persists projected text; their physical fields are intentionally not interchangeable. Ordinary
+long/non-ASCII Type/Store/Scope behavior is exercised through both selected shell backends. Any
+future projection change requires a new algorithm id, an explicit data migration/backfill, and
+compatibility tests; editing v1 in place is forbidden.
 
 ## Generate and apply migrations
 
@@ -78,10 +120,12 @@ bash tools/ef/dual-migrate.sh apply --sqlite
 ```
 
 `pending` is `dotnet ef migrations has-pending-model-changes` per derived context.
-`apply` is `dotnet ef database update --context <Derived>`. Runtime AutoMigrate / Validate
-uses the same compiled migrations in this module, but the checks are different: `pending`
+`apply` runs `dotnet ef database update --context <Derived>` and then the managed projection
+reindexer for that same context. Runtime AutoMigrate / Validate uses the same compiled migrations
+in this module, but the checks are different: `pending`
 compares the source model to its snapshot without reading database history, whereas runtime
-`Validate` checks whether the selected database has unapplied compiled migrations. Recommended
+`Validate` checks whether the selected database has unapplied compiled migrations; both runtime
+policies also reject legacy projection bytes until the operator reindex completes. Recommended
 deployment order is `pending`, backup/quiesce, provider-specific `apply`, history/table-shape
 verification, then application startup with `MigratePolicy=Validate`.
 

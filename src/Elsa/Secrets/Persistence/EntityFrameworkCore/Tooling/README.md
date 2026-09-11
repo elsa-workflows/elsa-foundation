@@ -1,7 +1,8 @@
 # Secrets EF design-time tooling
 
-This project exists so `dotnet ef` can see Sqlite, SqlServer, and Npgsql providers plus
-`Microsoft.EntityFrameworkCore.Design`. It is **not** a Nuplane runtime package.
+This executable project lets `dotnet ef` see Sqlite, SqlServer, and Npgsql providers plus
+`Microsoft.EntityFrameworkCore.Design`, and hosts the operator-only projection reindex command.
+It is **not** a Nuplane runtime package.
 
 Generated migrations live in the **module** assembly
 (`../Migrations/Sqlite|SqlServer|PostgreSql`) so `MigrateAsync` and
@@ -51,6 +52,13 @@ Each provider has an independent migration set and snapshot. Review all three ge
 `database update` and runtime `MigratePolicy=Validate` use the database's
 `__EFMigrationsHistory_ElsaSecrets` to detect unapplied compiled migrations. One check does not
 replace the other.
+
+The provider-specific `dual-migrate.sh apply` command follows `database update` with a managed
+reindex of any projection fields written by the pre-contract Phase 1 runtime casing API. The
+reindex derives fields from each stored `Secret` document, preserves its concurrency token, runs in
+bounded keyset transactions over `(TenantId, NormalizedName)`, and is idempotent. Host startup
+scans in bounded read-only keyset pages: it fails closed when a legacy row is
+found and tells the operator to rerun `apply`; it never rewrites secret rows implicitly.
 
 Use the deployment sequence in [tools/ef/README.md](../../../../../../tools/ef/README.md): back
 up and quiesce writes, run `pending`, select exactly one provider and apply it with a short-lived

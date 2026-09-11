@@ -5,6 +5,7 @@ using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.Support;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
@@ -100,6 +101,7 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
         Skip.IfNot(DualMigrateProcessRunner.HasDotnetEf(), "dotnet-ef is not available.");
         var connectionString = await fixture.CreateIsolatedDatabaseAsync();
+        byte[] originalToken;
 
         await using (var olderContext = CreateContext(connectionString))
         {
@@ -111,8 +113,16 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
                 EfDatabaseMigrator.ApplyAsync(
                     olderContext,
                     SecretsPostgreSqlDbContext.ExpectedProviderName,
-                    EfMigratePolicy.Validate));
+                EfMigratePolicy.Validate));
             Assert.Contains("20260911011058_WidenLookupKeys", exception.Message, StringComparison.Ordinal);
+
+            var legacySecret = Secret("tenant-a", "legacy.postgres.projection", "value");
+            legacySecret.TypeName = "\u019B";
+            var current = SecretDocument.FromSecret(legacySecret);
+            var record = (current with { TypeNameLookupKey = "\u019B" }).ToRecord();
+            olderContext.Secrets.Add(record);
+            await olderContext.SaveChangesAsync();
+            originalToken = record.ConcurrencyToken.ToArray();
         }
 
         var result = DualMigrateProcessRunner.RunFromExistingBuild(
@@ -132,6 +142,7 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
             ContainsSensitiveConnectionData(result.Error, connectionString, password),
             "The operator wrote sensitive PostgreSQL connection data to stderr.");
         Assert.True(result.ExitCode == 0, $"The PostgreSQL operator exited {result.ExitCode}; captured output is suppressed.");
+        Assert.Contains("reindexed 1 row(s)", result.Output, StringComparison.Ordinal);
         Assert.True(
             result.Output.Contains(
                 "database update --context SecretsPostgreSqlDbContext",
@@ -147,20 +158,56 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
         Assert.Empty(await context.Database.GetPendingMigrationsAsync());
         Assert.True(await TableExistsAsync(context, SecretsEfModule.TableName));
         Assert.True(await TableExistsAsync(context, SecretsEfModule.HistoryTableName));
+        var repaired = await context.Secrets.AsNoTracking().SingleAsync();
+        Assert.Equal("\uA7DC", repaired.TypeNameLookupKey);
+        Assert.Equal("\uA7DC", SecretDocument.Parse(repaired.Payload).TypeNameLookupKey);
+        Assert.Equal(originalToken, repaired.ConcurrencyToken);
         await EfDatabaseMigrator.ApplyAsync(
             context,
             SecretsPostgreSqlDbContext.ExpectedProviderName,
             EfMigratePolicy.Validate);
     }
 
-    private static SecretsPostgreSqlDbContext CreateContext(string connectionString)
+    [SkippableFact]
+    public async Task Projection_reindex_rejects_a_concurrent_postgres_writer_without_overwriting_it()
     {
-        var options = new DbContextOptionsBuilder<SecretsPostgreSqlDbContext>()
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
+        var connectionString = await fixture.CreateIsolatedDatabaseAsync();
+        await using (var setup = CreateContext(connectionString))
+        {
+            await EfDatabaseMigrator.ApplyAsync(setup, SecretsPostgreSqlDbContext.ExpectedProviderName);
+            var legacySecret = Secret("tenant-a", "legacy.concurrent.projection", "value");
+            legacySecret.TypeName = "\u019B";
+            var current = SecretDocument.FromSecret(legacySecret);
+            setup.Secrets.Add((current with { TypeNameLookupKey = "\u019B" }).ToRecord());
+            await setup.SaveChangesAsync();
+        }
+
+        var concurrentWriter = new ConcurrentSecretWriterInterceptor(connectionString);
+        await using (var repair = CreateContext(connectionString, concurrentWriter))
+        {
+            await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() =>
+                SecretsProjectionContract.ReindexAsync(repair));
+        }
+
+        await using var verify = CreateContext(connectionString);
+        var stored = await verify.Secrets.AsNoTracking().SingleAsync();
+        Assert.Equal("Concurrent writer", SecretDocument.Parse(stored.Payload).Secret.DisplayName);
+        Assert.Equal(concurrentWriter.ConcurrencyToken, stored.ConcurrencyToken);
+    }
+
+    private static SecretsPostgreSqlDbContext CreateContext(
+        string connectionString,
+        params IInterceptor[] interceptors)
+    {
+        var builder = new DbContextOptionsBuilder<SecretsPostgreSqlDbContext>()
             .UseNpgsql(connectionString, npgsql => npgsql
                 .MigrationsAssembly(typeof(SecretsPostgreSqlDbContext).Assembly.GetName().Name)
-                .MigrationsHistoryTable(SecretsEfModule.HistoryTableName))
-            .Options;
-        return new SecretsPostgreSqlDbContext(options);
+                .MigrationsHistoryTable(SecretsEfModule.HistoryTableName));
+        if (interceptors.Length > 0)
+            builder.AddInterceptors(interceptors);
+
+        return new SecretsPostgreSqlDbContext(builder.Options);
     }
 
     private static async Task<bool> TableExistsAsync(SecretsPostgreSqlDbContext context, string table)
@@ -180,6 +227,32 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
     private static bool ContainsSensitiveConnectionData(string text, string connectionString, string? password) =>
         text.Contains(connectionString, StringComparison.Ordinal) ||
         (!string.IsNullOrEmpty(password) && text.Contains(password, StringComparison.Ordinal));
+
+    private sealed class ConcurrentSecretWriterInterceptor(string connectionString) : SaveChangesInterceptor
+    {
+        private bool hasRun;
+
+        public byte[]? ConcurrencyToken { get; private set; }
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (hasRun)
+                return result;
+
+            hasRun = true;
+            await using var writer = CreateContext(connectionString);
+            var record = await writer.Secrets.SingleAsync(cancellationToken);
+            var secret = SecretDocument.Parse(record.Payload).Secret;
+            secret.DisplayName = "Concurrent writer";
+            SecretDocument.FromSecret(secret).CopyProjectionsTo(record);
+            await writer.SaveChangesAsync(cancellationToken);
+            ConcurrencyToken = record.ConcurrencyToken.ToArray();
+            return result;
+        }
+    }
 
     private static Secret Secret(
         string tenantId,

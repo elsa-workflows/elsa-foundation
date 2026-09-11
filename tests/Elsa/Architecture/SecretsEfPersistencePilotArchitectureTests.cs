@@ -80,7 +80,12 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/EfSecretRepository.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/SecretDocument.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/SecretRevisionMapper.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsProjectionContract.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsProjectionException.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsSearchKeys.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsUnicodeOrdinalIgnoreCaseV1.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/UnicodeOrdinalCasingData.Generated.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/Program.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/SecretsDesignTimeConnection.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/SecretsPostgreSqlDesignTimeFactory.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/SecretsSqlServerDesignTimeFactory.cs",
@@ -89,8 +94,12 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "tests/Elsa/Persistence/EntityFramework/Tests/EfMigrationsHistoryTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/EfProviderGuardTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/EfRelationalProviderBindingTests.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Program.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/PostgreSqlEfSecretRepositoryTests.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/PostgreSqlSecretsShellJourneyTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/PostgresContainerFixture.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/SecretsPackageFeedProbeTests.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Support/SecretsPackageFeedProbeRunner.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/SqlServerContainerFixture.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/SqlServerEfSecretRepositoryTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsDesignTimeConnectionTests.cs",
@@ -98,6 +107,11 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEfMigrationHostedServiceTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEntityFrameworkCoreFeatureTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEntityFrameworkCoreShellReloadTests.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsHostCatalog.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsPersistenceCompositionTests.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsPersistenceHostJourneyTests.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsProjectionContractTests.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsSearchKeysTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SqliteEfSecretRepositoryTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/Support/DualMigrateProcessRunner.cs"
     ];
@@ -137,6 +151,62 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
     }
 
     [Fact]
+    public void PostgreSql_shell_proof_supplies_exactly_one_relational_provider_package()
+    {
+        var packages = PackageIncludes(RepoPath(
+            "tests", "Elsa", "Secrets", "Persistence", "EntityFrameworkCore", "PostgreSql", "Tests",
+            "Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj"));
+
+        Assert.Equal(
+            ["Npgsql.EntityFrameworkCore.PostgreSQL"],
+            packages.Intersect(ForbiddenProviderPackages, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void Package_feed_probe_has_one_provider_and_no_compile_time_secrets_ef_module_reference()
+    {
+        var projectPath = RepoPath(
+            "tests", "Elsa", "Secrets", "Persistence", "EntityFrameworkCore", "PostgreSql", "PackageFeedProbe",
+            "Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe.csproj");
+        var project = XDocument.Load(projectPath);
+        var packages = project.Descendants("PackageReference")
+            .Select(element => element.Attribute("Include")?.Value)
+            .OfType<string>()
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var projects = project.Descendants("ProjectReference")
+            .Select(element => element.Attribute("Include")?.Value)
+            .OfType<string>()
+            .ToArray();
+
+        Assert.Equal(
+            ["Npgsql.EntityFrameworkCore.PostgreSQL"],
+            packages.Intersect(ForbiddenProviderPackages, StringComparer.Ordinal));
+        Assert.DoesNotContain(
+            projects,
+            reference => reference.Contains("Secrets\\Persistence\\EntityFrameworkCore", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Module_package_declares_host_integrated_nuplane_loading()
+    {
+        var projectPath = RepoPath(
+            "src", "Elsa", "Secrets", "Persistence", "EntityFrameworkCore",
+            "Elsa.Secrets.Persistence.EntityFrameworkCore.csproj");
+        var project = XDocument.Load(projectPath);
+        var metadataItem = Assert.Single(project.Descendants("None"), element =>
+            string.Equals(element.Attribute("Update")?.Value, "nuplane.json", StringComparison.Ordinal));
+        Assert.Equal("true", metadataItem.Attribute("Pack")?.Value);
+        Assert.Equal("/", metadataItem.Attribute("PackagePath")?.Value);
+
+        using var metadata = System.Text.Json.JsonDocument.Parse(File.ReadAllText(
+            RepoPath("src", "Elsa", "Secrets", "Persistence", "EntityFrameworkCore", "nuplane.json")));
+        var loading = metadata.RootElement.GetProperty("loading");
+        Assert.Equal("HostIntegrated", loading.GetProperty("loadMode").GetString());
+        Assert.Equal("DependencyClosure", loading.GetProperty("scope").GetString());
+    }
+
+    [Fact]
     public void Pilot_sources_are_the_exact_reviewed_inventory()
     {
         var actual = EfCoreDependencyGuardTests.Adr0072SecretsEfPilot.SurfacePathPrefixes
@@ -149,16 +219,57 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
     }
 
     [Fact]
-    public void Workbench_does_not_reference_the_secrets_ef_module()
+    public void Workbench_catalogs_the_secrets_ef_module_without_enabling_it_by_default()
     {
         var workbench = XDocument.Load(RepoPath("src", "Apps", "Elsa.Workbench", "Elsa.Workbench.csproj"));
         var references = workbench.Descendants("ProjectReference")
             .Select(element => element.Attribute("Include")?.Value)
             .OfType<string>()
             .ToArray();
-        Assert.DoesNotContain(
+        Assert.Contains(
             references,
-            reference => reference.Contains("Secrets.Persistence.EntityFrameworkCore", StringComparison.OrdinalIgnoreCase));
+            reference => reference.Contains("Secrets.Persistence.EntityFrameworkCore", StringComparison.OrdinalIgnoreCase)
+                         && !reference.Contains("Tooling", StringComparison.OrdinalIgnoreCase));
+
+        foreach (var relative in new[]
+                 {
+                     "src/Apps/Elsa.Workbench/shells.json",
+                     "src/Apps/Elsa.Workbench/shells.baseline.json",
+                     "src/Apps/Elsa.Workbench/shells.Production.json",
+                     "docker/compose/elsa-workbench.shells.json"
+                 })
+        {
+            Assert.False(
+                DefaultShellFeatures(relative).Contains("SecretsEntityFrameworkCore"),
+                $"{relative} must not enable SecretsEntityFrameworkCore; Groundwork remains the default.");
+        }
+
+        foreach (var relative in new[]
+                 {
+                     "src/Apps/Elsa.Workbench/shells.json",
+                     "docker/compose/elsa-workbench.shells.json"
+                 })
+        {
+            Assert.True(
+                DefaultShellFeatures(relative).Contains("SecretsGroundworkPersistence"),
+                $"{relative} must keep SecretsGroundworkPersistence as the default Secrets store.");
+        }
+    }
+
+    private static HashSet<string> DefaultShellFeatures(string relative)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(
+            File.ReadAllText(RepoPath(relative.Split('/'))),
+            new System.Text.Json.JsonDocumentOptions
+            {
+                CommentHandling = System.Text.Json.JsonCommentHandling.Skip,
+                AllowTrailingCommas = true
+            });
+        return document.RootElement
+            .GetProperty("CShells").GetProperty("Shells").GetProperty("default").GetProperty("Features")
+            .EnumerateObject()
+            .Select(property => property.Name)
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     private static IReadOnlyList<string> PackageIncludes(string csproj) =>

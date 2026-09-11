@@ -39,6 +39,14 @@ public abstract class SecretsDbContext : DbContext
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
 
+    /// <summary>
+    /// Persists a projection-only repair without changing the semantic revision of the secret.
+    /// The existing concurrency token still participates in the update predicate, so a concurrent
+    /// writer makes the operator retry instead of letting the repair overwrite newer content.
+    /// </summary>
+    internal Task<int> SaveProjectionChangesAsync(CancellationToken cancellationToken = default) =>
+        base.SaveChangesAsync(acceptAllChangesOnSuccess: true, cancellationToken);
+
     private void StampConcurrencyTokens()
     {
         // IsRowVersion() on Sqlite inserts NULL. Stamp an explicit token on every provider.

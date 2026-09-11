@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Nuplane dual-migrate CI/ops tool for the Secrets EF pilot.
 #
-# Applies compiled migrations from the module assembly Nuplane loads at runtime, and
-# fails if a derived context's model drifted from its snapshot. Does not boot the host.
+# Applies compiled migrations from the module assembly Nuplane loads at runtime, reindexes
+# pre-contract projection fields, and fails if a derived context's model drifted from its
+# snapshot. Does not boot the host.
 #
 # Usage:
 #   bash tools/ef/dual-migrate.sh pending
@@ -21,6 +22,7 @@
 #
 # Hooks (per derived context):
 #   dotnet ef database update --context <Derived>
+#   dotnet run ... -- reindex <Derived>
 #   dotnet ef migrations has-pending-model-changes --context <Derived>
 # Factories read ELSA_SECRETS_EF_* so connection strings stay off the process command line.
 set -euo pipefail
@@ -40,7 +42,7 @@ Usage:
 pending  Fail if any derived Secrets context has pending model changes.
          No database required.
 
-apply    Apply compiled migrations for the selected derived contexts.
+apply    Apply compiled migrations and reindex legacy projections for the selected contexts.
          Sqlite uses ELSA_SECRETS_EF_SQLITE or a temp file.
          --sqlserver / --postgresql fail when the matching env is unset.
          --all skips a missing non-Sqlite env unless ELSA_SECRETS_EF_REQUIRE_ALL=1.
@@ -143,12 +145,19 @@ apply_one() {
   # Factories read ELSA_SECRETS_EF_*. Do not pass --connection: that puts credentials
   # on the process command line.
   secrets_ef database update --context "$context" "${ef_common[@]}"
+  echo "  reindex legacy projections --context $context"
+  dotnet run \
+    --project "$secrets_ef_startup" \
+    --configuration "${ELSA_SECRETS_EF_CONFIGURATION:-Release}" \
+    --no-build \
+    -- \
+    reindex "$context"
 }
 
 run_apply() {
   local want="${1:-all}"
   local row
-  echo "Secrets EF: apply compiled migrations from the Nuplane module assembly"
+  echo "Secrets EF: apply compiled migrations and reindex legacy projections"
   for row in "${secrets_ef_contexts[@]}"; do
     secrets_ef_split "$row"
     case "$want" in

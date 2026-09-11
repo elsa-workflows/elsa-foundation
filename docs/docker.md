@@ -135,7 +135,9 @@ PostgreSQL provider and persistence-lane composition:
   activities-design, publishing, and distributed lanes to the provider's default target.
 
 - `DiagnosticsGroundworkPersistence` persists OpenTelemetry and structured logs through the same provider,
-  while `SecretsGroundworkPersistence` keeps the secrets lane on Groundwork. The dashboard projection feature
+  while `SecretsGroundworkPersistence` keeps the secrets lane on Groundwork (the Secrets EF
+  feature is catalogued on Workbench but is opt-in — replace this key with `SecretsEntityFrameworkCore`,
+  never enable both). The dashboard projection feature
   is enabled explicitly so run-health and portfolio queries do not fall back to unavailable/in-memory sources.
 
 - Engine self-instrumentation is enabled: `WorkflowsRuntimeTracing` emits engine spans and
