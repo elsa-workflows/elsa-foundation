@@ -223,10 +223,10 @@ issue. Do not bundle multiple domains merely to make a wave look complete.
 ### Current no-go for this rollout — Runtime/G8 hot paths
 
 Runtime checkpoint, execution state, execution logs, scheduler queues, durable command inboxes,
-durable timers, outbox, placement, transport, leases, fencing, and distributed locks do not enter
-these waves. Reconsideration needs a separate ADR plus correctness, contention, crash-recovery,
-idempotency, and performance evidence on the production workload shapes. Until then, Groundwork
-remains the implementation family.
+durable timers, outbox, mailbox and agent ownership, placement, transport, leases, fencing, and
+distributed locks do not enter these waves. Reconsideration needs a separate ADR plus correctness,
+contention, crash-recovery, idempotency, and performance evidence on the production workload
+shapes. Until then, Groundwork remains the implementation family.
 
 ### Per-module delivery template
 
