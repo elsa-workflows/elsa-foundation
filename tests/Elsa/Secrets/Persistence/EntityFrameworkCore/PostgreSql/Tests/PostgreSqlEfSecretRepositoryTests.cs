@@ -126,6 +126,7 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
         Assert.True(result.ExitCode == 0, result.Describe());
         Assert.Contains("database update --context SecretsPostgreSqlDbContext", result.Output, StringComparison.Ordinal);
         Assert.DoesNotContain(connectionString, result.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain(connectionString, result.Error, StringComparison.Ordinal);
 
         await using var context = CreateContext(connectionString);
         Assert.Equal(EfProviderNames.PostgreSql, context.Database.ProviderName);

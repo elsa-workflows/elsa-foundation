@@ -27,7 +27,7 @@ public sealed class SecretsEfDualMigrateToolTests
     }
 
     [SkippableFact]
-    public void Dual_migrate_builds_once_and_reuses_non_default_configuration_for_each_ef_call()
+    public void Dual_migrate_prefers_the_manifest_tool_builds_once_and_reuses_the_configuration()
     {
         Skip.If(OperatingSystem.IsWindows(), "The recording shims require Unix executable permissions.");
 
@@ -41,61 +41,75 @@ public sealed class SecretsEfDualMigrateToolTests
                 #!/usr/bin/env bash
                 set -euo pipefail
 
-                [[ "${1:-}" == "build" ]] || exit 97
+                command="${1:-}"
                 shift
-                configuration=""
-                disable_build_servers=0
-                while [[ $# -gt 0 ]]; do
-                  case "$1" in
-                    --configuration)
-                      configuration="${2:?}"
-                      shift 2
-                      ;;
-                    --disable-build-servers)
-                      disable_build_servers=1
-                      shift
-                      ;;
-                    *)
-                      shift
-                      ;;
-                  esac
-                done
-                printf 'build|%s|%s\n' "$configuration" "$disable_build_servers" >> "$ELSA_SECRETS_EF_RECORDING_LOG"
+                case "$command" in
+                  build)
+                    configuration=""
+                    disable_build_servers=0
+                    while [[ $# -gt 0 ]]; do
+                      case "$1" in
+                        --configuration)
+                          configuration="${2:?}"
+                          shift 2
+                          ;;
+                        --disable-build-servers)
+                          disable_build_servers=1
+                          shift
+                          ;;
+                        *)
+                          shift
+                          ;;
+                      esac
+                    done
+                    printf 'build|%s|%s\n' "$configuration" "$disable_build_servers" >> "$ELSA_SECRETS_EF_RECORDING_LOG"
+                    ;;
+                  ef)
+                    [[ "${1:-}" == "migrations" && "${2:-}" == "has-pending-model-changes" ]] || exit 98
+                    shift 2
+                    context=""
+                    configuration=""
+                    no_build=0
+                    while [[ $# -gt 0 ]]; do
+                      case "$1" in
+                        --context)
+                          context="${2:?}"
+                          shift 2
+                          ;;
+                        --configuration)
+                          configuration="${2:?}"
+                          shift 2
+                          ;;
+                        --no-build)
+                          no_build=1
+                          shift
+                          ;;
+                        *)
+                          shift
+                          ;;
+                      esac
+                    done
+                    printf 'manifest-ef|%s|%s|%s\n' "$context" "$configuration" "$no_build" >> "$ELSA_SECRETS_EF_RECORDING_LOG"
+                    printf 'No changes have been made to the model since the last migration.\n'
+                    ;;
+                  *)
+                    exit 97
+                    ;;
+                esac
                 """);
             WriteExecutableShim(shimRoot, "dotnet-ef", """
                 #!/usr/bin/env bash
                 set -euo pipefail
 
-                [[ "${1:-}" == "migrations" && "${2:-}" == "has-pending-model-changes" ]] || exit 98
-                shift 2
-                context=""
-                configuration=""
-                no_build=0
-                while [[ $# -gt 0 ]]; do
-                  case "$1" in
-                    --context)
-                      context="${2:?}"
-                      shift 2
-                      ;;
-                    --configuration)
-                      configuration="${2:?}"
-                      shift 2
-                      ;;
-                    --no-build)
-                      no_build=1
-                      shift
-                      ;;
-                    *)
-                      shift
-                      ;;
-                  esac
-                done
-                printf 'ef|%s|%s|%s\n' "$context" "$configuration" "$no_build" >> "$ELSA_SECRETS_EF_RECORDING_LOG"
-                printf 'No changes have been made to the model since the last migration.\n'
+                printf 'global-ef\n' >> "$ELSA_SECRETS_EF_RECORDING_LOG"
+                exit 96
                 """);
             var isolatedRoot = Path.Join(shimRoot, "repo");
             var isolatedScriptDirectory = Path.Join(isolatedRoot, "tools", "ef");
+            var isolatedConfigDirectory = Path.Join(isolatedRoot, ".config");
             Directory.CreateDirectory(isolatedScriptDirectory);
+            Directory.CreateDirectory(isolatedConfigDirectory);
+            File.WriteAllText(Path.Join(isolatedConfigDirectory, "dotnet-tools.json"), "{}");
             File.Copy(
                 RepoPath("tools", "ef", "dual-migrate.sh"),
                 Path.Join(isolatedScriptDirectory, "dual-migrate.sh"));
@@ -117,9 +131,9 @@ public sealed class SecretsEfDualMigrateToolTests
             Assert.Equal(
                 [
                     "build|Canary|1",
-                    "ef|SecretsSqliteDbContext|Canary|1",
-                    "ef|SecretsSqlServerDbContext|Canary|1",
-                    "ef|SecretsPostgreSqlDbContext|Canary|1"
+                    "manifest-ef|SecretsSqliteDbContext|Canary|1",
+                    "manifest-ef|SecretsSqlServerDbContext|Canary|1",
+                    "manifest-ef|SecretsPostgreSqlDbContext|Canary|1"
                 ],
                 File.ReadAllLines(recordingLog));
         }
