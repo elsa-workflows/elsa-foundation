@@ -203,13 +203,25 @@ public sealed class SecretsEfDualMigrateToolTests
                 return Remember(false);
             if (!process.WaitForExit(60_000))
             {
-                try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch (InvalidOperationException exception)
+                {
+                    Debug.WriteLine(exception);
+                }
+
                 return Remember(false);
             }
 
             return Remember(process.ExitCode == 0);
         }
-        catch (Exception)
+        catch (InvalidOperationException)
+        {
+            return Remember(false);
+        }
+        catch (System.ComponentModel.Win32Exception)
         {
             return Remember(false);
         }
@@ -235,7 +247,11 @@ public sealed class SecretsEfDualMigrateToolTests
             using var process = Process.Start(start);
             process?.WaitForExit(60_000);
         }
-        catch (Exception)
+        catch (InvalidOperationException)
+        {
+            // pending / apply --sqlite then skip.
+        }
+        catch (System.ComponentModel.Win32Exception)
         {
             // pending / apply --sqlite then skip.
         }
@@ -273,7 +289,16 @@ public sealed class SecretsEfDualMigrateToolTests
         var error = process.StandardError.ReadToEnd();
         if (!process.WaitForExit(180_000))
         {
-            try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            {
+                // The process may already have exited; cleanup is best-effort
+                // before the timeout is rethrown.
+            }
+
             throw new TimeoutException($"dual-migrate.sh {string.Join(' ', args)} did not exit within 180s.");
         }
 
