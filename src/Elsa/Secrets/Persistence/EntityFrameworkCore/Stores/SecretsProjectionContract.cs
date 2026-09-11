@@ -28,7 +28,14 @@ public static class SecretsProjectionContract
         while (true)
         {
             var records = await TakePageAsync(context.Secrets.AsNoTracking(), after, cancellationToken);
-            if (records.Any(record => !IsCurrent(record)))
+            var hasLegacyProjections = false;
+            foreach (var record in records)
+            {
+                if (!IsCurrent(record))
+                    hasLegacyProjections = true;
+            }
+
+            if (hasLegacyProjections)
             {
                 throw new InvalidOperationException(
                     "One or more Secrets rows do not use persisted projection " +
@@ -131,8 +138,9 @@ public static class SecretsProjectionContract
         SecretDocument current;
         try
         {
-            ValidatePayloadStructure(record.Payload);
-            stored = SecretDocument.Parse(record.Payload);
+            using var json = JsonDocument.Parse(record.Payload);
+            ValidatePayloadStructure(json.RootElement);
+            stored = SecretDocument.Parse(json.RootElement);
             if (stored.Secret is null)
                 throw new InvalidOperationException("The serialized document has no authoritative Secret.");
             if (stored.Secret.Versions is null)
@@ -170,10 +178,9 @@ public static class SecretsProjectionContract
         return (stored, current);
     }
 
-    private static void ValidatePayloadStructure(string payload)
+    private static void ValidatePayloadStructure(JsonElement root)
     {
-        using var json = JsonDocument.Parse(payload);
-        if (!TryGetProperty(json.RootElement, "secret", out var secret) || secret.ValueKind != JsonValueKind.Object)
+        if (!TryGetProperty(root, "secret", out var secret) || secret.ValueKind != JsonValueKind.Object)
             throw new InvalidOperationException("The serialized document has no authoritative Secret object.");
         if (!TryGetProperty(secret, "versions", out var versions) || versions.ValueKind != JsonValueKind.Array)
             throw new InvalidOperationException("The serialized Secret has no version array.");

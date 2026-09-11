@@ -210,6 +210,8 @@ public sealed class SecretsProjectionContractTests
         await using var fixture = await SqliteProjectionFixture.CreateAsync();
         var damaged = SecretDocument.FromSecret(CreateSecret("text", "z.damaged")).ToRecord();
         damaged.Payload = $"{{\"not-json\" {leakedPayload}";
+        var good = SecretDocument.FromSecret(CreateSecret("\u019B", "a.legacy"));
+        fixture.Context.Secrets.Add((good with { TypeNameLookupKey = "\u019B" }).ToRecord());
         fixture.Context.Secrets.Add(damaged);
         await fixture.Context.SaveChangesAsync();
         fixture.Context.ChangeTracker.Clear();
@@ -218,11 +220,6 @@ public sealed class SecretsProjectionContractTests
             () => SecretsProjectionContract.EnsureCurrentAsync(fixture.Context));
         AssertRowDiagnostic(startup, "tenant-a", "z.damaged", leakedPayload);
         Assert.IsAssignableFrom<JsonException>(startup.InnerException);
-
-        var good = SecretDocument.FromSecret(CreateSecret("\u019B", "a.legacy"));
-        fixture.Context.Secrets.Add((good with { TypeNameLookupKey = "\u019B" }).ToRecord());
-        await fixture.Context.SaveChangesAsync();
-        fixture.Context.ChangeTracker.Clear();
 
         var reindex = await Assert.ThrowsAsync<SecretsProjectionException>(
             () => SecretsProjectionContract.ReindexAsync(fixture.Context));
@@ -280,6 +277,49 @@ public sealed class SecretsProjectionContractTests
             () => SecretsProjectionContract.EnsureCurrentAsync(fixture.Context));
         AssertRowDiagnostic(exception, "tenant-a", $"invalid.{corruption}", leakedPayload);
         Assert.IsType<InvalidOperationException>(exception.InnerException);
+    }
+
+    [Fact]
+    public async Task Ill_formed_utf16_json_is_redacted_and_scoped_to_its_row()
+    {
+        const string leakedPayload = "UTF16-PAYLOAD-LEAK-MARKER";
+        await using var fixture = await SqliteProjectionFixture.CreateAsync();
+        var malformed = SecretDocument.FromSecret(CreateSecret("text", "invalid.utf16")).ToRecord();
+        var payload = JsonNode.Parse(malformed.Payload)!.AsObject();
+        payload["redactionProbe"] = leakedPayload;
+        malformed.Payload = payload.ToJsonString().Replace(
+            "\"typeName\":\"text\"",
+            "\"typeName\":\"\\uD800\"",
+            StringComparison.Ordinal);
+        Assert.Contains("\\uD800", malformed.Payload, StringComparison.Ordinal);
+        fixture.Context.Secrets.Add(malformed);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var exception = await Assert.ThrowsAsync<SecretsProjectionException>(
+            () => SecretsProjectionContract.EnsureCurrentAsync(fixture.Context));
+        AssertRowDiagnostic(exception, "tenant-a", "invalid.utf16", leakedPayload);
+        Assert.IsAssignableFrom<JsonException>(exception.InnerException);
+    }
+
+    [Fact]
+    public async Task Invalid_projected_value_is_redacted_and_scoped_to_its_row()
+    {
+        const string leakedPayload = "PROJECTED-VALUE-PAYLOAD-LEAK-MARKER";
+        await using var fixture = await SqliteProjectionFixture.CreateAsync();
+        var malformed = SecretDocument.FromSecret(CreateSecret("text", "invalid.projected-value")).ToRecord();
+        var payload = JsonNode.Parse(malformed.Payload)!.AsObject();
+        payload["redactionProbe"] = leakedPayload;
+        payload["secret"]!["typeName"] = null;
+        malformed.Payload = payload.ToJsonString();
+        fixture.Context.Secrets.Add(malformed);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var exception = await Assert.ThrowsAsync<SecretsProjectionException>(
+            () => SecretsProjectionContract.EnsureCurrentAsync(fixture.Context));
+        AssertRowDiagnostic(exception, "tenant-a", "invalid.projected-value", leakedPayload);
+        Assert.IsType<ArgumentNullException>(exception.InnerException);
     }
 
     [Fact]
