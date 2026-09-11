@@ -58,31 +58,39 @@ public static class SecretsProjectionContract
         while (true)
         {
             await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
-            var records = await TakePageAsync(context.Secrets, after, cancellationToken);
-            var updatedBatch = 0;
-
-            foreach (var record in records)
+            try
             {
-                var (stored, current) = ReadDocuments(record);
-                if (Matches(record, stored, current))
-                    continue;
+                var records = await TakePageAsync(context.Secrets, after, cancellationToken);
+                var updatedBatch = 0;
 
-                current.CopyProjectionsTo(record);
-                updatedBatch++;
+                foreach (var record in records)
+                {
+                    var (stored, current) = ReadDocuments(record);
+                    if (Matches(record, stored, current))
+                        continue;
+
+                    current.CopyProjectionsTo(record);
+                    updatedBatch++;
+                }
+
+                if (updatedBatch > 0)
+                    await context.SaveProjectionChangesAsync(cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
+                updatedTotal += updatedBatch;
+                var done = records.Count < BatchSize;
+                if (!done)
+                    after = Cursor(records[^1]);
+                context.ChangeTracker.Clear();
+
+                if (done)
+                    return updatedTotal;
             }
-
-            if (updatedBatch > 0)
-                await context.SaveProjectionChangesAsync(cancellationToken);
-
-            await transaction.CommitAsync(cancellationToken);
-            updatedTotal += updatedBatch;
-            var done = records.Count < BatchSize;
-            if (!done)
-                after = Cursor(records[^1]);
-            context.ChangeTracker.Clear();
-
-            if (done)
-                return updatedTotal;
+            catch
+            {
+                context.ChangeTracker.Clear();
+                throw;
+            }
         }
     }
 
@@ -123,6 +131,7 @@ public static class SecretsProjectionContract
         SecretDocument current;
         try
         {
+            ValidatePayloadStructure(record.Payload);
             stored = SecretDocument.Parse(record.Payload);
             if (stored.Secret is null)
                 throw new InvalidOperationException("The serialized document has no authoritative Secret.");
@@ -159,6 +168,17 @@ public static class SecretsProjectionContract
         }
 
         return (stored, current);
+    }
+
+    private static void ValidatePayloadStructure(string payload)
+    {
+        using var json = JsonDocument.Parse(payload);
+        if (!json.RootElement.TryGetProperty("secret", out var secret) || secret.ValueKind != JsonValueKind.Object)
+            throw new InvalidOperationException("The serialized document has no authoritative Secret object.");
+        if (!secret.TryGetProperty("versions", out var versions) || versions.ValueKind != JsonValueKind.Array)
+            throw new InvalidOperationException("The serialized Secret has no version array.");
+        if (versions.EnumerateArray().Any(static version => version.ValueKind == JsonValueKind.Null))
+            throw new InvalidOperationException("The serialized Secret contains an invalid version entry.");
     }
 
     private static bool Matches(SecretRecord record, SecretDocument stored, SecretDocument current) =>
