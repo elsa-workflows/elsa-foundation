@@ -4,11 +4,15 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 
 public static class SecretsSearchKeys
 {
-    public static string SearchKey(string value) => value.ToUpperInvariant();
+    /// <summary>The stable identity of the persisted case-insensitive projection.</summary>
+    public const string UnicodeOrdinalIgnoreCaseAlgorithmId = SecretsUnicodeOrdinalIgnoreCaseV1.AlgorithmId;
 
-    // Keep the Phase 1 projection byte-compatible with databases created by the already-merged
-    // Initial migrations. Phase 3 owns the provider-neutral, versioned Unicode projection.
-    public static string LookupKey(string value) => value.ToUpperInvariant();
+    /// <summary>The Unicode data version owned by the persisted projection.</summary>
+    public const string UnicodeVersion = SecretsUnicodeOrdinalIgnoreCaseV1.UnicodeVersion;
+
+    public static string SearchKey(string value) => SecretsUnicodeOrdinalIgnoreCaseV1.Project(value);
+
+    public static string LookupKey(string value) => SecretsUnicodeOrdinalIgnoreCaseV1.Project(value);
 
     public static string StatusValue(SecretStatus status) => status.ToString().ToLowerInvariant();
 }

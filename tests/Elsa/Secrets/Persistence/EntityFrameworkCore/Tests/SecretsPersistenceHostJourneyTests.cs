@@ -19,8 +19,11 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests;
 /// </summary>
 public sealed class SecretsPersistenceHostJourneyTests
 {
+    private const string EntityFrameworkBackend = "entity-framework";
+    private const string GroundworkBackend = "groundwork";
     private const string SecretName = "payments.journey";
     private const string SecretValue = "phase-3-secret";
+    private const string IdentitySecretName = "identity.projection";
 
     [Fact]
     public void Host_catalog_discovers_workbench_shaped_secrets_features()
@@ -50,7 +53,7 @@ public sealed class SecretsPersistenceHostJourneyTests
                 firstStart: EntityFrameworkShells(path, "AutoMigrate"),
                 restart: EntityFrameworkShells(path, "Validate"),
                 expectedRepository: typeof(EfSecretRepository),
-                expectedBackend: SecretRepositoryBackend.EntityFramework);
+                expectedBackend: EntityFrameworkBackend);
         }
         finally
         {
@@ -69,7 +72,7 @@ public sealed class SecretsPersistenceHostJourneyTests
                 firstStart: shells,
                 restart: shells,
                 expectedRepository: typeof(GroundworkSecretRepository),
-                expectedBackend: SecretRepositoryBackend.Groundwork);
+                expectedBackend: GroundworkBackend);
         }
         finally
         {
@@ -115,6 +118,9 @@ public sealed class SecretsPersistenceHostJourneyTests
                     SecretName,
                     new UpdateSecretMetadataRequest { DisplayName = "Journey secret updated" });
                 Assert.Equal("Journey secret updated", updated.DisplayName);
+
+                await AssertRevisionConflictAsync(scope.ServiceProvider);
+                await SaveAndQueryLongNonAsciiIdentityAsync(scope.ServiceProvider);
             }
 
             // Groundwork SQLite holds a process schema lock per file. Release the shell connection
@@ -143,8 +149,81 @@ public sealed class SecretsPersistenceHostJourneyTests
                 .ResolveAsync(SecretsHostCatalog.TenantId, new SecretReference(SecretName));
             Assert.True(resolved.Succeeded);
             Assert.Equal(SecretValue, resolved.Value);
+
+            await AssertLongNonAsciiIdentityPersistedAsync(scope.ServiceProvider);
         }
     }
+
+    private static async Task AssertRevisionConflictAsync(IServiceProvider services)
+    {
+        var repository = services.GetRequiredService<ISecretRepository>();
+        var revisions = Assert.IsAssignableFrom<IRevisionAwareSecretRepository>(repository);
+        var current = await revisions.FindWithRevisionAsync(SecretsHostCatalog.TenantId, SecretName);
+        Assert.NotNull(current);
+
+        current.Secret.Description = "OCC winner";
+        var saved = await revisions.SaveWithRevisionAsync(current.Secret, current.Revision);
+        Assert.Equal(SecretRevisionSaveStatus.Saved, saved.Status);
+
+        current.Secret.Description = "stale overwrite";
+        var stale = await revisions.SaveWithRevisionAsync(current.Secret, current.Revision);
+        Assert.Equal(SecretRevisionSaveStatus.Conflict, stale.Status);
+
+        var persisted = await repository.FindAsync(SecretsHostCatalog.TenantId, SecretName);
+        Assert.NotNull(persisted);
+        Assert.Equal("OCC winner", persisted.Description);
+    }
+
+    private static async Task SaveAndQueryLongNonAsciiIdentityAsync(IServiceProvider services)
+    {
+        var repository = services.GetRequiredService<ISecretRepository>();
+        var identity = LongNonAsciiIdentity();
+        await repository.SaveAsync(new Secret
+        {
+            TenantId = SecretsHostCatalog.TenantId,
+            Name = IdentitySecretName,
+            DisplayName = "München identity projection",
+            TypeName = identity.TypeName,
+            StoreName = identity.StoreName,
+            Scope = identity.Scope,
+            Versions =
+            [
+                new SecretVersion
+                {
+                    Version = 1,
+                    Status = SecretStatus.Active,
+                    Payload = SecretPayload.FromValue("identity-value")
+                }
+            ]
+        });
+
+        var page = await repository.ListPageAsync(
+            SecretsHostCatalog.TenantId,
+            new SecretRepositoryListRequest(
+                typeName: identity.TypeName.ToLowerInvariant(),
+                storeName: identity.StoreName.ToLowerInvariant(),
+                scope: identity.Scope.ToLowerInvariant()));
+        Assert.Equal(IdentitySecretName, Assert.Single(page.Items).Name);
+    }
+
+    private static async Task AssertLongNonAsciiIdentityPersistedAsync(IServiceProvider services)
+    {
+        var identity = LongNonAsciiIdentity();
+        var page = await services.GetRequiredService<ISecretRepository>().ListPageAsync(
+            SecretsHostCatalog.TenantId,
+            new SecretRepositoryListRequest(
+                typeName: identity.TypeName.ToLowerInvariant(),
+                storeName: identity.StoreName.ToLowerInvariant(),
+                scope: identity.Scope.ToLowerInvariant()));
+        var secret = Assert.Single(page.Items);
+        Assert.Equal(IdentitySecretName, secret.Name);
+        Assert.Equal(identity.TypeName, secret.TypeName);
+        Assert.Equal(identity.StoreName, secret.StoreName);
+        Assert.Equal(identity.Scope, secret.Scope);
+    }
+
+    private static (string TypeName, string StoreName, string Scope) LongNonAsciiIdentity() =>
+        ($"Typé-{new string('Ä', 96)}", $"Storé-{new string('Ö', 96)}", $"Scopé-{new string('Ü', 96)}");
 
     private static void AssertSelectedBackend(IServiceProvider services, Type repositoryType, string backend)
     {

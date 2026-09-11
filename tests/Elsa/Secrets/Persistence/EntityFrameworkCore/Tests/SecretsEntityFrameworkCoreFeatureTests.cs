@@ -69,7 +69,7 @@ public sealed class SecretsEntityFrameworkCoreFeatureTests
         var services = new ServiceCollection();
         feature.ConfigureServices(services);
         Assert.Contains(services, descriptor => descriptor.ServiceType == contextType);
-        Assert.Equal(SecretRepositoryBackend.EntityFramework, services
+        Assert.Equal("entity-framework", services
             .Select(descriptor => descriptor.ImplementationInstance)
             .OfType<SecretRepositoryBackend>()
             .Single().Name);

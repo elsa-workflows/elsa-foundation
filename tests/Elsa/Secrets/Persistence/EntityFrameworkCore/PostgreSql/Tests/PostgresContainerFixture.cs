@@ -8,10 +8,11 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests;
 public sealed class PostgresContainerFixture : IAsyncLifetime
 {
     private PostgreSqlContainer? container;
+    private string? connectionString;
 
     public bool IsAvailable { get; private set; }
     public string? SkipReason { get; private set; }
-    public string ConnectionString => container?.GetConnectionString()
+    public string ConnectionString => connectionString ?? container?.GetConnectionString()
         ?? throw new InvalidOperationException("PostgreSQL container is not available.");
 
     public async Task<string> CreateIsolatedDatabaseAsync()
@@ -30,6 +31,13 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
+        connectionString = Environment.GetEnvironmentVariable("ELSA_SECRETS_EF_POSTGRESQL_TEST_CONNECTION_STRING");
+        if (!string.IsNullOrWhiteSpace(connectionString))
+        {
+            IsAvailable = true;
+            return;
+        }
+
         try
         {
             // Build() pings Docker; keep it out of the constructor so missing Docker skips instead of failing collection setup.

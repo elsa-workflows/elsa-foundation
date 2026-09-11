@@ -49,8 +49,14 @@ in the same shell — registration throws an `InvalidOperationException` naming 
 }
 ```
 
-A Nuplane / Foundation Host feed composition is the same swap: load this package, enable
-the feature, omit `SecretsGroundworkPersistence`.
+Package-feed shells make the same swap: load this package, enable the feature, and omit
+`SecretsGroundworkPersistence`. The package-root `nuplane.json` declares `HostIntegrated`
+loading for its dependency closure because the feature contributes shell DI,
+hosted/initializer lifecycle services, EF contexts, and migrations. A host override must not
+downgrade this package to collectible loading. The current Nuplane-backed Foundation Host route
+still requires the unsigned-CShells identity fix tracked by foundation issue #1644; until that
+lands, use a host-integrated package-feed composition rather than treating Foundation Host
+readiness as proof that the requested feed features activated.
 
 `ConnectionName` looks up `ConnectionStrings:<name>` when `ConnectionString` is omitted.
 `MigratePolicy` is `AutoMigrate` (default) or `Validate` (fail if pending). Both policies
@@ -68,6 +74,22 @@ stored as UTC ticks (`INTEGER`) so active-only expiry comparisons translate.
 Derived contexts: `SecretsSqliteDbContext`, `SecretsSqlServerDbContext`,
 `SecretsPostgreSqlDbContext`. Each has its own `Migrations/` folder and `ModelSnapshot`.
 History table: `__EFMigrationsHistory_ElsaSecrets`.
+
+### Persisted text projections
+
+Case-insensitive search and Type/Store/Scope lookup keys use the Elsa-owned
+`elsa-secrets-unicode-ordinal-ignore-case-v1-bcbcc4bf0951b182137ed0f42681f30bafda7777f500c42203cf58bb7e4eaaa1`
+projection. Its generated table is pinned to Unicode 16 plus the 26 mappings already emitted by
+.NET 10 when Phase 1 began writing rows. Runtime casing APIs are no longer used, so upgrading the
+host runtime cannot silently change new keys while older rows retain different bytes.
+
+The casing projection matches Groundwork's Unicode-16 mapping for every scalar except the exact,
+exhaustively tested boundary `U+017F` and `U+16EBB` through `U+16ED3`. Groundwork also persists a
+six-hex-digit-per-scalar comparison key and a SHA-256 identity lookup key, while this EF pilot
+persists projected text; their physical fields are intentionally not interchangeable. Ordinary
+long/non-ASCII Type/Store/Scope behavior is exercised through both selected shell backends. Any
+future projection change requires a new algorithm id, an explicit data migration/backfill, and
+compatibility tests; editing v1 in place is forbidden.
 
 ## Generate and apply migrations
 

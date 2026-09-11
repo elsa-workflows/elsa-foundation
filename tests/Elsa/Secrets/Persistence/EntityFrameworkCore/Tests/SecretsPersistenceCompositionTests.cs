@@ -27,6 +27,8 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests;
 public sealed class SecretsPersistenceCompositionTests
 {
     private const string ShellName = "secrets-persistence";
+    private const string EntityFrameworkBackend = "entity-framework";
+    private const string GroundworkBackend = "groundwork";
 
     [Fact]
     public void Groundwork_feature_alone_selects_the_groundwork_repository()
@@ -34,7 +36,7 @@ public sealed class SecretsPersistenceCompositionTests
         var services = new ServiceCollection();
         new SecretsGroundworkPersistenceFeature().ConfigureServices(services);
 
-        Assert.Equal(SecretRepositoryBackend.Groundwork, BackendName(services));
+        Assert.Equal(GroundworkBackend, BackendName(services));
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(ISecretRepository) &&
             descriptor.ImplementationFactory is not null);
@@ -53,7 +55,7 @@ public sealed class SecretsPersistenceCompositionTests
             MigratePolicy = EfMigratePolicy.Validate
         }.ConfigureServices(services);
 
-        Assert.Equal(SecretRepositoryBackend.EntityFramework, BackendName(services));
+        Assert.Equal(EntityFrameworkBackend, BackendName(services));
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
         Assert.IsType<EfSecretRepository>(scope.ServiceProvider.GetRequiredService<ISecretRepository>());
@@ -70,8 +72,8 @@ public sealed class SecretsPersistenceCompositionTests
 
         first();
         var exception = Assert.Throws<InvalidOperationException>(second);
-        Assert.Contains(SecretRepositoryBackend.Groundwork, exception.Message, StringComparison.Ordinal);
-        Assert.Contains(SecretRepositoryBackend.EntityFramework, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(GroundworkBackend, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(EntityFrameworkBackend, exception.Message, StringComparison.Ordinal);
         Assert.Contains("Enable only one Secrets persistence feature", exception.Message, StringComparison.Ordinal);
         return;
 
@@ -115,8 +117,8 @@ public sealed class SecretsPersistenceCompositionTests
         var registry = app.Services.GetRequiredService<IShellRegistry>();
         var exception = await Assert.ThrowsAnyAsync<Exception>(() => registry.GetOrActivateAsync(ShellName));
         var flattened = Flatten(exception);
-        Assert.Contains(SecretRepositoryBackend.Groundwork, flattened, StringComparison.Ordinal);
-        Assert.Contains(SecretRepositoryBackend.EntityFramework, flattened, StringComparison.Ordinal);
+        Assert.Contains(GroundworkBackend, flattened, StringComparison.Ordinal);
+        Assert.Contains(EntityFrameworkBackend, flattened, StringComparison.Ordinal);
         Assert.Contains("Enable only one Secrets persistence feature", flattened, StringComparison.Ordinal);
     }
 
@@ -147,7 +149,7 @@ public sealed class SecretsPersistenceCompositionTests
         await using var scope = shell.ServiceProvider.CreateAsyncScope();
         Assert.IsType<EfSecretRepository>(scope.ServiceProvider.GetRequiredService<ISecretRepository>());
         Assert.Equal(
-            SecretRepositoryBackend.EntityFramework,
+            EntityFrameworkBackend,
             scope.ServiceProvider.GetRequiredService<SecretRepositoryBackend>().Name);
     }
 
@@ -177,8 +179,8 @@ public sealed class SecretsPersistenceCompositionTests
         var exception = await Assert.ThrowsAnyAsync<Exception>(() =>
             app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName));
         var flattened = Flatten(exception);
-        Assert.Contains(SecretRepositoryBackend.Groundwork, flattened, StringComparison.Ordinal);
-        Assert.Contains(SecretRepositoryBackend.EntityFramework, flattened, StringComparison.Ordinal);
+        Assert.Contains(GroundworkBackend, flattened, StringComparison.Ordinal);
+        Assert.Contains(EntityFrameworkBackend, flattened, StringComparison.Ordinal);
         Assert.Contains("Enable only one Secrets persistence feature", flattened, StringComparison.Ordinal);
     }
 
