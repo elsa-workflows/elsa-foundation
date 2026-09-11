@@ -15,6 +15,10 @@ Program goal: `none/free-flow`. If accepted, this ADR narrows
 individually admitted relational modules. It does not schedule a replacement wave, switch a host
 default, delete a Groundwork adapter, or decide Runtime persistence.
 
+[ADR 0042](0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md) and the active
+[Zero-EF persistence program goal](../program-goals/zero-ef-persistence.md) remain authoritative until
+this ADR is explicitly accepted. Acceptance must reconcile both sources in the same decision change.
+
 Primary evidence:
 
 - [Secrets EF pilot program #1626](https://github.com/elsa-workflows/elsa-foundation/issues/1626)
@@ -103,9 +107,10 @@ provider-conditional types and OCC behavior.
 
 ### Step 3 — Run a bounded product pilot
 
-Program #1626 implemented Secrets end to end through four phases: EF policy and module, dual
-migration modes, opt-in shell composition, and selected-family evidence ownership. Corrective PRs
-closed review and operator gaps rather than treating the first green implementation as sufficient.
+Program #1626 implemented the bounded Secrets EF technical pilot through four phases: EF policy and
+module, dual migration modes, opt-in shell composition, and selected-family evidence ownership.
+Corrective PRs closed review and operator gaps rather than treating the first green implementation
+as sufficient.
 
 ### Step 4 — Audit the pilot against product-policy criteria
 
@@ -174,22 +179,24 @@ No second module is pre-approved by this ADR. Issue
 [#1654](https://github.com/elsa-workflows/elsa-foundation/issues/1654) owns the candidate and
 transaction-boundary inventory after acceptance.
 
-### D3 — One module package owns the relational model and migrations
+### D3 — The domain feature owns its relational model and migrations
 
 An EF persistence module references `Microsoft.EntityFrameworkCore` and
 `Microsoft.EntityFrameworkCore.Relational`. Provider engines are supplied by the host's selected
 composition, not referenced directly by the module.
 
-The module package owns:
+The domain feature logically owns:
 
 - the shared model and store implementation;
 - the provider-derived contexts;
 - each provider's migrations and model snapshot;
 - feature registration and selected-family guards.
 
-If a provider generator emits provider-dependent compiled types, that derived context and snapshot
-may live in an existing host provider package or companion already pulled by it. Do not recreate the
-Elsa 3 matrix of one provider project per domain merely to preserve this packaging sentence.
+That logical ownership includes compatibility, review, release, and evidence responsibility. If a
+provider generator emits provider-dependent compiled types, the physical derived context and
+snapshot may live in an existing host provider package or companion already pulled by it. Do not
+recreate the Elsa 3 matrix of one provider project per domain merely to preserve one-package
+physical colocation.
 
 ### D4 — Each relational provider gets a derived context and snapshot
 
@@ -235,18 +242,20 @@ Apply refuses to run when the live `Database.ProviderName` does not match the se
 context. Concurrent apply uses EF's migration lock path or an explicitly equivalent lock; callers
 must not bypass it with an unlocked custom migrator.
 
-### D8 — Persistence semantics are provider-specific contracts
+### D8 — Observable invariants stay fixed while provider mechanics vary
 
 Do not assume `IsRowVersion()`, one Guid affinity, one JSON type, runtime Unicode casing, or one
 index/query shape works across providers.
 
-Each provider implementation proves its own:
+The domain module fixes the observable uniqueness, paging, conflict, tenancy, normalization,
+retention, and redaction semantics in provider-blind contracts and shared conformance tests. Each
+provider implementation then proves its own enforcement mechanism and physical encoding for:
 
-- optimistic-concurrency token and conflict behavior;
+- optimistic-concurrency token and the fixed conflict behavior;
 - physical types and null/default behavior;
-- indexes, uniqueness, paging, and bounded query plans;
-- normalization and persisted search-key algorithm;
-- diagnostics and redaction behavior.
+- indexes and bounded query plans that preserve the fixed uniqueness and paging semantics;
+- the fixed normalization semantics and versioned persisted search-key algorithm;
+- diagnostics and storage details that preserve the fixed retention and redaction semantics.
 
 Persisted normalization/search-key algorithms are versioned compatibility contracts. A mapping table
 is not regenerated in place when runtime or Unicode data changes; a new algorithm id, backfill, and
@@ -310,7 +319,10 @@ locking guidance, and host/shell lifecycle integration. It must not become anoth
 persistence framework, accumulate domain entity mappings, or require modules to inherit from an
 Elsa-specific base context.
 
-Consumer-owned `DbContext` types remain first-class under framework §2.9 and Elsa §E2.5.
+Consumer-owned `DbContext` types remain first-class under
+[framework §2.9](../../.specify/memory/constitution-framework.md#29-persistence-base-context--application-level)
+and
+[Elsa §E2.5](../../.specify/memory/constitution.md#e25-elsadbcontextbase--opt-in-capability-not-requirement).
 
 ### D14 — FluentMigrator remains a measured escape hatch
 
@@ -332,8 +344,9 @@ The pilot's package-feed composition proof is valid for the bounded technical ve
 prove the current Foundation Host/Nuplane directory-feed route can safely share unsigned
 `CShells.Abstractions` identity or reject a zero-feature shell.
 
-Issue [#1644](https://github.com/elsa-workflows/elsa-foundation/issues/1644) must close before that
-directory-feed route is called production-ready. Issue
+The required outcome and evidence in
+[#1644](https://github.com/elsa-workflows/elsa-foundation/issues/1644) must be complete before that
+directory-feed route is called production-ready; issue closure records that evidence. Issue
 [#1653](https://github.com/elsa-workflows/elsa-foundation/issues/1653) owns a real Secrets HTTP CRUD
 and restart journey with EF selected. These evidence gates do not themselves authorize another
 module or a default switch.
@@ -412,16 +425,21 @@ and workload evidence.
 | 2026-09-10 | Proposed | PR #1623 drafted the provider-derived EF direction from spike #1622. |
 | 2026-09-11 | Pilot concluded | Program #1626 and report PR #1655 recorded a successful bounded technical pilot and deferred product policy. |
 | 2026-09-11 | Revision authorized | Sipke authorized revising ADR 0072 in the bounded direction: separately admitted shape-simple relational modules, Groundwork retained for Runtime/document/specialized workloads. |
-| Pending | Final acceptance | Sipke reviews the exact final text after review convergence and explicitly accepts or rejects it. |
+| Pending | Final decision | Sipke reviews the exact final text after review convergence and explicitly accepts, revises, or rejects it. A revision returns to exact-head review. |
 | Pending | Rollout | If accepted, #1654 may inventory candidates and create separately authorized module issues. No module is scheduled by this ADR alone. |
 
 ## Follow-ups and ownership
 
 - [#1628](https://github.com/elsa-workflows/elsa-foundation/issues/1628): review and explicitly
-  accept or reject the final ADR text; reconcile ADR 0042 and the Zero-EF program goal.
-- [#1622](https://github.com/elsa-workflows/elsa-foundation/pull/1622): if this ADR is accepted,
-  close the spike PR as superseded by the product pilot and this decision while retaining its
-  permalink; do not merge duplicate spike product code.
+  accept, revise, or reject the final ADR text; a revision returns to exact-head review. Acceptance
+  reconciles ADR 0042 and the Zero-EF program goal.
+- [#1623](https://github.com/elsa-workflows/elsa-foundation/pull/1623): on acceptance, record the
+  accepted status and merge only after its gates and separate merge authority; on revision, update
+  it and repeat exact-head review; on rejection, close it without merge and record the reason.
+- [#1622](https://github.com/elsa-workflows/elsa-foundation/pull/1622): record an explicit disposition
+  for every final outcome. Acceptance closes it as superseded by the product pilot and this decision
+  while retaining its permalink; revision or rejection states whether further spike evidence is
+  intentionally retained or closes it with the reason. Do not merge duplicate spike product code.
 - [#1644](https://github.com/elsa-workflows/elsa-foundation/issues/1644): make the current
   Foundation Host/Nuplane directory-feed route production-ready.
 - [#1653](https://github.com/elsa-workflows/elsa-foundation/issues/1653): prove EF-selected Secrets
