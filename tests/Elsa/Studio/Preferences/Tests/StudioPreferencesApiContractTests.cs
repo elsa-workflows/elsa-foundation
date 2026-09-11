@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Elsa.Testing;
 
 namespace Elsa.Studio.Preferences.Tests;
 
@@ -45,13 +46,6 @@ public sealed class StudioPreferencesApiContractTests
                 EndpointAuthoringModels.MinimalApi,
                 endpoint.Metadata.GetMetadata<EndpointAuthoringMetadata>()?.Model);
         });
-    }
-
-    private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
-    {
-        public IServiceProvider ServiceProvider { get; } = serviceProvider;
-        public ICollection<EndpointDataSource> DataSources { get; } = [];
-        public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
     }
 
     private static string GetMethod(RouteEndpoint endpoint) =>

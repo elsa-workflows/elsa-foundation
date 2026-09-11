@@ -35,7 +35,8 @@
       "tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.csproj",
       "tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.Tests.csproj",
       "tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj",
-      "tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj"
+      "tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj",
+      "tests/Elsa/Testing/Elsa.Testing.csproj"
     ]
   }
 }

@@ -4,13 +4,13 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Modularity.ExtensionBuilder;
+namespace Elsa.Workbench;
 
 /// <summary>
-/// Shared authentication primitive for the management API surfaces (extension builder and module
+/// Authentication primitive for the Workbench host-control surfaces (module management and CShells
 /// management). Both surfaces gate their endpoints behind the same configured API key; this type is
 /// the single source of truth for the header name, configuration key, key comparison and validation
-/// flow so the two surfaces cannot drift apart.
+/// flow so the surfaces cannot drift apart.
 /// </summary>
 public static class ManagementApiKeyAuthentication
 {

@@ -8,6 +8,7 @@ using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Tests.Support;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Testing;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -152,14 +153,5 @@ public sealed class StructuredLogsApiContractTests
     {
         Assert.DoesNotContain("0H", value, StringComparison.Ordinal);
         Assert.DoesNotContain("secrets", value, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
-    {
-        public IServiceProvider ServiceProvider { get; } = serviceProvider;
-
-        public ICollection<EndpointDataSource> DataSources { get; } = [];
-
-        public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
     }
 }

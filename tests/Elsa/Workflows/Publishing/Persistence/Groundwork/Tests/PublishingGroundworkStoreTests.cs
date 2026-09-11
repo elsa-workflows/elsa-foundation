@@ -284,7 +284,7 @@ public sealed class PublishingGroundworkStoreTests
         public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null)
         {
             opens?.Add(unitId);
-            return new RecordingSession(inner.Open(unitId, access, targetName), requests, indexHints);
+            return new RecordingSession(inner.Open(unitId, access, targetName), requests) { IndexHints = indexHints };
         }
 
         public IUnitOfWork BeginUnitOfWork(
@@ -294,40 +294,5 @@ public sealed class PublishingGroundworkStoreTests
             string? targetName = null) => inner.BeginUnitOfWork(access, options, unitIds, targetName);
 
         public StorageUnit Unit(string unitId, string? targetName = null) => inner.Unit(unitId, targetName);
-    }
-
-    private sealed class RecordingSession(
-        IStorageSession inner,
-        ICollection<QueryRequest> requests,
-        ICollection<string>? indexHints) : SynchronousStorageSessionTestDouble, IStorageSession, IConcurrencyStorageSession
-    {
-        public RecordingSession(IStorageSession inner, ICollection<QueryRequest> requests)
-            : this(inner, requests, null)
-        {
-        }
-
-        public StorageUnit Unit => inner.Unit;
-        public StorageAccess Access => inner.Access;
-        public StoredEntry? Read(StorageKey key) => inner.Read(key);
-        public QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null)
-        {
-            requests.Add(request);
-            if (options?.SelectedIndex is { } selectedIndex)
-                indexHints?.Add(selectedIndex);
-            return inner.Query(request, options);
-        }
-        public AggregationResult Aggregate(AggregationQuery query) => inner.Aggregate(query);
-        public WriteOutcome Insert(StorageValues values, WriteOptions? options = null) => inner.Insert(values, options);
-        public WriteOutcome Update(StorageValues values, WriteOptions? options = null) => inner.Update(values, options);
-        public WriteOutcome Upsert(StorageValues values, WriteOptions? options = null) => inner.Upsert(values, options);
-        public WriteOutcome Delete(StorageKey key, WriteOptions? options = null) => inner.Delete(key, options);
-        public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) => inner.Append(operationId, values);
-
-        // The publishing stores write through the concurrency seam, so a session that hides it would
-        // change what is under test from "which route did this read take" to "does the double compile".
-        public WriteOutcome ConditionalUpsert(StorageValues values, WriteOptions options) =>
-            inner is IConcurrencyStorageSession concurrency
-                ? concurrency.ConditionalUpsert(values, options)
-                : throw new NotSupportedException("The recorded session has no optimistic concurrency.");
     }
 }

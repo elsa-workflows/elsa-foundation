@@ -21,6 +21,7 @@
     <!-- The current-schema proof applies both design catalogs to one database. -->
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\Persistence\Groundwork\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
 
 </Project>

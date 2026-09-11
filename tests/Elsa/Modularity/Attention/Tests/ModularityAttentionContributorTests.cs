@@ -5,11 +5,14 @@ using Elsa.Modularity.Attention;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Models;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Modularity.Attention.Tests;
 
 public sealed class ModularityAttentionContributorTests
 {
+    private static readonly DateTimeOffset Now = DateTimeOffset.Parse("2026-07-13T10:00:00Z");
+
     [Fact]
     public async Task ReportsManifestDiagnosticsAndIncompatibleDependenciesFromCompleteCatalog()
     {
@@ -20,7 +23,7 @@ public sealed class ModularityAttentionContributorTests
             Feature("healthy", true)
         ]);
         var service = new StubFeatureManagementService(catalog);
-        var contributor = new ModularityAttentionContributor(service, new FixedTimeProvider());
+        var contributor = new ModularityAttentionContributor(service, new FakeTimeProvider(Now));
 
         var contribution = await contributor.EvaluateAsync(Context(1));
 
@@ -42,7 +45,7 @@ public sealed class ModularityAttentionContributorTests
             Feature("dependency", false),
             Feature("dependent", true, dependencies: [new("dependency", false)])
         ]));
-        var contributor = new ModularityAttentionContributor(service, new FixedTimeProvider());
+        var contributor = new ModularityAttentionContributor(service, new FakeTimeProvider(Now));
 
         var first = await contributor.EvaluateAsync(Context(1));
         var second = await contributor.EvaluateAsync(Context(1));
@@ -55,7 +58,7 @@ public sealed class ModularityAttentionContributorTests
     public async Task ReturnsAtMostFiveItemsButTruthfulTotal()
     {
         var features = Enumerable.Range(0, 8).Select(i => Feature($"broken-{i}", true, readError: "Bad manifest")).ToArray();
-        var contributor = new ModularityAttentionContributor(new StubFeatureManagementService(new("revision", features)), new FixedTimeProvider());
+        var contributor = new ModularityAttentionContributor(new StubFeatureManagementService(new("revision", features)), new FakeTimeProvider(Now));
 
         var contribution = await contributor.EvaluateAsync(Context(1));
 
@@ -68,7 +71,7 @@ public sealed class ModularityAttentionContributorTests
     public async Task BudgetPreventsCatalogCall()
     {
         var service = new StubFeatureManagementService(new("revision", []));
-        var contributor = new ModularityAttentionContributor(service, new FixedTimeProvider());
+        var contributor = new ModularityAttentionContributor(service, new FakeTimeProvider(Now));
 
         await Assert.ThrowsAsync<AttentionBudgetExceededException>(async () => await contributor.EvaluateAsync(Context(0)));
         Assert.Equal(0, service.CallCount);
@@ -114,10 +117,5 @@ public sealed class ModularityAttentionContributorTests
 
         public Task<FeatureApplyResult> ApplyAsync(FeatureApplyRequest request, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
-    }
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => DateTimeOffset.Parse("2026-07-13T10:00:00Z");
     }
 }

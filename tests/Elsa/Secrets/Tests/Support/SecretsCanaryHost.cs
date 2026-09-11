@@ -23,6 +23,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Secrets.Tests.Support;
 
@@ -40,7 +41,7 @@ public sealed class SecretsCanaryHost : IAsyncDisposable
     public const string SensitiveMarker = "secrets-1348-sensitive-marker";
     public const string ConfigurationKey = "Canary:Secrets:Shared";
     public const string ConfigurationValue = "secrets-1348-configuration-value";
-    public static DateTimeOffset FixedUtcNow => FixedTimeProvider.UtcNow;
+    public static DateTimeOffset FixedUtcNow { get; } = new(2026, 8, 15, 12, 0, 0, TimeSpan.Zero);
 
     private readonly IHost host;
 
@@ -91,7 +92,7 @@ public sealed class SecretsCanaryHost : IAsyncDisposable
                             CanaryAuthenticationHandler.SchemeName
                         });
                     services.ReplacePermissionEvaluator<RecordingPermissionEvaluator>();
-                    services.AddSingleton<TimeProvider>(new FixedTimeProvider());
+                    services.AddSingleton<TimeProvider>(new FakeTimeProvider(FixedUtcNow));
                     services.AddScoped<IPermissionResourceHandler, CanaryPermissionResourceHandler>();
 
                     new SecretsApiFeature().ConfigureServices(services);
@@ -205,14 +206,14 @@ public sealed class SecretsCanaryHost : IAsyncDisposable
             Scope = "workflow",
             Tags = new HashSet<string>(["canary", tenantId], StringComparer.OrdinalIgnoreCase),
             Status = status,
-            CreatedAt = FixedTimeProvider.UtcNow.AddMinutes(-5),
+            CreatedAt = FixedUtcNow.AddMinutes(-5),
             Versions =
             [
                 new SecretVersion
                 {
                     Version = 1,
                     Status = status is SecretStatus.Revoked or SecretStatus.Deleted ? status : SecretStatus.Active,
-                    CreatedAt = FixedTimeProvider.UtcNow.AddMinutes(-5),
+                    CreatedAt = FixedUtcNow.AddMinutes(-5),
                     Payload = new SecretPayload
                     {
                         Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -236,13 +237,13 @@ public sealed class SecretsCanaryHost : IAsyncDisposable
         Scope = "application",
         Tags = new HashSet<string>(["canary", "configuration"], StringComparer.OrdinalIgnoreCase),
         Status = SecretStatus.Active,
-        CreatedAt = FixedTimeProvider.UtcNow.AddMinutes(-5),
+        CreatedAt = FixedUtcNow.AddMinutes(-5),
         Versions =
         [
             new SecretVersion
             {
                 Version = 1,
-                CreatedAt = FixedTimeProvider.UtcNow.AddMinutes(-5),
+                CreatedAt = FixedUtcNow.AddMinutes(-5),
                 Payload = new SecretPayload
                 {
                     Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -257,15 +258,8 @@ public sealed class SecretsCanaryHost : IAsyncDisposable
     private static Secret Expired(string tenantId, string name, string id, string protectedValue)
     {
         var secret = Encrypted(tenantId, name, id, "Expired", protectedValue);
-        secret.Versions[0].ExpiresAt = FixedTimeProvider.UtcNow.AddMinutes(-1);
+        secret.Versions[0].ExpiresAt = FixedUtcNow.AddMinutes(-1);
         return secret;
-    }
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        public static readonly DateTimeOffset UtcNow = new(2026, 8, 15, 12, 0, 0, TimeSpan.Zero);
-
-        public override DateTimeOffset GetUtcNow() => UtcNow;
     }
 
     private sealed class CanaryPermissionResourceHandler(IHttpContextAccessor accessor) : IPermissionResourceHandler

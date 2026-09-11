@@ -8,6 +8,7 @@ using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Store;
 using Xunit;
+using Elsa.Persistence.Groundwork.V2.Testing;
 
 namespace Elsa.Persistence.Groundwork.V2.Runtime.Tests;
 
@@ -117,11 +118,6 @@ public sealed class GroundworkV2RuntimeLivenessCodecTests
     private static JsonElement JsonString(string value) => JsonDocument.Parse(JsonSerializer.Serialize(value)).RootElement.Clone();
 
     private static JsonElement JsonBoolean(bool value) => JsonDocument.Parse(value ? "true" : "false").RootElement.Clone();
-
-    private sealed class TestAccessContextAccessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
-    {
-        public PersistenceAccessContext Current { get; } = current;
-    }
 
     private sealed class MemorySessionSource(MemorySession session, StorageUnit unit) : IGroundworkStorageSessionSource
     {

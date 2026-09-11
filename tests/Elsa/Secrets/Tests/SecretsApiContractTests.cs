@@ -4,6 +4,7 @@ using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Secrets.Api.Features;
 using Elsa.Secrets.Core.Permissions;
 using Elsa.Secrets.Tests.Support;
+using Elsa.Testing;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -61,12 +62,5 @@ public sealed class SecretsApiContractTests
             Assert.Equal(EndpointAuthoringModels.MinimalApi,
                 endpoint.Metadata.GetMetadata<EndpointAuthoringMetadata>()?.Model);
         });
-    }
-
-    private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
-    {
-        public IServiceProvider ServiceProvider { get; } = serviceProvider;
-        public ICollection<EndpointDataSource> DataSources { get; } = [];
-        public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
     }
 }

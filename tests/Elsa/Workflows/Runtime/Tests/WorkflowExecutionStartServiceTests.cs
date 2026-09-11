@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -143,7 +144,7 @@ public sealed class WorkflowExecutionStartServiceTests : IAsyncLifetime
             referenceStore,
             new RecordingAgentProvider(),
             new FixedRuntimeExecutionIdGenerator(),
-            new FixedTimeProvider(new DateTimeOffset(2026, 6, 11, 12, 0, 0, TimeSpan.Zero)));
+            new FakeTimeProvider(new DateTimeOffset(2026, 6, 11, 12, 0, 0, TimeSpan.Zero)));
     }
 
     private static WorkflowExecutable NewExecutable() =>
@@ -212,11 +213,6 @@ public sealed class WorkflowExecutionStartServiceTests : IAsyncLifetime
         public string NewWorkflowExecutionCommandEnvelopeId() => "envelope-fixed";
 
         public string NewActivityExecutionId() => throw new NotSupportedException("HTTP start dispatch does not schedule activities.");
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private sealed class CapturingStartDispatcher(IWorkflowStartDispatcher inner) : IWorkflowStartDispatcher

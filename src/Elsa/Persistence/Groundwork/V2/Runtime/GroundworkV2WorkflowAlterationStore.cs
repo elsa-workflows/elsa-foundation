@@ -17,30 +17,21 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// unsealed cleanup, and lease transitions use exact two-unit transactions; every mutable row transition is fenced
 /// by the provider's optimistic revision. There is no v1 document-store bridge or migration path.
 /// </remarks>
-public sealed class GroundworkV2WorkflowAlterationStore : IWorkflowAlterationStore
+public sealed class GroundworkV2WorkflowAlterationStore : GroundworkV2RuntimeStoreBase, IWorkflowAlterationStore
 {
     private const int TransitionAttempts = 16;
     private const int UnsealedCleanupPageSize = 100;
     private const int MaximumQueryPage = 2_000;
 
-    private readonly IGroundworkStorageSessionSource sessions;
-    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
-    private readonly string? targetName;
-    private readonly StorageUnit planUnit;
     private readonly StorageUnit jobUnit;
 
     public GroundworkV2WorkflowAlterationStore(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,
         string? targetName = null)
+        : base(sessions, accessContextAccessor, targetName, "workflow alteration", ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanDocumentKind)
     {
-        ArgumentNullException.ThrowIfNull(sessions);
-        ArgumentNullException.ThrowIfNull(accessContextAccessor);
-        this.sessions = sessions;
-        this.accessContextAccessor = accessContextAccessor;
-        this.targetName = targetName;
-        planUnit = sessions.Unit(ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanDocumentKind, targetName);
-        jobUnit = sessions.Unit(ElsaRuntimeV2StorageManifest.WorkflowAlterationJobDocumentKind, targetName);
+        jobUnit = UnitFor(ElsaRuntimeV2StorageManifest.WorkflowAlterationJobDocumentKind);
     }
 
     public ValueTask<WorkflowAlterationPlanAdmissionResult> AdmitAsync(
@@ -50,7 +41,7 @@ public sealed class GroundworkV2WorkflowAlterationStore : IWorkflowAlterationSto
         ArgumentNullException.ThrowIfNull(plan);
         cancellationToken.ThrowIfCancellationRequested();
         EnsureTenant(plan.AuthorityScope.TenantPartition);
-        var session = OpenScoped(planUnit);
+        var session = OpenScoped(Unit);
         var byId = session.Read(GroundworkRuntimeRowStore.Key(
             GroundworkV2WorkflowAlterationStorageConventions.PhysicalPlanId(plan.PlanId)));
         if (byId is not null)
@@ -98,7 +89,7 @@ public sealed class GroundworkV2WorkflowAlterationStore : IWorkflowAlterationSto
     {
         ValidateId(planId, nameof(planId));
         cancellationToken.ThrowIfCancellationRequested();
-        var entry = OpenScoped(planUnit).Read(GroundworkRuntimeRowStore.Key(
+        var entry = OpenScoped(Unit).Read(GroundworkRuntimeRowStore.Key(
             GroundworkV2WorkflowAlterationStorageConventions.PhysicalPlanId(planId)));
         if (entry is null)
             return ValueTask.FromResult<WorkflowAlterationPlanState?>(null);
@@ -125,7 +116,7 @@ public sealed class GroundworkV2WorkflowAlterationStore : IWorkflowAlterationSto
             throw new InvalidOperationException(
                 "Active alteration-plan discovery requires one tenant-scoped persistence context; cross-scope alteration coordination is not available for scoped v2 units.");
 
-        var table = new TableId(planUnit.Name);
+        var table = new TableId(Unit.Name);
         var predicates = new List<Predicate>
         {
             new Predicate.Or([
@@ -138,7 +129,7 @@ public sealed class GroundworkV2WorkflowAlterationStore : IWorkflowAlterationSto
             predicates.Add(Equal(Column(table, ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanTenantPartitionField), context.Scope.Value));
         var order = Column(table, ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanActiveOrderKeyField);
         var result = QueryWithBoundCursor(
-            OpenScoped(planUnit),
+            OpenScoped(Unit),
             new QueryRequest(
                 table,
                 Combine(predicates),
@@ -184,7 +175,7 @@ public sealed class GroundworkV2WorkflowAlterationStore : IWorkflowAlterationSto
         RequireAtomicCommit();
 
         using var unitOfWork = BeginAtomicUnitOfWork();
-        var planSession = unitOfWork.OpenSession(planUnit);
+        var planSession = unitOfWork.OpenSession(Unit);
         var jobSession = unitOfWork.OpenSession(jobUnit);
         var planEntry = planSession.Read(GroundworkRuntimeRowStore.Key(
             GroundworkV2WorkflowAlterationStorageConventions.PhysicalPlanId(planId)))
@@ -245,7 +236,7 @@ public sealed class GroundworkV2WorkflowAlterationStore : IWorkflowAlterationSto
 
         var updated = CopyPlan(plan, captureCursor: nextCursor, setCaptureCursor: true, capturedSoFar: ordinal, revision: checked(plan.Revision + 1));
         unitOfWork.Stage(RowWrite.ConditionalUpsert(
-            planUnit,
+            Unit,
             GroundworkV2WorkflowAlterationStorageConventions.Values(
                 GroundworkV2WorkflowAlterationStorageConventions.CreatePlanDocument(updated, document.ActiveOrderKey, document.UnsealedCaptureCleanup)),
             WriteOptions.IfVersion(RequiredVersion(planEntry))));
@@ -471,7 +462,7 @@ public sealed class GroundworkV2WorkflowAlterationStore : IWorkflowAlterationSto
                 return null;
 
             using var unitOfWork = BeginAtomicUnitOfWork();
-            var planSession = unitOfWork.OpenSession(planUnit);
+            var planSession = unitOfWork.OpenSession(Unit);
             var jobSession = unitOfWork.OpenSession(jobUnit);
             var currentPlanEntry = planSession.Read(GroundworkRuntimeRowStore.Key(
                 GroundworkV2WorkflowAlterationStorageConventions.PhysicalPlanId(planId)));
@@ -511,7 +502,7 @@ public sealed class GroundworkV2WorkflowAlterationStore : IWorkflowAlterationSto
                     startedAt: currentPlanDocument.Plan.StartedAt ?? now,
                     revision: checked(currentPlanDocument.Plan.Revision + 1));
                 unitOfWork.Stage(RowWrite.ConditionalUpsert(
-                    planUnit,
+                    Unit,
                     GroundworkV2WorkflowAlterationStorageConventions.Values(
                         GroundworkV2WorkflowAlterationStorageConventions.CreatePlanDocument(runningPlan, currentPlanDocument.ActiveOrderKey, currentPlanDocument.UnsealedCaptureCleanup)),
                     WriteOptions.IfVersion(RequiredVersion(currentPlanEntry))));
@@ -608,7 +599,7 @@ public sealed class GroundworkV2WorkflowAlterationStore : IWorkflowAlterationSto
                 completedAt: now,
                 revision: checked(plan.Revision + 1));
             var result = ConditionalUpsert(
-                OpenScoped(planUnit),
+                OpenScoped(Unit),
                 GroundworkV2WorkflowAlterationStorageConventions.Values(
                     GroundworkV2WorkflowAlterationStorageConventions.CreatePlanDocument(updated, loaded.Document.ActiveOrderKey, loaded.Document.UnsealedCaptureCleanup)),
                 loaded.Version);
@@ -638,7 +629,7 @@ public sealed class GroundworkV2WorkflowAlterationStore : IWorkflowAlterationSto
                 return observed.Document.Plan;
 
             using var unitOfWork = BeginAtomicUnitOfWork();
-            var planSession = unitOfWork.OpenSession(planUnit);
+            var planSession = unitOfWork.OpenSession(Unit);
             var jobSession = unitOfWork.OpenSession(jobUnit);
             var planEntry = planSession.Read(GroundworkRuntimeRowStore.Key(
                 GroundworkV2WorkflowAlterationStorageConventions.PhysicalPlanId(planId)));
@@ -692,7 +683,7 @@ public sealed class GroundworkV2WorkflowAlterationStore : IWorkflowAlterationSto
                     cancellationRequestedAt: cleanup.TerminalStatus == WorkflowAlterationPlanStatus.Cancelled ? cleanup.CompletedAt : null,
                     revision: checked(current.Plan.Revision + 1));
             unitOfWork.Stage(RowWrite.ConditionalUpsert(
-                planUnit,
+                Unit,
                 GroundworkV2WorkflowAlterationStorageConventions.Values(
                     GroundworkV2WorkflowAlterationStorageConventions.CreatePlanDocument(
                         updated,
@@ -722,7 +713,7 @@ public sealed class GroundworkV2WorkflowAlterationStore : IWorkflowAlterationSto
             if (ReferenceEquals(transitioned.Plan, loaded.Document.Plan) || transitioned.Plan == loaded.Document.Plan)
                 return transitioned.Plan;
             var result = ConditionalUpsert(
-                OpenScoped(planUnit),
+                OpenScoped(Unit),
                 GroundworkV2WorkflowAlterationStorageConventions.Values(
                     GroundworkV2WorkflowAlterationStorageConventions.CreatePlanDocument(transitioned.Plan, transitioned.ActiveOrderKey, loaded.Document.UnsealedCaptureCleanup)),
                 loaded.Version);
@@ -749,7 +740,7 @@ public sealed class GroundworkV2WorkflowAlterationStore : IWorkflowAlterationSto
     {
         ValidateId(planId, nameof(planId));
         cancellationToken.ThrowIfCancellationRequested();
-        var entry = OpenScoped(planUnit).Read(GroundworkRuntimeRowStore.Key(
+        var entry = OpenScoped(Unit).Read(GroundworkRuntimeRowStore.Key(
             GroundworkV2WorkflowAlterationStorageConventions.PhysicalPlanId(planId)));
         if (entry is null)
             return ValueTask.FromResult<LoadedPlan?>(null);
@@ -846,7 +837,7 @@ public sealed class GroundworkV2WorkflowAlterationStore : IWorkflowAlterationSto
         string idempotencyKeyHash,
         int take)
     {
-        var table = new TableId(planUnit.Name);
+        var table = new TableId(Unit.Name);
         var tenant = Column(table, ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanTenantPartitionField);
         var hash = Column(table, ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanIdempotencyKeyHashField);
         var id = Column(table, ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanIdField);
@@ -871,37 +862,12 @@ public sealed class GroundworkV2WorkflowAlterationStore : IWorkflowAlterationSto
         ((job.Status == WorkflowAlterationJobStatus.Pending && plan.Status != WorkflowAlterationPlanStatus.Cancelling && job.CreatedAt <= now) ||
          (job.Status == WorkflowAlterationJobStatus.Running && job.Claim is not null && job.Claim.ExpiresAt <= now));
 
-    private IStorageSession OpenScoped(StorageUnit unit) => sessions.Open(unit.Id.Value, ScopedAccess, targetName);
-
-    private StorageAccess ScopedAccess
-    {
-        get
-        {
-            var context = AccessContext;
-            if (context.Scope is null || context.AcrossScopes)
-                throw new InvalidOperationException("Groundwork workflow alterations require one explicit persistence scope for this operation.");
-            return StorageAccess.Scoped(new StorageScope(context.Scope.Value));
-        }
-    }
-
-    private PersistenceAccessContext AccessContext => accessContextAccessor.Current ??
-        throw new InvalidOperationException("Groundwork workflow-alteration persistence access context is missing.");
-
-    private void EnsureTenant(string tenantPartition) => AccessContext.EnsureTenantScope(tenantPartition);
-
-    private IUnitOfWork BeginAtomicUnitOfWork() => sessions.BeginUnitOfWork(
-        ScopedAccess,
-        BatchWriteOptions.Exact,
-        [ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanDocumentKind, ElsaRuntimeV2StorageManifest.WorkflowAlterationJobDocumentKind],
-        targetName);
+    private IUnitOfWork BeginAtomicUnitOfWork() => BeginAtomicUnitOfWork([ElsaRuntimeV2StorageManifest.WorkflowAlterationPlanDocumentKind, ElsaRuntimeV2StorageManifest.WorkflowAlterationJobDocumentKind]);
 
     private void RequireAtomicCommit()
     {
-        if (sessions is not IGroundworkStorageCapabilitySource source ||
-            !source.Capabilities(targetName).Any(capability => capability.Id.Equals(WellKnownCapabilities.AtomicCommit)))
-        {
+        if (!HasAtomicCommit)
             throw new NotSupportedException("Groundwork workflow alterations require the provider's evidenced atomic-commit capability.");
-        }
     }
 
     private async ValueTask<BatchWriteReport> CommitAsync(IUnitOfWork unitOfWork, CancellationToken cancellationToken)
@@ -996,37 +962,11 @@ public sealed class GroundworkV2WorkflowAlterationStore : IWorkflowAlterationSto
             _ => throw new InvalidDataException($"Groundwork alteration query row is missing required projection '{field}'.")
         };
 
-    private static WriteOutcome ConditionalUpsert(IStorageSession session, StorageValues values, long revision)
-    {
-        if (session is not IConcurrencyStorageSession concurrency)
-            throw new NotSupportedException("The selected Groundwork provider does not advertise optimistic alteration concurrency.");
-        return concurrency.ConditionalUpsert(values, WriteOptions.IfVersion(revision));
-    }
+    /// <summary>Plan and job queries share one helper; the table name selects which unit declares the column.</summary>
+    private new ColumnRef Column(TableId table, string name) =>
+        Column(table.Value == Unit.Name ? Unit : jobUnit, table, name);
 
-    private ColumnRef Column(TableId table, string name)
-    {
-        var definition = (table.Value == planUnit.Name ? planUnit : jobUnit).Columns.SingleOrDefault(column => StringComparer.Ordinal.Equals(column.Name, name))
-            ?? throw new InvalidOperationException($"Groundwork alteration unit '{table.Value}' does not declare query column '{name}'.");
-        var type = definition.Type switch
-        {
-            PortableType.String => QueryType.String,
-            PortableType.DateTimeOffset => QueryType.DateTimeOffset,
-            PortableType.Int64 => QueryType.Int64,
-            _ => throw new InvalidOperationException($"Groundwork alteration query column '{name}' has unsupported type '{definition.Type}'.")
-        };
-        return new ColumnRef(table, name, type, definition.IsNullable, definition.MaxLength);
-    }
-
-    private static Predicate Equal(ColumnRef column, string value) => new Predicate.Equal(column, QueryConstant.Of(column, value));
     private static Predicate Equal(ColumnRef column, long value) => new Predicate.Equal(column, QueryConstant.Of(column, value));
-    private static Predicate Combine(IReadOnlyList<Predicate> predicates) => predicates.Count switch
-    {
-        0 => Predicate.AlwaysTrue.Instance,
-        1 => predicates[0],
-        _ => new Predicate.And(predicates)
-    };
-
-    private static bool IsSaved(WriteOutcomeStatus status) => status is WriteOutcomeStatus.Inserted or WriteOutcomeStatus.Updated or WriteOutcomeStatus.Upserted or WriteOutcomeStatus.Replayed;
 
     private static InvalidOperationException Concurrency(string planId) =>
         new($"The alteration plan '{planId}' changed while the operation was in progress.");
@@ -1147,7 +1087,6 @@ public sealed class GroundworkV2WorkflowAlterationStore : IWorkflowAlterationSto
             completedAt ?? job.CompletedAt,
             revision ?? job.Revision,
             job.CapturedConcurrency);
-
 }
 
 internal sealed record LoadedPlan(WorkflowAlterationPlanDocument Document, long Version)

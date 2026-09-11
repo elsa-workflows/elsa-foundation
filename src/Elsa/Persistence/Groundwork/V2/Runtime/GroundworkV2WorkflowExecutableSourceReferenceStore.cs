@@ -14,24 +14,15 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// one explicit persistence scope, uses identity reads for direct access, and keeps source-reference creation strict.
 /// Retirement and deletion use provider optimistic concurrency. There is no document bridge, migration, or fallback.
 /// </remarks>
-public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkflowExecutableSourceReferenceStore
+public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : GroundworkV2RuntimeStoreBase, IWorkflowExecutableSourceReferenceStore
 {
-    private readonly IGroundworkStorageSessionSource sessions;
-    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
-    private readonly string? targetName;
-    private readonly StorageUnit unit;
 
     public GroundworkV2WorkflowExecutableSourceReferenceStore(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,
         string? targetName = null)
+        : base(sessions, accessContextAccessor, targetName, "source reference", ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDocumentKind)
     {
-        ArgumentNullException.ThrowIfNull(sessions);
-        ArgumentNullException.ThrowIfNull(accessContextAccessor);
-        this.sessions = sessions;
-        this.accessContextAccessor = accessContextAccessor;
-        this.targetName = targetName;
-        unit = sessions.Unit(ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDocumentKind, targetName);
     }
 
     public ValueTask SaveAsync(
@@ -98,7 +89,7 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
     {
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var artifact = Column(table, ElsaRuntimeV2StorageManifest.ArtifactIdField);
         var sourceReference = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceIdField);
         var result = Open().Query(new QueryRequest(
@@ -116,7 +107,7 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
     {
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var definitionVersion = Column(
             table,
             ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDefinitionVersionIdField);
@@ -136,7 +127,7 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
     {
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var predicates = new List<Predicate>();
         if (query.Scope is { } scope)
             predicates.Add(Equal(Column(table, ElsaRuntimeV2StorageManifest.ScopeField), scope.ToString()));
@@ -177,7 +168,7 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
             order,
             Projection.All,
             PagingFor(query.Limit, query.ContinuationToken)),
-            unit.CreateQueryRenderOptions(selectedIndex));
+            Unit.CreateQueryRenderOptions(selectedIndex));
         return ValueTask.FromResult(Page(query, result));
     }
 
@@ -323,10 +314,10 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
         cancellationToken.ThrowIfCancellationRequested();
         var expired = QueryCleanup(
             new Predicate.Range(
-                Column(new TableId(unit.Name), ElsaRuntimeV2StorageManifest.ExpiresAtField),
+                Column(new TableId(Unit.Name), ElsaRuntimeV2StorageManifest.ExpiresAtField),
                 null,
                 Bound.Inclusive(QueryConstant.Of(
-                    Column(new TableId(unit.Name), ElsaRuntimeV2StorageManifest.ExpiresAtField), now))),
+                    Column(new TableId(Unit.Name), ElsaRuntimeV2StorageManifest.ExpiresAtField), now))),
             batch.Limit,
             cancellationToken);
         var remaining = batch.Limit - expired.Count;
@@ -334,11 +325,11 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
             ? []
             : QueryCleanup(
                 And([
-                    Equal(Column(new TableId(unit.Name), ElsaRuntimeV2StorageManifest.IsRetiredField), true),
+                    Equal(Column(new TableId(Unit.Name), ElsaRuntimeV2StorageManifest.IsRetiredField), true),
                     new Predicate.Range(
-                        Column(new TableId(unit.Name), ElsaRuntimeV2StorageManifest.ExpiresAtField),
+                        Column(new TableId(Unit.Name), ElsaRuntimeV2StorageManifest.ExpiresAtField),
                         Bound.Exclusive(QueryConstant.Of(
-                            Column(new TableId(unit.Name), ElsaRuntimeV2StorageManifest.ExpiresAtField), now)),
+                            Column(new TableId(Unit.Name), ElsaRuntimeV2StorageManifest.ExpiresAtField), now)),
                         null)
                 ]),
                 remaining,
@@ -365,7 +356,7 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
     {
         ArgumentNullException.ThrowIfNull(candidates);
         cancellationToken.ThrowIfCancellationRequested();
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var artifact = Column(table, ElsaRuntimeV2StorageManifest.ArtifactIdField);
         var retired = Column(table, ElsaRuntimeV2StorageManifest.IsRetiredField);
         var expiresAt = Column(table, ElsaRuntimeV2StorageManifest.ExpiresAtField);
@@ -399,7 +390,7 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
         int limit,
         CancellationToken cancellationToken)
     {
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var expiresAt = Column(table, ElsaRuntimeV2StorageManifest.ExpiresAtField);
         var sourceReference = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceIdField);
         var result = Open().Query(new QueryRequest(
@@ -427,30 +418,6 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
             result.NextContinuationToken);
     }
 
-    private IStorageSession Open()
-    {
-        var context = AccessContext;
-        return sessions.Open(
-            unit.Id.Value,
-            StorageAccess.Scoped(new StorageScope(context.Scope!.Value)),
-            targetName);
-    }
-
-    private PersistenceAccessContext AccessContext
-    {
-        get
-        {
-            var context = accessContextAccessor.Current;
-            if (context.Scope is null || context.AcrossScopes)
-            {
-                throw new InvalidOperationException(
-                    "Groundwork source-reference access requires one explicit persistence scope; global and across-scope access are refused.");
-            }
-
-            return context;
-        }
-    }
-
     private WorkflowExecutableSourceReference Deserialize(IReadOnlyDictionary<string, object?> values)
     {
         var reference = GroundworkV2WorkflowExecutableSourceReferenceStorageConventions.Deserialize(values);
@@ -461,48 +428,6 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStore : IWorkfl
     private void EnsureTenant(WorkflowExecutableSourceReference reference) =>
         AccessContext.EnsureTenantScope(reference.TenantId);
 
-    private static WriteOutcome ConditionalUpsert(
-        IStorageSession session,
-        StorageValues values,
-        long revision)
-    {
-        if (session is not IConcurrencyStorageSession concurrency)
-            throw new NotSupportedException(
-                "The selected Groundwork provider does not advertise optimistic source-reference concurrency.");
-        return concurrency.ConditionalUpsert(values, WriteOptions.IfVersion(revision));
-    }
-
-    private ColumnRef Column(TableId table, string name)
-    {
-        var definition = unit.Columns.SingleOrDefault(column =>
-            StringComparer.Ordinal.Equals(column.Name, name))
-            ?? throw new InvalidOperationException(
-                $"Groundwork source-reference unit '{unit.Id.Value}' does not declare query column '{name}'.");
-        var type = definition.Type switch
-        {
-            PortableType.String => QueryType.String,
-            PortableType.DateTimeOffset => QueryType.DateTimeOffset,
-            PortableType.Boolean => QueryType.Boolean,
-            _ => throw new InvalidOperationException(
-                $"Groundwork source-reference query column '{name}' has unsupported type '{definition.Type}'.")
-        };
-        return new ColumnRef(table, name, type, definition.IsNullable, definition.MaxLength);
-    }
-
-    private static Predicate Equal(ColumnRef column, string value) =>
-        new Predicate.Equal(column, QueryConstant.Of(column, value));
-
-    private static Predicate Equal(ColumnRef column, bool value) =>
-        new Predicate.Equal(column, QueryConstant.Of(column, value));
-
     private static Predicate And(IReadOnlyList<Predicate> predicates) =>
         predicates.Count == 1 ? predicates[0] : new Predicate.And(predicates);
-
-    private static Paging PagingFor(int limit, string? continuationToken) =>
-        continuationToken is null
-            ? Paging.Keyset(limit)
-            : Paging.Continuation(continuationToken, limit);
-
-    private static bool IsSaved(WriteOutcomeStatus status) =>
-        status is WriteOutcomeStatus.Inserted or WriteOutcomeStatus.Updated or WriteOutcomeStatus.Upserted or WriteOutcomeStatus.Replayed;
 }

@@ -3,6 +3,7 @@ using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Secrets.Tests;
@@ -265,7 +266,7 @@ public sealed class SecretManagerDeterministicClockTests : IDisposable
     private static readonly DateTimeOffset CreatedNow = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset RotatedNow = new(2026, 1, 2, 0, 0, 0, TimeSpan.Zero);
 
-    private readonly FixedTimeProvider _timeProvider = new(CreatedNow);
+    private readonly FakeTimeProvider _timeProvider = new(CreatedNow);
     private readonly ServiceProvider _provider;
     private readonly ISecretManager _manager;
     private readonly ISecretRepository _repository;
@@ -317,7 +318,7 @@ public sealed class SecretManagerDeterministicClockTests : IDisposable
             Value = "old-value"
         });
 
-        _timeProvider.Set(RotatedNow);
+        _timeProvider.SetUtcNow(RotatedNow);
         await _manager.RotateAsync(TenantId, "payments.api", new RotateSecretRequest { Value = "new-value" });
 
         var stored = (await _repository.FindAsync(TenantId, "payments.api"))!;
@@ -343,17 +344,10 @@ public sealed class SecretManagerDeterministicClockTests : IDisposable
 
         Assert.Single((await _manager.ListAsync(TenantId, new SecretQuery { ActiveOnly = true })).Items);
 
-        _timeProvider.Set(CreatedNow.AddHours(1));
+        _timeProvider.SetUtcNow(CreatedNow.AddHours(1));
 
         Assert.Empty((await _manager.ListAsync(TenantId, new SecretQuery { ActiveOnly = true })).Items);
     }
 
     public void Dispose() => _provider.Dispose();
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        private DateTimeOffset _now = now;
-        public void Set(DateTimeOffset value) => _now = value;
-        public override DateTimeOffset GetUtcNow() => _now;
-    }
 }

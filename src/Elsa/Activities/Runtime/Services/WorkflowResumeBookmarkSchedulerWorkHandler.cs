@@ -13,7 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.Runtime.Services;
 
-public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedulerWorkHandler
+public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : RuntimeSchedulerWorkHandlerBase<RuntimeResumeBookmarkCommandPayload>
 {
     public const string HandlerName = nameof(WorkflowResumeBookmarkSchedulerWorkHandler);
 
@@ -24,47 +24,47 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
     /// </summary>
     public const string UndeclaredStimulusProviderId = "runtime.stimulus";
 
-    private readonly IServiceScopeFactory _serviceScopeFactory;
-    private readonly TimeProvider _timeProvider;
+    private static readonly string[] PayloadValidationParamNames =
+    [
+        "pinnedExecutable", "bookmarkId", "activityExecutionId", "executableNodeId", "resumeTargetId", "stimulusType", "stimulusHash", "reason"
+    ];
 
     public WorkflowResumeBookmarkSchedulerWorkHandler(
         IServiceScopeFactory serviceScopeFactory,
-        TimeProvider timeProvider)
+        TimeProvider? timeProvider = null)
+        : base(serviceScopeFactory, timeProvider)
     {
-        ArgumentNullException.ThrowIfNull(serviceScopeFactory);
-        ArgumentNullException.ThrowIfNull(timeProvider);
-
-        _serviceScopeFactory = serviceScopeFactory;
-        _timeProvider = timeProvider;
     }
 
-    public string Name => HandlerName;
+    public override string Name => HandlerName;
 
-    public bool CanHandle(RuntimeSchedulerWorkItem workItem)
+    public override bool CanHandle(RuntimeSchedulerWorkItem workItem)
     {
         ArgumentNullException.ThrowIfNull(workItem);
 
         return workItem.CommandKind == WorkflowExecutionCommandKind.ResumeBookmark;
     }
 
-    public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(workItem);
-        cancellationToken.ThrowIfCancellationRequested();
+    protected override RuntimeResumeBookmarkCommandPayload DeserializePayload(RuntimeSchedulerWorkItem workItem) =>
+        SchedulerWorkItems.DeserializePayload<RuntimeResumeBookmarkCommandPayload>(workItem, "ResumeBookmark", "resume bookmark payload", PayloadValidationParamNames);
 
-        var resumePayload = DeserializeResumePayload(workItem);
-        await using var scope = _serviceScopeFactory.CreateAsyncScope();
-        var activityExecutionStateStore = scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>();
-        var bookmarkStateStore = scope.ServiceProvider.GetRequiredService<IBookmarkStateStore>();
-        var bookmarkConsumptionCheckpointService = scope.ServiceProvider.GetRequiredService<IBookmarkConsumptionCheckpointService>();
-        var schedulerWorkQueue = scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
-        var checkpointCommitter = scope.ServiceProvider.GetRequiredService<RuntimeCheckpointCommitter>();
-        var activityFaultIncidentRecorder = scope.ServiceProvider.GetRequiredService<ActivityFaultIncidentRecorder>();
-        var durableValueStateStore = scope.ServiceProvider.GetRequiredService<IDurableValueStateStore>();
-        var payloadCapturePolicy = scope.ServiceProvider.GetService<IRuntimePayloadCapturePolicy>() ?? new DefaultRuntimePayloadCapturePolicy();
+    protected override async ValueTask HandleWithServicesAsync(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeResumeBookmarkCommandPayload resumePayload,
+        IServiceProvider serviceProvider,
+        CancellationToken cancellationToken)
+    {
+        var activityExecutionStateStore = serviceProvider.GetRequiredService<IActivityExecutionStateStore>();
+        var bookmarkStateStore = serviceProvider.GetRequiredService<IBookmarkStateStore>();
+        var bookmarkConsumptionCheckpointService = serviceProvider.GetRequiredService<IBookmarkConsumptionCheckpointService>();
+        var schedulerWorkQueue = serviceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+        var checkpointCommitter = serviceProvider.GetRequiredService<RuntimeCheckpointCommitter>();
+        var activityFaultIncidentRecorder = serviceProvider.GetRequiredService<ActivityFaultIncidentRecorder>();
+        var durableValueStateStore = serviceProvider.GetRequiredService<IDurableValueStateStore>();
+        var payloadCapturePolicy = serviceProvider.GetService<IRuntimePayloadCapturePolicy>() ?? new DefaultRuntimePayloadCapturePolicy();
 
         // spec 111: burst-cached pinned-executable read.
-        var executable = await PinnedExecutableRead.FindAsync(scope.ServiceProvider, resumePayload.PinnedExecutable.ArtifactId, cancellationToken);
+        var executable = await PinnedExecutableRead.FindAsync(serviceProvider, resumePayload.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(resumePayload.PinnedExecutable.ArtifactId);
 
@@ -92,7 +92,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
 
         if (TryResolveClaimedResume(state, workItem, deliveryMetadata, out var claimedDelivery, out var claimedAttempt))
         {
-            await ResumeActivityAsync(scope.ServiceProvider, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, durableValueStateStore, payloadCapturePolicy, workItem, resumePayload, null, [], executable, executableNode, state, claimedDelivery!, claimedAttempt, cancellationToken);
+            await ResumeActivityAsync(serviceProvider, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, durableValueStateStore, payloadCapturePolicy, workItem, resumePayload, null, [], executable, executableNode, state, claimedDelivery!, claimedAttempt, cancellationToken);
             return;
         }
 
@@ -107,7 +107,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                         resumePayload,
                         bookmark,
                         state,
-                        NewCompletionWorkItem(workItem, resumePayload, state)),
+                        SchedulerWorkItems.NewCompletionWorkItem(
+                            TimeProvider, workItem, resumePayload.PinnedExecutable, resumePayload.ExecutableNodeId, resumePayload.ActivityExecutionId, state)),
                     cancellationToken);
             }
 
@@ -128,7 +129,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             return;
 
         var siblingBookmarks = await LoadOwnedSiblingBookmarksAsync(bookmarkStateStore, workItem, state, bookmark, cancellationToken);
-        await ResumeActivityAsync(scope.ServiceProvider, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, durableValueStateStore, payloadCapturePolicy, workItem, resumePayload, bookmark, siblingBookmarks, executable, executableNode, state, triggerDelivery!, null, cancellationToken);
+        await ResumeActivityAsync(serviceProvider, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, durableValueStateStore, payloadCapturePolicy, workItem, resumePayload, bookmark, siblingBookmarks, executable, executableNode, state, triggerDelivery!, null, cancellationToken);
     }
 
     private async ValueTask ResumeActivityAsync(
@@ -157,7 +158,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             var bookmarkToConsume = bookmark
                 ?? throw new InvalidOperationException($"ResumeBookmark scheduler work item '{workItem.WorkItemId}' cannot claim trigger delivery without bookmark '{resumePayload.BookmarkId}'.");
             var activationClaim = ActivityAttemptActivationClaimer.PrepareTypedResumeClaim(
-                _timeProvider,
+                TimeProvider,
                 workItem,
                 resumePayload,
                 state,
@@ -177,7 +178,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         else
         {
             var replacementClaim = ActivityAttemptActivationClaimer.PrepareTypedResumeRedeliveryClaim(
-                _timeProvider,
+                TimeProvider,
                 workItem,
                 state,
                 triggerDelivery);
@@ -221,7 +222,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 contract,
                 executionState.InputSnapshot!,
                 RuntimeMetadataKeys.ResumeSchedulerWorkItemId,
-                _timeProvider.GetUtcNow()));
+                TimeProvider.GetUtcNow()));
 
             // Transient activation and one-time snapshot hydration run
             // inside a fault boundary on the resume path too (#325, sibling of #317). Previously this step sat
@@ -299,7 +300,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     executionState,
                     resumeAttempt,
                     suspension,
-                    _timeProvider.GetUtcNow(),
+                    TimeProvider.GetUtcNow(),
                     key => StatefulSuspensionSupport.ResolveResumeTarget(executable, executableNode, key).ResumeTargetId);
             }
             else if (transition is IActivityCompletionTransition)
@@ -311,7 +312,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     resumeAttempt,
                     contract,
                     transition,
-                    _timeProvider.GetUtcNow(),
+                    TimeProvider.GetUtcNow(),
                     cancellationToken);
             }
             else if (transition is IActivityFaultTransition faultTransition)
@@ -392,7 +393,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             await ActivityCancellationCheckpointService.CommitAsync(
                 checkpointCommitter,
                 serviceProvider.GetService<IRuntimeActivityExecutionInspectionAccumulator>(),
-                _timeProvider,
+                TimeProvider,
                 workItem,
                 executionState,
                 returnedCancellationReason,
@@ -417,7 +418,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             executableNode.ActivityContract,
             recordedOutputs,
             RuntimeMetadataKeys.ResumeSchedulerWorkItemId,
-            _timeProvider.GetUtcNow()));
+            TimeProvider.GetUtcNow()));
 
         if (replacementSuspendedState is not null)
         {
@@ -456,7 +457,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 executableNode,
                 completionTransition!,
                 typedCompletion,
-                _timeProvider.GetUtcNow(),
+                TimeProvider.GetUtcNow(),
                 cancellationToken);
         // A workflow-variable output capture writes the canonical root frame in the SAME commit as the
         // completion (#972), mirroring how the Set intrinsic commits its changed frame.
@@ -476,7 +477,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 workItem,
                 resumePayload,
                 completedState,
-                NewCompletionWorkItem(workItem, resumePayload, completedState),
+                SchedulerWorkItems.NewCompletionWorkItem(
+                    TimeProvider, workItem, resumePayload.PinnedExecutable, resumePayload.ExecutableNodeId, resumePayload.ActivityExecutionId, completedState),
                 valueSnapshots,
                 captureProjection.DurableValues,
                 workflowVariableWriteBack),
@@ -662,7 +664,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         for (var index = 0; index < registrations.Length; index++)
         {
             var registration = registrations[index];
-            var now = _timeProvider.GetUtcNow();
+            var now = TimeProvider.GetUtcNow();
             var payload = new RuntimeCreateBookmarkCommandPayload(
                 pinnedExecutable: resumePayload.PinnedExecutable,
                 bookmarkId: registration.RegistrationId,
@@ -735,58 +737,6 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         left.SchemaVersion == right.SchemaVersion &&
         StringComparer.Ordinal.Equals(left.Schema?.GetRawText(), right.Schema?.GetRawText());
 
-    private RuntimeSchedulerWorkItem NewCompletionWorkItem(
-        RuntimeSchedulerWorkItem resumeWorkItem,
-        RuntimeResumeBookmarkCommandPayload resumePayload,
-        ActivityExecutionState completedState)
-    {
-        var now = _timeProvider.GetUtcNow();
-        var payload = new RuntimeCompleteActivityCommandPayload(
-            resumePayload.PinnedExecutable,
-            resumePayload.ExecutableNodeId,
-            resumePayload.ActivityExecutionId,
-            completedState.ParentActivityExecutionId,
-            completedState.BranchId,
-            SchedulerWorkHandlerHelpers.ReadCompletionOutcomeNames(completedState, skippedSubStatus: null),
-            RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason);
-
-        return new RuntimeSchedulerWorkItem(
-            workItemId: RuntimeChainId.Derive(resumeWorkItem.WorkItemId, $"complete:{resumePayload.ActivityExecutionId}"),
-            workflowExecutionId: resumeWorkItem.WorkflowExecutionId,
-            commandId: RuntimeChainId.Derive(resumeWorkItem.CommandId, $"complete:{resumePayload.ActivityExecutionId}"),
-            commandKind: WorkflowExecutionCommandKind.CompleteActivity,
-            envelopeId: resumeWorkItem.EnvelopeId,
-            idempotencyKey: RuntimeChainId.Derive(resumeWorkItem.IdempotencyKey, $"complete:{resumePayload.ActivityExecutionId}"),
-            enqueuedAt: now,
-            recordedAt: now,
-            sequence: resumeWorkItem.Sequence is { } sequence ? sequence + 1 : null,
-            payload: JsonSerializer.SerializeToElement(payload),
-            commandMetadata: resumeWorkItem.CommandMetadata,
-            envelopeMetadata: resumeWorkItem.EnvelopeMetadata);
-    }
-
-    private static RuntimeResumeBookmarkCommandPayload DeserializeResumePayload(RuntimeSchedulerWorkItem workItem) =>
-        SchedulerWorkHandlerHelpers.DeserializePayload(
-            workItem,
-            requiresPayloadMessage: "ResumeBookmark scheduler work item requires a resume bookmark payload.",
-            resolvedToNullMessage: "ResumeBookmark scheduler work item payload resolved to null.",
-            invalidPayloadMessage: "ResumeBookmark scheduler work item payload is not a valid resume bookmark payload.",
-            deserialize: static (_, payload) => payload.Deserialize<RuntimeResumeBookmarkCommandPayload>(),
-            isPayloadValidationException: static exception =>
-                exception is JsonException or NotSupportedException ||
-                exception is ArgumentException argumentException && IsResumePayloadValidationException(argumentException));
-
-    private static bool IsResumePayloadValidationException(ArgumentException exception) =>
-        exception.ParamName is
-            "pinnedExecutable" or
-            "bookmarkId" or
-            "activityExecutionId" or
-            "executableNodeId" or
-            "resumeTargetId" or
-            "stimulusType" or
-            "stimulusHash" or
-            "reason";
-
     private static void ValidateBookmarkMatchesPayload(
         RuntimeSchedulerWorkItem workItem,
         RuntimeResumeBookmarkCommandPayload resumePayload,
@@ -814,7 +764,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         ActivityExecutionState state,
         IReadOnlyCollection<string> outcomeNames)
     {
-        var completedAt = _timeProvider.GetUtcNow();
+        var completedAt = TimeProvider.GetUtcNow();
         var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         metadata[RuntimeMetadataKeys.ResumeReason] = resumePayload.Reason;
         metadata[RuntimeMetadataKeys.ResumeSchedulerWorkItemId] = workItem.WorkItemId;
@@ -903,13 +853,13 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         state = EndOpenAttempt(
             state with { TriggerRegistrations = [], BookmarkIds = [] },
             Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Fault,
-            _timeProvider.GetUtcNow(),
+            TimeProvider.GetUtcNow(),
             incidentId);
         state = ActivityAttemptActivationClaimer.CompactTriggerDeliveryHistory(state);
         var request = NewFaultIncidentRecordRequest(checkpointCommitter, workItem, resumePayload, state, exception, subStatus, valueSnapshots);
         var activityExecutionStateStore = serviceProvider.GetRequiredService<IActivityExecutionStateStore>();
         var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(
-            activityExecutionStateStore, _timeProvider, workItem, resumePayload.PinnedExecutable, state, incidentId, cancellationToken);
+            activityExecutionStateStore, TimeProvider, workItem, resumePayload.PinnedExecutable, state, incidentId, cancellationToken);
 
         await activityFaultIncidentRecorder.CommitAsync(
             parentEvaluation is null ? request : request with { PostCommitSchedulerWorkItemsOrNull = [parentEvaluation] },

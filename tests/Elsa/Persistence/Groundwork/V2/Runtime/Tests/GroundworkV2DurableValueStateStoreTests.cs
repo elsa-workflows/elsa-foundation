@@ -9,6 +9,7 @@ using Groundwork.Query.Model;
 using Groundwork.Sqlite;
 using Groundwork.Store;
 using Xunit;
+using Elsa.Persistence.Groundwork.V2.Testing;
 
 namespace Elsa.Persistence.Groundwork.V2.Runtime.Tests;
 
@@ -301,11 +302,6 @@ public sealed class GroundworkV2DurableValueStateStoreTests
             [],
             new Dictionary<string, string>());
 
-    private sealed class TestAccessContextAccessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
-    {
-        public PersistenceAccessContext Current { get; } = current;
-    }
-
     private sealed class DirectSessionSource(IStorageProviderConnection connection, StorageUnit unit) : IGroundworkStorageSessionSource
     {
         private readonly Dictionary<StorageAccess, IStorageSession> sessions = [];
@@ -359,24 +355,6 @@ public sealed class GroundworkV2DurableValueStateStoreTests
             Assert.Equal(unit.Id.Value, unitId);
             return unit;
         }
-    }
-
-    private sealed class RecordingSession(IStorageSession inner, ICollection<QueryRequest> requests) : SynchronousStorageSessionTestDouble, IStorageSession
-    {
-        public StorageUnit Unit => inner.Unit;
-        public StorageAccess Access => inner.Access;
-        public StoredEntry? Read(StorageKey key) => inner.Read(key);
-        public QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null)
-        {
-            requests.Add(request);
-            return inner.Query(request, options);
-        }
-        public AggregationResult Aggregate(AggregationQuery query) => inner.Aggregate(query);
-        public WriteOutcome Insert(StorageValues values, WriteOptions? options = null) => inner.Insert(values, options);
-        public WriteOutcome Update(StorageValues values, WriteOptions? options = null) => inner.Update(values, options);
-        public WriteOutcome Upsert(StorageValues values, WriteOptions? options = null) => inner.Upsert(values, options);
-        public WriteOutcome Delete(StorageKey key, WriteOptions? options = null) => inner.Delete(key, options);
-        public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) => inner.Append(operationId, values);
     }
 
     private sealed class InterleavingSessionSource(InterleavingSession session, StorageUnit unit) : IGroundworkStorageSessionSource

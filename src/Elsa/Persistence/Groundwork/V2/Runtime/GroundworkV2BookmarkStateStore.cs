@@ -16,24 +16,15 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// checkpoint state changes on the same row key. A concurrent save is reported as a deterministic retryable
 /// failure; it never falls back to an unconditional write.
 /// </remarks>
-public sealed class GroundworkV2BookmarkStateStore : IBookmarkStateStore, IBookmarkStimulusIndex
+public sealed class GroundworkV2BookmarkStateStore : GroundworkV2RuntimeStoreBase, IBookmarkStateStore, IBookmarkStimulusIndex
 {
-    private readonly IGroundworkStorageSessionSource sessions;
-    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
-    private readonly string? targetName;
-    private readonly StorageUnit unit;
 
     public GroundworkV2BookmarkStateStore(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,
         string? targetName = null)
+        : base(sessions, accessContextAccessor, targetName, "bookmark state", ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind)
     {
-        ArgumentNullException.ThrowIfNull(sessions);
-        ArgumentNullException.ThrowIfNull(accessContextAccessor);
-        this.sessions = sessions;
-        this.accessContextAccessor = accessContextAccessor;
-        this.targetName = targetName;
-        unit = sessions.Unit(ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind, targetName);
     }
 
     public ValueTask<BookmarkState> SaveAsync(
@@ -118,7 +109,7 @@ public sealed class GroundworkV2BookmarkStateStore : IBookmarkStateStore, IBookm
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var workflow = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField);
         var bookmark = Column(table, ElsaRuntimeV2StorageManifest.BookmarkIdField);
         var request = new QueryRequest(
@@ -167,7 +158,7 @@ public sealed class GroundworkV2BookmarkStateStore : IBookmarkStateStore, IBookm
         string selectedIndex,
         IStorageSession session)
     {
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var lookup = Column(table, lookupField);
         var workflow = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField);
         var bookmark = Column(table, ElsaRuntimeV2StorageManifest.BookmarkIdField);
@@ -180,7 +171,7 @@ public sealed class GroundworkV2BookmarkStateStore : IBookmarkStateStore, IBookm
             ],
             Projection.All,
             PagingFor(query.Limit, query.ContinuationToken));
-        return ReadPage(query, session.Query(request, unit.CreateQueryRenderOptions(selectedIndex)));
+        return ReadPage(query, session.Query(request, Unit.CreateQueryRenderOptions(selectedIndex)));
     }
 
     private static RuntimeStorePage<BookmarkState> ReadPage(
@@ -191,22 +182,7 @@ public sealed class GroundworkV2BookmarkStateStore : IBookmarkStateStore, IBookm
             result.Rows.Select(Deserialize).ToArray(),
             result.NextContinuationToken);
 
-    private IStorageSession Open()
-    {
-        var context = accessContextAccessor.Current;
-        if (context.Scope is null || context.AcrossScopes)
-        {
-            throw new InvalidOperationException(
-                "Groundwork bookmark state requires one explicit persistence scope; global and across-scope access are refused.");
-        }
-
-        return sessions.Open(
-            unit.Id.Value,
-            StorageAccess.Scoped(new StorageScope(context.Scope.Value)),
-            targetName);
-    }
-
-    private static WriteOutcome UpdateExisting(
+    private WriteOutcome UpdateExisting(
         IStorageSession session,
         StorageValues values,
         StoredEntry existing,
@@ -221,11 +197,7 @@ public sealed class GroundworkV2BookmarkStateStore : IBookmarkStateStore, IBookm
 
         var revision = existing.Version ??
                        throw new InvalidDataException("Groundwork bookmark row did not return an optimistic revision.");
-        if (session is not IConcurrencyStorageSession concurrency)
-            throw new NotSupportedException(
-                "The selected Groundwork provider does not advertise optimistic bookmark concurrency.");
-
-        return concurrency.ConditionalUpsert(values, WriteOptions.IfVersion(revision));
+        return ConditionalUpsert(session, values, revision);
     }
 
     private static StorageValues Values(BookmarkState state) =>
@@ -306,9 +278,6 @@ public sealed class GroundworkV2BookmarkStateStore : IBookmarkStateStore, IBookm
         throw new InvalidDataException($"Groundwork bookmark row is missing required string field '{field}'.");
     }
 
-    private static bool IsSaved(WriteOutcomeStatus status) =>
-        status is WriteOutcomeStatus.Inserted or WriteOutcomeStatus.Updated or WriteOutcomeStatus.Upserted or WriteOutcomeStatus.Replayed;
-
     private static void ValidateState(BookmarkState state)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -321,32 +290,4 @@ public sealed class GroundworkV2BookmarkStateStore : IBookmarkStateStore, IBookm
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(bookmarkId);
     }
-
-    private static Predicate Equal(ColumnRef column, string value) =>
-        new Predicate.Equal(column, QueryConstant.Of(column, value));
-
-    private ColumnRef Column(TableId table, string name)
-    {
-        var definition = unit.Columns.SingleOrDefault(column =>
-            StringComparer.Ordinal.Equals(column.Name, name))
-            ?? throw new InvalidOperationException(
-                $"Groundwork bookmark unit '{unit.Id.Value}' does not declare query column '{name}'.");
-        var type = definition.Type switch
-        {
-            PortableType.String => QueryType.String,
-            PortableType.DateTimeOffset => QueryType.DateTimeOffset,
-            PortableType.Int32 => QueryType.Int32,
-            PortableType.Int64 => QueryType.Int64,
-            PortableType.Boolean => QueryType.Boolean,
-            _ => throw new InvalidOperationException(
-                $"Groundwork bookmark query column '{name}' has unsupported type '{definition.Type}'.")
-        };
-        return new ColumnRef(table, name, type, definition.IsNullable, definition.MaxLength);
-    }
-
-    private static Paging PagingFor(int limit, string? continuationToken) =>
-        continuationToken is null
-            ? Paging.Keyset(limit)
-            : Paging.Continuation(continuationToken, limit);
-
 }

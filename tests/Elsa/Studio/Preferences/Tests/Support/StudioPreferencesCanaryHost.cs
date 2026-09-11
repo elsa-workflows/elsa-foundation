@@ -22,6 +22,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Studio.Preferences.Tests.Support;
 
@@ -36,6 +37,7 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
     public const string SubjectId = "user-7";
     public const string TenantId = "tenant-3";
 
+    private static readonly DateTimeOffset FixedUtcNow = new(2026, 8, 15, 12, 0, 0, TimeSpan.Zero);
     private readonly IHost host;
 
     private StudioPreferencesCanaryHost(IHost host)
@@ -71,7 +73,7 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
                         {
                             CanaryAuthenticationHandler.SchemeName
                         });
-                    services.AddSingleton<TimeProvider>(new FixedTimeProvider());
+                    services.AddSingleton<TimeProvider>(new FakeTimeProvider(FixedUtcNow));
                     services.AddSingleton<IAuthSessionService, CanaryAuthSessionService>();
                     services.AddScoped<IPermissionResourceHandler, CanaryPermissionResourceHandler>();
 
@@ -140,7 +142,7 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
             key,
             new StudioPreferenceWrite(1, value.RootElement.Clone()),
             StudioPreferenceWriteCondition.MustNotExist,
-            FixedTimeProvider.UtcNow);
+            FixedUtcNow);
     }
 
     private static void MapMigratedFeature(IEndpointRouteBuilder endpoints)
@@ -154,13 +156,6 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
         Client.Dispose();
         await host.StopAsync();
         host.Dispose();
-    }
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        public static readonly DateTimeOffset UtcNow = new(2026, 8, 15, 12, 0, 0, TimeSpan.Zero);
-
-        public override DateTimeOffset GetUtcNow() => UtcNow;
     }
 
     private sealed class CanaryAuthSessionService : IAuthSessionService

@@ -181,7 +181,6 @@
     <Project Path="src/Elsa/Modularity/Attention/Elsa.Modularity.Attention.csproj" />
     <Project Path="src/Elsa/Modularity/Api/Elsa.Modularity.Api.csproj" />
     <Project Path="src/Elsa/Modularity/Core/Elsa.Modularity.Core.csproj" />
-    <Project Path="src/Elsa/Modularity/ExtensionBuilder/Elsa.Modularity.ExtensionBuilder.csproj" />
     <Project Path="src/Elsa/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Persistence/">
@@ -309,7 +308,9 @@
   </Folder>
   <Folder Name="/src/Elsa3/Mapping/" />
   <Folder Name="/tests/" />
-  <Folder Name="/tests/Elsa/" />
+  <Folder Name="/tests/Elsa/">
+    <Project Path="tests/Elsa/Testing/Elsa.Testing.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Activities/">
     <Project Path="tests/Elsa/Activities/Testing/Elsa.Activities.Testing.csproj" />
   </Folder>
@@ -475,6 +476,7 @@
     <Project Path="tests/Elsa/Persistence/Groundwork/DesignConformance/Tests/Elsa.Persistence.Groundwork.DesignConformance.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/DesignConformance/MongoDb/">
+    <Project Path="tests/Elsa/Persistence/Groundwork/DesignConformance/Target/Elsa.Persistence.Groundwork.DesignConformance.Target.csproj" />
     <Project Path="tests/Elsa/Persistence/Groundwork/DesignConformance/MongoDb/Tests/Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/DesignConformance/PostgreSql/">

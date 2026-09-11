@@ -9,6 +9,7 @@ using Groundwork.Sqlite;
 using Groundwork.Store;
 using System.Text.Json;
 using Xunit;
+using Elsa.Persistence.Groundwork.V2.Testing;
 
 namespace Elsa.Persistence.Groundwork.V2.Runtime.Tests;
 
@@ -341,11 +342,6 @@ public sealed class GroundworkV2DurableTimerStateStoreTests
             JsonElement value => value.GetDateTimeOffset(),
             _ => throw new InvalidOperationException($"Field '{field}' was not a timestamp.")
         };
-
-    private sealed class TestAccessContextAccessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
-    {
-        public PersistenceAccessContext Current { get; } = current;
-    }
 
     private sealed class DirectSessionSource(IStorageProviderConnection connection, StorageUnit unit) : IGroundworkStorageSessionSource
     {

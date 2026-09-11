@@ -23,11 +23,6 @@ public sealed class ArchitectureGuardTests
     // recorded at the declaration site (csproj comment) and here. Additions require architect review.
     private static readonly HashSet<(string Project, string Target)> AllowedInternalsVisibleTo =
     [
-        // The ExtensionBuilder subsystem is a host-private surface of ~80 interlocking internal types;
-        // publicizing it to satisfy §2.23.3 would promote host-only contracts into public API. It now
-        // lives in its own module (Elsa.Modularity.ExtensionBuilder) which exposes those internals to
-        // the shared modularity test project (MD-3, Elsa 4 architecture review 2026-07).
-        ("Elsa.Modularity.ExtensionBuilder", "Elsa.Modularity.Tests"),
         // Elsa.Workbench keeps a narrow exception for the host-only module-management registry builder
         // (ModuleManagementRegistryBuilder), exercised by ModuleManagementRegistryBuilderTests.
         ("Elsa.Workbench", "Elsa.Modularity.Tests"),
@@ -973,7 +968,7 @@ public sealed class ArchitectureGuardTests
 
         var sourceRoot = Path.Combine(RepoRoot, "src");
         var violations = Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
-            .Where(file => !IsGeneratedScratchFile(file) && !IsBuildArtifactFile(file))
+            .Where(file => !IsBuildArtifactFile(file))
             .SelectMany(file =>
             {
                 var code = StripCommentsAndStringLiterals(File.ReadAllText(file));
@@ -1014,7 +1009,7 @@ public sealed class ArchitectureGuardTests
         var onPrefixedDeclaration = new Regex(@"\b(?:class|record|struct)\s+(On[A-Z]\w*)", RegexOptions.Compiled);
 
         var violations = Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
-            .Where(file => !IsGeneratedScratchFile(file) && !IsBuildArtifactFile(file))
+            .Where(file => !IsBuildArtifactFile(file))
             .SelectMany(file =>
             {
                 var code = File.ReadAllText(file);
@@ -1034,8 +1029,6 @@ public sealed class ArchitectureGuardTests
         reference.Name.StartsWith("Elsa.", StringComparison.Ordinal) &&
         reference.Name.Contains(".Design", StringComparison.Ordinal);
 
-    private static bool IsGeneratedScratchFile(string filePath) =>
-        filePath.Replace(Path.DirectorySeparatorChar, '/').Contains("/extension-builder/projects/", StringComparison.Ordinal);
 
     // Build output under src/**/obj and src/**/bin (AssemblyInfo, GlobalUsings.g.cs, EF/source-generator
     // scaffolds) is not source; scanning it would make a token sweep depend on build state.
@@ -1103,23 +1096,11 @@ public sealed class ArchitectureGuardTests
     private static IEnumerable<ProjectInfo> ProjectFiles()
     {
         foreach (var file in Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.csproj", SearchOption.AllDirectories))
-        {
-            var project = ProjectInfo.From(RepoRoot, file);
-            if (IsGeneratedScratchProject(project))
-                continue;
-
-            yield return project;
-        }
+            yield return ProjectInfo.From(RepoRoot, file);
 
         foreach (var file in Directory.EnumerateFiles(Path.Combine(RepoRoot, "tests"), "*.csproj", SearchOption.AllDirectories))
             yield return ProjectInfo.From(RepoRoot, file);
     }
-
-    // The extension-builder feature writes runtime-generated scratch projects under guid-named
-    // project/snapshot folders (gitignored, never part of the solution). Exclude them from the
-    // domain-tree convention checks so generated artifacts are not enshrined in the slnx.
-    private static bool IsGeneratedScratchProject(ProjectInfo project) =>
-        project.RelativePath.Contains("/extension-builder/projects/", StringComparison.Ordinal);
 
     private static IEnumerable<SolutionProjectInfo> SolutionProjects()
     {

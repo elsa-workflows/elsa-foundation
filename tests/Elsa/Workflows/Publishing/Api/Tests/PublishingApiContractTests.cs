@@ -33,6 +33,7 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.RegularExpressions;
 using Xunit;
+using Elsa.Testing;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
@@ -169,13 +170,6 @@ public sealed class PublishingApiContractTests
         "ActivityTestRuns.Get" or
         "ActivityTestRuns.GetByIdempotencyKey" or
         "ActivityTestRuns.Cancel");
-
-    private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
-    {
-        public IServiceProvider ServiceProvider { get; } = serviceProvider;
-        public ICollection<EndpointDataSource> DataSources { get; } = [];
-        public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
-    }
 }
 
 /// <summary>Real TestServer host used by the Publishing contract and behavior tests.</summary>
