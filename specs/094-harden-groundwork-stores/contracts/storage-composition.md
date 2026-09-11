@@ -67,6 +67,10 @@ The test matrix includes:
 
 The same selected feature set must compile on every mandatory provider without changing core contracts or domain behavior.
 
+## Secrets EF-selected composition (Phase 4 / #1631)
+
+Selecting `SecretsEntityFrameworkCore` instead of `SecretsGroundworkPersistence` omits the Groundwork `elsa-secrets` source. Host-selection evidence for that shell is `evidence/composition/host-selection-ef-secrets-pilot.json`: the other Groundwork families stay selected, and `secrets-repository` is omitted rather than deleted. Workbench default remains the Groundwork-selected `host-selection-all35` composition. Either/or per host; never both sources in one shell.
+
 ## 34-row host-selection evidence
 
 The checked-in coverage ledger carries one digest-verified `host-selection-all34` composition record.

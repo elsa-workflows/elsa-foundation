@@ -348,6 +348,200 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
+    public void Secrets_repository_is_composition_conditional_and_not_a_universal_prerequisite()
+    {
+        var ledger = ReadLedger();
+        var conditional = Assert.Single(ledger["compositionConditionalEntries"]!.AsArray()!.OfType<JsonObject>());
+        var ownership = Entry(ledger, "secrets-repository")["compositionOwnership"]!.AsObject();
+
+        Assert.Equal("secrets-repository", conditional["entryId"]!.GetValue<string>());
+        Assert.Equal("SecretsGroundworkPersistence", conditional["requiredWhenFeature"]!.GetValue<string>());
+        Assert.Equal("SecretsEntityFrameworkCore", conditional["omittedWhenFeature"]!.GetValue<string>());
+        Assert.Equal("tests/Elsa/Secrets/Persistence/Groundwork/", conditional["groundworkEvidenceOwner"]!.GetValue<string>());
+        Assert.Equal("tests/Elsa/Secrets/Persistence/EntityFrameworkCore/", conditional["alternateEvidenceOwner"]!.GetValue<string>());
+        Assert.False(ownership["universalPrerequisite"]!.GetValue<bool>());
+        Assert.Equal("#1631", ownership["pilotIssue"]!.GetValue<string>());
+        Assert.Contains("secrets-repository", ledger["compositionEvidence"]!["coveredEntryIds"]!.AsArray().Select(row => row!.GetValue<string>()));
+        Assert.DoesNotContain(
+            "runtime-checkpoint-commit",
+            ledger["compositionConditionalEntries"]!.AsArray().OfType<JsonObject>().Select(row => row["entryId"]!.GetValue<string>()));
+    }
+
+    [Fact]
+    public void Ef_selected_composition_omits_secrets_repository_and_keeps_the_other_34_rows()
+    {
+        var findings = CreateEvidenceValidator().Validate(ReadLedger());
+        Assert.Empty(findings);
+
+        var artifactPath = Path.Join(
+            RepoRoot,
+            "specs",
+            "094-harden-groundwork-stores",
+            "evidence",
+            "composition",
+            "host-selection-ef-secrets-pilot.json");
+        var artifact = JsonNode.Parse(File.ReadAllText(artifactPath))!.AsObject();
+        var covered = artifact["coveredEntryIds"]!.AsArray().Select(row => row!.GetValue<string>()).ToArray();
+        var omitted = artifact["omittedEntryIds"]!.AsArray().Select(row => row!.GetValue<string>()).ToArray();
+
+        Assert.Equal(["secrets-repository"], omitted);
+        Assert.Equal(34, covered.Length);
+        Assert.DoesNotContain("secrets-repository", covered);
+        Assert.DoesNotContain("elsa-secrets", artifact["selectedFeatureIdentities"]!.AsArray().Select(row => row!.GetValue<string>()));
+        Assert.Equal(ExpectedEntryIds.Where(id => id != "secrets-repository"), covered);
+        Assert.Equal("pass", artifact["outcome"]!.GetValue<string>());
+        Assert.Equal(
+            ["#644", "#660"],
+            artifact["externalAuthorityLinks"]!.AsArray().Select(link => link!["authority"]!.GetValue<string>()));
+    }
+
+    [Fact]
+    public void Composition_conditional_rejects_digest_drift_and_ownership_mismatch()
+    {
+        var ledger = ReadLedger();
+        var conditional = Assert.Single(ledger["compositionConditionalEntries"]!.AsArray()!.OfType<JsonObject>());
+        conditional["alternateCompositionArtifactSha256"] = new string('0', 64);
+        Entry(ledger, "secrets-repository")["compositionOwnership"]!["universalPrerequisite"] = true;
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            "composition-conditional: coverage row 'secrets-repository' ownership does not match the Groundwork-selected call-down.",
+            findings);
+        Assert.Contains(
+            "composition-conditional: artifact 'evidence/composition/host-selection-ef-secrets-pilot.json' digest does not match its contents.",
+            findings);
+    }
+
+    [Fact]
+    public void Composition_conditional_rejects_missing_ownership()
+    {
+        var ledger = ReadLedger();
+        Entry(ledger, "secrets-repository").Remove("compositionOwnership");
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            "composition-conditional: coverage row 'secrets-repository' must declare compositionOwnership.",
+            findings);
+    }
+
+    [Fact]
+    public void Composition_conditional_rejects_stale_default_coverage()
+    {
+        var ledger = ReadLedger();
+        var covered = ledger["compositionEvidence"]!["coveredEntryIds"]!.AsArray();
+        covered.Remove(covered.Single(row => row!.GetValue<string>() == "secrets-repository"));
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            "composition-conditional: Groundwork-selected composition must still cover 'secrets-repository' when SecretsGroundworkPersistence is selected.",
+            findings);
+    }
+
+    [Fact]
+    public void Composition_conditional_rejects_an_unregistered_ownership_row()
+    {
+        var ledger = ReadLedger();
+        Entry(ledger, "runtime-checkpoint-commit")["compositionOwnership"] = new JsonObject
+        {
+            ["mode"] = "selected-feature",
+            ["requiredWhenFeature"] = "SecretsGroundworkPersistence",
+            ["omittedWhenFeature"] = "SecretsEntityFrameworkCore",
+            ["universalPrerequisite"] = false,
+            ["pilotIssue"] = "#1631"
+        };
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            "composition-conditional: coverage row 'runtime-checkpoint-commit' declares compositionOwnership but is not registered in compositionConditionalEntries.",
+            findings);
+    }
+
+    [Fact]
+    public void Composition_conditional_rejects_a_missing_denominator_row()
+    {
+        var ledger = ReadLedger();
+        var entries = ledger["entries"]!.AsArray();
+        var secretsIndex = Enumerable.Range(0, entries.Count)
+            .Single(index => entries[index]!["id"]!.GetValue<string>() == "secrets-repository");
+        entries.RemoveAt(secretsIndex);
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            "composition-conditional: coverage row 'secrets-repository' is missing from the ledger denominator.",
+            findings);
+    }
+
+    [Fact]
+    public void Composition_conditional_rejects_an_unavailable_or_malformed_artifact()
+    {
+        var ledger = ReadLedger();
+        var relativePath = "evidence/composition/host-selection-ef-secrets-pilot.json";
+        File.Delete(ArtifactPath(relativePath));
+
+        var missing = CreateEvidenceValidator().Validate(ledger);
+        Assert.Contains($"composition-conditional: artifact '{relativePath}' is unavailable.", missing);
+
+        ReadLedger();
+        File.WriteAllText(ArtifactPath(relativePath), "{");
+        SyncAlternateArtifactDigest(ledger);
+
+        var malformed = CreateEvidenceValidator().Validate(ledger);
+        Assert.Contains($"composition-conditional: artifact '{relativePath}' is not a JSON object.", malformed);
+    }
+
+    [Fact]
+    public void Composition_conditional_rejects_omitted_set_drift_missing_rows_and_reselecting_elsa_secrets()
+    {
+        var ledger = ReadLedger();
+        MutateStagedEfCompositionArtifact(artifact =>
+        {
+            artifact["omittedEntryIds"]!.AsArray().Clear();
+            artifact["coveredEntryIds"]!.AsArray().RemoveAt(0);
+            artifact["selectedFeatureIdentities"]!.AsArray().Insert(0, JsonValue.Create("elsa-secrets"));
+        });
+        SyncAlternateArtifactDigest(ledger);
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            "composition-conditional: artifact 'evidence/composition/host-selection-ef-secrets-pilot.json' must omit exactly [secrets-repository].",
+            findings);
+        Assert.Contains(
+            "composition-conditional: EF-selected composition is missing Groundwork row 'diagnostics-open-telemetry-store'.",
+            findings);
+        Assert.Contains(
+            "composition-conditional: EF-selected composition must not select the Groundwork elsa-secrets source.",
+            findings);
+    }
+
+    [Fact]
+    public void Composition_conditional_rejects_failed_outcome_and_dropped_authority_links()
+    {
+        var ledger = ReadLedger();
+        MutateStagedEfCompositionArtifact(artifact =>
+        {
+            artifact["outcome"] = "fail";
+            artifact.Remove("externalAuthorityLinks");
+        });
+        SyncAlternateArtifactDigest(ledger);
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains("composition-conditional: EF-selected composition outcome must be 'pass'.", findings);
+        Assert.Contains(
+            "composition-conditional: EF-selected composition must preserve #644/#660 external authority links for the remaining rows.",
+            findings);
+        Assert.Contains(
+            "composition-conditional: artifact 'evidence/composition/host-selection-ef-secrets-pilot.json' does not match its durable payload.",
+            findings);
+    }
+
+    [Fact]
     public void Composition_evidence_rejects_missing_rows_and_artifact_digest_drift()
     {
         var ledger = ReadLedger();
@@ -557,7 +751,8 @@ public sealed class GroundworkCoverageLedgerTests
             findings,
             "$.entries: baseline entry 'distributed-command-transport' is missing.",
             "$.entries: baseline entry 'runtime-activity-execution-inspection' occurs 2 times; expected exactly once.",
-            "composition evidence: coverage row 'distributed-command-transport' is outside the reviewed ledger denominator.");
+            "composition evidence: coverage row 'distributed-command-transport' is outside the reviewed ledger denominator.",
+            "composition-conditional: EF-selected composition covers 'distributed-command-transport' which is not in the current ledger denominator.");
     }
 
     [Theory]
@@ -1459,6 +1654,34 @@ public sealed class GroundworkCoverageLedgerTests
             if (record["nativeEvidence"]?.GetValue<string>() is { } nativeEvidence)
                 StageArtifact(nativeEvidence);
         }
+
+        if (ledger["compositionEvidence"]?["artifact"]?.GetValue<string>() is { } compositionArtifact)
+            StageArtifact(compositionArtifact);
+
+        if (ledger["compositionConditionalEntries"] is JsonArray conditionals)
+        {
+            foreach (var alternate in conditionals
+                         .OfType<JsonObject>()
+                         .Where(conditional => conditional["alternateCompositionArtifact"] is JsonValue)
+                         .Select(conditional => conditional["alternateCompositionArtifact"]!.GetValue<string>()))
+                StageArtifact(alternate);
+        }
+    }
+
+    private static void MutateStagedEfCompositionArtifact(Action<JsonObject> mutate)
+    {
+        var path = ArtifactPath("evidence/composition/host-selection-ef-secrets-pilot.json");
+        var artifact = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        mutate(artifact);
+        File.WriteAllText(path, artifact.ToJsonString());
+    }
+
+    private static void SyncAlternateArtifactDigest(JsonObject ledger)
+    {
+        var conditional = Assert.Single(ledger["compositionConditionalEntries"]!.AsArray()!.OfType<JsonObject>());
+        var relativePath = conditional["alternateCompositionArtifact"]!.GetValue<string>();
+        conditional["alternateCompositionArtifactSha256"] =
+            GroundworkEvidenceArtifactContract.FileSha256(ArtifactPath(relativePath));
     }
 
     private static void StageArtifact(string relativePath)

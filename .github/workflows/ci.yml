@@ -144,7 +144,7 @@ jobs:
   groundwork-v2-native-provider-matrix:
     name: Groundwork v2 native provider matrix
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -222,22 +222,8 @@ jobs:
       - name: Restore Groundwork v2 runtime native proofs
         run: dotnet restore tests/Elsa/Persistence/Groundwork/V2/Runtime/Tests/Elsa.Persistence.Groundwork.V2.Runtime.Tests.csproj -p:WarningsNotAsErrors=NU1603
 
-      - name: Restore the Secrets EF PostgreSQL shell proof
-        run: dotnet restore tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj -p:WarningsNotAsErrors=NU1603
-
-      # Phase 3 proves the opt-in Secrets EF feature through configuration-driven CShells composition,
-      # including migration/validation, CRUD/OCC, runtime resolution and restart persistence. It also packs
-      # and extracts the module, then loads that DLL in a clean child host with no compile-time module edge.
-      # Both proof projects reference Npgsql as their only relational provider package and reuse this job's
-      # PostgreSQL instance instead of starting another provider container.
-      - name: Prove Secrets EF composition on PostgreSQL
-        env:
-          ELSA_SECRETS_EF_POSTGRESQL_TEST_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
-        run: >-
-          dotnet test
-          tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj
-          -c Release --no-restore
-          -p:WarningsNotAsErrors=NU1603
+      - name: Restore the Groundwork Secrets native provider matrix
+        run: dotnet restore tests/Elsa/Secrets/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Secrets.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj -p:WarningsNotAsErrors=NU1603
 
       - name: Test current Groundwork v2 runtime families on every native provider
         env:
@@ -249,6 +235,22 @@ jobs:
           tests/Elsa/Persistence/Groundwork/V2/Runtime/Tests/Elsa.Persistence.Groundwork.V2.Runtime.Tests.csproj
           -c Release --no-restore
           --filter 'FullyQualifiedName~GroundworkV2RuntimeRegistrationTests|FullyQualifiedName~GroundworkV2WorkflowTestScopeStoreTests|FullyQualifiedName~GroundworkV2WorkflowExecutableStoreTests|FullyQualifiedName~GroundworkV2ExecutableActivityTemplateStoreTests|FullyQualifiedName~GroundworkV2WorkflowExecutableSourceReferenceStoreTests|FullyQualifiedName~GroundworkV2WorkflowRuntimeAttentionQueryTests|FullyQualifiedName~GroundworkV2WorkflowAlterationStoreTests|FullyQualifiedName~GroundworkV2BookmarkStateStoreTests|FullyQualifiedName~GroundworkV2WorkflowSchedulerWorkQueueTests'
+          -p:WarningsNotAsErrors=NU1603
+
+      # Secrets Groundwork four-provider coverage is owned by the Groundwork-selected composition
+      # (#1631). It must not live in the Secrets EF job: an EF-selected shell does not register
+      # the Groundwork secrets source. Reuse this job's databases so SQLite is not the only
+      # executed provider.
+      - name: Prove Groundwork Secrets on every native provider
+        env:
+          GROUNDWORK_V2_REQUIRE_NATIVE_PROVIDER_MATRIX: 1
+          GROUNDWORK_V2_POSTGRESQL_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
+          GROUNDWORK_V2_MONGODB_CONNECTION_STRING: mongodb://127.0.0.1:27017/elsa_v2_secrets?replicaSet=groundworkv2&directConnection=true
+        run: >-
+          dotnet test
+          tests/Elsa/Secrets/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Secrets.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj
+          -c Release --no-restore
+          --filter 'FullyQualifiedName~GroundworkV2SecretsProviderMatrixTests'
           -p:WarningsNotAsErrors=NU1603
 
       - name: Restore diagnostics v2 native proofs
@@ -306,6 +308,59 @@ jobs:
           --filter 'FullyQualifiedName~ActivityDraftTestRunProviderMatrixTests'
           -p:WarningsNotAsErrors=NU1603
 
+  # Phase 4 (#1631): Secrets EF composition is independent of Groundwork Secrets matrix
+  # obligations. This job owns the EF-selected path only. Groundwork-default Workbench
+  # remains proven by build-and-test plus the Groundwork v2 native provider matrix job.
+  secrets-ef-composition:
+    name: Secrets EF composition
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Start PostgreSQL for the Secrets EF shell proof
+        run: |
+          docker run --detach --name secrets-ef-postgresql --publish 5432:5432 \
+            --env POSTGRES_HOST_AUTH_METHOD=trust postgres:17.6-alpine3.22
+          for attempt in {1..60}; do
+            if docker exec secrets-ef-postgresql pg_isready -U postgres > /dev/null; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 60 ]; then
+              docker logs secrets-ef-postgresql
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Restore the Secrets EF PostgreSQL shell proof
+        run: dotnet restore tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj -p:WarningsNotAsErrors=NU1603
+
+      # Configuration-driven CShells composition, migration/validation, CRUD/OCC, runtime
+      # resolution, restart persistence, and the packed-module child-host proof. Npgsql is
+      # the only relational provider package in this project.
+      - name: Prove Secrets EF composition on PostgreSQL
+        env:
+          ELSA_SECRETS_EF_POSTGRESQL_TEST_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
+        run: >-
+          dotnet test
+          tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj
+          -c Release --no-restore
+          -p:WarningsNotAsErrors=NU1603
+
   # Container-free architecture guards (dependency direction, endpoint security, feature
   # composition, the EF dependency allowlist). The whole project runs so a renamed or newly
   # added guard cannot silently fall out of a brittle test filter. The spec 094 coverage-ledger
@@ -345,6 +400,7 @@ jobs:
     needs:
       - build-and-test
       - groundwork-v2-native-provider-matrix
+      - secrets-ef-composition
       - groundwork-fast
     if: ${{ failure() && github.event_name == 'push' }}
     permissions:

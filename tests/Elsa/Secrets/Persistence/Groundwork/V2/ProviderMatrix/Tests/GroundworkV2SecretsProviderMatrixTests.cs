@@ -19,8 +19,10 @@ namespace Elsa.Secrets.Persistence.Groundwork.V2.ProviderMatrix.Tests;
 
 /// <summary>
 /// Runs the public Groundwork v2 Secrets repository contract through every native provider.
-/// SQLite is always exercised; external providers use a local connection string when supplied
-/// and otherwise are provisioned by the Docker-backed integration gate.
+/// Owned by the Groundwork-selected composition (#1631): an EF-selected shell must not have to
+/// grow this matrix. SQLite is always exercised; external providers use a local connection
+/// string when supplied and otherwise are provisioned by the Docker-backed integration gate
+/// or the Groundwork v2 native provider matrix CI job.
 /// </summary>
 public sealed class GroundworkV2SecretsProviderMatrixTests
 {

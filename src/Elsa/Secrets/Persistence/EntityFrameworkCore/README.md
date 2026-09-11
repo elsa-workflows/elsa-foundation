@@ -4,6 +4,12 @@ Additive, opt-in EF Core persistence for Secrets. **Groundwork remains the defau
 store. Workbench catalogs this feature so a host can enable it; default `shells.json` files
 keep `SecretsGroundworkPersistence` and do not enable this feature.
 
+Phase 4 (#1631) makes Groundwork Secrets provider-matrix and ledger-growth obligations
+conditional on selecting Groundwork. Enabling this feature is an EF-selected composition:
+it must not have to grow `secrets-repository` Groundwork four-provider evidence, and CI
+proves it on the independent `Secrets EF composition` job. Groundwork-default Workbench
+shells stay on Groundwork and keep that path's tests.
+
 ## Proposed ADR 0072 / ADR 0042
 
 This is an intentional first-party EF pilot under **proposed**

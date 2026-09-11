@@ -32,9 +32,10 @@ internal sealed class GroundworkCoverageLedgerValidator
         _schema = JsonNode.Parse(File.ReadAllText(schemaPath))?.AsObject()
                   ?? throw new InvalidOperationException($"Coverage-ledger schema '{schemaPath}' is empty.");
         _baselineEntryIds = baselineEntryIds.ToHashSet(StringComparer.Ordinal);
-        _compositionEvidenceRoot = Path.GetFullPath(
+        var specRoot = Path.GetFullPath(
             Directory.GetParent(Path.GetDirectoryName(Path.GetFullPath(schemaPath))!)!.FullName);
-        _evidenceRoot = Path.GetFullPath(evidenceRoot ?? _compositionEvidenceRoot);
+        _evidenceRoot = Path.GetFullPath(evidenceRoot ?? specRoot);
+        _compositionEvidenceRoot = _evidenceRoot;
     }
 
     public IReadOnlyList<string> Validate(JsonObject ledger)
@@ -87,6 +88,8 @@ internal sealed class GroundworkCoverageLedgerValidator
 
             if (ledger["compositionEvidence"] is JsonObject compositionEvidence)
                 ValidateCompositionEvidence(compositionEvidence, entries, findings);
+
+            ValidateCompositionConditionalEntries(ledger, entries, findings);
         }
 
         return findings.Order(StringComparer.Ordinal).ToArray();
@@ -239,6 +242,222 @@ internal sealed class GroundworkCoverageLedgerValidator
         }
 
         ValidateCompositionArtifact(compositionEvidence, findings);
+    }
+
+    private void ValidateCompositionConditionalEntries(
+        JsonObject ledger,
+        JsonArray entries,
+        ICollection<string> findings)
+    {
+        var entriesById = entries
+            .OfType<JsonObject>()
+            .Where(entry => StringValue(entry, "id") is not null)
+            .GroupBy(entry => StringValue(entry, "id")!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        if (ledger["compositionConditionalEntries"] is not JsonArray conditionalEntries)
+            return;
+
+        var defaultComposition = ledger["compositionEvidence"] as JsonObject;
+        var coveredByDefault = defaultComposition is not null
+            ? StringArray(defaultComposition, "coveredEntryIds").ToHashSet(StringComparer.Ordinal)
+            : new HashSet<string>(StringComparer.Ordinal);
+        var omitted = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var conditional in conditionalEntries.OfType<JsonObject>())
+        {
+            var entryId = StringValue(conditional, "entryId");
+            if (entryId is null)
+                continue;
+
+            omitted.Add(entryId);
+            if (!entriesById.TryGetValue(entryId, out var entry))
+            {
+                findings.Add($"composition-conditional: coverage row '{entryId}' is missing from the ledger denominator.");
+                continue;
+            }
+
+            if (entry["compositionOwnership"] is not JsonObject ownership)
+            {
+                findings.Add($"composition-conditional: coverage row '{entryId}' must declare compositionOwnership.");
+                continue;
+            }
+
+            if (StringValue(ownership, "requiredWhenFeature") != StringValue(conditional, "requiredWhenFeature") ||
+                StringValue(ownership, "omittedWhenFeature") != StringValue(conditional, "omittedWhenFeature") ||
+                ownership["universalPrerequisite"] is not JsonValue universal ||
+                !universal.TryGetValue<bool>(out var isUniversal) ||
+                isUniversal)
+            {
+                findings.Add(
+                    $"composition-conditional: coverage row '{entryId}' ownership does not match the Groundwork-selected call-down.");
+            }
+
+            if (!coveredByDefault.Contains(entryId))
+            {
+                findings.Add(
+                    $"composition-conditional: Groundwork-selected composition must still cover '{entryId}' when SecretsGroundworkPersistence is selected.");
+            }
+
+            ValidateAlternateCompositionArtifact(conditional, defaultComposition, entriesById.Keys, omitted, findings);
+        }
+
+        foreach (var (entryId, entry) in entriesById)
+        {
+            if (entry["compositionOwnership"] is not JsonObject)
+                continue;
+
+            if (!omitted.Contains(entryId))
+            {
+                findings.Add(
+                    $"composition-conditional: coverage row '{entryId}' declares compositionOwnership but is not registered in compositionConditionalEntries.");
+            }
+        }
+    }
+
+    private const string EfSelectedSecretsOmissionReason =
+        "SecretsEntityFrameworkCore is selected; the Groundwork elsa-secrets source is not registered. secrets-repository remains in the Groundwork-selected ALL35 composition.";
+
+    private void ValidateAlternateCompositionArtifact(
+        JsonObject conditional,
+        JsonObject? defaultComposition,
+        IEnumerable<string> ledgerEntryIds,
+        IReadOnlySet<string> omitted,
+        ICollection<string> findings)
+    {
+        var relativePath = StringValue(conditional, "alternateCompositionArtifact");
+        if (relativePath is null)
+            return;
+
+        var relativeSegments = relativePath.Replace('/', Path.DirectorySeparatorChar);
+        if (Path.IsPathRooted(relativeSegments))
+        {
+            findings.Add($"composition-conditional: artifact '{relativePath}' is unavailable.");
+            return;
+        }
+
+        var path = Path.GetFullPath(Path.Join(_compositionEvidenceRoot, relativeSegments));
+        var rootPrefix = _compositionEvidenceRoot.EndsWith(Path.DirectorySeparatorChar)
+            ? _compositionEvidenceRoot
+            : _compositionEvidenceRoot + Path.DirectorySeparatorChar;
+        if (!path.StartsWith(rootPrefix, StringComparison.Ordinal) || !File.Exists(path))
+        {
+            findings.Add($"composition-conditional: artifact '{relativePath}' is unavailable.");
+            return;
+        }
+
+        var actualSha256 = GroundworkEvidenceArtifactContract.FileSha256(path);
+        if (StringValue(conditional, "alternateCompositionArtifactSha256") != actualSha256)
+        {
+            findings.Add($"composition-conditional: artifact '{relativePath}' digest does not match its contents.");
+            return;
+        }
+
+        JsonObject? artifact;
+        try
+        {
+            artifact = JsonNode.Parse(File.ReadAllText(path))?.AsObject();
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException)
+        {
+            artifact = null;
+        }
+
+        if (artifact is null)
+        {
+            findings.Add($"composition-conditional: artifact '{relativePath}' is not a JSON object.");
+            return;
+        }
+
+        if (StringValue(artifact, "outcome") != "pass")
+            findings.Add("composition-conditional: EF-selected composition outcome must be 'pass'.");
+        if (StringValue(artifact, "evidenceId") != "host-selection-ef-secrets-pilot")
+            findings.Add("composition-conditional: EF-selected composition evidenceId must be 'host-selection-ef-secrets-pilot'.");
+        if (StringValue(artifact, "artifact") != relativePath)
+            findings.Add($"composition-conditional: artifact identity must be '{relativePath}'.");
+
+        var covered = StringArray(artifact, "coveredEntryIds").ToHashSet(StringComparer.Ordinal);
+        var artifactOmitted = StringArray(artifact, "omittedEntryIds").ToHashSet(StringComparer.Ordinal);
+        if (!artifactOmitted.SetEquals(omitted))
+        {
+            findings.Add(
+                $"composition-conditional: artifact '{relativePath}' must omit exactly [{string.Join(", ", omitted.Order(StringComparer.Ordinal))}].");
+        }
+
+        var expectedCovered = ledgerEntryIds
+            .Where(id => !omitted.Contains(id))
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var missing in expectedCovered.Where(id => !covered.Contains(id)).Order(StringComparer.Ordinal))
+            findings.Add($"composition-conditional: EF-selected composition is missing Groundwork row '{missing}'.");
+        foreach (var unexpected in covered.Where(id => !expectedCovered.Contains(id)).Order(StringComparer.Ordinal))
+        {
+            findings.Add(
+                omitted.Contains(unexpected)
+                    ? $"composition-conditional: EF-selected composition must not cover Groundwork-only row '{unexpected}'."
+                    : $"composition-conditional: EF-selected composition covers '{unexpected}' which is not in the current ledger denominator.");
+        }
+
+        var selected = StringArray(artifact, "selectedFeatureIdentities");
+        if (selected.Contains("elsa-secrets", StringComparer.Ordinal))
+        {
+            findings.Add(
+                "composition-conditional: EF-selected composition must not select the Groundwork elsa-secrets source.");
+        }
+
+        if (defaultComposition is not null)
+        {
+            var expectedSelected = StringArray(defaultComposition, "selectedFeatureIdentities")
+                .Where(identity => identity != "elsa-secrets")
+                .ToArray();
+            if (!selected.SequenceEqual(expectedSelected, StringComparer.Ordinal))
+            {
+                findings.Add(
+                    "composition-conditional: EF-selected composition must select exactly the Groundwork sources other than elsa-secrets.");
+            }
+
+            if (!JsonNode.DeepEquals(artifact["externalAuthorityLinks"], defaultComposition["externalAuthorityLinks"]))
+            {
+                findings.Add(
+                    "composition-conditional: EF-selected composition must preserve #644/#660 external authority links for the remaining rows.");
+            }
+
+            var expectedPayload = ExpectedEfSelectedCompositionPayload(conditional, defaultComposition, omitted);
+            if (!JsonNode.DeepEquals(expectedPayload, artifact))
+                findings.Add($"composition-conditional: artifact '{relativePath}' does not match its durable payload.");
+        }
+    }
+
+    private static JsonObject ExpectedEfSelectedCompositionPayload(
+        JsonObject conditional,
+        JsonObject defaultComposition,
+        IReadOnlySet<string> omitted)
+    {
+        var selected = new JsonArray();
+        foreach (var identity in StringArray(defaultComposition, "selectedFeatureIdentities")
+                     .Where(id => id != "elsa-secrets"))
+            selected.Add(identity);
+
+        var covered = new JsonArray();
+        foreach (var entryId in StringArray(defaultComposition, "coveredEntryIds").Where(id => !omitted.Contains(id)))
+            covered.Add(entryId);
+
+        var omittedArray = new JsonArray();
+        foreach (var entryId in omitted.Order(StringComparer.Ordinal))
+            omittedArray.Add(entryId);
+
+        return new JsonObject
+        {
+            ["schemaVersion"] = 1,
+            ["evidenceId"] = "host-selection-ef-secrets-pilot",
+            ["outcome"] = "pass",
+            ["selectedFeatureIdentities"] = selected,
+            ["coveredEntryIds"] = covered,
+            ["omittedEntryIds"] = omittedArray,
+            ["externalAuthorityLinks"] = defaultComposition["externalAuthorityLinks"]?.DeepClone(),
+            ["omissionReason"] = EfSelectedSecretsOmissionReason,
+            ["alternateEvidenceOwner"] = StringValue(conditional, "alternateEvidenceOwner"),
+            ["pilotIssue"] = StringValue(conditional, "pilotIssue"),
+            ["artifact"] = StringValue(conditional, "alternateCompositionArtifact")
+        };
     }
 
     private sealed record ExpectedExternalAuthority(
