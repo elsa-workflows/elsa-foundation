@@ -68,9 +68,9 @@ The final integrated baseline is the post-merge `main` commit `0a6a6595`. Its re
 
 The final corrective heads received explicit exact-head approval:
 
-- Phase 2 hardening [#1638](https://github.com/elsa-workflows/elsa-foundation/pull/1638) and
-  operator closeout [#1643](https://github.com/elsa-workflows/elsa-foundation/pull/1643) were
-  Copilot-approved on their final heads `d04f2d3a` and `3af889642`, respectively.
+- Phase 0 + 1 cross-phase corrective [#1638](https://github.com/elsa-workflows/elsa-foundation/pull/1638)
+  and Phase 2 operator closeout [#1643](https://github.com/elsa-workflows/elsa-foundation/pull/1643)
+  were Copilot-approved on their final heads `d04f2d3a` and `3af889642`, respectively.
 - Phase 3 closeout [#1651](https://github.com/elsa-workflows/elsa-foundation/pull/1651) was approved
   at `df0135a6`, with no independent P0-P3 findings and all review threads resolved.
 - Phase 4 evidence closeout [#1652](https://github.com/elsa-workflows/elsa-foundation/pull/1652)
@@ -193,9 +193,11 @@ Owner: #1654, blocked on #1628.
 - **Studio Preferences:** strongest candidate for the second canary because its current surface is
   small and key/value-shaped, but not pre-approved. Its inventory must still prove tenancy,
   concurrency, conversion, and host-composition semantics.
-- **Publishing:** **hold**. Publication currently stages Design, Runtime, and Publishing rows in one
-  Groundwork transaction and rejects a split-target host. Do not migrate Publishing independently
-  until a focused architecture decision defines a safe cross-family transaction topology.
+- **Publishing:** **not pre-approved**. Ordinary workflow publication already uses ordered writes
+  with compensation. Reusable-activity publication is the cross-lane outlier governed by ADR 0066:
+  its Runtime, Design, and Publishing receipt steps must preserve the documented ordering,
+  idempotency, co-location, and recovery rules. Do not independently migrate that receipt path until
+  #1654 proves those rules across the selected persistence families.
 - **Dashboard:** **hold** until its Design/Runtime projection and consistency dependencies are
   inventoried. Small store size does not make cross-domain projections simple.
 - **Workflows Design and Activities Design:** **not automatic replacements**. Current architecture
@@ -213,7 +215,7 @@ If #1654 admits Studio Preferences or another module, that module becomes one th
 one domain contract, one conversion path, one selected-family composition, one rollback, and one
 issue. Do not bundle multiple domains merely to make a wave look complete.
 
-### Permanent hold — Runtime/G8 hot paths
+### Current no-go for this rollout — Runtime/G8 hot paths
 
 Runtime checkpoint, execution state, scheduler queues, durable timers, outbox, placement,
 transport, leases, fencing, and distributed locks do not enter these waves. Reconsideration needs a
