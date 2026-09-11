@@ -7,6 +7,7 @@ using Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.Support;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Npgsql;
 using Xunit;
 
 namespace Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests;
@@ -123,10 +124,19 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
                 ["ELSA_SECRETS_EF_SQLSERVER"] = null,
                 ["ELSA_SECRETS_EF_REQUIRE_ALL"] = null
             });
-        Assert.True(result.ExitCode == 0, result.Describe());
-        Assert.Contains("database update --context SecretsPostgreSqlDbContext", result.Output, StringComparison.Ordinal);
-        Assert.DoesNotContain(connectionString, result.Output, StringComparison.Ordinal);
-        Assert.DoesNotContain(connectionString, result.Error, StringComparison.Ordinal);
+        var password = new NpgsqlConnectionStringBuilder(connectionString).Password;
+        Assert.False(
+            ContainsSensitiveConnectionData(result.Output, connectionString, password),
+            "The operator wrote sensitive PostgreSQL connection data to stdout.");
+        Assert.False(
+            ContainsSensitiveConnectionData(result.Error, connectionString, password),
+            "The operator wrote sensitive PostgreSQL connection data to stderr.");
+        Assert.True(result.ExitCode == 0, $"The PostgreSQL operator exited {result.ExitCode}; captured output is suppressed.");
+        Assert.True(
+            result.Output.Contains(
+                "database update --context SecretsPostgreSqlDbContext",
+                StringComparison.Ordinal),
+            "The operator did not report the expected PostgreSQL context update.");
 
         await using var context = CreateContext(connectionString);
         Assert.Equal(EfProviderNames.PostgreSql, context.Database.ProviderName);
@@ -166,6 +176,10 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
         command.Parameters.Add(parameter);
         return Convert.ToBoolean(await command.ExecuteScalarAsync());
     }
+
+    private static bool ContainsSensitiveConnectionData(string text, string connectionString, string? password) =>
+        text.Contains(connectionString, StringComparison.Ordinal) ||
+        (!string.IsNullOrEmpty(password) && text.Contains(password, StringComparison.Ordinal));
 
     private static Secret Secret(
         string tenantId,

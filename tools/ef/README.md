@@ -81,16 +81,19 @@ The checks cover different failure classes:
   history. A failure means a migration is missing from source; it is not proof that a database has
   unapplied migrations.
 - `apply` runs `database update` against the selected provider and applies compiled migrations
-  missing from `__EFMigrationsHistory_ElsaSecrets`. It requires the selected provider's connection
-  environment variable and a reachable database.
+  missing from `__EFMigrationsHistory_ElsaSecrets`. SQL Server and PostgreSQL require their
+  provider-specific connection environment variable and a reachable database. SQLite uses
+  `ELSA_SECRETS_EF_SQLITE` when set; otherwise the script creates a temporary database and removes
+  it on exit, which validates the artifact but does not update a deployment database.
 - Runtime `MigratePolicy=Validate` calls EF's pending-database-migration check and fails closed
   when the database history is behind. It does not replace the source/model `pending` check.
 
 ## Deployment and rollback boundary
 
 Use an explicit provider selector (`apply --sqlite`, `apply --sqlserver`, or
-`apply --postgresql`) and its matching `ELSA_SECRETS_EF_*` connection. Before applying, take a
-backup, quiesce writes, and run `pending`. Use a short-lived least-privilege deployment identity
+`apply --postgresql`) and set its matching `ELSA_SECRETS_EF_*` connection for the target database.
+Omitting `ELSA_SECRETS_EF_SQLITE` intentionally targets only the disposable fallback. Before
+applying to a deployment database, take a backup, quiesce writes, and run `pending`. Use a short-lived least-privilege deployment identity
 with the DDL rights needed for that provider; after the schema is verified, run the application
 with its least-privilege runtime identity. Do not enable `SecretsEntityFrameworkCore` together
 with `SecretsGroundworkPersistence` in the same shell.
