@@ -23,8 +23,8 @@ changes it.
 
 The product conclusion is therefore conditional:
 
-> Reuse the Secrets recipe for eligible relational modules only after ADR 0072 is explicitly
-> accepted or revised into that direction. Do not invent another persistence framework. Keep
+> Reuse the Secrets recipe for eligible relational modules only after the final ADR 0072 text is
+> explicitly accepted. Do not invent another persistence framework. Keep
 > Groundwork for the Runtime hot path and for domains whose document/Mongo or operational needs
 > make it the better fit.
 
@@ -40,6 +40,15 @@ The product conclusion is therefore conditional:
 The spike that selected provider-derived contexts over FluentMigrator remains in
 [#1622](https://github.com/elsa-workflows/elsa-foundation/pull/1622). Its merge/retention disposition
 belongs to the ADR decision in #1628 rather than to this report.
+
+The per-phase evidence ledger is intentionally explicit about corrective scope:
+
+| Phase | Exact evidence |
+|---|---|
+| 0 + 1 | Original #1624 head `89fe0f64` passed its [PR CI](https://github.com/elsa-workflows/elsa-foundation/actions/runs/34543365451), but lacked final-head Copilot approval. Corrective #1638 head `d04f2d3a` passed [PR CI](https://github.com/elsa-workflows/elsa-foundation/actions/runs/34552827257), received exact-head approval, and [closed the Phase 0 + 1 convergence](https://github.com/elsa-workflows/elsa-foundation/issues/1627#issuecomment-5628458728). |
+| 2 | Original #1633 head `52a0d856` passed [PR CI](https://github.com/elsa-workflows/elsa-foundation/actions/runs/34547654512), but lacked final-head Copilot approval. Operator closeout #1643 head `3af889642` passed [PR CI](https://github.com/elsa-workflows/elsa-foundation/actions/runs/34562265444), received exact-head approval, and its [Phase 2 closure evidence](https://github.com/elsa-workflows/elsa-foundation/issues/1629#issuecomment-5629645110) links the green post-main gate set. |
+| 3 | Original #1634 head `57de34f6` passed [PR CI](https://github.com/elsa-workflows/elsa-foundation/actions/runs/34574310289), but lacked final-head Copilot approval. Corrective #1651 head `df0135a6` passed [PR CI](https://github.com/elsa-workflows/elsa-foundation/actions/runs/34614436548), received exact-head approval and independent review, and its [Phase 3 closure](https://github.com/elsa-workflows/elsa-foundation/issues/1630#issuecomment-5636683323) records the merged result. |
+| 4 | Original #1646 head `b23850f7` passed [PR CI](https://github.com/elsa-workflows/elsa-foundation/actions/runs/34603251405), but lacked final-head Copilot approval. Evidence closeout #1652 head `dbeb6682` passed [PR CI](https://github.com/elsa-workflows/elsa-foundation/actions/runs/34618196316), received exact-head approval and independent review, and its [Phase 4 closure evidence](https://github.com/elsa-workflows/elsa-foundation/issues/1631#issuecomment-5637293935) links the green post-main gate set. |
 
 ## Integrated evidence
 
@@ -61,7 +70,7 @@ The final corrective heads received explicit exact-head approval:
 
 - Phase 2 hardening [#1638](https://github.com/elsa-workflows/elsa-foundation/pull/1638) and
   operator closeout [#1643](https://github.com/elsa-workflows/elsa-foundation/pull/1643) were
-  Copilot-approved on their final heads.
+  Copilot-approved on their final heads `d04f2d3a` and `3af889642`, respectively.
 - Phase 3 closeout [#1651](https://github.com/elsa-workflows/elsa-foundation/pull/1651) was approved
   at `df0135a6`, with no independent P0-P3 findings and all review threads resolved.
 - Phase 4 evidence closeout [#1652](https://github.com/elsa-workflows/elsa-foundation/pull/1652)
@@ -218,7 +227,10 @@ Every admitted module gets its own issue and review-converged PR sequence:
 2. Add EF contract tests first, sharing fixtures with the Groundwork implementation where behavior
    must be identical.
 3. Add one module package with shared model/configuration and provider-derived SQLite, SQL Server,
-   and PostgreSQL contexts; the module references EF Core + Relational only.
+   and PostgreSQL contexts when they compile against Relational alone; the module references EF
+   Core + Relational only. If a provider generator emits provider-dependent types, keep that
+   derived context and snapshot in the host's one provider package or an existing companion it
+   already pulls, preserving ADR 0072 D3 instead of adding per-module provider projects.
 4. Generate and review all three migration/snapshot folders. Enforce provider/model drift and the
    module-specific history table.
 5. Implement provider-appropriate OCC, types, normalized/search keys, indexes, paging, and redacted
