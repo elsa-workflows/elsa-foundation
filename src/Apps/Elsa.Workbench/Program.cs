@@ -93,9 +93,10 @@ ConsoleLogStreamingSetup.InstallConsoleStreamHookIfEnabled(args);
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("shells.json", optional: true, reloadOnChange: true);
 // Environment overlay (e.g. shells.Production.json), layered on top of the dev/demo defaults in shells.json.
-// This keeps `git clone && dotnet run` (Development) working out of the box on in-memory stores + ephemeral
-// keys + a seeded well-known admin, while Production hardens to durable stores, a persistent signing key
-// (secret), and a configured initial admin (password supplied as a secret — never committed).
+// This keeps `git clone && dotnet run` (Development) working out of the box on ephemeral identity keys, committed
+// demo-only runtime keys (the durable runtime refuses ephemeral ones) and a seeded well-known admin, while
+// Production blanks those demo values and hardens to durable identity stores, persistent keys (secrets), and a
+// configured initial admin (password supplied as a secret — never committed).
 builder.Configuration.AddJsonFile($"shells.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true);
 // WebApplication.CreateBuilder adds environment variables before these shell files. Re-add the environment and
 // command-line providers after the shell layers so container environment variables override shells.json, while

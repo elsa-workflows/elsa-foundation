@@ -314,34 +314,13 @@ public sealed class RuntimeRecoveryScannerTests
     [Fact]
     public void RecoveryContinuationStartupTask_FailsStartupWhenDurablePagingHasNoStableKey()
     {
-        var services = new ServiceCollection();
-        services.AddOptions<RuntimeRecoveryContinuationOptions>()
-            .Configure(options => options.AllowEphemeralDevelopmentKey = false);
-        services.AddSingleton<IRuntimeRecoveryContinuationCodec, HmacRuntimeRecoveryContinuationCodec>();
-        services.AddScoped<IStartupTask, ValidateRuntimeRecoveryContinuationCodecStartupTask>();
-
-        using var provider = services.BuildServiceProvider();
-        using var scope = provider.CreateScope();
-
-        Assert.Throws<InvalidOperationException>(() => scope.ServiceProvider.GetServices<IStartupTask>().ToArray());
+        Assert.Throws<InvalidOperationException>(() => ResolveDurableRecoveryStartupTasks(signingKey: null));
     }
 
     [Fact]
     public async Task RecoveryContinuationStartupTask_SucceedsOnAConfiguredKey()
     {
-        var services = new ServiceCollection();
-        services.AddOptions<RuntimeRecoveryContinuationOptions>()
-            .Configure(options =>
-            {
-                options.SigningKey = "startup-validated-recovery-signing-key-32-bytes";
-                options.AllowEphemeralDevelopmentKey = false;
-            });
-        services.AddSingleton<IRuntimeRecoveryContinuationCodec, HmacRuntimeRecoveryContinuationCodec>();
-        services.AddScoped<IStartupTask, ValidateRuntimeRecoveryContinuationCodecStartupTask>();
-
-        using var provider = services.BuildServiceProvider();
-        using var scope = provider.CreateScope();
-        var task = Assert.Single(scope.ServiceProvider.GetServices<IStartupTask>());
+        var task = Assert.Single(ResolveDurableRecoveryStartupTasks("startup-validated-recovery-signing-key-32-bytes"));
 
         await task.ExecuteAsync(CancellationToken.None);
     }
@@ -445,6 +424,23 @@ public sealed class RuntimeRecoveryScannerTests
             limit: limit,
             ownerId: ownerId,
             continuationToken: continuationToken);
+
+    private static IStartupTask[] ResolveDurableRecoveryStartupTasks(string? signingKey)
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<RuntimeRecoveryContinuationOptions>()
+            .Configure(options =>
+            {
+                options.SigningKey = signingKey;
+                options.AllowEphemeralDevelopmentKey = false;
+            });
+        services.AddSingleton<IRuntimeRecoveryContinuationCodec, HmacRuntimeRecoveryContinuationCodec>();
+        services.AddScoped<IStartupTask, ValidateRuntimeRecoveryContinuationCodecStartupTask>();
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        return scope.ServiceProvider.GetServices<IStartupTask>().ToArray();
+    }
 
     private static IRuntimeRecoveryContinuationCodec RecoveryCodec(string signingKey) =>
         new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions
