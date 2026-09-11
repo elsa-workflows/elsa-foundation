@@ -34,10 +34,11 @@ ADR 0042 made Groundwork the only first-party durable persistence family in Elsa
 from the later vendor-owned OpenIddict exception. It removed a parallel EF implementation estate and
 the provider-project multiplication that accompanied it.
 
-That decision exposed a different cost. For shape-simple relational modules, Elsa-owned Groundwork
-adapters, schema wrapping, composition, and evidence can be heavier than a conventional EF Core
-implementation. The product preference is to minimize Elsa-owned persistence code where doing so
-does not weaken provider-blind contracts, migration safety, or operational evidence.
+That decision raised a testable question: for shape-simple relational modules, can a conventional EF
+Core implementation provide enough ecosystem familiarity, tooling, and model-drift protection to
+justify a second first-party persistence lane without recreating the Elsa 3 provider-project matrix?
+The product preference remains to minimize Elsa-owned persistence code, but the pilot evidence must
+decide whether EF actually does so rather than assuming it.
 
 Nuplane and CShells make the packaging and lifecycle constraints load-bearing:
 
@@ -49,10 +50,10 @@ Nuplane and CShells make the packaging and lifecycle constraints load-bearing:
 - the domain contract must not expose EF, Groundwork, provider SQL, or `IQueryable`.
 
 The spike in PR #1622 compared provider-derived EF contexts with FluentMigrator for a
-Secrets-shaped module. Provider-derived contexts won on owned-code cost, operational familiarity,
-model-drift protection, and migration locking. It also established that one `DbContext` type owns
-one model snapshot per assembly, so three provider migration sets require three derived context
-types.
+Secrets-shaped module. Provider-derived contexts won that EF-internal comparison on owned-code cost,
+operational familiarity, model-drift protection, and migration locking. The spike did not establish
+that EF would own less code than Groundwork. It also established that one `DbContext` type owns one
+model snapshot per assembly, so three provider migration sets require three derived context types.
 
 The completed Secrets pilot then tested that direction in product code. It proved:
 
@@ -66,6 +67,12 @@ The completed Secrets pilot then tested that direction in product code. It prove
 - OCC, physical types, normalization, and persisted search keys are provider-specific contracts;
 - Workbench can remain Groundwork-default while an EF composition is opt-in.
 
+The measured cost comparison disproved the code-reduction premise for Secrets. Even after excluding
+pilot-only tests, its EF implementation carries about 2.5 times the source and 4.5 times the tests of
+the Groundwork adapter, plus three provider migration/snapshot sets and operator tooling. Runtime
+keeps Groundwork, so the shared Groundwork layer cannot be retired by moving ordinary modules. An
+EF-first decision must therefore rest on explicit benefits other than reducing owned code.
+
 The pilot did **not** prove existing-domain data conversion, arbitrary cross-module multi-engine
 composition, MongoDB parity, the current Foundation Host directory-feed route, or Runtime hot-path
 suitability.
@@ -74,7 +81,8 @@ suitability.
 
 Elsa Foundation needs a relational persistence policy that:
 
-1. Uses mainstream EF Core when that materially reduces Elsa-owned code for an eligible module.
+1. Uses mainstream EF Core only when measured module-specific benefits justify its additional owned
+   code and provider-migration surface.
 2. Preserves provider-blind domain contracts and provider-appropriate persistence semantics.
 3. Works with dynamically enabled features without a host-owned global migration catalog.
 4. Supports runtime and operator-controlled migration modes over one artifact set.
@@ -131,7 +139,8 @@ records that direction and the pilot lessons. Three distinct gates remain:
 
 An acceptable policy must satisfy all of these:
 
-- **Owned-code economy:** EF must reduce, not merely relocate, Elsa-maintained infrastructure.
+- **Measured ownership:** compare EF and Groundwork source, tests, migrations, tooling, and shared
+  infrastructure; do not claim code reduction where the evidence shows added ownership.
 - **Contract neutrality:** domain callers remain independent of persistence family and engine.
 - **Dynamic ownership:** migrations and lifecycle behavior travel with the feature.
 - **Operator safety:** apply, validate, diagnostics, locking, and rollback are explicit.
@@ -167,8 +176,10 @@ A module is eligible only when all of these are demonstrated:
 3. Transaction, concurrency, ordering, query, tenancy, retention, and consistency semantics can be
    written as module-owned tests.
 4. The workload is not a Runtime/G8 hot-path or dependent on Groundwork operational primitives.
-5. Three provider-derived migration sets remain reviewable; otherwise the D14 threshold is
-   evaluated before proceeding.
+5. A measured comparison against the Groundwork adapter records source, tests, migrations, tooling,
+   shared-layer effects, and expected schema churn. Explicit non-code-size benefits justify the added
+   EF ownership, and three provider-derived migration sets remain reviewable; otherwise the D14
+   threshold is evaluated before proceeding.
 6. For an existing module, data conversion, mixed-version behavior, cutover, rollback, evidence
    retention, and operational ownership are explicit acceptance gates.
 
@@ -368,6 +379,9 @@ If accepted:
 - Groundwork remains a first-party family; this ADR does not set a date for its removal.
 - Snapshot and provider evidence cost becomes visible per module rather than hidden in a shared host
   migration estate.
+- EF adds owned code for Secrets, and is expected to do so for similar modules while Runtime keeps the
+  shared Groundwork layer alive. Admission therefore requires a measured comparison and an explicit
+  benefit case other than code-size reduction.
 
 Costs and risks:
 
