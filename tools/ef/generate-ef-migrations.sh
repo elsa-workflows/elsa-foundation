@@ -1,26 +1,41 @@
 #!/usr/bin/env bash
+# Add a named migration for every Secrets EF derived context into the module assembly
+# Nuplane loads at apply time. Do not re-add Initial; that set already exists.
+#
+# Usage:
+#   bash tools/ef/generate-ef-migrations.sh <MigrationName>
+#
+# Requires the dotnet-ef tool (10.0.x). From the repo root: `dotnet tool restore`
+# or `dotnet tool install dotnet-ef --version 10.0.10 --tool-path .tools`.
 set -euo pipefail
-# Stub: Secrets EF Initial migrations are generated from the Tooling project into the module.
-# Full generate-ef-migrations driver (all modules × providers) is Phase 2.
-#
-# Usage (Secrets):
-#   bash tools/ef/generate-ef-migrations.sh
-#
-# Requires the dotnet-ef tool (10.0.x).
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-cd "$root"
+# shellcheck source=secrets-ef-lib.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/secrets-ef-lib.sh"
+secrets_ef_init
+cd "$secrets_ef_root"
 
-module="src/Elsa/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj"
-startup="src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling.csproj"
+if [[ $# -lt 1 || "$1" == "-h" || "$1" == "--help" ]]; then
+  echo "Usage: bash tools/ef/generate-ef-migrations.sh <MigrationName>" >&2
+  exit 2
+fi
 
-ef() {
-  dotnet ef "$@"
-}
+name="$1"
+if [[ "$name" == "Initial" ]]; then
+  echo "error: Initial already exists for each derived Secrets context. Choose a new name." >&2
+  exit 2
+fi
 
-echo "Phase 2 stub: this will fail if an Initial migration already exists (dotnet ef rejects the duplicate name)."
-echo "Regeneration that remove/replaces existing Initial sets is Phase 2. Review provider snapshots before committing."
+for row in "${secrets_ef_contexts[@]}"; do
+  secrets_ef_split "$row"
+  echo "migrations add $name --context $secrets_ef_context"
+  secrets_ef migrations add "$name" \
+    --context "$secrets_ef_context" \
+    --project "$secrets_ef_module" \
+    --startup-project "$secrets_ef_startup" \
+    --output-dir "$secrets_ef_output_dir" \
+    --namespace "$secrets_ef_namespace"
+done
 
-ef migrations add Initial --context SecretsSqliteDbContext --project "$module" --startup-project "$startup" --output-dir Migrations/Sqlite --namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.Sqlite
-ef migrations add Initial --context SecretsSqlServerDbContext --project "$module" --startup-project "$startup" --output-dir Migrations/SqlServer --namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.SqlServer
-ef migrations add Initial --context SecretsPostgreSqlDbContext --project "$module" --startup-project "$startup" --output-dir Migrations/PostgreSql --namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.PostgreSql
+echo "Review provider snapshots before committing. If a snapshot emits provider-package"
+echo "extension calls, rewrite them to Relational HasColumnType / annotations so the"
+echo "module stays provider-free."

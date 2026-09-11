@@ -1,0 +1,149 @@
+using CShells;
+using CShells.AspNetCore.Configuration;
+using CShells.AspNetCore.Extensions;
+using CShells.DependencyInjection;
+using CShells.Features;
+using CShells.Lifecycle;
+using Elsa.Persistence.EntityFramework;
+using Microsoft.EntityFrameworkCore;
+using Elsa.Secrets.Core.Contracts;
+using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Xunit;
+
+namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests;
+
+/// <summary>
+/// CShells does not run shell-scoped <see cref="IHostedService"/>s. Enable and reload must apply
+/// <see cref="EfMigratePolicy"/> through <c>IShellInitializer</c> on a new shell provider.
+/// </summary>
+public sealed class SecretsEntityFrameworkCoreShellReloadTests
+{
+    private const string ShellName = "secrets-ef-migrate";
+
+    [Fact]
+    public async Task AutoMigrate_applies_on_activation_and_again_after_reload()
+    {
+        var path = NewDbPath();
+        try
+        {
+            await using var host = await StartHostAsync(path, EfMigratePolicy.AutoMigrate);
+            var registry = host.Services.GetRequiredService<IShellRegistry>();
+
+            var first = await registry.GetOrActivateAsync(ShellName);
+            await AssertSchemaAndRepositoryAsync(first.ServiceProvider);
+
+            var reload = await registry.ReloadAsync(ShellName);
+            if (reload.Drain is not null)
+                await reload.Drain.WaitAsync();
+
+            var second = registry.GetActive(ShellName)
+                         ?? await registry.GetOrActivateAsync(ShellName);
+            Assert.NotSame(first, second);
+            await AssertSchemaAndRepositoryAsync(second.ServiceProvider);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Validate_fails_activation_when_migrations_are_pending()
+    {
+        var path = NewDbPath();
+        try
+        {
+            await using var host = await StartHostAsync(path, EfMigratePolicy.Validate);
+            var registry = host.Services.GetRequiredService<IShellRegistry>();
+
+            var exception = await Assert.ThrowsAnyAsync<Exception>(() => registry.GetOrActivateAsync(ShellName));
+            Assert.Contains("pending migrations", Flatten(exception), StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Validate_succeeds_on_reload_after_schema_is_applied()
+    {
+        var path = NewDbPath();
+        try
+        {
+            await using (var applyHost = await StartHostAsync(path, EfMigratePolicy.AutoMigrate))
+            {
+                await applyHost.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+                await applyHost.StopAsync();
+            }
+
+            await using var validateHost = await StartHostAsync(path, EfMigratePolicy.Validate);
+            var registry = validateHost.Services.GetRequiredService<IShellRegistry>();
+            var shell = await registry.GetOrActivateAsync(ShellName);
+            await AssertSchemaAndRepositoryAsync(shell.ServiceProvider);
+
+            var reload = await registry.ReloadAsync(ShellName);
+            if (reload.Drain is not null)
+                await reload.Drain.WaitAsync();
+            var reloaded = registry.GetActive(ShellName)
+                           ?? await registry.GetOrActivateAsync(ShellName);
+            await AssertSchemaAndRepositoryAsync(reloaded.ServiceProvider);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    private static async Task AssertSchemaAndRepositoryAsync(IServiceProvider services)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var repository = scope.ServiceProvider.GetRequiredService<ISecretRepository>();
+        Assert.IsType<EfSecretRepository>(repository);
+        var context = scope.ServiceProvider.GetRequiredService<SecretsDbContext>();
+        Assert.IsType<SecretsSqliteDbContext>(context);
+        var applied = (await context.Database.GetAppliedMigrationsAsync()).ToArray();
+        Assert.NotEmpty(applied);
+        Assert.Empty(await context.Database.GetPendingMigrationsAsync());
+    }
+
+    private static async Task<WebApplication> StartHostAsync(string path, EfMigratePolicy policy)
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Development });
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.Logging.ClearProviders();
+        builder.Services.AddCShellsAspNetCore(shells =>
+        {
+            shells
+                .WithAssemblies(typeof(SecretsEntityFrameworkCoreFeature).Assembly)
+                .AddShell(ShellName, shell => shell.WithFeature<SecretsEntityFrameworkCoreFeature>(feature =>
+                {
+                    feature.Provider = "Sqlite";
+                    feature.ConnectionString = $"Data Source={path}";
+                    feature.MigratePolicy = policy;
+                }));
+        });
+
+        var app = builder.Build();
+        app.MapShells();
+        await app.StartAsync();
+        return app;
+    }
+
+    private static string NewDbPath() =>
+        Path.Join(Path.GetTempPath(), $"elsa-secrets-ef-shell-{Guid.NewGuid():N}.db");
+
+    private static string Flatten(Exception exception)
+    {
+        var parts = new List<string>();
+        for (var current = exception; current is not null; current = current.InnerException)
+            parts.Add(current.Message);
+        return string.Join(" | ", parts);
+    }
+}
