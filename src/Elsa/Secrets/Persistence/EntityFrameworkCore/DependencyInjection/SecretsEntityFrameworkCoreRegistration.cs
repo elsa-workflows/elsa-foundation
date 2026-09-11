@@ -1,3 +1,4 @@
+using CShells.Lifecycle;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
@@ -43,8 +44,20 @@ public static class SecretsEntityFrameworkCoreRegistration
         }
 
         services.AddScoped<ISecretRepository>(sp => new EfSecretRepository(sp.GetRequiredService<SecretsDbContext>()));
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, SecretsEfMigrationHostedService>());
+        AddMigrationLifecycle(services);
         return services;
+    }
+
+    private static void AddMigrationLifecycle(IServiceCollection services)
+    {
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(SecretsEfMigrationHostedService)))
+            return;
+
+        services.AddSingleton<SecretsEfMigrationHostedService>();
+        services.AddSingleton<IHostedService>(provider =>
+            provider.GetRequiredService<SecretsEfMigrationHostedService>());
+        services.AddSingleton<IShellInitializer>(provider =>
+            provider.GetRequiredService<SecretsEfMigrationHostedService>());
     }
 
     private static void AddContext<TContext>(
@@ -110,19 +123,4 @@ public sealed class SecretsEntityFrameworkCoreOptions
     public string? ConnectionString { get; set; }
     public string? ConnectionName { get; set; }
     public EfMigratePolicy MigratePolicy { get; set; } = EfMigratePolicy.AutoMigrate;
-}
-
-public sealed class SecretsEfMigrationHostedService(
-    IServiceScopeFactory scopes,
-    SecretsEntityFrameworkCoreOptions options) : IHostedService
-{
-    public async Task StartAsync(CancellationToken cancellationToken)
-    {
-        await using var scope = scopes.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<SecretsDbContext>();
-        var expected = EfRelationalProviderBinding.ExpectedProviderName(options.Provider);
-        await EfDatabaseMigrator.ApplyAsync(context, expected, options.MigratePolicy, cancellationToken);
-    }
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

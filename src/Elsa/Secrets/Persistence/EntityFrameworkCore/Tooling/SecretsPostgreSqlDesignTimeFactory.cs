@@ -11,7 +11,9 @@ public sealed class SecretsPostgreSqlDesignTimeFactory : IDesignTimeDbContextFac
     {
         var builder = new DbContextOptionsBuilder<SecretsPostgreSqlDbContext>();
         builder.UseNpgsql(
-            "Host=localhost;Database=elsa_secrets_design;Username=postgres;Password=postgres",
+            SecretsDesignTimeConnection.Resolve(
+                SecretsDesignTimeConnection.PostgreSqlVariable,
+                "Host=localhost;Database=elsa_secrets_design;Username=postgres;Password=postgres"),
             npgsql => npgsql
                 .MigrationsAssembly(typeof(SecretsPostgreSqlDbContext).Assembly.GetName().Name)
                 .MigrationsHistoryTable(EfMigrationsHistory.TableName(SecretsEfModule.HistoryModuleName)));

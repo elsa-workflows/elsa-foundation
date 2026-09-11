@@ -11,7 +11,9 @@ public sealed class SecretsSqlServerDesignTimeFactory : IDesignTimeDbContextFact
     {
         var builder = new DbContextOptionsBuilder<SecretsSqlServerDbContext>();
         builder.UseSqlServer(
-            "Server=localhost;Database=elsa-secrets-design;Trusted_Connection=True;TrustServerCertificate=True",
+            SecretsDesignTimeConnection.Resolve(
+                SecretsDesignTimeConnection.SqlServerVariable,
+                "Server=localhost;Database=elsa-secrets-design;Trusted_Connection=True;TrustServerCertificate=True"),
             sqlServer => sqlServer
                 .MigrationsAssembly(typeof(SecretsSqlServerDbContext).Assembly.GetName().Name)
                 .MigrationsHistoryTable(EfMigrationsHistory.TableName(SecretsEfModule.HistoryModuleName)));

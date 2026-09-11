@@ -40,7 +40,9 @@ provider package.
 ```
 
 `ConnectionName` looks up `ConnectionStrings:<name>` when `ConnectionString` is omitted.
-`MigratePolicy` is `AutoMigrate` (default) or `Validate` (fail if pending).
+`MigratePolicy` is `AutoMigrate` (default) or `Validate` (fail if pending). Both policies
+run when the feature is enabled **and** when CShells reloads the shell (`IShellInitializer`).
+A plain host uses the same instance as `IHostedService`.
 
 Do not enable this feature together with `SecretsGroundworkPersistence` in the same shell:
 both replace `ISecretRepository`, and registration throws if the other backend is already selected.
@@ -57,6 +59,17 @@ Derived contexts: `SecretsSqliteDbContext`, `SecretsSqlServerDbContext`,
 `SecretsPostgreSqlDbContext`. Each has its own `Migrations/` folder and `ModelSnapshot`.
 History table: `__EFMigrationsHistory_ElsaSecrets`.
 
-## Generate migrations
+## Generate and apply migrations
 
 See [Tooling/README.md](Tooling/README.md) and [tools/ef/README.md](../../../../../tools/ef/README.md).
+
+Out of process (no host):
+
+```bash
+bash tools/ef/dual-migrate.sh pending
+bash tools/ef/dual-migrate.sh apply --sqlite
+```
+
+`pending` is `dotnet ef migrations has-pending-model-changes` per derived context.
+`apply` is `dotnet ef database update --context <Derived>`. Runtime AutoMigrate / Validate
+uses the same compiled migrations in this module.
