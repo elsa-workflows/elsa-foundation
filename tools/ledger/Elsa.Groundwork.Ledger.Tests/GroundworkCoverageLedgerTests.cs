@@ -373,7 +373,7 @@ public sealed class GroundworkCoverageLedgerTests
         var findings = CreateEvidenceValidator().Validate(ReadLedger());
         Assert.Empty(findings);
 
-        var artifactPath = Path.Combine(
+        var artifactPath = Path.Join(
             RepoRoot,
             "specs",
             "094-harden-groundwork-stores",
@@ -1660,11 +1660,11 @@ public sealed class GroundworkCoverageLedgerTests
 
         if (ledger["compositionConditionalEntries"] is JsonArray conditionals)
         {
-            foreach (var conditional in conditionals.OfType<JsonObject>())
-            {
-                if (conditional["alternateCompositionArtifact"]?.GetValue<string>() is { } alternate)
-                    StageArtifact(alternate);
-            }
+            foreach (var alternate in conditionals
+                         .OfType<JsonObject>()
+                         .Where(conditional => conditional["alternateCompositionArtifact"] is JsonValue)
+                         .Select(conditional => conditional["alternateCompositionArtifact"]!.GetValue<string>()))
+                StageArtifact(alternate);
         }
     }
 

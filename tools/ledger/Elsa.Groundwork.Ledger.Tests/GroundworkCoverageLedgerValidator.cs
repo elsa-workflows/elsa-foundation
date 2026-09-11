@@ -335,7 +335,7 @@ internal sealed class GroundworkCoverageLedgerValidator
             return;
         }
 
-        var path = Path.GetFullPath(Path.Combine(_compositionEvidenceRoot, relativeSegments));
+        var path = Path.GetFullPath(Path.Join(_compositionEvidenceRoot, relativeSegments));
         var rootPrefix = _compositionEvidenceRoot.EndsWith(Path.DirectorySeparatorChar)
             ? _compositionEvidenceRoot
             : _compositionEvidenceRoot + Path.DirectorySeparatorChar;
