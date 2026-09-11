@@ -96,6 +96,33 @@ post-merge gates above. Skipped alert/optional jobs are not counted as passed ev
 No criterion depends on treating an unavailable local container as a pass. Native provider evidence
 comes from the hosted jobs; local provider skips were reported as skips.
 
+## Cost of ownership
+
+Measured at the evidence cut `0a6a6595` as physical lines in `.cs` files, blank lines and comments
+included, so the ratios matter more than the exact counts.
+
+| Secrets persistence | EF pilot | Groundwork adapter |
+|---|---|---|
+| Module source | 1,679: 1,278 hand-written plus 401 lines of generated Unicode casing data | 510 |
+| Migrations and model snapshots | 1,070 generated, in three provider folders (SQLite 306, SQL Server 393, PostgreSQL 371) | none |
+| Tooling | 117 lines of design-time factories plus the 225-line `tools/ef/dual-migrate.sh` | none |
+| Tests | 4,537 | 690 |
+| Shared layer | 331-line `Elsa.Persistence.EntityFramework` policy package | `Elsa.Persistence.Groundwork.V2`: 1,456 lines of shared integration plus 18,686 lines of Runtime stores |
+
+About 1,350 of the EF test lines prove the pilot rather than the module: the package-feed probe and
+the dual-migrate tool tests. Without them, the EF module still carries about 2.5 times the source and
+4.5 times the tests of its Groundwork adapter, and every schema change adds a migration in each of
+the three provider folders.
+
+The shared layer does not offset this. EF could retire at most the 1,456 lines of shared Groundwork
+integration, and only once no module uses it. Runtime stays on Groundwork under this plan, so that
+layer and the Groundwork dependency remain. Moving a module to EF therefore adds owned code rather
+than removing it, and the case for EF-first has to rest on benefits other than code size. #1628
+should weigh it on those.
+
+Each admitted module should record the same comparison against its Groundwork adapter, so admission
+condition 5 is judged on measured numbers.
+
 ## Residual risks and ownership
 
 | Risk | Current disposition |
@@ -103,7 +130,7 @@ comes from the hosted jobs; local provider skips were reported as skips.
 | Product policy still says Groundwork-only first-party persistence | Human decision and source-of-truth reconciliation: [#1628](https://github.com/elsa-workflows/elsa-foundation/issues/1628). Proposed [ADR 0072](https://github.com/elsa-workflows/elsa-foundation/pull/1623) remains unmerged and `proposed`. |
 | The real Foundation Host/Nuplane directory-feed route cannot yet share unsigned `CShells.Abstractions` identity reliably and can report a zero-feature shell ready | Production-readiness corrective issue: [#1644](https://github.com/elsa-workflows/elsa-foundation/issues/1644). The pilot used its explicitly allowed equivalent package-feed shell proof; #1644 blocks calling the current directory-feed route production-ready, not the narrower technical verdict. |
 | API shape and persistence selection are proven in separate in-process suites, not one real HTTP/restart journey | Production-evidence follow-up: [#1653](https://github.com/elsa-workflows/elsa-foundation/issues/1653). It must drive the Secrets API with EF selected across a process restart without flipping the checked-in default or conflating the Nuplane defect in #1644. |
-| Three migration folders and snapshots per relational module create review/maintenance cost | Apply an explicit per-module admission check and measure snapshot churn. Proposed ADR 0072 D11 retains FluentMigrator only as a threshold-triggered escape hatch, not the next default. |
+| Three migration folders and snapshots per relational module create review/maintenance cost | Apply an explicit per-module admission check and measure snapshot churn. The measured per-module cost is under [Cost of ownership](#cost-of-ownership). Proposed ADR 0072 D11 retains FluentMigrator only as a threshold-triggered escape hatch, not the next default. |
 | Secrets normalized search keys are a persisted compatibility contract | The v1 algorithm pins Unicode 16 simple-uppercase data plus the exact 26 additional mappings observed on the Phase 1 .NET 10 host. Runtime casing APIs are excluded. Any future change needs a new algorithm id, explicit backfill/data migration, and old/new lookup continuity tests; v1 must not be regenerated in place. |
 | MongoDB has no EF implementation in this pilot | Keep Mongo as an optional second family. A module that requires Mongo must retain or add a document-family adapter with its own evidence rather than pretending EF is cross-family. |
 | Runtime hot-path suitability was not tested | Runtime checkpoint, queue, placement, outbox, timer, lease, fencing, and distributed-lock work stays on Groundwork under the existing Runtime/G8 gates. A later ADR and workload evidence are prerequisites to reconsidering it. |
@@ -273,6 +300,8 @@ accept**, adding the pilot's material lessons before acceptance:
    and delivery template to new modules.
 6. Every authorized existing-domain replacement must include an explicit data conversion and
    rollback gate; the greenfield Secrets pilot did not prove that part.
+7. The ADR must state that an EF module adds owned code compared with its Groundwork adapter (see
+   [Cost of ownership](#cost-of-ownership)) and justify EF-first on other grounds.
 
 Sipke must record **accept**, **revise**, or **reject** in #1628. No agent should infer the answer
 from this successful pilot.
