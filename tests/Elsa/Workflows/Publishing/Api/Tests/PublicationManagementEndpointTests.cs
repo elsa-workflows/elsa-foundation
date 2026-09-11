@@ -1,6 +1,7 @@
 using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Workflows.Publishing.Api.Capabilities;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Tests.Support;
@@ -43,6 +44,34 @@ public sealed class PublicationManagementEndpointTests
         var descriptor = Assert.IsType<PermissionPolicyDescriptor>(parsed.Descriptor);
         Assert.Equal(PermissionRequirementMode.Single, descriptor.Mode);
         Assert.Equal(PermissionKey.Normalize(permission), Assert.Single(descriptor.Permissions));
+    }
+
+    // #1637: #1498 removed the publication-slots relation along with the slot GETs it used to derive URLs
+    // for, but never replaced it for the two lifecycle commands Publishing kept. A capability-driven client
+    // that never hardcodes routes could no longer discover unpublish or restore.
+    public static TheoryData<string, string, string> SlotLifecycleRelations => new()
+    {
+        { "publication-slot-unpublish", "UnpublishPublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}" },
+        { "publication-slot-restore", "RestorePublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}/restore" }
+    };
+
+    [Theory]
+    [MemberData(nameof(SlotLifecycleRelations))]
+    public void The_slot_lifecycle_relations_mirror_their_mapped_routes_without_moving_the_contract_major(
+        string rel,
+        string endpointName,
+        string expectedHref)
+    {
+        var link = Assert.Single(PublishingApiCapabilities.StaticDeclaration.Links, candidate => candidate.Rel == rel);
+        var route = PublishingMinimalApiTestSurface.Named(endpointName).RoutePattern.RawText!.TrimStart('/');
+
+        // A typo in either of the two strings a client is pinned to would otherwise ship silently.
+        Assert.True(link.Templated);
+        Assert.Equal(expectedHref, link.Href);
+        Assert.Equal(link.Href, route);
+        Assert.False(link.Href.StartsWith('/'));
+        // The relation is additive, so clients that pin the major keep working.
+        Assert.Equal(1, PublishingApiCapabilities.StaticDeclaration.ContractMajorVersion);
     }
 
     [Fact]
