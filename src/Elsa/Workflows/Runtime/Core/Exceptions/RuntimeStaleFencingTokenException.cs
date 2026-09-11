@@ -26,7 +26,7 @@ public sealed class RuntimeStaleFencingTokenException : Exception
             $"Checkpoint commit for workflow execution '{workflowExecutionId}' presented fencing token {presentedFencingToken} " +
             $"but the current ownership fencing state has token {currentFencingToken} and rejected it as '{reason}'. " +
             "A stale or non-owning writer is fenced out of the " +
-            "single-writer commit path (RT-2).")
+            "single-writer commit path.")
     {
         WorkflowExecutionId = workflowExecutionId;
         PresentedFencingToken = presentedFencingToken;
