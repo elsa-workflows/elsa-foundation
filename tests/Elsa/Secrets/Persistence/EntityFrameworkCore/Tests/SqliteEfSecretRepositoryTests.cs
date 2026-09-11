@@ -170,6 +170,21 @@ public sealed class SqliteEfSecretRepositoryTests
     }
 
     [Fact]
+    public async Task Save_clears_tracking_and_reports_bounded_concurrency_exhaustion()
+    {
+        var failures = new AlwaysFailConcurrencyInterceptor();
+        await using var fixture = await SqliteFixture.CreateAsync(failures);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => fixture.Repository.SaveAsync(Secret("tenant-a", "always.conflicts", "value")).AsTask());
+
+        Assert.Equal(3, failures.Attempts);
+        Assert.IsType<DbUpdateConcurrencyException>(exception.InnerException);
+        Assert.Contains("after 3 attempts", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+    }
+
+    [Fact]
     public async Task Active_only_uses_strict_expiry_across_every_active_version()
     {
         await using var fixture = await SqliteFixture.CreateAsync();
@@ -406,6 +421,22 @@ public sealed class SqliteEfSecretRepositoryTests
 
             await _release.Task.WaitAsync(cancellationToken);
             return result;
+        }
+    }
+
+    private sealed class AlwaysFailConcurrencyInterceptor : SaveChangesInterceptor
+    {
+        private int _attempts;
+
+        public int Attempts => _attempts;
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _attempts);
+            throw new DbUpdateConcurrencyException("Forced test conflict.");
         }
     }
 }

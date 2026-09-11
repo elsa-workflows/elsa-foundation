@@ -122,6 +122,11 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
                 // writer wins the optimistic race, then apply this caller's complete document.
                 context.ChangeTracker.Clear();
             }
+            catch (DbUpdateConcurrencyException exception)
+            {
+                context.ChangeTracker.Clear();
+                throw new InvalidOperationException($"Could not save secret '{secret.Name}' after {MaximumUnconditionalSaveAttempts} attempts.", exception);
+            }
             catch (DbUpdateException exception)
                 when (attempt + 1 < MaximumUnconditionalSaveAttempts && IsUniqueConstraintViolation(exception))
             {
