@@ -246,7 +246,7 @@ public sealed class SecretsProjectionContractTests
         var malformed = SecretDocument.FromSecret(CreateSecret("text", $"invalid.{corruption}")).ToRecord();
         var payload = JsonNode.Parse(malformed.Payload)!.AsObject();
         var serializedSecret = payload["secret"]!.AsObject();
-        serializedSecret["description"] = leakedPayload;
+        payload["redactionProbe"] = leakedPayload;
         switch (corruption)
         {
             case "missing-secret":
@@ -263,6 +263,7 @@ public sealed class SecretsProjectionContractTests
         }
 
         malformed.Payload = payload.ToJsonString();
+        Assert.Contains(leakedPayload, malformed.Payload, StringComparison.Ordinal);
         fixture.Context.Secrets.Add(malformed);
         await fixture.Context.SaveChangesAsync();
         fixture.Context.ChangeTracker.Clear();
