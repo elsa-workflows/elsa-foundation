@@ -8,6 +8,7 @@ using Elsa.Workflows.Publishing.Api.Tests.Support;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Routing;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Xunit;
@@ -49,10 +50,10 @@ public sealed class PublicationManagementEndpointTests
     // #1637: #1498 removed the publication-slots relation along with the slot GETs it used to derive URLs
     // for, but never replaced it for the two lifecycle commands Publishing kept. A capability-driven client
     // that never hardcodes routes could no longer discover unpublish or restore.
-    public static TheoryData<string, string, string> SlotLifecycleRelations => new()
+    public static TheoryData<string, string, string, string> SlotLifecycleRelations => new()
     {
-        { "publication-slot-unpublish", "UnpublishPublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}" },
-        { "publication-slot-restore", "RestorePublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}/restore" }
+        { "publication-slot-unpublish", "UnpublishPublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}", "DELETE" },
+        { "publication-slot-restore", "RestorePublicationSlotEndpoint", "publishing/workflows/{definitionId}/slots/{slotName}/restore", "POST" }
     };
 
     [Theory]
@@ -60,16 +61,19 @@ public sealed class PublicationManagementEndpointTests
     public void The_slot_lifecycle_relations_mirror_their_mapped_routes_without_moving_the_contract_major(
         string rel,
         string endpointName,
-        string expectedHref)
+        string expectedHref,
+        string expectedMethod)
     {
         var link = Assert.Single(PublishingApiCapabilities.StaticDeclaration.Links, candidate => candidate.Rel == rel);
-        var route = PublishingMinimalApiTestSurface.Named(endpointName).RoutePattern.RawText!.TrimStart('/');
+        var endpoint = PublishingMinimalApiTestSurface.Named(endpointName);
+        var route = endpoint.RoutePattern.RawText!.TrimStart('/');
 
         // A typo in either of the two strings a client is pinned to would otherwise ship silently.
         Assert.True(link.Templated);
         Assert.Equal(expectedHref, link.Href);
         Assert.Equal(link.Href, route);
         Assert.False(link.Href.StartsWith('/'));
+        Assert.Equal(expectedMethod, Assert.Single(endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()!.HttpMethods));
         // The relation is additive, so clients that pin the major keep working.
         Assert.Equal(1, PublishingApiCapabilities.StaticDeclaration.ContractMajorVersion);
     }
