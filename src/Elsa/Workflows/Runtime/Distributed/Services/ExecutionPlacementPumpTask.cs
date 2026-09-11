@@ -19,7 +19,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Services;
 /// <remarks>
 /// This is the failover re-drive loop: when a node dies, its placement lease and its in-flight transport leases both
 /// expire on the injected <see cref="TimeProvider"/> clock, so the survivor's sweep claims the execution and re-drives
-/// its commands. Re-drive is safe — not merely deduplicated — because the drain acquires a fresh, strictly greater W5
+/// its commands. Re-drive is safe — not merely deduplicated — because the drain acquires a fresh, strictly greater
 /// fencing token; the dead node's stale token is rejected at checkpoint commit. All cadence and bounds come from
 /// options evaluated against <see cref="TimeProvider"/>; there are no wall-clock literals here. A sweep that throws is
 /// caught, logged, and never rethrown, and consecutive failures widen the schedule interval geometrically.

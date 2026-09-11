@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Runtime.Services;
 /// <summary>
 /// Computes the content-addressable identity of a compiled workflow executable: the deterministic SHA-256
 /// <c>ArtifactHash</c> over a canonical rendering of the executable node tree, and the derived
-/// <c>ArtifactId</c>. Extracted from <see cref="WorkflowExecutableCompiler"/> (W30b, #418) so hashing and
+/// <c>ArtifactId</c>. Extracted from <see cref="WorkflowExecutableCompiler"/> (#418) so hashing and
 /// artifact-id formatting can change independently of activity-tree compilation.
 /// </summary>
 /// <remarks>

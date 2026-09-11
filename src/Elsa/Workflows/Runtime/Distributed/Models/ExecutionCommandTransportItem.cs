@@ -15,8 +15,8 @@ namespace Elsa.Workflows.Runtime.Distributed.Models;
 /// to other nodes until the lease is acked (removed) or expires. If the owning node dies mid-dequeue — after leasing
 /// but before ack — the lease simply expires and the item becomes visible again, so the survivor that claims placement
 /// re-leases and re-drives it on failover. This mirrors the ack-based hold-until-commit dequeue that
-/// <c>docs/runtime-durable-resumption.md</c> records as the remaining increment on W2's durable queue, and matches the
-/// same at-least-once concern W5 recorded: destructive-before-dispatch would drop a command when a node dies mid-flight,
+/// <c>docs/runtime-durable-resumption.md</c> records as the remaining increment on the durable queue, and matches the
+/// same at-least-once concern the runtime already guards against: destructive-before-dispatch would drop a command when a node dies mid-flight,
 /// so this transport deliberately does not remove before ack.
 /// </remarks>
 public sealed class ExecutionCommandTransportItem

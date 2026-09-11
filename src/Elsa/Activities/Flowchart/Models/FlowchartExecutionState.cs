@@ -39,7 +39,7 @@ public sealed record FlowchartExecutionState
     /// Explicit monotonic loop-iteration counter per loop owner node (the backward-edge target). The value
     /// is the highest iteration number minted so far for that owner; it only ever increases, which
     /// decouples iteration-key numbering from the live loop-iteration scope count and lets stale scopes be
-    /// pruned without a later iteration reusing an earlier key (#382 / W32).
+    /// pruned without a later iteration reusing an earlier key (#382).
     /// </summary>
     public IReadOnlyDictionary<string, int> LoopIterationCounters { get; init; }
 }

@@ -134,7 +134,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         }
         else
         {
-            // In-memory live-drain delivery (WU-2) and the compatibility path for third-party v1 stores share the same
+            // In-memory live-drain delivery and the compatibility path for third-party v1 stores share the same
             // claim-free mechanics: read the deliverable items, enqueue the continuation through the queue's idempotent
             // EnqueueAsync, and mark the durable outbox item Delivered directly (Pending -> Delivered) via the existing
             // recording contract. DeliversInMemory forces this branch even when the store advertises the claim capability
@@ -152,7 +152,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         return new RuntimePostCommitOutboxProcessResult(processedItems);
     }
 
-    // The live-drain fast path (WU-2) engages only when: a live drain owns this exact execution's delivery, the request
+    // The live-drain fast path engages only when: a live drain owns this exact execution's delivery, the request
     // targets EnqueueSchedulerWork intents (every other kind stays on the durable claim path, condition (e)), and no
     // coalescing session is active (the coalescing overlay is authoritative, condition (c) — the drain orchestrator
     // never pushes a live-drain scope on the coalescing path, and this guard defends against direct callers).

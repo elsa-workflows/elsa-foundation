@@ -28,7 +28,7 @@ public sealed class TaskStateManager(ILogger<TaskStateManager> logger, Cancellat
 
     public async ValueTask Stop()
     {
-        // Graceful stop for background tasks (IN-5): signal each IBackgroundTask to stop BEFORE the
+        // Graceful stop for background tasks: signal each IBackgroundTask to stop BEFORE the
         // lifetime token is cancelled, then await the running loops so anything already queued drains.
         // BackgroundEventPublisher.StopAsync completes its channel writer, which makes the drain bounded
         // (the read loop ends once the channel empties), so this can never hang on a still-filling

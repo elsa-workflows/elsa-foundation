@@ -22,7 +22,7 @@ public sealed class RuntimeCheckpointCommitter
     /// <summary>
     /// Creates the committer. C1 (#1227): the four telescoping constructors collapsed into this single primary
     /// constructor: five required collaborators followed by optional collaborators that default to their no-op
-    /// implementations. The ownership context accessor is <b>required by construction</b> so the W5 fence
+    /// implementations. The ownership context accessor is <b>required by construction</b> so the fence
     /// (<see cref="AttachExpectedFence"/>, which stamps the ambient lease onto the provider-facing envelope) can never
     /// be silently disabled by picking a narrower constructor: without it a commit made inside a fenced drain would
     /// carry no expected fence and a superseded writer would be admitted. The enricher and intent-handler contribution
@@ -73,7 +73,7 @@ public sealed class RuntimeCheckpointCommitter
         foreach (var enricher in _enrichers)
             commit = await enricher.EnrichAsync(commit, cancellationToken);
 
-        // MS-9: the checkpoint-commit span wraps the fenced commit path. StartCheckpointCommit returns null when tracing
+        // The checkpoint-commit span wraps the fenced commit path. StartCheckpointCommit returns null when tracing
         // is inactive, so no allocation and no semantic change; when active it only introduces Activity.Current (trace
         // context, not service location). No new awaits are inserted between the fenced awaits below — attribute writes
         // are synchronous and happen after their source values are already computed.
@@ -112,7 +112,7 @@ public sealed class RuntimeCheckpointCommitter
         // the rest of the checkpoint through its uniform apply path, then verify the provider acknowledged them.
         var postCommitOutbox = RuntimePostCommitOutboxItems.CreatePendingChanges(commit, _intentHandlerContributions);
 
-        // WU-1 / spec 105: fold the claimed scheduler work item's fence-checked delete into this same commit so the
+        // spec 105: fold the claimed scheduler work item's fence-checked delete into this same commit so the
         // drainer can skip its separate acknowledgement. Suppressed while a coalescing session owns the execution — the
         // session's overlay queue + AdvanceInnerQueueAsync stay authoritative on durable queue advance in that mode.
         var consumedWorkItems = ResolveConsumedWorkItems(commit);
@@ -156,7 +156,7 @@ public sealed class RuntimeCheckpointCommitter
                 _consumedWorkClaimAccessor?.MarkConsumedDurably(workItemId);
         }
 
-        // WU-3 / spec 109 (ADR 0031 follow-up (a)): the durable outbox item is now committed and authoritative. If a
+        // spec 109 (ADR 0031 follow-up (a)): the durable outbox item is now committed and authoritative. If a
         // live drain owns this execution's delivery, hand the still-materialized continuation work items to its
         // drain-scoped carrier so the scheduler intent dispatcher can enqueue them without re-deserializing the payload
         // we just persisted. Runs only after the commit succeeds, so a rolled-back commit publishes nothing.

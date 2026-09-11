@@ -36,7 +36,7 @@ public sealed class WorkflowHoldState
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
     }
 
-    // Persisted JSON key: the `controlPlaneStateId` property name predates the W14 rename of this type
+    // Persisted JSON key: the `controlPlaneStateId` property name predates a later rename of this type
     // (WorkflowHoldState was ControlPlaneState). The member name is intentionally left unchanged to keep the wire key stable.
     public string ControlPlaneStateId { get; }
     public string? WorkflowExecutionId { get; }

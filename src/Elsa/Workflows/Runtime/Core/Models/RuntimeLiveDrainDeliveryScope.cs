@@ -4,14 +4,14 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
 /// Marks that a live drain loop currently owns post-commit intent delivery for a single workflow execution
-/// (WU-2, spec 105-runtime-live-drain-delivery). While this scope is ambient, the post-commit outbox processor
+/// (spec 105-runtime-live-drain-delivery). While this scope is ambient, the post-commit outbox processor
 /// delivers <c>EnqueueSchedulerWork</c> intents for the owning execution IN-MEMORY: it enqueues the continuation
 /// work item through the queue's idempotent <c>EnqueueAsync</c> and marks the durable outbox item Delivered directly,
-/// WITHOUT the durable claim round-trip. Ownership is bounded by the drain's single-writer lease (RT-2), so no other
+/// WITHOUT the durable claim round-trip. Ownership is bounded by the drain's single-writer lease, so no other
 /// deliverer competes for the same execution's intents; the durable outbox item remains a crash backstop that the
 /// resumption sweep re-drives idempotently.
 ///
-/// <para><b>In-process-hop payload carrier (WU-3, spec 109, ADR 0031 follow-up item (a)).</b> The scope also carries the
+/// <para><b>In-process-hop payload carrier (spec 109, ADR 0031 follow-up item (a)).</b> The scope also carries the
 /// already-materialized continuation <see cref="RuntimeSchedulerWorkItem"/>s across the enqueue→dispatch hop in memory,
 /// keyed by post-commit intent id. The checkpoint committer publishes each continuation the moment its commit lands
 /// (<see cref="PublishHopWorkItem"/>); the scheduler post-commit intent dispatcher takes it back

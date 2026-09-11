@@ -6,7 +6,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
 
 /// <summary>
-/// Per-drain in-memory working set for coalesced checkpoint segments (E3-6, RT-10). Buffers deferred checkpoint
+/// Per-drain in-memory working set for coalesced checkpoint segments. Buffers deferred checkpoint
 /// change-sets, holds an overlay of the mutated continuation state so intra-segment reads see prior hops, mirrors the
 /// scheduler work queue and post-commit outbox so the drain advances without touching durable stores, and folds
 /// everything into a single atomic commit at a flush boundary.

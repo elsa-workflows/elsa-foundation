@@ -4,7 +4,7 @@ using Elsa.Activities.Runtime.Core.Models;
 namespace Elsa.Activities.Scheduling.Activities;
 
 /// <summary>
-/// A recurring cron start trigger (W16). Authored as a start trigger, it starts a <i>new</i> workflow instance
+/// A recurring cron start trigger. Authored as a start trigger, it starts a <i>new</i> workflow instance
 /// on each occurrence of its cron <see cref="Expression"/> — the calendar-aligned counterpart to
 /// <see cref="Timer"/> (a drift-tolerant "every N"). Publishing a workflow whose start trigger is a
 /// <see cref="Cron"/> records both a trigger binding and a recurring schedule; the hosted recurring-trigger pump

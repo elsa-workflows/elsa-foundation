@@ -4,7 +4,7 @@ using Elsa.Activities.Runtime.Core.Models;
 namespace Elsa.Activities.Scheduling.Activities;
 
 /// <summary>
-/// A recurring interval start trigger (W16). Authored as a start trigger, it starts a <i>new</i> workflow
+/// A recurring interval start trigger. Authored as a start trigger, it starts a <i>new</i> workflow
 /// instance every <see cref="Interval"/> — the recurring counterpart to <see cref="Delay"/> (which suspends and
 /// resumes one existing run). Publishing a workflow whose start trigger is a <see cref="Timer"/> records both a
 /// trigger binding (so the recurring-trigger pump's stimulus routes to a start) and a recurring schedule (so the

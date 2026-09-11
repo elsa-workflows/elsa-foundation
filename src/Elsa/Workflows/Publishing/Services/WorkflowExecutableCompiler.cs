@@ -18,7 +18,7 @@ using Elsa.Workflows.Runtime.Core.Services;
 namespace Elsa.Workflows.Publishing.Services;
 
 /// <summary>
-/// Orchestrates workflow-executable compilation (W30b, #418): resolves the compile source, drives a single
+/// Orchestrates workflow-executable compilation (#418): resolves the compile source, drives a single
 /// authored-tree walk, and assembles the durable <see cref="WorkflowExecutable"/> artifact. Per-phase work is
 /// delegated to focused collaborators — <see cref="ActivityTreeProjector"/> (walk + validate),
 /// <see cref="ExecutableNodeCompiler"/> (node/resume-target compilation), and

@@ -5,8 +5,8 @@ using Elsa.Workflows.Runtime.Api.Models;
 namespace Elsa.Workflows.Runtime.Api.Requests;
 
 /// <summary>
-/// Routes an external stimulus to workflows (W7): starts new instances from the published trigger index (E3-1)
-/// and/or resumes every waiting instance across executions whose bookmark matches (E3-5), with no explicit
+/// Routes an external stimulus to workflows: starts new instances from the published trigger index
+/// and/or resumes every waiting instance across executions whose bookmark matches, with no explicit
 /// workflow execution id. The stimulus identity is the opaque <c>(StimulusType, StimulusHash)</c> routing pair
 /// the engine already uses; this endpoint does not invent a second hashing scheme.
 /// </summary>

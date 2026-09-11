@@ -131,7 +131,7 @@ public static class SchedulerWorkHandlerHelpers
             idempotencyKey: $"{sourceWorkItem.IdempotencyKey}:post-commit:{schedulerWorkItem.IdempotencyKey}",
             payload: JsonSerializer.SerializeToElement(schedulerWorkItem),
             metadata: sourceWorkItem.CommandMetadata,
-            // WU-3 / spec 109: carry the already-materialized work item alongside its authoritative serialized payload so
+            // spec 109: carry the already-materialized work item alongside its authoritative serialized payload so
             // a live drain's in-process hop can skip re-deserializing it. In-process conduit only ([JsonIgnore]); the
             // serialized payload above stays the sole durable form.
             materializedSchedulerWorkItem: schedulerWorkItem);

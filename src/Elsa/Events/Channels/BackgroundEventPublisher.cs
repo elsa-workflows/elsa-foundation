@@ -18,11 +18,11 @@ namespace Elsa.Events.Channels;
 ///
 /// Lifetime: dispatch is tied to the host/tenant lifetime token passed to <see cref="ExecuteAsync"/>.
 /// The enqueue-time caller token carried on the queued context is deliberately NOT linked into
-/// dispatch (IN-2): by the time a fire-and-forget event is dequeued its originating scope (e.g. an
+/// dispatch: by the time a fire-and-forget event is dequeued its originating scope (e.g. an
 /// HTTP request) may already be gone, and linking its since-cancelled token would abort — and then
 /// misreport — a dispatch that should run to completion under host lifetime.
 ///
-/// Graceful shutdown (IN-5): <see cref="StopAsync"/> completes the channel writer so the read loop
+/// Graceful shutdown: <see cref="StopAsync"/> completes the channel writer so the read loop
 /// drains everything already queued and then exits cleanly, instead of dropping in-flight events.
 /// It is invoked by the background-task host before the lifetime token is cancelled.
 /// </remarks>
@@ -73,7 +73,7 @@ public sealed class BackgroundEventPublisher(
             var eventPublisher = scope.ServiceProvider.GetRequiredService<IInlineEventPublisher>();
 
             // Dispatch under host lifetime only. The queued context's own CancellationToken (captured
-            // at enqueue time) is intentionally NOT linked here — see the class remarks (IN-2).
+            // at enqueue time) is intentionally NOT linked here — see the class remarks on dispatch lifetime.
             await eventPublisher.Publish(
                 queuedContext.Event,
                 cancellationToken

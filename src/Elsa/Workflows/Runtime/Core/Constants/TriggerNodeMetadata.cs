@@ -2,7 +2,7 @@ namespace Elsa.Workflows.Runtime.Core.Constants;
 
 /// <summary>
 /// Well-known <see cref="Elsa.Workflows.Runtime.Core.Models.ExecutableNode.Metadata"/> keys the publish
-/// compiler stamps and the trigger extractor reads (W7, E3-1). Kept as a shared constant so the producer
+/// compiler stamps and the trigger extractor reads. Kept as a shared constant so the producer
 /// (compiler) and consumer (extractor) cannot drift.
 /// </summary>
 public static class TriggerNodeMetadata
