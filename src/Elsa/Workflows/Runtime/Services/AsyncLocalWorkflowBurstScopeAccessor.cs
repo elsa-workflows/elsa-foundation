@@ -26,15 +26,15 @@ public sealed class AsyncLocalWorkflowBurstScopeAccessor : IWorkflowBurstScopeAc
 
     private sealed class PopWhenDisposed(AsyncLocalWorkflowBurstScopeAccessor accessor, Frame? prior) : IDisposable
     {
-        private bool _disposed;
+        private bool disposed;
 
         public void Dispose()
         {
-            if (_disposed)
+            if (disposed)
                 return;
 
             accessor._current.Value = prior;
-            _disposed = true;
+            disposed = true;
         }
     }
 }
