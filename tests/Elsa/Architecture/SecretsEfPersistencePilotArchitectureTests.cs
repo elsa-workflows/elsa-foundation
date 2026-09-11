@@ -81,6 +81,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/SecretDocument.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/SecretRevisionMapper.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsProjectionContract.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsProjectionException.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsSearchKeys.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/SecretsUnicodeOrdinalIgnoreCaseV1.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/UnicodeOrdinalCasingData.Generated.cs",

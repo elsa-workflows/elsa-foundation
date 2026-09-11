@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,23 +7,27 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 /// <summary>
 /// Audits and repairs projection fields written before the persisted Unicode algorithm was pinned.
 /// Reindexing is an explicit operator action; ordinary startup only validates and fails closed.
+/// Both paths page by the <c>(TenantId, NormalizedName)</c> key so each bounded batch is a single
+/// forward seek rather than a growing OFFSET rescan.
 /// </summary>
 public static class SecretsProjectionContract
 {
     private const int BatchSize = 100;
 
+    /// <summary>
+    /// Validates stored row and payload projections in bounded keyset pages.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Legacy projection bytes remain; the operator must reindex.</exception>
+    /// <exception cref="SecretsProjectionException">A row payload cannot be parsed or does not match its key.</exception>
     public static async Task EnsureCurrentAsync(
         SecretsDbContext context,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
-        for (var offset = 0;; offset += BatchSize)
+        SeekCursor? after = null;
+        while (true)
         {
-            var records = await Ordered(context.Secrets.AsNoTracking())
-                .Skip(offset)
-                .Take(BatchSize)
-                .ToListAsync(cancellationToken);
-
+            var records = await TakePageAsync(context.Secrets.AsNoTracking(), after, cancellationToken);
             if (records.Any(record => !IsCurrent(record)))
             {
                 throw new InvalidOperationException(
@@ -34,23 +39,26 @@ public static class SecretsProjectionContract
 
             if (records.Count < BatchSize)
                 return;
+
+            after = Cursor(records[^1]);
         }
     }
 
+    /// <summary>
+    /// Rewrites legacy projection columns and payload copies from the authoritative stored secret.
+    /// </summary>
+    /// <exception cref="SecretsProjectionException">A row payload cannot be parsed or does not match its key; the current batch is rolled back.</exception>
     public static async Task<int> ReindexAsync(
         SecretsDbContext context,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
-        var offset = 0;
+        SeekCursor? after = null;
         var updatedTotal = 0;
         while (true)
         {
             await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
-            var records = await Ordered(context.Secrets)
-                .Skip(offset)
-                .Take(BatchSize)
-                .ToListAsync(cancellationToken);
+            var records = await TakePageAsync(context.Secrets, after, cancellationToken);
             var updatedBatch = 0;
 
             foreach (var record in records)
@@ -68,12 +76,36 @@ public static class SecretsProjectionContract
 
             await transaction.CommitAsync(cancellationToken);
             updatedTotal += updatedBatch;
-            offset += records.Count;
+            var done = records.Count < BatchSize;
+            if (!done)
+                after = Cursor(records[^1]);
             context.ChangeTracker.Clear();
 
-            if (records.Count < BatchSize)
+            if (done)
                 return updatedTotal;
         }
+    }
+
+    private readonly record struct SeekCursor(string TenantId, string NormalizedName);
+
+    private static SeekCursor Cursor(SecretRecord record) => new(record.TenantId, record.NormalizedName);
+
+    private static Task<List<SecretRecord>> TakePageAsync(
+        IQueryable<SecretRecord> records,
+        SeekCursor? after,
+        CancellationToken cancellationToken) =>
+        Ordered(After(records, after)).Take(BatchSize).ToListAsync(cancellationToken);
+
+    private static IQueryable<SecretRecord> After(IQueryable<SecretRecord> records, SeekCursor? after)
+    {
+        if (after is not { } cursor)
+            return records;
+
+        var tenantId = cursor.TenantId;
+        var normalizedName = cursor.NormalizedName;
+        return records.Where(record =>
+            record.TenantId.CompareTo(tenantId) > 0 ||
+            (record.TenantId == tenantId && record.NormalizedName.CompareTo(normalizedName) > 0));
     }
 
     private static IOrderedQueryable<SecretRecord> Ordered(IQueryable<SecretRecord> records) =>
@@ -87,14 +119,21 @@ public static class SecretsProjectionContract
 
     private static (SecretDocument Stored, SecretDocument Current) ReadDocuments(SecretRecord record)
     {
-        var stored = SecretDocument.Parse(record.Payload);
+        SecretDocument stored;
+        try
+        {
+            stored = SecretDocument.Parse(record.Payload);
+        }
+        catch (Exception exception) when (exception is JsonException or ArgumentNullException or InvalidOperationException)
+        {
+            throw SecretsProjectionException.ForPayload(record, exception);
+        }
+
         var current = SecretDocument.FromSecret(stored.Secret);
         if (!string.Equals(current.TenantId, record.TenantId, StringComparison.Ordinal) ||
             !string.Equals(current.NormalizedName, record.NormalizedName, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException(
-                "A Secrets row identity does not match its stored document; the current projection-reindex batch was rolled back. " +
-                "Correct the inconsistent row and rerun the idempotent operator command.");
+            throw SecretsProjectionException.ForIdentity(record);
         }
 
         return (stored, current);

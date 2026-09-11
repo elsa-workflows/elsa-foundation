@@ -88,10 +88,10 @@ change newly persisted keys.
 Before upgrading a database written by the pre-contract Phase 1 pilot, quiesce writers and run the
 provider-specific `dual-migrate.sh apply` command. After applying compiled migrations it reindexes
 the stored projection columns and document copies from the authoritative `Secret` payload in bounded
-transactions while preserving concurrency tokens. Rows created on a host whose runtime casing data differed from this
+keyset transactions over `(TenantId, NormalizedName)` while preserving concurrency tokens. Rows created on a host whose runtime casing data differed from this
 pinned table otherwise remain unreadable through canonical lookups. Host startup audits every row
-in bounded, read-only batches and fails closed with the repair command instead of silently serving a
-partially readable store.
+in bounded, read-only keyset pages over `(TenantId, NormalizedName)` and fails closed with the repair
+command instead of silently serving a partially readable store.
 
 The casing projection matches Groundwork's Unicode-16 mapping for every scalar except the exact,
 exhaustively tested boundary `U+017F` and `U+16EBB` through `U+16ED3`. Groundwork also persists a

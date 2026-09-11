@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
@@ -7,6 +8,7 @@ using Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.Support;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests;
@@ -154,6 +156,188 @@ public sealed class SecretsProjectionContractTests
             File.Delete(path);
             File.Delete($"{path}-wal");
             File.Delete($"{path}-shm");
+        }
+    }
+
+    [Fact]
+    public async Task Startup_audit_pages_by_keyset_without_offset()
+    {
+        var path = Path.Join(Path.GetTempPath(), $"elsa-secrets-projection-keyset-{Guid.NewGuid():N}.db");
+        await using var connection = new SqliteConnection($"Data Source={path};Pooling=False");
+        await connection.OpenAsync();
+        var sql = new List<string>();
+        try
+        {
+            var options = new DbContextOptionsBuilder<SecretsSqliteDbContext>()
+                .UseSqlite(connection, sqlite => sqlite
+                    .MigrationsAssembly(typeof(SecretsSqliteDbContext).Assembly.GetName().Name)
+                    .MigrationsHistoryTable(SecretsEfModule.HistoryTableName))
+                .LogTo(sql.Add, [DbLoggerCategory.Database.Command.Name], LogLevel.Information)
+                .Options;
+            await using var context = new SecretsSqliteDbContext(options);
+            await EfDatabaseMigrator.ApplyAsync(context, SecretsSqliteDbContext.ExpectedProviderName);
+            for (var index = 0; index < 101; index++)
+                context.Secrets.Add(SecretDocument.FromSecret(CreateSecret("text", $"current.{index:D3}")).ToRecord());
+            await context.SaveChangesAsync();
+            context.ChangeTracker.Clear();
+            sql.Clear();
+
+            await SecretsProjectionContract.EnsureCurrentAsync(context);
+
+            var selects = sql
+                .Where(statement => statement.Contains("FROM \"elsa_secrets\"", StringComparison.Ordinal))
+                .ToArray();
+            Assert.Equal(2, selects.Length);
+            Assert.All(selects, statement => Assert.DoesNotContain("OFFSET", statement, StringComparison.OrdinalIgnoreCase));
+            Assert.Contains("\"TenantId\"", selects[1], StringComparison.Ordinal);
+            Assert.Contains("\"NormalizedName\"", selects[1], StringComparison.Ordinal);
+            Assert.Contains('>', selects[1]);
+        }
+        finally
+        {
+            await connection.CloseAsync();
+            File.Delete(path);
+            File.Delete($"{path}-wal");
+            File.Delete($"{path}-shm");
+        }
+    }
+
+    [Fact]
+    public async Task Damaged_payload_wraps_json_exception_with_row_identity_and_rolls_back()
+    {
+        const string leakedPayload = "PAYLOAD-LEAK-MARKER";
+        await using var fixture = await SqliteProjectionFixture.CreateAsync();
+        var good = SecretDocument.FromSecret(CreateSecret("\u019B", "a.legacy"));
+        fixture.Context.Secrets.Add((good with { TypeNameLookupKey = "\u019B" }).ToRecord());
+        var damaged = SecretDocument.FromSecret(CreateSecret("text", "z.damaged")).ToRecord();
+        damaged.Payload = $"{{\"not-json\" {leakedPayload}";
+        fixture.Context.Secrets.Add(damaged);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var startup = await Assert.ThrowsAsync<SecretsProjectionException>(
+            () => SecretsProjectionContract.EnsureCurrentAsync(fixture.Context));
+        AssertRowDiagnostic(startup, "tenant-a", "z.damaged", leakedPayload);
+        Assert.IsType<JsonException>(startup.InnerException);
+
+        var reindex = await Assert.ThrowsAsync<SecretsProjectionException>(
+            () => SecretsProjectionContract.ReindexAsync(fixture.Context));
+        AssertRowDiagnostic(reindex, "tenant-a", "z.damaged", leakedPayload);
+        Assert.IsType<JsonException>(reindex.InnerException);
+
+        fixture.Context.ChangeTracker.Clear();
+        var leftover = await fixture.Context.Secrets.AsNoTracking()
+            .SingleAsync(record => record.NormalizedName == "a.legacy");
+        Assert.Equal("\u019B", leftover.TypeNameLookupKey);
+    }
+
+    [Fact]
+    public async Task Identity_mismatch_rolls_back_batch_and_names_the_row()
+    {
+        await using var fixture = await SqliteProjectionFixture.CreateAsync();
+        var good = SecretDocument.FromSecret(CreateSecret("\u019B", "a.legacy"));
+        fixture.Context.Secrets.Add((good with { TypeNameLookupKey = "\u019B" }).ToRecord());
+        var mismatched = SecretDocument.FromSecret(CreateSecret("text", "embedded-name")).ToRecord();
+        mismatched.NormalizedName = "z.row-key";
+        fixture.Context.Secrets.Add(mismatched);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var startup = await Assert.ThrowsAsync<SecretsProjectionException>(
+            () => SecretsProjectionContract.EnsureCurrentAsync(fixture.Context));
+        AssertRowDiagnostic(startup, "tenant-a", "z.row-key", payloadFragment: "embedded-name");
+        Assert.Null(startup.InnerException);
+
+        var reindex = await Assert.ThrowsAsync<SecretsProjectionException>(
+            () => SecretsProjectionContract.ReindexAsync(fixture.Context));
+        AssertRowDiagnostic(reindex, "tenant-a", "z.row-key", payloadFragment: "embedded-name");
+        Assert.Null(reindex.InnerException);
+
+        fixture.Context.ChangeTracker.Clear();
+        var leftover = await fixture.Context.Secrets.AsNoTracking()
+            .SingleAsync(record => record.NormalizedName == "a.legacy");
+        Assert.Equal("\u019B", leftover.TypeNameLookupKey);
+        var corrupt = await fixture.Context.Secrets.AsNoTracking()
+            .SingleAsync(record => record.NormalizedName == "z.row-key");
+        Assert.Equal("embedded-name", SecretDocument.Parse(corrupt.Payload).NormalizedName);
+    }
+
+    [Fact]
+    public async Task Current_columns_with_legacy_payload_fail_closed_then_reindex_repairs_payload_copy()
+    {
+        await using var fixture = await SqliteProjectionFixture.CreateAsync();
+        var current = SecretDocument.FromSecret(CreateSecret("\u019B"));
+        Assert.Equal("\uA7DC", current.TypeNameLookupKey);
+        var record = current.ToRecord();
+        record.Payload = (current with { TypeNameLookupKey = "\u019B" }).ToPayload();
+        fixture.Context.Secrets.Add(record);
+        await fixture.Context.SaveChangesAsync();
+        var originalToken = record.ConcurrencyToken.ToArray();
+        fixture.Context.ChangeTracker.Clear();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => SecretsProjectionContract.EnsureCurrentAsync(fixture.Context));
+        Assert.IsNotType<SecretsProjectionException>(exception);
+        Assert.Contains("dual-migrate.sh apply", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("\u019B", exception.Message, StringComparison.Ordinal);
+
+        Assert.Equal(1, await SecretsProjectionContract.ReindexAsync(fixture.Context));
+        fixture.Context.ChangeTracker.Clear();
+        await SecretsProjectionContract.EnsureCurrentAsync(fixture.Context);
+
+        var repaired = await fixture.Context.Secrets.AsNoTracking().SingleAsync();
+        Assert.Equal("\uA7DC", repaired.TypeNameLookupKey);
+        Assert.Equal("\uA7DC", SecretDocument.Parse(repaired.Payload).TypeNameLookupKey);
+        Assert.Equal(originalToken, repaired.ConcurrencyToken);
+        Assert.Equal(0, await SecretsProjectionContract.ReindexAsync(fixture.Context));
+    }
+
+    private static void AssertRowDiagnostic(
+        SecretsProjectionException exception,
+        string tenantId,
+        string normalizedName,
+        string payloadFragment)
+    {
+        Assert.Equal(tenantId, exception.TenantId);
+        Assert.Equal(normalizedName, exception.NormalizedName);
+        Assert.Contains(tenantId, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(normalizedName, exception.Message, StringComparison.Ordinal);
+        Assert.Contains("dual-migrate.sh apply", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("not committed", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(payloadFragment, exception.Message, StringComparison.Ordinal);
+    }
+
+    private sealed class SqliteProjectionFixture : IAsyncDisposable
+    {
+        private readonly string _path;
+        private readonly SqliteConnection _connection;
+
+        private SqliteProjectionFixture(string path, SqliteConnection connection, SecretsSqliteDbContext context)
+        {
+            _path = path;
+            _connection = connection;
+            Context = context;
+        }
+
+        public SecretsSqliteDbContext Context { get; }
+
+        public static async Task<SqliteProjectionFixture> CreateAsync()
+        {
+            var path = Path.Join(Path.GetTempPath(), $"elsa-secrets-projection-{Guid.NewGuid():N}.db");
+            var connection = new SqliteConnection($"Data Source={path};Pooling=False");
+            await connection.OpenAsync();
+            var context = new SecretsSqliteDbContext(CreateOptions(connection));
+            await EfDatabaseMigrator.ApplyAsync(context, SecretsSqliteDbContext.ExpectedProviderName);
+            return new SqliteProjectionFixture(path, connection, context);
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await Context.DisposeAsync();
+            await _connection.DisposeAsync();
+            File.Delete(_path);
+            File.Delete($"{_path}-wal");
+            File.Delete($"{_path}-shm");
         }
     }
 

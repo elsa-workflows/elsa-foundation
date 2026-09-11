@@ -56,7 +56,8 @@ replace the other.
 The provider-specific `dual-migrate.sh apply` command follows `database update` with a managed
 reindex of any projection fields written by the pre-contract Phase 1 runtime casing API. The
 reindex derives fields from each stored `Secret` document, preserves its concurrency token, runs in
-bounded transactions, and is idempotent. Host startup scans in bounded read-only batches: it fails closed when a legacy row is
+bounded keyset transactions over `(TenantId, NormalizedName)`, and is idempotent. Host startup
+scans in bounded read-only keyset pages: it fails closed when a legacy row is
 found and tells the operator to rerun `apply`; it never rewrites secret rows implicitly.
 
 Use the deployment sequence in [tools/ef/README.md](../../../../../../tools/ef/README.md): back
