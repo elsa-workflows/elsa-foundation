@@ -1,7 +1,5 @@
-using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.Json.Serialization.Metadata;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Entities;
 using Elsa.Serialization.Core;
@@ -33,37 +31,14 @@ public static class GroundworkActivitiesDesignDocumentSerialization
         ArgumentNullException.ThrowIfNull(payloadSerializer);
         var options = new JsonSerializerOptions(payloadSerializer.GetOptions())
         {
-            TypeInfoResolver = new ExcludingTypeInfoResolver(
-                payloadSerializer.GetOptions().TypeInfoResolver,
-                new HashSet<string>(ExcludedMembers, StringComparer.OrdinalIgnoreCase))
+            TypeInfoResolver = new ExcludingJsonTypeInfoResolver(
+                ExcludedMembers,
+                payloadSerializer.GetOptions().TypeInfoResolver)
         };
         options.Converters.Add(new PayloadDelegatingConverterFactory(
             payloadSerializer,
             new HashSet<Type>(PayloadDelegatedTypes)));
         return options;
-    }
-
-    private sealed class ExcludingTypeInfoResolver(
-        IJsonTypeInfoResolver? source,
-        HashSet<string> excluded) : IJsonTypeInfoResolver
-    {
-        private readonly IJsonTypeInfoResolver inner = source ?? new DefaultJsonTypeInfoResolver();
-
-        public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
-        {
-            var typeInfo = inner.GetTypeInfo(type, options);
-            if (typeInfo?.Kind != JsonTypeInfoKind.Object)
-                return typeInfo;
-
-            foreach (var property in typeInfo.Properties)
-            {
-                if (excluded.Contains(property.Name) ||
-                    property.AttributeProvider is PropertyInfo member && excluded.Contains(member.Name))
-                    property.ShouldSerialize = static (_, _) => false;
-            }
-
-            return typeInfo;
-        }
     }
 
     private sealed class PayloadDelegatingConverterFactory(
