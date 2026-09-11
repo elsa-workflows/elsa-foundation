@@ -59,6 +59,18 @@ The job fails when any of these evidence classes regress:
 
 The job is container-free and does not create provider or restart evidence. SQLite, SQL Server, PostgreSQL, MongoDB, failure/restart, native-plan, temporary-oracle, and readiness claims remain owned by the fail-closed integration lanes; a row cannot advance to `evidence-complete` or `ready` merely because this fast gate passes.
 
+## Composition-conditional Secrets ownership (Phase 4 / #1631)
+
+`secrets-repository` remains in the 35-row Groundwork denominator and in `host-selection-all35`. That record is the **Groundwork-selected** composition: Workbench default still enables `SecretsGroundworkPersistence`, so the Groundwork Secrets source and its four-provider evidence stay required for that path.
+
+The row is **not** a universal prerequisite for an EF-selected Secrets shell. The ledger's `compositionConditionalEntries` (exactly one entry, `secrets-repository`) and the row's `compositionOwnership.universalPrerequisite=false` record that:
+
+- Groundwork Secrets provider-matrix and ledger-growth obligations apply when `SecretsGroundworkPersistence` is selected or changed.
+- An EF-selected shell (`SecretsEntityFrameworkCore`) uses `evidence/composition/host-selection-ef-secrets-pilot.json`, which covers the other 34 Groundwork rows and omits `secrets-repository` because the Groundwork `elsa-secrets` source is not registered.
+- EF Secrets proof lives in `tests/Elsa/Secrets/Persistence/EntityFrameworkCore/` and the independent `Secrets EF composition` CI job. It must not have to grow Groundwork Secrets MongoDB/SQL Server/PostgreSQL matrix evidence.
+
+Do not add runtime checkpoint, queue, placement, outbox, timer, or distributed-lock rows to `compositionConditionalEntries`. Schema `maxItems: 1` and `entryId` const `secrets-repository` are the ratchet that keeps this call-down narrow.
+
 ## Allowed outcomes and states
 
 **Durable outcomes**: `ordinary-document`, `operational-store`, `specialized-primitive`, `external-authority-adapter`, `explicit-exclusion`.

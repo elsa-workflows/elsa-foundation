@@ -19,7 +19,9 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
 /// Phase 3: a shell selects EF or Groundwork, never both. Default hosts stay on Groundwork
-/// (see <c>SecretsEfPersistencePilotArchitectureTests</c>). Configuration-driven cases
+/// (see <c>SecretsEfPersistencePilotArchitectureTests</c>). Phase 4 (#1631) keeps that
+/// either/or and makes Groundwork Secrets matrix/ledger obligations conditional on selecting
+/// Groundwork (see <c>SecretsPersistenceGateOwnershipTests</c>). Configuration-driven cases
 /// bind features from JSON the same way Workbench <c>shells.json</c> does, after the host
 /// catalog discovers feature assemblies. Create/resolve/restart journeys live in
 /// <see cref="SecretsPersistenceHostJourneyTests"/>.

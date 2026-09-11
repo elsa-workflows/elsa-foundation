@@ -12,7 +12,7 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore;
 [ShellFeature(
     name: "SecretsEntityFrameworkCore",
     DisplayName = "Secrets Entity Framework Core Persistence",
-    Description = "Opt-in EF Core replacement for the secrets repository. Groundwork remains the default; do not enable both in one shell."
+    Description = "Opt-in EF Core replacement for the secrets repository. Groundwork remains the default; do not enable both in one shell. Groundwork Secrets matrix/ledger obligations do not apply to this composition."
 )]
 public class SecretsEntityFrameworkCoreFeature : IShellFeature
 {

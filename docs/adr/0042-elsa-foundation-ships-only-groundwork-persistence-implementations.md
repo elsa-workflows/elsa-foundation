@@ -6,7 +6,9 @@
 > The architecture ratchet may exclude the proposed pilot path prefixes so that review can proceed;
 > that exclusion is not an accepted amendment of this ADR. Accepting 0072 is what would formally
 > narrow the first-party EF rule. Groundwork stays the default Secrets store; Workbench catalogs
-> the Secrets EF feature for opt-in composition and is not switched onto EF.
+> the Secrets EF feature for opt-in composition and is not switched onto EF. Phase 4 (#1631)
+> makes Groundwork Secrets matrix and ledger obligations conditional on selecting Groundwork
+> so they do not block the EF-selected composition; that is not an ADR 0072 acceptance.
 
 Status: accepted (2026-07-12; ratified through the maintainer grilling and PR #630 review; the targeted constitution amendment remains separately pending consensus and compliance evidence).
 

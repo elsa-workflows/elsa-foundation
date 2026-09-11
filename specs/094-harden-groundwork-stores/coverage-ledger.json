@@ -81,6 +81,18 @@
     "artifact": "evidence/composition/host-selection-all35.json",
     "artifactSha256": "a165286ae138c101966128200be6f81c3a499e7e32efdf8427537583be9ddd33"
   },
+  "compositionConditionalEntries": [
+    {
+      "entryId": "secrets-repository",
+      "requiredWhenFeature": "SecretsGroundworkPersistence",
+      "omittedWhenFeature": "SecretsEntityFrameworkCore",
+      "groundworkEvidenceOwner": "tests/Elsa/Secrets/Persistence/Groundwork/",
+      "alternateEvidenceOwner": "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/",
+      "alternateCompositionArtifact": "evidence/composition/host-selection-ef-secrets-pilot.json",
+      "alternateCompositionArtifactSha256": "eb10c80a5f253dd1d9efa5308f652878e00c205f15bc7ce7e43dea8d64c3b14b",
+      "pilotIssue": "#1631"
+    }
+  ],
   "entries": [
     {
       "id": "diagnostics-open-telemetry-store",
@@ -7822,7 +7834,14 @@
         "tests/Elsa/Secrets/Tests/GroundworkSecretRepositoryTests.cs",
         "tests/Elsa/Secrets/Tests/SecretRepositoryContractTests.cs",
         "tests/Elsa/Secrets/Tests/SecretsGroundworkDocumentFixtureTests.cs"
-      ]
+      ],
+      "compositionOwnership": {
+        "mode": "selected-feature",
+        "requiredWhenFeature": "SecretsGroundworkPersistence",
+        "omittedWhenFeature": "SecretsEntityFrameworkCore",
+        "universalPrerequisite": false,
+        "pilotIssue": "#1631"
+      }
     },
     {
       "id": "distributed-execution-placement",

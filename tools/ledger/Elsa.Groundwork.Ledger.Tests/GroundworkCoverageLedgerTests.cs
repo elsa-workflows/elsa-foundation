@@ -348,6 +348,64 @@ public sealed class GroundworkCoverageLedgerTests
     }
 
     [Fact]
+    public void Secrets_repository_is_composition_conditional_and_not_a_universal_prerequisite()
+    {
+        var ledger = ReadLedger();
+        var conditional = Assert.Single(ledger["compositionConditionalEntries"]!.AsArray()!.OfType<JsonObject>());
+        var ownership = Entry(ledger, "secrets-repository")["compositionOwnership"]!.AsObject();
+
+        Assert.Equal("secrets-repository", conditional["entryId"]!.GetValue<string>());
+        Assert.Equal("SecretsGroundworkPersistence", conditional["requiredWhenFeature"]!.GetValue<string>());
+        Assert.Equal("SecretsEntityFrameworkCore", conditional["omittedWhenFeature"]!.GetValue<string>());
+        Assert.Equal("tests/Elsa/Secrets/Persistence/Groundwork/", conditional["groundworkEvidenceOwner"]!.GetValue<string>());
+        Assert.Equal("tests/Elsa/Secrets/Persistence/EntityFrameworkCore/", conditional["alternateEvidenceOwner"]!.GetValue<string>());
+        Assert.False(ownership["universalPrerequisite"]!.GetValue<bool>());
+        Assert.Equal("#1631", ownership["pilotIssue"]!.GetValue<string>());
+        Assert.Contains("secrets-repository", ledger["compositionEvidence"]!["coveredEntryIds"]!.AsArray().Select(row => row!.GetValue<string>()));
+        Assert.DoesNotContain(
+            "runtime-checkpoint-commit",
+            ledger["compositionConditionalEntries"]!.AsArray().OfType<JsonObject>().Select(row => row["entryId"]!.GetValue<string>()));
+    }
+
+    [Fact]
+    public void Ef_selected_composition_omits_secrets_repository_and_keeps_the_other_34_rows()
+    {
+        var findings = CreateEvidenceValidator().Validate(ReadLedger());
+        Assert.Empty(findings);
+
+        var artifactPath = Path.Combine(
+            RepoRoot,
+            "specs/094-harden-groundwork-stores/evidence/composition/host-selection-ef-secrets-pilot.json");
+        var artifact = JsonNode.Parse(File.ReadAllText(artifactPath))!.AsObject();
+        var covered = artifact["coveredEntryIds"]!.AsArray().Select(row => row!.GetValue<string>()).ToArray();
+        var omitted = artifact["omittedEntryIds"]!.AsArray().Select(row => row!.GetValue<string>()).ToArray();
+
+        Assert.Equal(["secrets-repository"], omitted);
+        Assert.Equal(34, covered.Length);
+        Assert.DoesNotContain("secrets-repository", covered);
+        Assert.DoesNotContain("elsa-secrets", artifact["selectedFeatureIdentities"]!.AsArray().Select(row => row!.GetValue<string>()));
+        Assert.Equal(ExpectedEntryIds.Where(id => id != "secrets-repository"), covered);
+    }
+
+    [Fact]
+    public void Composition_conditional_rejects_digest_drift_and_ownership_mismatch()
+    {
+        var ledger = ReadLedger();
+        var conditional = Assert.Single(ledger["compositionConditionalEntries"]!.AsArray()!.OfType<JsonObject>());
+        conditional["alternateCompositionArtifactSha256"] = new string('0', 64);
+        Entry(ledger, "secrets-repository")["compositionOwnership"]!["universalPrerequisite"] = true;
+
+        var findings = CreateEvidenceValidator().Validate(ledger);
+
+        Assert.Contains(
+            "composition-conditional: coverage row 'secrets-repository' ownership does not match the Groundwork-selected call-down.",
+            findings);
+        Assert.Contains(
+            "composition-conditional: artifact 'evidence/composition/host-selection-ef-secrets-pilot.json' digest does not match its contents.",
+            findings);
+    }
+
+    [Fact]
     public void Composition_evidence_rejects_missing_rows_and_artifact_digest_drift()
     {
         var ledger = ReadLedger();
