@@ -82,6 +82,49 @@ public sealed class SecretsEfDualMigrateToolTests
         Assert.Contains("has-pending-model-changes --context SecretsSqliteDbContext", result.Output, StringComparison.Ordinal);
         Assert.Contains("has-pending-model-changes --context SecretsSqlServerDbContext", result.Output, StringComparison.Ordinal);
         Assert.Contains("has-pending-model-changes --context SecretsPostgreSqlDbContext", result.Output, StringComparison.Ordinal);
+        // Echo-only pending would still print the banners. The ef tool writes this line once per context.
+        Assert.Equal(3, CountOccurrences(result.Output, "No changes have been made to the model since the last migration."));
+    }
+
+    [SkippableFact]
+    public async Task Apply_all_skips_missing_non_sqlite_engines_unless_required()
+    {
+        Skip.IfNot(HasDotnetEf(), "dotnet-ef is not available.");
+        var path = Path.Join(Path.GetTempPath(), $"elsa-secrets-ef-dual-all-{Guid.NewGuid():N}.db");
+        try
+        {
+            var skipped = RunDualMigrate(
+                ["apply", "--all"],
+                extraEnv: new Dictionary<string, string?>
+                {
+                    ["ELSA_SECRETS_EF_SQLITE"] = $"Data Source={path}",
+                    ["ELSA_SECRETS_EF_SQLSERVER"] = null,
+                    ["ELSA_SECRETS_EF_POSTGRESQL"] = null,
+                    ["ELSA_SECRETS_EF_REQUIRE_ALL"] = null
+                });
+            Assert.True(skipped.ExitCode == 0, skipped.Describe());
+            Assert.Contains("skip SecretsSqlServerDbContext", skipped.Output, StringComparison.Ordinal);
+            Assert.Contains("skip SecretsPostgreSqlDbContext", skipped.Output, StringComparison.Ordinal);
+            Assert.True(await TableExistsAsync(path, SecretsEfModule.TableName));
+
+            var required = RunDualMigrate(
+                ["apply", "--all"],
+                extraEnv: new Dictionary<string, string?>
+                {
+                    ["ELSA_SECRETS_EF_SQLITE"] = $"Data Source={path}",
+                    ["ELSA_SECRETS_EF_SQLSERVER"] = null,
+                    ["ELSA_SECRETS_EF_POSTGRESQL"] = null,
+                    ["ELSA_SECRETS_EF_REQUIRE_ALL"] = "1"
+                });
+            Assert.Equal(1, required.ExitCode);
+            Assert.Contains("ELSA_SECRETS_EF_SQLSERVER is required", required.Error + required.Output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.Delete(path);
+            File.Delete($"{path}-wal");
+            File.Delete($"{path}-shm");
+        }
     }
 
     [SkippableFact]
@@ -231,6 +274,20 @@ public sealed class SecretsEfDualMigrateToolTests
         command.Parameters.AddWithValue("$name", table);
         var count = (long)(await command.ExecuteScalarAsync() ?? 0L);
         return count == 1;
+    }
+
+    private static int CountOccurrences(string text, string value)
+    {
+        var count = 0;
+        var start = 0;
+        while (true)
+        {
+            var index = text.IndexOf(value, start, StringComparison.Ordinal);
+            if (index < 0)
+                return count;
+            count++;
+            start = index + value.Length;
+        }
     }
 
     private static string RepoPath(params string[] segments)
