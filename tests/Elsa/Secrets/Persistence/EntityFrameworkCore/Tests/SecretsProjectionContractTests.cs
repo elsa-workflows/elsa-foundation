@@ -207,8 +207,6 @@ public sealed class SecretsProjectionContractTests
     {
         const string leakedPayload = "PAYLOAD-LEAK-MARKER";
         await using var fixture = await SqliteProjectionFixture.CreateAsync();
-        var good = SecretDocument.FromSecret(CreateSecret("\u019B", "a.legacy"));
-        fixture.Context.Secrets.Add((good with { TypeNameLookupKey = "\u019B" }).ToRecord());
         var damaged = SecretDocument.FromSecret(CreateSecret("text", "z.damaged")).ToRecord();
         damaged.Payload = $"{{\"not-json\" {leakedPayload}";
         fixture.Context.Secrets.Add(damaged);
@@ -219,6 +217,11 @@ public sealed class SecretsProjectionContractTests
             () => SecretsProjectionContract.EnsureCurrentAsync(fixture.Context));
         AssertRowDiagnostic(startup, "tenant-a", "z.damaged", leakedPayload);
         Assert.IsType<JsonException>(startup.InnerException);
+
+        var good = SecretDocument.FromSecret(CreateSecret("\u019B", "a.legacy"));
+        fixture.Context.Secrets.Add((good with { TypeNameLookupKey = "\u019B" }).ToRecord());
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
 
         var reindex = await Assert.ThrowsAsync<SecretsProjectionException>(
             () => SecretsProjectionContract.ReindexAsync(fixture.Context));
@@ -235,8 +238,6 @@ public sealed class SecretsProjectionContractTests
     public async Task Identity_mismatch_rolls_back_batch_and_names_the_row()
     {
         await using var fixture = await SqliteProjectionFixture.CreateAsync();
-        var good = SecretDocument.FromSecret(CreateSecret("\u019B", "a.legacy"));
-        fixture.Context.Secrets.Add((good with { TypeNameLookupKey = "\u019B" }).ToRecord());
         var mismatched = SecretDocument.FromSecret(CreateSecret("text", "embedded-name")).ToRecord();
         mismatched.NormalizedName = "z.row-key";
         fixture.Context.Secrets.Add(mismatched);
@@ -247,6 +248,11 @@ public sealed class SecretsProjectionContractTests
             () => SecretsProjectionContract.EnsureCurrentAsync(fixture.Context));
         AssertRowDiagnostic(startup, "tenant-a", "z.row-key", payloadFragment: "embedded-name");
         Assert.Null(startup.InnerException);
+
+        var good = SecretDocument.FromSecret(CreateSecret("\u019B", "a.legacy"));
+        fixture.Context.Secrets.Add((good with { TypeNameLookupKey = "\u019B" }).ToRecord());
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
 
         var reindex = await Assert.ThrowsAsync<SecretsProjectionException>(
             () => SecretsProjectionContract.ReindexAsync(fixture.Context));

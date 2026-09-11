@@ -124,7 +124,15 @@ public static class SecretsProjectionContract
         {
             stored = SecretDocument.Parse(record.Payload);
         }
-        catch (Exception exception) when (exception is JsonException or ArgumentNullException or InvalidOperationException)
+        catch (JsonException exception)
+        {
+            throw SecretsProjectionException.ForPayload(record, exception);
+        }
+        catch (ArgumentNullException exception)
+        {
+            throw SecretsProjectionException.ForPayload(record, exception);
+        }
+        catch (InvalidOperationException exception)
         {
             throw SecretsProjectionException.ForPayload(record, exception);
         }
