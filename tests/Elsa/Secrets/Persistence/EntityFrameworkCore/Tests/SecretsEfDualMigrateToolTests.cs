@@ -41,28 +41,23 @@ public sealed class SecretsEfDualMigrateToolTests
             StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void Explicit_sqlserver_apply_fails_when_the_connection_env_is_unset()
+    [Theory]
+    [InlineData("--sqlserver", "ELSA_SECRETS_EF_SQLSERVER", null)]
+    [InlineData("--sqlserver", "ELSA_SECRETS_EF_SQLSERVER", "   ")]
+    [InlineData("--postgresql", "ELSA_SECRETS_EF_POSTGRESQL", null)]
+    [InlineData("--postgresql", "ELSA_SECRETS_EF_POSTGRESQL", "\t")]
+    public void Explicit_engine_apply_fails_when_the_connection_env_is_unset_or_whitespace(
+        string selector,
+        string envName,
+        string? envValue)
     {
-        var result = RunDualMigrate(["apply", "--sqlserver"], extraEnv: new Dictionary<string, string?>
+        var result = RunDualMigrate(["apply", selector], extraEnv: new Dictionary<string, string?>
         {
-            ["ELSA_SECRETS_EF_SQLSERVER"] = null,
+            [envName] = envValue,
             ["ELSA_SECRETS_EF_REQUIRE_ALL"] = null
         });
         Assert.Equal(1, result.ExitCode);
-        Assert.Contains("ELSA_SECRETS_EF_SQLSERVER is required", result.Error + result.Output, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Explicit_postgresql_apply_fails_when_the_connection_env_is_unset()
-    {
-        var result = RunDualMigrate(["apply", "--postgresql"], extraEnv: new Dictionary<string, string?>
-        {
-            ["ELSA_SECRETS_EF_POSTGRESQL"] = null,
-            ["ELSA_SECRETS_EF_REQUIRE_ALL"] = null
-        });
-        Assert.Equal(1, result.ExitCode);
-        Assert.Contains("ELSA_SECRETS_EF_POSTGRESQL is required", result.Error + result.Output, StringComparison.Ordinal);
+        Assert.Contains($"{envName} is required", result.Error + result.Output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -84,6 +79,35 @@ public sealed class SecretsEfDualMigrateToolTests
         Assert.Contains("has-pending-model-changes --context SecretsPostgreSqlDbContext", result.Output, StringComparison.Ordinal);
         // Echo-only pending would still print the banners. The ef tool writes this line once per context.
         Assert.Equal(3, CountOccurrences(result.Output, "No changes have been made to the model since the last migration."));
+    }
+
+    [SkippableFact]
+    public async Task Default_all_runs_pending_then_applies_sqlite()
+    {
+        Skip.IfNot(HasDotnetEf(), "dotnet-ef is not available.");
+        var path = Path.Join(Path.GetTempPath(), $"elsa-secrets-ef-dual-default-{Guid.NewGuid():N}.db");
+        try
+        {
+            var result = RunDualMigrate(
+                [],
+                extraEnv: new Dictionary<string, string?>
+                {
+                    ["ELSA_SECRETS_EF_SQLITE"] = $"Data Source={path}",
+                    ["ELSA_SECRETS_EF_SQLSERVER"] = null,
+                    ["ELSA_SECRETS_EF_POSTGRESQL"] = null,
+                    ["ELSA_SECRETS_EF_REQUIRE_ALL"] = null
+                });
+            Assert.True(result.ExitCode == 0, result.Describe());
+            Assert.Equal(3, CountOccurrences(result.Output, "No changes have been made to the model since the last migration."));
+            Assert.Contains("skip SecretsSqlServerDbContext", result.Output, StringComparison.Ordinal);
+            Assert.True(await TableExistsAsync(path, SecretsEfModule.TableName));
+        }
+        finally
+        {
+            File.Delete(path);
+            File.Delete($"{path}-wal");
+            File.Delete($"{path}-shm");
+        }
     }
 
     [SkippableFact]

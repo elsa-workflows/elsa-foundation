@@ -1,4 +1,5 @@
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests;
@@ -63,6 +64,47 @@ public sealed class SecretsDesignTimeConnectionTests
         Assert.Equal("ELSA_SECRETS_EF_POSTGRESQL", SecretsDesignTimeConnection.PostgreSqlVariable);
     }
 
+    [Fact]
+    public void Sqlite_factory_uses_the_environment_connection()
+    {
+        using var _ = Override(SecretsDesignTimeConnection.SqliteVariable, "Data Source=factory-env.db");
+        using var context = new SecretsSqliteDesignTimeFactory().CreateDbContext([]);
+        Assert.Equal("Data Source=factory-env.db", context.Database.GetConnectionString());
+    }
+
+    [Fact]
+    public void SqlServer_factory_uses_the_environment_connection()
+    {
+        using var _ = Override(SecretsDesignTimeConnection.SqlServerVariable, "Server=ci;Database=elsa-secrets;");
+        using var context = new SecretsSqlServerDesignTimeFactory().CreateDbContext([]);
+        Assert.Equal("Server=ci;Database=elsa-secrets;", context.Database.GetConnectionString());
+    }
+
+    [Fact]
+    public void PostgreSql_factory_uses_the_environment_connection()
+    {
+        using var _ = Override(SecretsDesignTimeConnection.PostgreSqlVariable, "Host=ci;Database=elsa-secrets;");
+        using var context = new SecretsPostgreSqlDesignTimeFactory().CreateDbContext([]);
+        Assert.Equal("Host=ci;Database=elsa-secrets;", context.Database.GetConnectionString());
+    }
+
     private static string UniqueVariable() =>
         $"ELSA_SECRETS_EF_DESIGN_TIME_TEST_{Guid.NewGuid():N}";
+
+    private static EnvironmentOverride Override(string name, string value) => new(name, value);
+
+    private sealed class EnvironmentOverride : IDisposable
+    {
+        private readonly string _name;
+        private readonly string? _previous;
+
+        public EnvironmentOverride(string name, string value)
+        {
+            _name = name;
+            _previous = Environment.GetEnvironmentVariable(name);
+            Environment.SetEnvironmentVariable(name, value);
+        }
+
+        public void Dispose() => Environment.SetEnvironmentVariable(_name, _previous);
+    }
 }

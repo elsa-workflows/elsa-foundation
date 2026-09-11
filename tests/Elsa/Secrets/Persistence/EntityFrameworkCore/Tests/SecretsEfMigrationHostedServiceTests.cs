@@ -57,6 +57,16 @@ public sealed class SecretsEfMigrationHostedServiceTests
     }
 
     [Fact]
+    public async Task Validate_fails_on_hosted_start_when_migrations_are_pending()
+    {
+        await using var fixture = await MigrationHostFixture.CreateAsync(EfMigratePolicy.Validate);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            fixture.Lifecycle.StartAsync(CancellationToken.None));
+        Assert.Contains("pending migrations", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.False(await TableExistsAsync(fixture, SecretsEfModule.TableName));
+    }
+
+    [Fact]
     public async Task Validate_fails_again_when_retried_on_the_same_instance()
     {
         await using var fixture = await MigrationHostFixture.CreateAsync(EfMigratePolicy.Validate);

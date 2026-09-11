@@ -64,6 +64,13 @@ run_pending() {
 
 sqlite_temp_file=""
 
+# Factories treat whitespace as unset (SecretsDesignTimeConnection.Resolve). Match that
+# here so " " cannot skip the required-env error or write elsa-secrets-design.db.
+env_is_set() {
+  local value="${1:-}"
+  [[ -n "${value//[[:space:]]/}" ]]
+}
+
 cleanup_sqlite_temp() {
   if [[ -n "${sqlite_temp_file:-}" ]]; then
     rm -f "$sqlite_temp_file" "${sqlite_temp_file}-wal" "${sqlite_temp_file}-shm"
@@ -71,9 +78,10 @@ cleanup_sqlite_temp() {
 }
 
 ensure_sqlite_env() {
-  if [[ -n "${ELSA_SECRETS_EF_SQLITE:-}" ]]; then
+  if env_is_set "${ELSA_SECRETS_EF_SQLITE:-}"; then
     return
   fi
+  unset ELSA_SECRETS_EF_SQLITE
   # BSD mktemp requires the X's at the end of the template.
   sqlite_temp_file="$(mktemp "${TMPDIR:-/tmp}/elsa-secrets-ef.XXXXXX")"
   export ELSA_SECRETS_EF_SQLITE="Data Source=${sqlite_temp_file}"
@@ -90,7 +98,7 @@ apply_one() {
       ensure_sqlite_env
       ;;
     *)
-      if [[ -z "${!env_name:-}" ]]; then
+      if ! env_is_set "${!env_name:-}"; then
         # Skip-without-env is only for --all / default. An explicit engine must fail
         # so callers cannot treat a no-op as "this engine was updated".
         if [[ "$want" != "all" || "${ELSA_SECRETS_EF_REQUIRE_ALL:-}" == "1" ]]; then
