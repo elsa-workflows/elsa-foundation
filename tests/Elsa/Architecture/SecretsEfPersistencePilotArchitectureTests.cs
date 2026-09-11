@@ -92,6 +92,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEfMigrationHostedServiceTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEntityFrameworkCoreFeatureTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEntityFrameworkCoreShellReloadTests.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsPersistenceCompositionTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SqliteEfSecretRepositoryTests.cs"
     ];
 
@@ -154,16 +155,44 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
     }
 
     [Fact]
-    public void Workbench_does_not_reference_the_secrets_ef_module()
+    public void Workbench_catalogs_the_secrets_ef_module_without_enabling_it_by_default()
     {
         var workbench = XDocument.Load(RepoPath("src", "Apps", "Elsa.Workbench", "Elsa.Workbench.csproj"));
         var references = workbench.Descendants("ProjectReference")
             .Select(element => element.Attribute("Include")?.Value)
             .OfType<string>()
             .ToArray();
-        Assert.DoesNotContain(
+        Assert.Contains(
             references,
-            reference => reference.Contains("Secrets.Persistence.EntityFrameworkCore", StringComparison.OrdinalIgnoreCase));
+            reference => reference.Contains("Secrets.Persistence.EntityFrameworkCore", StringComparison.OrdinalIgnoreCase)
+                         && !reference.Contains("Tooling", StringComparison.OrdinalIgnoreCase));
+
+        foreach (var relative in new[]
+                 {
+                     "src/Apps/Elsa.Workbench/shells.json",
+                     "src/Apps/Elsa.Workbench/shells.baseline.json",
+                     "src/Apps/Elsa.Workbench/shells.Production.json",
+                     "docker/compose/elsa-workbench.shells.json"
+                 })
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(
+                File.ReadAllText(RepoPath(relative.Split('/'))),
+                new System.Text.Json.JsonDocumentOptions
+                {
+                    CommentHandling = System.Text.Json.JsonCommentHandling.Skip,
+                    AllowTrailingCommas = true
+                });
+            var features = document.RootElement
+                .GetProperty("CShells").GetProperty("Shells").GetProperty("default").GetProperty("Features");
+            Assert.False(
+                features.TryGetProperty("SecretsEntityFrameworkCore", out _),
+                $"{relative} must not enable SecretsEntityFrameworkCore; Groundwork remains the default.");
+            if (relative.EndsWith("shells.Production.json", StringComparison.Ordinal))
+                continue;
+            Assert.True(
+                features.TryGetProperty("SecretsGroundworkPersistence", out _),
+                $"{relative} must keep SecretsGroundworkPersistence as the default Secrets store.");
+        }
     }
 
     private static IReadOnlyList<string> PackageIncludes(string csproj) =>

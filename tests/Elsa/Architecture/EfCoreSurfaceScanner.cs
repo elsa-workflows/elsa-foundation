@@ -444,11 +444,13 @@ internal sealed class EfCoreSurfaceScanner
         var directEfReferences = inventoryProjects
             .SelectMany(project => project.ProjectReferences
                 .Where(efProjectPaths.Contains)
+                .Where(reference => !Adr0072SecretsEfPilot.IsSurfacePath(projectsByPath[reference].RelativePath))
                 .Select(reference => Pair(project.RelativePath, projectsByPath[reference].RelativePath)))
             .Sorted();
         var transitiveEfProjects = inventoryProjects
             .SelectMany(project => reachable[project.FullPath]
                 .Where(efProjectPaths.Contains)
+                .Where(reference => !Adr0072SecretsEfPilot.IsSurfacePath(projectsByPath[reference].RelativePath))
                 .Select(reference => Pair(project.RelativePath, projectsByPath[reference].RelativePath)))
             .Sorted();
         var transitiveEfPackages = inventoryProjects
@@ -521,6 +523,8 @@ internal sealed class EfCoreSurfaceScanner
     // exception; this prefix exclusion is a review-time ratchet carve-out, not an accepted
     // amendment. SecretsEfPersistencePilotArchitectureTests owns the exact package and source
     // inventory. Accepting 0072 is what would formally narrow 0042.
+    // Phase 3 catalog edges (Workbench -> the reviewed Secrets EF module) are excluded the same
+    // way: they are not a new first-party store, only a host composition reference to this tree.
     internal static class Adr0072SecretsEfPilot
     {
         public static readonly string[] SurfacePathPrefixes =

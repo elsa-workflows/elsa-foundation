@@ -98,7 +98,7 @@ not automatic constitution violations.
 |---|---|
 | Secrets core (contracts — manager, resolver, repository, store, type provider, audit sink) | [`src/Elsa/Secrets/Core/EXTENSION_POINTS.md`](src/Elsa/Secrets/Core/EXTENSION_POINTS.md) |
 | Secrets (default services + shell feature registration; service overrides for repository, value protector, audit sink, stores, type providers) | [`src/Elsa/Secrets/EXTENSION_POINTS.md`](src/Elsa/Secrets/EXTENSION_POINTS.md) |
-| Secrets Entity Framework Core persistence (opt-in ADR 0072 pilot; does not replace Groundwork default) | [`src/Elsa/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](src/Elsa/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
+| Secrets Entity Framework Core persistence (opt-in ADR 0072 pilot; Workbench catalogs it, default shells stay Groundwork) | [`src/Elsa/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](src/Elsa/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 
 ### Persistence
 

@@ -1,7 +1,8 @@
 # Elsa.Secrets.Persistence.EntityFrameworkCore
 
 Additive, opt-in EF Core persistence for Secrets. **Groundwork remains the default** durable
-store. This package does not switch Workbench and does not remove Groundwork.
+store. Workbench catalogs this feature so a host can enable it; default `shells.json` files
+keep `SecretsGroundworkPersistence` and do not enable this feature.
 
 ## Proposed ADR 0072 / ADR 0042
 
@@ -18,8 +19,15 @@ in the host or in `Tooling/` (design-time).
 
 ## Enable
 
-CShells feature `SecretsEntityFrameworkCore`. The host must already reference one EF
-provider package.
+CShells feature `SecretsEntityFrameworkCore`. The host must reference this module (Workbench
+already does, via `WithHostAssemblies()`) and exactly one EF provider package. Workbench
+already references `Microsoft.EntityFrameworkCore.Sqlite` for OpenIddict, so Sqlite Secrets
+EF works without another provider package. SqlServer / PostgreSql require the host to add
+that engine.
+
+**Default stays Groundwork.** In `shells.json` (or the docker compose overlay), replace
+`SecretsGroundworkPersistence` with `SecretsEntityFrameworkCore`. Do not leave both keys
+in the same shell — registration throws an `InvalidOperationException` naming both backends.
 
 ```json
 {
@@ -27,6 +35,8 @@ provider package.
     "Shells": {
       "default": {
         "Features": {
+          "Secrets": {},
+          "SecretsApi": {},
           "SecretsEntityFrameworkCore": {
             "Provider": "Sqlite",
             "ConnectionString": "Data Source=elsa-secrets.db",
@@ -39,13 +49,13 @@ provider package.
 }
 ```
 
+A Nuplane / Foundation Host feed composition is the same swap: load this package, enable
+the feature, omit `SecretsGroundworkPersistence`.
+
 `ConnectionName` looks up `ConnectionStrings:<name>` when `ConnectionString` is omitted.
 `MigratePolicy` is `AutoMigrate` (default) or `Validate` (fail if pending). Both policies
 run when the feature is enabled **and** when CShells reloads the shell (`IShellInitializer`).
 A plain host uses the same instance as `IHostedService`.
-
-Do not enable this feature together with `SecretsGroundworkPersistence` in the same shell:
-both replace `ISecretRepository`, and registration throws if the other backend is already selected.
 
 ## Schema
 

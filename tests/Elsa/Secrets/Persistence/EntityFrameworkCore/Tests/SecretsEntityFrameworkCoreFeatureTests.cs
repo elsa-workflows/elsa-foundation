@@ -39,6 +39,25 @@ public sealed class SecretsEntityFrameworkCoreFeatureTests
         Assert.Same(hosted, initializer);
     }
 
+    [Theory]
+    [InlineData("SqlServer", typeof(SecretsSqlServerDbContext))]
+    [InlineData("PostgreSql", typeof(SecretsPostgreSqlDbContext))]
+    public void Feature_binds_the_derived_context_for_the_selected_provider(string provider, Type contextType)
+    {
+        var feature = new SecretsEntityFrameworkCoreFeature
+        {
+            Provider = provider,
+            ConnectionString = "Host=unused;Database=unused"
+        };
+        var services = new ServiceCollection();
+        feature.ConfigureServices(services);
+        Assert.Contains(services, descriptor => descriptor.ServiceType == contextType);
+        Assert.Equal(SecretRepositoryBackend.EntityFramework, services
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<SecretRepositoryBackend>()
+            .Single().Name);
+    }
+
     [Fact]
     public void Registration_refuses_a_prior_groundwork_backend()
     {

@@ -1,7 +1,7 @@
 # Extension points — Secrets.Persistence.EntityFrameworkCore
 
 Additive EF Core replacement for `ISecretRepository`. Groundwork remains the default
-first-party store.
+first-party store. Workbench catalogs this feature; default shells do not enable it.
 
 ## Replacement contract
 
@@ -9,7 +9,7 @@ first-party store.
 
 ## Shell feature
 
-- **`SecretsEntityFrameworkCoreFeature`**: host-selected provider (`Sqlite` / `SqlServer` / `PostgreSql`), connection string or named connection, and `EfMigratePolicy`. The host must reference the matching EF provider engine; this package does not.
+- **`SecretsEntityFrameworkCoreFeature`**: host-selected provider (`Sqlite` / `SqlServer` / `PostgreSql`), connection string or named connection, and `EfMigratePolicy`. The host must reference the matching EF provider engine; this package does not. Enable this feature **or** `SecretsGroundworkPersistence`, never both.
 
 ## Lifecycle
 

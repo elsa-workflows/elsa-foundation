@@ -10,10 +10,12 @@ contracts in this package remain Groundwork-free. Register a Groundwork v2 provi
 repository as a scoped service. A named target can be supplied when a host routes Secrets to a dedicated store.
 
 An additive EF Core replacement lives in `Elsa.Secrets.Persistence.EntityFrameworkCore` (proposed
-[ADR 0072](https://github.com/elsa-workflows/elsa-foundation/pull/1623) pilot). It is opt-in, is not the
-Workbench default, and must not be enabled in the same shell as Groundwork Secrets persistence.
+[ADR 0072](https://github.com/elsa-workflows/elsa-foundation/pull/1623) pilot). It is opt-in. Workbench
+catalogs the feature so a shell can select it; committed default shells keep
+`SecretsGroundworkPersistence` and must not also enable `SecretsEntityFrameworkCore`.
 Both registrations record `SecretRepositoryBackend` and throw if the other backend is already selected.
-See [`Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Persistence/EntityFrameworkCore/EXTENSION_POINTS.md).
+See [`Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Persistence/EntityFrameworkCore/EXTENSION_POINTS.md)
+and that module's README for the exact feature swap.
 
 `SecretsGroundworkStorageSchema` declares the fresh `elsa-secrets` unit. Tenant id and normalized secret name form
 its key, searchable/filterable values are projected into typed columns, and the complete secret is retained in a
