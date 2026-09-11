@@ -173,12 +173,28 @@ public static class SecretsProjectionContract
     private static void ValidatePayloadStructure(string payload)
     {
         using var json = JsonDocument.Parse(payload);
-        if (!json.RootElement.TryGetProperty("secret", out var secret) || secret.ValueKind != JsonValueKind.Object)
+        if (!TryGetProperty(json.RootElement, "secret", out var secret) || secret.ValueKind != JsonValueKind.Object)
             throw new InvalidOperationException("The serialized document has no authoritative Secret object.");
-        if (!secret.TryGetProperty("versions", out var versions) || versions.ValueKind != JsonValueKind.Array)
+        if (!TryGetProperty(secret, "versions", out var versions) || versions.ValueKind != JsonValueKind.Array)
             throw new InvalidOperationException("The serialized Secret has no version array.");
         if (versions.EnumerateArray().Any(static version => version.ValueKind == JsonValueKind.Null))
             throw new InvalidOperationException("The serialized Secret contains an invalid version entry.");
+    }
+
+    private static bool TryGetProperty(JsonElement element, string propertyName, out JsonElement value)
+    {
+        value = default;
+        var found = false;
+        foreach (var property in element.EnumerateObject())
+        {
+            if (!string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            value = property.Value;
+            found = true;
+        }
+
+        return found;
     }
 
     private static bool Matches(SecretRecord record, SecretDocument stored, SecretDocument current) =>

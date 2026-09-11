@@ -237,6 +237,7 @@ public sealed class SecretsProjectionContractTests
 
     [Theory]
     [InlineData("missing-secret")]
+    [InlineData("null-secret")]
     [InlineData("missing-versions")]
     [InlineData("null-versions")]
     [InlineData("null-version")]
@@ -251,6 +252,9 @@ public sealed class SecretsProjectionContractTests
         switch (corruption)
         {
             case "missing-secret":
+                payload.Remove("secret");
+                break;
+            case "null-secret":
                 payload["secret"] = null;
                 break;
             case "missing-versions":
@@ -276,6 +280,25 @@ public sealed class SecretsProjectionContractTests
             () => SecretsProjectionContract.EnsureCurrentAsync(fixture.Context));
         AssertRowDiagnostic(exception, "tenant-a", $"invalid.{corruption}", leakedPayload);
         Assert.IsType<InvalidOperationException>(exception.InnerException);
+    }
+
+    [Fact]
+    public async Task Required_payload_properties_follow_case_insensitive_deserializer_semantics()
+    {
+        await using var fixture = await SqliteProjectionFixture.CreateAsync();
+        var record = SecretDocument.FromSecret(CreateSecret("text", "case-insensitive-shape")).ToRecord();
+        var payload = JsonNode.Parse(record.Payload)!.AsObject();
+        var serializedSecret = payload["secret"]!.AsObject();
+        serializedSecret["Versions"] = serializedSecret["versions"]!.DeepClone();
+        serializedSecret.Remove("versions");
+        payload["Secret"] = serializedSecret.DeepClone();
+        payload.Remove("secret");
+        record.Payload = payload.ToJsonString();
+        fixture.Context.Secrets.Add(record);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        await SecretsProjectionContract.EnsureCurrentAsync(fixture.Context);
     }
 
     [Fact]
