@@ -89,7 +89,7 @@
       "groundworkEvidenceOwner": "tests/Elsa/Secrets/Persistence/Groundwork/",
       "alternateEvidenceOwner": "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/",
       "alternateCompositionArtifact": "evidence/composition/host-selection-ef-secrets-pilot.json",
-      "alternateCompositionArtifactSha256": "eb10c80a5f253dd1d9efa5308f652878e00c205f15bc7ce7e43dea8d64c3b14b",
+      "alternateCompositionArtifactSha256": "5a5fb5675949df4a6ea719d376b2fc9985ec01128bd4ffe48272adc20facb534",
       "pilotIssue": "#1631"
     }
   ],

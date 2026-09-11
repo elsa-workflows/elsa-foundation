@@ -32,9 +32,10 @@ internal sealed class GroundworkCoverageLedgerValidator
         _schema = JsonNode.Parse(File.ReadAllText(schemaPath))?.AsObject()
                   ?? throw new InvalidOperationException($"Coverage-ledger schema '{schemaPath}' is empty.");
         _baselineEntryIds = baselineEntryIds.ToHashSet(StringComparer.Ordinal);
-        _compositionEvidenceRoot = Path.GetFullPath(
+        var specRoot = Path.GetFullPath(
             Directory.GetParent(Path.GetDirectoryName(Path.GetFullPath(schemaPath))!)!.FullName);
-        _evidenceRoot = Path.GetFullPath(evidenceRoot ?? _compositionEvidenceRoot);
+        _evidenceRoot = Path.GetFullPath(evidenceRoot ?? specRoot);
+        _compositionEvidenceRoot = _evidenceRoot;
     }
 
     public IReadOnlyList<string> Validate(JsonObject ledger)
@@ -256,7 +257,8 @@ internal sealed class GroundworkCoverageLedgerValidator
         if (ledger["compositionConditionalEntries"] is not JsonArray conditionalEntries)
             return;
 
-        var coveredByDefault = ledger["compositionEvidence"] is JsonObject defaultComposition
+        var defaultComposition = ledger["compositionEvidence"] as JsonObject;
+        var coveredByDefault = defaultComposition is not null
             ? StringArray(defaultComposition, "coveredEntryIds").ToHashSet(StringComparer.Ordinal)
             : new HashSet<string>(StringComparer.Ordinal);
         var omitted = new HashSet<string>(StringComparer.Ordinal);
@@ -296,7 +298,7 @@ internal sealed class GroundworkCoverageLedgerValidator
                     $"composition-conditional: Groundwork-selected composition must still cover '{entryId}' when SecretsGroundworkPersistence is selected.");
             }
 
-            ValidateAlternateCompositionArtifact(conditional, entriesById.Keys, omitted, findings);
+            ValidateAlternateCompositionArtifact(conditional, defaultComposition, entriesById.Keys, omitted, findings);
         }
 
         foreach (var (entryId, entry) in entriesById)
@@ -312,8 +314,12 @@ internal sealed class GroundworkCoverageLedgerValidator
         }
     }
 
+    private const string EfSelectedSecretsOmissionReason =
+        "SecretsEntityFrameworkCore is selected; the Groundwork elsa-secrets source is not registered. secrets-repository remains in the Groundwork-selected ALL35 composition.";
+
     private void ValidateAlternateCompositionArtifact(
         JsonObject conditional,
+        JsonObject? defaultComposition,
         IEnumerable<string> ledgerEntryIds,
         IReadOnlySet<string> omitted,
         ICollection<string> findings)
@@ -362,6 +368,13 @@ internal sealed class GroundworkCoverageLedgerValidator
             return;
         }
 
+        if (StringValue(artifact, "outcome") != "pass")
+            findings.Add("composition-conditional: EF-selected composition outcome must be 'pass'.");
+        if (StringValue(artifact, "evidenceId") != "host-selection-ef-secrets-pilot")
+            findings.Add("composition-conditional: EF-selected composition evidenceId must be 'host-selection-ef-secrets-pilot'.");
+        if (StringValue(artifact, "artifact") != relativePath)
+            findings.Add($"composition-conditional: artifact identity must be '{relativePath}'.");
+
         var covered = StringArray(artifact, "coveredEntryIds").ToHashSet(StringComparer.Ordinal);
         var artifactOmitted = StringArray(artifact, "omittedEntryIds").ToHashSet(StringComparer.Ordinal);
         if (!artifactOmitted.SetEquals(omitted))
@@ -389,6 +402,62 @@ internal sealed class GroundworkCoverageLedgerValidator
             findings.Add(
                 "composition-conditional: EF-selected composition must not select the Groundwork elsa-secrets source.");
         }
+
+        if (defaultComposition is not null)
+        {
+            var expectedSelected = StringArray(defaultComposition, "selectedFeatureIdentities")
+                .Where(identity => identity != "elsa-secrets")
+                .ToArray();
+            if (!selected.SequenceEqual(expectedSelected, StringComparer.Ordinal))
+            {
+                findings.Add(
+                    "composition-conditional: EF-selected composition must select exactly the Groundwork sources other than elsa-secrets.");
+            }
+
+            if (!JsonNode.DeepEquals(artifact["externalAuthorityLinks"], defaultComposition["externalAuthorityLinks"]))
+            {
+                findings.Add(
+                    "composition-conditional: EF-selected composition must preserve #644/#660 external authority links for the remaining rows.");
+            }
+
+            var expectedPayload = ExpectedEfSelectedCompositionPayload(conditional, defaultComposition, omitted);
+            if (!JsonNode.DeepEquals(expectedPayload, artifact))
+                findings.Add($"composition-conditional: artifact '{relativePath}' does not match its durable payload.");
+        }
+    }
+
+    private static JsonObject ExpectedEfSelectedCompositionPayload(
+        JsonObject conditional,
+        JsonObject defaultComposition,
+        IReadOnlySet<string> omitted)
+    {
+        var selected = new JsonArray();
+        foreach (var identity in StringArray(defaultComposition, "selectedFeatureIdentities")
+                     .Where(id => id != "elsa-secrets"))
+            selected.Add(identity);
+
+        var covered = new JsonArray();
+        foreach (var entryId in StringArray(defaultComposition, "coveredEntryIds").Where(id => !omitted.Contains(id)))
+            covered.Add(entryId);
+
+        var omittedArray = new JsonArray();
+        foreach (var entryId in omitted.Order(StringComparer.Ordinal))
+            omittedArray.Add(entryId);
+
+        return new JsonObject
+        {
+            ["schemaVersion"] = 1,
+            ["evidenceId"] = "host-selection-ef-secrets-pilot",
+            ["outcome"] = "pass",
+            ["selectedFeatureIdentities"] = selected,
+            ["coveredEntryIds"] = covered,
+            ["omittedEntryIds"] = omittedArray,
+            ["externalAuthorityLinks"] = defaultComposition["externalAuthorityLinks"]?.DeepClone(),
+            ["omissionReason"] = EfSelectedSecretsOmissionReason,
+            ["alternateEvidenceOwner"] = StringValue(conditional, "alternateEvidenceOwner"),
+            ["pilotIssue"] = StringValue(conditional, "pilotIssue"),
+            ["artifact"] = StringValue(conditional, "alternateCompositionArtifact")
+        };
     }
 
     private sealed record ExpectedExternalAuthority(
