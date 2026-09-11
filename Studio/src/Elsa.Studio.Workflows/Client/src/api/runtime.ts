@@ -140,6 +140,45 @@ export async function runExecutable(
   }));
 }
 
+/** The source kind Runtime records for an activation owned by the Publishing pipeline. */
+export const publishingActivationSourceKind = "publishing";
+
+/**
+ * The Runtime-owned state of one named workflow activation slot (`WorkflowActivationSlotView`; the slot
+ * ledger is Runtime's per the ADR 0043 ownership amendment). The view is deliberately unjoined:
+ * `activeActivationId` names a publication only when `sourceKind` is `publishing`; other sources, such as
+ * `artifact-reconciliation`, occupy the slot with activations that have no publication record.
+ */
+export interface WorkflowActivationSlot {
+  slotId: string;
+  definitionId: string;
+  slotName: string;
+  activeActivationId: string | null;
+  sourceKind: string | null;
+  sourceId: string | null;
+  revision: number;
+  updatedAt: string;
+}
+
+export async function listWorkflowActivationSlots(context: StudioEndpointContext, definitionId: string) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.runtime,
+    "workflow-activation-slots",
+    { definitionId });
+  const response = await context.http.getJson<{ items?: WorkflowActivationSlot[] }>(path);
+  return response.items ?? [];
+}
+
+export async function getWorkflowActivationSlot(context: StudioEndpointContext, definitionId: string, slotName: string) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.runtime,
+    "workflow-activation-slot",
+    { definitionId, slotName });
+  return context.http.getJson<WorkflowActivationSlot>(path);
+}
+
 export interface ListWorkflowInstancesRequest {
   status?: string;
   runKind?: string;

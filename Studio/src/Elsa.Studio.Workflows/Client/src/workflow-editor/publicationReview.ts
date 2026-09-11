@@ -1,4 +1,4 @@
-import type { Publication, PublicationIntent, PublicationPolicy, PublicationPreflight, PublicationSlot } from "../api/publishing";
+import { describeActivationSource, type Publication, type PublicationIntent, type PublicationPolicy, type PublicationPreflight, type PublicationSlot } from "../api/publishing";
 import type { PromotionPreflightAssessment } from "../api/workflowDesign";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDefinitionDetails, WorkflowDefinitionState, WorkflowDefinitionVersionDetails, WorkflowDraft } from "../workflowTypes";
 import { getChildSlots, readStructureDesignFacet, type ActivityCatalogLookup, type ChildSlot } from "../workflowAdapter";
@@ -34,6 +34,8 @@ export interface PublicationReviewState {
   changes: PublicationChangeSummary;
   policy: PublicationPolicy;
   slots: PublicationSlot[];
+  /** Set when the host cannot provide publication slots; occupancy and baselines are then unknown. */
+  slotsUnavailableReason?: string;
   slotVersions: Record<string, WorkflowDefinitionVersionDetails>;
   catalog: ActivityCatalogItem[];
   triggerActivityVersionIds: string[];
@@ -57,6 +59,7 @@ export function createPublicationReview(input: {
   slotVersions: Record<string, WorkflowDefinitionVersionDetails>;
   policy: PublicationPolicy | null;
   slots: PublicationSlot[];
+  slotsUnavailableReason?: string;
   catalog: ActivityCatalogItem[];
 }): PublicationReviewState {
   const policy = input.policy ?? {
@@ -94,6 +97,7 @@ export function createPublicationReview(input: {
       input.catalog),
     policy,
     slots: input.slots,
+    slotsUnavailableReason: input.slotsUnavailableReason,
     slotVersions: input.slotVersions,
     catalog: input.catalog,
     triggerActivityVersionIds,
@@ -106,13 +110,30 @@ export function createPublicationReview(input: {
   };
 }
 
+/**
+ * What occupies a Publication channel, as far as Studio can know. A channel is occupied exactly when its
+ * Runtime activation slot has an active activation; only a publishing-sourced one has a design version.
+ */
+export type PublicationChannelOccupancy =
+  | { kind: "unknown" }
+  | { kind: "empty"; slot?: PublicationSlot }
+  | { kind: "publication"; slot: PublicationSlot }
+  | { kind: "foreign"; slot: PublicationSlot };
+
+export function publicationChannelOccupancy(review: PublicationReviewState, slotName: string): PublicationChannelOccupancy {
+  if (review.slotsUnavailableReason) return { kind: "unknown" };
+  const slot = review.slots.find(candidate => candidate.slotName === slotName.trim());
+  if (!slot?.activeActivationId) return { kind: "empty", slot };
+  return slot.publication ? { kind: "publication", slot } : { kind: "foreign", slot };
+}
+
 export function publicationIntentForChannel(
   review: PublicationReviewState,
   slotName: string
 ): PublicationIntent {
   const normalizedSlot = slotName.trim();
-  const occupied = review.slots.some(slot =>
-    slot.slotName === normalizedSlot && Boolean(slot.publication || slot.activePublicationId));
+  const occupancy = publicationChannelOccupancy(review, normalizedSlot).kind;
+  const occupied = occupancy === "publication" || occupancy === "foreign";
   return publicationIntentFor(
     review,
     occupied || normalizedSlot === review.policy.defaultSlotName ? "replace" : "sideBySide",
@@ -121,12 +142,18 @@ export function publicationIntentForChannel(
 
 export function publicationBaselineFor(review: PublicationReviewState, slotName: string) {
   const normalizedSlot = slotName.trim();
-  const slot = review.slots.find(candidate => candidate.slotName === normalizedSlot);
-  const version = slot?.publication?.artifactVersion
-    ?? slot?.publication?.versionId
+  const occupancy = publicationChannelOccupancy(review, normalizedSlot);
+  // Never describe a channel Studio cannot see, or one served by another source, as having no publication.
+  if (occupancy.kind === "unknown") return `${normalizedSlot || "unnamed"} · current publication unknown`;
+  if (occupancy.kind === "foreign") {
+    return `${normalizedSlot} · occupied by ${describeActivationSource(occupancy.slot)} · not a Studio design version`;
+  }
+  const version = occupancy.slot?.publication?.artifactVersion
+    ?? occupancy.slot?.publication?.versionId
     ?? review.slotVersions[normalizedSlot]?.version;
-  return version
-    ? `${normalizedSlot} · ${version}`
+  if (version) return `${normalizedSlot} · ${version}`;
+  return occupancy.slot
+    ? `${normalizedSlot} · no active publication`
     : `New channel · ${normalizedSlot || "unnamed"} · no previous publication`;
 }
 
@@ -171,7 +198,10 @@ export function publicationPreflightMatchesIntent(
     && preflight.slotName === intent.slotName);
 }
 
-export function publicationChangesFor(review: PublicationReviewState, slotName: string) {
+/** Null when the channel's current state is not a Studio design version Studio can compare with. */
+export function publicationChangesFor(review: PublicationReviewState, slotName: string): PublicationChangeSummary | null {
+  const occupancy = publicationChannelOccupancy(review, slotName).kind;
+  if (occupancy === "unknown" || occupancy === "foreign") return null;
   return summarizePublicationChanges(
     review.slotVersions[slotName]?.state ?? null,
     review.draftSnapshot.state,

@@ -9,6 +9,7 @@ import {
 } from "../api/workflowDesign";
 import {
   getPublicationPolicy,
+  isPublishingActivation,
   listPublicationSlots,
   preflightPublicationSnapshot,
   publishVersion,
@@ -121,25 +122,29 @@ export function useWorkflowOperations({
     try {
       // Review preparation is deliberately read-only. The captured draft is not saved or promoted
       // until the author explicitly presses Publish.
-      const [policy, slots, versionCapabilities] = await Promise.all([
+      const [policy, slotsView, versionCapabilities] = await Promise.all([
         getPublicationPolicy(context, draftSnapshot.definitionId),
         listPublicationSlots(context, draftSnapshot.definitionId),
         getWorkflowPromotionVersionCapabilities(context)
       ]);
-      const occupiedSlots = slots.filter(slot => slot.activePublicationId || slot.publication);
-      const incompleteSlot = occupiedSlots.find(slot => !slot.publication?.versionId);
+      const slots = slotsView.available ? slotsView.slots : [];
+      // Only a publishing-sourced activation has a design version. A slot occupied by another activation
+      // source stays in the review as occupied, without a version, rather than failing the review.
+      const publishedSlots = slots.filter(isPublishingActivation);
+      const incompleteSlot = publishedSlots.find(slot => !slot.publication?.versionId);
       if (incompleteSlot) throw new Error(`Publication slot '${incompleteSlot.slotName}' did not include its active version.`);
       const versionsById = new Map<string, Awaited<ReturnType<typeof getWorkflowDefinitionVersion>>>();
-      await Promise.all(occupiedSlots.map(async slot => {
+      await Promise.all(publishedSlots.map(async slot => {
         const versionId = slot.publication!.versionId;
         if (!versionsById.has(versionId)) versionsById.set(versionId, await getWorkflowDefinitionVersion(context, versionId));
       }));
-      const slotVersions = Object.fromEntries(occupiedSlots.map(slot => [slot.slotName, versionsById.get(slot.publication!.versionId)!]));
+      const slotVersions = Object.fromEntries(publishedSlots.map(slot => [slot.slotName, versionsById.get(slot.publication!.versionId)!]));
       const review = createPublicationReview({
         draft: draftSnapshot,
         details,
         policy,
         slots,
+        slotsUnavailableReason: slotsView.available ? undefined : slotsView.reason,
         slotVersions,
         catalog
       });

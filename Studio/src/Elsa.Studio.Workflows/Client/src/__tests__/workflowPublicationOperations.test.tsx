@@ -4,9 +4,12 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { clearApiCapabilityCache } from "../api/capabilities";
-import type { PublicationIntent } from "../api/publishing";
+import { activationSlotReadsUnavailableReason, type Publication, type PublicationIntent } from "../api/publishing";
+import type { WorkflowActivationSlot } from "../api/runtime";
 import type { WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
+import { publicationBaselineFor, publicationChangesFor, publicationIntentForChannel } from "../workflow-editor/publicationReview";
 import { useWorkflowOperations } from "../workflow-editor/useWorkflowOperations";
+import { activationSlot, importedActivationSlot, publicationRecord } from "./fixtures/publicationSlots";
 
 type Operations = ReturnType<typeof useWorkflowOperations>;
 
@@ -54,6 +57,78 @@ describe("workflow publication operations", () => {
     expect(fixture.setAutosavePaused).toHaveBeenNthCalledWith(1, true);
     expect(fixture.setAutosavePaused).toHaveBeenLastCalledWith(false);
     expect(fixture.setError.mock.calls.at(-1)?.[0]).toContain("Could not prepare a trustworthy publication review");
+  });
+
+  it("joins Runtime activation slots to their publication records before building the review", async () => {
+    const fixture = renderOperations();
+
+    await prepare(fixture);
+
+    expect(fixture.getJson.mock.calls.map(([url]) => url)).toEqual(expect.arrayContaining([
+      "/runtime/workflows/activation-slots/definition-1",
+      "/publishing/publications/publication-1",
+      "/design/workflows/versions/version-1"
+    ]));
+    expect(fixture.current().publicationReview).toMatchObject({
+      slots: [{
+        slotName: "default",
+        activeActivationId: "publication-1",
+        sourceKind: "publishing",
+        publication: { publicationId: "publication-1", versionId: "version-1" }
+      }],
+      slotVersions: { default: { id: "version-1" } },
+      intent: { action: "replace", slotName: "default", expectedPublicationId: "publication-1" }
+    });
+  });
+
+  it("keeps a slot occupied by another activation source in the review without a design version", async () => {
+    const fixture = renderOperations({
+      slots: [publishedSlot(), importedActivationSlot()]
+    });
+
+    await prepare(fixture);
+    const review = fixture.current().publicationReview!;
+
+    expect(fixture.getJson.mock.calls.map(([url]) => url)).not.toContain("/publishing/publications/activation-imported");
+    expect(review.slots.find(slot => slot.slotName === "imported")).toMatchObject({ activeActivationId: "activation-imported", publication: null });
+    expect(review.slotVersions).not.toHaveProperty("imported");
+    expect(publicationIntentForChannel(review, "imported")).toEqual({ action: "replace", slotName: "imported" });
+    expect(publicationBaselineFor(review, "imported")).toBe("imported · occupied by artifact-reconciliation (orders-bundle) · not a Studio design version");
+    expect(publicationChangesFor(review, "imported")).toBeNull();
+  });
+
+  it("fails closed when the publication record behind a publishing-sourced slot cannot be read", async () => {
+    const fixture = renderOperations({ publications: [] });
+
+    await fixture.current().preparePublication();
+    await flushUpdates();
+
+    expect(fixture.current().publicationReview).toBeNull();
+    expect(fixture.postJson).not.toHaveBeenCalled();
+    expect(fixture.getJson.mock.calls.map(([url]) => url)).not.toContain("/design/workflows/versions/version-1");
+    expect(fixture.setAutosavePaused).toHaveBeenLastCalledWith(false);
+    expect(fixture.setError.mock.calls.at(-1)?.[0]).toContain("Could not prepare a trustworthy publication review");
+    expect(fixture.setError.mock.calls.at(-1)?.[0]).toContain(
+      "Publication slot 'default' is occupied by publication 'publication-1', but its publication record could not be read");
+  });
+
+  it("opens an honest unavailable review, never the legacy slot route, when Runtime slot reads are not advertised", async () => {
+    const fixture = renderOperations({ legacySlotContract: true });
+
+    await prepare(fixture);
+    const review = fixture.current().publicationReview!;
+
+    expect(fixture.getJson.mock.calls.map(([url]) => url).filter(url => url.includes("slots") || url.includes("/publications/"))).toEqual([]);
+    expect(review).toMatchObject({
+      phase: "review",
+      slots: [],
+      slotsUnavailableReason: activationSlotReadsUnavailableReason,
+      intent: { action: "replace", slotName: "default" },
+      preflight: { preflightToken: "preflight-token-1" }
+    });
+    expect(review.intent).not.toHaveProperty("expectedPublicationId");
+    expect(publicationBaselineFor(review, "default")).toBe("default · current publication unknown");
+    expect(publicationChangesFor(review, "default")).toBeNull();
   });
 
   it("leaves all workflow state unchanged when authoritative snapshot preflight fails", async () => {
@@ -476,20 +551,31 @@ function renderOperations(options: {
   delayExactVersion?: string;
   saveDelayMs?: number;
   resolveSideBySideAsReplace?: boolean;
+  slots?: WorkflowActivationSlot[];
+  publications?: Publication[];
+  legacySlotContract?: boolean;
 } = {}) {
   const sourceDraft = options.draft ?? draft();
+  const slots = options.slots ?? [publishedSlot()];
+  const publications = options.publications ?? [publishedRecord()];
   const mutationOrder: string[] = [];
   let publishAttempts = 0;
   let promoteAttempts = 0;
   let snapshotPreflightAttempts = 0;
   let failNextVersionPreflight = false;
   const getJson = vi.fn(async (url: string) => {
-    if (url === "/capabilities") return capabilitiesFor(options.exactVersionSupport ?? false);
+    if (url === "/capabilities") return capabilitiesFor(options.exactVersionSupport ?? false, options.legacySlotContract ?? false);
     if (url === "/publishing/workflows/definition-1/policy") {
       if (options.failPolicyLoad) throw new Error("policy unavailable");
       return { defaultAction: "replace", defaultSlotName: "default", source: "host" };
     }
-    if (url === "/publishing/workflows/definition-1/slots") return { items: [slot()] };
+    if (url === "/runtime/workflows/activation-slots/definition-1") return { items: slots };
+    if (url.startsWith("/publishing/publications/")) {
+      const publicationId = decodeURIComponent(url.slice("/publishing/publications/".length));
+      const record = publications.find(candidate => candidate.publicationId === publicationId);
+      if (!record) throw Object.assign(new Error(`Publication '${publicationId}' was not found.`), { status: 404 });
+      return record;
+    }
     if (url === "/design/workflows/versions/version-1") return { id: "version-1", version: "1.0.0", definition: details().definition, state: sourceDraft.state, layout: [] };
     throw new Error(`Unexpected GET ${url}`);
   });
@@ -669,25 +755,23 @@ function details(): WorkflowDefinitionDetails {
   };
 }
 
-function slot() {
-  return {
-    definitionId: "definition-1",
-    slotName: "default",
-    status: "active",
-    publication: {
-      publicationId: "publication-1",
-      definitionId: "definition-1",
-      versionId: "version-1",
-      artifactId: "artifact-1",
-      artifactVersion: "1.0.0",
-      slotName: "default",
-      sourceReferenceId: "reference-1",
-      status: "active"
-    }
-  };
+// The default slot is occupied by publication-1, which published design version-1.
+function publishedSlot() {
+  return activationSlot("default", { activeActivationId: "publication-1", sourceKind: "publishing" });
 }
 
-function capabilitiesFor(exactVersionSupport: boolean) {
+function publishedRecord() {
+  return publicationRecord("default", {
+    publicationId: "publication-1",
+    versionId: "version-1",
+    artifactId: "artifact-1",
+    sourceReferenceId: "reference-1"
+  });
+}
+
+// The current backend contract: slot reads are Runtime-owned and joined through `publication-record`.
+// The legacy contract predates elsa-foundation#1498 and advertises only the removed Publishing relation.
+function capabilitiesFor(exactVersionSupport: boolean, legacySlotContract: boolean) {
   return {
     capabilities: [
     {
@@ -715,10 +799,20 @@ function capabilitiesFor(exactVersionSupport: boolean) {
       contractVersion: "1",
       links: [
         { rel: "publication-policy", href: "publishing/workflows/{definitionId}/policy", templated: true },
-        { rel: "publication-slots", href: "publishing/workflows/{definitionId}/slots", templated: true },
+        legacySlotContract
+          ? { rel: "publication-slots", href: "publishing/workflows/{definitionId}/slots", templated: true }
+          : { rel: "publication-record", href: "publishing/publications/{publicationId}", templated: true },
         { rel: "publication-snapshot-preflight", href: "publishing/workflows/preflight" },
         { rel: "publication-preflight", href: "publishing/workflows/{versionId}/preflight", templated: true },
         { rel: "workflow-publish", href: "publishing/workflows/{versionId}/publish", templated: true }
+      ]
+    },
+    {
+      id: "elsa.api.runtime",
+      contractVersion: "1",
+      links: legacySlotContract ? [] : [
+        { rel: "workflow-activation-slots", href: "runtime/workflows/activation-slots/{definitionId}", templated: true },
+        { rel: "workflow-activation-slot", href: "runtime/workflows/activation-slots/{definitionId}/{slotName}", templated: true }
       ]
     }
     ]

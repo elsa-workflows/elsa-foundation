@@ -9,7 +9,19 @@ import type {
   WorkflowDefinitionState,
   WorkflowTestRunView
 } from "../workflowTypes";
-import { capabilityIds, resolveCapabilityLink } from "./capabilities";
+import {
+  ApiCapabilityUnavailableError,
+  ApiCapabilityVersionMismatchError,
+  capabilityIds,
+  hasCapabilityLink,
+  resolveCapabilityLink
+} from "./capabilities";
+import {
+  getWorkflowActivationSlot,
+  listWorkflowActivationSlots,
+  publishingActivationSourceKind,
+  type WorkflowActivationSlot
+} from "./runtime";
 import { createWorkflowExecutionRequestInit } from "../workflowRunInputs";
 
 export interface PublicationIntent {
@@ -276,7 +288,7 @@ export interface Publication {
   definitionVersionId?: string;
   artifactId: string;
   slotName: string;
-  sourceReferenceId: string;
+  sourceReferenceId: string | null;
   status: PublicationStatus;
   createdAt?: string;
   activatedAt?: string | null;
@@ -287,16 +299,29 @@ export interface Publication {
   nodeCount?: number;
 }
 
-export interface PublicationSlot {
-  slotId?: string;
-  definitionId: string;
-  slotName: string;
-  activePublicationId?: string | null;
-  revision?: number;
-  updatedAt?: string;
-  status: PublicationStatus | null;
-  publication?: Publication | null;
+/**
+ * A Runtime activation slot joined to the publication record behind its active activation. `publication`
+ * is set exactly when the slot is occupied by a publishing-sourced activation; an empty slot and a slot
+ * occupied by another activation source (for example artifact reconciliation) carry `null`. A slot is
+ * occupied when `activeActivationId` is set, whatever its source.
+ */
+export interface PublicationSlot extends WorkflowActivationSlot {
+  publication: Publication | null;
 }
+
+/**
+ * The publication slots of one workflow, or an honest account of why the host cannot provide them.
+ * Studio never substitutes a guessed route or an empty list for an unadvertised read.
+ */
+export type PublicationSlotsView =
+  | { available: true; slots: PublicationSlot[] }
+  | { available: false; reason: string };
+
+export const activationSlotReadsUnavailableReason =
+  "This backend does not advertise workflow activation slot reads. No fallback is used, so Studio cannot tell which publication channels are occupied or which versions they serve.";
+
+export const publicationRecordReadsUnavailableReason =
+  "This backend does not advertise publication record reads. No fallback is used, so Studio cannot resolve the versions behind occupied publication channels.";
 
 export interface PublicationPolicy {
   definitionId?: string;
@@ -433,34 +458,86 @@ export async function cancelActivityDraftTestRun(
   return context.http.postJson<ActivityDraftTestRunView>(path, {});
 }
 
-async function publicationSlotsPath(context: StudioEndpointContext, definitionId: string) {
-  return resolveCapabilityLink(
+/** Reads one publication journal record. A 404 means the id names no record, never "no version". */
+export async function getPublicationRecord(context: StudioEndpointContext, publicationId: string) {
+  const path = await resolveCapabilityLink(
     context,
     capabilityIds.publishing,
-    "publication-slots",
-    { definitionId });
+    "publication-record",
+    { publicationId });
+  return context.http.getJson<Publication>(path);
 }
 
-export async function listPublicationSlots(context: StudioEndpointContext, definitionId: string) {
-  const response = await context.http.getJson<{ items: PublicationSlot[] }>(
-    await publicationSlotsPath(context, definitionId));
-  return response.items ?? [];
+export function isPublishingActivation(slot: WorkflowActivationSlot) {
+  return Boolean(slot.activeActivationId) && slot.sourceKind === publishingActivationSourceKind;
+}
+
+/** Names the activation source occupying a slot, for slots whose activation is not a publication. */
+export function describeActivationSource(slot: WorkflowActivationSlot) {
+  const kind = slot.sourceKind ?? "an unidentified activation source";
+  return slot.sourceId ? `${kind} (${slot.sourceId})` : kind;
+}
+
+/**
+ * Lists the Runtime activation slots of a workflow and joins every publishing-sourced activation to its
+ * publication record. Slot reads that the host does not advertise resolve to an unavailable view; a
+ * publication record that is advertised but cannot be read rejects, because a slot without its version
+ * cannot back a trustworthy review.
+ */
+export async function listPublicationSlots(context: StudioEndpointContext, definitionId: string): Promise<PublicationSlotsView> {
+  if (!(await hasCapabilityLink(context, capabilityIds.runtime, "workflow-activation-slots"))) {
+    return { available: false, reason: activationSlotReadsUnavailableReason };
+  }
+  const slots = await listWorkflowActivationSlots(context, definitionId);
+  if (slots.some(isPublishingActivation) && !(await hasCapabilityLink(context, capabilityIds.publishing, "publication-record"))) {
+    return { available: false, reason: publicationRecordReadsUnavailableReason };
+  }
+  return { available: true, slots: await Promise.all(slots.map(slot => joinPublicationRecord(context, slot))) };
 }
 
 export async function getPublicationSlot(context: StudioEndpointContext, definitionId: string, slotName: string) {
-  return context.http.getJson<PublicationSlot>(
-    `${await publicationSlotsPath(context, definitionId)}/${encodeURIComponent(slotName)}`);
+  return joinPublicationRecord(context, await getWorkflowActivationSlot(context, definitionId, slotName));
 }
 
+async function joinPublicationRecord(context: StudioEndpointContext, slot: WorkflowActivationSlot): Promise<PublicationSlot> {
+  if (!isPublishingActivation(slot)) return { ...slot, publication: null };
+  try {
+    return { ...slot, publication: await getPublicationRecord(context, slot.activeActivationId!) };
+  } catch (error) {
+    if (error instanceof ApiCapabilityUnavailableError || error instanceof ApiCapabilityVersionMismatchError) throw error;
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Publication slot '${slot.slotName}' is occupied by publication '${slot.activeActivationId}', but its publication record could not be read: ${reason}`,
+      { cause: error });
+  }
+}
+
+/** Which slot lifecycle commands the host advertises; Studio offers only those, never a guessed route. */
+export async function getPublicationSlotLifecycleSupport(context: StudioEndpointContext) {
+  const [unpublish, restore] = await Promise.all([
+    hasCapabilityLink(context, capabilityIds.publishing, "publication-slot-unpublish"),
+    hasCapabilityLink(context, capabilityIds.publishing, "publication-slot-restore")
+  ]);
+  return { unpublish, restore };
+}
+
+// The lifecycle responses carry Publishing's own slot shape; Studio reloads the joined slot view instead.
 export async function unpublishSlot(context: StudioEndpointContext, definitionId: string, slotName: string) {
-  return context.http.deleteJson<PublicationSlot>(
-    `${await publicationSlotsPath(context, definitionId)}/${encodeURIComponent(slotName)}`);
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.publishing,
+    "publication-slot-unpublish",
+    { definitionId, slotName });
+  return context.http.deleteJson<unknown>(path);
 }
 
 export async function restorePublicationSlot(context: StudioEndpointContext, definitionId: string, slotName: string) {
-  return context.http.postJson<PublicationSlot>(
-    `${await publicationSlotsPath(context, definitionId)}/${encodeURIComponent(slotName)}/restore`,
-    {});
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.publishing,
+    "publication-slot-restore",
+    { definitionId, slotName });
+  return context.http.postJson<unknown>(path, {});
 }
 
 export async function getPublicationPolicy(context: StudioEndpointContext, definitionId: string) {

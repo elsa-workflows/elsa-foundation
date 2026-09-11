@@ -6,8 +6,8 @@ import type { WorkflowExecutableSummary, WorkflowTestRunView } from "../workflow
 
 // Resolves the draft-equivalence signal for the latest test run: the published executable of this
 // definition that shares the test run's artifact id, when one exists. Uses the imperative load pattern
-// the designer tree relies on (no QueryClientProvider there). The signal is advisory — a failed
-// executables load resolves to "no signal", never to an error surface.
+// the designer tree relies on (no QueryClientProvider there). The signal is advisory — a failed load,
+// or a host that cannot provide publication slots, resolves to "no signal", never to an error surface.
 export function useDraftEquivalence(
   context: StudioEndpointContext,
   definitionId: string,
@@ -22,7 +22,8 @@ export function useDraftEquivalence(
 
     let cancelled = false;
     Promise.all([listExecutables(context, { scope: "all", includeRetired: true }), listPublicationSlots(context, definitionId)]).then(
-      ([executables, slots]) => {
+      ([executables, slotsView]) => {
+        const slots = slotsView.available ? slotsView.slots : [];
         const publication = slots.map(slot => slot.publication).find(candidate =>
           candidate?.artifactId === artifactId && candidate.status === "active");
         const executable = publication ? executables.find(candidate => candidate.artifactId === publication.artifactId) : null;

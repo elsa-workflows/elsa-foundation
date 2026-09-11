@@ -6,6 +6,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { authSessionEndedEvent, type ElsaStudioModuleApi, type StudioContributionRegistry, type StudioSlotDefinition } from "@elsa-workflows/studio-sdk";
 import { register, type WorkflowDesignerPanelContext } from "../module";
 import { clearApiCapabilityCache } from "../api/capabilities";
+import { activationSlotReadsUnavailableReason, type Publication } from "../api/publishing";
+import type { WorkflowActivationSlot } from "../api/runtime";
+import { activationSlot, deactivatedActivationSlot, importedActivationSlot, publicationRecord } from "./fixtures/publicationSlots";
 import { createEnumWorkflowRunInputEditorContribution } from "../workflowRunInputEditorContributions";
 import { isConnectEndOverExistingWorkflowNode, resolveConnectEndSource } from "../workflow-editor/connectEndHelpers";
 import { workflowInspectorCollapsedStorageKey, workflowInspectorWidthStorageKey, workflowSidePanelMaximizedStorageKey } from "../workflow-editor/constants";
@@ -483,7 +486,8 @@ describe("workflows module", () => {
   it("opens the workflow editor when a definition row is clicked", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes("/publishing/workflows/definition-1/slots")) return response({ items: [publicationSlot("artifact-current")] });
+      const slotResponse = publicationSlotResponse(url, [publishedSlot("artifact-current")]);
+      if (slotResponse) return slotResponse;
       if (url.includes("/activities")) return response({ activities: [] });
       if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: null, versions: [] });
       return response({ items: [definition()] });
@@ -502,7 +506,8 @@ describe("workflows module", () => {
   it("preserves definition browse context while opening a workflow", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes("/publishing/workflows/definition-1/slots")) return response({ items: [publicationSlot("artifact-current")] });
+      const slotResponse = publicationSlotResponse(url, [publishedSlot("artifact-current")]);
+      if (slotResponse) return slotResponse;
       if (url.includes("/activities")) return response({ activities: [] });
       if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: null, versions: [] });
       return response({ items: [definition()] });
@@ -833,10 +838,11 @@ describe("workflows module", () => {
         const version = workflowDefinitionVersionDetails();
         return response({ ...version, state: { ...version.state, inputs: [workflowInput()] } });
       }
-      if (url.includes("/publishing/workflows/definition-1/slots")) return response({ items: [
-        publicationSlot("artifact-current"),
-        publicationSlot("artifact-no-live", { slotName: "canary" })
-      ] });
+      const slotResponse = publicationSlotResponse(url, [
+        publishedSlot("artifact-current"),
+        publishedSlot("artifact-no-live", "canary")
+      ]);
+      if (slotResponse) return slotResponse;
       if (url.includes("/runtime/workflows/executables")) return response([
         executable({
           artifactId: "artifact-current",
@@ -1391,29 +1397,11 @@ describe("workflows module", () => {
   });
 
   it("scopes an artifact delete to the definition when deleting from the editor's artifacts panel", async () => {
-    vi.stubGlobal("ResizeObserver", class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    });
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (init?.method === "DELETE") return response(null, 204);
-      if (url.includes("/publishing/workflows/definition-1/slots")) return response({ items: [publicationSlot("artifact-current")] });
-      if (url.includes("/runtime/workflows/executables")) return response([
-        executable({ artifactId: "artifact-current", definitionId: "definition-1" })
-      ]);
-      if (url.includes("/activities")) return response({ activities: [] });
-      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: workflowDraft(), versions: [] });
-      return response({ items: [definition()] });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    const { api, container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+    const { api, container, fetchMock, unmount } = await renderArtifactsPanel(
+      [publishedSlot("artifact-current")],
+      publicationSlotLifecycleCapabilities());
 
-    await waitForText(container, "Autosave");
-    await click(buttonByText(container, "Artifacts"));
     await waitForText(container, "artifact-current");
-
     await click(buttonByLabel(container, "Unpublish publication slot default"));
     await flushPromises();
 
@@ -1422,6 +1410,90 @@ describe("workflows module", () => {
       "https://server.example/publishing/workflows/definition-1/slots/default",
       expect.objectContaining({ method: "DELETE" })
     );
+
+    await unmount();
+  });
+
+  it("restores an inactive publication slot through the advertised restore relation", async () => {
+    const { container, fetchMock, unmount } = await renderArtifactsPanel(
+      [{ view: deactivatedActivationSlot("default") }],
+      publicationSlotLifecycleCapabilities());
+
+    await waitForText(container, "No active publication");
+    expect(container.textContent).toContain("inactive");
+    await click(buttonByLabel(container, "Restore publication slot default"));
+    await flushPromises();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/publishing/workflows/definition-1/slots/default/restore",
+      expect.objectContaining({ method: "POST" })
+    );
+
+    await unmount();
+  });
+
+  it("surfaces the backend's 404 when a deactivated slot has no retired publication to restore", async () => {
+    const { container, fetchMock, unmount } = await renderArtifactsPanel(
+      [{ view: deactivatedActivationSlot("default") }],
+      publicationSlotLifecycleCapabilities());
+
+    await waitForText(container, "No active publication");
+    fetchMock.mockImplementationOnce(async () => response(
+      { title: "No retired publication", detail: "Slot 'default' has no retired publication to restore.", status: 404 },
+      404
+    ));
+    await click(buttonByLabel(container, "Restore publication slot default"));
+    await flushPromises();
+
+    await waitForText(container, "Slot 'default' has no retired publication to restore.");
+    expect(container.textContent).not.toContain("Restored default");
+
+    await unmount();
+  });
+
+  it("shows slot lifecycle commands as unavailable when the backend does not advertise them", async () => {
+    const { container, fetchMock, unmount } = await renderArtifactsPanel([
+      publishedSlot("artifact-current"),
+      { view: activationSlot("canary") }
+    ]);
+
+    await waitForText(container, "does not advertise the publication slot unpublish and restore commands");
+    const unpublish = buttonByLabel(container, "Unpublish publication slot default") as HTMLButtonElement;
+    const restore = buttonByLabel(container, "Restore publication slot canary") as HTMLButtonElement;
+    expect(unpublish.disabled).toBe(true);
+    expect(restore.disabled).toBe(true);
+
+    await click(unpublish);
+    await click(restore);
+
+    expect(fetchMock.mock.calls.some(([url, init]) =>
+      String(url).includes("/slots/") && (init?.method === "DELETE" || init?.method === "POST"))).toBe(false);
+
+    await unmount();
+  });
+
+  it("labels a slot occupied by another activation source without inventing a publication", async () => {
+    const { container, fetchMock, unmount } = await renderArtifactsPanel(
+      [{ view: importedActivationSlot() }],
+      publicationSlotLifecycleCapabilities());
+
+    await waitForText(container, "Occupied by artifact-reconciliation (orders-bundle), not by a Studio publication");
+    expect(buttonByLabel(container, "Unpublish publication slot imported")).toBeNull();
+    expect(buttonByLabel(container, "Restore publication slot imported")).toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/publishing/publications/"))).toBe(false);
+
+    await unmount();
+  });
+
+  it("explains that publication slots are unavailable instead of claiming nothing was published", async () => {
+    const capabilities = capabilityDocument();
+    const runtime = capabilities.capabilities.find(capability => capability.id === "elsa.api.runtime")!;
+    runtime.links = runtime.links.filter(link => !link.rel.startsWith("workflow-activation-slot"));
+    const { container, fetchMock, unmount } = await renderArtifactsPanel([publishedSlot("artifact-current")], capabilities);
+
+    await waitForText(container, activationSlotReadsUnavailableReason);
+    expect(container.textContent).not.toContain("No published artifacts for this workflow yet.");
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/activation-slots/"))).toBe(false);
 
     await unmount();
   });
@@ -2013,9 +2085,8 @@ describe("workflows module", () => {
         if (scenario.surface === "inspector" && url.includes("/runtime/workflows/executables/artifact-1")) {
           return response(executableDetail());
         }
-        if (url.includes("/publishing/workflows/definition-1/slots")) {
-          return response({ items: [publicationSlot("artifact-current")] });
-        }
+        const slotResponse = publicationSlotResponse(url, [publishedSlot("artifact-current")]);
+        if (slotResponse) return slotResponse;
         if (url.includes("/runtime/workflows/executables")) {
           return response([executable({
             artifactId: scenario.artifactId,
@@ -4748,7 +4819,7 @@ function capabilityDocument() {
         links: [
           { rel: "publication-preflight", href: "publishing/workflows/{versionId}/preflight", templated: true },
           { rel: "workflow-publish", href: "publishing/workflows/{versionId}/publish", templated: true },
-          { rel: "publication-slots", href: "publishing/workflows/{definitionId}/slots", templated: true },
+          { rel: "publication-record", href: "publishing/publications/{publicationId}", templated: true },
           { rel: "publication-policy", href: "publishing/workflows/{definitionId}/policy", templated: true },
           { rel: "workflow-test-runs", href: "publishing/workflows/{versionId}/test-runs", templated: true },
           { rel: "workflow-draft-test-runs", href: "publishing/workflows/drafts/test-runs" }
@@ -4762,6 +4833,8 @@ function capabilityDocument() {
           { rel: "workflow-executable", href: "runtime/workflows/executables/{artifactId}", templated: true },
           { rel: "workflow-executable-provenance", href: "runtime/workflows/executables/{artifactId}/provenance", templated: true },
           { rel: "workflow-execute", href: "runtime/workflows/executables/{artifactId}/execute", templated: true },
+          { rel: "workflow-activation-slots", href: "runtime/workflows/activation-slots/{definitionId}", templated: true },
+          { rel: "workflow-activation-slot", href: "runtime/workflows/activation-slots/{definitionId}/{slotName}", templated: true },
           { rel: "workflow-instances", href: "runtime/workflows/instances" },
           { rel: "workflow-instance", href: "runtime/workflows/instances/{workflowExecutionId}", templated: true },
           { rel: "activity-execution", href: "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}", templated: true },
@@ -4865,23 +4938,57 @@ function executable(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
-function publicationSlot(artifactId: string, overrides: Partial<Record<string, unknown>> = {}) {
-  return {
-    definitionId: "definition-1",
-    slotName: "default",
-    status: "active",
-    publication: {
-      publicationId: "publication-1",
-      definitionId: "definition-1",
-      versionId: "version-1",
-      artifactId,
-      slotName: "default",
-      sourceReferenceId: "reference-1",
-      status: "active",
-      activatedAt: "2026-06-18T01:00:00Z"
-    },
-    ...overrides
-  };
+interface ActivationSlotFixture {
+  view: WorkflowActivationSlot;
+  record?: Publication;
+}
+
+/** A Runtime slot occupied by a publication of design version-1, plus the publication record it joins to. */
+function publishedSlot(artifactId: string, slotName = "default"): ActivationSlotFixture {
+  const record = publicationRecord(slotName, { artifactId, versionId: "version-1", sourceReferenceId: "reference-1" });
+  return { view: activationSlot(slotName, { activeActivationId: record.publicationId, sourceKind: "publishing" }), record };
+}
+
+/** The current capability document plus the slot lifecycle relations proposed in elsa-foundation#1637. */
+function publicationSlotLifecycleCapabilities() {
+  const capabilities = capabilityDocument();
+  capabilities.capabilities.find(capability => capability.id === "elsa.api.publishing")!.links.push(
+    { rel: "publication-slot-unpublish", href: "publishing/workflows/{definitionId}/slots/{slotName}", templated: true },
+    { rel: "publication-slot-restore", href: "publishing/workflows/{definitionId}/slots/{slotName}/restore", templated: true }
+  );
+  return capabilities;
+}
+
+async function renderArtifactsPanel(slots: ActivationSlotFixture[], capabilities = capabilityDocument()) {
+  vi.stubGlobal("ResizeObserver", class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  });
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (init?.method === "DELETE" || init?.method === "POST") return response(null, 204);
+    const slotResponse = publicationSlotResponse(url, slots);
+    if (slotResponse) return slotResponse;
+    if (url.includes("/runtime/workflows/executables")) return response([
+      executable({ artifactId: "artifact-current", definitionId: "definition-1" })
+    ]);
+    if (url.includes("/activities")) return response({ activities: [] });
+    if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+    return response({ items: [definition()] });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  const rendered = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", undefined, false, capabilities);
+  await waitForText(rendered.container, "Autosave");
+  await click(buttonByText(rendered.container, "Artifacts"));
+  return { ...rendered, fetchMock };
+}
+
+/** Serves the Runtime slot list and the publication records it joins to; null for every other URL. */
+function publicationSlotResponse(url: string, slots: ActivationSlotFixture[]) {
+  if (url.includes("/runtime/workflows/activation-slots/definition-1")) return response({ items: slots.map(slot => slot.view) });
+  const record = slots.find(slot => slot.record && url.endsWith(`/publishing/publications/${slot.record.publicationId}`))?.record;
+  return record ? response(record) : null;
 }
 
 function executableReference(overrides: Partial<Record<string, unknown>> = {}) {

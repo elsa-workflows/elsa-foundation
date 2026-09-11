@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import type { PublicationIntent } from "../api/publishing";
+import { describeActivationSource, type PublicationIntent } from "../api/publishing";
 import {
   publicationBaselineFor,
   publicationChangesFor,
+  publicationChannelOccupancy,
   publicationIntentForChannel,
   publicationPreflightMatchesIntent,
   type PublicationChangeCount,
+  type PublicationChannelOccupancy,
   type PublicationReviewState,
   type PublicationVersionSelection
 } from "./publicationReview";
@@ -87,9 +89,10 @@ export function PublicationReviewDialog({
   ]);
 
   const activeSlot = review.slots.find(slot => slot.slotName === selectedChannel);
+  const occupancy = publicationChannelOccupancy(review, selectedChannel);
   const isReplacement = reviewedPreflight
     ? reviewedPreflight.resolvedAction === "replace"
-    : Boolean(activeSlot?.publication || activeSlot?.activePublicationId)
+    : occupancy.kind === "publication" || occupancy.kind === "foreign"
       || selectedChannel === review.policy.defaultSlotName;
   const changes = publicationChangesFor(review, activeSlot?.slotName ?? "");
   const preflightChanges = reviewedPreflight?.triggers ?? reviewedPreflight?.changes ?? [];
@@ -97,7 +100,7 @@ export function PublicationReviewDialog({
     ? preflightChanges.length
       ? preflightChanges.map(change => `${change.change} ${change.key} (${change.cardinality})`).join("; ")
       : "No trigger changes."
-    : formatChangeCount(changes.triggers);
+    : formatChangeCount(changes?.triggers);
   const versionIssues = matchingVersionPreflight?.issues ?? [];
   const blocked = review.validationErrors.length > 0
     || !channelIsValid
@@ -196,6 +199,10 @@ export function PublicationReviewDialog({
                     </small>
                   </label>
 
+                  {review.slotsUnavailableReason ? (
+                    <p className="wf-dialog-note" role="note">{review.slotsUnavailableReason}</p>
+                  ) : null}
+
                   {channelMode === "create" ? (
                     <label className="wf-form-field">
                       <span>New channel name</span>
@@ -217,7 +224,7 @@ export function PublicationReviewDialog({
                     <DecisionFact
                       label="Effect"
                       value={isReplacement
-                        ? `Replace the current publication in ${selectedChannel || "this channel"}`
+                        ? `Replace the current ${occupancy.kind === "foreign" ? "activation" : "publication"} in ${selectedChannel || "this channel"}`
                         : `Create a separate publication channel named ${selectedChannel || "…"}`}
                     />
                     <DecisionFact
@@ -293,7 +300,7 @@ export function PublicationReviewDialog({
                 <section className="wf-publication-change-card" aria-labelledby="publication-changes-title">
                   <div>
                     <h4 id="publication-changes-title">Captured changes</h4>
-                    <p>{compactChangeSummary(changes)}</p>
+                    <p>{changes ? compactChangeSummary(changes) : comparisonUnavailableMessage(occupancy, selectedChannel)}</p>
                   </div>
                   <p className="wf-publication-baseline">Baseline: {publicationBaselineFor(review, selectedChannel)}</p>
                 </section>
@@ -348,9 +355,9 @@ export function PublicationReviewDialog({
                 <details className="wf-publication-disclosure">
                   <summary>Changes details</summary>
                   <dl className="wf-publication-detail-grid">
-                    <ChangeSummary label="Activities" value={changes.activities} />
-                    <ChangeSummary label="Inputs" value={changes.inputs} />
-                    <ChangeSummary label="Outputs" value={changes.outputs} />
+                    <ChangeSummary label="Activities" value={changes?.activities} />
+                    <ChangeSummary label="Inputs" value={changes?.inputs} />
+                    <ChangeSummary label="Outputs" value={changes?.outputs} />
                     <div><dt>Triggers</dt><dd>{triggerSummary}</dd></div>
                   </dl>
                 </details>
@@ -466,12 +473,18 @@ function DecisionFact({ label, value }: { label: string; value: string }) {
   return <div><dt>{label}</dt><dd>{value}</dd></div>;
 }
 
-function ChangeSummary({ label, value }: { label: string; value: PublicationChangeCount }) {
+function ChangeSummary({ label, value }: { label: string; value?: PublicationChangeCount }) {
   return <div><dt>{label}</dt><dd>{formatChangeCount(value)}</dd></div>;
 }
 
-function formatChangeCount(value: PublicationChangeCount) {
-  return `${value.added} added, ${value.changed} changed, ${value.removed} removed`;
+function formatChangeCount(value?: PublicationChangeCount) {
+  return value ? `${value.added} added, ${value.changed} changed, ${value.removed} removed` : "Not compared";
+}
+
+function comparisonUnavailableMessage(occupancy: PublicationChannelOccupancy, channel: string) {
+  return occupancy.kind === "foreign"
+    ? `Not compared: ${channel} is occupied by an activation from ${describeActivationSource(occupancy.slot)}, not by a Studio design version.`
+    : "Not compared: the current publication in this channel is unknown on this backend.";
 }
 
 function compactChangeSummary(changes: PublicationReviewState["changes"]) {

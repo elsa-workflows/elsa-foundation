@@ -1,10 +1,14 @@
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { clearApiCapabilityCache } from "../api/capabilities";
 import { findPublishedEquivalent } from "../workflow-editor/editorHelpers";
 import { WorkflowRuntimePanel } from "../workflow-editor/editorPanels";
+import { useDraftEquivalence } from "../workflow-editor/useDraftEquivalence";
 import type { WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
+import { activationSlot, publicationRecord } from "./fixtures/publicationSlots";
 
 const definitionId = "definition-1";
 
@@ -124,5 +128,81 @@ describe("WorkflowRuntimePanel equivalence caption", () => {
     );
 
     expect(container.querySelector(".wf-runtime-equivalence")).toBeNull();
+  });
+});
+
+describe("useDraftEquivalence", () => {
+  let active: { root: Root; container: HTMLElement } | null = null;
+  const record = publicationRecord("default", { artifactId: "artifact-1", versionId: "version-2", activatedAt: "2026-09-02T00:00:00Z" });
+
+  afterEach(() => {
+    clearApiCapabilityCache();
+    if (!active) return;
+    flushSync(() => active!.root.unmount());
+    active.container.remove();
+    active = null;
+  });
+
+  function resolveEquivalence(options: { slotReads?: boolean; record?: boolean } = {}) {
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return { capabilities: [
+        { id: "elsa.api.publishing", contractVersion: "1", links: [
+          { rel: "publication-record", href: "publishing/publications/{publicationId}", templated: true }
+        ] },
+        { id: "elsa.api.runtime", contractVersion: "1", links: [
+          { rel: "workflow-executables", href: "runtime/workflows/executables" },
+          ...(options.slotReads ?? true
+            ? [{ rel: "workflow-activation-slots", href: "runtime/workflows/activation-slots/{definitionId}", templated: true }]
+            : [])
+        ] }
+      ] };
+      if (url === "/runtime/workflows/executables?scope=All&includeRetired=true") return [executable({ publishedAt: null })];
+      if (url === "/runtime/workflows/activation-slots/definition-1") return { items: [
+        activationSlot("default", { activeActivationId: record.publicationId, sourceKind: "publishing" })
+      ] };
+      if (url === "/publishing/publications/publication-default" && (options.record ?? true)) return record;
+      throw Object.assign(new Error(`Not found: ${url}`), { status: 404 });
+    });
+    const context = { baseUrl: `test://draft-equivalence-${Math.random()}`, http: { getJson } } as unknown as StudioEndpointContext;
+    const values: Array<WorkflowExecutableSummary | null> = [];
+    function Harness() {
+      values.push(useDraftEquivalence(context, definitionId, testRun()));
+      return null;
+    }
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    flushSync(() => root.render(<Harness />));
+    active = { root, container };
+    return { getJson, latest: () => values.at(-1) ?? null };
+  }
+
+  it("resolves the published equivalent through the Runtime slot and its publication record", async () => {
+    const { latest } = resolveEquivalence();
+
+    await vi.waitFor(() => expect(latest()).not.toBeNull());
+    expect(latest()).toMatchObject({
+      artifactId: "artifact-1",
+      definitionId,
+      definitionVersionId: "version-2",
+      publishedAt: "2026-09-02T00:00:00Z"
+    });
+  });
+
+  it("resolves to no signal when the backend cannot provide publication slots", async () => {
+    const { getJson, latest } = resolveEquivalence({ slotReads: false });
+
+    await vi.waitFor(() => expect(getJson).toHaveBeenCalledWith("/runtime/workflows/executables?scope=All&includeRetired=true"));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(latest()).toBeNull();
+    expect(getJson.mock.calls.some(([url]) => url.includes("activation-slots") || url.includes("/publications/"))).toBe(false);
+  });
+
+  it("resolves to no signal when the publication record behind the slot cannot be read", async () => {
+    const { getJson, latest } = resolveEquivalence({ record: false });
+
+    await vi.waitFor(() => expect(getJson).toHaveBeenCalledWith("/publishing/publications/publication-default"));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(latest()).toBeNull();
   });
 });

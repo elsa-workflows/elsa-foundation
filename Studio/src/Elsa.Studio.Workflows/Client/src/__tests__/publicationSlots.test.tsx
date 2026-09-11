@@ -3,9 +3,10 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PublicationReviewDialog } from "../workflow-editor/WorkflowEditor";
-import type { PublicationIntent, PublicationPreflight } from "../api/publishing";
+import { activationSlotReadsUnavailableReason, type PublicationIntent, type PublicationPreflight } from "../api/publishing";
 import { createPublicationReview, type PublicationReviewState, type PublicationVersionSelection } from "../workflow-editor/publicationReview";
 import type { WorkflowDraft } from "../workflowTypes";
+import { importedActivationSlot, publishedSlot, withoutPublication } from "./fixtures/publicationSlots";
 
 let mounted: { root: ReturnType<typeof createRoot>; container: HTMLDivElement } | null = null;
 
@@ -77,6 +78,37 @@ describe("publication channel UX", () => {
       expect.anything(),
       { action: "replace", slotName: "blue", expectedPublicationId: "publication-blue" },
       { mode: "automatic" });
+  });
+
+  it("names the source of a channel occupied by another activation source instead of a publication", () => {
+    const onReview = vi.fn(async () => undefined);
+    const container = render(review({ slots: [withoutPublication(importedActivationSlot())] }), { onReview });
+
+    changeSelect(container.querySelector<HTMLSelectElement>("select[aria-label='Publication channel']")!, "imported");
+
+    expect(text(container)).toContain("Replace the current activation in imported");
+    expect(text(container)).toContain("imported · occupied by artifact-reconciliation (orders-bundle) · not a Studio design version");
+    expect(text(container)).toContain("Not compared: imported is occupied by an activation from artifact-reconciliation (orders-bundle)");
+    expect(text(container)).not.toContain("no previous publication");
+    expect(onReview).toHaveBeenCalledWith(
+      expect.anything(),
+      { action: "replace", slotName: "imported" },
+      { mode: "automatic" });
+  });
+
+  it("states that the current publication is unknown when the backend cannot provide publication slots", () => {
+    const visible = render(review());
+    expect(text(visible)).toContain("New channel · default · no previous publication");
+    expect(visible.querySelector("[role='note']")).toBeNull();
+    unmount();
+
+    const container = render(review({ slotsUnavailableReason: activationSlotReadsUnavailableReason }));
+
+    expect(container.querySelector("[role='note']")?.textContent).toBe(activationSlotReadsUnavailableReason);
+    expect(text(container)).toContain("default · current publication unknown");
+    expect(text(container)).toContain("Not compared: the current publication in this channel is unknown on this backend.");
+    expect(text(container)).not.toContain("no previous publication");
+    expect(text(container)).toContain("Ready to publish");
   });
 
   it("shows exact-version editing only when the backend advertises it", () => {
@@ -292,21 +324,7 @@ function preflight(overrides: Partial<PublicationPreflight> = {}): PublicationPr
 }
 
 function occupiedBlue() {
-  return {
-    definitionId: "definition-1",
-    slotName: "blue",
-    status: "active" as const,
-    publication: {
-      publicationId: "publication-blue",
-      definitionId: "definition-1",
-      versionId: "version-blue",
-      artifactId: "artifact-blue",
-      artifactVersion: "1.4.0",
-      slotName: "blue",
-      sourceReferenceId: "reference-blue",
-      status: "active" as const
-    }
-  };
+  return publishedSlot("blue", { artifactVersion: "1.4.0" });
 }
 
 function button(container: HTMLElement, label: string) {

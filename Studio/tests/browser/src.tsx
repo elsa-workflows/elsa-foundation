@@ -1337,9 +1337,14 @@ function publicationReview(): PublicationReviewState {
   };
   const slots = [
     {
+      slotId: "activation-slot:definition-browser:default",
       definitionId: "definition-browser",
       slotName: "default",
-      status: "active" as const,
+      activeActivationId: "publication-default",
+      sourceKind: "publishing",
+      sourceId: null,
+      revision: 1,
+      updatedAt: "2026-09-01T00:00:00Z",
       publication: {
         publicationId: "publication-default",
         definitionId: "definition-browser",
@@ -1352,9 +1357,14 @@ function publicationReview(): PublicationReviewState {
       }
     },
     {
+      slotId: "activation-slot:definition-browser:blue",
       definitionId: "definition-browser",
       slotName: "blue",
-      status: "active" as const,
+      activeActivationId: "publication-blue",
+      sourceKind: "publishing",
+      sourceId: null,
+      revision: 1,
+      updatedAt: "2026-09-01T00:00:00Z",
       publication: {
         publicationId: "publication-blue",
         definitionId: "definition-browser",

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { activationSlotReadsUnavailableReason } from "../api/publishing";
 import type { ActivityCatalogItem, WorkflowDefinitionVersionDetails, WorkflowDraft } from "../workflowTypes";
 import {
   createPublicationReview,
@@ -9,6 +10,7 @@ import {
   summarizePublicationChanges
 } from "../workflow-editor/publicationReview";
 import { flowchartActivity, sequenceActivity } from "./fixtures";
+import { activationSlot, importedActivationSlot, publishedSlot, withoutPublication } from "./fixtures/publicationSlots";
 
 describe("publication review model", () => {
   it("summarizes changed activities, inputs, and outputs against the source version", () => {
@@ -133,21 +135,7 @@ describe("publication review model", () => {
       details: null,
       slotVersions: {},
       policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
-      slots: [{
-        definitionId: "definition-1",
-        slotName: "default",
-        status: "active",
-        publication: {
-          publicationId: "publication-1",
-          definitionId: "definition-1",
-          versionId: "version-1",
-          artifactId: "artifact-1",
-          slotName: "default",
-          sourceReferenceId: "reference-1",
-          status: "active",
-          artifactVersion: "1.0.0"
-        }
-      }],
+      slots: [publishedSlot("default", { publicationId: "publication-1", versionId: "version-1", artifactVersion: "1.0.0" })],
       catalog: []
     });
 
@@ -219,20 +207,7 @@ describe("publication review model", () => {
       details: null,
       slotVersions: { blue: version("version-blue", { inputs: [{ name: "blue" }] }) },
       policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
-      slots: [{
-        definitionId: "definition-1",
-        slotName: "blue",
-        status: "active",
-        publication: {
-          publicationId: "publication-blue",
-          definitionId: "definition-1",
-          versionId: "version-blue",
-          artifactId: "artifact-blue",
-          slotName: "blue",
-          sourceReferenceId: "reference-blue",
-          status: "active"
-        }
-      }],
+      slots: [publishedSlot("blue")],
       catalog: []
     });
 
@@ -249,21 +224,7 @@ describe("publication review model", () => {
       details: null,
       slotVersions: { blue: version("version-blue", {}) },
       policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
-      slots: [{
-        definitionId: "definition-1",
-        slotName: "blue",
-        status: "active",
-        publication: {
-          publicationId: "publication-blue",
-          definitionId: "definition-1",
-          versionId: "version-blue",
-          artifactId: "artifact-blue",
-          artifactVersion: "1.4.0",
-          slotName: "blue",
-          sourceReferenceId: "reference-blue",
-          status: "active"
-        }
-      }],
+      slots: [publishedSlot("blue", { artifactVersion: "1.4.0" })],
       catalog: []
     });
 
@@ -293,10 +254,50 @@ describe("publication review model", () => {
       catalog: []
     });
 
-    expect(publicationChangesFor(review, "default").inputs).toEqual({ added: 0, changed: 0, removed: 0 });
-    expect(publicationChangesFor(review, "blue").inputs).toEqual({ added: 1, changed: 0, removed: 1 });
+    expect(publicationChangesFor(review, "default")?.inputs).toEqual({ added: 0, changed: 0, removed: 0 });
+    expect(publicationChangesFor(review, "blue")?.inputs).toEqual({ added: 1, changed: 0, removed: 1 });
+  });
+
+  it("treats a channel occupied by another activation source as occupied without a design version", () => {
+    const review = reviewWith({ slots: [withoutPublication(importedActivationSlot())] });
+
+    expect(publicationIntentForChannel(review, "imported")).toEqual({ action: "replace", slotName: "imported" });
+    expect(publicationBaselineFor(review, "imported")).toBe("imported · occupied by artifact-reconciliation (orders-bundle) · not a Studio design version");
+    expect(publicationChangesFor(review, "imported")).toBeNull();
+  });
+
+  it("does not treat a listed slot without an active activation as occupied or as a new channel", () => {
+    const review = reviewWith({ slots: [withoutPublication(activationSlot("canary"))] });
+
+    expect(publicationIntentForChannel(review, "canary")).toEqual({ action: "sideBySide", slotName: "canary" });
+    expect(publicationBaselineFor(review, "canary")).toBe("canary · no active publication");
+    expect(publicationChangesFor(review, "canary")).not.toBeNull();
+  });
+
+  it("never reports an unreadable channel as having no previous publication", () => {
+    const visible = reviewWith({ slots: [] });
+    const unavailable = reviewWith({ slots: [], slotsUnavailableReason: activationSlotReadsUnavailableReason });
+
+    expect(publicationBaselineFor(visible, "canary")).toBe("New channel · canary · no previous publication");
+    expect(publicationChangesFor(visible, "canary")).not.toBeNull();
+    expect(publicationBaselineFor(unavailable, "canary")).toBe("canary · current publication unknown");
+    expect(publicationChangesFor(unavailable, "canary")).toBeNull();
+    expect(publicationIntentForChannel(unavailable, "default")).toEqual({ action: "replace", slotName: "default" });
+    expect(unavailable.slotsUnavailableReason).toBe(activationSlotReadsUnavailableReason);
   });
 });
+
+function reviewWith(input: Partial<Parameters<typeof createPublicationReview>[0]>) {
+  return createPublicationReview({
+    draft: draft(),
+    details: null,
+    slotVersions: {},
+    policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
+    slots: [],
+    catalog: [],
+    ...input
+  });
+}
 
 function draft(state: Partial<WorkflowDraft["state"]> = {}): WorkflowDraft {
   return {

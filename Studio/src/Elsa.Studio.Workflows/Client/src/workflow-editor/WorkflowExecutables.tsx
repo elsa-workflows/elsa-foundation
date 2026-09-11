@@ -2,7 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, ChevronDown, ChevronRight, Play, RotateCcw, ScanSearch, Search, Sparkles, X } from "lucide-react";
 import type { StudioAiContributionApi, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import { listExecutables } from "../api/runtime";
-import { listPublicationSlots, restorePublicationSlot, unpublishSlot, type PublicationSlot } from "../api/publishing";
+import {
+  describeActivationSource,
+  getPublicationSlotLifecycleSupport,
+  listPublicationSlots,
+  restorePublicationSlot,
+  unpublishSlot,
+  type PublicationSlot
+} from "../api/publishing";
 import type { WorkflowExecutableListScope, WorkflowExecutableSummary } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
 import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
@@ -279,6 +286,8 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
   const [lastRun, setLastRun] = useState<ExecutableRunState | null>(null);
   const [artifacts, setArtifacts] = useState<WorkflowExecutableSummary[]>([]);
   const [slots, setSlots] = useState<PublicationSlot[]>([]);
+  const [slotsUnavailableReason, setSlotsUnavailableReason] = useState<string | null>(null);
+  const [lifecycleSupport, setLifecycleSupport] = useState({ unpublish: false, restore: false });
   const explainExecutableAction = findAiAction(ai, "weaver.workflows.explain-executable");
   const executableRun = useExecutableWorkflowRun({
     context,
@@ -289,18 +298,23 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
     setState("loading");
     setError("");
     try {
-      const [executables, publicationSlots] = await Promise.all([
+      const [executables, slotsView, lifecycle] = await Promise.all([
         listExecutables(context, { scope: "all", includeRetired: true }),
-        listPublicationSlots(context, definitionId)
+        listPublicationSlots(context, definitionId),
+        getPublicationSlotLifecycleSupport(context)
       ]);
+      const publicationSlots = slotsView.available ? slotsView.slots : [];
       const publicationArtifactIds = new Set(publicationSlots.flatMap(slot => slot.publication?.artifactId ? [slot.publication.artifactId] : []));
       setArtifacts(executables.filter(executable => publicationArtifactIds.has(executable.artifactId)).sort(compareExecutablesByPublishedDate));
       setSlots(publicationSlots);
+      setSlotsUnavailableReason(slotsView.available ? null : slotsView.reason);
+      setLifecycleSupport(lifecycle);
       setState("ready");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setArtifacts([]);
       setSlots([]);
+      setSlotsUnavailableReason(null);
       setState("failed");
     }
   }, [context, definitionId]);
@@ -346,6 +360,11 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
     }
   };
 
+  const unavailableLifecycleCommands = [
+    !lifecycleSupport.unpublish && slots.some(slot => slot.publication) ? "unpublish" : null,
+    !lifecycleSupport.restore && slots.some(slot => !slot.activeActivationId) ? "restore" : null
+  ].filter((command): command is string => Boolean(command));
+
   const openExecutablePage = () => {
     window.history.pushState({}, "", `/workflows/executables?definition=${encodeURIComponent(definitionId)}`);
     window.dispatchEvent(new PopStateEvent("popstate"));
@@ -387,21 +406,37 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
             <article className="wf-artifact-card" role="listitem" key={slot.slotName}>
               <div className="wf-artifact-card-heading">
                 <strong>Slot {slot.slotName}</strong>
-                <span className="wf-chip">{slot.status ?? "empty"}</span>
+                <span className="wf-chip">{slot.publication?.status ?? (slot.activeActivationId ? "active" : "inactive")}</span>
               </div>
-              {slot.publication ? <p><code>{slot.publication.artifactId}</code></p> : <p className="wf-muted">No active publication</p>}
+              {slot.publication ? (
+                <p><code>{slot.publication.artifactId}</code></p>
+              ) : slot.activeActivationId ? (
+                <p className="wf-muted">Occupied by {describeActivationSource(slot)}, not by a Studio publication</p>
+              ) : (
+                <p className="wf-muted">No active publication</p>
+              )}
               <div className="wf-row-actions">
-                {slot.status === "retired" ? (
-                  <button type="button" aria-label={`Restore publication slot ${slot.slotName}`} onClick={() => void restore(slot)}><RotateCcw size={13} /> Restore</button>
+                {/* Restore is offered for every inactive slot, not just ones known to have been published: Runtime
+                    clears the activation source on deactivation, so Studio cannot tell which owner last held the
+                    slot. The backend answers with a 404 (surfaced above as an error) when there is nothing to
+                    restore. */}
+                {!slot.activeActivationId ? (
+                  <button type="button" aria-label={`Restore publication slot ${slot.slotName}`} disabled={!lifecycleSupport.restore} onClick={() => void restore(slot)}><RotateCcw size={13} /> Restore</button>
                 ) : slot.publication ? (
-                  <button type="button" aria-label={`Unpublish publication slot ${slot.slotName}`} onClick={() => void unpublish(slot)}>Unpublish</button>
+                  <button type="button" aria-label={`Unpublish publication slot ${slot.slotName}`} disabled={!lifecycleSupport.unpublish} onClick={() => void unpublish(slot)}>Unpublish</button>
                 ) : null}
               </div>
             </article>
           ))}
         </div>
       ) : null}
-      {state === "ready" && artifacts.length === 0 ? <p className="wf-muted">No published artifacts for this workflow yet.</p> : null}
+      {state === "ready" && unavailableLifecycleCommands.length ? (
+        <p className="wf-muted" role="note">
+          This backend does not advertise the publication slot {unavailableLifecycleCommands.join(" and ")} command{unavailableLifecycleCommands.length === 1 ? "" : "s"}. No fallback route is used.
+        </p>
+      ) : null}
+      {state === "ready" && slotsUnavailableReason ? <p className="wf-muted" role="note">{slotsUnavailableReason}</p> : null}
+      {state === "ready" && !slotsUnavailableReason && artifacts.length === 0 ? <p className="wf-muted">No published artifacts for this workflow yet.</p> : null}
       {state === "ready" && artifacts.length > 0 ? (
         <div className="wf-artifact-list" role="list" aria-label="Workflow artifacts">
           {artifacts.map(artifact => {
