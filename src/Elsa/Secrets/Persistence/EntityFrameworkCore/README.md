@@ -66,6 +66,9 @@ See [Tooling/README.md](Tooling/README.md) and [tools/ef/README.md](../../../../
 The repository pins `dotnet-ef` in `.config/dotnet-tools.json`; run `dotnet tool restore` from
 the repository root. An executable `.tools/dotnet-ef` is an explicit override for an operator
 checkout, while a stale global `dotnet-ef` is never preferred over the repository manifest.
+The script builds the tooling project once by default. CI or tests that already built the same
+checkout and configuration can set `ELSA_SECRETS_EF_SKIP_BUILD=1`; that caller owns artifact
+freshness, so operator checkouts should not set it casually.
 
 Out of process (no host):
 

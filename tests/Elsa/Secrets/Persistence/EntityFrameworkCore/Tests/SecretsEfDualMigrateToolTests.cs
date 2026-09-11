@@ -188,8 +188,9 @@ public sealed class SecretsEfDualMigrateToolTests
     public void Pending_is_clean_for_each_derived_context()
     {
         Skip.IfNot(HasDotnetEf(), "dotnet-ef is not available.");
-        var result = RunDualMigrate(["pending"]);
+        var result = RunDualMigrateFromExistingBuild(["pending"]);
         Assert.True(result.ExitCode == 0, result.Describe());
+        Assert.Contains("use existing EF tooling build", result.Output, StringComparison.Ordinal);
         Assert.Contains("has-pending-model-changes --context SecretsSqliteDbContext", result.Output, StringComparison.Ordinal);
         Assert.Contains("has-pending-model-changes --context SecretsSqlServerDbContext", result.Output, StringComparison.Ordinal);
         Assert.Contains("has-pending-model-changes --context SecretsPostgreSqlDbContext", result.Output, StringComparison.Ordinal);
@@ -204,7 +205,7 @@ public sealed class SecretsEfDualMigrateToolTests
         var path = Path.Join(Path.GetTempPath(), $"elsa-secrets-ef-dual-default-{Guid.NewGuid():N}.db");
         try
         {
-            var result = RunDualMigrate(
+            var result = RunDualMigrateFromExistingBuild(
                 [],
                 extraEnv: new Dictionary<string, string?>
                 {
@@ -233,7 +234,7 @@ public sealed class SecretsEfDualMigrateToolTests
         var path = Path.Join(Path.GetTempPath(), $"elsa-secrets-ef-dual-all-{Guid.NewGuid():N}.db");
         try
         {
-            var skipped = RunDualMigrate(
+            var skipped = RunDualMigrateFromExistingBuild(
                 ["apply", "--all"],
                 extraEnv: new Dictionary<string, string?>
                 {
@@ -247,7 +248,7 @@ public sealed class SecretsEfDualMigrateToolTests
             Assert.Contains("skip SecretsPostgreSqlDbContext", skipped.Output, StringComparison.Ordinal);
             Assert.True(await TableExistsAsync(path, SecretsEfModule.TableName));
 
-            var required = RunDualMigrate(
+            var required = RunDualMigrateFromExistingBuild(
                 ["apply", "--all"],
                 extraEnv: new Dictionary<string, string?>
                 {
@@ -274,7 +275,7 @@ public sealed class SecretsEfDualMigrateToolTests
         var path = Path.Join(Path.GetTempPath(), $"elsa-secrets-ef-dual-{Guid.NewGuid():N}.db");
         try
         {
-            var result = RunDualMigrate(
+            var result = RunDualMigrateFromExistingBuild(
                 ["apply", "--sqlite"],
                 extraEnv: new Dictionary<string, string?>
                 {
@@ -300,6 +301,11 @@ public sealed class SecretsEfDualMigrateToolTests
         IReadOnlyDictionary<string, string?>? extraEnv = null,
         string? rootOverride = null)
         => DualMigrateProcessRunner.Run(args, extraEnv, rootOverride);
+
+    private static DualMigrateProcessRunner.ScriptResult RunDualMigrateFromExistingBuild(
+        IReadOnlyList<string> args,
+        IReadOnlyDictionary<string, string?>? extraEnv = null)
+        => DualMigrateProcessRunner.RunFromExistingBuild(args, extraEnv);
 
     private static string WriteExecutableShim(string directory, string name, string contents)
     {

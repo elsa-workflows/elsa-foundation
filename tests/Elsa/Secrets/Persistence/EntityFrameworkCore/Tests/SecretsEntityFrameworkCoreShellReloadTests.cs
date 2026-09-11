@@ -96,7 +96,7 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
                 Assert.Contains("20260911010717_WidenLookupKeys", message, StringComparison.Ordinal);
             }
 
-            var result = DualMigrateProcessRunner.Run(
+            var result = DualMigrateProcessRunner.RunFromExistingBuild(
                 ["apply", "--sqlite"],
                 new Dictionary<string, string?>
                 {

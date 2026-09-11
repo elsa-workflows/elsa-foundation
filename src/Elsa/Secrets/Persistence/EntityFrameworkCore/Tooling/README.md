@@ -20,6 +20,9 @@ The repository manifest pins `dotnet-ef` to 10.0.10. The shared helper first hon
 executable `.tools/dotnet-ef`, then invokes the restored manifest through `dotnet ef`; a global
 `dotnet-ef` is only a fallback when no repository manifest exists. Restore the manifest before
 generation or dual-migrate runs so a stale global tool cannot select a different EF version.
+`dual-migrate.sh` builds this tooling project once by default. A parallel CI/test caller that has
+already built the same checkout and configuration may set `ELSA_SECRETS_EF_SKIP_BUILD=1` to avoid
+concurrent writes to loaded outputs; doing so makes that caller responsible for artifact freshness.
 
 Equivalent per-context commands:
 

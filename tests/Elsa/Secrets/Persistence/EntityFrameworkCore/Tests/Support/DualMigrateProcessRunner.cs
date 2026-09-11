@@ -105,6 +105,17 @@ internal static class DualMigrateProcessRunner
             errorTask.GetAwaiter().GetResult());
     }
 
+    public static ScriptResult RunFromExistingBuild(
+        IReadOnlyList<string> args,
+        IReadOnlyDictionary<string, string?>? extraEnvironment = null)
+    {
+        var environment = extraEnvironment is null
+            ? new Dictionary<string, string?>()
+            : new Dictionary<string, string?>(extraEnvironment);
+        environment["ELSA_SECRETS_EF_SKIP_BUILD"] = "1";
+        return Run(args, environment);
+    }
+
     private static bool Remember(bool value)
     {
         dotnetEf = value;

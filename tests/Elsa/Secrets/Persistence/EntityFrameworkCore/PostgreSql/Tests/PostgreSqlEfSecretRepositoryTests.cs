@@ -114,7 +114,7 @@ public sealed class PostgreSqlEfSecretRepositoryTests(PostgresContainerFixture f
             Assert.Contains("20260911011058_WidenLookupKeys", exception.Message, StringComparison.Ordinal);
         }
 
-        var result = DualMigrateProcessRunner.Run(
+        var result = DualMigrateProcessRunner.RunFromExistingBuild(
             ["apply", "--postgresql"],
             new Dictionary<string, string?>
             {
