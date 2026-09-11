@@ -5,7 +5,8 @@
     Exercises the reachable GET endpoints under the publishing area against a fixture (a published workflow
     definition + a known activity version), plus negative (404) cases.
     Covered: activities (list) + activities/{id}/construct; value-conversion/profiles; incident-strategies; descriptors;
-    workflows/{definitionId}/policy. Activation slots are covered by Test-RuntimeGets.ps1.
+    workflows/{definitionId}/policy; publications/{publicationId}, reached the way a client reaches it: through the
+    runtime activation slot's activeActivationId. Activation slots themselves are covered by Test-RuntimeGets.ps1.
     Requires the server running from source (see ../README.md).
 #>
 [CmdletBinding()]
@@ -40,6 +41,17 @@ Assert-Get -Ctx $ctx -Label "incident-strategies" -Path "publishing/incident-str
 } | Out-Null
 Assert-Get -Ctx $ctx -Label "workflows/{definitionId}/policy" -Path "publishing/workflows/$definitionId/policy" | Out-Null
 
+# publication record: runtime says what is active, publishing says what it published (#1625)
+$slot = Assert-Get -Ctx $ctx -Label "runtime activation slot (join source)" -Path "runtime/workflows/activation-slots/$definitionId/default" -Validate { param($r) $r.Json.sourceKind -eq 'publishing' -and $r.Json.activeActivationId }
+Assert-Get -Ctx $ctx -Label "publications/{activeActivationId}" -Path "publishing/publications/$($slot.Json.activeActivationId)" -Validate {
+    param($r)
+    $r.Json.publicationId -eq $slot.Json.activeActivationId -and
+    $r.Json.definitionId -eq $definitionId -and
+    $r.Json.versionId -eq $def.version.id -and
+    $r.Json.status -eq 'active'
+} | Out-Null
+
 Assert-Get -Ctx $ctx -Label "activities/{bogus}/construct -> 404" -Path "publishing/activities/actver-bogus$tag/construct" -ExpectStatus 404 | Out-Null
+Assert-Get -Ctx $ctx -Label "publications/{bogus} -> 404" -Path "publishing/publications/pub-bogus$tag" -ExpectStatus 404 | Out-Null
 
 Complete-GetSuite -Area "publishing API"

@@ -2086,6 +2086,46 @@
     {
       "authoringModel": "Minimal API",
       "contentTypes": [
+        "*/*",
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /publishing/publications/{publicationId}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.PublicationView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/publications/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsGetPublicationRecordEndpoint"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
         "application/json"
       ],
       "displayName": "HTTP: GET /publishing/value-conversion/profiles",
