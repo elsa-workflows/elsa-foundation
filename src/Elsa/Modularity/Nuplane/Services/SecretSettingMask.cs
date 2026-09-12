@@ -5,20 +5,22 @@ using Elsa.Modularity.Core.Models;
 namespace Elsa.Modularity.Nuplane.Services;
 
 /// <summary>
-/// Keeps the values of settings declared <c>[ManifestSetting(Secret = true)]</c> out of the feature catalog. A set
-/// secret is replaced by <see cref="Placeholder"/> so the catalog still shows that a value exists; an unset one
-/// (null, empty string, empty object or array) passes through so it still reads as unset. When an apply request
-/// sends the placeholder back, <see cref="Restore"/> puts the stored value in its place, so a client that
-/// round-trips the catalog cannot overwrite a real secret with the mask.
+/// Keeps secret configuration values out of the feature catalog. It fails closed: a value is shown only when a setting
+/// declares it and does not mark it <c>[ManifestSetting(Secret = true)]</c>. Everything else is replaced by
+/// <see cref="Placeholder"/>: secret settings, and keys no setting declares, which covers a feature whose package is
+/// gone, an object-typed setting the manifest cannot describe, and colon-path keys such as <c>Keys:primary</c>. A
+/// hidden value that is unset (null, empty string, empty object or array) passes through so it still reads as unset.
+/// When an apply request sends the placeholder back, <see cref="Restore"/> puts the stored value in its place, so a
+/// client that round-trips the catalog cannot overwrite a real secret with the mask.
 /// </summary>
 public static class SecretSettingMask
 {
-    /// <summary>The value the catalog shows in place of a set secret.</summary>
+    /// <summary>The value the catalog shows in place of a hidden value.</summary>
     public const string Placeholder = "********";
 
     private static readonly JsonElement s_placeholder = JsonSerializer.SerializeToElement(Placeholder);
 
-    /// <summary>Returns <paramref name="configuration"/> with every set secret setting replaced by the placeholder.</summary>
+    /// <summary>Returns <paramref name="configuration"/> with every set hidden value replaced by the placeholder.</summary>
     public static JsonElement MaskConfiguration(JsonElement configuration, IReadOnlyList<FeatureSettingDescriptor> settings) =>
         Rewrite(configuration, settings, (_, value) => IsUnset(value) ? value : s_placeholder);
 
@@ -32,8 +34,8 @@ public static class SecretSettingMask
             .ToArray();
 
     /// <summary>
-    /// Returns <paramref name="requested"/> with every secret setting that still carries the placeholder replaced by
-    /// its value in <paramref name="stored"/>, or removed when nothing is stored for it.
+    /// Returns <paramref name="requested"/> with every hidden value that still carries the placeholder replaced by its
+    /// value in <paramref name="stored"/>, or removed when nothing is stored for it.
     /// </summary>
     public static JsonElement Restore(JsonElement requested, JsonElement? stored, IReadOnlyList<FeatureSettingDescriptor> settings) =>
         Rewrite(requested, settings, (name, value) =>
@@ -42,17 +44,20 @@ public static class SecretSettingMask
     private static JsonElement Rewrite(
         JsonElement configuration,
         IReadOnlyList<FeatureSettingDescriptor> settings,
-        Func<string, JsonElement, JsonElement?> rewriteSecret)
+        Func<string, JsonElement, JsonElement?> rewriteHidden)
     {
-        // Configuration binding matches keys case-insensitively, so a secret must be recognised however it is cased.
-        var secretNames = settings.Where(x => x.Secret).Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (secretNames.Count == 0 || configuration.ValueKind is not JsonValueKind.Object)
+        if (configuration.ValueKind is not JsonValueKind.Object)
             return configuration;
+
+        // Configuration binding matches keys case-insensitively, so a name must be recognised however it is cased. A
+        // name any source declares secret stays hidden even if another declares it plain.
+        var visibleNames = settings.Where(x => !x.Secret).Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        visibleNames.ExceptWith(settings.Where(x => x.Secret).Select(x => x.Name));
 
         var result = new JsonObject();
         foreach (var property in configuration.EnumerateObject())
         {
-            var value = secretNames.Contains(property.Name) ? rewriteSecret(property.Name, property.Value) : property.Value;
+            var value = visibleNames.Contains(property.Name) ? property.Value : rewriteHidden(property.Name, property.Value);
             if (value is { } kept)
                 result[property.Name] = JsonNode.Parse(kept.GetRawText());
         }

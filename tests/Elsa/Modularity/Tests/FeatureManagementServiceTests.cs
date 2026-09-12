@@ -154,6 +154,34 @@ public sealed class FeatureManagementServiceTests
     }
 
     [Fact]
+    public async Task CatalogHidesTheConfigurationOfAFeatureWithoutSettingsMetadata()
+    {
+        // e.g. a feature still listed in shells.json whose package was pruned: nothing declares its settings.
+        _store.Features["Orphaned"] = Json($$"""{"ApiToken":"{{SigningKeyValue}}"}""");
+
+        var catalog = await CreateService().GetCatalogAsync();
+
+        var configuration = Assert.Single(catalog.Features, x => x.Id == "Orphaned").Configuration;
+        Assert.Equal(SecretSettingMask.Placeholder, configuration.GetProperty("ApiToken").GetString());
+        AssertNoSecretValue(catalog);
+    }
+
+    [Fact]
+    public async Task ApplyRestoresEachSecretFromItsOwnFeatureWhateverItsCasing()
+    {
+        _store.Features["SecuredA"] = Json("""{"signingKey":"signing-key-of-a"}""");
+        _store.Features["SecuredB"] = Json("""{"SIGNINGKEY":"signing-key-of-b"}""");
+        var service = CreateService(SecuredFeature("SecuredA"), SecuredFeature("SecuredB"));
+        var catalog = await service.GetCatalogAsync();
+        var placeholder = Json($$"""{"SigningKey":"{{SecretSettingMask.Placeholder}}"}""");
+
+        await service.ApplyAsync(new FeatureApplyRequest(catalog.Revision, [new("SecuredA", true, placeholder), new("SecuredB", true, placeholder)]));
+
+        Assert.Equal("signing-key-of-a", _store.Features["SecuredA"].GetProperty("SigningKey").GetString());
+        Assert.Equal("signing-key-of-b", _store.Features["SecuredB"].GetProperty("SigningKey").GetString());
+    }
+
+    [Fact]
     public async Task ApplyStoresANewSecretValue()
     {
         _store.Features[SecuredFeatureId] = Json($$"""{"SigningKey":"{{SigningKeyValue}}"}""");
@@ -183,9 +211,9 @@ public sealed class FeatureManagementServiceTests
         Assert.Equal("slow", stored.GetProperty("Mode").GetString());
     }
 
-    private static ContributingFeatureCatalogContributor SecuredFeature() =>
+    private static ContributingFeatureCatalogContributor SecuredFeature(string featureId = SecuredFeatureId) =>
         new(
-            SecuredFeatureId,
+            featureId,
             Setting("SigningKey", "string", secret: true),
             Setting("KeyRing", "object", secret: true),
             Setting("EmptySecret", "string", secret: true),

@@ -61,8 +61,8 @@ public sealed class FeatureManagementService(
             await contributor.ContributeAsync(context, cancellationToken);
 
         // Every catalog response (list, apply result, and the host registry built from them) passes through here, so
-        // this is the one place a secret setting's value is kept out of the wire. Settings are only known once every
-        // contributor has run.
+        // this is the one place a secret value is kept out of the wire. Settings are only known once every contributor
+        // has run.
         foreach (var builder in context.Items.Values)
         {
             builder.Configuration = SecretSettingMask.MaskConfiguration(builder.Configuration, builder.Settings);
@@ -79,7 +79,7 @@ public sealed class FeatureManagementService(
         return new FeatureCatalogResponse(shell.Revision, items);
     }
 
-    /// <summary>A client that round-trips the catalog sends the placeholder back for every secret it did not change.</summary>
+    /// <summary>A client that round-trips the catalog sends the placeholder back for every hidden value it did not change.</summary>
     private static FeatureApplyRequest RestoreSecrets(FeatureApplyRequest request, FeatureCatalogResponse current, ShellFeatureConfigurationSnapshot shell)
     {
         var settingsById = current.Features.ToDictionary(x => x.Id, x => x.Settings, StringComparer.OrdinalIgnoreCase);
@@ -88,9 +88,11 @@ public sealed class FeatureManagementService(
         {
             Features = request.Features.Select(feature =>
             {
-                if (feature.Id is null || !settingsById.TryGetValue(feature.Id, out var settings))
+                if (feature.Id is null)
                     return feature;
 
+                // A feature the catalog does not know declares no settings, so every key it carries counts as hidden.
+                var settings = settingsById.GetValueOrDefault(feature.Id) ?? [];
                 System.Text.Json.JsonElement? stored = shell.Features.TryGetValue(feature.Id, out var value) ? value : null;
                 return feature with { Configuration = SecretSettingMask.Restore(feature.Configuration, stored, settings) };
             }).ToArray()
