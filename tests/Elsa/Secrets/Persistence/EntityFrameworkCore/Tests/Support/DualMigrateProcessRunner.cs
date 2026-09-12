@@ -11,6 +11,18 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.Support;
 /// </summary>
 internal static class DualMigrateProcessRunner
 {
+    // Every `dotnet ef` invocation copies its BuildHost into the Tooling project's output
+    // folder. Concurrent dual-migrate.sh calls race on that copy: xUnit runs the Secrets EF
+    // test classes in the same assembly in parallel, and a solution-filtered `dotnet test`
+    // runs the PostgreSQL assembly (which links this file, see the class doc comment) alongside
+    // this one. Serialize with a cross-process, cross-assembly lock on a file scoped to this
+    // checkout's Tooling output, so two different worktrees never contend on each other's lock.
+    private static readonly string ToolingLockRelativePath = Path.Join(
+        "src", "Elsa", "Secrets", "Persistence", "EntityFrameworkCore", "Tooling", "obj", "dual-migrate.lock");
+
+    private static readonly TimeSpan LockAcquisitionTimeout = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan LockRetryDelay = TimeSpan.FromMilliseconds(100);
+
     private static bool? dotnetEf;
 
     public static bool HasDotnetEf()
@@ -63,6 +75,11 @@ internal static class DualMigrateProcessRunner
     {
         var root = rootOverride ?? RepositoryRoot();
         var script = Path.Join(root, "tools", "ef", "dual-migrate.sh");
+
+        // Hold the lock for the whole process lifetime so no other caller can start a
+        // conflicting `dotnet ef` invocation while this one runs.
+        using var toolingLock = AcquireToolingLock(root);
+
         var start = new ProcessStartInfo("bash")
         {
             WorkingDirectory = root,
@@ -89,6 +106,8 @@ internal static class DualMigrateProcessRunner
                             ?? throw new InvalidOperationException("bash could not be started.");
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
+        // The 180s budget covers running the script, not waiting for the lock: start it now,
+        // after the lock is already held.
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(180));
         try
         {
@@ -158,6 +177,33 @@ internal static class DualMigrateProcessRunner
         catch (System.ComponentModel.Win32Exception)
         {
             // The caller will skip when the repository-local tool is unavailable.
+        }
+    }
+
+    private static FileStream AcquireToolingLock(string root)
+    {
+        var lockPath = Path.Join(root, ToolingLockRelativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(lockPath)!);
+
+        var stopwatch = Stopwatch.StartNew();
+        while (true)
+        {
+            try
+            {
+                return new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            }
+            catch (IOException) when (stopwatch.Elapsed < LockAcquisitionTimeout)
+            {
+                Thread.Sleep(LockRetryDelay);
+            }
+            catch (IOException ex)
+            {
+                throw new TimeoutException(
+                    $"Could not acquire the dual-migrate Tooling lock at '{lockPath}' within " +
+                    $"{LockAcquisitionTimeout}. Another dual-migrate.sh invocation is holding it " +
+                    "for longer than expected.",
+                    ex);
+            }
         }
     }
 
