@@ -206,6 +206,45 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     [Fact]
+    public void Evaluated_assets_reject_a_package_library_missing_from_every_target()
+    {
+        const string assets = """
+            {
+              "libraries": {
+                "Contoso.Persistence/1.0.0": { "type": "package" },
+                "Microsoft.EntityFrameworkCore/10.0.0": { "type": "package" }
+              },
+              "targets": {
+                "net10.0": {
+                  "Microsoft.EntityFrameworkCore/10.0.0": { "type": "package" }
+                }
+              }
+            }
+            """;
+
+        Assert.Throws<InvalidOperationException>(() => ReadEfDependencyPackages(assets));
+    }
+
+    [Fact]
+    public void Evaluated_assets_reject_a_package_target_with_a_different_version_than_its_library_node()
+    {
+        const string assets = """
+            {
+              "libraries": {
+                "Contoso.Persistence/1.0.0": { "type": "package" }
+              },
+              "targets": {
+                "net10.0": {
+                  "Contoso.Persistence/2.0.0": { "type": "package" }
+                }
+              }
+            }
+            """;
+
+        Assert.Throws<InvalidOperationException>(() => ReadEfDependencyPackages(assets));
+    }
+
+    [Fact]
     public void First_party_dependency_edges_cannot_be_conditionally_hidden_from_the_reviewed_restore_graphs()
     {
         var offenders = Directory.EnumerateFiles(RepoRoot, "*.*", SearchOption.AllDirectories)
@@ -285,16 +324,18 @@ public sealed class EfCoreDependencyGuardTests
         if (!document.RootElement.TryGetProperty("targets", out var targets) || targets.ValueKind != JsonValueKind.Object)
             throw new InvalidOperationException("Evaluated restore assets must contain an object-valued 'targets' graph.");
 
-        var libraryTypes = libraries.EnumerateObject()
+        var libraryNodes = libraries.EnumerateObject()
             .ToDictionary(
-                library => library.Name.Split('/', 2)[0],
-                library => ReadLibraryType(library),
+                library => library.Name,
+                library => new LibraryNode(library.Name.Split('/', 2)[0], ReadLibraryType(library)),
                 StringComparer.OrdinalIgnoreCase);
-        var packageNames = libraryTypes
-            .Where(library => string.Equals(library.Value, "package", StringComparison.Ordinal))
-            .Select(library => library.Key)
+        var libraryNames = libraryNodes.Values.Select(library => library.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var packageNames = libraryNodes.Values
+            .Where(library => string.Equals(library.Type, "package", StringComparison.Ordinal))
+            .Select(library => library.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var dependencies = packageNames.ToDictionary(name => name, _ => new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
+        var targetNodeKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var target in targets.EnumerateObject())
         {
@@ -303,16 +344,17 @@ public sealed class EfCoreDependencyGuardTests
 
             foreach (var library in target.Value.EnumerateObject())
             {
-                var name = library.Name.Split('/', 2)[0];
-                if (!libraryTypes.ContainsKey(name))
-                    throw new InvalidOperationException($"Evaluated restore target node '{name}' is missing from 'libraries'.");
+                if (!libraryNodes.TryGetValue(library.Name, out var libraryNode))
+                    throw new InvalidOperationException($"Evaluated restore target node '{library.Name}' is missing from 'libraries'.");
+                var name = libraryNode.Name;
+                targetNodeKeys.Add(library.Name);
                 if (!library.Value.TryGetProperty("dependencies", out var libraryDependencies))
                     continue;
                 if (libraryDependencies.ValueKind != JsonValueKind.Object)
                     throw new InvalidOperationException($"Evaluated dependencies for '{name}' must be an object.");
 
                 var dependencyNames = libraryDependencies.EnumerateObject().Select(dependency => dependency.Name).ToArray();
-                var missingDependencies = dependencyNames.Where(dependency => !libraryTypes.ContainsKey(dependency)).ToArray();
+                var missingDependencies = dependencyNames.Where(dependency => !libraryNames.Contains(dependency)).ToArray();
                 if (missingDependencies.Length > 0)
                     throw new InvalidOperationException(
                         $"Evaluated dependencies for '{name}' contain nodes missing from 'libraries': {string.Join(", ", missingDependencies)}.");
@@ -321,6 +363,15 @@ public sealed class EfCoreDependencyGuardTests
                     dependencies[name].UnionWith(dependencyNames.Where(packageNames.Contains));
             }
         }
+
+        var packagesMissingFromTargets = libraryNodes
+            .Where(library => library.Value.Type == "package" && !targetNodeKeys.Contains(library.Key))
+            .Select(library => library.Key)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (packagesMissingFromTargets.Length > 0)
+            throw new InvalidOperationException(
+                $"Evaluated restore package libraries are missing from every target: {string.Join(", ", packagesMissingFromTargets)}.");
 
         var efDependencyPackages = packageNames
             .Where(name => name.Contains(EfPackageToken, StringComparison.OrdinalIgnoreCase))
@@ -351,6 +402,8 @@ public sealed class EfCoreDependencyGuardTests
 
         return libraryType;
     }
+
+    private sealed record LibraryNode(string Name, string Type);
 
     private static string[] FindUnexpectedEfPackages(IEnumerable<string> resolved, IEnumerable<string> allowed) =>
         resolved.Except(allowed, StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToArray();

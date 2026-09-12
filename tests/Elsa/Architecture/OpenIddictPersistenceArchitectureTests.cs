@@ -22,17 +22,18 @@ public sealed class OpenIddictPersistenceArchitectureTests
         "OpenIddict.EntityFrameworkCore"
     ];
 
-    private static readonly string[] WorkbenchOpenIddictVendorSources =
-    [
-        "OpenIddictEntityFrameworkCoreDefaults.cs",
-        "OpenIddictIdentityDbContext.cs",
-        "OpenIddictIdentityStoreInitializer.cs",
-        "Sqlite/Migrations/20260704221407_Initial.Designer.cs",
-        "Sqlite/Migrations/20260704221407_Initial.cs",
-        "Sqlite/Migrations/OpenIddictIdentityDbContextModelSnapshot.cs",
-        "Sqlite/OpenIddictIdentityDbContextFactory.cs",
-        "WorkbenchOpenIddictEntityFrameworkCoreOptions.cs"
-    ];
+    private static readonly IReadOnlyDictionary<string, string> WorkbenchOpenIddictVendorSources =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["OpenIddictEntityFrameworkCoreDefaults.cs"] = "4e844102195aa3eab13220c513a423345b7100e53365a768e48dfa9f6469d3f2",
+            ["OpenIddictIdentityDbContext.cs"] = "105b7bfb61bb87332c8bd5a5a83cff5f8f3f2ee0a40fc6733834afc84b11986f",
+            ["OpenIddictIdentityStoreInitializer.cs"] = "e0e4fd06238ee0d890ce278823be670d11cd7e4ce1952a05567895c0403f3a6b",
+            ["Sqlite/Migrations/20260704221407_Initial.Designer.cs"] = "e49cc98bb32378c17bbad75fd3bbb071f3d70e7dbf654cc00019282d38e67e79",
+            ["Sqlite/Migrations/20260704221407_Initial.cs"] = "d73cc67a51181faa7b1d454fd45bb897f458ecb46156e45dba7aa8cc15229b28",
+            ["Sqlite/Migrations/OpenIddictIdentityDbContextModelSnapshot.cs"] = "88338ae62df8596eab3f87d007b121252f373c8670ac1d131d098692b48e27b6",
+            ["Sqlite/OpenIddictIdentityDbContextFactory.cs"] = "e6ecc4bbf730d140886b207a3591ae1f027c2930c79938fdd06d0b236803d3ee",
+            ["WorkbenchOpenIddictEntityFrameworkCoreOptions.cs"] = "d2442a8e30c18f022cb91806a74a3477f3e6bf136178454d1ac8ca5fbf89d4a1"
+        };
 
     internal static bool IsWorkbenchVendorEfSource(string relativePath)
     {
@@ -41,7 +42,7 @@ public sealed class OpenIddictPersistenceArchitectureTests
             return true;
 
         return relativePath.StartsWith(vendorRoot, StringComparison.Ordinal) &&
-               WorkbenchOpenIddictVendorSources.Contains(relativePath[vendorRoot.Length..], StringComparer.Ordinal);
+               WorkbenchOpenIddictVendorSources.ContainsKey(relativePath[vendorRoot.Length..]);
     }
 
     [Fact]
@@ -50,7 +51,7 @@ public sealed class OpenIddictPersistenceArchitectureTests
         const string vendorRoot = "src/Apps/Elsa.Workbench/OpenIddict/";
 
         Assert.True(IsWorkbenchVendorEfSource("src/Apps/Elsa.Workbench/WorkbenchOpenIddictVendorRegistration.cs"));
-        Assert.All(WorkbenchOpenIddictVendorSources, source => Assert.True(IsWorkbenchVendorEfSource(vendorRoot + source)));
+        Assert.All(WorkbenchOpenIddictVendorSources.Keys, source => Assert.True(IsWorkbenchVendorEfSource(vendorRoot + source)));
         Assert.False(IsWorkbenchVendorEfSource("src/Apps/Elsa.Workbench/Program.cs"));
         Assert.False(IsWorkbenchVendorEfSource(vendorRoot + "UnlistedEntityFrameworkCoreAdapter.cs"));
         Assert.False(IsWorkbenchVendorEfSource("src/Elsa/Foundation/Identity/OpenIddict/OpenIddictIdentityDbContext.cs"));
@@ -176,9 +177,7 @@ public sealed class OpenIddictPersistenceArchitectureTests
             "Apps",
             "Elsa.Workbench",
             "WorkbenchOpenIddictVendorRegistration.cs"));
-        var normalizedRegistrationHash = Convert.ToHexString(
-                SHA256.HashData(Encoding.UTF8.GetBytes(hostRegistration.ReplaceLineEndings("\n"))))
-            .ToLowerInvariant();
+        var normalizedRegistrationHash = ContentSha256(hostRegistration);
         Assert.True(
             normalizedRegistrationHash == WorkbenchVendorRegistrationSha256,
             "The admitted Workbench OpenIddict vendor registration changed. Re-review its complete content and update the fingerprint deliberately; no additional first-party EF registration may share this exception.");
@@ -199,11 +198,16 @@ public sealed class OpenIddictPersistenceArchitectureTests
         Assert.Equal(["OpenIddictIdentityDbContext", "OpenIddictIdentityDbContext"], dbContextRegistrations);
         var vendorRoot = Path.Combine(RepoRoot, "src", "Apps", "Elsa.Workbench", "OpenIddict");
         Assert.True(Directory.Exists(vendorRoot));
+        Assert.All(
+            WorkbenchOpenIddictVendorSources,
+            source => Assert.True(
+                ContentSha256(File.ReadAllText(Path.Join(vendorRoot, source.Key))) == source.Value,
+                $"The admitted Workbench OpenIddict vendor source '{source.Key}' changed. Re-review its complete content and update the fingerprint deliberately; no first-party EF code may share this exception."));
         var vendorSources = Directory.EnumerateFiles(vendorRoot, "*.cs", SearchOption.AllDirectories)
             .Select(path => Path.GetRelativePath(vendorRoot, path).Replace(Path.DirectorySeparatorChar, '/'))
             .Order(StringComparer.Ordinal)
             .ToArray();
-        Assert.Equal(WorkbenchOpenIddictVendorSources, vendorSources);
+        Assert.Equal(WorkbenchOpenIddictVendorSources.Keys, vendorSources);
 
         var testProject = XDocument.Load(Path.Combine(
             RepoRoot,
@@ -236,6 +240,9 @@ public sealed class OpenIddictPersistenceArchitectureTests
             .Where(candidate => tokens.Any(token => candidate.line.Contains(token, StringComparison.OrdinalIgnoreCase)))
             .Select(candidate => $"{relativePath}:{candidate.number}: {candidate.line.Trim()}");
     }
+
+    private static string ContentSha256(string content) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content.ReplaceLineEndings("\n")))).ToLowerInvariant();
 
     private static string RepoRoot
     {
