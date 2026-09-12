@@ -1,7 +1,9 @@
 # Extension points — Secrets.Persistence.EntityFrameworkCore
 
-Additive EF Core replacement for `ISecretRepository`. Groundwork remains the default
-first-party store. Workbench catalogs this feature; default shells do not enable it.
+EF Core replacement for `ISecretRepository` and the first existing implementation in the accepted
+[ADR 0073](../../../../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
+migration program. Groundwork remains the temporary default until the Secrets four-provider gate and
+explicit flip complete. Workbench catalogs this feature; default shells do not yet enable it.
 
 Phase 4 (#1631): Groundwork Secrets matrix and ledger growth are **not** prerequisites for this
 feature. EF-selected proof is `tests/Elsa/Secrets/Persistence/EntityFrameworkCore/` plus the

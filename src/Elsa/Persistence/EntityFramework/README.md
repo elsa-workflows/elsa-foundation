@@ -1,7 +1,8 @@
 # Elsa.Persistence.EntityFramework
 
-Shared **policy** surface for first-party EF Core persistence. This is the ADR 0072 Secrets
-pilot package: history-table naming, provider guard, and migrate/validate apply modes.
+Shared **policy** surface for first-party EF Core persistence: history-table naming,
+provider guard, and migrate/validate apply modes. It began as the ADR 0072 Secrets pilot
+and now serves the accepted ADR 0073 migration program.
 
 It is **not** a second Groundwork, not a mandatory Elsa `DbContext` base, and not a place to
 accumulate entity configuration. Module-owned derived contexts remain first-class
@@ -9,12 +10,10 @@ accumulate entity configuration. Module-owned derived contexts remain first-clas
 
 ## Status
 
-This package is an intentional first-party EF edge under **proposed**
-[ADR 0072](https://github.com/elsa-workflows/elsa-foundation/pull/1623).
-[ADR 0042](../../../../docs/adr/0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md)
-still forbids first-party EF except the OpenIddict vendor exception. The ratchet may
-exclude these proposed pilot paths for review; that exclusion is not an accepted ADR
-amendment. Accepting 0072 formally narrows 0042.
+Accepted [ADR 0073](../../../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
+makes EF Core the only first-party persistence implementation family and supersedes the
+opposite direction in ADRs 0042, 0065, 0072. The Secrets implementation remains opt-in only
+until its migration slice proves four-provider parity and performs the explicit default flip.
 
 ## What this package owns
 
@@ -35,7 +34,7 @@ same lock** or concurrent hosts race. Do not roll a second lock around `MigrateA
 ## Dual apply
 
 `EfDatabaseMigrator.ApplyAsync` is the in-process path (feature enable and CShells reload).
-Out-of-process apply and fail-if-pending for the Secrets pilot live in
+Out-of-process apply and fail-if-pending for the current Secrets implementation live in
 [tools/ef/dual-migrate.sh](../../../../tools/ef/dual-migrate.sh) (`dotnet ef database update`
 and `dotnet ef migrations has-pending-model-changes` per derived context).
 

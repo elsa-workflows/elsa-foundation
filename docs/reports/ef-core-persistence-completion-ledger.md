@@ -74,9 +74,9 @@ correctness requirements must first move to an EF-neutral or EF-owned row.
 
 ## Shell-feature ledger
 
-All 17 entries are owned by the matching production row and Program #1665 until a worker-ready leaf
-exists. Each requires replacement registration, activation/reload proof, default-composition proof,
-then explicit deletion evidence.
+All 17 entries are owned by the matching production, provider/host, or Mongo row and Program #1665
+until a worker-ready leaf exists. Each requires replacement registration, activation/reload proof,
+default-composition proof, then explicit deletion evidence.
 
 | ID | Current shell feature file | Owning production row | Replacement / flip / deletion PRs | Disposition |
 |---|---|---|---|---|
