@@ -72,6 +72,7 @@ public sealed class EfRelationalExceptionClassifierTests
     [Theory]
     [InlineData("40001", true)]
     [InlineData("40P01", true)]
+    [InlineData("55P03", true)]
     [InlineData("23505", false)]
     public void Classifies_postgresql_transient_write_conflicts(string sqlState, bool expected)
     {
@@ -82,6 +83,7 @@ public sealed class EfRelationalExceptionClassifierTests
 
     [Theory]
     [InlineData(1205, true)]
+    [InlineData(1222, true)]
     [InlineData(3960, true)]
     [InlineData(2627, false)]
     public void Classifies_sql_server_transient_write_conflicts(int number, bool expected)

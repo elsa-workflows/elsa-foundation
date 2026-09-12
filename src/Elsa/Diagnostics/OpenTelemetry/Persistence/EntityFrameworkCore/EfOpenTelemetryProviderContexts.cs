@@ -49,9 +49,11 @@ internal static class EfOpenTelemetryProviderModel
             modelBuilder.Entity(type).Property("PayloadJson").HasColumnType(payloadType);
             foreach (var property in modelBuilder.Entity(type).Metadata.GetProperties().Where(property => property.Name.EndsWith("SearchKey", StringComparison.Ordinal)))
             {
-                // Search keys are ASCII projections. Oversized keys are deliberately unindexed text so
-                // MySQL's utf8mb4 row/index limits cannot reject an otherwise valid telemetry record.
-                modelBuilder.Entity(type).Property(property.Name).HasColumnType(canonicalType).IsUnicode(false);
+                // Search keys are ASCII projections. Unbounded signal-text projections need the same
+                // large-object type as payloads; bounded identity projections use the provider's compact
+                // canonical type and remain deliberately unindexed.
+                var columnType = property.GetMaxLength() is null ? payloadType : canonicalType;
+                modelBuilder.Entity(type).Property(property.Name).HasColumnType(columnType).IsUnicode(false);
             }
         }
     }

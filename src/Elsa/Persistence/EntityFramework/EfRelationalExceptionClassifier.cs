@@ -59,11 +59,11 @@ public static class EfRelationalExceptionClassifier
                 return true;
 
             if (fullName.Contains("PostgresException", StringComparison.Ordinal) &&
-                type.GetProperty("SqlState")?.GetValue(current) as string is "40001" or "40P01")
+                type.GetProperty("SqlState")?.GetValue(current) as string is "40001" or "40P01" or "55P03")
                 return true;
 
             if (type.Name.Equals("SqlException", StringComparison.Ordinal) &&
-                type.GetProperty("Number")?.GetValue(current) is 1205 or 3960)
+                type.GetProperty("Number")?.GetValue(current) is 1205 or 1222 or 3960)
                 return true;
 
             if (fullName.Contains("MySqlException", StringComparison.Ordinal) &&

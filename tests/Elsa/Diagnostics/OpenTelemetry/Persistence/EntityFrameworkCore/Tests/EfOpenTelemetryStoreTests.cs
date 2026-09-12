@@ -244,6 +244,35 @@ public sealed class EfOpenTelemetryStoreTests
     }
 
     [Fact]
+    public async Task Persisted_unicode_identity_collapses_catalogs_and_resolves_services_consistently()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        var longSResource = TelemetryTestData.Resource("resource-ſ", "service-old");
+        var asciiResource = TelemetryTestData.Resource("resource-s", "service-current");
+        var longSInstrument = TelemetryTestData.Instrument("instrument-ſ", longSResource.Id, "requests-old");
+        var asciiInstrument = TelemetryTestData.Instrument("instrument-s", asciiResource.Id, "requests-current");
+        var trace = TelemetryTestData.Trace("trace-pinned-identity", longSResource.Id, spanCount: 1);
+        var point = TelemetryTestData.Point("point-pinned-identity", longSInstrument.Id, longSResource.Id);
+        var log = TelemetryTestData.Log("log-pinned-identity", longSResource.Id, trace.TraceId);
+
+        await fixture.Store.WriteAsync(new(
+            [longSResource, asciiResource],
+            [trace],
+            [],
+            [longSInstrument, asciiInstrument],
+            [point],
+            [log]));
+
+        var resource = Assert.Single((await fixture.Store.QueryResourcesAsync(new() { Take = 10 })).Items);
+        Assert.Equal(asciiResource.Id, resource.Id);
+        Assert.Equal(asciiResource.ServiceName, resource.ServiceName);
+        Assert.Equal([trace.TraceId], (await fixture.Store.QueryTracesAsync(new() { ServiceName = "SERVICE-CURRENT", Take = 10 })).Items.Select(x => x.TraceId));
+        Assert.Equal([point.Id], (await fixture.Store.QueryMetricsAsync(new() { ServiceName = "SERVICE-CURRENT", Take = 10 })).Points.Select(x => x.Id));
+        Assert.Equal(asciiInstrument.Id, Assert.Single((await fixture.Store.QueryMetricsAsync(new() { Take = 10 })).Instruments).Id);
+        Assert.Equal([log.Id], (await fixture.Store.QueryLogsAsync(new() { ServiceName = "SERVICE-CURRENT", Take = 10 })).Items.Select(x => x.Id));
+    }
+
+    [Fact]
     public async Task Query_bounds_are_clamped_and_ordering_is_deterministic()
     {
         await using var fixture = await CreateFixtureAsync(new() { MaxQuerySize = 2 });
@@ -270,6 +299,10 @@ public sealed class EfOpenTelemetryStoreTests
 
         var refused = TelemetryTestData.Trace("trace-name-refused", "resource-name", spanCount: 1) with { Name = new string('n', 572) };
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => fixture.Store.WriteAsync(new([], [refused], [], [], [], [])).AsTask());
+
+        var whitespace = TelemetryTestData.Trace("trace-name-whitespace", "resource-name", spanCount: 1) with { Name = new string(' ', 1_024) };
+        await fixture.Store.WriteAsync(new([], [whitespace], [], [], [], []));
+        Assert.Null((await fixture.Store.GetTraceAsync(whitespace.TraceId))!.Trace.Name);
     }
 
     [Fact]

@@ -152,20 +152,26 @@ public sealed class EfOpenTelemetryDurabilityTests
         }
     }
 
-    [Fact]
-    public async Task Corrupt_durable_summary_is_reported_without_a_partial_append()
+    [Theory]
+    [InlineData("{not-json}")]
+    [InlineData("[\"z\",\"a\"]")]
+    public async Task Corrupt_durable_summary_is_reported_as_data_corruption_without_a_partial_append(string persistedMemberships)
     {
         await using var fixture = await CreateFixtureAsync();
         var original = TelemetryTestData.Batch("corrupt-summary");
         await fixture.Store.WriteAsync(original);
 
-        await fixture.WithDbAsync(CorruptTraceSummaryAsync);
+        await fixture.WithDbAsync(db => CorruptTraceSummaryAsync(db, persistedMemberships));
+
+        var readFailure = await Assert.ThrowsAsync<OpenTelemetryPersistenceDataException>(() => fixture.Store.GetTraceAsync(original.Traces.Single().TraceId).AsTask());
+        Assert.Equal(OpenTelemetryPersistenceFailureReason.CorruptData, readFailure.Reason);
 
         var second = original with
         {
             Traces = [original.Traces.Single() with { StartTime = TelemetryTestData.Now.AddSeconds(1) }]
         };
-        await Assert.ThrowsAnyAsync<Exception>(() => fixture.Store.WriteAsync(second).AsTask());
+        var failure = await Assert.ThrowsAsync<OpenTelemetryPersistenceDataException>(() => fixture.Store.WriteAsync(second).AsTask());
+        Assert.Equal(OpenTelemetryPersistenceFailureReason.CorruptData, failure.Reason);
         var rawTraceCount = await fixture.WithDbAsync(db => db.Traces.CountAsync());
         Assert.Equal(1, rawTraceCount);
     }
@@ -247,6 +253,25 @@ public sealed class EfOpenTelemetryDurabilityTests
     }
 
     [Fact]
+    public void Ef_feature_configures_the_opt_in_store_and_provider_context()
+    {
+        var services = new ServiceCollection();
+        new EfOpenTelemetryFeature
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:",
+            TenantId = "feature-tenant",
+            ScopeId = "feature-scope",
+            SourceId = "feature-source"
+        }.ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        Assert.IsType<EfOpenTelemetryStore>(provider.GetRequiredService<IOpenTelemetryStore>());
+        using var scope = provider.CreateScope();
+        Assert.IsType<OpenTelemetrySqliteDbContext>(scope.ServiceProvider.GetRequiredService<OpenTelemetryDbContext>());
+    }
+
+    [Fact]
     public async Task Infrastructure_failures_do_not_escape_as_successful_captures()
     {
         var directory = Path.Combine(Path.GetTempPath(), "elsa-otel-infrastructure-" + Guid.NewGuid().ToString("N"));
@@ -269,10 +294,26 @@ public sealed class EfOpenTelemetryDurabilityTests
         }
     }
 
-    private static async Task CorruptTraceSummaryAsync(OpenTelemetryDbContext db)
+    [Fact]
+    public async Task Rejected_capture_is_counted_once_for_each_lost_signal()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        await fixture.EfStore.StopAsync();
+        var batch = TelemetryTestData.Batch("rejected-capture");
+
+        await Assert.ThrowsAsync<DiagnosticsDrainException>(() => fixture.Store.WriteAsync(batch).AsTask());
+
+        var diagnostics = await fixture.Store.GetDiagnosticsAsync();
+        Assert.Equal(1, diagnostics.DroppedTraceCount);
+        Assert.Equal(1, diagnostics.DroppedSpanCount);
+        Assert.Equal(1, diagnostics.DroppedMetricPointCount);
+        Assert.Equal(1, diagnostics.DroppedLogRecordCount);
+    }
+
+    private static async Task CorruptTraceSummaryAsync(OpenTelemetryDbContext db, string persistedMemberships)
     {
         var summary = await db.TraceSummaries.SingleAsync();
-        summary.ServiceMembershipJson = "{not-json}";
+        summary.ServiceMembershipJson = persistedMemberships;
         await db.SaveChangesAsync();
     }
 

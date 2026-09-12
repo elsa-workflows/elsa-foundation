@@ -1,8 +1,3 @@
-using System.Data;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Exceptions;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
@@ -14,6 +9,11 @@ using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using System.Data;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Stores;
 
@@ -29,6 +29,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     private const int MaxDrainAttempts = 3;
     private const int MaxSummaryRetry = 3;
     private const int MaximumAffectedSummaryKeys = 100_000;
+    private const int ProviderSafeKeyBatchSize = 500;
     private static readonly TimeSpan AppendIdempotencyWindow = TimeSpan.FromHours(1);
     private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(25);
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
@@ -113,9 +114,12 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
                 foreach (var resource in batch.Resources)
                     sourceRegistry.MarkSeen(resource);
         }
-        catch (DiagnosticsDrainException exception) when (exception.InnerException is OpenTelemetryPersistenceException persistence)
+        catch (DiagnosticsDrainException exception)
         {
-            throw persistence;
+            CountDropped(batch);
+            if (exception.InnerException is OpenTelemetryPersistenceException persistence)
+                throw persistence;
+            throw;
         }
     }
 
@@ -217,14 +221,18 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
                 return null;
             // These columns are a portable integrity projection as well as a corruption probe; filters use
             // normalized membership rows, never provider JSON operators.
-            _ = Deserialize<string[]>(summary.ServiceMembershipJson);
-            _ = Deserialize<string[]>(summary.WorkflowMembershipJson);
+            _ = ValidatePersistedMemberships(summary.ServiceMembershipJson, nameof(summary.ServiceMembershipJson));
+            _ = ValidatePersistedMemberships(summary.WorkflowMembershipJson, nameof(summary.WorkflowMembershipJson));
             var trace = ToTrace(summary);
             var spans = await db.Spans.AsNoTracking().Where(x => x.ScopeKey == binding.ScopeKey && x.TraceKey == traceKey).OrderBy(x => x.StartTimeTicks).ThenBy(x => x.SpanIdOrderKey).ThenBy(x => x.Sequence).ToListAsync(ct);
             var logs = await db.Logs.AsNoTracking().Where(x => x.ScopeKey == binding.ScopeKey && x.TraceIdSearchKey == traceSearchKey).OrderBy(x => x.TimestampTicks).ThenBy(x => x.IdOrderKey).ThenBy(x => x.Sequence).ToListAsync(ct);
             var resourceIds = await db.TraceSummaryMemberships.AsNoTracking().Where(x => x.ScopeKey == binding.ScopeKey && x.TraceKey == traceKey && x.Kind == OpenTelemetryTraceSummaryMembershipKind.Resource).Select(x => x.Value).ToListAsync(ct);
-            var resourceKeys = resourceIds.Select(id => OpenTelemetrySearchKeys.Key(id)).ToArray();
-            var resources = await db.Resources.AsNoTracking().Where(x => x.ScopeKey == binding.ScopeKey && resourceKeys.Contains(x.IdSearchKey)).ToListAsync(ct);
+            var resourceKeys = resourceIds.Select(OpenTelemetrySearchKeys.ResourceId);
+            var resources = await LoadBySearchKeysAsync(
+                resourceKeys,
+                keys => db.Resources.AsNoTracking()
+                    .Where(x => x.ScopeKey == binding.ScopeKey && keys.Contains(x.IdSearchKey))
+                    .ToListAsync(ct));
             return new OpenTelemetryTraceDetail(trace,
                 spans.Select(ToSpan).ToArray(),
                 resources.OrderBy(x => x.ServiceName, StringComparer.Ordinal).ThenBy(x => x.Id, StringComparer.Ordinal).Select(ToResource).ToArray(),
@@ -257,9 +265,11 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
                 query = query.Where(x => x.TimestampTicks <= to.UtcTicks);
             var points = await query.OrderByDescending(x => x.TimestampTicks).ThenBy(x => x.IdOrderKey).ThenBy(x => x.Sequence).Take(take).ToListAsync(ct);
             var instrumentKeys = points.Select(x => x.InstrumentIdSearchKey).Distinct(StringComparer.Ordinal).ToArray();
-            var instruments = (await db.Instruments.AsNoTracking()
-                    .Where(x => x.ScopeKey == binding.ScopeKey && instrumentKeys.Contains(x.IdSearchKey))
-                    .ToListAsync(ct))
+            var instruments = (await LoadBySearchKeysAsync(
+                    instrumentKeys,
+                    keys => db.Instruments.AsNoTracking()
+                        .Where(x => x.ScopeKey == binding.ScopeKey && keys.Contains(x.IdSearchKey))
+                        .ToListAsync(ct)))
                 .OrderBy(x => x.Id, StringComparer.Ordinal)
                 .Select(ToInstrument)
                 .ToArray();
@@ -422,8 +432,8 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
         catch (OpenTelemetryPersistenceException) { throw; }
         catch (OperationCanceledException) { throw; }
         catch (ArgumentException) { throw; }
-        catch (InvalidDataException) { throw; }
-        catch (JsonException exception) { throw new InvalidDataException("The persisted OpenTelemetry capture contains malformed JSON.", exception); }
+        catch (InvalidDataException exception) { throw new OpenTelemetryPersistenceDataException(operation, "The durable OpenTelemetry capture contains inconsistent state.", ScopeContext(), exception); }
+        catch (JsonException exception) { throw new OpenTelemetryPersistenceDataException(operation, "The durable OpenTelemetry capture contains malformed JSON.", ScopeContext(), exception); }
         catch (Exception exception) { throw new OpenTelemetryPersistenceUnavailableException(operation, "The OpenTelemetry capture could not be committed.", ScopeContext(), exception); }
         finally { operationGate.Release(); }
     }
@@ -478,6 +488,11 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
             await tx.CommitAsync(cancellationToken);
             return deleted;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (OpenTelemetryPersistenceException) { throw; }
+        catch (InvalidDataException exception) { throw new OpenTelemetryPersistenceDataException("Retention", "The durable OpenTelemetry capture contains inconsistent state.", ScopeContext(), exception); }
+        catch (JsonException exception) { throw new OpenTelemetryPersistenceDataException("Retention", "The durable OpenTelemetry capture contains malformed JSON.", ScopeContext(), exception); }
+        catch (Exception exception) { throw new OpenTelemetryPersistenceUnavailableException("Retention", "The OpenTelemetry retention operation failed.", ScopeContext(), exception); }
         finally { operationGate.Release(); }
     }
 
@@ -522,19 +537,25 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
 
     private async Task UpsertCatalogAsync(OpenTelemetryDbContext db, OpenTelemetryBatch batch, CancellationToken ct)
     {
-        foreach (var resource in batch.Resources.GroupBy(x => x.Id, StringComparer.OrdinalIgnoreCase).Select(x => x.Last()))
+        foreach (var item in batch.Resources
+                     .Select(resource => (Resource: resource, Key: OpenTelemetrySearchKeys.ResourceId(resource.Id)))
+                     .GroupBy(x => x.Key, StringComparer.Ordinal)
+                     .Select(group => group.Last()))
         {
-            var row = await db.Resources.SingleOrDefaultAsync(x => x.ScopeKey == binding.ScopeKey && x.IdSearchKey == OpenTelemetrySearchKeys.ResourceId(resource.Id), ct);
-            var projection = ToResourceEntity(resource);
+            var row = await db.Resources.SingleOrDefaultAsync(x => x.ScopeKey == binding.ScopeKey && x.IdSearchKey == item.Key, ct);
+            var projection = ToResourceEntity(item.Resource);
             if (row is null)
                 db.Resources.Add(projection);
             else
                 Copy(projection, row);
         }
-        foreach (var instrument in batch.Instruments.GroupBy(x => x.Id, StringComparer.OrdinalIgnoreCase).Select(x => x.Last()))
+        foreach (var item in batch.Instruments
+                     .Select(instrument => (Instrument: instrument, Key: OpenTelemetrySearchKeys.SummaryElement(instrument.Id)))
+                     .GroupBy(x => x.Key, StringComparer.Ordinal)
+                     .Select(group => group.Last()))
         {
-            var row = await db.Instruments.SingleOrDefaultAsync(x => x.ScopeKey == binding.ScopeKey && x.IdSearchKey == OpenTelemetrySearchKeys.SummaryElement(instrument.Id), ct);
-            var projection = ToInstrumentEntity(instrument);
+            var row = await db.Instruments.SingleOrDefaultAsync(x => x.ScopeKey == binding.ScopeKey && x.IdSearchKey == item.Key, ct);
+            var projection = ToInstrumentEntity(item.Instrument);
             if (row is null)
                 db.Instruments.Add(projection);
             else
@@ -545,14 +566,25 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
 
     private async Task<Dictionary<string, string>> ResolveServicesAsync(OpenTelemetryDbContext db, OpenTelemetryBatch batch, CancellationToken ct)
     {
-        var result = batch.Resources.ToDictionary(x => x.Id, x => x.ServiceName, StringComparer.OrdinalIgnoreCase);
-        var ids = batch.Traces.SelectMany(x => x.ResourceIds).Concat(batch.MetricPoints.Select(x => x.ResourceId)).Concat(batch.Logs.Select(x => x.ResourceId)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        if (ids.Length == 0)
+        var result = batch.Resources
+            .Select(resource => (Key: OpenTelemetrySearchKeys.ResourceId(resource.Id), Resource: resource))
+            .GroupBy(x => x.Key, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Last().Resource.ServiceName, StringComparer.Ordinal);
+        var idKeys = batch.Traces.SelectMany(x => x.ResourceIds)
+            .Concat(batch.MetricPoints.Select(x => x.ResourceId))
+            .Concat(batch.Logs.Select(x => x.ResourceId))
+            .Select(OpenTelemetrySearchKeys.ResourceId)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (idKeys.Length == 0)
             return result;
-        var idKeys = ids.Select(OpenTelemetrySearchKeys.ResourceId).ToArray();
-        var existing = await db.Resources.AsNoTracking().Where(x => x.ScopeKey == binding.ScopeKey && idKeys.Contains(x.IdSearchKey)).ToListAsync(ct);
+        var existing = await LoadBySearchKeysAsync(
+            idKeys,
+            keys => db.Resources.AsNoTracking()
+                .Where(x => x.ScopeKey == binding.ScopeKey && keys.Contains(x.IdSearchKey))
+                .ToListAsync(ct));
         foreach (var row in existing)
-            result.TryAdd(row.Id, row.ServiceName);
+            result.TryAdd(row.IdSearchKey, row.ServiceName);
         return result;
     }
 
@@ -569,9 +601,9 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
         foreach (var span in batch.Spans)
             db.Spans.Add(ToSpanEntity(span, spanSequence++));
         foreach (var point in batch.MetricPoints)
-            db.MetricPoints.Add(ToMetricPointEntity(point, pointSequence++, services.GetValueOrDefault(point.ResourceId)));
+            db.MetricPoints.Add(ToMetricPointEntity(point, pointSequence++, ResolveService(services, point.ResourceId)));
         foreach (var log in batch.Logs)
-            db.Logs.Add(ToLogEntity(log, logSequence++, services.GetValueOrDefault(log.ResourceId)));
+            db.Logs.Add(ToLogEntity(log, logSequence++, ResolveService(services, log.ResourceId)));
         await db.SaveChangesAsync(ct);
     }
 
@@ -592,7 +624,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
             if (existing is not null)
                 _ = ValidatePersistedMemberships(existing.WorkflowMembershipJson, nameof(existing.WorkflowMembershipJson));
             var serviceNames = CanonicalSummaryElements(
-                retainedServices.Concat(merged.ResourceIds.Select(id => services.GetValueOrDefault(id)).OfType<string>()),
+                retainedServices.Concat(merged.ResourceIds.Select(id => ResolveService(services, id)).OfType<string>()),
                 nameof(OpenTelemetryTraceSummaryEntity.ServiceMembershipJson));
             ApplySummary(row, merged, serviceNames);
             if (existing is null)
@@ -626,8 +658,11 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
             var merged = NormalizeSummary(TelemetryTraceMerger.Merge(records.Select(x => Deserialize<TelemetryTrace>(x.PayloadJson)).ToArray()));
             if (summary is null)
             { summary = new OpenTelemetryTraceSummaryEntity { ScopeKey = binding.ScopeKey, TraceKey = key }; db.TraceSummaries.Add(summary); }
-            var ids = merged.ResourceIds.Select(OpenTelemetrySearchKeys.ResourceId).ToArray();
-            var resources = await db.Resources.AsNoTracking().Where(x => x.ScopeKey == binding.ScopeKey && ids.Contains(x.IdSearchKey)).ToListAsync(ct);
+            var resources = await LoadBySearchKeysAsync(
+                merged.ResourceIds.Select(OpenTelemetrySearchKeys.ResourceId),
+                ids => db.Resources.AsNoTracking()
+                    .Where(x => x.ScopeKey == binding.ScopeKey && ids.Contains(x.IdSearchKey))
+                    .ToListAsync(ct));
             var serviceNames = CanonicalSummaryElements(resources.Select(x => x.ServiceName), nameof(OpenTelemetryTraceSummaryEntity.ServiceMembershipJson));
             ApplySummary(summary, merged, serviceNames);
             db.TraceSummaryMemberships.RemoveRange(memberships);
@@ -702,6 +737,27 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
 
     private async Task<long> NextSequenceAsync<T>(DbSet<T> set, CancellationToken ct) where T : EfOpenTelemetrySignalEntity => (await set.Where(x => x.ScopeKey == binding.ScopeKey).Select(x => (long?)x.Sequence).MaxAsync(ct) ?? 0) + 1;
 
+    private static async Task<List<T>> LoadBySearchKeysAsync<T>(
+        IEnumerable<string> searchKeys,
+        Func<string[], Task<List<T>>> loadBatch)
+    {
+        var result = new List<T>();
+        foreach (var keys in searchKeys.Distinct(StringComparer.Ordinal).Chunk(ProviderSafeKeyBatchSize))
+            result.AddRange(await loadBatch(keys));
+        return result;
+    }
+
+    private static string? ResolveService(IReadOnlyDictionary<string, string> services, string resourceId) =>
+        services.GetValueOrDefault(OpenTelemetrySearchKeys.ResourceId(resourceId));
+
+    private void CountDropped(OpenTelemetryBatch batch)
+    {
+        Interlocked.Add(ref droppedTraces, batch.Traces.Count);
+        Interlocked.Add(ref droppedSpans, batch.Spans.Count);
+        Interlocked.Add(ref droppedMetricPoints, batch.MetricPoints.Count);
+        Interlocked.Add(ref droppedLogs, batch.Logs.Count);
+    }
+
     private async Task<T> ExecuteAsync<T>(string operation, Func<OpenTelemetryDbContext, CancellationToken, Task<T>> callback, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -714,6 +770,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (OpenTelemetryPersistenceException) { throw; }
+        catch (InvalidDataException exception) { throw new OpenTelemetryPersistenceDataException(operation, "The durable OpenTelemetry payload is inconsistent.", ScopeContext(), exception); }
         catch (JsonException exception) { throw new OpenTelemetryPersistenceDataException(operation, "The durable OpenTelemetry payload is malformed.", ScopeContext(), exception); }
         catch (Exception exception) { throw new OpenTelemetryPersistenceUnavailableException(operation, "The OpenTelemetry persistence provider failed.", ScopeContext(), exception); }
         finally { operationGate.Release(); }
@@ -788,7 +845,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     private OpenTelemetryTraceEntity ToTraceEntity(TelemetryTrace x, long sequence)
     {
         ValidateSummary(x);
-        return new() { ScopeKey = binding.ScopeKey, Sequence = sequence, Id = x.TraceId, IdSearchKey = OpenTelemetrySearchKeys.TraceId(x.TraceId), IdOrderKey = OpenTelemetrySearchKeys.OrderKey(x.TraceId), TraceId = x.TraceId, TraceIdSearchKey = OpenTelemetrySearchKeys.TraceId(x.TraceId), TraceKey = OpenTelemetrySearchKeys.TraceKey(x.TraceId), RootSpanId = x.RootSpanId, Name = x.Name, NameSearchKey = string.IsNullOrWhiteSpace(x.Name) ? null : OpenTelemetrySearchKeys.SummaryName(x.Name), Status = (int)x.Status, StartTimeTicks = x.StartTime.UtcTicks, StartTimeOffsetMinutes = Offset(x.StartTime), EndTimeTicks = x.EndTime.UtcTicks, EndTimeOffsetMinutes = Offset(x.EndTime), SpanCount = x.SpanCount, PayloadJson = Serialize(x) };
+        return new() { ScopeKey = binding.ScopeKey, Sequence = sequence, Id = x.TraceId, IdSearchKey = OpenTelemetrySearchKeys.TraceId(x.TraceId), IdOrderKey = OpenTelemetrySearchKeys.OrderKey(x.TraceId), TraceId = x.TraceId, TraceIdSearchKey = OpenTelemetrySearchKeys.TraceId(x.TraceId), TraceKey = OpenTelemetrySearchKeys.TraceKey(x.TraceId), RootSpanId = x.RootSpanId, Name = string.IsNullOrWhiteSpace(x.Name) ? null : x.Name, NameSearchKey = string.IsNullOrWhiteSpace(x.Name) ? null : OpenTelemetrySearchKeys.SummaryName(x.Name), Status = (int)x.Status, StartTimeTicks = x.StartTime.UtcTicks, StartTimeOffsetMinutes = Offset(x.StartTime), EndTimeTicks = x.EndTime.UtcTicks, EndTimeOffsetMinutes = Offset(x.EndTime), SpanCount = x.SpanCount, PayloadJson = Serialize(x) };
     }
 
     private static void ValidateSummary(TelemetryTrace trace)

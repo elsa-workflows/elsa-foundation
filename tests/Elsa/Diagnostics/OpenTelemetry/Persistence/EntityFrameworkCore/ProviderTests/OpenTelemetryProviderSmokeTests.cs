@@ -53,6 +53,15 @@ public sealed class OpenTelemetryProviderModelTests
             expectedPayloadType,
             entity.FindProperty("PayloadJson")!.GetColumnType(),
             ignoreCase: true));
+        var unboundedSearchKeys = entityTypes
+            .SelectMany(entity => entity.GetProperties())
+            .Where(property => property.Name.EndsWith("SearchKey", StringComparison.Ordinal) && property.GetMaxLength() is null)
+            .ToArray();
+        Assert.NotEmpty(unboundedSearchKeys);
+        Assert.All(unboundedSearchKeys, property => Assert.Equal(
+            expectedPayloadType,
+            property.GetColumnType(),
+            ignoreCase: true));
         Assert.All(entityTypes, entity => Assert.Contains(
             "ScopeKey",
             entity.FindPrimaryKey()!.Properties.Select(property => property.Name)));
@@ -89,6 +98,10 @@ public sealed class OpenTelemetrySqlServerSmokeTests(OpenTelemetrySqlServerFixtu
     [SkippableFact]
     public Task Trace_retention_recomputes_summary_and_memberships_on_sql_server() =>
         OpenTelemetryProviderSmoke.RunRetentionAsync(fixture, "SqlServer");
+
+    [SkippableFact]
+    public Task Maximum_trace_memberships_do_not_exceed_the_sql_server_parameter_limit() =>
+        OpenTelemetryProviderSmoke.RunMaximumMembershipsAsync(fixture, "SqlServer");
 }
 
 [Collection(OpenTelemetryMySqlFixture.CollectionName)]
@@ -105,6 +118,10 @@ public sealed class OpenTelemetryMySqlSmokeTests(OpenTelemetryMySqlFixture fixtu
     [SkippableFact]
     public Task Trace_retention_recomputes_summary_and_memberships_on_mysql() =>
         OpenTelemetryProviderSmoke.RunRetentionAsync(fixture, "MySql");
+
+    [SkippableFact]
+    public Task Unbounded_signal_text_round_trips_on_mysql() =>
+        OpenTelemetryProviderSmoke.RunUnboundedSignalTextAsync(fixture, "MySql");
 }
 
 internal static class OpenTelemetryProviderSmoke
@@ -296,6 +313,57 @@ internal static class OpenTelemetryProviderSmoke
         Assert.Equal([latest.TraceId], (await store.QueryTracesAsync(new() { ServiceName = "ORDERS-API", Take = 10 })).Items.Select(x => x.TraceId));
         Assert.Equal([latest.TraceId], (await store.QueryTracesAsync(new() { ServiceName = "ORDERS-WORKER", Take = 10 })).Items.Select(x => x.TraceId));
         await drain.StopAsync();
+    }
+
+    public static async Task RunMaximumMembershipsAsync(OpenTelemetryProviderFixture fixture, string provider)
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? $"{provider} is unavailable.");
+
+        var scopeKey = "otel-memberships-" + Guid.NewGuid().ToString("N");
+        await using var services = OpenTelemetryProviderTestHost.BuildProvider(provider, fixture.ConnectionString, scopeKey);
+        await OpenTelemetryProviderTestHost.EnsureCreatedAsync(services);
+        var store = services.GetRequiredService<EfOpenTelemetryStore>();
+        var resourceIds = Enumerable.Range(0, 2_500).Select(index => $"resource-{index:D4}").ToArray();
+        var now = DateTimeOffset.UtcNow;
+        var trace = new TelemetryTrace(
+            "trace-maximum-memberships", "root", "maximum memberships", now, now, TimeSpan.Zero,
+            SpanStatus.Ok, resourceIds, [], 0);
+
+        await store.WriteAsync(DiagnosticsDrainBatchId.New(), new([], [trace], [], [], [], []));
+
+        var detail = await store.GetTraceAsync(trace.TraceId);
+        Assert.NotNull(detail);
+        Assert.Equal(resourceIds, detail!.Trace.ResourceIds);
+        Assert.Empty(detail.Resources);
+    }
+
+    public static async Task RunUnboundedSignalTextAsync(OpenTelemetryProviderFixture fixture, string provider)
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? $"{provider} is unavailable.");
+
+        var scopeKey = "otel-unbounded-" + Guid.NewGuid().ToString("N");
+        await using var services = OpenTelemetryProviderTestHost.BuildProvider(provider, fixture.ConnectionString, scopeKey);
+        await OpenTelemetryProviderTestHost.EnsureCreatedAsync(services);
+        var store = services.GetRequiredService<EfOpenTelemetryStore>();
+        var data = OpenTelemetryProviderTestHost.CreateBatch("mysql-unbounded");
+        var longName = new string('n', 10_000);
+        var longSeverity = new string('s', 10_000);
+        var longBody = new string('b', 10_000);
+        var batch = data.Batch with
+        {
+            Spans = [data.Span with { Name = longName }],
+            Instruments = [data.Instrument with { Name = longName }],
+            MetricPoints = [data.Point with { InstrumentName = longName }],
+            Logs = [data.Log with { SeverityText = longSeverity, Body = longBody }]
+        };
+
+        await store.WriteAsync(DiagnosticsDrainBatchId.New(), batch);
+
+        Assert.Equal(longName, Assert.Single((await store.GetTraceAsync(data.Trace.TraceId))!.Spans).Name);
+        Assert.Equal(longName, Assert.Single((await store.QueryMetricsAsync(new() { InstrumentName = new string('n', 64), Take = 10 })).Points).InstrumentName);
+        var log = Assert.Single((await store.QueryLogsAsync(new() { Severity = new string('s', 64), Search = new string('b', 64), Take = 10 })).Items);
+        Assert.Equal(longSeverity, log.SeverityText);
+        Assert.Equal(longBody, log.Body);
     }
 
     private static async Task RunScopeIsolationAsync(string connectionString, string provider)
