@@ -37,8 +37,10 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Module CSS contract test
-        run: pnpm --filter @elsa-workflows/studio-workflows exec vitest run src/__tests__/moduleCssContract.test.ts
+      - name: Unit tests
+        # Every workspace package's vitest suite; the Workflows suite includes the module CSS contract test.
+        # One package at a time, so the Workflows suite does not compete with the others for the runner's cores.
+        run: pnpm --recursive --workspace-concurrency=1 test
 
       - name: Check Workflows bundle budget
         run: pnpm check:bundle:workflows

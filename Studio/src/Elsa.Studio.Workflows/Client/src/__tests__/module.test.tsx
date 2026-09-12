@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { authSessionEndedEvent, type ElsaStudioModuleApi, type StudioContributionRegistry, type StudioSlotDefinition } from "@elsa-workflows/studio-sdk";
 import { register, type WorkflowDesignerPanelContext } from "../module";
 import { clearApiCapabilityCache } from "../api/capabilities";
@@ -17,7 +17,14 @@ import { ValidationPanel } from "../workflow-editor/editorPanels";
 import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
 import { createActivityDefinitionRecoveryStore } from "../activityDefinitionRecovery";
 
-afterEach(() => {
+// Route hosts still attached to the document. A test that fails before its own `await unmount()` would
+// otherwise leave a live tree behind that keeps answering window `popstate`, fetches through the next
+// test's `fetch` stub, and shadows the next test's elements in document-scoped lookups.
+const mountedRouteHosts = new Set<() => Promise<void>>();
+
+afterEach(async () => {
+  for (const unmount of [...mountedRouteHosts]) await unmount();
+  expect(document.body.children, "a test left elements attached to document.body").toHaveLength(0);
   clearApiCapabilityCache();
   vi.unstubAllGlobals();
   window.localStorage.removeItem?.(workflowInspectorCollapsedStorageKey);
@@ -156,6 +163,17 @@ describe("workflows module", () => {
     await vi.waitFor(() => expect(container.textContent).toContain("Hello World"), { timeout: 10_000 });
 
     await unmount();
+  });
+
+  it("tears down a route host its test never unmounted before the next test starts", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => response({ items: [] })));
+    const { container } = await renderRegisteredRoute();
+
+    // Stands in for a test that fails before its own `await unmount()`.
+    // Relies on vitest 2.1.9 running `onTestFinished` callbacks after `afterEach` hooks
+    // (@vitest/runner's `runTest`); if a future vitest reorders that, this canary would
+    // pass vacuously or fail without explanation.
+    onTestFinished(() => expect(container.isConnected).toBe(false));
   });
 
   it("offers an accessible recovery action when a deferred workflow surface fails", () => {
@@ -1102,7 +1120,11 @@ describe("workflows module", () => {
     const activityNodes = container.querySelectorAll(".wf-canvas .wf-node");
     expect(activityNodes).toHaveLength(1);
     expect(activityNodes[0].textContent).toContain("Write Line");
-    expect(activityNodes[0].textContent).toContain("Primitives");
+    // With no authored input to summarize, the subtitle falls back to the bare kind and keeps
+    // `category · kind` in its tooltip (#468).
+    const subtitle = activityNodes[0].querySelector(".wf-node-copy small");
+    expect(subtitle?.textContent).toBe("Action");
+    expect(subtitle?.getAttribute("title")).toBe("Primitives · Action");
     expect(activityNodes[0].textContent).not.toContain("Elsa.Activities.Primitives.Activities.WriteLine");
     expect(activityNodes[0].getAttribute("data-icon")).toBe("terminal");
     expect(container.querySelectorAll(".wf-canvas .react-flow__handle")).toHaveLength(0);
@@ -4202,10 +4224,13 @@ describe("workflows module", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, workflowFolderMutationCapabilities());
+    // Folder names are read from the tree alone: the definitions table ("Operations workflow") and the
+    // selected folder's breadcrumb, which refreshes to the new name after the rename, render them too.
+    const folderTree = () => container.querySelector<HTMLElement>(".wf-folder-nav")!;
 
     await waitForText(container, parent.name);
     await click(buttonByLabel(container, `Expand ${parent.name}`));
-    await waitForText(container, child.name);
+    await waitForText(folderTree(), child.name);
     await click([...container.querySelectorAll<HTMLElement>("[data-folder-id]")].find(item => item.dataset.folderId === child.id) ?? null);
     await click(buttonByLabel(container, `Collapse ${parent.name}`));
     await click(buttonByText(container, "Rename"));
@@ -4214,9 +4239,9 @@ describe("workflows module", () => {
 
     await waitForText(container, "Folder renamed");
     expect(childPageRequests).toBe(1);
-    expect(container.textContent).not.toContain("Platform operations");
+    expect(folderTree().textContent).not.toContain("Platform operations");
     await click(buttonByLabel(container, `Expand ${parent.name}`));
-    await waitForText(container, "Platform operations");
+    await waitForText(folderTree(), "Platform operations");
     expect(childPageRequests).toBe(2);
     await unmount();
   });
@@ -4714,15 +4739,15 @@ async function renderRegisteredRoute(
     root.render(<QueryClientProvider client={queryClient}><RegisteredRouteHost /></QueryClientProvider>);
   });
 
-  return {
-    api,
-    container,
-    unmount: async () => {
-      flushSync(() => root.unmount());
-      queryClient.clear();
-      container.remove();
-    }
+  const unmount = async () => {
+    if (!mountedRouteHosts.delete(unmount)) return;
+    flushSync(() => root.unmount());
+    queryClient.clear();
+    container.remove();
   };
+  mountedRouteHosts.add(unmount);
+
+  return { api, container, unmount };
 }
 
 function routeMatchesPath(routePath: string, path: string) {
