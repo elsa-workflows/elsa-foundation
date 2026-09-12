@@ -1,4 +1,4 @@
-using System.Xml.Linq;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -6,46 +6,48 @@ namespace Elsa.Architecture.Tests;
 /// <summary>
 /// ADR 0073 selects EF Core as the destination persistence family, but each implementation still enters
 /// through an explicitly reviewed program issue. This ratchet therefore keeps the currently admitted
-/// surface at the vendor-owned OpenIddict host boundary plus ADR 0072's accepted Secrets EF tree. It walks
-/// the declared csproj graph (no restore, no baseline) and scans sources, so an unreviewed EF edge anywhere
-/// else under <c>src/</c> fails and names the offender. Each replacement changes this guard deliberately
-/// with its own architecture evidence; the destination ADR alone is not a repository-wide exemption.
+/// surface at the vendor-owned OpenIddict host boundary plus ADR 0072's accepted Secrets EF tree. It reads
+/// each source project's evaluated restore graph and scans sources, so imported, conditional, transitive,
+/// and provider-only EF edges anywhere else under <c>src/</c> fail and name the offender. Each replacement
+/// changes this guard deliberately with its own architecture evidence; the destination ADR alone is not a
+/// repository-wide exemption.
 /// </summary>
 public sealed class EfCoreDependencyGuardTests
 {
     private static readonly string[] AllowedEfConsumers = ["Elsa.Workbench"];
-
-    private static readonly string[] EfPackagePrefixes =
-        ["Microsoft.EntityFrameworkCore", "OpenIddict.EntityFrameworkCore", "Microsoft.AspNetCore.Identity.EntityFrameworkCore"];
+    private const string EfPackageToken = "EntityFrameworkCore";
 
     private static readonly string RepoRoot = FindRepoRoot();
-    private static readonly Dictionary<string, Project> Projects = LoadSrcProjects();
 
     [Fact]
-    public void Only_the_allowed_consumers_reach_ef_core_packages()
+    public void Only_admitted_consumers_and_pilot_projects_resolve_ef_core_packages()
     {
-        Assert.All(AllowedEfConsumers, name => Assert.Contains(name, Projects.Keys));
+        var projects = LoadSrcProjects();
 
-        var reachingEf = Projects.Values
-            .Where(project => Reachable([project.Name], name => Projects[name].References).Any(name => Projects[name].DeclaresEf))
-            .Select(project => project.Name);
+        Assert.All(AllowedEfConsumers, name => Assert.Contains(name, projects.Keys));
 
-        var offenders = reachingEf.Except(AllowedEfConsumers).Where(name => !Projects[name].IsPilot).Order().ToArray();
-
-        Assert.True(offenders.Length == 0, Report("reach an EF Core package outside the allowed consumers", offenders));
-    }
-
-    [Fact]
-    public void No_project_outside_the_admitted_surfaces_declares_an_ef_core_package()
-    {
-        var offenders = Projects.Values
-            .Where(project => project.DeclaresEf && !project.IsPilot)
+        var offenders = projects.Values
+            .Where(project => project.ResolvesEf && !project.IsPilot)
             .Select(project => project.Name)
             .Except(AllowedEfConsumers)
             .Order()
             .ToArray();
 
-        Assert.True(offenders.Length == 0, Report("declare an EF Core PackageReference directly", offenders));
+        Assert.True(offenders.Length == 0, Report("resolve EF Core outside the admitted consumers and pilot projects", offenders));
+    }
+
+    [Fact]
+    public void Evaluated_assets_detect_an_imported_provider_only_dependency()
+    {
+        const string assets = """
+            {
+              "libraries": {
+                "Npgsql.EntityFrameworkCore.PostgreSQL/10.0.0": { "type": "package" }
+              }
+            }
+            """;
+
+        Assert.True(ResolvesEfCore(assets));
     }
 
     [Fact]
@@ -53,7 +55,7 @@ public sealed class EfCoreDependencyGuardTests
     {
         var offenders = Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
             .Where(file => !IsBuildOutput(file) && !IsAdmittedEfSource(file))
-            .Where(file => EfPackagePrefixes.Any(prefix => File.ReadAllText(file).Contains(prefix, StringComparison.Ordinal)))
+            .Where(file => File.ReadAllText(file).Contains(EfPackageToken, StringComparison.Ordinal))
             .Select(file => Path.GetRelativePath(RepoRoot, file))
             .Order()
             .ToArray();
@@ -61,32 +63,31 @@ public sealed class EfCoreDependencyGuardTests
         Assert.True(offenders.Length == 0, Report("mention an EF package namespace in source", offenders));
     }
 
-    private static HashSet<string> Reachable(IEnumerable<string> roots, Func<string, IEnumerable<string>> next)
-    {
-        var visited = new HashSet<string>(StringComparer.Ordinal);
-        var pending = new Stack<string>(roots);
-        while (pending.TryPop(out var current))
-            if (visited.Add(current))
-                foreach (var name in next(current).Where(Projects.ContainsKey))
-                    pending.Push(name);
-        return visited;
-    }
-
     private static Dictionary<string, Project> LoadSrcProjects()
     {
         var projects = new Dictionary<string, Project>(StringComparer.Ordinal);
         foreach (var file in Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.csproj", SearchOption.AllDirectories).Where(f => !IsBuildOutput(f)))
         {
-            var document = XDocument.Load(file);
-            var references = document.Descendants("ProjectReference")
-                .Select(x => Path.GetFileNameWithoutExtension((x.Attribute("Include")?.Value ?? "").Replace('\\', '/')))
-                .ToHashSet(StringComparer.Ordinal);
-            var declaresEf = document.Descendants("PackageReference")
-                .Any(x => EfPackagePrefixes.Any(prefix => (x.Attribute("Include")?.Value ?? "").StartsWith(prefix, StringComparison.OrdinalIgnoreCase)));
-            var isPilot = Adr0072SecretsEfPilot.IsProjectPath(Path.GetRelativePath(RepoRoot, file).Replace('\\', '/'));
-            projects.Add(Path.GetFileNameWithoutExtension(file), new Project(Path.GetFileNameWithoutExtension(file), references, declaresEf, isPilot));
+            var relativePath = Path.GetRelativePath(RepoRoot, file).Replace('\\', '/');
+            var assetsPath = Path.Combine(Path.GetDirectoryName(file)!, "obj", "project.assets.json");
+            if (!File.Exists(assetsPath))
+                throw new InvalidOperationException($"Evaluated restore assets are required for '{relativePath}'. Restore Elsa.Server.slnx before running the EF dependency guard.");
+
+            projects.Add(
+                Path.GetFileNameWithoutExtension(file),
+                new Project(Path.GetFileNameWithoutExtension(file), ResolvesEfCore(File.ReadAllText(assetsPath)), Adr0072SecretsEfPilot.IsProjectPath(relativePath)));
         }
         return projects;
+    }
+
+    private static bool ResolvesEfCore(string assetsJson)
+    {
+        using var document = JsonDocument.Parse(assetsJson);
+        if (!document.RootElement.TryGetProperty("libraries", out var libraries))
+            return false;
+
+        return libraries.EnumerateObject()
+            .Any(library => library.Name.Split('/', 2)[0].Contains(EfPackageToken, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsAdmittedEfSource(string file)
@@ -109,7 +110,7 @@ public sealed class EfCoreDependencyGuardTests
         throw new DirectoryNotFoundException("Could not find repository root.");
     }
 
-    private sealed record Project(string Name, HashSet<string> References, bool DeclaresEf, bool IsPilot);
+    private sealed record Project(string Name, bool ResolvesEf, bool IsPilot);
 
     /// <summary>
     /// ADR 0072's accepted, now-superseded Secrets EF surface. ADR 0073 preserves this as the only currently

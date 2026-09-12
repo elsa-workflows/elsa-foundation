@@ -388,8 +388,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
+      - name: Restore the evaluated source dependency graph
+        run: dotnet restore Elsa.Server.slnx -p:Configuration=Release -p:WarningsNotAsErrors=NU1603
+
       - name: Run the architecture guards
-        run: dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release -p:WarningsNotAsErrors=NU1603
+        run: dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 
   # A red main has to reach a human. GitHub's own failure notification for a push does go to
   # whoever pushed, which is a better channel than the one the nightly uses -- but on
