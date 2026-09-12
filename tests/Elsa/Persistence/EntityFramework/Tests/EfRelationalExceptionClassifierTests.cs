@@ -58,6 +58,50 @@ public sealed class EfRelationalExceptionClassifierTests
         Assert.False(EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception));
     }
 
+    [Theory]
+    [InlineData(5, true)]
+    [InlineData(6, true)]
+    [InlineData(19, false)]
+    public void Classifies_sqlite_transient_write_conflicts(int errorCode, bool expected)
+    {
+        var exception = new DbUpdateException("write failed", new SqliteException(errorCode, errorCode));
+
+        Assert.Equal(expected, EfRelationalExceptionClassifier.IsTransientWriteConflict(exception));
+    }
+
+    [Theory]
+    [InlineData("40001", true)]
+    [InlineData("40P01", true)]
+    [InlineData("23505", false)]
+    public void Classifies_postgresql_transient_write_conflicts(string sqlState, bool expected)
+    {
+        var exception = new DbUpdateException("write failed", new PostgresException(sqlState));
+
+        Assert.Equal(expected, EfRelationalExceptionClassifier.IsTransientWriteConflict(exception));
+    }
+
+    [Theory]
+    [InlineData(1205, true)]
+    [InlineData(3960, true)]
+    [InlineData(2627, false)]
+    public void Classifies_sql_server_transient_write_conflicts(int number, bool expected)
+    {
+        var exception = new DbUpdateException("write failed", new SqlException(number));
+
+        Assert.Equal(expected, EfRelationalExceptionClassifier.IsTransientWriteConflict(exception));
+    }
+
+    [Theory]
+    [InlineData(1205, true)]
+    [InlineData(1213, true)]
+    [InlineData(1062, false)]
+    public void Classifies_mysql_transient_write_conflicts(int number, bool expected)
+    {
+        var exception = new DbUpdateException("write failed", new MySqlException(number));
+
+        Assert.Equal(expected, EfRelationalExceptionClassifier.IsTransientWriteConflict(exception));
+    }
+
     [Fact]
     public async Task Classifies_a_real_sqlite_unique_constraint_failure()
     {

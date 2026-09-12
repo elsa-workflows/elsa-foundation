@@ -41,4 +41,36 @@ public static class EfRelationalExceptionClassifier
 
         return false;
     }
+
+    /// <summary>
+    /// Returns whether a relational provider reported a bounded-retry write conflict such as a
+    /// serialization failure, deadlock, lock timeout, or SQLite busy/locked result.
+    /// </summary>
+    public static bool IsTransientWriteConflict(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            var type = current.GetType();
+            var fullName = type.FullName ?? "";
+            if (fullName.Contains("SqliteException", StringComparison.Ordinal) &&
+                type.GetProperty("SqliteErrorCode")?.GetValue(current) is 5 or 6)
+                return true;
+
+            if (fullName.Contains("PostgresException", StringComparison.Ordinal) &&
+                type.GetProperty("SqlState")?.GetValue(current) as string is "40001" or "40P01")
+                return true;
+
+            if (type.Name.Equals("SqlException", StringComparison.Ordinal) &&
+                type.GetProperty("Number")?.GetValue(current) is 1205 or 3960)
+                return true;
+
+            if (fullName.Contains("MySqlException", StringComparison.Ordinal) &&
+                type.GetProperty("Number")?.GetValue(current) is 1205 or 1213)
+                return true;
+        }
+
+        return false;
+    }
 }

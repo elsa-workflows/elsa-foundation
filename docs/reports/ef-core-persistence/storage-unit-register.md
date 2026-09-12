@@ -44,7 +44,7 @@ and repository-surface registers.
 | Publishing | `GroundworkPublishingStore`, `GroundworkPublicationRecordStore`, `GroundworkPublicationPolicyStore`, `GroundworkPublicationProjectionIntentStore`, `GroundworkPublicationSnapshotReviewStore`, `GroundworkActivityPublicationReceiptStore`, `GroundworkActivityDraftTestRunStore`, `GroundworkActivityPublicationCommand`, `GroundworkSourceActivityPublicationCommand`, `GroundworkActivityUpgradePlanStore`, `GroundworkActivityDependencyProjectionRebuildCoordinator` | P01-P06 plus A/R/W participants | #1677 child; S1-S3 | E-PUBLISH | | | | Pending |
 | Dashboard | `GroundworkV2WorkflowPortfolioDataSource`, `GroundworkV2WorkflowRunHealthDataSource` | Reads A/W/R projections; declares no unit | #1677 child; Runtime/Design consistency | E-DESIGN/E-RUNTIME bounded reads and partial availability | | | | Pending |
 | Identity and ASP.NET Identity | `GroundworkUserStore`, `GroundworkRoleStore`, `GroundworkApplicationStore`, `GroundworkCredentialStore`, `GroundworkClaimMappingStore`, `GroundworkProviderConfigurationStore`, `GroundworkExternalIdentityStore`, `GroundworkTenantMembershipStore`, `GroundworkIdentityRowStore`, `GroundworkIdentityAtomicMutation`, `GroundworkIdentityAtomicWrite`, `GroundworkIdentityMutationBatch`, `GroundworkIdentityAuthorityAggregateCoordinator`, `GroundworkIdentityAuthorityRelationshipCoordinator`, `GroundworkIdentityUserStore` (user/claim/login/role/token partials), `GroundworkIdentityRoleStore`, `GroundworkIdentityFailureMapper`, `AspNetCoreIdentityAuthorityMapper`, `GroundworkIdentitySessionInvalidator` | I01-I17 | #1682; S1-S3 | E-IAM | | | | Pending |
-| Diagnostics | `GroundworkOpenTelemetryStore`, `GroundworkStructuredLogStore`, opt-in EF `StructuredLogs` adapter | O01-O09 | #1681/#1695; S1-S3 | E-OBS | #1696 (O09) | | | Structured Logs EF is delivered by #1696; Groundwork remains default and OpenTelemetry/default-flip/deletion gates remain pending |
+| Diagnostics | `GroundworkOpenTelemetryStore`, `GroundworkStructuredLogStore`, opt-in EF `OpenTelemetry` and `StructuredLogs` adapters | O01-O09 | #1681/#1695/#1697; S1-S3 | E-OBS | #1696 (O09); #1701 (O01-O08) | | | Structured Logs EF is delivered by #1696 and OpenTelemetry EF by #1701; Groundwork remains default and default-flip/deletion gates remain pending |
 | Secrets | `GroundworkSecretRepository` | S01 | #1679; S1/S3 | E-CRUD | | | | Pending |
 | Studio Preferences | `GroundworkStudioPreferenceStore`, opt-in `EfStudioPreferenceStore` | U01 | #1680; S1/S3 | E-CRUD | #1693 | | | EF implementation merged; Groundwork remains default and migration/default-flip/deletion gates are deferred |
 | Elsa 3 import | `GroundworkReusableActivityImportOperationStore`, `GroundworkReusableActivityImportCommand` | L01-L03 plus A/R participants | #1677 child; S1-S3 | E-PUBLISH | | | | Pending |
@@ -159,14 +159,14 @@ Owner: Diagnostics feature #1681. Dependencies: S1-S3.
 
 | ID | Groundwork unit / physical name | Domain contract or semantic role | Evidence | Blockers | Replacement PR | Default-flip PR | Deletion PR | Disposition |
 |---|---|---|---|---|---|---|---|---|
-| O01 | `elsa-otel-traces-v2` / `elsa_otel_traces_v2` | OpenTelemetry trace append and detail query | E-OBS | S1-S3 | | | | Pending |
-| O02 | `elsa-otel-spans-v2` / `elsa_otel_spans_v2` | Span append and ordered trace detail | E-OBS | S1-S3 | | | | Pending |
-| O03 | `elsa-otel-metric-points-v2` / `elsa_otel_metric_points_v2` | Metric-point append and bounded time query | E-OBS | S1-S3 | | | | Pending |
-| O04 | `elsa-otel-logs-v2` / `elsa_otel_logs_v2` | Log append and trace/time query | E-OBS | S1-S3 | | | | Pending |
-| O05 | `elsa-otel-resources-v2` / `elsa_otel_resources_v2` | Resource upsert, status and retention | E-OBS | S1-S3 | | | | Pending |
-| O06 | `elsa-otel-instruments-v2` / `elsa_otel_instruments_v2` | Instrument upsert and retention | E-OBS | S1-S3 | | | | Pending |
-| O07 | `elsa-otel-capture-ledger-v3` / `elsa_otel_capture_ledger_v3` | Idempotent capture-batch ledger | E-OBS | S1-S3 | | | | Pending |
-| O08 | `elsa-otel-trace-summaries-v3` / `elsa_otel_trace_summaries_v3` | Optimistically concurrent trace-summary projection | E-OBS | S1-S3 | | | | Pending |
+| O01 | `elsa-otel-traces-v2` / `elsa_otel_traces_v2` | OpenTelemetry trace append and detail query | E-OBS | S1-S3; #1697 | #1701 | | | Opt-in EF implementation and SQLite/provider proof delivered by #1701 |
+| O02 | `elsa-otel-spans-v2` / `elsa_otel_spans_v2` | Span append and ordered trace detail | E-OBS | S1-S3; #1697 | #1701 | | | Opt-in EF implementation and SQLite/provider proof delivered by #1701 |
+| O03 | `elsa-otel-metric-points-v2` / `elsa_otel_metric_points_v2` | Metric-point append and bounded time query | E-OBS | S1-S3; #1697 | #1701 | | | Opt-in EF implementation and SQLite/provider proof delivered by #1701 |
+| O04 | `elsa-otel-logs-v2` / `elsa_otel_logs_v2` | Log append and trace/time query | E-OBS | S1-S3; #1697 | #1701 | | | Opt-in EF implementation and SQLite/provider proof delivered by #1701 |
+| O05 | `elsa-otel-resources-v2` / `elsa_otel_resources_v2` | Resource upsert, status and retention | E-OBS | S1-S3; #1697 | #1701 | | | Opt-in EF implementation and SQLite/provider proof delivered by #1701 |
+| O06 | `elsa-otel-instruments-v2` / `elsa_otel_instruments_v2` | Instrument upsert and retention | E-OBS | S1-S3; #1697 | #1701 | | | Opt-in EF implementation and SQLite/provider proof delivered by #1701 |
+| O07 | `elsa-otel-capture-ledger-v3` / `elsa_otel_capture_ledger_v3` | Idempotent capture-batch ledger | E-OBS | S1-S3; #1697 | #1701 | | | Opt-in EF implementation and SQLite/provider proof delivered by #1701 |
+| O08 | `elsa-otel-trace-summaries-v3` / `elsa_otel_trace_summaries_v3` | Optimistically concurrent trace-summary projection | E-OBS | S1-S3; #1697 | #1701 | | | Opt-in EF implementation and SQLite/provider proof delivered by #1701 |
 | O09 | `elsa-structured-logs` / `elsa_structured_logs` | Structured-log store; append, replay/high-water and retention | E-OBS | S1-S3; #1695 | #1696 | | | Opt-in EF implementation with SQLite behavioral proof and focused PostgreSQL, SQL Server, and MySQL smoke; Groundwork/default flip/deletion deferred |
 
 ## Publishing: 6 units

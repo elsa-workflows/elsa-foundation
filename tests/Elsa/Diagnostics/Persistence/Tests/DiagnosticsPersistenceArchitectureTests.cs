@@ -558,7 +558,9 @@ public sealed partial class DiagnosticsPersistenceArchitectureTests
     private static bool IsApprovedEfAdapterPath(string path)
     {
         var relativePath = RelativePath(path);
-        return IsWithin("src/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore") ||
+        return IsWithin("src/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore") ||
+               IsWithin("tests/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore") ||
+               IsWithin("src/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore") ||
                IsWithin("tests/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore");
 
         bool IsWithin(string root) =>

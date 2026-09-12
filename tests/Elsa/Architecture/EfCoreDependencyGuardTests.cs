@@ -126,6 +126,25 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     [Fact]
+    public void Every_admitted_OpenTelemetry_project_resolves_only_its_reviewed_EF_closure()
+    {
+        var offenders = Adr0073OpenTelemetryEf.ExpectedEfPackagesByProject
+            .SelectMany(project => RestoreConfigurations.SelectMany(configuration =>
+            {
+                var resolved = ReadProjectEfPackages(project.Key, configuration);
+                var unexpected = FindUnexpectedEfPackages(resolved, project.Value)
+                    .Select(package => $"{project.Key} ({configuration}) unexpectedly resolves {package}");
+                var missing = FindUnexpectedEfPackages(project.Value, resolved)
+                    .Select(package => $"{project.Key} ({configuration}) no longer resolves reviewed package {package}");
+                return unexpected.Concat(missing);
+            }))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        Assert.True(offenders.Length == 0, Report("drift from the reviewed OpenTelemetry EF closure", offenders));
+    }
+
+    [Fact]
     public void Workbench_package_allowlist_rejects_an_unreviewed_transitive_wrapper()
     {
         const string assets = """
@@ -355,7 +374,8 @@ public sealed class EfCoreDependencyGuardTests
                         StringComparer.Ordinal),
                     Adr0072SecretsEfPilot.IsProjectPath(relativePath) ||
                     Adr0073RepositoryFirstEf.IsProjectPath(relativePath) ||
-                    Adr0073StructuredLogsEf.IsProjectPath(relativePath)));
+                    Adr0073StructuredLogsEf.IsProjectPath(relativePath) ||
+                    Adr0073OpenTelemetryEf.IsProjectPath(relativePath)));
         }
         return projects;
     }
@@ -491,6 +511,7 @@ public sealed class EfCoreDependencyGuardTests
         return Adr0072SecretsEfPilot.IsSurfacePath(relativePath) ||
                Adr0073RepositoryFirstEf.IsSurfacePath(relativePath) ||
                Adr0073StructuredLogsEf.IsSurfacePath(relativePath) ||
+               Adr0073OpenTelemetryEf.IsSurfacePath(relativePath) ||
                OpenIddictPersistenceArchitectureTests.IsWorkbenchVendorEfSource(relativePath);
     }
 
@@ -651,6 +672,53 @@ public sealed class EfCoreDependencyGuardTests
                     "Npgsql.EntityFrameworkCore.PostgreSQL"
                 ],
                 ["tests/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests.csproj"] =
+                [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
+            };
+
+        public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
+
+        public static bool IsSurfacePath(string relativePath) =>
+            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
+
+        public static bool IsProjectPath(string relativePath) =>
+            ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
+
+        private static string[] CorePackages() =>
+        [
+            "Microsoft.EntityFrameworkCore",
+            "Microsoft.EntityFrameworkCore.Abstractions",
+            "Microsoft.EntityFrameworkCore.Analyzers",
+            "Microsoft.EntityFrameworkCore.Relational"
+        ];
+    }
+
+    /// <summary>
+    /// ADR 0073's Diagnostics OpenTelemetry repository-first admission for issue #1697. The
+    /// production adapter is provider-neutral; SQLite belongs to the behavioral test project and
+    /// SQL Server, PostgreSQL, and MySQL packages belong only to the live-provider test project.
+    /// </summary>
+    internal static class Adr0073OpenTelemetryEf
+    {
+        public static readonly string[] SurfacePathPrefixes =
+        [
+            "src/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/",
+            "tests/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/"
+        ];
+
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["src/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["tests/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                [
+                    .. CorePackages(),
+                    "Microsoft.EntityFrameworkCore.Sqlite",
+                    "Microsoft.EntityFrameworkCore.Sqlite.Core",
+                    "Microsoft.EntityFrameworkCore.SqlServer",
+                    "MySql.EntityFrameworkCore",
+                    "Npgsql.EntityFrameworkCore.PostgreSQL"
+                ],
+                ["tests/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
             };
 
