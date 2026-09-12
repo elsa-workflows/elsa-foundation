@@ -2,11 +2,16 @@
 
 Date: 2026-07-12.
 
-Status: completed research for [issue #631](https://github.com/elsa-workflows/elsa-foundation/issues/631). This report inventories the implementation boundary; it does not freeze production-store APIs or implement stores.
+Status: historical technical input from the superseded Groundwork direction, completed for
+[issue #631](https://github.com/elsa-workflows/elsa-foundation/issues/631). This report inventories
+framework contracts; it does not freeze production-store APIs or dictate current implementation.
+The active replacement owner is
+[EF Core Persistence issue #1682](https://github.com/elsa-workflows/elsa-foundation/issues/1682).
 
-Program goal: [Zero-EF Persistence](../program-goals/zero-ef-persistence.md).
+Historical program goal: [Zero-EF Persistence](../program-goals/zero-ef-persistence.md).
 
-Decision: [ADR 0042](../adr/0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md).
+Historical decision: [ADR 0042](../adr/0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md),
+superseded by [ADR 0073](../adr/0073-ef-core-is-the-only-first-party-persistence-family.md).
 
 ## Executive Finding
 
@@ -62,7 +67,11 @@ Because this product is greenfield, no data bridge from the legacy Groundwork IA
 5. replaces Elsa's four in-memory IAM stores with EF adapters over the same context;
 6. registers the configured admin seeder under both `IHostedService` and CShells `IShellInitializer`.
 
-The Groundwork replacement should preserve the provider-neutral feature, cookie scheme, managers, principal factory, sign-in service, safety guard, and lifecycle hooks. It replaces only the EF feature/package, store registrations, migration bootstrapping, and EF IAM adapters.
+Historical recommendation (superseded): the proposed Groundwork replacement would have preserved
+the provider-neutral feature, cookie scheme, managers, principal factory, sign-in service, safety
+guard, and lifecycle hooks while replacing the EF feature/package, store registrations, migration
+bootstrapping, and EF IAM adapters. Current replacement work belongs to #1682 and keeps EF Core as
+the first-party implementation family.
 
 Recommended seam:
 
@@ -77,9 +86,12 @@ FoundationIdentityAspNetCoreIdentity
         -> provider-neutral admin seeder
 ```
 
-The seeder must stop resolving an EF `DbContext`; schema readiness belongs to Groundwork's startup/CLI policy. Its configured-credential validation, role/user idempotency, permission catalog expansion, `*` grant, secret-safe logging, and dual lifecycle registration remain unchanged.
+The historical proposal would also have moved schema readiness to Groundwork's startup/CLI policy.
+The configured-credential validation, role/user idempotency, permission catalog expansion, `*`
+grant, secret-safe logging, and lifecycle requirements remain useful contract inventory for #1682;
+the proposed Groundwork implementation does not.
 
-### OpenIddict
+### OpenIddict (historical replacement proposal; superseded)
 
 `AddFoundationIdentityOpenIddict` currently:
 
@@ -90,7 +102,11 @@ The seeder must stop resolving an EF `DbContext`; schema readiness belongs to Gr
 5. registers `OpenIddictTokenService` over `IOpenIddictTokenManager`;
 6. registers an EF store initializer under both lifecycle hooks.
 
-The Groundwork seam should keep server, validation, scheme selection, key/lifetime configuration, and `OpenIddictTokenService` unchanged. Replace `UseEntityFrameworkCore`, the `DbContext`, EF initializer, EF migrations, and EF package references with OpenIddict core store/resolver registrations backed by Groundwork and the shared Groundwork schema lifecycle.
+The former proposal would have kept server, validation, scheme selection, key/lifetime
+configuration, and `OpenIddictTokenService` while replacing OpenIddict's EF store. ADR 0073 rejects
+that replacement: OpenIddict remains on its separate vendor-owned EF Core context, store,
+migrations, and package boundary. #1682 may use this section's framework contract inventory, but it
+must not replace or merge the OpenIddict persistence boundary.
 
 ## ASP.NET Core Identity Store Inventory
 

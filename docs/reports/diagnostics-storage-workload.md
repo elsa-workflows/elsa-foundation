@@ -291,9 +291,15 @@ The adapter suite should add tests missing from the current EF oracle: category/
 
 Each provider test run should inspect the declared query/materialization plan. Result equality alone is insufficient. Tests must prove that required fields and compound orderings are materialized, queries are server-side, trim is set-based or otherwise bounded, and tenant/scope appears in keys and scale-bearing indexes.
 
-## Performance Workload
+## Historical Performance Workload (retired)
 
-Performance validation should compare the EF Core SQLite oracle with a Groundwork physical-entity implementation first, then run the Groundwork provider matrix. The capture queue and durable provider must be measured separately so a fast non-blocking enqueue cannot hide a drain that continuously sheds data.
+This section preserves the former Zero-EF measurement design for decision provenance only. Do not
+run it or treat its datasets, measured operations, comparisons, or outputs as current work. ADR 0073
+retired all performance measurements, timings, budgets, and gates.
+
+The retired design would have compared the EF Core SQLite oracle with a Groundwork physical-entity
+implementation first, then run the Groundwork provider matrix. This is historical context, not an
+instruction or acceptance criterion.
 
 ### Dataset scales
 
@@ -309,7 +315,8 @@ Performance validation should compare the EF Core SQLite oracle with a Groundwor
 | Time range | latest minute; latest hour; full retained window |
 | Retention crossing | cap + 1; cap + 1%; cap + 10% |
 
-Use deterministic Structured Log and OpenTelemetry generators with fixed seeds. Include realistic structured properties, span events/links, multi-resource/workflow trace indexes, metric attributes, and log bodies. Publish payload bytes, index bytes, write amplification, allocations, connection/pool wait, provider CPU, and query plans alongside latency and throughput.
+The retired design called for deterministic Structured Log and OpenTelemetry generators with fixed
+seeds and the dataset characteristics below. It must not be executed under the current policy.
 
 ### Measured operations
 
@@ -322,11 +329,18 @@ Use deterministic Structured Log and OpenTelemetry generators with fixed seeds. 
 7. Graceful drain time and retry-exhaustion behavior.
 8. Restart recovery and first-query latency.
 
-Correctness, no unexplained loss/duplication, atomicity, isolation, and server-side execution are prerequisites. Diagnostics durable operations use the provisional ordinary-store gate from the Zero-EF decision: Groundwork p95 no worse than 1.25x EF Core and throughput at least 80%, with Groundwork p99 no worse than 2x EF Core. The non-blocking capture path additionally must not regress host throughput or block a producer on database I/O. A sustained run is unacceptable if its apparent throughput is achieved by a higher shed/drop rate.
+Current acceptance retains only the timing-independent obligations: no unexplained loss or
+duplication, required atomicity and isolation, server-side query execution, a capture path that does
+not block a producer on database I/O, and explicit accounting for every shed or dropped record. The
+former Zero-EF ratio gate and all associated timings, budgets, and measurements are historical and
+retired under ADR 0073; they are not acceptance criteria for #1681.
 
 ## Failure Observability
 
-Groundwork should emit operational evidence for append/query/inspect/trim duration, batch/row counts, idempotency replays, selected physical plan, pool/session wait, trim deletions, cancellations, and failures. Elsa should emit queue depth/high-water, batches drained, retry attempts, queue-overflow drops, retry-exhausted drops, writes-after-stop, shutdown timeout, and final drain outcome.
+The EF replacement should emit timing-independent operational evidence for batch/row counts,
+idempotency replays, selected execution plan, trim deletions, cancellations, and failures. Elsa
+should emit queue depth/high-water, batches drained, retry attempts, queue-overflow drops,
+retry-exhausted drops, writes-after-stop, shutdown failure, and final drain outcome.
 
 Durable-adapter loss counters must distinguish at least `queue_overflow`, `retry_exhausted`, `shutdown_timeout`, and `writer_closed`. OpenTelemetry's per-signal counts remain useful; Structured Logs needs equivalent process-local durable-queue counters rather than only a warning. Groundwork trim results/inspection must distinguish durable retained-record eviction from failed persistence and subscriber delivery loss. In-memory ring-buffer eviction accounting remains owned by #420.
 

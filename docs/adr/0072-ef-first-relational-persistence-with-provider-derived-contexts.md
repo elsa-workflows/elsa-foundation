@@ -449,7 +449,7 @@ and workload evidence.
 | 2026-09-10 | Proposed | PR #1623 drafted the provider-derived EF direction from spike #1622. |
 | 2026-09-11 | Pilot concluded | Program #1626 and report PR #1655 recorded a successful bounded technical pilot and deferred product policy. |
 | 2026-09-11 | Revision authorized | Sipke authorized revising ADR 0072 in the bounded direction: separately admitted shape-simple relational modules, Groundwork retained for Runtime/document/specialized workloads. |
-| 2026-09-12 | Accepted | Sipke explicitly approved the final bounded text. The acceptance record reconciles ADR 0042 and retires the Zero-EF goal as an active policy surface. |
+| 2026-09-12 | Accepted | Sipke explicitly approved the final bounded text. The acceptance record narrows ADR 0042 to admit separately governed, shape-simple relational EF modules while retaining Groundwork for excluded workloads. |
 | 2026-09-12 | Superseded | Sipke selected the all-EF destination recorded by ADR 0073. Program #1665 replaced this bounded rollout; #1654 remains historical inventory input and no module work is authorized by this ADR. |
 
 ## Follow-ups and ownership
