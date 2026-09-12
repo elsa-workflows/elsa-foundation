@@ -6,9 +6,11 @@ Origin: drafted as a finding in spec 129 (Cold-Start Readiness unit 1), filed as
 Target package: `CShells` / `CShells.Abstractions` (observed at `0.0.29-preview.147`).
 
 ADR 0073 retired all performance measurements, timings, budgets, and gates. This document is kept
-only as provenance for a former upstream idea. Timing-independent initializer ordering, failure
-propagation, and activation correctness belong to EF Core Persistence; per-initializer duration
-attribution and ReadyToRun sizing do not.
+only as provenance for a former upstream idea. Timing-independent persistence-initializer and
+migration ordering and failure behavior belong to [EF Core Persistence](../program-goals/ef-core-persistence.md).
+General untimed launch and activation correctness remains with
+[Workspace Launch Readiness](../program-goals/workspace-launch-readiness.md). Per-initializer duration
+attribution and ReadyToRun sizing belong to neither program.
 
 ## Problem
 

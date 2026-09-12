@@ -24,11 +24,17 @@ while keeping core persistence contracts and invariants independent of Groundwor
 superseded by ADR 0073; the consolidation evidence and linked issue history remain useful provenance.
 No active work should be scheduled from this page.
 
-This is the successor to the completed [Groundwork Persistence Readiness](groundwork-persistence-readiness.md) goal. The earlier goal established and validated the provider-neutral foundation; this goal completes product adoption and removal of the parallel EF Core implementation lane.
+This was the successor to the completed [Groundwork Persistence Readiness](groundwork-persistence-readiness.md)
+goal. The earlier goal established and validated the provider-neutral foundation; this former goal
+would have completed product adoption and removed the parallel EF Core implementation lane.
 
-## In Scope
+## Historical Scope (superseded)
 
-- Ratify the Elsa provider boundary and the narrow constitution amendment it requires.
+The bullets in this section describe the former Groundwork program. They are retained only as
+provenance and must not be treated as current policy, requirements, or scheduling instructions.
+
+- The former program proposed ratifying the Elsa provider boundary and a narrow constitution
+  amendment; ADR 0073 later found no constitution conflict requiring such an amendment.
 - Track upstream Groundwork dependencies through the [Zero-EF Groundwork decision map](../decision-maps/zero-ef-groundwork.md).
 - Replace scale-bearing in-memory query fallbacks with bounded, server-side Groundwork queries.
 - Use Groundwork for Elsa-owned structured logs, OpenTelemetry and ASP.NET Core Identity persistence; preserve the vendor authorization-server boundary.
@@ -37,7 +43,7 @@ This is the successor to the completed [Groundwork Persistence Readiness](ground
 - Switch Elsa-owned reference-host lanes to Groundwork and remove first-party EF projects, migrations, registrations, dependencies and obsolete EF-only tests with recorded dispositions.
 - Keep an architecture guard that rejects first-party EF and scopes the vendor-host exception narrowly.
 
-## Out Of Scope
+## Historical Exclusions
 
 - Creating or maintaining a separate repository for optional EF Core implementations.
 - Migrating data from an already-released EF-backed Elsa installation; this software is greenfield.
@@ -72,9 +78,9 @@ linked GitHub issue or another active program goal.
 - [Diagnostics Observability Readiness](diagnostics-observability-readiness.md)
 - [Runtime Execution Seam](runtime-execution-seam.md)
 
-## Current Roadmap Notes
+## Historical Roadmap Notes (superseded)
 
-**Historical scope (2026-09-07):** The owner separated broad validation from implementation to reduce credit consumption. [Spec 144's governing scope](../../specs/144-zero-ef-final-removal/spec.md#current-governing-scope--2026-09-07) records that former decision and the vendor OpenIddict exception. The all-EF direction now belongs to ADR 0073 and Program #1665. Existing timing results remain historical evidence; performance measurement itself is retired by owner policy without a claim that its unfinished budgets passed.
+**Historical scope (2026-09-07):** The owner separated broad validation from implementation to reduce credit consumption. [Spec 144's historical governing scope](../../specs/144-zero-ef-final-removal/spec.md#historical-governing-scope--superseded-2026-09-12) records that former decision and the vendor OpenIddict exception. The all-EF direction now belongs to ADR 0073 and Program #1665. Existing timing results remain historical evidence; performance measurement itself is retired by owner policy without a claim that its unfinished budgets passed.
 
 ### Historical roadmap notes — not current scheduling instructions
 
@@ -104,13 +110,13 @@ The dated notes below preserve prior milestones, package identities and failures
 - Structured Logs multi-writer replay hardening is implemented by [spec 091](../../specs/091-structured-logs-replay-cursors/spec.md): Core remains Groundwork-neutral, while the first-party adapter consumes Groundwork preview.33 diagnostic records. The temporary EF adapter received no migration or schema expansion.
 - Runtime hot paths remain subject to Runtime Execution Seam correctness and performance gates.
 
-## Drift / Review Notes
+## Historical Drift / Review Notes
 
 - If work changes general Groundwork vocabulary, public APIs, providers, or migration mechanics, implement it upstream and link the released dependency here.
 - If work changes diagnostic capture/query semantics rather than its persistence substrate, route it through Diagnostics Observability Readiness.
 - If a proposed rule is durable and enforceable across Elsa work units, route only that gate through Constitution Readiness; keep plans and sequencing here.
 
-## Removal or Completion Conditions
+## Historical Removal or Completion Conditions
 
 This historical goal remains superseded. Its prior completion conditions were never satisfied and
 must not be reported as passed. Program #1665 maps their still-applicable correctness requirements

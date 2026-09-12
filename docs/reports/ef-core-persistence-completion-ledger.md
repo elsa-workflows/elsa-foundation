@@ -4,8 +4,8 @@ Status: active initial ledger index; #1671 must complete entry-level expansion b
 implementation and no removal disposition is complete.
 
 Inventory branch-cut snapshot: `origin/main` at
-`ad127e777e442ca9ffdd2e0d035f7b84205d1d2a` (2026-09-12). PR #1685 later integrated current base
-`6bdb377bbbc76baac9ef19b59a8a8c824ede8349`; that intervening publishing change touched no
+`ad127e777e442ca9ffdd2e0d035f7b84205d1d2a` (2026-09-12). Publishing PR #1686 then advanced main to
+`6bdb377bbbc76baac9ef19b59a8a8c824ede8349`, which PR #1685 integrated. The #1686 delta touched no
 persistence project, dependency, or ledger count. #1671 owns the next entry-level rebaseline.
 
 Program: [#1665](https://github.com/elsa-workflows/elsa-foundation/issues/1665). Governing

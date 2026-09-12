@@ -247,13 +247,17 @@ The specialized primitive deliberately does not include:
 
 Provider optimizations may change physical plans, not results, order, isolation, exactness, or failure behavior. Native TTL indexes, capped collections, approximate counts, and text search are optional only when they preserve the declared portable contract; otherwise they are additional provider-specific capabilities and cannot silently replace it.
 
-## Highest-Seam Conformance Plan
+## Historical Groundwork Highest-Seam Conformance Plan (superseded)
 
-Testing should be layered but acceptance belongs at the highest seam that proves application behavior.
+This entire plan, through the physical/provider assertions below, is retained only as historical
+Groundwork design provenance. Do not execute it. The current diagnostics implementation issue must
+translate applicable timing-independent behavior to EF Core across SQLite, SQL Server, PostgreSQL,
+and MySQL; MongoDB and Groundwork steps are not current requirements.
 
-### 1. Groundwork primitive contract suite
+### 1. Historical Groundwork primitive contract suite
 
-Run the same `IDiagnosticRecordStore` suite against real SQLite, SQL Server, PostgreSQL, and MongoDB providers:
+The former plan would have run the same `IDiagnosticRecordStore` suite against real SQLite, SQL
+Server, PostgreSQL, and MongoDB providers:
 
 - empty, single-record, batch-boundary, concurrent-stream isolation, and single-stream atomic append;
 - append-operation replay proving stable outcomes, plus same-id/different-batch rejection;
@@ -272,9 +276,11 @@ Run the same `IDiagnosticRecordStore` suite against real SQLite, SQL Server, Pos
 - injected failure proving whole-batch commit/rollback and retry-safe acknowledgement; and
 - executable-plan evidence proving no unbounded client evaluation.
 
-### 2. Elsa adapter contract suite
+### 2. Historical Elsa adapter contract suite
 
-Run the same existing `IStructuredLogStore` and `IOpenTelemetryStore` behavior fixtures against each real Groundwork provider through Elsa's adapter, not against a mocked Groundwork interface. This suite proves:
+The former plan would have run the existing `IStructuredLogStore` and `IOpenTelemetryStore` behavior
+fixtures against each real Groundwork provider through Elsa's adapter, not against a mocked
+Groundwork interface. That suite was intended to prove:
 
 - exact filter/case/order/clamp semantics;
 - Structured Logs lifetime committed high-water and snapshot-bound opaque-cursor replay;
@@ -285,11 +291,16 @@ Run the same existing `IStructuredLogStore` and `IOpenTelemetryStore` behavior f
 - queue overflow, retry exhaustion, drain survival, final trim, and graceful shutdown; and
 - correct mapping between shell/tenant execution scope and Groundwork scope.
 
-The adapter suite should add tests missing from the current EF oracle: category/source case policy, all OpenTelemetry filter combinations, inclusive range boundaries, equal-timestamp tie-breaks, error propagation, storage-scope isolation, crash/restart, uncertain-commit idempotency, and bounded provider execution.
+The historical adapter suite proposed tests missing from its then-current EF oracle: category/source
+case policy, all OpenTelemetry filter combinations, inclusive range boundaries, equal-timestamp
+tie-breaks, error propagation, storage-scope isolation, crash/restart, uncertain-commit idempotency,
+and bounded provider execution.
 
-### 3. Physical/provider assertions
+### 3. Historical physical/provider assertions
 
-Each provider test run should inspect the declared query/materialization plan. Result equality alone is insufficient. Tests must prove that required fields and compound orderings are materialized, queries are server-side, trim is set-based or otherwise bounded, and tenant/scope appears in keys and scale-bearing indexes.
+The former plan required each provider test run to inspect the declared query/materialization plan.
+Its intended assertions covered materialized fields and compound ordering, server-side queries,
+bounded trimming, and tenant/scope participation in keys and scale-bearing indexes.
 
 ## Historical Performance Workload (retired)
 
