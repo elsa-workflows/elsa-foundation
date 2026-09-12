@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 103
+- Discovered feature classes: 104
 
 ## Features
 
@@ -76,6 +76,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | SerializationFeature | direct IShellFeature | Elsa.Serialization.SystemText | IShellFeature | [SerializationFeature.cs](../../src/Elsa/Serialization/SystemText/SerializationFeature.cs) |
 | StudioPreferencesApiFeature | direct IWebShellFeature | Elsa.Studio.Preferences.Api | IWebShellFeature | [StudioPreferencesApiFeature.cs](../../src/Elsa/Studio/Preferences/Api/StudioPreferencesApiFeature.cs) |
 | StudioPreferencesFeature | direct IShellFeature | Elsa.Studio.Preferences.Api | IShellFeature | [StudioPreferencesFeature.cs](../../src/Elsa/Studio/Preferences/Api/StudioPreferencesFeature.cs) |
+| StudioPreferencesEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Studio.Preferences.Persistence.EntityFrameworkCore | IShellFeature | [StudioPreferencesEntityFrameworkCoreFeature.cs](../../src/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/StudioPreferencesEntityFrameworkCoreFeature.cs) |
 | StudioPreferencesGroundworkPersistenceFeature | direct IShellFeature | Elsa.Studio.Preferences.Persistence.Groundwork | IShellFeature | [StudioPreferencesGroundworkPersistenceFeature.cs](../../src/Elsa/Studio/Preferences/Persistence/Groundwork/StudioPreferencesGroundworkPersistenceFeature.cs) |
 | TasksFeature | direct IShellFeature | Elsa.Tasks | IShellFeature | [TasksFeature.cs](../../src/Elsa/Tasks/TasksFeature.cs) |
 | GroundworkMongoDbProviderFeature | feature-base-derived | Elsa.Workbench | GroundworkProviderFeatureBase | [GroundworkMongoDbProviderFeature.cs](../../src/Apps/Elsa.Workbench/Groundwork/GroundworkMongoDbProviderFeature.cs) |

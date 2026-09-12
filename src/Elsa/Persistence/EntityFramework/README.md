@@ -24,7 +24,7 @@ until its migration slice proves four-provider parity and performs the explicit 
 | `EfProviderGuard.Ensure` | Refuse apply when `Database.ProviderName` does not match the derived context |
 | `EfMigratePolicy` | `AutoMigrate` vs `Validate` (fail if pending) |
 | `EfDatabaseMigrator.ApplyAsync` | Guard, then `MigrateAsync` (EF 9+ takes the database lock) or fail closed |
-| `EfRelationalProviderBinding` | Invoke host-supplied `UseSqlite` / `UseSqlServer` / `UseNpgsql` without this package referencing those engines |
+| `EfRelationalProviderBinding` | Invoke host-supplied `UseSqlite` / `UseSqlServer` / `UseNpgsql` / `UseMySQL` without this package referencing those engines |
 
 ## Custom migrate loops
 
@@ -41,5 +41,5 @@ and `dotnet ef migrations has-pending-model-changes` per derived context).
 
 ## Provider packages stay in the host
 
-This project has no `PackageReference` to SqlServer, Sqlite, or Npgsql. The host (or a
+This project has no `PackageReference` to SqlServer, Sqlite, Npgsql, or MySql.EntityFrameworkCore. The host (or a
 design-time tooling project) brings exactly one runtime provider package.

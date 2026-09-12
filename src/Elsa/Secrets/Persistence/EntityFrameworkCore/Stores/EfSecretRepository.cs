@@ -1,3 +1,4 @@
+using Elsa.Persistence.EntityFramework;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Entities;
@@ -85,7 +86,7 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
             context.ChangeTracker.Clear();
             return true;
         }
-        catch (DbUpdateException exception) when (IsUniqueConstraintViolation(exception))
+        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
         {
             context.ChangeTracker.Clear();
             return false;
@@ -128,7 +129,7 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
                 throw new InvalidOperationException($"Could not save secret '{secret.Name}' after {MaximumUnconditionalSaveAttempts} attempts.", exception);
             }
             catch (DbUpdateException exception)
-                when (attempt + 1 < MaximumUnconditionalSaveAttempts && IsUniqueConstraintViolation(exception))
+                when (attempt + 1 < MaximumUnconditionalSaveAttempts && EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
             {
                 // A concurrent creator may win between FindAsync and INSERT. Refresh and turn the
                 // operation into an update on the next attempt rather than reporting a conflict.
@@ -187,7 +188,7 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
             return new SecretRevisionSaveResult(SecretRevisionSaveStatus.Conflict);
         }
         catch (DbUpdateException exception)
-            when (expectedToken is null && IsUniqueConstraintViolation(exception))
+            when (expectedToken is null && EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
         {
             context.ChangeTracker.Clear();
             return new SecretRevisionSaveResult(SecretRevisionSaveStatus.Conflict);
@@ -304,34 +305,6 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
     {
         ValidateTenantId(tenantId);
         SecretNameConstraints.Validate(normalizedName);
-    }
-
-    internal static bool IsUniqueConstraintViolation(DbUpdateException exception)
-    {
-        for (var current = (Exception?)exception; current is not null; current = current.InnerException)
-        {
-            var type = current.GetType();
-            var fullName = type.FullName ?? "";
-            if (fullName.Contains("SqliteException", StringComparison.Ordinal))
-            {
-                if (type.GetProperty("SqliteErrorCode")?.GetValue(current) is 19)
-                    return true;
-                if (current.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase) ||
-                    current.Message.Contains("PRIMARY KEY", StringComparison.OrdinalIgnoreCase))
-                    return true;
-            }
-
-            if (fullName.Contains("PostgresException", StringComparison.Ordinal) &&
-                type.GetProperty("SqlState")?.GetValue(current) as string == "23505")
-                return true;
-
-            if ((fullName.EndsWith(".SqlException", StringComparison.Ordinal) ||
-                 fullName.Equals("Microsoft.Data.SqlClient.SqlException", StringComparison.Ordinal)) &&
-                type.GetProperty("Number")?.GetValue(current) is 2627 or 2601)
-                return true;
-        }
-
-        return false;
     }
 
     private static void ValidateTenantId(string tenantId)
