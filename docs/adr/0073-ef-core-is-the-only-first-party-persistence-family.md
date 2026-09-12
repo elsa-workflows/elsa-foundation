@@ -53,8 +53,12 @@ met.
 
 ### D1 — EF Core is the only first-party persistence implementation family
 
-Elsa Foundation will ship EF Core implementations for every first-party persistence contract. The
-supported relational engines are SQLite, SQL Server, PostgreSQL, and MySQL.
+Elsa Foundation will ship EF Core implementations for every first-party **durable** persistence
+contract. The supported relational engines are SQLite, SQL Server, PostgreSQL, and MySQL.
+
+Process-local in-memory implementations used as defaults, development/test substitutes, or explicit
+non-durable modes are not a persistence implementation family and may remain where the owning
+contract requires them. They do not satisfy any durable-store, restart, or provider gate.
 
 Groundwork is a migration source and historical evidence source, not a retained first-party product
 lane. MongoDB support is removed rather than replaced. No new first-party persistence family is

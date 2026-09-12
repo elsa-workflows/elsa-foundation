@@ -65,7 +65,7 @@ proof are active under #1681.
 ## Drift / Review Notes
 
 - If shared real-time/live-feed code materializes across StructuredLogs and OTEL, evaluate a `Elsa.Diagnostics.RealTime.Core` seam (defer until the second consumer proves it; §2.17/§2.20).
-- If observability work turns mostly into persistence-framework concerns, check against [Groundwork Persistence Readiness](groundwork-persistence-readiness.md).
+- If observability work turns mostly into persistence-framework concerns, check against [EF Core Persistence](ef-core-persistence.md). [Groundwork Persistence Readiness](groundwork-persistence-readiness.md) is historical only.
 - If a diagnostics rule becomes a general framework gate, move it to the constitution and leave a link here.
 
 ## Removal or Completion Conditions

@@ -37,7 +37,12 @@ The inventory was verified against the repository at this report's date and thes
 - the local official OpenIddict 7.5.0 assemblies/XML documentation and the package's concrete EF models/stores;
 - the current Groundwork `main` document, query, index, concurrency, tenancy, and unit-of-work contracts.
 
-The current host activates `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore` and `FoundationIdentityOpenIddict` in [shells.json](../../src/Apps/Elsa.Server/shells.json). Production configuration points both at SQLite in [shells.Production.json](../../src/Apps/Elsa.Server/shells.Production.json). The host references the EF Identity project directly, while the OpenIddict project contains EF packages and its EF context/migrations itself.
+At the evidence date, the then-current Elsa.Server host activated
+`FoundationIdentityAspNetCoreIdentityEntityFrameworkCore` and `FoundationIdentityOpenIddict` in
+`src/Apps/Elsa.Server/shells.json`; its production configuration pointed both at SQLite in
+`src/Apps/Elsa.Server/shells.Production.json`. Those historical host files no longer exist. The
+current host composition lives in [Elsa.Workbench shells.json](../../src/Apps/Elsa.Workbench/shells.json)
+and [shells.Production.json](../../src/Apps/Elsa.Workbench/shells.Production.json).
 
 ## Current Composition And Registration Seams
 
@@ -73,7 +78,7 @@ guard, and lifecycle hooks while replacing the EF feature/package, store registr
 bootstrapping, and EF IAM adapters. Current replacement work belongs to #1682 and keeps EF Core as
 the first-party implementation family.
 
-Recommended seam:
+Historical recommended seam (superseded; not current guidance):
 
 ```text
 FoundationIdentityAspNetCoreIdentity
@@ -383,16 +388,16 @@ The production-store slices must not begin by copying the current EF schema mech
 
 ## Source Pointers
 
-- [Identity EF registration](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Extensions/AspNetCoreIdentityEntityFrameworkCoreServiceCollectionExtensions.cs)
+- Historical Identity EF registration (removed path): `src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Extensions/AspNetCoreIdentityEntityFrameworkCoreServiceCollectionExtensions.cs`
 - [Existing Groundwork IAM persistence feature](../../src/Elsa/Foundation/Identity/Persistence/Groundwork/IdentityGroundworkPersistenceFeature.cs)
 - [Existing Groundwork IAM storage manifest](../../src/Elsa/Foundation/Identity/Persistence/Groundwork/IdentityStorageManifest.cs)
 - [Identity framework registration](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Extensions/AspNetCoreIdentityServiceCollectionExtensions.cs)
 - [Identity model](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Models/AspNetCoreIdentityUser.cs)
-- [Identity EF model](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/ApplicationIdentityDbContext.cs)
-- [Identity seeder](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Seeding/IdentitySeeder.cs)
+- Historical Identity EF model (removed path): `src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/ApplicationIdentityDbContext.cs`
+- Historical Identity seeder (removed path): `src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Seeding/IdentitySeeder.cs`
 - [Identity sign-in flow](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Services/AspNetCoreIdentitySignInService.cs)
 - [OpenIddict registration](../../src/Elsa/Foundation/Identity/OpenIddict/Extensions/OpenIddictIdentityServiceCollectionExtensions.cs)
-- [OpenIddict token flow](../../src/Elsa/Foundation/Identity/OpenIddict/OpenIddictTokenService.cs)
+- [OpenIddict token flow](../../src/Elsa/Foundation/Identity/OpenIddict/Behavior/OpenIddictTokenService.cs)
 - [Workbench-owned OpenIddict vendor EF model](../../src/Apps/Elsa.Workbench/OpenIddict/OpenIddictIdentityDbContext.cs)
 - [Identity tests](../../tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity)
 - [OpenIddict tests](../../tests/Elsa/Foundation/Identity/Tests/OpenIddict)

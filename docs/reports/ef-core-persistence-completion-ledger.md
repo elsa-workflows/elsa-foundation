@@ -66,7 +66,7 @@ correctness requirements must first move to an EF-neutral or EF-owned row.
 |---|---|---|---|---|---|
 | X01 | `GroundworkStorageSessionSource` owns one provider connection/session per target and admits schema on initialization | #1674 | Define EF connection/context ownership, shell isolation, activation/reload and teardown | | Pending |
 | X02 | `GroundworkStorageTransaction` refuses wrong target, wrong scope, privileged access, missing atomic capability, or undeclared units | #1674 | Preserve refusal semantics and prove commit, rollback, partial `SaveChanges`, retries, savepoints and isolation | | Pending |
-| X03 | Publishing commands atomically span Activities Design, Runtime and Publishing units when co-located | #1674 and #1677 | Reconcile ADR 0066 only after shared/split topology is proven | | Pending |
+| X03 | Reusable-activity publication commands atomically span Activities Design, Runtime and Publishing units when co-located; ordinary workflow publication remains ordered across lanes | #1674 and #1677 | Preserve the reusable-activity atomicity guarantee and ordinary-workflow ordered/recovery semantics from ADR 0066 after shared/split topology is proven | | Pending |
 | X04 | `ActivityUpgradePlanStore` can stage Activities Design and Workflows Design rows in one exact unit of work | #1674 and #1677 | Resolve two logical operation units sharing physical `elsa_design_operations`; do not assume one current unit | | Pending |
 | X05 | Elsa3 reusable-activity import spans design/runtime/import units | #1674 and #1677 | Prove idempotency and failure recovery for chosen topology | | Pending |
 | X06 | Runtime checkpoint writer stages fence, execution, scheduler, activities, bookmarks, durable values, incidents, alterations, dispatch, outbox, timers, health and a create-only marker | #1676 | Prove atomicity or explicit convergent recovery, commit ambiguity, fencing and crash restart | | Pending |
@@ -192,7 +192,10 @@ before any later `superseded` or `retired by policy` closure.
 
 | Current issue(s) | Requirement class | New owner / disposition gate |
 |---|---|---|
-| #1626, #1628, #1653, #1654, #1657 | Secrets pilot, governance, production-shaped proof, inventory and migration-tool race | #1665/#1666 now; preserve #1653/#1657 as executable predecessors |
+| #1626, #1628 | Bounded Secrets pilot and superseded EF policy governance | Historical inputs to ADR 0073 and #1665; no active implementation ownership remains after #1666 merges |
+| #1653 | Secrets production-shaped HTTP CRUD/restart proof | #1679; preserve as an executable predecessor |
+| #1654 | Repository persistence inventory | #1671; expand into the entry-level completion ledger before removal work |
+| #1657 | EF migration-tool BuildHost concurrency race | #1669 prerequisite; preserve as an executable migration-lifecycle gate |
 | #646, #1576, #1594 | Performance harness plus provider/correctness evidence | Performance-only criteria retire by policy; map native-plan, bounded-query, concurrency, retention and failure evidence before closure |
 | #1521, #1529 | EF/diagnostics correctness and observability defects | Diagnostics EF feature must explicitly accept or supersede every criterion |
 | #1132, #1137, #1138, #678, #683 | Execution Evidence, dispatch and Runtime durability | Runtime/Execution Evidence issues after the proving slice |
