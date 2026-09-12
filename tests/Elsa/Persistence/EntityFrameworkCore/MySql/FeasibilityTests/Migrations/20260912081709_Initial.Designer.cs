@@ -18,7 +18,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .UseCollation("utf8mb4_bin")
+                .UseCollation("utf8mb4_0900_bin")
                 .HasAnnotation("ProductVersion", "10.0.10")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
@@ -29,12 +29,12 @@ namespace Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.Migrations
                     b.Property<string>("TenantId")
                         .HasMaxLength(256)
                         .HasColumnType("varchar(256)")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_bin");
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("NormalizedName")
                         .HasMaxLength(256)
                         .HasColumnType("varchar(256)")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_bin");
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
@@ -44,7 +44,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.Migrations
                     b.Property<string>("DisplayNameSearchKey")
                         .IsRequired()
                         .HasColumnType("longtext")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_bin");
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<bool>("HasNonExpiringActiveVersion")
                         .HasColumnType("tinyint(1)");
@@ -55,7 +55,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.Migrations
                     b.Property<string>("NameSearchKey")
                         .IsRequired()
                         .HasColumnType("longtext")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_bin");
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("Payload")
                         .IsRequired()
@@ -63,7 +63,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.Migrations
 
                     b.Property<string>("ScopeLookupKey")
                         .HasColumnType("longtext")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_bin");
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -73,12 +73,12 @@ namespace Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.Migrations
                     b.Property<string>("StoreNameLookupKey")
                         .IsRequired()
                         .HasColumnType("longtext")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_bin");
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.Property<string>("TypeNameLookupKey")
                         .IsRequired()
                         .HasColumnType("longtext")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_bin");
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
                     b.HasKey("TenantId", "NormalizedName");
 
@@ -87,7 +87,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.Migrations
 
                     b.ToTable("elsa_secrets", (string)null);
 
-                    b.HasAnnotation("MySQL:Collation", "utf8mb4_bin");
+                    b.HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
                 });
 #pragma warning restore 612, 618
         }

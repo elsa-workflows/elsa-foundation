@@ -58,6 +58,12 @@ public sealed class MySqlProviderFeasibilityTests(MySqlContainerFixture fixture)
             MySqlContainerFixture.ConflictingDatabaseCollation,
             await ScalarAsync<string>(context, "SELECT DEFAULT_COLLATION_NAME FROM information_schema.schemata WHERE SCHEMA_NAME = DATABASE()"));
         Assert.Equal(
+            "NO PAD",
+            await ScalarAsync<string>(
+                context,
+                "SELECT PAD_ATTRIBUTE FROM information_schema.collations WHERE collation_name = @collation",
+                ("@collation", SecretsMySqlDbContext.Collation)));
+        Assert.Equal(
             7,
             await ScalarAsync<long>(
                 context,
@@ -159,6 +165,10 @@ public sealed class MySqlProviderFeasibilityTests(MySqlContainerFixture fixture)
         context.Secrets.Add(Record("tenant-collation", "Raw-münchen", "unicode-lower"));
         context.Secrets.Add(Record("tenant-collation", asciiUpper, "ascii"));
         context.Secrets.Add(Record("tenant-collation", umlautUpper, "unicode"));
+        context.Secrets.Add(Record("tenant-space", "same-name", "tenant-no-space"));
+        context.Secrets.Add(Record("tenant-space ", "same-name", "tenant-space"));
+        context.Secrets.Add(Record("tenant-name-space", "name", "name-no-space"));
+        context.Secrets.Add(Record("tenant-name-space", "name ", "name-space"));
         await context.SaveChangesAsync();
 
         Assert.Equal(6, await context.Secrets.CountAsync(record => record.TenantId == "tenant-collation"));
@@ -182,6 +192,26 @@ public sealed class MySqlProviderFeasibilityTests(MySqlContainerFixture fixture)
             "SELECT COUNT(*) FROM elsa_secrets WHERE TenantId = @tenant AND NormalizedName = @name",
             ("@tenant", "tenant-collation"),
             ("@name", "Raw-münchen")));
+        Assert.Equal(1, await ScalarAsync<long>(
+            context,
+            "SELECT COUNT(*) FROM elsa_secrets WHERE TenantId = @tenant AND NormalizedName = @name",
+            ("@tenant", "tenant-space"),
+            ("@name", "same-name")));
+        Assert.Equal(1, await ScalarAsync<long>(
+            context,
+            "SELECT COUNT(*) FROM elsa_secrets WHERE TenantId = @tenant AND NormalizedName = @name",
+            ("@tenant", "tenant-space "),
+            ("@name", "same-name")));
+        Assert.Equal(1, await ScalarAsync<long>(
+            context,
+            "SELECT COUNT(*) FROM elsa_secrets WHERE TenantId = @tenant AND NormalizedName = @name",
+            ("@tenant", "tenant-name-space"),
+            ("@name", "name")));
+        Assert.Equal(1, await ScalarAsync<long>(
+            context,
+            "SELECT COUNT(*) FROM elsa_secrets WHERE TenantId = @tenant AND NormalizedName = @name",
+            ("@tenant", "tenant-name-space"),
+            ("@name", "name ")));
         var exact = await context.Secrets.SingleAsync(record => record.TenantId == "tenant-collation" && record.NormalizedName == asciiLower);
         Assert.Equal("ascii", JsonDocument.Parse(exact.Payload).RootElement.GetProperty("value").GetString());
     }

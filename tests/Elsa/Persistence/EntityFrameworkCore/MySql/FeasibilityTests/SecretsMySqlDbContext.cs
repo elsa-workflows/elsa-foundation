@@ -23,7 +23,7 @@ public class SecretsMySqlDbContext : SecretsDbContext
 
     public const string ExpectedProviderName = "MySql.EntityFrameworkCore";
     public const string CharacterSet = "utf8mb4";
-    public const string Collation = "utf8mb4_bin";
+    public const string Collation = "utf8mb4_0900_bin";
     public const string HistoryTableName = "__EFMigrationsHistory_ElsaSecretsMySqlSpike";
     public const string MigrationId = "20260912081709_Initial";
     public bool IncludePendingModel => includePendingModel;

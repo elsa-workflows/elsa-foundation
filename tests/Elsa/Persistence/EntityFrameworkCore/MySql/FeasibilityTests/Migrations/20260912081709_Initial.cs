@@ -35,7 +35,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.Migrations
                     table.PrimaryKey("PK_elsa_secrets", x => new { x.TenantId, x.NormalizedName });
                 })
                 .Annotation("MySQL:Charset", "utf8mb4")
-                .Annotation("Relational:Collation", "utf8mb4_bin");
+                .Annotation("Relational:Collation", "utf8mb4_0900_bin");
 
             migrationBuilder.CreateIndex(
                 name: "IX_elsa_secrets_tenantId_status_normalizedName",
