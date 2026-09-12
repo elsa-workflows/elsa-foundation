@@ -466,6 +466,30 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /publishing/workflows/{versionId}/executable-export:
+    parameters:
+      - $ref: '#/components/parameters/VersionId'
+    get:
+      tags: [Publishing]
+      operationId: exportWorkflowExecutableClosure
+      description: >-
+        Downloads the published executable closure for the named workflow definition version as an
+        attachment. This is a plain Minimal API operation that streams the target's inline payload bytes
+        rather than a typed response object, so the body is an opaque JSON envelope rather than a documented
+        schema.
+      responses:
+        '200':
+          description: Executable closure envelope, served as a downloadable attachment
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /publishing/workflows/{versionId}/preflight:
     parameters:
       - $ref: '#/components/parameters/VersionId'
@@ -1408,26 +1432,43 @@ components:
         slotName: { type: string }
     Publication:
       type: object
-      required: [publicationId, definitionId, versionId, artifactId, slotName, status, sourceReferenceId]
+      required: [publicationId, definitionId, versionId, artifactId, slotName, status, createdAt]
       properties:
         publicationId: { type: string }
         definitionId: { type: string }
         versionId: { type: string }
         artifactId: { type: string }
         slotName: { type: string }
-        sourceReferenceId: { type: string }
+        sourceReferenceId: { type: [string, 'null'] }
         status:
           $ref: '#/components/schemas/PublicationStatus'
+        createdAt: { type: string, format: date-time }
         activatedAt: { type: [string, 'null'], format: date-time }
         retiredAt: { type: [string, 'null'], format: date-time }
+        failure:
+          oneOf:
+            - $ref: '#/components/schemas/PublicationFailure'
+            - type: 'null'
+    PublicationFailure:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
     PublicationSlot:
       type: object
-      required: [definitionId, slotName, status]
+      required: [slotId, definitionId, slotName, revision, updatedAt]
       properties:
+        slotId: { type: string }
         definitionId: { type: string }
         slotName: { type: string }
+        activePublicationId: { type: [string, 'null'] }
+        revision: { type: integer, format: int64 }
+        updatedAt: { type: string, format: date-time }
         status:
-          $ref: '#/components/schemas/PublicationStatus'
+          oneOf:
+            - $ref: '#/components/schemas/PublicationStatus'
+            - type: 'null'
         publication:
           oneOf:
             - $ref: '#/components/schemas/Publication'
@@ -1449,25 +1490,36 @@ components:
       enum: [preparing, pending, active, retiring, retired, failed]
     PublicationPolicy:
       type: object
-      required: [defaultAction, defaultSlotName, source]
+      required: [definitionId, defaultAction, defaultSlotName, source, revision, updatedAt]
       properties:
+        definitionId: { type: string }
         defaultAction: { type: string, enum: [replace, requireExplicitSlot] }
         defaultSlotName: { type: string, default: default }
         source: { type: string, enum: [workflow, host] }
+        revision: { type: integer, format: int64 }
+        updatedAt: { type: string, format: date-time }
     SetPublicationPolicyRequest:
       type: object
       properties:
         defaultAction: { type: string, enum: [replace, requireExplicitSlot] }
         defaultSlotName: { type: string, default: default }
+        expectedRevision: { type: integer, format: int64, default: 0 }
     TestRun:
       type: object
-      required: [testRunId, artifactId, sourceReferenceId, workflowExecutionId, expiresAt]
+      required: [testRunId, definitionId, definitionVersionId, status, metadata]
       properties:
         testRunId: { type: string }
-        artifactId: { type: string }
-        sourceReferenceId: { type: string }
-        workflowExecutionId: { type: string }
-        expiresAt: { type: string, format: date-time }
+        definitionId: { type: string }
+        definitionVersionId: { type: string }
+        artifactId: { type: [string, 'null'] }
+        workflowExecutionId: { type: [string, 'null'] }
+        status: { type: string }
+        commandDispatchStatus: { type: [string, 'null'] }
+        reason: { type: [string, 'null'] }
+        expiresAt: { type: [string, 'null'], format: date-time }
+        metadata:
+          type: object
+          additionalProperties: { type: string }
 
     SourceReferenceScope:
       type: string
