@@ -1,9 +1,15 @@
 # Groundwork Persistence Targets Are Named and Lanes Bind to Them
 
-Status: proposed (2026-08-07)
+> **Superseded before acceptance by
+> [ADR 0073](0073-ef-core-is-the-only-first-party-persistence-family.md) on 2026-09-12.** The target
+> and lane model remains historical evidence for the current Groundwork implementation and for the
+> transaction/migration spikes; it is not the destination architecture.
+
+Status: superseded (2026-09-12); proposed on 2026-08-07 and never accepted.
 
 Tracking: [issue #1156](https://github.com/elsa-workflows/elsa-foundation/issues/1156).
-Constrained by [ADR 0042](0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md).
+Historically constrained by
+[ADR 0042](0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md).
 
 ## Context
 

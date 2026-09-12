@@ -1,8 +1,22 @@
 # Diagnostics Storage Workload
 
-Status: decision input for [Zero-EF Persistence](../program-goals/zero-ef-persistence.md) and [Diagnostics Observability Readiness](../program-goals/diagnostics-observability-readiness.md).
+Status: historical Groundwork capability evidence and current domain-workload input for
+[EF Core Persistence issue #1681](https://github.com/elsa-workflows/elsa-foundation/issues/1681) and
+[Diagnostics Observability Readiness](../program-goals/diagnostics-observability-readiness.md).
 
-Date: 2026-07-12.
+> **Direction superseded, workload retained.** This report's Groundwork-specific architecture and
+> former [Zero-EF Persistence](../program-goals/zero-ef-persistence.md) ownership are historical.
+> Its timing-independent domain semantics—append, ordering, idempotency, bounded queries, exact
+> retention, redaction, and failure isolation—remain current inputs that #1681 must preserve in EF.
+> Performance measurements, timings, budgets, and gates retire under
+> [ADR 0073](../adr/0073-ef-core-is-the-only-first-party-persistence-family.md) without a pass claim.
+
+All Groundwork or temporary-EF implementation statements in the dated sections below describe the
+2026-07-12 evidence cut only. They are not current architecture instructions. Current work takes only
+the timing-independent workload semantics from those sections and implements them under ADR 0073 and
+#1681.
+
+Evidence date: 2026-07-12.
 
 Tracking: [Elsa issue #632](https://github.com/elsa-workflows/elsa-foundation/issues/632), [Groundwork diagnostic record-store #30](https://github.com/valence-works/Groundwork/issues/30), [Elsa PRD #629](https://github.com/elsa-workflows/elsa-foundation/issues/629), and [Groundwork PRD #25](https://github.com/valence-works/Groundwork/issues/25).
 
@@ -29,7 +43,7 @@ Every citation in this amendment was re-verified against source on 2026-08-11 an
 
 The rest of the report stands: generic reduce, map/reduce, and arbitrary aggregation are still out of scope. What is in scope is exactly the named, profile-bound, bounded grouped reduction described above.
 
-## Outcome
+## Historical Outcome at the Evidence Cut
 
 Elsa Structured Logs and OpenTelemetry do need a specialized Groundwork persistence primitive. Ordinary document CRUD is useful for the small mutable OpenTelemetry resource and instrument catalogs, but it is not the right abstraction for the high-volume immutable records. The missing primitive is an idempotent atomic single-stream batch append, bounded server-side query, exact inspection/count, and deterministic retention trim over tenant-scoped, time-ordered record streams.
 
@@ -41,7 +55,7 @@ The existing Elsa core contracts remain Groundwork-free. `IStructuredLogStore` a
 
 No current Elsa caller requires numeric rollups, grouping, generic reduce, or map/reduce. Exact counts are required. Metric endpoints return raw points and instruments. This workload therefore does not justify adding reduce to Groundwork. *(Superseded for grouping — see [Amendment 2026-07-31](#amendment-2026-07-31-grouped-reduction-is-required). Generic reduce and map/reduce remain out of scope.)*
 
-## Evidence Scope
+## Historical Evidence Scope
 
 The inventory covers:
 
@@ -55,7 +69,7 @@ The inventory covers:
 
 Live SSE fan-out is not a persistence concern. Its per-subscriber queues and in-band drop signals stay in the diagnostics domain.
 
-## Current Contract Inventory
+## Contract Inventory at the Evidence Cut
 
 ### Structured Logs
 
@@ -161,9 +175,10 @@ Retention is scope-local. A noisy tenant must not evict another tenant's records
 
 Storage-scope design must also decide whether a Structured Logs source instance is part of the scope. If multiple source instances share one tenant store, Elsa must expose Groundwork's durable cursor (or a source-plus-sequence cursor) before claiming lossless cross-process SSE resume.
 
-## Smallest Specialized Groundwork Contract
+## Historical Groundwork Contract Shape (superseded)
 
-The following is a semantic shape, not a ratified API signature.
+The following was a Groundwork semantic shape, not a ratified API signature. Its domain semantics
+are input to #1681, but its API names, Groundwork ownership, and provider mechanics are historical.
 
 ```csharp
 public interface IDiagnosticRecordStore
@@ -221,7 +236,11 @@ The specialized primitive deliberately does not include:
   [Amendment 2026-07-31](#amendment-2026-07-31-grouped-reduction-is-required)); or
 - map/reduce.
 
-## Portable Semantics Versus Provider Optimizations
+## Historical Groundwork Provider-Optimization Map (superseded)
+
+This table records the former Groundwork provider mapping, including MongoDB. It is not an EF
+implementation plan or a current provider list; #1681 must translate only applicable
+timing-independent semantics to SQLite, SQL Server, PostgreSQL, and MySQL.
 
 | Portable, conformance-gated behavior | Provider-native optimization allowed behind it |
 |---|---|
@@ -238,13 +257,17 @@ The specialized primitive deliberately does not include:
 
 Provider optimizations may change physical plans, not results, order, isolation, exactness, or failure behavior. Native TTL indexes, capped collections, approximate counts, and text search are optional only when they preserve the declared portable contract; otherwise they are additional provider-specific capabilities and cannot silently replace it.
 
-## Highest-Seam Conformance Plan
+## Historical Groundwork Highest-Seam Conformance Plan (superseded)
 
-Testing should be layered but acceptance belongs at the highest seam that proves application behavior.
+This entire plan, through the physical/provider assertions below, is retained only as historical
+Groundwork design provenance. Do not execute it. The current diagnostics implementation issue must
+translate applicable timing-independent behavior to EF Core across SQLite, SQL Server, PostgreSQL,
+and MySQL; MongoDB and Groundwork steps are not current requirements.
 
-### 1. Groundwork primitive contract suite
+### 1. Historical Groundwork primitive contract suite
 
-Run the same `IDiagnosticRecordStore` suite against real SQLite, SQL Server, PostgreSQL, and MongoDB providers:
+The former plan would have run the same `IDiagnosticRecordStore` suite against real SQLite, SQL
+Server, PostgreSQL, and MongoDB providers:
 
 - empty, single-record, batch-boundary, concurrent-stream isolation, and single-stream atomic append;
 - append-operation replay proving stable outcomes, plus same-id/different-batch rejection;
@@ -263,9 +286,11 @@ Run the same `IDiagnosticRecordStore` suite against real SQLite, SQL Server, Pos
 - injected failure proving whole-batch commit/rollback and retry-safe acknowledgement; and
 - executable-plan evidence proving no unbounded client evaluation.
 
-### 2. Elsa adapter contract suite
+### 2. Historical Elsa adapter contract suite
 
-Run the same existing `IStructuredLogStore` and `IOpenTelemetryStore` behavior fixtures against each real Groundwork provider through Elsa's adapter, not against a mocked Groundwork interface. This suite proves:
+The former plan would have run the existing `IStructuredLogStore` and `IOpenTelemetryStore` behavior
+fixtures against each real Groundwork provider through Elsa's adapter, not against a mocked
+Groundwork interface. That suite was intended to prove:
 
 - exact filter/case/order/clamp semantics;
 - Structured Logs lifetime committed high-water and snapshot-bound opaque-cursor replay;
@@ -276,15 +301,26 @@ Run the same existing `IStructuredLogStore` and `IOpenTelemetryStore` behavior f
 - queue overflow, retry exhaustion, drain survival, final trim, and graceful shutdown; and
 - correct mapping between shell/tenant execution scope and Groundwork scope.
 
-The adapter suite should add tests missing from the current EF oracle: category/source case policy, all OpenTelemetry filter combinations, inclusive range boundaries, equal-timestamp tie-breaks, error propagation, storage-scope isolation, crash/restart, uncertain-commit idempotency, and bounded provider execution.
+The historical adapter suite proposed tests missing from its then-current EF oracle: category/source
+case policy, all OpenTelemetry filter combinations, inclusive range boundaries, equal-timestamp
+tie-breaks, error propagation, storage-scope isolation, crash/restart, uncertain-commit idempotency,
+and bounded provider execution.
 
-### 3. Physical/provider assertions
+### 3. Historical physical/provider assertions
 
-Each provider test run should inspect the declared query/materialization plan. Result equality alone is insufficient. Tests must prove that required fields and compound orderings are materialized, queries are server-side, trim is set-based or otherwise bounded, and tenant/scope appears in keys and scale-bearing indexes.
+The former plan required each provider test run to inspect the declared query/materialization plan.
+Its intended assertions covered materialized fields and compound ordering, server-side queries,
+bounded trimming, and tenant/scope participation in keys and scale-bearing indexes.
 
-## Performance Workload
+## Historical Performance Workload (retired)
 
-Performance validation should compare the EF Core SQLite oracle with a Groundwork physical-entity implementation first, then run the Groundwork provider matrix. The capture queue and durable provider must be measured separately so a fast non-blocking enqueue cannot hide a drain that continuously sheds data.
+This section preserves the former Zero-EF measurement design for decision provenance only. Do not
+run it or treat its datasets, measured operations, comparisons, or outputs as current work. ADR 0073
+retired all performance measurements, timings, budgets, and gates.
+
+The retired design would have compared the EF Core SQLite oracle with a Groundwork physical-entity
+implementation first, then run the Groundwork provider matrix. This is historical context, not an
+instruction or acceptance criterion.
 
 ### Dataset scales
 
@@ -300,7 +336,8 @@ Performance validation should compare the EF Core SQLite oracle with a Groundwor
 | Time range | latest minute; latest hour; full retained window |
 | Retention crossing | cap + 1; cap + 1%; cap + 10% |
 
-Use deterministic Structured Log and OpenTelemetry generators with fixed seeds. Include realistic structured properties, span events/links, multi-resource/workflow trace indexes, metric attributes, and log bodies. Publish payload bytes, index bytes, write amplification, allocations, connection/pool wait, provider CPU, and query plans alongside latency and throughput.
+The retired design called for deterministic Structured Log and OpenTelemetry generators with fixed
+seeds and the dataset characteristics below. It must not be executed under the current policy.
 
 ### Measured operations
 
@@ -313,19 +350,29 @@ Use deterministic Structured Log and OpenTelemetry generators with fixed seeds. 
 7. Graceful drain time and retry-exhaustion behavior.
 8. Restart recovery and first-query latency.
 
-Correctness, no unexplained loss/duplication, atomicity, isolation, and server-side execution are prerequisites. Diagnostics durable operations use the provisional ordinary-store gate from the Zero-EF decision: Groundwork p95 no worse than 1.25x EF Core and throughput at least 80%, with Groundwork p99 no worse than 2x EF Core. The non-blocking capture path additionally must not regress host throughput or block a producer on database I/O. A sustained run is unacceptable if its apparent throughput is achieved by a higher shed/drop rate.
+Current acceptance retains only the timing-independent obligations: no unexplained loss or
+duplication, required atomicity and isolation, server-side query execution, a capture path that does
+not block a producer on database I/O, and explicit accounting for every shed or dropped record. The
+former Zero-EF ratio gate and all associated timings, budgets, and measurements are historical and
+retired under ADR 0073; they are not acceptance criteria for #1681.
 
 ## Failure Observability
 
-Groundwork should emit operational evidence for append/query/inspect/trim duration, batch/row counts, idempotency replays, selected physical plan, pool/session wait, trim deletions, cancellations, and failures. Elsa should emit queue depth/high-water, batches drained, retry attempts, queue-overflow drops, retry-exhausted drops, writes-after-stop, shutdown timeout, and final drain outcome.
+The EF replacement should emit timing-independent operational evidence for batch/row counts,
+idempotency replays, server-side execution, trim deletions, cancellations, and failures. Elsa
+should emit queue depth/high-water, batches drained, retry attempts, queue-overflow drops,
+retry-exhausted drops, writes-after-stop, shutdown failure, and final drain outcome.
 
-Durable-adapter loss counters must distinguish at least `queue_overflow`, `retry_exhausted`, `shutdown_timeout`, and `writer_closed`. OpenTelemetry's per-signal counts remain useful; Structured Logs needs equivalent process-local durable-queue counters rather than only a warning. Groundwork trim results/inspection must distinguish durable retained-record eviction from failed persistence and subscriber delivery loss. In-memory ring-buffer eviction accounting remains owned by #420.
+Durable-adapter loss counters must distinguish at least `queue_overflow`, `retry_exhausted`, `shutdown_timeout`, and `writer_closed`. OpenTelemetry's per-signal counts remain useful; Structured Logs needs equivalent process-local durable-queue counters rather than only a warning. Durable-adapter trim results and inspection must distinguish retained-record eviction from failed persistence and subscriber delivery loss. In-memory ring-buffer eviction accounting remains owned by #420.
 
-Diagnostics persistence cannot rely solely on logs or telemetry that it captures itself. Instrumentation must have a non-recursive path, using `Meter`, health/readiness state, and explicitly suppressed `Activity`/logger capture around the persistence implementation. Groundwork provider logging that is fed back into Structured Logs, or Groundwork tracing exported into the OpenTelemetry store it describes, can create an amplification loop. Conformance should prove that one append does not recursively generate another diagnostic append.
+Diagnostics persistence cannot rely solely on logs or telemetry that it captures itself. Instrumentation must have a non-recursive path, using `Meter`, health/readiness state, and explicitly suppressed `Activity`/logger capture around the persistence implementation. EF-adapter or database-driver logging fed back into Structured Logs, or persistence tracing exported into the OpenTelemetry store it describes, can create an amplification loop. Conformance should prove that one append does not recursively generate another diagnostic append.
 
 Do not put raw payloads, secrets, tenant ids, trace ids, or record ids into low-cardinality metric labels. Error logs should include bounded operation/stream/provider context and exception details without diagnostic payload content.
 
-## Current Gaps and Follow-up Slices
+## Historical Groundwork Gaps and Follow-up Slices (superseded)
+
+The slices below record the former Groundwork delivery plan. They are not current instructions;
+#1681 owns the EF replacement and must preserve only the applicable timing-independent behavior.
 
 ### Upstream Groundwork capability slices
 
@@ -355,6 +402,9 @@ These can be delivered incrementally, but the Elsa diagnostic adapters should no
 
 This report does not absorb issue #420's SSE-writer deduplication, in-memory ring-buffer reuse/drop counting, culture-invariant request parsing, serializer null policy, option clamping, or enum validation. The current EF resource/instrument full-table scans are relevant evidence, but the durable fix is keyed Groundwork catalog lookup rather than carrying the EF implementation forward. Issue #420's original claim that persistence failures were silent is stale in current source: the shared drain base now logs retries, exhausted batches, pruning failures, and overload shedding. This report owns durable queue/retry/shutdown loss categories, durable trim counts, and recursion-safe telemetry; #420 retains in-memory retention-eviction accounting.
 
-## Decision
+## Historical Groundwork Decision (superseded)
 
-Resolve `diagnostic-storage` with the specialized record-store shape above. Counts are required; generic reduce is not. Profile-bound grouped reduction is required — see [Amendment 2026-07-31](#amendment-2026-07-31-grouped-reduction-is-required). Capture buffering stays in Elsa. Mutable catalogs stay in ordinary Groundwork documents. Every durable operation is explicit-scope, idempotent where retried, bounded, server-side, restart-safe, and conformance-tested across all four mandatory providers.
+The former decision was to resolve `diagnostic-storage` with the specialized Groundwork record-store
+shape above. That provider choice is superseded. Exact counts, profile-bound grouped reduction,
+capture buffering, scope, idempotency, bounded queries, restart safety, and the other
+timing-independent semantics remain workload inputs for the EF design owned by #1681.

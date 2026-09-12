@@ -21,8 +21,10 @@ feature and then registers its own store still wins.
 For ASP.NET Core Identity hosts, select `FoundationIdentityAspNetCoreIdentityGroundwork` instead of
 the lower-level IAM persistence feature directly. It registers the framework-facing
 `UserManager`/`RoleManager` stores and the Elsa IAM adapters over one authoritative Groundwork Identity
-authority. Groundwork is the sole first-party Elsa Identity persistence authority; a host-owned integration
-must be explicitly selected when replacing it.
+authority. Groundwork is the only currently shipped first-party Elsa Identity persistence authority,
+pending its evidence-gated EF replacement under
+[ADR 0073](../../../../../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md);
+a host-owned integration must be explicitly selected when replacing it.
 
 ## Persisted document kinds
 

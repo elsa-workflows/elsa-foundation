@@ -98,7 +98,7 @@ not automatic constitution violations.
 |---|---|
 | Secrets core (contracts — manager, resolver, repository, store, type provider, audit sink) | [`src/Elsa/Secrets/Core/EXTENSION_POINTS.md`](src/Elsa/Secrets/Core/EXTENSION_POINTS.md) |
 | Secrets (default services + shell feature registration; Groundwork vs EF gate ownership is per selected composition) | [`src/Elsa/Secrets/EXTENSION_POINTS.md`](src/Elsa/Secrets/EXTENSION_POINTS.md) |
-| Secrets Entity Framework Core persistence (opt-in ADR 0072 pilot; Workbench catalogs it, default shells stay Groundwork; Groundwork Secrets matrix is not a prerequisite) | [`src/Elsa/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](src/Elsa/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
+| Secrets Entity Framework Core persistence (existing opt-in implementation and first ADR 0073 migration slice; Workbench catalogs it while the default flip remains pending) | [`src/Elsa/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](src/Elsa/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 
 ### Persistence
 
@@ -106,7 +106,7 @@ not automatic constitution violations.
 |---|---|
 | Provider-neutral persistence access and scope selection | [`src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md) |
 | Groundwork runtime persistence (document serializer + schema-version upcasters) | [`src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md) |
-| Entity Framework persistence policy (history table, provider guard, migrate vs validate; ADR 0072 pilot) | [`src/Elsa/Persistence/EntityFramework/EXTENSION_POINTS.md`](src/Elsa/Persistence/EntityFramework/EXTENSION_POINTS.md) |
+| Entity Framework persistence policy (history table, provider guard, migrate vs validate; shared policy under ADR 0073) | [`src/Elsa/Persistence/EntityFramework/EXTENSION_POINTS.md`](src/Elsa/Persistence/EntityFramework/EXTENSION_POINTS.md) |
 | Foundation Identity Groundwork persistence (durable users/roles/external-identities/memberships; Identity schema selection) | [`src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md) |
 
 ### Activities

@@ -1,6 +1,9 @@
 # Quickstart: Zero-EF Final Removal
 
-> **Current execution scope — 2026-09-07:** Follow [the current governing scope](spec.md#current-governing-scope--2026-09-07). This checklist and its receipts are retained history. Do not launch its broad provider, concurrency or performance commands as part of implementation delivery: those belong to the separate #646 harness. Vendor-host OpenIddict EF remains allowed; missing final validation remains unverified.
+> **Historical quickstart — superseded 2026-09-12.** The
+> [historical governing scope](spec.md#historical-governing-scope--superseded-2026-09-12), checklist,
+> commands, and receipts are retained only for provenance. Do not run them. ADR 0073 and Program
+> #1665 own the opposite all-EF replacement direction and retire all performance work.
 
 ## Shared-kernel implementation checkpoint — 2026-09-07
 

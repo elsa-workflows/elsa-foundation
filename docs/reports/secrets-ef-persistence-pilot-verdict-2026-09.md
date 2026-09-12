@@ -1,12 +1,38 @@
 # Secrets EF persistence pilot verdict and conditional replacement plan
 
-Status: concluded technical pilot; product-direction decision pending.
+Status: concluded technical pilot; bounded product recommendation superseded by ADR 0073.
 
 Evidence cut: `main` at `0a6a6595b9905048ce694d849d4fb080993fe727` (2026-09-11).
 
 Program: [#1626](https://github.com/elsa-workflows/elsa-foundation/issues/1626).
 
-## Verdict
+## Addendum — 2026-09-12
+
+The pilot's technical evidence remains valid. It proved the bounded Secrets recipe for SQLite, SQL
+Server, and PostgreSQL, including provider-derived contexts, module-owned migrations, host and shell
+lifecycle, dual migration modes, provider checks, and selected-family composition.
+
+Its recommendation to retain Groundwork for Runtime and other excluded workloads is superseded by
+the owner-ratified all-EF direction in
+[ADR 0073](../adr/0073-ef-core-is-the-only-first-party-persistence-family.md). That later product
+decision does not enlarge the pilot's evidence: this pilot did **not** prove Runtime, shared
+cross-module transactions, MySQL, repository-wide Groundwork removal, #1644's real Foundation
+Host/Nuplane directory-feed route, or #1653's production-shaped Secrets HTTP CRUD/restart journey.
+Those claims require their owning issues, spikes, and delivery evidence in
+[Program #1665](https://github.com/elsa-workflows/elsa-foundation/issues/1665).
+
+Any HTTP workflow performance result cited below is retained only as historical evidence from the
+pilot's original gate. Performance measurement is now retired by owner policy; this addendum does not
+claim that a current performance budget passed. Timing-independent activation and correctness
+evidence remains applicable.
+
+## Historical verdict at the 2026-09-11 evidence cut
+
+The remainder of this report preserves the pilot's then-current policy, recommendations, residuals,
+and evidence wording. Where it names ADR 0042, ADR 0072, Zero-EF, Runtime retention, MongoDB, or a
+pending product decision, read that statement as historical context superseded by the addendum above.
+
+### Verdict
 
 The Secrets EF pilot **succeeded as a narrow technical pilot for a shape-simple relational
 module**. It proves that Elsa can add an EF-backed Secrets implementation without changing
@@ -130,7 +156,7 @@ condition 5 is judged on measured numbers.
 | Product policy still says Groundwork-only first-party persistence | Human decision and source-of-truth reconciliation: [#1628](https://github.com/elsa-workflows/elsa-foundation/issues/1628). Proposed [ADR 0072](https://github.com/elsa-workflows/elsa-foundation/pull/1623) remains unmerged and `proposed`. |
 | The real Foundation Host/Nuplane directory-feed route cannot yet share unsigned `CShells.Abstractions` identity reliably and can report a zero-feature shell ready | Production-readiness corrective issue: [#1644](https://github.com/elsa-workflows/elsa-foundation/issues/1644). The pilot used its explicitly allowed equivalent package-feed shell proof; #1644 blocks calling the current directory-feed route production-ready, not the narrower technical verdict. |
 | API shape and persistence selection are proven in separate in-process suites, not one real HTTP/restart journey | Production-evidence follow-up: [#1653](https://github.com/elsa-workflows/elsa-foundation/issues/1653). It must drive the Secrets API with EF selected across a process restart without flipping the checked-in default or conflating the Nuplane defect in #1644. |
-| Three migration folders and snapshots per relational module create review/maintenance cost | Apply an explicit per-module admission check and measure snapshot churn. The measured per-module cost is under [Cost of ownership](#cost-of-ownership). Proposed ADR 0072 D11 retains FluentMigrator only as a threshold-triggered escape hatch, not the next default. |
+| Three migration folders and snapshots per relational module create review/maintenance cost | Apply an explicit per-module admission check and measure snapshot churn. The measured per-module cost is under [Cost of ownership](#cost-of-ownership). Proposed ADR 0072 D14 retains FluentMigrator only as a threshold-triggered escape hatch, not the next default. |
 | Secrets normalized search keys are a persisted compatibility contract | The v1 algorithm pins Unicode 16 simple-uppercase data plus the exact 26 additional mappings observed on the Phase 1 .NET 10 host. Runtime casing APIs are excluded. Any future change needs a new algorithm id, explicit backfill/data migration, and old/new lookup continuity tests; v1 must not be regenerated in place. |
 | MongoDB has no EF implementation in this pilot | Keep Mongo as an optional second family. A module that requires Mongo must retain or add a document-family adapter with its own evidence rather than pretending EF is cross-family. |
 | Runtime hot-path suitability was not tested | Runtime checkpoint, queue, placement, outbox, timer, lease, fencing, and distributed-lock work stays on Groundwork under the existing Runtime/G8 gates. A later ADR and workload evidence are prerequisites to reconsidering it. |
@@ -177,7 +203,7 @@ A domain may enter an EF replacement wave only when all of these are true:
    as module-owned tests before implementation.
 4. It is not a Runtime/G8 hot-path store and does not require Groundwork operational primitives.
 5. Three provider-derived migration sets are small enough to review and maintain; otherwise stop
-   and evaluate the D11 threshold instead of adding another schema framework by reflex.
+   and evaluate the D14 threshold instead of adding another schema framework by reflex.
 6. The owning team accepts data conversion, rollback, compatibility, and on-call responsibility.
 
 Failing one condition means **keep Groundwork** or open a focused architecture decision. It does

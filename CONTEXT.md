@@ -28,9 +28,10 @@ Activity implementations (`HttpEndpoint`, `Sequence`, `Flowchart`, ...) live und
 ## Persistence
 
 Every store contract has an in-memory default registered by `AddWorkflowRuntime()` in
-`src/Elsa/Workflows/Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs`. The only durable
-implementations this repository ships are Groundwork-backed (ADR 0042): runtime state under
-`src/Elsa/Persistence/Groundwork/V2/Runtime`, design and publishing state under their own
-`*/Persistence/Groundwork` folders. The Workbench selects SQLite through the `GroundworkProviderSqlite` feature.
+`src/Elsa/Workflows/Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs`. [ADR 0073](docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
+establishes EF Core as the only first-party durable persistence destination. The repository is still
+in transition: Groundwork-backed runtime, design, and publishing implementations remain while their
+owned EF replacements are delivered, and Secrets provides the first opt-in EF implementation. The
+Workbench still selects SQLite through `GroundworkProviderSqlite` until its owned composition flip.
 
 Decisions are recorded in [`docs/adr/`](docs/adr/README.md).

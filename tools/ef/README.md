@@ -1,6 +1,9 @@
 # generate-ef-migrations / dual-migrate
 
-Convention for first-party EF modules under proposed ADR 0072 (Secrets pilot).
+Convention for first-party EF modules under accepted
+[ADR 0073](../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md).
+The current commands began with the Secrets pilot and must become module-parameterized under #1669;
+#1657 is the prerequisite race/isolation repair, not the owner of that generalization.
 
 ## Layout
 

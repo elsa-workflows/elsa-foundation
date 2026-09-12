@@ -1,15 +1,16 @@
 # Elsa Foundation Ships Only Groundwork Persistence Implementations
 
-> **Pending amendment (proposed ADR 0072, not accepted):**
-> [ADR 0072](0072-ef-first-relational-persistence-with-provider-derived-contexts.md) records the
-> bounded EF-first relational direction evaluated by the completed
-> [Secrets EF pilot](../reports/secrets-ef-persistence-pilot-verdict-2026-09.md). The pilot's scoped
-> EF allowlist is technical evidence, not an amendment of this accepted ADR. This ADR remains in
-> force until the final ADR 0072 text is explicitly accepted. Groundwork remains the Workbench
-> default and the retained family for Runtime, document/Mongo, and operationally specialized
-> workloads.
+> **Superseded by [ADR 0073](0073-ef-core-is-the-only-first-party-persistence-family.md) on
+> 2026-09-12.** The Groundwork-only decision, its later bounded ADR 0072 amendment, and their evidence
+> remain historical. ADR 0073 selects EF Core as the only first-party persistence family while
+> preserving this ADR's vendor-owned OpenIddict boundary.
 
-Status: accepted (2026-07-12; ratified through the maintainer grilling and PR #630 review; the targeted constitution amendment remains separately pending consensus and compliance evidence).
+> **Amended by accepted [ADR 0072](0072-ef-first-relational-persistence-with-provider-derived-contexts.md)
+> on 2026-09-12:** individually admitted shape-simple relational modules may ship first-party EF
+> Core implementations under ADR 0072's gates. Groundwork remains the Workbench default and the
+> first-party family for Runtime, document/Mongo, and operationally specialized workloads.
+
+Status: superseded (2026-09-12) by ADR 0073; accepted on 2026-07-12 and amended by the OpenIddict decision on 2026-08-04 and by accepted ADR 0072 on 2026-09-12.
 
 Tracking: [Elsa PRD #629](https://github.com/elsa-workflows/elsa-foundation/issues/629) and [Groundwork PRD #25](https://github.com/valence-works/Groundwork/issues/25).
 
@@ -31,6 +32,24 @@ The zero-EF target is greenfield. No released EF-backed installation needs an ex
 - EF Core implementations may remain temporarily as contract-parity and benchmark oracles during vertical store-family migrations. They are removed after all mandatory correctness, provider, and performance gates pass.
 - Completion means no direct or transitive `Microsoft.EntityFrameworkCore*` dependency remains in `elsa-foundation`, its reference hosts, or its test graph. An architecture test will enforce that boundary.
 - No EF-to-Groundwork production-data migration is required because the product is greenfield.
+
+## Amendment — 2026-09-12, accepted
+
+Accepted [ADR 0072](0072-ef-first-relational-persistence-with-provider-derived-contexts.md) narrows
+the Groundwork-only first-party rule. Its current boundary is:
+
+- individually admitted new or existing shape-simple relational modules may ship first-party EF
+  Core implementations after satisfying ADR 0072's ownership, lifecycle, provider, evidence, and
+  rollback gates;
+- Groundwork remains the checked-in Workbench default and the first-party family for Runtime,
+  document/Mongo, and operationally specialized workloads;
+- one persistence family is selected per domain per shell, with no EF/Groundwork dual-write;
+- adding an EF implementation does not authorize a default switch or Groundwork deletion;
+- OpenIddict remains at its vendor-owned persistence boundary.
+
+This amendment supersedes only the statements in the original decision and the 2026-08-04
+completion criterion that prohibit every Elsa-authored EF store. The provider-neutral core-contract
+rules, Groundwork defaults and exclusions, and explicit vendor boundary remain in force.
 
 ## Amendment — 2026-08-04, decided
 

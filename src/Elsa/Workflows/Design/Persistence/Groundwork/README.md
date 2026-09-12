@@ -2,8 +2,10 @@
 
 Groundwork (document-store) provider for workflow-design persistence. The read/write contracts live in
 `Elsa.Workflows.Design.Persistence.Core`; this feature supplies their durable Groundwork
-implementations. The EF Core design persistence implementation is removed by spec 093 US4, so
-Groundwork is the sole workflow-design persistence provider.
+implementations. The former EF Core design persistence implementation was removed by spec 093 US4,
+so Groundwork is the only currently shipped workflow-design provider. Accepted
+[ADR 0073](../../../../../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
+requires its evidence-gated EF replacement; the current state is inventory, not the governing direction.
 
 ## What this feature provides
 

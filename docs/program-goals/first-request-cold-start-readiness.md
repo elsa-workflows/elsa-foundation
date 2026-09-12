@@ -1,6 +1,11 @@
 # First-Request / Cold-Start Readiness
 
-Status: active.
+> **Historical program — superseded 2026-09-12.** ADR 0073 retires performance benchmarks, timing
+> measurements, budgets, and gates without claiming the targets below passed. Preserve delivered
+> implementation history; move only timing-independent activation, migration, and failure behavior
+> into [EF Core Persistence](ef-core-persistence.md) and #1668 before deleting measurement surfaces.
+
+Status: superseded by owner policy (2026-09-12).
 
 Area: host boot and first-request latency (engine performance, phase 4, track 2).
 
@@ -50,7 +55,8 @@ Readiness](workspace-launch-readiness.md): a launchable workspace must also *sta
 5. **Warmups.** Targeted first-use warmups (JIT/route-table/serializer/connection) for whatever residual
    first-request cost remains after units 2–4.
 
-EF-initializer consolidation is **not** in this bucket — it belongs to [Zero-EF Persistence](zero-ef-persistence.md).
+Historical note: EF-initializer consolidation was outside this bucket. Current migration lifecycle
+work belongs to [EF Core Persistence](ef-core-persistence.md).
 
 ## Program success criteria (targets for units 2–5)
 
@@ -68,10 +74,13 @@ EF-initializer consolidation is **not** in this bucket — it belongs to [Zero-E
 ## Out of scope
 
 - Warm steady-state latency (done in `runtime-http-performance-2026-07`; ADR 0031/0032).
-- EF-provider consolidation (Zero-EF bucket).
+- EF-provider consolidation was historically outside this bucket; current work belongs to
+  [EF Core Persistence](ef-core-persistence.md).
 - First-user navigability / docs / tour (Workspace Launch Readiness bucket).
 
-## Active objectives
+## Historical objectives at supersession
+
+These items preserve the former queue and do not authorize measurement or timing work.
 
 1. Land spec 129: instrument, deterministic op count, recipe, baseline report. **(this unit)**
 2. Size units 2–5 from the baseline report and pick the next unit by measured share.
@@ -96,5 +105,6 @@ EF-initializer consolidation is **not** in this bucket — it belongs to [Zero-E
 
 ## Removal or completion conditions
 
-Complete when units 2–5 land and the program success criteria are met on the reference container (or the numbers
-are re-scoped with evidence). Until then keep this bucket active and route each unit through it.
+This program remains superseded. Its timing targets are not reported as passed. Program #1665/#1668
+must preserve any still-applicable untimed activation, migration, and failure requirements before
+measurement infrastructure is removed.

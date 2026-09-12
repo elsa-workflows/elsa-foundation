@@ -1,12 +1,14 @@
 # Contract: First-Party EF-Free Certification
 
-## Current scope amendment — 2026-09-07
+## Historical scope amendment — superseded 2026-09-12
 
-Apply [the current governing scope](../spec.md#current-governing-scope--2026-09-07). The absolute-zero contract below is historical input to the follow-on certifier, not a requirement to remove vendor OpenIddict or rerun broad validation during implementation.
+The [historical governing scope](../spec.md#historical-governing-scope--superseded-2026-09-12) and
+absolute-zero contract below are retained only as provenance. They do not authorize work. ADR 0073
+and Program #1665 own the opposite all-EF direction while preserving the vendor OpenIddict boundary.
 
-The current certification must distinguish forbidden Elsa-owned EF from the narrowly identified Workbench vendor `OpenIddict.EntityFrameworkCore` store and its necessary dependencies/configuration. A package-name match alone cannot make all host usage acceptable: the exception is bound to the vendor purpose and host, never to arbitrary first-party EF. All non-exempt findings must be absent; unknown, missing or stale dependency evidence must still refuse certification. Tests must cover both an allowed vendor-host composition and prohibited first-party use of the same EF packages.
+The former certification distinguished forbidden Elsa-owned EF from the narrowly identified Workbench vendor `OpenIddict.EntityFrameworkCore` store and its necessary dependencies/configuration. A package-name match alone did not make all host usage acceptable: the exception was bound to the vendor purpose and host, never to arbitrary first-party EF. All non-exempt findings had to be absent; unknown, missing or stale dependency evidence still refused certification. Tests covered both an allowed vendor-host composition and prohibited first-party use of the same EF packages.
 
-The final guard's exact exception representation and baseline retirement belong to #1490. This document does not assert that those code changes or a complete restored-graph certification have passed. The broad certification run belongs to the separate #646 validation harness; narrow implementation checks are recorded separately.
+That final guard's exact exception representation and baseline retirement belonged to #1490, and the broad certification run belonged to the separate #646 validation harness. Those statements are historical rather than current requirements. Current EF admission is governed by ADR 0073 and `EfCoreDependencyGuardTests`: the accepted Secrets pilot and vendor-owned OpenIddict host are explicit, reviewed surfaces, and each later first-party replacement must enter through its Program #1665 work unit.
 
 ## Historical absolute-zero contract
 

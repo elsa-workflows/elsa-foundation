@@ -1,6 +1,9 @@
 # Contract: #647 / #629 Completion Evidence
 
-> **Current completion scope — 2026-09-07:** [The amended scope](../spec.md#current-governing-scope--2026-09-07) separates implementation closure from broad validation. The bundle below is historical: link deferred #646 work and unresolved results instead of claiming they passed or requiring their execution in this implementation program. Remote-main integration, narrow safety checks, retained test dispositions and accurate board reconciliation still require evidence.
+> **Historical contract — superseded 2026-09-12.** The
+> [historical amended scope](../spec.md#historical-governing-scope--superseded-2026-09-12) and evidence
+> bundle below are provenance, not current completion instructions. ADR 0073 and Program #1665 own
+> the opposite all-EF requirements; performance work is retired rather than passed.
 
 ## Purpose
 

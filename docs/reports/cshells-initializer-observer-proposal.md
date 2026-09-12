@@ -1,16 +1,24 @@
-# Upstream proposal — CShells `IShellInitializerObserver`
+# Historical upstream proposal — CShells `IShellInitializerObserver`
 
-Status: proposal (for the external CShells repo; not implementable in `elsa-foundation`).
+Status: superseded historical proposal; do not schedule or implement its timing instrumentation.
 Origin: drafted as a finding in spec 129 (Cold-Start Readiness unit 1), filed as a carryable artifact by spec 132
 (unit 4, opt-in eager shell activation).
 Target package: `CShells` / `CShells.Abstractions` (observed at `0.0.29-preview.147`).
 
+ADR 0073 retired all performance measurements, timings, budgets, and gates. This document is kept
+only as provenance for a former upstream idea. Timing-independent persistence-initializer and
+migration ordering and failure behavior belong to [EF Core Persistence](../program-goals/ef-core-persistence.md).
+General untimed launch and activation correctness remains with
+[Workspace Launch Readiness](../program-goals/workspace-launch-readiness.md). Per-initializer duration
+attribution and ReadyToRun sizing belong to neither program.
+
 ## Problem
 
-The First-Request/Cold-Start Readiness program (`docs/program-goals/first-request-cold-start-readiness.md`) needs
-to attribute the shell-activation wall **per initializer** — schema admission vs. EF `EnsureCreated`/`Migrate` vs.
-identity seeding vs. task-pump start — to size unit 2 (ReadyToRun) and target the residual after units 3–4. That
-attribution is **not host-observable today**, which is the gating finding for unit 2
+The former First-Request/Cold-Start Readiness program (`docs/program-goals/first-request-cold-start-readiness.md`)
+sought to attribute the shell-activation wall **per initializer** — schema admission vs. EF
+`EnsureCreated`/`Migrate` vs. identity seeding vs. task-pump start — to size its former unit 2
+(ReadyToRun) and target the residual after units 3–4. That attribution was not host-observable,
+which was the historical gating finding for unit 2
 (`docs/reports/cold-start-readiness-2026-07.md`, §"per-initializer attribution is NOT host-observable").
 
 ### Why the host cannot observe it (verified against 0.0.29-preview.147)
@@ -115,11 +123,11 @@ Notes for the CShells maintainer:
   activation.
 - **Container choice.** Resolving from the shell container lets a shell-composed diagnostic feature observe its own
   activation; a host-container overload (or resolving host-registered observers too) would let a host observe every
-  shell. Either is acceptable for our use — the host-level case is what unit 2 needs.
+  shell. The historical proposal preferred the host-level case for its former unit 2.
 - **`LifecyclePhase`/`ShellDescriptor`/`ShellInitializerRegistration`** already exist in
   `CShells.Abstractions`/`CShells.Lifecycle`; the only new public types are the two records and the interface.
 
-## What it unlocks
+## What it would have unlocked (historical)
 
 - Per-initializer duration attribution of the activation wall, host-observable with **no host reflection and no
   per-feature edits** — directly sizes program unit 2 (ReadyToRun/TieredPGO share of activation JIT) and confirms
@@ -131,9 +139,9 @@ Notes for the CShells maintainer:
   `boot.shell:<name>:initializer:<type>` spans on the existing `Elsa.Boot` ActivitySource — no host wiring beyond
   registering one observer.
 
-## Interim (until the hook lands)
+## Historical interim plan (retired)
 
-Unit 2 sizing continues to use: the whole-activation wall (spec-129 instrument) + the deterministic 930-op schema
-count (`ColdStartSchemaOperationCountTests`) + targeted timing added temporarily inside the specific initializers
-under investigation. Opt-in eager activation (spec 132) does **not** depend on this hook — it moves the whole wall
-off the request path regardless of per-initializer visibility.
+The former unit 2 plan would have used the whole-activation wall, a deterministic schema-operation
+count, and temporary targeted timing inside specific initializers. That measurement work is retired
+and must not be run. The timing-independent observation that opt-in eager activation can move
+initialization off a request path remains historical design context, not current scheduling guidance.

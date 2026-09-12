@@ -1,7 +1,8 @@
 # Extension points — Persistence.EntityFramework (policy)
 
-Policy helpers for the ADR 0072 EF-first relational pilot. This package does not own
-domain entities or a mandated `DbContext` base.
+Shared policy helpers for first-party EF Core persistence under accepted
+[ADR 0073](../../../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md).
+This package does not own domain entities or a mandated `DbContext` base.
 
 ## Replacement / composition
 
