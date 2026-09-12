@@ -11,10 +11,10 @@ namespace Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests;
 
 public sealed class StructuredLogsEntityFrameworkCoreFixture : IAsyncDisposable
 {
-    private readonly string directory = Path.Combine(Path.GetTempPath(), "elsa-structured-logs-" + Guid.NewGuid().ToString("N"));
+    private readonly string directory = Path.Join(Path.GetTempPath(), "elsa-structured-logs-" + Guid.NewGuid().ToString("N"));
     private ServiceProvider? provider;
 
-    public string DatabasePath => Path.Combine(directory, "structured-logs.db");
+    public string DatabasePath => Path.Join(directory, "structured-logs.db");
     public StructuredLogStoreBinding Binding { get; } = new("tenant-a", "scope-a", "stream-a");
     public EfStructuredLogStore Store => provider!.GetRequiredService<EfStructuredLogStore>();
 

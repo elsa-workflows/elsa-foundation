@@ -447,9 +447,10 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
         {
             ValidateRecord(row);
             var entry = ToEntry(row);
-            if (!StringComparer.Ordinal.Equals(entry.SourceId, parts.EntrySourceId) ||
+            if (entry.ReplayCursor is not { } entryReplayCursor ||
+                !StringComparer.Ordinal.Equals(entry.SourceId, parts.EntrySourceId) ||
                 !StringComparer.Ordinal.Equals(row.ReplayToken, parts.ReplayToken) ||
-                !StringComparer.Ordinal.Equals(entry.ReplayCursor?.Value, cursor.Value))
+                !StringComparer.Ordinal.Equals(entryReplayCursor.Value, cursor.Value))
                 throw new StructuredLogReplayCursorUnavailableException();
             return row;
         }
