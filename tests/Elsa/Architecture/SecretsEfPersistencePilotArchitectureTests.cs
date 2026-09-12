@@ -105,6 +105,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Support/SecretsPackageFeedProbeRunner.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/SqlServerContainerFixture.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/SqlServerEfSecretRepositoryTests.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/DualMigrateProcessRunnerLockTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsDesignTimeConnectionTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEfDualMigrateToolTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEfMigrationHostedServiceTests.cs",

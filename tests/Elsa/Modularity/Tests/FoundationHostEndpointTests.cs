@@ -9,10 +9,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
-using Nuplane.Abstractions;
 using Nuplane.Admin;
-using Nuplane.Operational;
-using Nuplane.Reconciliation;
 using Xunit;
 
 namespace Elsa.Modularity.Tests;
@@ -78,7 +75,7 @@ public sealed class FoundationHostEndpointTests
             Assert.Equal(System.Net.HttpStatusCode.Unauthorized, response.StatusCode);
         }
 
-        var operations = new TestNuplaneAdminOperations();
+        var operations = new FakeNuplaneAdminOperations();
         await using var app = await StartModuleManagementApp("expected-key", operations);
         using var missingKeyClient = app.GetTestClient();
         var missing = await missingKeyClient.PostAsync("/_module-management/reconcile", content: null);
@@ -96,33 +93,16 @@ public sealed class FoundationHostEndpointTests
         Assert.True(operations.ReconcileCalled);
     }
 
-    private static async Task<WebApplication> StartModuleManagementApp(string? apiKey, TestNuplaneAdminOperations? operations = null)
+    private static async Task<WebApplication> StartModuleManagementApp(string? apiKey, FakeNuplaneAdminOperations? operations = null)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Services.AddSingleton<IShellRegistry>(_ => null!);
         builder.Services.AddSingleton<IRuntimeFeatureCatalog>(_ => null!);
-        builder.Services.AddSingleton<INuplaneAdminOperations>(operations ?? new TestNuplaneAdminOperations());
+        builder.Services.AddSingleton<INuplaneAdminOperations>(operations ?? new FakeNuplaneAdminOperations());
         var app = builder.Build();
         app.MapModuleManagementApi(new ModuleManagementOptions { Enabled = true, ApiKey = apiKey });
         await app.StartAsync();
         return app;
-    }
-
-    private sealed class TestNuplaneAdminOperations : INuplaneAdminOperations
-    {
-        public bool ReconcileCalled { get; private set; }
-
-        public Task<ActivePackagesSnapshot> GetPackagesAsync(CancellationToken cancellationToken) =>
-            Task.FromResult<ActivePackagesSnapshot>(default!);
-
-        public Task<OperationalStateSnapshot> GetStateAsync(CancellationToken cancellationToken) =>
-            Task.FromResult<OperationalStateSnapshot>(default!);
-
-        public Task<ManualReconcileOutcome> TriggerReconcileAsync(CancellationToken cancellationToken)
-        {
-            ReconcileCalled = true;
-            return Task.FromResult<ManualReconcileOutcome>(default!);
-        }
     }
 }

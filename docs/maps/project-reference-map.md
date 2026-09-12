@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 130
 - Test projects: 106
-- Direct project references: 1194
+- Direct project references: 1196
 
 ## Projects
 
@@ -194,7 +194,7 @@ Records direct project references only.
 | [Elsa.Groundwork.ProviderEvidenceImporter.Tests](../../tests/Elsa/Groundwork/ProviderEvidenceImporter/Tests/Elsa.Groundwork.ProviderEvidenceImporter.Tests.csproj) | test | Elsa.Groundwork | - | default | Elsa.Groundwork.ProviderEvidenceImporter |
 | [Elsa.Http.Tests](../../tests/Elsa/Http/Tests/Elsa.Http.Tests.csproj) | test | Elsa.Http | - | default | Elsa.Api.AspNetCore<br>Elsa.Http<br>Elsa.Testing |
 | [Elsa.Mediator.Tests](../../tests/Elsa/Mediator/Tests/Elsa.Mediator.Tests.csproj) | test | Elsa.Mediator | - | default | Elsa.Mediator |
-| [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Elsa.Modularity | - | default | Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Host<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.Nuplane<br>Elsa.Workbench |
+| [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Elsa.Modularity | - | default | Elsa.Agent.Anthropic<br>Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Host<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.Nuplane<br>Elsa.Workbench<br>Elsa.Workflows.Design.Reconciliation.Git |
 | [Elsa.Persistence.EntityFramework.Tests](../../tests/Elsa/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj) | test | Elsa.Persistence | - | default | Elsa.Persistence.EntityFramework |
 | [Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests](../../tests/Elsa/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj) | test | Elsa.Persistence | - | default | Elsa.Secrets<br>Elsa.Secrets.Persistence.EntityFrameworkCore |
 | [Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests](../../tests/Elsa/Persistence/Groundwork/DesignConformance/MongoDb/Tests/Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests.csproj) | test | Elsa.Persistence | - | default | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Persistence.Groundwork.DesignConformance.Target<br>Elsa.Persistence.Groundwork.DesignConformance.Tests<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Persistence.Groundwork<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Publishing.Persistence.Groundwork<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |

@@ -18,7 +18,9 @@ public sealed class FeatureManagementService(
 
     public async Task<FeatureApplyResult> ApplyAsync(FeatureApplyRequest request, CancellationToken cancellationToken = default)
     {
-        var current = await BuildCatalogAsync(await shellStore.LoadAsync(cancellationToken), cancellationToken);
+        var shell = await shellStore.LoadAsync(cancellationToken);
+        var current = await BuildCatalogAsync(shell, cancellationToken);
+        request = RestoreSecrets(request, shell);
         ValidateRequest(request, current);
 
         var changes = request.Features
@@ -58,6 +60,15 @@ public sealed class FeatureManagementService(
         foreach (var contributor in contributors)
             await contributor.ContributeAsync(context, cancellationToken);
 
+        // Every catalog response (list, apply result, and the host registry built from them) passes through here, so
+        // this is the one place a secret value is kept out of the wire. Settings are only known once every contributor
+        // has run.
+        foreach (var builder in context.Items.Values)
+        {
+            builder.Configuration = SecretSettingMask.MaskConfiguration(builder.Configuration, builder.Settings);
+            builder.Settings = SecretSettingMask.MaskDefaults(builder.Settings);
+        }
+
         var items = context.Items.Values
             .Select(x => x.ToItem())
             .OrderByDescending(x => x.Enabled)
@@ -66,6 +77,27 @@ public sealed class FeatureManagementService(
             .ToArray();
 
         return new FeatureCatalogResponse(shell.Revision, items);
+    }
+
+    /// <summary>A client that round-trips the catalog sends the placeholder back for every hidden value it did not change.</summary>
+    private static FeatureApplyRequest RestoreSecrets(FeatureApplyRequest request, ShellFeatureConfigurationSnapshot shell)
+    {
+        // A body without "features" is left for ValidateRequest to reject.
+        if (request.Features is null)
+            return request;
+
+        return request with
+        {
+            Features = request.Features.Select(feature =>
+            {
+                // Match feature IDs case-insensitively like the rest of this service, whatever the store's comparer.
+                var stored = shell.Features
+                    .Where(x => string.Equals(x.Key, feature.Id, StringComparison.OrdinalIgnoreCase))
+                    .Select(x => (System.Text.Json.JsonElement?)x.Value)
+                    .FirstOrDefault();
+                return feature with { Configuration = SecretSettingMask.Restore(feature.Configuration, stored) };
+            }).ToArray()
+        };
     }
 
     private static void ValidateRequest(FeatureApplyRequest request, FeatureCatalogResponse current)

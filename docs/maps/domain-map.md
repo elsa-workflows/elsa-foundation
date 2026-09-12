@@ -9,7 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 130
 - Test projects: 106
 - Domains: 28
-- Direct cross-domain references: 718
+- Direct cross-domain references: 720
 
 ## Domains
 
@@ -228,7 +228,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Groundwork.ProviderEvidenceImporter.Tests](../../tests/Elsa/Groundwork/ProviderEvidenceImporter/Tests/Elsa.Groundwork.ProviderEvidenceImporter.Tests.csproj) | test | Elsa.Groundwork | ProviderEvidenceImporter.Tests | test | Elsa.Groundwork.ProviderEvidenceImporter |
 | [Elsa.Http.Tests](../../tests/Elsa/Http/Tests/Elsa.Http.Tests.csproj) | test | Elsa.Http | Tests | test | Elsa.Api.AspNetCore<br>Elsa.Http<br>Elsa.Testing |
 | [Elsa.Mediator.Tests](../../tests/Elsa/Mediator/Tests/Elsa.Mediator.Tests.csproj) | test | Elsa.Mediator | Tests | test | Elsa.Mediator |
-| [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Elsa.Modularity | Tests | test | Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Host<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.Nuplane<br>Elsa.Workbench |
+| [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Elsa.Modularity | Tests | test | Elsa.Agent.Anthropic<br>Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Host<br>Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.Nuplane<br>Elsa.Workbench<br>Elsa.Workflows.Design.Reconciliation.Git |
 | [Elsa.Persistence.EntityFramework.Tests](../../tests/Elsa/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj) | test | Elsa.Persistence | EntityFramework.Tests | test | Elsa.Persistence.EntityFramework |
 | [Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests](../../tests/Elsa/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj) | test | Elsa.Persistence | EntityFrameworkCore.MySql.FeasibilityTests | test | Elsa.Secrets<br>Elsa.Secrets.Persistence.EntityFrameworkCore |
 | [Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests](../../tests/Elsa/Persistence/Groundwork/DesignConformance/MongoDb/Tests/Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests.csproj) | test | Elsa.Persistence | Groundwork.DesignConformance.MongoDb.Tests | test | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Persistence.Groundwork.DesignConformance.Target<br>Elsa.Persistence.Groundwork.DesignConformance.Tests<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Persistence.Groundwork<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Publishing.Persistence.Groundwork<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
@@ -575,9 +575,11 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Modularity.Api](../../src/Elsa/Modularity/Api/Elsa.Modularity.Api.csproj) | Elsa.Modularity | [Elsa.Api.AspNetCore](../../src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | Elsa.Api |
 | [Elsa.Modularity.Api](../../src/Elsa/Modularity/Api/Elsa.Modularity.Api.csproj) | Elsa.Modularity | [Elsa.Attention.Core](../../src/Elsa/Attention/Core/Elsa.Attention.Core.csproj) | Elsa.Attention |
 | [Elsa.Modularity.Api](../../src/Elsa/Modularity/Api/Elsa.Modularity.Api.csproj) | Elsa.Modularity | [Elsa.Foundation.Identity.Abstractions](../../src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj) | Elsa.Foundation |
+| [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | Elsa.Modularity | [Elsa.Agent.Anthropic](../../src/Elsa/Agent/Anthropic/Elsa.Agent.Anthropic.csproj) | Elsa.Agent |
 | [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | Elsa.Modularity | [Elsa.Api.Compatibility.Testing](../../tests/Elsa/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj) | Elsa.Api |
 | [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | Elsa.Modularity | [Elsa.Foundation.Host](../../src/Apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj) | Elsa.Foundation |
 | [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | Elsa.Modularity | [Elsa.Workbench](../../src/Apps/Elsa.Workbench/Elsa.Workbench.csproj) | Elsa.Workbench |
+| [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | Elsa.Modularity | [Elsa.Workflows.Design.Reconciliation.Git](../../src/Elsa/Workflows/Design/Reconciliation/Git/Elsa.Workflows.Design.Reconciliation.Git.csproj) | Elsa.Workflows |
 | [Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests](../../tests/Elsa/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj) | Elsa.Persistence | [Elsa.Secrets](../../src/Elsa/Secrets/Elsa.Secrets.csproj) | Elsa.Secrets |
 | [Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests](../../tests/Elsa/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj) | Elsa.Persistence | [Elsa.Secrets.Persistence.EntityFrameworkCore](../../src/Elsa/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj) | Elsa.Secrets |
 | [Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests](../../tests/Elsa/Persistence/Groundwork/DesignConformance/MongoDb/Tests/Elsa.Persistence.Groundwork.DesignConformance.MongoDb.Tests.csproj) | Elsa.Persistence | [Elsa.Activities.Design.Persistence.Groundwork](../../src/Elsa/Activities/Design/Persistence/Groundwork/Elsa.Activities.Design.Persistence.Groundwork.csproj) | Elsa.Activities |

@@ -58,7 +58,7 @@ public class OpenTelemetryFeature : IWebShellFeature
     [ManifestSetting(DisplayName = "Max HTTP request body size", Description = "Maximum OTLP HTTP/protobuf request body size in bytes.", Category = "Diagnostics", DefaultValue = "10485760")]
     public long MaxHttpRequestBodySize { get; set; } = 10 * 1024 * 1024;
 
-    [ManifestSetting(DisplayName = "API key", Description = "Optional API key required on the OTLP collector endpoints. When empty, loopback ingestion is allowed unauthenticated.", Category = "Diagnostics")]
+    [ManifestSetting(DisplayName = "API key", Description = "Optional API key required on the OTLP collector endpoints. When empty, loopback ingestion is allowed unauthenticated.", Category = "Diagnostics", Secret = true)]
     public string? ApiKey { get; set; }
 
     [ManifestSetting(DisplayName = "API key header", Description = "Header name carrying the OTLP ingestion API key.", Category = "Diagnostics", DefaultValue = "x-otlp-api-key")]
