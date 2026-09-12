@@ -62,9 +62,9 @@ services:
       # blanks any value in the mounted shells.json. Demo-only; change it for anything beyond local use.
       CShells__Shells__default__Features__GroundworkWorkflowRuntime__RecoveryContinuationSigningKey: elsa-docker-demo-recovery-continuation-key
       # Identity secrets. The image's shells.Production.json turns off development mode for both identity
-      # features and blanks the seed password, and it sits above the mounted shells.json, so these must be env
-      # vars. Without the password the default shell fails activation; without the key every request returns
-      # 500. Demo-only values; change both for anything beyond local use.
+      # features and blanks the seed password, and it sits above the mounted shells.json, so the password must be
+      # an env var; the signing key is supplied the same way to keep secrets out of that file. Without either one
+      # the default shell fails activation. Demo-only values; change both for anything beyond local use.
       # Password for the seeded "admin" account (the overlay supplies the username) you sign in to Studio with.
       CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityGroundwork__SeedAdminPassword: "Password123!"
       # Base64 PKCS#8 RSA private key that signs access tokens; line breaks are ignored. Generate your own with:

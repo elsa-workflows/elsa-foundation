@@ -21,10 +21,9 @@ public sealed record WorkbenchShell(
     public static readonly WorkbenchShell Baseline = new("Development", "shells.baseline.json", null, new Dictionary<string, string>());
 
     /// <summary>
-    /// <c>shells.Production.json</c> blanks the demo secrets committed in <c>shells.json</c>, so a Production host must be
-    /// given its own: the durable-recovery HMAC key and the initial admin's password (activation fails without either),
-    /// and the OpenIddict token signing key (without it the shell reports ready but every request through
-    /// authentication fails).
+    /// <c>shells.Production.json</c> blanks the demo secrets committed in <c>shells.json</c> and turns off OpenIddict's
+    /// ephemeral development keys, so a Production host must be given its own durable-recovery HMAC key, initial admin
+    /// password, and OpenIddict token signing key. Activation fails without any one of them.
     /// </summary>
     public static readonly WorkbenchShell Production = new("Production", "shells.json", "shells.Production.json", new Dictionary<string, string>
     {
@@ -37,6 +36,15 @@ public sealed record WorkbenchShell(
         .ToDictionary(shell => shell.Name, StringComparer.Ordinal);
 
     public string Name => EnvironmentOverlay is null ? ShellFile : $"{ShellFile} + {EnvironmentOverlay}";
+
+    /// <summary>This composition with one operator-supplied default-shell feature setting left out.</summary>
+    public WorkbenchShell Without(string featureSetting)
+    {
+        var key = $"{FeaturesPath}:{featureSetting}";
+        return Settings.ContainsKey(key)
+            ? this with { Settings = Settings.Where(setting => setting.Key != key).ToDictionary() }
+            : throw new ArgumentException($"{Name} does not supply {featureSetting}.", nameof(featureSetting));
+    }
 
     /// <summary>The feature names the committed shell file and overlay list for the default shell.</summary>
     public IReadOnlySet<string> ListedFeatures() =>

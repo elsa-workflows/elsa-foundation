@@ -39,6 +39,8 @@ public sealed class OpenIddictSigningKeyResolutionTests
 
         // Names the setting to configure for production.
         Assert.Contains("SigningKey", exception.Message, StringComparison.Ordinal);
+        // ...including the shell feature setting, which is what a shell host actually configures.
+        Assert.Contains("FoundationIdentityOpenIddict feature's SigningKey setting", exception.Message, StringComparison.Ordinal);
         // Does not send operators down the dead end from issue #1163: the dev/demo flag alone does not
         // activate the ephemeral key — the environment must be Development, and overlays can reset the flag.
         Assert.Contains("ASPNETCORE_ENVIRONMENT=Development", exception.Message, StringComparison.Ordinal);
