@@ -49,7 +49,7 @@ public sealed class WorkbenchProcess : IAsyncDisposable
         CopySourceFile("appsettings.json", directory);
         if (File.Exists(WorkbenchBuild.SourceFile($"appsettings.{shell.Environment}.json")))
             CopySourceFile($"appsettings.{shell.Environment}.json", directory);
-        Directory.CreateDirectory(Path.Combine(directory, "packages"));
+        Directory.CreateDirectory(Path.Join(directory, "packages"));
 
         var baseAddress = new Uri($"http://127.0.0.1:{FreePort()}");
         var managementKey = Guid.NewGuid().ToString("n");
@@ -57,7 +57,7 @@ public sealed class WorkbenchProcess : IAsyncDisposable
         {
             ["Elsa:ModuleManagement:ApiKey"] = managementKey,
             // Nuplane keeps its store state beside the host binaries by default, which every run shares.
-            ["Nuplane:Setup:StateFilePath"] = Path.Combine(directory, ".nuplane", "store-state.json")
+            ["Nuplane:Setup:StateFilePath"] = Path.Join(directory, ".nuplane", "store-state.json")
         };
 
         var startInfo = new ProcessStartInfo(
@@ -175,7 +175,7 @@ public sealed class WorkbenchProcess : IAsyncDisposable
     }
 
     private static void CopySourceFile(string fileName, string directory, string? targetName = null) =>
-        File.Copy(WorkbenchBuild.SourceFile(fileName), Path.Combine(directory, targetName ?? fileName));
+        File.Copy(WorkbenchBuild.SourceFile(fileName), Path.Join(directory, targetName ?? fileName));
 
     private static int FreePort()
     {

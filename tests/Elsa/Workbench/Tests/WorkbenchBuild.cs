@@ -7,9 +7,9 @@ public static class WorkbenchBuild
 {
     public static readonly string RepositoryRoot = FindRepositoryRoot();
 
-    private static readonly string SourceDirectory = Path.Combine(RepositoryRoot, "src", "Apps", "Elsa.Workbench");
+    private static readonly string SourceDirectory = Path.Join(RepositoryRoot, "src", "Apps", "Elsa.Workbench");
 
-    public static string SourceFile(string fileName) => Path.Combine(SourceDirectory, fileName);
+    public static string SourceFile(string fileName) => Path.Join(SourceDirectory, fileName);
 
     /// <summary>
     /// <c>Elsa.Workbench.dll</c> from the host's own <c>bin</c> folder, built with the same configuration and target
@@ -19,7 +19,7 @@ public static class WorkbenchBuild
     {
         var configuration = typeof(WorkbenchBuild).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()!.Configuration;
         var targetFramework = Path.GetFileName(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory));
-        var path = Path.Combine(SourceDirectory, "bin", configuration, targetFramework, "Elsa.Workbench.dll");
+        var path = Path.Join(SourceDirectory, "bin", configuration, targetFramework, "Elsa.Workbench.dll");
 
         return File.Exists(path)
             ? path
@@ -30,7 +30,7 @@ public static class WorkbenchBuild
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
         {
-            if (File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
+            if (File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
                 return directory.FullName;
         }
 

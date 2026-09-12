@@ -30,7 +30,7 @@ public sealed record WorkbenchShell(
     {
         [$"{FeaturesPath}:GroundworkWorkflowRuntime:RecoveryContinuationSigningKey"] = "smoke-test-recovery-continuation-signing-key",
         [$"{FeaturesPath}:FoundationIdentityAspNetCoreIdentityGroundwork:SeedAdminPassword"] = $"Smoke-{Guid.NewGuid():n}!",
-        [$"{FeaturesPath}:FoundationIdentityOpenIddict:SigningKey"] = Convert.ToBase64String(RSA.Create(2048).ExportPkcs8PrivateKey())
+        [$"{FeaturesPath}:FoundationIdentityOpenIddict:SigningKey"] = NewPkcs8SigningKey()
     });
 
     public static readonly IReadOnlyDictionary<string, WorkbenchShell> All = new[] { Development, Baseline, Production }
@@ -44,6 +44,12 @@ public sealed record WorkbenchShell(
             .OfType<string>()
             .SelectMany(file => FeatureSection(file).Select(feature => feature.Key))
             .ToHashSet(StringComparer.Ordinal);
+
+    private static string NewPkcs8SigningKey()
+    {
+        using var rsa = RSA.Create(2048);
+        return Convert.ToBase64String(rsa.ExportPkcs8PrivateKey());
+    }
 
     private static JsonObject FeatureSection(string file)
     {
