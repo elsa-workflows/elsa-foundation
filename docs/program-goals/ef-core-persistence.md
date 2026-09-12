@@ -18,7 +18,21 @@ execution queue.
 
 [ADR 0073](../adr/0073-ef-core-is-the-only-first-party-persistence-family.md) is the governing
 decision. The [completion ledger](../reports/ef-core-persistence-completion-ledger.md) is the audit
-boundary. The [Zero-EF goal](zero-ef-persistence.md) remains superseded historical provenance.
+boundary. Its entry-level registers cover [storage units and implementations](../reports/ef-core-persistence/storage-unit-register.md),
+[tests and backend e2e](../reports/ef-core-persistence/test-and-e2e-register.md),
+[repository surfaces](../reports/ef-core-persistence/repository-surface-register.md), and
+[legacy requirements](../reports/ef-core-persistence/legacy-requirement-register.md). The
+[Zero-EF goal](zero-ef-persistence.md) remains superseded historical provenance.
+
+## Current checkpoint
+
+As of 2026-09-12, governance issue #1666 and PR #1685 are merged. Issue #1671 is the sole assigned
+Project 49 leaf and is expanding the ledger against `main` at
+`7a952efcf8d53472d7d4e7e3fd7b51d7a808c1c8`. The candidate baseline contains 95 storage-unit rows,
+51 test/evidence-project rows, 13 backend e2e journeys, 78 uniquely linked current/legacy issues,
+and explicit dependency, transaction, migration, host, tool, workflow, alert, map and guard
+surfaces. These are inventory facts and future acceptance gates; no module replacement, default
+flip, or deletion is claimed by this checkpoint.
 
 ## Settled boundaries
 
