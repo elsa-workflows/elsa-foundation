@@ -11,6 +11,11 @@ Status: historical Groundwork capability evidence and current domain-workload in
 > Performance measurements, timings, budgets, and gates retire under
 > [ADR 0073](../adr/0073-ef-core-is-the-only-first-party-persistence-family.md) without a pass claim.
 
+All Groundwork or temporary-EF implementation statements in the dated sections below describe the
+2026-07-12 evidence cut only. They are not current architecture instructions. Current work takes only
+the timing-independent workload semantics from those sections and implements them under ADR 0073 and
+#1681.
+
 Evidence date: 2026-07-12.
 
 Tracking: [Elsa issue #632](https://github.com/elsa-workflows/elsa-foundation/issues/632), [Groundwork diagnostic record-store #30](https://github.com/valence-works/Groundwork/issues/30), [Elsa PRD #629](https://github.com/elsa-workflows/elsa-foundation/issues/629), and [Groundwork PRD #25](https://github.com/valence-works/Groundwork/issues/25).
@@ -38,7 +43,7 @@ Every citation in this amendment was re-verified against source on 2026-08-11 an
 
 The rest of the report stands: generic reduce, map/reduce, and arbitrary aggregation are still out of scope. What is in scope is exactly the named, profile-bound, bounded grouped reduction described above.
 
-## Outcome
+## Historical Outcome at the Evidence Cut
 
 Elsa Structured Logs and OpenTelemetry do need a specialized Groundwork persistence primitive. Ordinary document CRUD is useful for the small mutable OpenTelemetry resource and instrument catalogs, but it is not the right abstraction for the high-volume immutable records. The missing primitive is an idempotent atomic single-stream batch append, bounded server-side query, exact inspection/count, and deterministic retention trim over tenant-scoped, time-ordered record streams.
 
@@ -50,7 +55,7 @@ The existing Elsa core contracts remain Groundwork-free. `IStructuredLogStore` a
 
 No current Elsa caller requires numeric rollups, grouping, generic reduce, or map/reduce. Exact counts are required. Metric endpoints return raw points and instruments. This workload therefore does not justify adding reduce to Groundwork. *(Superseded for grouping — see [Amendment 2026-07-31](#amendment-2026-07-31-grouped-reduction-is-required). Generic reduce and map/reduce remain out of scope.)*
 
-## Evidence Scope
+## Historical Evidence Scope
 
 The inventory covers:
 
@@ -64,7 +69,7 @@ The inventory covers:
 
 Live SSE fan-out is not a persistence concern. Its per-subscriber queues and in-band drop signals stay in the diagnostics domain.
 
-## Current Contract Inventory
+## Contract Inventory at the Evidence Cut
 
 ### Structured Logs
 

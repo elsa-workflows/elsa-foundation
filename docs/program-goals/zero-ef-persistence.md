@@ -9,7 +9,13 @@
 > correctness obligation, carry it into the completed ledger, or explicitly retire only its
 > performance portion by owner policy.
 
-Constitution reconciliation: ratified constitution v4.0.0 retains historical EF implementation examples in §E2.2.1, §E2.5 and §E5. Those examples do not enumerate current shipped APIs after this program's owner-approved deletion. Normative provider-neutrality rules remain unchanged. Updating the constitutional text itself is deferred to its proposal/discussion/ratification process; this program does not claim a new ratification. Current implementation inventory is the generated maps and this program's scope.
+Historical constitution reconciliation: ratified constitution v4.0.0 retains EF implementation
+examples in §E2.2.1, §E2.5 and §E5. This former program treated those examples as non-exhaustive,
+but its planned deletion did not complete and is not current policy. Normative provider-neutrality
+rules remain unchanged. Updating the constitutional text itself is deferred to its
+proposal/discussion/ratification process; this page does not claim a new ratification. The generated
+maps, ADR 0073, and the active EF Core Persistence goal own the current implementation inventory and
+direction.
 
 Status: superseded.
 

@@ -20,7 +20,9 @@ and supersedes ADR 0042's opposite direction. The default remains unchanged unti
 Secrets migration issue records four-provider, migration-lifecycle, host-composition, and
 [#1653 production-shaped HTTP CRUD/restart](https://github.com/elsa-workflows/elsa-foundation/issues/1653)
 proof. The [completion ledger](../../../../../docs/reports/ef-core-persistence-completion-ledger.md)
-is authoritative for that gate.
+records evidence and dispositions for that gate. ADR 0073 and the active
+[EF Core Persistence goal](../../../../../docs/program-goals/ef-core-persistence.md) govern the
+decision and program scope; the point-in-time ledger cannot override them.
 
 The module package references `Microsoft.EntityFrameworkCore` and
 `Microsoft.EntityFrameworkCore.Relational` only. Sqlite / SqlServer / Npgsql engines live

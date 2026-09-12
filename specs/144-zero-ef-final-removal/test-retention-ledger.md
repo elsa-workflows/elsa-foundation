@@ -1,5 +1,12 @@
 # Test-retention ledger — zero-EF final removal
 
+> **Historical artifact — superseded 2026-09-12.** This file belongs to superseded Work Unit 144
+> and is preserved only as provenance. Do not use its Groundwork gates, performance prerequisites,
+> or deletion dispositions as current instructions. [ADR 0073](../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
+> and [Program #1665](../../docs/program-goals/ef-core-persistence.md) govern the opposite all-EF
+> direction; only timing-independent correctness requirements survive when mapped into the current
+> completion ledger.
+
 ## Shared EF kernel disposition — 2026-09-07
 
 Decision: `RemoveApproved`. Architect/reviewer: root program integration lead. Date: 2026-09-07. Authority: owner-approved #1484 first-party EF deletion. The original intake below remains historical; this section supersedes `RemovePending` only for the 16 named methods in the five shared EF test classes listed here. It does not certify broad provider behavior or dispose unrelated ledger rows.

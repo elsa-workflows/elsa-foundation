@@ -49,7 +49,10 @@ preserved here as historical names rather than live links. OpenIddict also consu
 integration, and [`Directory.Packages.props`](../../Directory.Packages.props) centrally versioned
 both ASP.NET Core Identity EF Core and OpenIddict EF Core packages.
 
-This is expected transition evidence, not a reason to weaken the decision. EF remains a temporary oracle until Groundwork parity gates pass.
+At this report's evidence cut, the former program treated EF as a temporary oracle until Groundwork
+parity gates passed. That conclusion is historical and is superseded by
+[ADR 0073](../adr/0073-ef-core-is-the-only-first-party-persistence-family.md) and Program #1665: EF
+Core is now the destination persistence family, while Groundwork is the source being replaced.
 
 Classification: planned code drift relative to the proposed gate.
 

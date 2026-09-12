@@ -40,6 +40,18 @@ public sealed class OpenIddictPersistenceArchitectureTests
     }
 
     [Fact]
+    public void Workbench_vendor_EF_source_allowlist_is_exact()
+    {
+        const string vendorRoot = "src/Apps/Elsa.Workbench/OpenIddict/";
+
+        Assert.True(IsWorkbenchVendorEfSource("src/Apps/Elsa.Workbench/WorkbenchOpenIddictVendorRegistration.cs"));
+        Assert.All(WorkbenchOpenIddictVendorSources, source => Assert.True(IsWorkbenchVendorEfSource(vendorRoot + source)));
+        Assert.False(IsWorkbenchVendorEfSource("src/Apps/Elsa.Workbench/Program.cs"));
+        Assert.False(IsWorkbenchVendorEfSource(vendorRoot + "UnlistedEntityFrameworkCoreAdapter.cs"));
+        Assert.False(IsWorkbenchVendorEfSource("src/Elsa/Foundation/Identity/OpenIddict/OpenIddictIdentityDbContext.cs"));
+    }
+
+    [Fact]
     public void Identity_abstractions_are_free_of_concrete_persistence_dependencies()
     {
         var root = Path.Combine(RepoRoot, "src", "Elsa", "Foundation", "Identity", "Abstractions");
