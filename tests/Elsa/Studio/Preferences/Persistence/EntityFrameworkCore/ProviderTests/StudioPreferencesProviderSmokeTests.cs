@@ -1,8 +1,13 @@
+using Elsa.Studio.Preferences.Core.Contracts;
 using Elsa.Studio.Preferences.Core.Models;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore;
+using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests;
@@ -52,6 +57,47 @@ public sealed class StudioPreferencesMySqlSmokeTests(StudioPreferencesMySqlConta
                 new DbContextOptionsBuilder<StudioPreferencesMySqlDbContext>()
                     .UseMySQL(connectionString)
                     .Options));
+    }
+
+    [SkippableFact]
+    public async Task Public_feature_binds_mysql_with_the_module_history_options_and_a_working_store()
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "MySQL is unavailable.");
+        var services = new ServiceCollection();
+        new StudioPreferencesEntityFrameworkCoreFeature
+        {
+            Provider = "MySql",
+            ConnectionString = fixture.ConnectionString
+        }.ConfigureServices(services);
+
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<StudioPreferencesDbContext>();
+        var store = scope.ServiceProvider.GetRequiredService<IStudioPreferenceStore>();
+
+        Assert.IsType<StudioPreferencesMySqlDbContext>(context);
+        Assert.IsType<EfStudioPreferenceStore>(store);
+        Assert.Equal("MySql.EntityFrameworkCore", context.Database.ProviderName);
+        var relational = context.GetService<IDbContextOptions>().Extensions
+            .OfType<RelationalOptionsExtension>()
+            .Single();
+        Assert.Equal(StudioPreferencesEfModule.HistoryTableName, relational.MigrationsHistoryTableName);
+        Assert.Equal(typeof(StudioPreferencesDbContext).Assembly.GetName().Name, relational.MigrationsAssembly);
+
+        await context.Database.EnsureCreatedAsync();
+        var key = new StudioPreferenceKey(
+            $"public-feature-user-{Guid.NewGuid():N}",
+            "public-feature-tenant",
+            "public-feature-host",
+            "dashboard");
+        var created = await store.WriteAsync(
+            key,
+            new(1, JsonSerializer.SerializeToElement(new { layout = "public-feature" })),
+            StudioPreferenceWriteCondition.MustNotExist,
+            DateTimeOffset.Parse("2026-09-12T14:20:00Z"));
+
+        Assert.Equal(StudioPreferenceStoreWriteStatus.Saved, created.Status);
+        Assert.Equal("public-feature", (await store.FindAsync(key))!.Value.GetProperty("layout").GetString());
     }
 }
 

@@ -158,13 +158,21 @@ public sealed class EfStudioPreferenceStore(StudioPreferencesDbContext context) 
     private static bool TryParseRevision(string? revision, out long version)
     {
         version = 0;
-        return revision is not null &&
-               revision.StartsWith("rev-", StringComparison.Ordinal) &&
-               long.TryParse(
-                   revision.AsSpan("rev-".Length),
-                   NumberStyles.None,
-                   CultureInfo.InvariantCulture,
-                   out version) &&
-               version > 0;
+        if (revision is null ||
+            !revision.StartsWith("rev-", StringComparison.Ordinal) ||
+            !long.TryParse(
+                revision.AsSpan("rev-".Length),
+                NumberStyles.None,
+                CultureInfo.InvariantCulture,
+                out version) ||
+            version <= 0)
+        {
+            return false;
+        }
+
+        return string.Equals(
+            revision,
+            $"rev-{version.ToString(CultureInfo.InvariantCulture)}",
+            StringComparison.Ordinal);
     }
 }

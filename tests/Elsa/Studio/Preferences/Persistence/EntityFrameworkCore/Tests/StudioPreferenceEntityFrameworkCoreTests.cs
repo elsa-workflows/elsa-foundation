@@ -9,6 +9,7 @@ using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Studio.Preferences.Persistence.Groundwork;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
 using Xunit;
@@ -167,8 +168,13 @@ public sealed class StudioPreferenceEntityFrameworkCoreTests
         var databasePath = TemporaryDatabasePath();
         try
         {
-            await using var first = await SqliteFixture.CreateAsync(databasePath);
-            await using var second = await SqliteFixture.CreateAsync(databasePath);
+            var barrier = new DeterministicSaveBarrier();
+            await using var first = await InterceptedSqliteFixture.CreateAsync(
+                databasePath,
+                new OrderedSaveChangesInterceptor(barrier, isWinner: true));
+            await using var second = await InterceptedSqliteFixture.CreateAsync(
+                databasePath,
+                new OrderedSaveChangesInterceptor(barrier, isWinner: false));
 
             var writes = await Task.WhenAll(
                 first.Store.WriteAsync(
@@ -184,6 +190,8 @@ public sealed class StudioPreferenceEntityFrameworkCoreTests
 
             Assert.Equal(1, writes.Count(result => result.Status == StudioPreferenceStoreWriteStatus.Saved));
             Assert.Equal(1, writes.Count(result => result.Status == StudioPreferenceStoreWriteStatus.Conflict));
+            Assert.Equal(StudioPreferenceStoreWriteStatus.Saved, writes[0].Status);
+            Assert.Equal(StudioPreferenceStoreWriteStatus.Conflict, writes[1].Status);
             Assert.Equal("rev-1", (await first.Store.FindAsync(Key()))!.Revision);
         }
         finally
@@ -198,28 +206,40 @@ public sealed class StudioPreferenceEntityFrameworkCoreTests
         var databasePath = TemporaryDatabasePath();
         try
         {
-            await using var first = await SqliteFixture.CreateAsync(databasePath);
-            var created = await first.Store.WriteAsync(
-                Key(),
-                new(1, Json("{\"value\":\"original\"}")),
-                StudioPreferenceWriteCondition.MustNotExist,
-                DateTimeOffset.Parse("2026-09-12T09:17:00Z"));
-            await using var second = await SqliteFixture.CreateAsync(databasePath);
+            StudioPreferenceDocument created;
+            await using (var seed = await SqliteFixture.CreateAsync(databasePath))
+            {
+                created = (await seed.Store.WriteAsync(
+                    Key(),
+                    new(1, Json("{\"value\":\"original\"}")),
+                    StudioPreferenceWriteCondition.MustNotExist,
+                    DateTimeOffset.Parse("2026-09-12T09:17:00Z"))).Document!;
+            }
+
+            var barrier = new DeterministicSaveBarrier();
+            await using var first = await InterceptedSqliteFixture.CreateAsync(
+                databasePath,
+                new OrderedSaveChangesInterceptor(barrier, isWinner: true));
+            await using var second = await InterceptedSqliteFixture.CreateAsync(
+                databasePath,
+                new OrderedSaveChangesInterceptor(barrier, isWinner: false));
 
             var writes = await Task.WhenAll(
                 first.Store.WriteAsync(
                     Key(),
                     new(1, Json("{\"value\":\"first\"}")),
-                    StudioPreferenceWriteCondition.Matches(created.Document!.Revision),
+                    StudioPreferenceWriteCondition.Matches(created.Revision),
                     DateTimeOffset.Parse("2026-09-12T09:17:01Z")).AsTask(),
                 second.Store.WriteAsync(
                     Key(),
                     new(1, Json("{\"value\":\"second\"}")),
-                    StudioPreferenceWriteCondition.Matches(created.Document.Revision),
+                    StudioPreferenceWriteCondition.Matches(created.Revision),
                     DateTimeOffset.Parse("2026-09-12T09:17:02Z")).AsTask());
 
             var saved = Assert.Single(writes, result => result.Status == StudioPreferenceStoreWriteStatus.Saved);
             Assert.Single(writes, result => result.Status == StudioPreferenceStoreWriteStatus.Conflict);
+            Assert.Equal(StudioPreferenceStoreWriteStatus.Saved, writes[0].Status);
+            Assert.Equal(StudioPreferenceStoreWriteStatus.Conflict, writes[1].Status);
             var loaded = await first.Store.FindAsync(Key());
             Assert.Equal("rev-2", loaded!.Revision);
             Assert.Equal(saved.Document!.Value.GetProperty("value").GetString(), loaded.Value.GetProperty("value").GetString());
@@ -234,6 +254,7 @@ public sealed class StudioPreferenceEntityFrameworkCoreTests
     [InlineData("rev-0")]
     [InlineData("rev--1")]
     [InlineData("REV-1")]
+    [InlineData("rev-01")]
     [InlineData("rev-1 ")]
     [InlineData("rev-9223372036854775808")]
     public async Task Malformed_revisions_are_conflicts_without_mutation(string? revision)
@@ -539,6 +560,89 @@ public sealed class StudioPreferenceEntityFrameworkCoreTests
             {
                 DeleteDatabaseFiles(_databasePath);
             }
+        }
+    }
+
+    private sealed class InterceptedSqliteFixture(
+        StudioPreferencesSqliteDbContext context,
+        IStudioPreferenceStore store) : IAsyncDisposable
+    {
+        public IStudioPreferenceStore Store { get; } = store;
+
+        public static async Task<InterceptedSqliteFixture> CreateAsync(
+            string databasePath,
+            SaveChangesInterceptor interceptor)
+        {
+            var options = new DbContextOptionsBuilder<StudioPreferencesSqliteDbContext>()
+                .UseSqlite($"Data Source={databasePath}")
+                .AddInterceptors(interceptor)
+                .Options;
+            var context = new StudioPreferencesSqliteDbContext(options);
+            try
+            {
+                await context.Database.EnsureCreatedAsync();
+                return new InterceptedSqliteFixture(context, new EfStudioPreferenceStore(context));
+            }
+            catch
+            {
+                await context.DisposeAsync();
+                throw;
+            }
+        }
+
+        public ValueTask DisposeAsync() => context.DisposeAsync();
+    }
+
+    private sealed class DeterministicSaveBarrier
+    {
+        private readonly TaskCompletionSource _loserArrived = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _winnerCompleted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void SignalLoserArrived() => _loserArrived.TrySetResult();
+        public Task WaitForLoserAsync(CancellationToken cancellationToken) => _loserArrived.Task.WaitAsync(cancellationToken);
+        public void SignalWinnerCompleted() => _winnerCompleted.TrySetResult();
+        public Task WaitForWinnerAsync(CancellationToken cancellationToken) => _winnerCompleted.Task.WaitAsync(cancellationToken);
+    }
+
+    private sealed class OrderedSaveChangesInterceptor(
+        DeterministicSaveBarrier barrier,
+        bool isWinner) : SaveChangesInterceptor
+    {
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (isWinner)
+                await barrier.WaitForLoserAsync(cancellationToken);
+            else
+            {
+                barrier.SignalLoserArrived();
+                await barrier.WaitForWinnerAsync(cancellationToken);
+            }
+
+            return result;
+        }
+
+        public override ValueTask<int> SavedChangesAsync(
+            SaveChangesCompletedEventData eventData,
+            int result,
+            CancellationToken cancellationToken = default)
+        {
+            if (isWinner)
+                barrier.SignalWinnerCompleted();
+
+            return ValueTask.FromResult(result);
+        }
+
+        public override Task SaveChangesFailedAsync(
+            DbContextErrorEventData eventData,
+            CancellationToken cancellationToken = default)
+        {
+            if (isWinner)
+                barrier.SignalWinnerCompleted();
+
+            return Task.CompletedTask;
         }
     }
 }
