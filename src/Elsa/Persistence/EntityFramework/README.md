@@ -11,8 +11,9 @@ accumulate entity configuration. Module-owned derived contexts remain first-clas
 ## Status
 
 Accepted [ADR 0073](../../../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
-makes EF Core the only first-party persistence implementation family and supersedes the
-opposite direction in ADRs 0042, 0065, 0072. The Secrets implementation remains opt-in only
+makes EF Core the only first-party persistence implementation family. It supersedes ADR 0042's
+Groundwork-only policy, ADR 0065's proposed Groundwork target/lane topology, and ADR 0072's bounded
+EF lane while preserving each record's distinct history. The Secrets implementation remains opt-in
 until its migration slice proves four-provider parity and performs the explicit default flip.
 
 ## What this package owns

@@ -16,8 +16,10 @@ Its recommendation to retain Groundwork for Runtime and other excluded workloads
 the owner-ratified all-EF direction in
 [ADR 0073](../adr/0073-ef-core-is-the-only-first-party-persistence-family.md). That later product
 decision does not enlarge the pilot's evidence: this pilot did **not** prove Runtime, shared
-cross-module transactions, MySQL, or repository-wide Groundwork removal. Those claims require the
-spikes and delivery evidence in [Program #1665](https://github.com/elsa-workflows/elsa-foundation/issues/1665).
+cross-module transactions, MySQL, repository-wide Groundwork removal, #1644's real Foundation
+Host/Nuplane directory-feed route, or #1653's production-shaped Secrets HTTP CRUD/restart journey.
+Those claims require their owning issues, spikes, and delivery evidence in
+[Program #1665](https://github.com/elsa-workflows/elsa-foundation/issues/1665).
 
 Any HTTP workflow performance result cited below is retained only as historical evidence from the
 pilot's original gate. Performance measurement is now retired by owner policy; this addendum does not

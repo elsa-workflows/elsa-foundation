@@ -185,11 +185,10 @@ A module is eligible only when all of these are demonstrated:
 3. Transaction, concurrency, ordering, query, tenancy, retention, and consistency semantics can be
    written as module-owned tests.
 4. The workload is not a Runtime/G8 hot-path or dependent on Groundwork operational primitives.
-5. An ownership comparison records source, tests, migrations, tooling, shared-layer effects, and
-   expected schema churn. Existing modules use their actual Groundwork adapter as the baseline. New
-   modules use the closest comparable Groundwork module or, when that estimate could change the
-   decision, a bounded spike of both recipes. Explicit non-code-size benefits justify the added EF
-   ownership, and three provider-derived migration sets remain reviewable.
+5. A measured comparison against the Groundwork adapter records source, tests, migrations, tooling,
+   shared-layer effects, and expected schema churn. Explicit non-code-size benefits justify the added
+   EF ownership, and three provider-derived migration sets remain reviewable; otherwise the D14
+   threshold is evaluated before proceeding.
 6. For an existing module, data conversion, mixed-version behavior, cutover, rollback, evidence
    retention, and operational ownership are explicit acceptance gates.
 
@@ -307,9 +306,8 @@ contract.
 
 ### D11 — Groundwork remains for document, Runtime, and specialized operational workloads
 
-Groundwork remains the first-party document/Mongo family, outside these EF contexts. A module that
-requires a document store keeps its Groundwork adapter or adds one with its own evidence. This ADR
-does not authorize another first-party Mongo implementation.
+MongoDB remains an optional second family, outside these EF contexts. A module that requires a
+document store keeps or adds a document-family adapter with its own evidence.
 
 Runtime checkpoint, execution state and logs, scheduler queues, durable command inboxes, timers,
 outbox, mailbox and agent ownership, placement, transport, leases, fencing, and distributed locks

@@ -17,7 +17,10 @@ shells stay on Groundwork and keep that path's tests.
 This implementation began as the provider-derived `DbContext` pilot proposed in ADR 0072.
 Accepted ADR 0073 now makes EF Core the only first-party persistence implementation family
 and supersedes ADR 0042's opposite direction. The default remains unchanged until the
-Secrets migration issue records four-provider, migration-lifecycle, and host-composition proof.
+Secrets migration issue records four-provider, migration-lifecycle, host-composition, and
+[#1653 production-shaped HTTP CRUD/restart](https://github.com/elsa-workflows/elsa-foundation/issues/1653)
+proof. The [completion ledger](../../../../../docs/reports/ef-core-persistence-completion-ledger.md)
+is authoritative for that gate.
 
 The module package references `Microsoft.EntityFrameworkCore` and
 `Microsoft.EntityFrameworkCore.Relational` only. Sqlite / SqlServer / Npgsql engines live

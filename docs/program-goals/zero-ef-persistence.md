@@ -5,8 +5,9 @@
 > scheduling surface. [ADR 0073](../adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
 > and the active [EF Core Persistence goal](ef-core-persistence.md) own the opposite all-EF
 > replacement direction. Unfinished correctness and historical performance obligations did not pass
-> merely because this goal was superseded; each is implemented, carried into the new ledger, or
-> explicitly retired by owner policy.
+> merely because this goal was superseded; the replacement program must implement each applicable
+> correctness obligation, carry it into the completed ledger, or explicitly retire only its
+> performance portion by owner policy.
 
 Constitution reconciliation: ratified constitution v4.0.0 retains historical EF implementation examples in §E2.2.1, §E2.5 and §E5. Those examples do not enumerate current shipped APIs after this program's owner-approved deletion. Normative provider-neutrality rules remain unchanged. Updating the constitutional text itself is deferred to its proposal/discussion/ratification process; this program does not claim a new ratification. Current implementation inventory is the generated maps and this program's scope.
 

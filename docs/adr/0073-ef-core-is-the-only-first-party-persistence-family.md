@@ -158,8 +158,11 @@ EF policy rather than an empty provider-agnostic umbrella. If implementation lat
 conditions, that concrete conflict must follow the constitution proposal and ratification process;
 this ADR does not pre-authorize an exception.
 
-The Elsa constitution still contains historical EF package examples. Updating those examples is a
-separate governed propagation task, not an implied amendment in this decision.
+The Elsa constitution still contains EF package examples written for an earlier implementation
+state. The now-historical
+[Zero-EF constitution review](../reports/zero-ef-constitution-review.md) records the opposite former
+direction rather than current findings. Updating the constitution examples is a separate governed
+propagation task, not an implied amendment in this decision.
 
 ## Decisions requiring reconciliation
 
