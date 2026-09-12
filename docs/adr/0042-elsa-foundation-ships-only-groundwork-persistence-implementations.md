@@ -1,11 +1,16 @@
 # Elsa Foundation Ships Only Groundwork Persistence Implementations
 
+> **Superseded by [ADR 0073](0073-ef-core-is-the-only-first-party-persistence-family.md) on
+> 2026-09-12.** The Groundwork-only decision, its later bounded ADR 0072 amendment, and their evidence
+> remain historical. ADR 0073 selects EF Core as the only first-party persistence family while
+> preserving this ADR's vendor-owned OpenIddict boundary.
+
 > **Amended by accepted [ADR 0072](0072-ef-first-relational-persistence-with-provider-derived-contexts.md)
 > on 2026-09-12:** individually admitted shape-simple relational modules may ship first-party EF
 > Core implementations under ADR 0072's gates. Groundwork remains the Workbench default and the
 > first-party family for Runtime, document/Mongo, and operationally specialized workloads.
 
-Status: accepted (2026-07-12), amended by the OpenIddict decision on 2026-08-04 and by accepted ADR 0072 on 2026-09-12.
+Status: superseded (2026-09-12) by ADR 0073; accepted on 2026-07-12 and amended by the OpenIddict decision on 2026-08-04 and by accepted ADR 0072 on 2026-09-12.
 
 Tracking: [Elsa PRD #629](https://github.com/elsa-workflows/elsa-foundation/issues/629) and [Groundwork PRD #25](https://github.com/valence-works/Groundwork/issues/25).
 

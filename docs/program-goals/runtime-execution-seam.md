@@ -124,6 +124,11 @@ A read-only source verification (three independent sweeps) re-baselined this buc
 
 ## Current Roadmap Notes
 
+- **Persistence performance policy update (2026-09-12):** ADR 0073 retires benchmark execution,
+  timing measurements, budgets, gates, and permanent performance instruments without claiming their
+  targets passed. The measured notes below remain historical design evidence. #1668 owns removal of
+  measurement surfaces and preservation of timing-independent concurrency, atomicity, recovery, and
+  failure semantics; Runtime EF replacement is tracked by #1672/#1676.
 - Start with Work Unit Planner and Speckit Flow Guide from the skill catalog.
 - Use the Elsa Core runtime broken-windows brainstorm report to preserve maintainer concerns and source-derived analysis before selecting Speckit work units.
 - Do not reintroduce `WorkflowExecutionContext`, `WorkflowDefinitionActivity`, `UsableAsActivity`, or a workflow-definition runtime consumer. Extend reusable execution through provider-neutral activity definitions and runtime-owned executable templates; keep `ExecuteWorkflow` separate.

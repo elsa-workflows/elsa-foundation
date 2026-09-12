@@ -47,7 +47,10 @@ This bucket exists to turn the Elsa foundation workspace from "still being polis
 - [Unfinished work](../reports/unfinished-work.md)
 - [Program goals index](README.md)
 - [AGENTS.md](../../AGENTS.md)
-- Dependency: [First-Request / Cold-Start Readiness](first-request-cold-start-readiness.md) — a launchable workspace must also start fast; host boot / first-request latency is tracked in its own bucket, not here.
+- Historical dependency: [First-Request / Cold-Start Readiness](first-request-cold-start-readiness.md)
+  is superseded by owner policy. This goal retains only untimed launch/activation correctness;
+  persistence migration and host-composition evidence belongs to
+  [EF Core Persistence](ef-core-persistence.md).
 
 ## Current Roadmap Notes
 

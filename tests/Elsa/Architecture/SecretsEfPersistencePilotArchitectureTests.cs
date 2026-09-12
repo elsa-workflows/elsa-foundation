@@ -6,7 +6,8 @@ namespace Elsa.Architecture.Tests;
 /// <summary>
 /// Owns the ADR 0072 Secrets EF pilot allowlist. <see cref="EfCoreDependencyGuardTests"/> exempts these
 /// paths, but not the projects that depend on them; this test is the exact inventory.
-/// ADR 0042 still forbids first-party EF until 0072 is accepted.
+/// ADR 0073 supersedes ADR 0072's bounded policy but preserves its admitted implementation as the
+/// reviewed starting surface; later EF replacements must extend the ratchet with their own evidence.
 /// </summary>
 public sealed class SecretsEfPersistencePilotArchitectureTests
 {

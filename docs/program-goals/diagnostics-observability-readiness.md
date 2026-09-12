@@ -43,14 +43,17 @@ The bucket keeps the observability port coherent across two repos and two sub-do
 ## Linked Surfaces
 
 - Session plan: `diagnostics-port-plan.md` (session artifact).
-- [Diagnostics storage workload](../reports/diagnostics-storage-workload.md) - the domain inventory and specialized Groundwork append/query/retention capability required by Zero-EF Persistence.
+- [Diagnostics storage workload](../reports/diagnostics-storage-workload.md) - historical Groundwork
+  capability evidence and the domain inventory carried into EF Core Persistence issue #1681.
 - Source: `elsa-core @ 8e20386a28f5754cc4e3b7f02e2fec5c8f676bdc`; `elsa-studio @ fb5e371febe37146a84679f7cc11b5461851f11a`.
 - Existing console streaming: `src/Apps/Elsa.Server/Program.cs` (`ConsoleLogStreaming`), `elsa-foundation-studio:src/Elsa.Studio.ConsoleStream`.
 
 ## Current Roadmap Notes
 
 - Backend-first in `elsa-foundation`; studio panels follow in a separate `elsa-foundation-studio` session that consumes the backend hubs/endpoints.
-- Structured Logs now has a Groundwork diagnostic-record adapter while its EF adapter remains a temporary compatibility oracle. OpenTelemetry still uses the EF persistence lane pending its Zero-EF slice.
+- Structured Logs has a Groundwork diagnostic-record adapter and OpenTelemetry has existing EF/Groundwork
+  evidence. Their all-EF replacement and four-provider proof now belong to #1681 under
+  [EF Core Persistence](ef-core-persistence.md).
 - Studio UX consolidates observability into the bottom panel (tabs) rather than separate nav pages.
 - **Live transport decision (Structured Logs, spec 073):** Server-Sent Events (SSE), not SignalR — the workload is one-way server→client browser streaming, SSE adds no dependency (no `@microsoft/signalr`, no shared-framework hub), and native `EventSource` gives auto-reconnect + `Last-Event-ID` resume. The Console tab keeps its third-party SignalR transport for now; unifying it onto SSE is objective 7. OTEL's transport is decided per-slice (SSE preferred for consistency).
 

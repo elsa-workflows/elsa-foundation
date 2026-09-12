@@ -2,12 +2,11 @@
 
 > **Historical program — superseded 2026-09-12.** This goal records the completed Groundwork
 > consolidation direction and any residual issue provenance, but it is no longer an active policy or
-> scheduling surface. Accepted
-> [ADR 0072](../adr/0072-ef-first-relational-persistence-with-provider-derived-contexts.md) permits a
-> separately gated EF relational lane. It retains Groundwork as the Workbench default and for
-> Runtime, document/Mongo, and operationally specialized workloads. Unfinished provider/performance
-> obligations remain with their linked issues, including #646; superseding this goal does not claim
-> those obligations passed.
+> scheduling surface. [ADR 0073](../adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
+> and the active [EF Core Persistence goal](ef-core-persistence.md) own the opposite all-EF
+> replacement direction. Unfinished correctness and historical performance obligations did not pass
+> merely because this goal was superseded; each is implemented, carried into the new ledger, or
+> explicitly retired by owner policy.
 
 Constitution reconciliation: ratified constitution v4.0.0 retains historical EF implementation examples in §E2.2.1, §E2.5 and §E5. Those examples do not enumerate current shipped APIs after this program's owner-approved deletion. Normative provider-neutrality rules remain unchanged. Updating the constitutional text itself is deferred to its proposal/discussion/ratification process; this program does not claim a new ratification. Current implementation inventory is the generated maps and this program's scope.
 
@@ -20,9 +19,9 @@ Steward(s): Sipke plus active architects/agents.
 ## Purpose
 
 Historical purpose: make Groundwork the only first-party Elsa persistence implementation family,
-while keeping core persistence contracts and invariants independent of Groundwork. That absolute
-first-party boundary is superseded by accepted ADR 0072; the consolidation evidence and linked issue
-history remain useful provenance. No active work should be scheduled from this page.
+while keeping core persistence contracts and invariants independent of Groundwork. That direction is
+superseded by ADR 0073; the consolidation evidence and linked issue history remain useful provenance.
+No active work should be scheduled from this page.
 
 This is the successor to the completed [Groundwork Persistence Readiness](groundwork-persistence-readiness.md) goal. The earlier goal established and validated the provider-neutral foundation; this goal completes product adoption and removal of the parallel EF Core implementation lane.
 
@@ -74,7 +73,7 @@ linked GitHub issue or another active program goal.
 
 ## Current Roadmap Notes
 
-**Current scope (2026-09-07):** The owner separated broad validation from implementation to reduce credit consumption. [Spec 144's governing scope](../../specs/144-zero-ef-final-removal/spec.md#current-governing-scope--2026-09-07) records that decision and the vendor OpenIddict exception. The combined removal candidate is under integration; final main promotion, guard cleanup and closeout are not yet claimed. Existing performance budgets and historical receipts are unchanged.
+**Historical scope (2026-09-07):** The owner separated broad validation from implementation to reduce credit consumption. [Spec 144's governing scope](../../specs/144-zero-ef-final-removal/spec.md#current-governing-scope--2026-09-07) records that former decision and the vendor OpenIddict exception. The all-EF direction now belongs to ADR 0073 and Program #1665. Existing timing results remain historical evidence; performance measurement itself is retired by owner policy without a claim that its unfinished budgets passed.
 
 ### Historical roadmap notes — not current scheduling instructions
 
@@ -112,4 +111,6 @@ The dated notes below preserve prior milestones, package identities and failures
 
 ## Removal or Completion Conditions
 
-Complete implementation only after remote `main` contains the reviewed first-party EF removal, Elsa-owned durable lanes use Groundwork, vendor OpenIddict remains within its explicit host exception, narrow build/regression/startup/persistence checks pass, the permanent guard reflects that boundary, and issue/board records match delivery. The separate broad-validation handoff must be available with unresolved findings and exact source identities. Do not report #646, the full provider matrix or performance budgets as passed merely because this implementation bucket closes.
+This historical goal remains superseded. Its prior completion conditions were never satisfied and
+must not be reported as passed. Program #1665 maps their still-applicable correctness requirements
+into EF work and records performance-only requirements as retired by owner policy.

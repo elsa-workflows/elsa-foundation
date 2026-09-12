@@ -4,13 +4,12 @@ using Xunit;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// First-party EF Core persistence was removed with issue #1482: Elsa ships Groundwork-only stores, so
-/// EF Core may only survive where the <c>Elsa.Workbench</c> host wires the vendor OpenIddict store it
-/// chose for itself. The guard walks the declared csproj graph (no restore, no baseline) and scans
-/// sources, so a new EF edge anywhere else under <c>src/</c> fails and names the offender. To let another
-/// host own an EF vendor store, add it to <see cref="AllowedEfConsumers"/> in the same change. The proposed
-/// ADR 0072 Secrets EF pilot trees are exempt themselves (see <see cref="Adr0072SecretsEfPilot"/>), but a
-/// project outside them that reaches EF through a pilot project still fails.
+/// ADR 0073 selects EF Core as the destination persistence family, but each implementation still enters
+/// through an explicitly reviewed program issue. This ratchet therefore keeps the currently admitted
+/// surface at the vendor-owned OpenIddict host boundary plus ADR 0072's accepted Secrets EF tree. It walks
+/// the declared csproj graph (no restore, no baseline) and scans sources, so an unreviewed EF edge anywhere
+/// else under <c>src/</c> fails and names the offender. Each replacement changes this guard deliberately
+/// with its own architecture evidence; the destination ADR alone is not a repository-wide exemption.
 /// </summary>
 public sealed class EfCoreDependencyGuardTests
 {
@@ -122,8 +121,8 @@ public sealed class EfCoreDependencyGuardTests
     private sealed record Project(string Name, HashSet<string> References, bool DeclaresEf, bool IsPilot);
 
     /// <summary>
-    /// ADR 0072 (proposed) Secrets EF pilot. ADR 0042 still permits only the OpenIddict vendor exception; this
-    /// prefix exemption is a review-time carve-out, not an accepted amendment.
+    /// ADR 0072's accepted, now-superseded Secrets EF surface. ADR 0073 preserves this as the only currently
+    /// admitted first-party implementation while later Program #1665 replacements remain evidence-gated.
     /// <see cref="SecretsEfPersistencePilotArchitectureTests"/> owns the exact package and source inventory.
     /// </summary>
     internal static class Adr0072SecretsEfPilot

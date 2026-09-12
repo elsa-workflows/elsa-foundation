@@ -197,7 +197,9 @@ The reverse form would force `Elsa.JavaScript` to grow one sub-branch per model-
 
 ## Sync contributor pattern: IEntityModelCreatingHandler
 
-Historical example: the first-party EF implementation and these interfaces have been removed. This section explains the original rationale, not currently available APIs; see the [current persistence scope](../program-goals/zero-ef-persistence.md).
+Historical example: the earlier first-party EF implementation and these interfaces were removed. This
+section explains the original rationale, not currently available APIs; see the current
+[EF Core Persistence scope](../program-goals/ef-core-persistence.md).
 
 Instantiates framework §2.6.5.
 

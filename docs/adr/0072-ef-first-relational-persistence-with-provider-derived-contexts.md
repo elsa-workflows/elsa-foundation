@@ -1,16 +1,19 @@
 ---
-status: accepted
+status: superseded
 date: 2026-09-10
 decision_context: Spike PR #1622, completed Secrets EF pilot #1626, verdict PR #1655, and cost evidence PR #1660; revised direction authorized by Sipke Schoorstra on 2026-09-11 and final text accepted by Sipke Schoorstra on 2026-09-12.
 ---
 
 # EF-first relational persistence with provider-derived contexts
 
-Status: accepted (2026-09-12). Sipke Schoorstra explicitly approved the final bounded direction
-after the pilot verdict, ownership-cost evidence, and review-driven corrections. This repository
-records that approval using the ADR lifecycle term **accepted**.
+Status: superseded (2026-09-12) by
+[ADR 0073](0073-ef-core-is-the-only-first-party-persistence-family.md). Sipke Schoorstra explicitly
+approved this bounded direction after the pilot verdict, ownership-cost evidence, and review-driven
+corrections. Later the same day, the owner selected EF Core as the only first-party persistence
+family. This document preserves the bounded decision and its evidence; it is not current policy.
 
-Program goal: `none/free-flow`. This ADR narrows
+Historical program-goal state: `none/free-flow`. The active replacement program is
+[EF Core Persistence](../program-goals/ef-core-persistence.md). This ADR narrowed
 [ADR 0042](0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md) for
 individually admitted relational modules. It does not schedule a replacement wave, switch a host
 default, delete a Groundwork adapter, or decide Runtime persistence.
@@ -27,6 +30,7 @@ Primary evidence:
 - [Pilot verdict and conditional replacement plan](../reports/secrets-ef-persistence-pilot-verdict-2026-09.md)
 - [Provider-derived contexts versus FluentMigrator spike #1622](https://github.com/elsa-workflows/elsa-foundation/pull/1622)
 - [Human decision and governance reconciliation #1628](https://github.com/elsa-workflows/elsa-foundation/issues/1628)
+- [Superseding all-EF Program #1665](https://github.com/elsa-workflows/elsa-foundation/issues/1665)
 
 ---
 
@@ -448,13 +452,13 @@ and workload evidence.
 | 2026-09-11 | Pilot concluded | Program #1626 and report PR #1655 recorded a successful bounded technical pilot and deferred product policy. |
 | 2026-09-11 | Revision authorized | Sipke authorized revising ADR 0072 in the bounded direction: separately admitted shape-simple relational modules, Groundwork retained for Runtime/document/specialized workloads. |
 | 2026-09-12 | Accepted | Sipke explicitly approved the final bounded text. The acceptance record reconciles ADR 0042 and retires the Zero-EF goal as an active policy surface. |
-| Pending | Rollout | #1654 may inventory candidates and create separately authorized module issues. No module is scheduled by this ADR alone. |
+| 2026-09-12 | Superseded | Sipke selected the all-EF destination recorded by ADR 0073. Program #1665 replaced this bounded rollout; #1654 remains historical inventory input and no module work is authorized by this ADR. |
 
 ## Follow-ups and ownership
 
-- [#1628](https://github.com/elsa-workflows/elsa-foundation/issues/1628): the human decision is
-  accepted; close after this acceptance record, ADR 0042, the Zero-EF goal, and the spike disposition
-  agree on `main`.
+- [#1628](https://github.com/elsa-workflows/elsa-foundation/issues/1628): preserves the human review
+  and acceptance record for this bounded decision; reconcile it only after ADR 0073 and the active
+  program-goal state agree on `main`.
 - [#1623](https://github.com/elsa-workflows/elsa-foundation/pull/1623): merged the reviewed proposed
   text on 2026-09-11. The acceptance follow-up records the human decision and review corrections.
 - [#1622](https://github.com/elsa-workflows/elsa-foundation/pull/1622): record an explicit disposition
@@ -464,13 +468,15 @@ and workload evidence.
   Foundation Host/Nuplane directory-feed route production-ready.
 - [#1653](https://github.com/elsa-workflows/elsa-foundation/issues/1653): prove EF-selected Secrets
   through a production-shaped HTTP CRUD and restart journey.
-- [#1654](https://github.com/elsa-workflows/elsa-foundation/issues/1654): after acceptance, inventory
-  module eligibility, transactions, conversion, rollback, and multi-engine topology before creating
-  implementation issues.
+- [#1654](https://github.com/elsa-workflows/elsa-foundation/issues/1654): preserve its bounded
+  inventory as input to Program #1665's completion ledger. Its former Runtime exclusion and
+  conversion/rollback assumptions are superseded by ADR 0073.
 - [#1657](https://github.com/elsa-workflows/elsa-foundation/issues/1657): eliminate the concurrent
   `dotnet ef` Tooling build-host race found by the post-main pilot gate.
-- [#646](https://github.com/elsa-workflows/elsa-foundation/issues/646): retain broad native-provider
-  and performance evidence for persistence workloads.
+- [#646](https://github.com/elsa-workflows/elsa-foundation/issues/646): preserve applicable
+  provider-neutral correctness evidence; performance measurement retires by owner policy without a
+  pass claim.
 
-The broader rollout remains `none/free-flow` until an accepted governance record deliberately
-creates or selects a program-goal bucket.
+The superseding rollout is governed by [Program #1665](https://github.com/elsa-workflows/elsa-foundation/issues/1665),
+[Project 49](https://github.com/orgs/elsa-workflows/projects/49), and the active
+[EF Core Persistence goal](../program-goals/ef-core-persistence.md).

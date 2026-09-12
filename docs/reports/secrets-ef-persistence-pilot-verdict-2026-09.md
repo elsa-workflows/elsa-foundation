@@ -1,12 +1,36 @@
 # Secrets EF persistence pilot verdict and conditional replacement plan
 
-Status: concluded technical pilot; product-direction decision pending.
+Status: concluded technical pilot; bounded product recommendation superseded by ADR 0073.
 
 Evidence cut: `main` at `0a6a6595b9905048ce694d849d4fb080993fe727` (2026-09-11).
 
 Program: [#1626](https://github.com/elsa-workflows/elsa-foundation/issues/1626).
 
-## Verdict
+## Addendum — 2026-09-12
+
+The pilot's technical evidence remains valid. It proved the bounded Secrets recipe for SQLite, SQL
+Server, and PostgreSQL, including provider-derived contexts, module-owned migrations, host and shell
+lifecycle, dual migration modes, provider checks, and selected-family composition.
+
+Its recommendation to retain Groundwork for Runtime and other excluded workloads is superseded by
+the owner-ratified all-EF direction in
+[ADR 0073](../adr/0073-ef-core-is-the-only-first-party-persistence-family.md). That later product
+decision does not enlarge the pilot's evidence: this pilot did **not** prove Runtime, shared
+cross-module transactions, MySQL, or repository-wide Groundwork removal. Those claims require the
+spikes and delivery evidence in [Program #1665](https://github.com/elsa-workflows/elsa-foundation/issues/1665).
+
+Any HTTP workflow performance result cited below is retained only as historical evidence from the
+pilot's original gate. Performance measurement is now retired by owner policy; this addendum does not
+claim that a current performance budget passed. Timing-independent activation and correctness
+evidence remains applicable.
+
+## Historical verdict at the 2026-09-11 evidence cut
+
+The remainder of this report preserves the pilot's then-current policy, recommendations, residuals,
+and evidence wording. Where it names ADR 0042, ADR 0072, Zero-EF, Runtime retention, MongoDB, or a
+pending product decision, read that statement as historical context superseded by the addendum above.
+
+### Verdict
 
 The Secrets EF pilot **succeeded as a narrow technical pilot for a shape-simple relational
 module**. It proves that Elsa can add an EF-backed Secrets implementation without changing
