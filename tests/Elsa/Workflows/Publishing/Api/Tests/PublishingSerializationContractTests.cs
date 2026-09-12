@@ -289,19 +289,21 @@ public sealed class PublishingSerializationContractTests
         var snapshot = new PublicationSnapshotPreflightView("token-1", "sha256:candidate", "definition-1", null, "default",
             PublicationActionView.Replace, PublicationPolicySourceView.Host, null, owner is null, [], [], [], owner);
 
-        foreach (var json in new[] { Serialize(version), Serialize(snapshot) })
+        foreach (var document in new[] { Serialize(version), Serialize(snapshot) }.Select(json => JsonDocument.Parse(json)))
         {
-            using var document = JsonDocument.Parse(json);
-            var written = document.RootElement.GetProperty("targetSlotOwner");
-            if (owner is null)
+            using (document)
             {
-                Assert.Equal(JsonValueKind.Null, written.ValueKind);
-                continue;
-            }
+                var written = document.RootElement.GetProperty("targetSlotOwner");
+                if (owner is null)
+                {
+                    Assert.Equal(JsonValueKind.Null, written.ValueKind);
+                    continue;
+                }
 
-            Assert.Equal(["sourceKind", "sourceId"], written.EnumerateObject().Select(property => property.Name));
-            Assert.Equal(sourceKind, written.GetProperty("sourceKind").GetString());
-            Assert.Equal(sourceId, written.GetProperty("sourceId").GetString());
+                Assert.Equal(["sourceKind", "sourceId"], written.EnumerateObject().Select(property => property.Name));
+                Assert.Equal(sourceKind, written.GetProperty("sourceKind").GetString());
+                Assert.Equal(sourceId, written.GetProperty("sourceId").GetString());
+            }
         }
 
         Assert.Equal(owner, Deserialize<PublicationPreflightView>(Serialize(version)).TargetSlotOwner);
