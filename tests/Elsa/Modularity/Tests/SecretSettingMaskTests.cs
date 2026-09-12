@@ -112,8 +112,7 @@ public sealed class SecretSettingMaskTests
     {
         var restored = SecretSettingMask.Restore(
             Json($$"""{"Key":"{{Placeholder}}","Mode":"slow"}"""),
-            Json("""{"key":{"k1":"material"},"Mode":"fast"}"""),
-            Settings);
+            Json("""{"key":{"k1":"material"},"Mode":"fast"}"""));
 
         Assert.Equal("material", restored.GetProperty("Key").GetProperty("k1").GetString());
         Assert.Equal("slow", restored.GetProperty("Mode").GetString());
@@ -127,8 +126,7 @@ public sealed class SecretSettingMaskTests
     {
         var restored = SecretSettingMask.Restore(
             Json($$"""{"Key":"{{Placeholder}}","Mode":"slow"}"""),
-            stored is null ? null : Json(stored),
-            Settings);
+            stored is null ? null : Json(stored));
 
         Assert.False(restored.TryGetProperty("Key", out _));
         Assert.Equal("slow", restored.GetProperty("Mode").GetString());
@@ -140,31 +138,24 @@ public sealed class SecretSettingMaskTests
     [InlineData("null")]
     public void RestoreKeepsASecretValueThatIsNotThePlaceholder(string value)
     {
-        var restored = SecretSettingMask.Restore(Json($$"""{"Key":{{value}}}"""), Json("""{"Key":"material"}"""), Settings);
+        var restored = SecretSettingMask.Restore(Json($$"""{"Key":{{value}}}"""), Json("""{"Key":"material"}"""));
 
         Assert.Equal(Json(value).GetRawText(), restored.GetProperty("Key").GetRawText());
     }
 
     [Fact]
-    public void RestorePutsBackAnUndeclaredHiddenValue()
+    public void RestoreTreatsThePlaceholderAsUnchangedForAnyKey()
     {
-        var restored = SecretSettingMask.Restore(Json($$"""{"ApiToken":"{{Placeholder}}"}"""), Json("""{"ApiToken":"material"}"""), []);
+        // Whether a key is hidden follows the installed packages, which can change between a client's read and its apply.
+        var restored = SecretSettingMask.Restore(Json($$"""{"ApiUrl":"{{Placeholder}}"}"""), Json("""{"apiUrl":"https://real"}"""));
 
-        Assert.Equal("material", restored.GetProperty("ApiToken").GetString());
-    }
-
-    [Fact]
-    public void RestoreLeavesThePlaceholderTextInANonSecretSetting()
-    {
-        var restored = SecretSettingMask.Restore(Json($$"""{"Mode":"{{Placeholder}}"}"""), Json("""{"Mode":"fast"}"""), Settings);
-
-        Assert.Equal(Placeholder, restored.GetProperty("Mode").GetString());
+        Assert.Equal("https://real", restored.GetProperty("ApiUrl").GetString());
     }
 
     [Fact]
     public void RestoreReturnsNonObjectRequestsUnchanged()
     {
-        var restored = SecretSettingMask.Restore(Json("null"), Json("""{"Key":"material"}"""), Settings);
+        var restored = SecretSettingMask.Restore(Json("null"), Json("""{"Key":"material"}"""));
 
         Assert.Equal(JsonValueKind.Null, restored.ValueKind);
     }

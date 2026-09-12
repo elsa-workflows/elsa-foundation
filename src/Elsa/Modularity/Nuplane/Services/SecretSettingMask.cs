@@ -21,8 +21,15 @@ public static class SecretSettingMask
     private static readonly JsonElement s_placeholder = JsonSerializer.SerializeToElement(Placeholder);
 
     /// <summary>Returns <paramref name="configuration"/> with every set hidden value replaced by the placeholder.</summary>
-    public static JsonElement MaskConfiguration(JsonElement configuration, IReadOnlyList<FeatureSettingDescriptor> settings) =>
-        Rewrite(configuration, settings, (_, value) => IsUnset(value) ? value : s_placeholder);
+    public static JsonElement MaskConfiguration(JsonElement configuration, IReadOnlyList<FeatureSettingDescriptor> settings)
+    {
+        // Configuration binding matches keys case-insensitively, so a name must be recognised however it is cased. A
+        // name any source declares secret stays hidden even if another declares it plain.
+        var visibleNames = settings.Where(x => !x.Secret).Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        visibleNames.ExceptWith(settings.Where(x => x.Secret).Select(x => x.Name));
+
+        return Rewrite(configuration, visibleNames.Contains, (_, value) => IsUnset(value) ? value : s_placeholder);
+    }
 
     /// <summary>
     /// Returns <paramref name="settings"/> with the default value of every secret setting masked. Defaults come from
@@ -34,30 +41,24 @@ public static class SecretSettingMask
             .ToArray();
 
     /// <summary>
-    /// Returns <paramref name="requested"/> with every hidden value that still carries the placeholder replaced by its
-    /// value in <paramref name="stored"/>, or removed when nothing is stored for it.
+    /// Returns <paramref name="requested"/> with every value that still carries the placeholder replaced by its value in
+    /// <paramref name="stored"/>, or removed when nothing is stored for it. The placeholder means "unchanged" whatever
+    /// the key's current visibility: which keys are hidden follows the installed packages, which can change between a
+    /// client's read and its apply without changing the revision, and the placeholder must never be saved as a value.
     /// </summary>
-    public static JsonElement Restore(JsonElement requested, JsonElement? stored, IReadOnlyList<FeatureSettingDescriptor> settings) =>
-        Rewrite(requested, settings, (name, value) =>
+    public static JsonElement Restore(JsonElement requested, JsonElement? stored) =>
+        Rewrite(requested, _ => false, (name, value) =>
             value.ValueKind is JsonValueKind.String && value.GetString() == Placeholder ? FindProperty(stored, name) : value);
 
-    private static JsonElement Rewrite(
-        JsonElement configuration,
-        IReadOnlyList<FeatureSettingDescriptor> settings,
-        Func<string, JsonElement, JsonElement?> rewriteHidden)
+    private static JsonElement Rewrite(JsonElement configuration, Func<string, bool> isVisible, Func<string, JsonElement, JsonElement?> rewriteHidden)
     {
         if (configuration.ValueKind is not JsonValueKind.Object)
             return configuration;
 
-        // Configuration binding matches keys case-insensitively, so a name must be recognised however it is cased. A
-        // name any source declares secret stays hidden even if another declares it plain.
-        var visibleNames = settings.Where(x => !x.Secret).Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        visibleNames.ExceptWith(settings.Where(x => x.Secret).Select(x => x.Name));
-
         var result = new JsonObject();
         foreach (var property in configuration.EnumerateObject())
         {
-            var value = visibleNames.Contains(property.Name) ? property.Value : rewriteHidden(property.Name, property.Value);
+            var value = isVisible(property.Name) ? property.Value : rewriteHidden(property.Name, property.Value);
             if (value is { } kept)
                 result[property.Name] = JsonNode.Parse(kept.GetRawText());
         }

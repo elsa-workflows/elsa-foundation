@@ -182,6 +182,34 @@ public sealed class FeatureManagementServiceTests
     }
 
     [Fact]
+    public async Task ApplyKeepsAValueHiddenAtReadTimeEvenIfItsSettingIsDeclaredByApplyTime()
+    {
+        // The package declaring ApiUrl loads between the read and the apply; shells.json, and so the revision, is unchanged.
+        _store.Features["Sample"] = Json("""{"ApiUrl":"https://real"}""");
+        var contributor = new ContributingFeatureCatalogContributor("Sample");
+        var service = CreateService(contributor);
+        var catalog = await service.GetCatalogAsync();
+        contributor.Settings = [Setting("ApiUrl", "string", secret: false)];
+
+        await service.ApplyAsync(new FeatureApplyRequest(catalog.Revision, [new("Sample", true, Assert.Single(catalog.Features).Configuration)]));
+
+        Assert.Equal("https://real", _store.Features["Sample"].GetProperty("ApiUrl").GetString());
+    }
+
+    [Fact]
+    public async Task ApplyRejectsAFeatureWithoutAnId()
+    {
+        var service = CreateService();
+        var catalog = await service.GetCatalogAsync();
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => service.ApplyAsync(new FeatureApplyRequest(
+            catalog.Revision,
+            [new(null!, true, Json($$"""{"SigningKey":"{{SecretSettingMask.Placeholder}}"}"""))])));
+
+        Assert.Contains("Feature ID is required", exception.Message);
+    }
+
+    [Fact]
     public async Task ApplyStoresANewSecretValue()
     {
         _store.Features[SecuredFeatureId] = Json($$"""{"SigningKey":"{{SigningKeyValue}}"}""");
@@ -239,12 +267,14 @@ public sealed class FeatureManagementServiceTests
 
     private sealed class ContributingFeatureCatalogContributor(string featureId, params FeatureSettingDescriptor[] settings) : IFeatureCatalogContributor
     {
+        public FeatureSettingDescriptor[] Settings { get; set; } = settings;
+
         public Task ContributeAsync(FeatureCatalogContributionContext context, CancellationToken cancellationToken = default)
         {
             var feature = context.GetOrAdd(featureId);
             feature.DisplayName = featureId;
             feature.SourceKind = FeatureSourceKinds.Runtime;
-            feature.Settings = settings;
+            feature.Settings = Settings;
             return Task.CompletedTask;
         }
     }

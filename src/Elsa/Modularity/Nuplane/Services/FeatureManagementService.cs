@@ -20,7 +20,7 @@ public sealed class FeatureManagementService(
     {
         var shell = await shellStore.LoadAsync(cancellationToken);
         var current = await BuildCatalogAsync(shell, cancellationToken);
-        request = RestoreSecrets(request, current, shell);
+        request = RestoreSecrets(request, shell);
         ValidateRequest(request, current);
 
         var changes = request.Features
@@ -80,24 +80,16 @@ public sealed class FeatureManagementService(
     }
 
     /// <summary>A client that round-trips the catalog sends the placeholder back for every hidden value it did not change.</summary>
-    private static FeatureApplyRequest RestoreSecrets(FeatureApplyRequest request, FeatureCatalogResponse current, ShellFeatureConfigurationSnapshot shell)
-    {
-        var settingsById = current.Features.ToDictionary(x => x.Id, x => x.Settings, StringComparer.OrdinalIgnoreCase);
-
-        return request with
+    private static FeatureApplyRequest RestoreSecrets(FeatureApplyRequest request, ShellFeatureConfigurationSnapshot shell) =>
+        request with
         {
             Features = request.Features.Select(feature =>
             {
-                if (feature.Id is null)
-                    return feature;
-
-                // A feature the catalog does not know declares no settings, so every key it carries counts as hidden.
-                var settings = settingsById.GetValueOrDefault(feature.Id) ?? [];
-                System.Text.Json.JsonElement? stored = shell.Features.TryGetValue(feature.Id, out var value) ? value : null;
-                return feature with { Configuration = SecretSettingMask.Restore(feature.Configuration, stored, settings) };
+                // A null ID has nothing stored; ValidateRequest rejects it once the placeholders are dropped.
+                System.Text.Json.JsonElement? stored = feature.Id is not null && shell.Features.TryGetValue(feature.Id, out var value) ? value : null;
+                return feature with { Configuration = SecretSettingMask.Restore(feature.Configuration, stored) };
             }).ToArray()
         };
-    }
 
     private static void ValidateRequest(FeatureApplyRequest request, FeatureCatalogResponse current)
     {
