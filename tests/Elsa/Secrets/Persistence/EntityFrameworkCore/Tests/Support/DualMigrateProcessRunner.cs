@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.Support;
@@ -15,11 +16,12 @@ internal static class DualMigrateProcessRunner
     // folder. Concurrent dual-migrate.sh calls race on that copy: xUnit runs the Secrets EF
     // test classes in the same assembly in parallel, and a solution-filtered `dotnet test`
     // runs the PostgreSQL assembly (which links this file, see the class doc comment) alongside
-    // this one. Serialize with a cross-process, cross-assembly lock on a file scoped to this
-    // checkout's Tooling output, so two different worktrees never contend on each other's lock.
-    private static readonly string ToolingLockRelativePath = Path.Join(
-        "src", "Elsa", "Secrets", "Persistence", "EntityFrameworkCore", "Tooling", "obj", "dual-migrate.lock");
-
+    // this one. Serialize with a cross-process, cross-assembly lock on a file in the system temp
+    // directory, named from a deterministic hash of the Tooling project's absolute path. That
+    // keeps the lock out of `obj/` - disposable build output that a `dotnet clean` or cache reset
+    // can delete out from under a holder, letting the next acquirer create a fresh, uncontended
+    // file and silently defeat serialization - while still keying it to this checkout's Tooling
+    // output, so two different worktrees never contend on each other's lock.
     private static readonly TimeSpan LockAcquisitionTimeout = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan LockRetryDelay = TimeSpan.FromMilliseconds(100);
 
@@ -180,9 +182,27 @@ internal static class DualMigrateProcessRunner
         }
     }
 
-    private static FileStream AcquireToolingLock(string root)
+    private static FileStream AcquireToolingLock(string root) => AcquireLock(ComputeToolingLockPath(root));
+
+    // The lock file name is a truncated SHA-256 of the Tooling project's absolute path (not
+    // string.GetHashCode, which is randomized per process and would give every process its own
+    // lock). That makes the lock deterministic per checkout: every process targeting the same
+    // Tooling output - this assembly's parallel test classes and the linked PostgreSQL assembly -
+    // shares one lock file, while a different worktree's checkout hashes to a different file and
+    // never contends with this one.
+    internal static string ComputeToolingLockPath(string root)
     {
-        var lockPath = Path.Join(root, ToolingLockRelativePath);
+        var toolingPath = Path.Join(
+            root, "src", "Elsa", "Secrets", "Persistence", "EntityFrameworkCore", "Tooling");
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(toolingPath)))[..16];
+        return Path.Join(Path.GetTempPath(), $"elsa-dual-migrate-{hash}.lock");
+    }
+
+    // Exposed so DualMigrateProcessRunnerLockTests can prove that a non-contention failure (an
+    // unusable lock location) surfaces immediately instead of being retried for the full
+    // lock-acquisition timeout, by passing a lock path this helper cannot create a directory for.
+    internal static FileStream AcquireLock(string lockPath)
+    {
         Directory.CreateDirectory(Path.GetDirectoryName(lockPath)!);
 
         var stopwatch = Stopwatch.StartNew();
@@ -192,11 +212,11 @@ internal static class DualMigrateProcessRunner
             {
                 return new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
             }
-            catch (IOException) when (stopwatch.Elapsed < LockAcquisitionTimeout)
+            catch (IOException ex) when (IsLockContention(ex) && stopwatch.Elapsed < LockAcquisitionTimeout)
             {
                 Thread.Sleep(LockRetryDelay);
             }
-            catch (IOException ex)
+            catch (IOException ex) when (IsLockContention(ex))
             {
                 throw new TimeoutException(
                     $"Could not acquire the dual-migrate Tooling lock at '{lockPath}' within " +
@@ -205,6 +225,24 @@ internal static class DualMigrateProcessRunner
                     ex);
             }
         }
+    }
+
+    // A contended `FileShare.None` open must be the only IOException this loop retries; anything
+    // else (a missing/unusable lock directory, a full disk, a permissions problem) is a real
+    // failure and must surface immediately with its original cause, not be misreported as
+    // contention after a five-minute wait. .NET only ever raises the plain IOException type for
+    // this - DirectoryNotFoundException, PathTooLongException, etc. are subclasses and never
+    // sharing violations - and it carries the platform's sharing/lock-violation code: Windows
+    // reports ERROR_SHARING_VIOLATION/ERROR_LOCK_VIOLATION; Unix surfaces the raw EAGAIN/EWOULDBLOCK
+    // errno, verified empirically to be 35 on macOS (Darwin) and known to be 11 on Linux.
+    private static bool IsLockContention(IOException ex)
+    {
+        if (ex.GetType() != typeof(IOException))
+            return false;
+
+        return OperatingSystem.IsWindows()
+            ? ex.HResult is unchecked((int)0x80070020) or unchecked((int)0x80070021)
+            : ex.HResult is 35 or 11;
     }
 
     private static void KillProcessTree(Process process)

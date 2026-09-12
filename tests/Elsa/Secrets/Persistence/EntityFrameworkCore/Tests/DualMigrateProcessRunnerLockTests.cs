@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.Support;
 using Xunit;
 
@@ -71,6 +72,25 @@ public sealed class DualMigrateProcessRunnerLockTests
         {
             Directory.Delete(isolatedRoot, recursive: true);
         }
+    }
+
+    [SkippableFact]
+    public void A_non_contention_failure_surfaces_immediately()
+    {
+        Skip.If(OperatingSystem.IsWindows(), "Windows' long-path support makes this file name valid there.");
+
+        // A lock file name that exceeds the filesystem's limit throws PathTooLongException on
+        // every attempt - never a sharing violation - directly from the FileStream open inside
+        // the retry loop (the directory itself exists, so Directory.CreateDirectory is a no-op).
+        // The loop must not retry it as if it were lock contention.
+        var lockPath = Path.Join(Path.GetTempPath(), new string('a', 300) + ".lock");
+
+        var stopwatch = Stopwatch.StartNew();
+        Assert.Throws<PathTooLongException>(() => DualMigrateProcessRunner.AcquireLock(lockPath));
+        Assert.True(
+            stopwatch.Elapsed < TimeSpan.FromSeconds(5),
+            $"Expected the non-contention failure to surface immediately, but it took {stopwatch.Elapsed}, " +
+            "suggesting it was retried as if it were lock contention.");
     }
 
     private static string WriteExecutableShim(string directory, string name, string contents)
