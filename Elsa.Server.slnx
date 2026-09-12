@@ -213,6 +213,7 @@
     <Project Path="src/Elsa/Studio/Preferences/Api/Elsa.Studio.Preferences.Api.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Studio/Preferences/Persistence/">
+    <Project Path="src/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj" />
     <Project Path="src/Elsa/Studio/Preferences/Persistence/Groundwork/Elsa.Studio.Preferences.Persistence.Groundwork.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Secrets/Persistence/">
@@ -531,6 +532,10 @@
     <Project Path="tests/Elsa/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Studio/Preferences/Persistence/" />
+  <Folder Name="/tests/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/">
+    <Project Path="tests/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
+    <Project Path="tests/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/Tests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Studio/Preferences/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Studio/Preferences/Persistence/Groundwork/Tests/Elsa.Studio.Preferences.Persistence.Groundwork.Tests.csproj" />
   </Folder>

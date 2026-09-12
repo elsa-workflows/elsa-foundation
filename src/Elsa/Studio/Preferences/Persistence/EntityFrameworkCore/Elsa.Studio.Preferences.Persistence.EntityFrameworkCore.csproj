@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>
+      Opt-in EF Core persistence for Studio Preferences. Provider-neutral module: EF Core + Relational
+      only. Hosts bring exactly one provider package; Groundwork remains a separate composition.
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\Elsa.Studio.Preferences.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
+  </ItemGroup>
+
+</Project>

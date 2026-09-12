@@ -7,7 +7,8 @@ namespace Elsa.Architecture.Tests;
 /// <summary>
 /// ADR 0073 selects EF Core as the destination persistence family, but each implementation still enters
 /// through an explicitly reviewed program issue. This ratchet therefore keeps the currently admitted
-/// surface at the vendor-owned OpenIddict host boundary plus ADR 0072's accepted Secrets EF tree. It reads
+/// surface at the vendor-owned OpenIddict host boundary plus the repository implementations explicitly
+/// admitted by ADR 0072 and Program #1665. It reads
 /// each source project's evaluated Release and Debug restore graphs and scans sources, so imported, conditional, transitive,
 /// and provider-only EF edges anywhere else under <c>src/</c> fail and name the offender. Workbench's host
 /// exception also validates its exact resolved EF package set. Each replacement changes this guard deliberately
@@ -42,7 +43,7 @@ public sealed class EfCoreDependencyGuardTests
         Assert.All(AllowedEfConsumers, name => Assert.Contains(name, projects.Keys));
 
         var offenders = projects.Values
-            .Where(project => !project.IsPilot && !AllowedEfConsumers.Contains(project.Name, StringComparer.Ordinal))
+            .Where(project => !project.IsAdmittedRepository && !AllowedEfConsumers.Contains(project.Name, StringComparer.Ordinal))
             .SelectMany(project => project.EfPackagesByConfiguration
                 .Where(configuration => configuration.Value.Length > 0)
                 .Select(configuration => $"{project.Name} ({configuration.Key})"))
@@ -84,6 +85,25 @@ public sealed class EfCoreDependencyGuardTests
             .ToArray();
 
         Assert.True(offenders.Length == 0, Report("drift from the reviewed Secrets EF pilot closure", offenders));
+    }
+
+    [Fact]
+    public void Every_admitted_Studio_Preferences_project_resolves_only_its_reviewed_EF_closure()
+    {
+        var offenders = Adr0073RepositoryFirstEf.ExpectedEfPackagesByProject
+            .SelectMany(project => RestoreConfigurations.SelectMany(configuration =>
+            {
+                var resolved = ReadProjectEfPackages(project.Key, configuration);
+                var unexpected = FindUnexpectedEfPackages(resolved, project.Value)
+                    .Select(package => $"{project.Key} ({configuration}) unexpectedly resolves {package}");
+                var missing = FindUnexpectedEfPackages(project.Value, resolved)
+                    .Select(package => $"{project.Key} ({configuration}) no longer resolves reviewed package {package}");
+                return unexpected.Concat(missing);
+            }))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        Assert.True(offenders.Length == 0, Report("drift from the reviewed Studio Preferences EF closure", offenders));
     }
 
     [Fact]
@@ -314,7 +334,8 @@ public sealed class EfCoreDependencyGuardTests
                         configuration => configuration,
                         configuration => ReadProjectEfPackages(relativePath, configuration),
                         StringComparer.Ordinal),
-                    Adr0072SecretsEfPilot.IsProjectPath(relativePath)));
+                    Adr0072SecretsEfPilot.IsProjectPath(relativePath) ||
+                    Adr0073RepositoryFirstEf.IsProjectPath(relativePath)));
         }
         return projects;
     }
@@ -448,6 +469,7 @@ public sealed class EfCoreDependencyGuardTests
     {
         var relativePath = Path.GetRelativePath(RepoRoot, file).Replace('\\', '/');
         return Adr0072SecretsEfPilot.IsSurfacePath(relativePath) ||
+               Adr0073RepositoryFirstEf.IsSurfacePath(relativePath) ||
                OpenIddictPersistenceArchitectureTests.IsWorkbenchVendorEfSource(relativePath);
     }
 
@@ -469,7 +491,7 @@ public sealed class EfCoreDependencyGuardTests
         throw new DirectoryNotFoundException("Could not find repository root.");
     }
 
-    private sealed record Project(string Name, IReadOnlyDictionary<string, string[]> EfPackagesByConfiguration, bool IsPilot);
+    private sealed record Project(string Name, IReadOnlyDictionary<string, string[]> EfPackagesByConfiguration, bool IsAdmittedRepository);
 
     /// <summary>
     /// ADR 0072's accepted, now-superseded Secrets EF surface. ADR 0073 preserves this as the only currently
@@ -515,6 +537,54 @@ public sealed class EfCoreDependencyGuardTests
                     "Microsoft.EntityFrameworkCore.Sqlite",
                     "Microsoft.EntityFrameworkCore.Sqlite.Core",
                     "Npgsql.EntityFrameworkCore.PostgreSQL"
+                ]
+            };
+
+        public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
+
+        public static bool IsSurfacePath(string relativePath) =>
+            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
+
+        public static bool IsProjectPath(string relativePath) =>
+            ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
+
+        private static string[] CorePackages() =>
+        [
+            "Microsoft.EntityFrameworkCore",
+            "Microsoft.EntityFrameworkCore.Abstractions",
+            "Microsoft.EntityFrameworkCore.Analyzers",
+            "Microsoft.EntityFrameworkCore.Relational"
+        ];
+    }
+
+    /// <summary>
+    /// ADR 0073's first repository-first admission beyond the Secrets pilot. Provider engines remain
+    /// confined to the focused test project; the production adapter owns only EF Core relational APIs.
+    /// </summary>
+    internal static class Adr0073RepositoryFirstEf
+    {
+        public static readonly string[] SurfacePathPrefixes =
+        [
+            "src/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/",
+            "tests/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/"
+        ];
+
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["src/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["tests/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                [
+                    .. CorePackages(),
+                    "Microsoft.EntityFrameworkCore.SqlServer",
+                    "MySql.EntityFrameworkCore",
+                    "Npgsql.EntityFrameworkCore.PostgreSQL"
+                ],
+                ["tests/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/Tests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Tests.csproj"] =
+                [
+                    .. CorePackages(),
+                    "Microsoft.EntityFrameworkCore.Sqlite",
+                    "Microsoft.EntityFrameworkCore.Sqlite.Core"
                 ]
             };
 

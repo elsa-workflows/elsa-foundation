@@ -40,6 +40,7 @@
       "src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj",
       "src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj",
       "src/Elsa/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj",
+      "src/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj",
       "src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj",
       "src/Elsa/Tasks/Schedules/Elsa.Tasks.Schedules.csproj",
       "src/Elsa/Workflows/Dashboard/Elsa.Workflows.Dashboard.csproj",
@@ -75,6 +76,7 @@
       "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj",
       "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj",
       "tests/Elsa/Secrets/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Secrets.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj",
+      "tests/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "tests/Elsa/Testing/Elsa.Testing.csproj",
       "tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests.csproj"
     ]
