@@ -29,6 +29,16 @@ public sealed class OpenIddictPersistenceArchitectureTests
         "WorkbenchOpenIddictEntityFrameworkCoreOptions.cs"
     ];
 
+    internal static bool IsWorkbenchVendorEfSource(string relativePath)
+    {
+        const string vendorRoot = "src/Apps/Elsa.Workbench/OpenIddict/";
+        if (relativePath == "src/Apps/Elsa.Workbench/WorkbenchOpenIddictVendorRegistration.cs")
+            return true;
+
+        return relativePath.StartsWith(vendorRoot, StringComparison.Ordinal) &&
+               WorkbenchOpenIddictVendorSources.Contains(relativePath[vendorRoot.Length..], StringComparer.Ordinal);
+    }
+
     [Fact]
     public void Identity_abstractions_are_free_of_concrete_persistence_dependencies()
     {

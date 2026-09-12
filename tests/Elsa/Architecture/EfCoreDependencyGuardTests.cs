@@ -49,11 +49,10 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     [Fact]
-    public void No_source_file_outside_the_allowed_consumers_mentions_ef_core()
+    public void No_source_file_outside_the_admitted_surfaces_mentions_ef_core()
     {
         var offenders = Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
-            .Where(file => !IsBuildOutput(file) && !AllowedEfConsumers.Contains(OwningProject(file)))
-            .Where(file => !Adr0072SecretsEfPilot.IsSurfacePath(Path.GetRelativePath(RepoRoot, file).Replace('\\', '/')))
+            .Where(file => !IsBuildOutput(file) && !IsAdmittedEfSource(file))
             .Where(file => File.ReadAllText(file).Contains("Microsoft.EntityFrameworkCore", StringComparison.Ordinal))
             .Select(file => Path.GetRelativePath(RepoRoot, file))
             .Order()
@@ -94,15 +93,11 @@ public sealed class EfCoreDependencyGuardTests
         return projects;
     }
 
-    private static string OwningProject(string file)
+    private static bool IsAdmittedEfSource(string file)
     {
-        for (var directory = Path.GetDirectoryName(file); directory is not null && directory.StartsWith(RepoRoot, StringComparison.Ordinal); directory = Path.GetDirectoryName(directory))
-        {
-            var project = Directory.EnumerateFiles(directory, "*.csproj").FirstOrDefault();
-            if (project is not null)
-                return Path.GetFileNameWithoutExtension(project);
-        }
-        return "";
+        var relativePath = Path.GetRelativePath(RepoRoot, file).Replace('\\', '/');
+        return Adr0072SecretsEfPilot.IsSurfacePath(relativePath) ||
+               OpenIddictPersistenceArchitectureTests.IsWorkbenchVendorEfSource(relativePath);
     }
 
     private static bool IsBuildOutput(string path) => path.Replace('\\', '/') is var p && (p.Contains("/bin/") || p.Contains("/obj/"));
