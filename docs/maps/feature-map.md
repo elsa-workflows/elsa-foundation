@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 104
+- Discovered feature classes: 105
 
 ## Features
 
@@ -43,6 +43,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | GroundworkOpenTelemetryPersistenceFeature | direct IShellFeature | Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork | IShellFeature | [GroundworkOpenTelemetryPersistenceFeature.cs](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryPersistenceFeature.cs) |
 | DiagnosticsGroundworkPersistenceFeature | direct IShellFeature | Elsa.Diagnostics.Persistence.Groundwork | IShellFeature | [DiagnosticsGroundworkPersistenceFeature.cs](../../src/Elsa/Diagnostics/Persistence/Groundwork/DiagnosticsGroundworkPersistenceFeature.cs) |
 | StructuredLogsFeature | direct IWebShellFeature | Elsa.Diagnostics.StructuredLogs | IWebShellFeature | [StructuredLogsFeature.cs](../../src/Elsa/Diagnostics/StructuredLogs/StructuredLogsFeature.cs) |
+| StructuredLogsEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore | IShellFeature | [StructuredLogsEntityFrameworkCoreFeature.cs](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/StructuredLogsEntityFrameworkCoreFeature.cs) |
 | EventsFeature | direct IShellFeature | Elsa.Events | IShellFeature | [EventsFeature.cs](../../src/Elsa/Events/EventsFeature.cs) |
 | ExpressionsFeature | direct IShellFeature | Elsa.Expressions | IShellFeature | [ExpressionsFeature.cs](../../src/Elsa/Expressions/ExpressionsFeature.cs) |
 | ExpressionsApiFeature | direct IWebShellFeature | Elsa.Expressions.Api | IWebShellFeature | [ExpressionsApiFeature.cs](../../src/Elsa/Expressions/Api/ExpressionsApiFeature.cs) |
