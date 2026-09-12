@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Xml.Linq;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -7,13 +8,14 @@ namespace Elsa.Architecture.Tests;
 /// ADR 0073 selects EF Core as the destination persistence family, but each implementation still enters
 /// through an explicitly reviewed program issue. This ratchet therefore keeps the currently admitted
 /// surface at the vendor-owned OpenIddict host boundary plus ADR 0072's accepted Secrets EF tree. It reads
-/// each source project's evaluated restore graph and scans sources, so imported, conditional, transitive,
+/// each source project's evaluated Release and Debug restore graphs and scans sources, so imported, conditional, transitive,
 /// and provider-only EF edges anywhere else under <c>src/</c> fail and name the offender. Workbench's host
 /// exception also validates its exact resolved EF package set. Each replacement changes this guard deliberately
 /// with its own architecture evidence; the destination ADR alone is not a repository-wide exemption.
 /// </summary>
 public sealed class EfCoreDependencyGuardTests
 {
+    private static readonly string[] RestoreConfigurations = ["Release", "Debug"];
     private static readonly string[] AllowedEfConsumers = ["Elsa.Workbench"];
     private static readonly string[] AllowedWorkbenchEfPackages =
     [
@@ -40,9 +42,10 @@ public sealed class EfCoreDependencyGuardTests
         Assert.All(AllowedEfConsumers, name => Assert.Contains(name, projects.Keys));
 
         var offenders = projects.Values
-            .Where(project => project.ResolvesEf && !project.IsPilot)
-            .Select(project => project.Name)
-            .Except(AllowedEfConsumers)
+            .Where(project => !project.IsPilot && !AllowedEfConsumers.Contains(project.Name, StringComparer.Ordinal))
+            .SelectMany(project => project.EfPackagesByConfiguration
+                .Where(configuration => configuration.Value.Length > 0)
+                .Select(configuration => $"{project.Name} ({configuration.Key})"))
             .Order()
             .ToArray();
 
@@ -52,10 +55,35 @@ public sealed class EfCoreDependencyGuardTests
     [Fact]
     public void Workbench_resolves_only_reviewed_vendor_and_pilot_EF_packages()
     {
-        var workbenchAssets = LoadSrcProjects()["Elsa.Workbench"].EfPackages;
-        var offenders = FindUnexpectedEfPackages(workbenchAssets, AllowedWorkbenchEfPackages);
+        var offenders = LoadSrcProjects()["Elsa.Workbench"].EfPackagesByConfiguration
+            .SelectMany(configuration =>
+                FindUnexpectedEfPackages(configuration.Value, AllowedWorkbenchEfPackages)
+                    .Select(package => $"{package} ({configuration.Key}) is not reviewed")
+                    .Concat(FindUnexpectedEfPackages(AllowedWorkbenchEfPackages, configuration.Value)
+                        .Select(package => $"{package} ({configuration.Key}) is missing from the reviewed closure")))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
         Assert.True(offenders.Length == 0, Report("are unreviewed EF packages resolved by Workbench", offenders));
+    }
+
+    [Fact]
+    public void Every_admitted_Secrets_pilot_project_resolves_only_its_reviewed_EF_closure()
+    {
+        var offenders = Adr0072SecretsEfPilot.ExpectedEfPackagesByProject
+            .SelectMany(project => RestoreConfigurations.SelectMany(configuration =>
+            {
+                var resolved = ReadProjectEfPackages(project.Key, configuration);
+                var unexpected = FindUnexpectedEfPackages(resolved, project.Value)
+                    .Select(package => $"{project.Key} ({configuration}) unexpectedly resolves {package}");
+                var missing = FindUnexpectedEfPackages(project.Value, resolved)
+                    .Select(package => $"{project.Key} ({configuration}) no longer resolves reviewed package {package}");
+                return unexpected.Concat(missing);
+            }))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        Assert.True(offenders.Length == 0, Report("drift from the reviewed Secrets EF pilot closure", offenders));
     }
 
     [Fact]
@@ -120,6 +148,88 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     [Fact]
+    public void Evaluated_assets_reject_a_target_node_missing_from_libraries()
+    {
+        const string assets = """
+            {
+              "libraries": {},
+              "targets": {
+                "net10.0": {
+                  "Contoso.Persistence/1.0.0": { "type": "package" }
+                }
+              }
+            }
+            """;
+
+        Assert.Throws<InvalidOperationException>(() => ReadEfDependencyPackages(assets));
+    }
+
+    [Fact]
+    public void Evaluated_assets_reject_a_dependency_node_missing_from_libraries()
+    {
+        const string assets = """
+            {
+              "libraries": {
+                "Contoso.Persistence/1.0.0": { "type": "package" }
+              },
+              "targets": {
+                "net10.0": {
+                  "Contoso.Persistence/1.0.0": {
+                    "type": "package",
+                    "dependencies": { "Microsoft.EntityFrameworkCore": "10.0.0" }
+                  }
+                }
+              }
+            }
+            """;
+
+        Assert.Throws<InvalidOperationException>(() => ReadEfDependencyPackages(assets));
+    }
+
+    [Fact]
+    public void Evaluated_assets_reject_a_library_without_a_known_node_type()
+    {
+        const string assets = """
+            {
+              "libraries": {
+                "Contoso.Persistence/1.0.0": {}
+              },
+              "targets": {
+                "net10.0": {
+                  "Contoso.Persistence/1.0.0": {}
+                }
+              }
+            }
+            """;
+
+        Assert.Throws<InvalidOperationException>(() => ReadEfDependencyPackages(assets));
+    }
+
+    [Fact]
+    public void First_party_dependency_edges_cannot_be_conditionally_hidden_from_the_reviewed_restore_graphs()
+    {
+        var offenders = Directory.EnumerateFiles(RepoRoot, "*.*", SearchOption.AllDirectories)
+            .Where(path => !IsBuildOutput(path) && IsMsBuildFile(path))
+            .SelectMany(path => FindConditionalDependencyElements(XDocument.Load(path))
+                .Select(element => $"{Path.GetRelativePath(RepoRoot, path)}: {element.Name.LocalName}"))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            offenders.Length == 0,
+            Report("conditionally declare dependency/import edges that are not covered by the Release and Debug restore graphs", offenders));
+    }
+
+    [Theory]
+    [InlineData("<Project><ItemGroup Condition=\"'$(Configuration)' == 'Debug'\"><PackageReference Include=\"Contoso.Persistence\" /></ItemGroup></Project>")]
+    [InlineData("<Project><Choose><When Condition=\"'$(UseContoso)' == 'true'\"><ItemGroup><ProjectReference Include=\"Contoso.csproj\" /></ItemGroup></When></Choose></Project>")]
+    [InlineData("<Project><Import Project=\"Contoso.props\" Condition=\"'$(Configuration)' == 'Release'\" /></Project>")]
+    public void Conditional_dependency_declarations_are_detected(string xml)
+    {
+        Assert.NotEmpty(FindConditionalDependencyElements(XDocument.Parse(xml)));
+    }
+
+    [Fact]
     public void No_source_file_outside_the_admitted_surfaces_mentions_ef_core()
     {
         var offenders = Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
@@ -138,15 +248,30 @@ public sealed class EfCoreDependencyGuardTests
         foreach (var file in Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.csproj", SearchOption.AllDirectories).Where(f => !IsBuildOutput(f)))
         {
             var relativePath = Path.GetRelativePath(RepoRoot, file).Replace('\\', '/');
-            var assetsPath = Path.Combine(Path.GetDirectoryName(file)!, "obj", "project.assets.json");
-            if (!File.Exists(assetsPath))
-                throw new InvalidOperationException($"Evaluated restore assets are required for '{relativePath}'. Restore Elsa.Server.slnx before running the EF dependency guard.");
-
             projects.Add(
                 Path.GetFileNameWithoutExtension(file),
-                new Project(Path.GetFileNameWithoutExtension(file), ReadEfDependencyPackages(File.ReadAllText(assetsPath)), Adr0072SecretsEfPilot.IsProjectPath(relativePath)));
+                new Project(
+                    Path.GetFileNameWithoutExtension(file),
+                    RestoreConfigurations.ToDictionary(
+                        configuration => configuration,
+                        configuration => ReadProjectEfPackages(relativePath, configuration),
+                        StringComparer.Ordinal),
+                    Adr0072SecretsEfPilot.IsProjectPath(relativePath)));
         }
         return projects;
+    }
+
+    private static string[] ReadProjectEfPackages(string relativeProjectPath, string configuration)
+    {
+        var projectDirectory = Path.GetDirectoryName(Path.Combine(RepoRoot, relativeProjectPath))!;
+        var assetsPath = configuration == "Release"
+            ? Path.Combine(projectDirectory, "obj", "project.assets.json")
+            : Path.Combine(projectDirectory, "obj", "ef-guard", configuration, "project.assets.json");
+        if (!File.Exists(assetsPath))
+            throw new InvalidOperationException(
+                $"Evaluated {configuration} restore assets are required for '{relativeProjectPath}'. Restore Elsa.Server.slnx for both Release and Debug before running the EF dependency guard.");
+
+        return ReadEfDependencyPackages(File.ReadAllText(assetsPath));
     }
 
     private static bool ResolvesEfCore(string assetsJson) => ReadEfDependencyPackages(assetsJson).Length > 0;
@@ -160,9 +285,14 @@ public sealed class EfCoreDependencyGuardTests
         if (!document.RootElement.TryGetProperty("targets", out var targets) || targets.ValueKind != JsonValueKind.Object)
             throw new InvalidOperationException("Evaluated restore assets must contain an object-valued 'targets' graph.");
 
-        var packageNames = libraries.EnumerateObject()
-            .Where(library => library.Value.TryGetProperty("type", out var type) && type.ValueEquals("package"))
-            .Select(library => library.Name.Split('/', 2)[0])
+        var libraryTypes = libraries.EnumerateObject()
+            .ToDictionary(
+                library => library.Name.Split('/', 2)[0],
+                library => ReadLibraryType(library),
+                StringComparer.OrdinalIgnoreCase);
+        var packageNames = libraryTypes
+            .Where(library => string.Equals(library.Value, "package", StringComparison.Ordinal))
+            .Select(library => library.Key)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var dependencies = packageNames.ToDictionary(name => name, _ => new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
 
@@ -174,12 +304,21 @@ public sealed class EfCoreDependencyGuardTests
             foreach (var library in target.Value.EnumerateObject())
             {
                 var name = library.Name.Split('/', 2)[0];
-                if (!packageNames.Contains(name) || !library.Value.TryGetProperty("dependencies", out var libraryDependencies))
+                if (!libraryTypes.ContainsKey(name))
+                    throw new InvalidOperationException($"Evaluated restore target node '{name}' is missing from 'libraries'.");
+                if (!library.Value.TryGetProperty("dependencies", out var libraryDependencies))
                     continue;
                 if (libraryDependencies.ValueKind != JsonValueKind.Object)
                     throw new InvalidOperationException($"Evaluated dependencies for '{name}' must be an object.");
 
-                dependencies[name].UnionWith(libraryDependencies.EnumerateObject().Select(dependency => dependency.Name).Where(packageNames.Contains));
+                var dependencyNames = libraryDependencies.EnumerateObject().Select(dependency => dependency.Name).ToArray();
+                var missingDependencies = dependencyNames.Where(dependency => !libraryTypes.ContainsKey(dependency)).ToArray();
+                if (missingDependencies.Length > 0)
+                    throw new InvalidOperationException(
+                        $"Evaluated dependencies for '{name}' contain nodes missing from 'libraries': {string.Join(", ", missingDependencies)}.");
+
+                if (packageNames.Contains(name))
+                    dependencies[name].UnionWith(dependencyNames.Where(packageNames.Contains));
             }
         }
 
@@ -201,8 +340,27 @@ public sealed class EfCoreDependencyGuardTests
         return efDependencyPackages.Order(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
+    private static string ReadLibraryType(JsonProperty library)
+    {
+        if (!library.Value.TryGetProperty("type", out var type) || type.ValueKind != JsonValueKind.String)
+            throw new InvalidOperationException($"Evaluated restore library '{library.Name}' must declare type 'package' or 'project'.");
+
+        var libraryType = type.GetString()!;
+        if (libraryType is not "package" and not "project")
+            throw new InvalidOperationException($"Evaluated restore library '{library.Name}' must declare type 'package' or 'project'.");
+
+        return libraryType;
+    }
+
     private static string[] FindUnexpectedEfPackages(IEnumerable<string> resolved, IEnumerable<string> allowed) =>
         resolved.Except(allowed, StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToArray();
+
+    private static IEnumerable<XElement> FindConditionalDependencyElements(XDocument document) =>
+        document.Descendants()
+            .Where(element => element.Name.LocalName is "PackageReference" or "ProjectReference" or "Import")
+            .Where(element => element.AncestorsAndSelf()
+                .SelectMany(ancestor => ancestor.Attributes())
+                .Any(attribute => attribute.Name.LocalName == "Condition"));
 
     private static bool IsAdmittedEfSource(string file)
     {
@@ -212,6 +370,11 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     private static bool IsBuildOutput(string path) => path.Replace('\\', '/') is var p && (p.Contains("/bin/") || p.Contains("/obj/"));
+
+    private static bool IsMsBuildFile(string path) =>
+        path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ||
+        path.EndsWith(".props", StringComparison.OrdinalIgnoreCase) ||
+        path.EndsWith(".targets", StringComparison.OrdinalIgnoreCase);
 
     private static string Report(string what, IEnumerable<string> offenders) =>
         $"These src entries {what}:{Environment.NewLine}{string.Join(Environment.NewLine, offenders)}";
@@ -224,10 +387,7 @@ public sealed class EfCoreDependencyGuardTests
         throw new DirectoryNotFoundException("Could not find repository root.");
     }
 
-    private sealed record Project(string Name, string[] EfPackages, bool IsPilot)
-    {
-        public bool ResolvesEf => EfPackages.Length > 0;
-    }
+    private sealed record Project(string Name, IReadOnlyDictionary<string, string[]> EfPackagesByConfiguration, bool IsPilot);
 
     /// <summary>
     /// ADR 0072's accepted, now-superseded Secrets EF surface. ADR 0073 preserves this as the only currently
@@ -244,22 +404,52 @@ public sealed class EfCoreDependencyGuardTests
             "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/"
         ];
 
-        public static readonly string[] ProjectPaths =
-        [
-            "src/Elsa/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
-            "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj",
-            "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling.csproj",
-            "tests/Elsa/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj",
-            "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe.csproj",
-            "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj",
-            "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj",
-            "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj"
-        ];
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["src/Elsa/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"] = CorePackages(),
+                ["src/Elsa/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling.csproj"] =
+                [
+                    .. CorePackages(),
+                    "Microsoft.EntityFrameworkCore.Design",
+                    "Microsoft.EntityFrameworkCore.SqlServer",
+                    "Microsoft.EntityFrameworkCore.Sqlite",
+                    "Microsoft.EntityFrameworkCore.Sqlite.Core",
+                    "Npgsql.EntityFrameworkCore.PostgreSQL"
+                ],
+                ["tests/Elsa/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj"] =
+                [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
+                ["tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe.csproj"] =
+                [.. CorePackages(), "Npgsql.EntityFrameworkCore.PostgreSQL"],
+                ["tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj"] =
+                [.. CorePackages(), "Npgsql.EntityFrameworkCore.PostgreSQL"],
+                ["tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj"] =
+                [.. CorePackages(), "Microsoft.EntityFrameworkCore.SqlServer"],
+                ["tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj"] =
+                [
+                    .. CorePackages(),
+                    "Microsoft.EntityFrameworkCore.SqlServer",
+                    "Microsoft.EntityFrameworkCore.Sqlite",
+                    "Microsoft.EntityFrameworkCore.Sqlite.Core",
+                    "Npgsql.EntityFrameworkCore.PostgreSQL"
+                ]
+            };
+
+        public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
 
         public static bool IsSurfacePath(string relativePath) =>
             SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
 
         public static bool IsProjectPath(string relativePath) =>
             ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
+
+        private static string[] CorePackages() =>
+        [
+            "Microsoft.EntityFrameworkCore",
+            "Microsoft.EntityFrameworkCore.Abstractions",
+            "Microsoft.EntityFrameworkCore.Analyzers",
+            "Microsoft.EntityFrameworkCore.Relational"
+        ];
     }
 }

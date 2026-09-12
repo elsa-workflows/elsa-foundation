@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Xunit;
 
@@ -9,6 +12,8 @@ namespace Elsa.Architecture.Tests;
 /// </summary>
 public sealed class OpenIddictPersistenceArchitectureTests
 {
+    private const string WorkbenchVendorRegistrationSha256 = "bdf6f2979f6ce37a39e71ac42b787e6f22bf2be00d07aef35664e3166acab275";
+
     private static readonly string[] WorkbenchOpenIddictEfPackages =
     [
         "Microsoft.EntityFrameworkCore.Design",
@@ -171,10 +176,27 @@ public sealed class OpenIddictPersistenceArchitectureTests
             "Apps",
             "Elsa.Workbench",
             "WorkbenchOpenIddictVendorRegistration.cs"));
+        var normalizedRegistrationHash = Convert.ToHexString(
+                SHA256.HashData(Encoding.UTF8.GetBytes(hostRegistration.ReplaceLineEndings("\n"))))
+            .ToLowerInvariant();
+        Assert.True(
+            normalizedRegistrationHash == WorkbenchVendorRegistrationSha256,
+            "The admitted Workbench OpenIddict vendor registration changed. Re-review its complete content and update the fingerprint deliberately; no additional first-party EF registration may share this exception.");
         Assert.Contains("CShells:Shells:default:Features:FoundationIdentityOpenIddict", hostRegistration, StringComparison.Ordinal);
         Assert.Contains("AddDbContext<OpenIddictIdentityDbContext>", hostRegistration, StringComparison.Ordinal);
         Assert.Contains("UseEntityFrameworkCore", hostRegistration, StringComparison.Ordinal);
         Assert.Contains("AddHostedService", hostRegistration, StringComparison.Ordinal);
+        var dbContextIdentifiers = Regex.Matches(hostRegistration, @"\b[A-Za-z_][A-Za-z0-9_]*DbContext\b")
+            .Select(match => match.Value)
+            .Where(identifier => identifier is not "AddDbContext" and not "UseDbContext")
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(["OpenIddictIdentityDbContext"], dbContextIdentifiers);
+        var dbContextRegistrations = Regex.Matches(hostRegistration, @"\b(?:AddDbContext|UseDbContext)<([^>]+)>")
+            .Select(match => match.Groups[1].Value)
+            .ToArray();
+        Assert.Equal(["OpenIddictIdentityDbContext", "OpenIddictIdentityDbContext"], dbContextRegistrations);
         var vendorRoot = Path.Combine(RepoRoot, "src", "Apps", "Elsa.Workbench", "OpenIddict");
         Assert.True(Directory.Exists(vendorRoot));
         var vendorSources = Directory.EnumerateFiles(vendorRoot, "*.cs", SearchOption.AllDirectories)

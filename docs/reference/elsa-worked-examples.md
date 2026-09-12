@@ -114,15 +114,18 @@ registry.RegisterAll(@event.Converters);
 
 At runtime, `JsonPayloadSerializer` sync code accesses the populated `JsonPayloadConverterRegistry` directly.
 
-Further examples of this contributor-interface + single-aggregating-handler shape are documented in `src/Elsa/Persistence/EFCore/EXTENSION_POINTS.md`.
+The removed `src/Elsa/Persistence/EFCore/EXTENSION_POINTS.md` previously documented more examples of this contributor-interface + single-aggregating-handler shape; the path is retained here only as historical provenance.
 
 Legacy state: the historical implementation used `IPayloadSerializerConverterProvider`. Migration to the pattern above is tracked in the Unit A follow-up.
 
-## Feature inheritance
+## Historical feature inheritance example
+
+The types in this section were removed with the earlier persistence implementation. The example is
+retained only to explain the framework pattern; it does not describe a current extension point or API.
 
 Instantiates framework §2.5.
 
-Elsa's persistence stack inherits across three levels:
+The earlier persistence stack inherited across three levels:
 
 ```text
 PersistenceShellFeatureBase<TDbContext>
@@ -130,7 +133,7 @@ PersistenceShellFeatureBase<TDbContext>
             -> SqliteWorkflowDefinitionPersistenceShellFeature
 ```
 
-Each level adds to or specialises the level above it through compile-time inheritance, never through peer references. The leaf is the activated feature; intermediate levels are abstract.
+Each level added to or specialised the level above it through compile-time inheritance, never through peer references. The leaf was the activated feature; intermediate levels were abstract.
 
 ## Dual-integration smell: Elsa.Http and Elsa.Expressions.JavaScript
 

@@ -8,14 +8,14 @@ Steward(s): Joey plus active architects/agents.
 
 ## Purpose
 
-Coordinate porting the diagnostics observability subsystem from `elsa-core`/`elsa-studio` into the foundation repos, adapted to foundation architecture (CShells `IShellFeature`, `CShells.FastEndpoints`, EFCore persistence base, and the studio TypeScript module SDK) rather than a literal lift of the elsa-core `IFeature` modules and elsa-studio Blazor pages.
+Coordinate porting the diagnostics observability subsystem from `elsa-core`/`elsa-studio` into the foundation repos, adapted to foundation architecture (CShells `IShellFeature`, `CShells.FastEndpoints`, EF Core persistence under ADR 0073, and the studio TypeScript module SDK) rather than a literal lift of the elsa-core `IFeature` modules and elsa-studio Blazor pages.
 
 The bucket keeps the observability port coherent across two repos and two sub-domains (Structured Logs, OpenTelemetry), while reusing the existing console-log streaming surface (`ConsoleLogStreaming` package + `Elsa.Studio.ConsoleStream` bottom-panel tab) instead of re-porting ConsoleLogs.
 
 ## In Scope
 
-- Backend `Elsa.Diagnostics.StructuredLogs` (capture via `ILoggerProvider`, in-memory live feed, `CShells.FastEndpoints` with an SSE `text/event-stream` live endpoint) and its EFCore persistence (`*.Persistence.Core/.EFCore/.EFCore.Sqlite`).
-- Backend `Elsa.Diagnostics.OpenTelemetry` (OTLP HTTP/protobuf ingestion, in-memory live feed, query API + live streaming) and its EFCore persistence.
+- Backend `Elsa.Diagnostics.StructuredLogs` (capture via `ILoggerProvider`, in-memory live feed, `CShells.FastEndpoints` with an SSE `text/event-stream` live endpoint) and its durable EF Core replacement under #1681 for SQLite, SQL Server, PostgreSQL, and MySQL. The removed `*.Persistence.EFCore/.EFCore.Sqlite` paths are historical only.
+- Backend `Elsa.Diagnostics.OpenTelemetry` (OTLP HTTP/protobuf ingestion, in-memory live feed, query API + live streaming) and its durable EF Core replacement under #1681 for the same four providers. Its earlier EF Core paths are historical only.
 - Studio bottom-panel tabs (TypeScript module SDK) for Structured Logs and OTEL, siblings of the existing Console tab via `api.panels.add`.
 - Feature-registration and per-implementation unit tests, EXTENSION_POINTS catalog updates, and generated-map refreshes for the new domain.
 - Host wiring in `Elsa.Server` (and studio host); Structured Logs needs no explicit hub mapping (its SSE/HTTP endpoints auto-map via `app.MapShells()`).
