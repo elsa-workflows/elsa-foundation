@@ -232,7 +232,7 @@ public sealed class EfCoreDependencyGuardTests
     [Fact]
     public void No_source_file_outside_the_admitted_surfaces_mentions_ef_core()
     {
-        var offenders = Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
+        var offenders = Directory.EnumerateFiles(Path.Join(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
             .Where(file => !IsBuildOutput(file) && !IsAdmittedEfSource(file))
             .Where(file => File.ReadAllText(file).Contains(EfPackageToken, StringComparison.Ordinal))
             .Select(file => Path.GetRelativePath(RepoRoot, file))
@@ -245,7 +245,7 @@ public sealed class EfCoreDependencyGuardTests
     private static Dictionary<string, Project> LoadSrcProjects()
     {
         var projects = new Dictionary<string, Project>(StringComparer.Ordinal);
-        foreach (var file in Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.csproj", SearchOption.AllDirectories).Where(f => !IsBuildOutput(f)))
+        foreach (var file in Directory.EnumerateFiles(Path.Join(RepoRoot, "src"), "*.csproj", SearchOption.AllDirectories).Where(f => !IsBuildOutput(f)))
         {
             var relativePath = Path.GetRelativePath(RepoRoot, file).Replace('\\', '/');
             projects.Add(
@@ -263,10 +263,10 @@ public sealed class EfCoreDependencyGuardTests
 
     private static string[] ReadProjectEfPackages(string relativeProjectPath, string configuration)
     {
-        var projectDirectory = Path.GetDirectoryName(Path.Combine(RepoRoot, relativeProjectPath))!;
+        var projectDirectory = Path.GetDirectoryName(Path.Join(RepoRoot, relativeProjectPath))!;
         var assetsPath = configuration == "Release"
-            ? Path.Combine(projectDirectory, "obj", "project.assets.json")
-            : Path.Combine(projectDirectory, "obj", "ef-guard", configuration, "project.assets.json");
+            ? Path.Join(projectDirectory, "obj", "project.assets.json")
+            : Path.Join(projectDirectory, "obj", "ef-guard", configuration, "project.assets.json");
         if (!File.Exists(assetsPath))
             throw new InvalidOperationException(
                 $"Evaluated {configuration} restore assets are required for '{relativeProjectPath}'. Restore Elsa.Server.slnx for both Release and Debug before running the EF dependency guard.");
@@ -382,7 +382,7 @@ public sealed class EfCoreDependencyGuardTests
     private static string FindRepoRoot()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-            if (File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
+            if (File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
                 return directory.FullName;
         throw new DirectoryNotFoundException("Could not find repository root.");
     }
