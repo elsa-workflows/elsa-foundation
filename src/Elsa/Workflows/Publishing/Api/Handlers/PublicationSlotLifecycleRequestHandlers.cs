@@ -93,7 +93,7 @@ public sealed class UnpublishPublicationSlotRequestHandler(
         slot.Source is { } source && source.IsSameOwnerAs(PublicationActivator.Source);
 
     private static PublicationFailure ForeignActivationFailure(WorkflowActivationSlot slot, string activationId) => new(
-        "slot_owner_conflict",
+        PublicationFailureCodes.SlotOwnerConflict,
         $"Activation '{activationId}' of definition '{slot.WorkflowDefinitionId}' slot '{slot.SlotName}' was not published by " +
         $"'{PublicationActivator.Source.Describe()}'; it is owned by activation source '{slot.Source?.Describe() ?? "unknown"}' " +
         "and can only be withdrawn through that source.");
@@ -101,7 +101,7 @@ public sealed class UnpublishPublicationSlotRequestHandler(
     internal static PublicationFailure ToFailure(WorkflowActivationConflict conflict, string? diagnostic) => conflict switch
     {
         WorkflowActivationConflict.ForeignSource =>
-            new("slot_owner_conflict", diagnostic ?? "The activation slot is owned by another activation source."),
+            new(PublicationFailureCodes.SlotOwnerConflict, diagnostic ?? "The activation slot is owned by another activation source."),
         _ => new("slot_revision_conflict", diagnostic ?? "The publication slot revision changed.")
     };
 }

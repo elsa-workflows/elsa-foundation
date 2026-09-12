@@ -115,7 +115,7 @@ public sealed class PublicationActivator(
         WorkflowActivationConflict.RevisionMismatch =>
             new("slot_revision_conflict", activation.Diagnostic ?? "The publication slot revision changed."),
         WorkflowActivationConflict.ForeignSource =>
-            new("slot_owner_conflict", activation.Diagnostic ?? "The activation slot is owned by another activation source."),
+            new(PublicationFailureCodes.SlotOwnerConflict, activation.Diagnostic ?? "The activation slot is owned by another activation source."),
         _ when activation.CompensationDiagnostic is not null =>
             new("activation_compensation_failed", activation.Diagnostic ?? "Publication activation failed and its compensation did not converge."),
         _ => new(MapFailedStep(activation.FailedStep), activation.Diagnostic ?? "Publication activation failed.")

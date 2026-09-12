@@ -175,7 +175,7 @@ public sealed class PublishWorkflowRequestHandler(
     }
 
     private static PublicationFailure SlotOwnerConflict(string definitionId, string slotName, WorkflowActivationSource owner) => new(
-        "slot_owner_conflict",
+        PublicationFailureCodes.SlotOwnerConflict,
         $"Definition '{definitionId}' slot '{slotName}' is owned by activation source '{owner.Describe()}'; " +
         $"'{PublicationActivator.Source.Describe()}' cannot publish to it. Ownership transfer is an explicit operator action.");
 
