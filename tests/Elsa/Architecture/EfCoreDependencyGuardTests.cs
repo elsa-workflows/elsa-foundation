@@ -245,6 +245,25 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     [Fact]
+    public void Evaluated_assets_reject_a_target_type_that_differs_from_its_library_node()
+    {
+        const string assets = """
+            {
+              "libraries": {
+                "Microsoft.EntityFrameworkCore/10.0.0": { "type": "project" }
+              },
+              "targets": {
+                "net10.0": {
+                  "Microsoft.EntityFrameworkCore/10.0.0": { "type": "package" }
+                }
+              }
+            }
+            """;
+
+        Assert.Throws<InvalidOperationException>(() => ReadEfDependencyPackages(assets));
+    }
+
+    [Fact]
     public void First_party_dependency_edges_cannot_be_conditionally_hidden_from_the_reviewed_restore_graphs()
     {
         var offenders = Directory.EnumerateFiles(RepoRoot, "*.*", SearchOption.AllDirectories)
@@ -346,6 +365,16 @@ public sealed class EfCoreDependencyGuardTests
             {
                 if (!libraryNodes.TryGetValue(library.Name, out var libraryNode))
                     throw new InvalidOperationException($"Evaluated restore target node '{library.Name}' is missing from 'libraries'.");
+
+                if (library.Value.ValueKind != JsonValueKind.Object ||
+                    !library.Value.TryGetProperty("type", out var targetType) ||
+                    targetType.ValueKind != JsonValueKind.String ||
+                    !string.Equals(targetType.GetString(), libraryNode.Type, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Evaluated restore target node '{library.Name}' must be an object declaring type '{libraryNode.Type}' to match 'libraries'.");
+                }
+
                 var name = libraryNode.Name;
                 targetNodeKeys.Add(library.Name);
                 if (!library.Value.TryGetProperty("dependencies", out var libraryDependencies))

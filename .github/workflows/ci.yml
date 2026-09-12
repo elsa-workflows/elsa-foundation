@@ -117,6 +117,8 @@ jobs:
           echo "Kept ${#keep[@]} test project(s) in the container-free filter."
 
       - name: Restore
+        # Includes the isolated Debug dependency graph required by the Architecture
+        # tests in the container-free filter while preserving ordinary Release assets.
         run: bash tools/architecture/restore-ci-project-graph.sh -p:WarningsNotAsErrors=NU1603
 
       - name: Restore repository-local .NET tools
@@ -388,10 +390,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      - name: Restore the evaluated source dependency graph
-        run: |
-          dotnet restore Elsa.Server.slnx -p:Configuration=Release -p:WarningsNotAsErrors=NU1603
-          dotnet restore Elsa.Server.slnx -p:Configuration=Debug -p:BaseIntermediateOutputPath=obj/ef-guard/Debug/ -p:WarningsNotAsErrors=NU1603
+      - name: Restore the evaluated source dependency graphs
+        run: bash tools/architecture/restore-ci-project-graph.sh -p:WarningsNotAsErrors=NU1603
 
       - name: Run the architecture guards
         run: dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
