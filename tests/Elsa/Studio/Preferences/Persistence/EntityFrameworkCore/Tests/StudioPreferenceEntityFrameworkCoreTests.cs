@@ -338,7 +338,7 @@ public sealed class StudioPreferenceEntityFrameworkCoreTests
     [Fact]
     public async Task File_backed_database_reopens_with_the_same_document()
     {
-        var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-studio-preferences-{Guid.NewGuid():N}.db");
+        var databasePath = Path.Join(Path.GetTempPath(), $"elsa-studio-preferences-{Guid.NewGuid():N}.db");
         try
         {
             StudioPreferenceDocument created;
@@ -362,12 +362,7 @@ public sealed class StudioPreferenceEntityFrameworkCoreTests
         }
         finally
         {
-            if (File.Exists(databasePath))
-                File.Delete(databasePath);
-            if (File.Exists($"{databasePath}-shm"))
-                File.Delete($"{databasePath}-shm");
-            if (File.Exists($"{databasePath}-wal"))
-                File.Delete($"{databasePath}-wal");
+            DeleteDatabaseFiles(databasePath);
         }
     }
 
@@ -476,13 +471,12 @@ public sealed class StudioPreferenceEntityFrameworkCoreTests
     private static JsonElement Json(string json) => JsonDocument.Parse(json).RootElement.Clone();
 
     private static string TemporaryDatabasePath() =>
-        Path.Combine(Path.GetTempPath(), $"elsa-studio-preferences-{Guid.NewGuid():N}.db");
+        Path.Join(Path.GetTempPath(), $"elsa-studio-preferences-{Guid.NewGuid():N}.db");
 
     private static void DeleteDatabaseFiles(string databasePath)
     {
-        foreach (var path in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" })
-            if (File.Exists(path))
-                File.Delete(path);
+        foreach (var path in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" }.Where(File.Exists))
+            File.Delete(path);
     }
 
     private sealed class SqliteFixture : IAsyncDisposable
@@ -514,7 +508,7 @@ public sealed class StudioPreferenceEntityFrameworkCoreTests
         public static async Task<SqliteFixture> CreateAsync(string? databasePath = null)
         {
             var ownsDatabasePath = databasePath is null;
-            databasePath ??= Path.Combine(Path.GetTempPath(), $"elsa-studio-preferences-{Guid.NewGuid():N}.db");
+            databasePath ??= Path.Join(Path.GetTempPath(), $"elsa-studio-preferences-{Guid.NewGuid():N}.db");
             var services = ConfigureEf(
                 new ServiceCollection(),
                 "Sqlite",
