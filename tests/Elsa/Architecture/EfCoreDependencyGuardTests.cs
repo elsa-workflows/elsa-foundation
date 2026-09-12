@@ -36,7 +36,7 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     [Fact]
-    public void No_project_outside_the_allowed_closure_declares_an_ef_core_package()
+    public void No_project_outside_the_admitted_surfaces_declares_an_ef_core_package()
     {
         var offenders = Projects.Values
             .Where(project => project.DeclaresEf && !project.IsPilot)
@@ -53,12 +53,12 @@ public sealed class EfCoreDependencyGuardTests
     {
         var offenders = Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
             .Where(file => !IsBuildOutput(file) && !IsAdmittedEfSource(file))
-            .Where(file => File.ReadAllText(file).Contains("Microsoft.EntityFrameworkCore", StringComparison.Ordinal))
+            .Where(file => EfPackagePrefixes.Any(prefix => File.ReadAllText(file).Contains(prefix, StringComparison.Ordinal)))
             .Select(file => Path.GetRelativePath(RepoRoot, file))
             .Order()
             .ToArray();
 
-        Assert.True(offenders.Length == 0, Report("mention Microsoft.EntityFrameworkCore in source", offenders));
+        Assert.True(offenders.Length == 0, Report("mention an EF package namespace in source", offenders));
     }
 
     private static HashSet<string> Reachable(IEnumerable<string> roots, Func<string, IEnumerable<string>> next)

@@ -1,11 +1,17 @@
 # PRD: Runtime Execution Evidence
 
-**Status:** Proposed
+**Status:** Proposed; persistence and measurement directions reconciled to accepted ADR 0073
 **Date:** 2026-08-05
 **Tracking:** [GitHub epic #1132](https://github.com/elsa-workflows/elsa-foundation/issues/1132)
 **Program goal:** [Runtime Execution Evidence](../program-goals/runtime-execution-evidence.md)
 **Terminology:** [Elsa glossary](../glossary/elsa.md)
-**Architecture decisions:** [ADR 0052](../adr/0052-execution-evidence-is-checkpoint-atomic-and-at-least-once-delivered.md) through [ADR 0062](../adr/0062-execution-evidence-starts-in-memory-and-adds-groundwork-durability.md)
+**Architecture decisions:** [ADR 0052](../adr/0052-execution-evidence-is-checkpoint-atomic-and-at-least-once-delivered.md) through [ADR 0062](../adr/0062-execution-evidence-starts-in-memory-and-adds-groundwork-durability.md), as superseded for provider family and performance policy by [ADR 0073](../adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
+
+> **Current governing scope (2026-09-12):** The functional Execution Evidence contract remains
+> proposed. Accepted ADR 0073 replaces every Groundwork provider direction below with EF Core and
+> retires every benchmark, timing, budget, gate, and permanent measurement instrument without
+> claiming its target passed. Groundwork prototype results are historical evidence only. Do not
+> schedule or run their measurement work; preserve timing-independent correctness semantics.
 
 ## Problem Statement
 
@@ -29,7 +35,7 @@ remote APIs, and a module boundary that leaves existing Elsa domains unaware of 
 ## Solution
 
 Create a new **Execution Evidence domain** composed of separate contract, implementation, API, and
-Groundwork provider modules. A host explicitly enables the domain, and a caller explicitly opens an
+EF Core provider modules. A host explicitly enables the domain, and a caller explicitly opens an
 evidence session. Only workflows associated with that session produce evidence; the association
 propagates through scheduling, stimuli, child workflows, and resumed execution.
 
@@ -42,21 +48,22 @@ no sequence gaps remain.
 
 The first vertical slice uses a process-local in-memory store and a minimal workflow/activity catalog.
 Later features expand semantic coverage, add stimuli and causation, add opt-in value capture, and add
-Groundwork durability and distributed recovery. Elsa publishes neutral protocol and conformance
+EF Core durability and distributed recovery. Elsa publishes neutral protocol and conformance
 fixtures; J-Test owns its assertion DSL and framework integration.
 
 ### Rollout features
 
 1. [**Foundation vertical slice — #1133**](https://github.com/elsa-workflows/elsa-foundation/issues/1133) — domain modules, governed envelope/catalog, evidence sessions,
    deterministic checkpoint intent, strict failure behavior, in-memory materialization, minimal
-   workflow/activity evidence, query/wait API, registration tests, and performance baselines.
+   workflow/activity evidence, query/wait API, registration tests, and timing-independent activation
+   correctness. The former performance-baseline criterion is retired and must not run.
 2. [**Committed lifecycle coverage — #1134**](https://github.com/elsa-workflows/elsa-foundation/issues/1134) — complete workflow, activity, bookmark, incident, checkpoint,
    sequencing, deduplication, integrity, settled barrier, and completeness behavior.
 3. [**Stimulus and scheduling causation — #1135**](https://github.com/elsa-workflows/elsa-foundation/issues/1135) — dispatch, child workflows, signals, triggers,
    deduplication outcomes, timers, scheduling, resumes, and causal propagation.
 4. [**State and value evidence — #1136**](https://github.com/elsa-workflows/elsa-foundation/issues/1136) — variable and durable-value mutations, selected inputs and outputs,
    capture profiles, dispositions, maximum size, sanitizers, and redaction.
-5. [**Groundwork durability and distributed hardening — #1137**](https://github.com/elsa-workflows/elsa-foundation/issues/1137) — durable idempotent materialization, crash
+5. [**EF Core durability and distributed hardening — replacement for #1137**](https://github.com/elsa-workflows/elsa-foundation/issues/1137) — durable idempotent materialization, crash
    recovery, failover, retention cleanup, and provider conformance.
 6. [**Consumer conformance and J-Test integration — #1138**](https://github.com/elsa-workflows/elsa-foundation/issues/1138) — versioned protocol fixtures and neutral
    conformance kit in Elsa, with the fluent adapter and assertions implemented in J-Test.
@@ -143,10 +150,11 @@ specification, plan, and task list rather than sharing one epic implementation p
     that QA values do not remain indefinitely.
 38. As a provider author, I want a shared conformance suite for ordering, deduplication, integrity,
     retention, and failure semantics, so that stores provide equivalent behavior.
-39. As a distributed QA engineer, I want the Groundwork provider to recover evidence across restart
+39. As a distributed QA engineer, I want the EF Core provider to recover evidence across restart
     and failover, so that I can prove completeness beyond one process lifetime.
-40. As a performance engineer, I want measured absent, unscoped, metadata-only, and value-capture
-    baselines, so that later releases can detect overhead regressions.
+40. As a maintainer, I want timing-independent tests for absent, unscoped, metadata-only, and
+    value-capture compositions, so activation and semantic correctness remain protected without any
+    benchmark, timing, budget, gate, or permanent measurement instrument.
 41. As a J-Test maintainer, I want neutral versioned protocol fixtures, so that I can build ergonomic
     assertions without binding Elsa to my framework.
 42. As a support engineer, I want failed tests to include the relevant ordered evidence and integrity
@@ -158,9 +166,10 @@ specification, plan, and task list rather than sharing one epic implementation p
   settings, models, or events. Domain-owned adapters consume existing generic seams.
 - The initial module family is `Elsa.Workflows.ExecutionEvidence.Core`,
   `Elsa.Workflows.ExecutionEvidence`, and `Elsa.Workflows.ExecutionEvidence.Api`. The durable provider
-  is `Elsa.Workflows.ExecutionEvidence.Persistence.Groundwork`.
+  will be an EF Core module delivered under Program #1665; the former Groundwork module name is
+  historical and is not an implementation target.
 - The `.Core` module contains provider-neutral envelope, catalog, session, capture-profile, cursor,
-  integrity, query, store, and contribution contracts. It has no ASP.NET Core, Groundwork, or test-
+  integrity, query, store, and contribution contracts. It has no ASP.NET Core, EF Core, or test-
   framework dependency.
 - The common envelope includes stable evidence identity, evidence-session identity, kind and schema
   version, workflow identity and local sequence, checkpoint identity and local ordinal, occurred time,
@@ -193,7 +202,8 @@ specification, plan, and task list rather than sharing one epic implementation p
   Cross-workflow ordering uses causation references. Timestamps and API cursor order are not semantic
   global ordering.
 - The in-memory implementation is process-local and cannot claim completeness across process loss.
-  Groundwork is the only first-party durable provider and must prove restart and failover behavior.
+  EF Core is the only first-party durable provider family and must prove restart and failover behavior
+  across SQLite, SQL Server, PostgreSQL, and MySQL.
 - Metadata evidence remains available for enabled kinds. Values are opt-in through session-level
   allowlists and pass through deterministic bounded sanitizers before persistence.
 - Value payloads have explicit captured, redacted, omitted, or truncated dispositions. One module-
@@ -209,7 +219,8 @@ specification, plan, and task list rather than sharing one epic implementation p
   a storage-pressure interface are excluded.
 - Module absence adds no evidence-specific registrations, branches, allocation, serialization, or
   persistence work to existing modules. Enabled-unscoped capture performs only a constant-time session
-  check. Numeric regression budgets follow measured first-slice baselines.
+  check. Timing-independent tests protect those semantics; numeric regression budgets and measurements
+  are retired and must not run.
 - Elsa supplies neutral protocol and store conformance fixtures. J-Test owns fluent assertions,
   framework lifecycle, pass/fail reporting, and its Elsa client adapter.
 
@@ -226,24 +237,24 @@ specification, plan, and task list rather than sharing one epic implementation p
 - Runtime integration tests use the checkpoint committer and generic post-commit outbox as the highest
   existing seam. They prove one opaque intent per checkpoint, deterministic replay, no intent after a
   failed/skipped checkpoint, and unchanged workflow outcome after materialization failure.
-- Groundwork conformance tests prove atomic opaque-intent persistence, idempotent durable
+- EF Core conformance tests prove atomic opaque-intent persistence, idempotent durable
   materialization, ordering, filtering, restart/failover recovery, cleanup, and incomplete delivery
   reporting across supported providers.
 - API integration tests exercise session creation, normal workflow API invocation, cursor-based wait,
   filtered query, completeness, authorization, expiry, and deletion through HTTP.
 - Backend end-to-end suites drive a rebuilt Elsa.Server through the real REST, persistence, runtime,
   scheduling, and stimulus paths. Suites are added for lifecycle, bookmarks/incidents, stimuli/timers,
-  values/redaction, and Groundwork restart recovery.
+  values/redaction, and EF Core restart recovery.
 - Compatibility fixtures freeze kind strings, schema versions, envelope/payload wire shapes, cursor
   binding rules, and J-Test protocol examples.
 - Failure-injection tests cover enricher failure, checkpoint-store failure, crash after evidence write
   before acknowledgement, duplicate delivery, exhausted retry, sequence gap, process loss in the
-  in-memory adapter, and Groundwork restart/failover.
-- Benchmarks compare module absent, module enabled but unscoped, metadata-only scoped capture, and
-  value capture across representative value counts and serialized sizes. The first feature records
-  baselines; later work sets evidence-based regression limits.
+  in-memory adapter, and EF Core restart/failover.
+- Timing-independent correctness tests compare module absent, module enabled but unscoped,
+  metadata-only scoped capture, and value capture without recording duration, throughput,
+  allocation, or regression budgets. No benchmark or permanent measurement instrument is allowed.
 - Prior art includes Runtime checkpoint commit/outbox contract tests, activity-execution inspection
-  API tests, Groundwork provider conformance, structured-log cursor tests, diagnostics durable store
+  API tests, EF Core provider conformance, structured-log cursor tests, diagnostics durable store
   tests, and backend REST end-to-end suites.
 
 ## Out of Scope
@@ -261,14 +272,16 @@ specification, plan, and task list rather than sharing one epic implementation p
 - Blanket payload capture, a general data-classification engine, or a per-subject host policy matrix.
 - Storage quotas, storage-pressure detection, or automatic capacity-based eviction.
 - Record-by-record expiry or indefinite retention by default.
-- First-party EF Core persistence.
+- Re-deciding the first-party provider family or migration lifecycle already governed by Program #1665.
 - J-Test implementation code inside the Elsa repository.
 
 ## Further Notes
 
-- A disposable prototype validated the generic checkpoint enricher and opaque post-commit intent path
-  with both the in-memory and Groundwork checkpoint stores. It proved deterministic replay, strict
-  skip/failure behavior, idempotent crash redelivery, and intact opaque Groundwork payloads. No new
+- A disposable historical prototype validated the generic checkpoint enricher and opaque post-commit
+  intent path with both the in-memory and then-current Groundwork checkpoint stores. It proved
+  deterministic replay, strict skip/failure behavior, idempotent crash redelivery, and intact opaque
+  Groundwork payloads. This is design evidence, not current provider direction or a command to rerun
+  the prototype. No new
   Runtime extension point was required; prototype code was removed after verification.
 - The program-goal state is the named **Runtime Execution Evidence** bucket. It is separate from
   Runtime Execution Seam because the new domain consumes Runtime, and separate from Diagnostics

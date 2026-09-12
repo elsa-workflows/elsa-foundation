@@ -183,8 +183,11 @@ propagation task, not an implied amendment in this decision.
   references require EF proof.
 - [ADR 0062](0062-execution-evidence-starts-in-memory-and-adds-groundwork-durability.md) names
   Groundwork as the only durable Execution Evidence provider and requires a replacement decision.
-- Groundwork-specific statements in Runtime, diagnostics, serialization, program-goal, spec, and
-  evidence artifacts remain truthful history until their owning issues reconcile them.
+- Groundwork-specific statements in Runtime, diagnostics, serialization, program-goal, spec, plan,
+  and evidence artifacts remain truthful history until their owning issues reconcile them. The
+  still-proposed [Runtime Execution Evidence PRD](../plans/runtime-execution-evidence-prd.md) has
+  already been reconciled to EF-owned durability and timing-independent correctness; its prototype
+  notes preserve Groundwork only as explicitly historical evidence.
 
 ## Required architecture spikes
 
