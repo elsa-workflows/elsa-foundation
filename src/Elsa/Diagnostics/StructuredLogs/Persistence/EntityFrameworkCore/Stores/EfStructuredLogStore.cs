@@ -443,25 +443,14 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
             .SingleOrDefaultAsync(record => record.ScopeKey == ScopeKey && record.Position == parts.Position, cancellationToken);
         if (row is null)
             throw new StructuredLogReplayCursorUnavailableException();
-        try
-        {
-            ValidateRecord(row);
-            var entry = ToEntry(row);
-            if (entry.ReplayCursor is not { } entryReplayCursor ||
-                !StringComparer.Ordinal.Equals(entry.SourceId, parts.EntrySourceId) ||
-                !StringComparer.Ordinal.Equals(row.ReplayToken, parts.ReplayToken) ||
-                !StringComparer.Ordinal.Equals(entryReplayCursor.Value, cursor.Value))
-                throw new StructuredLogReplayCursorUnavailableException();
-            return row;
-        }
-        catch (StructuredLogReplayCursorUnavailableException)
-        {
-            throw;
-        }
-        catch (StructuredLogsException)
-        {
+        ValidateRecord(row);
+        var entry = ToEntry(row);
+        if (entry.ReplayCursor is not { } entryReplayCursor ||
+            !StringComparer.Ordinal.Equals(entry.SourceId, parts.EntrySourceId) ||
+            !StringComparer.Ordinal.Equals(row.ReplayToken, parts.ReplayToken) ||
+            !StringComparer.Ordinal.Equals(entryReplayCursor.Value, cursor.Value))
             throw new StructuredLogReplayCursorUnavailableException();
-        }
+        return row;
     }
 
     private Task<T> ExecuteReadAsync<T>(

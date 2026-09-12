@@ -371,7 +371,7 @@ public sealed class StructuredLogsEntityFrameworkCoreTests
         await Assert.ThrowsAsync<ArgumentNullException>(() => fixture.Store.GetRecentAsync(null!));
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
             fixture.Store.ReadAfterAsync(null, StructuredLogFilter.None, 0));
-        await fixture.Store.AppendAsync(Entry("corrupt", LogLevel.Information, "source-a"));
+        var committed = await fixture.Store.AppendAsync(Entry("corrupt", LogLevel.Information, "source-a"));
 
         await using (var provider = StructuredLogsEntityFrameworkCoreFixture.BuildProvider(fixture.DatabasePath, fixture.Binding))
         await using (var scope = provider.CreateAsyncScope())
@@ -385,6 +385,20 @@ public sealed class StructuredLogsEntityFrameworkCoreTests
         var failure = await Assert.ThrowsAsync<StructuredLogsException>(() =>
             fixture.Store.GetRecentAsync(StructuredLogFilter.None));
         Assert.IsType<System.Text.Json.JsonException>(failure.InnerException);
+
+        await using (var provider = StructuredLogsEntityFrameworkCoreFixture.BuildProvider(fixture.DatabasePath, fixture.Binding))
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<StructuredLogsDbContext>();
+            var record = await db.Records.SingleAsync();
+            record.PayloadJson = "null";
+            await db.SaveChangesAsync();
+        }
+
+        var anchorFailure = await Assert.ThrowsAsync<StructuredLogsException>(() =>
+            fixture.Store.ReadAfterAsync(committed.ReplayCursor, StructuredLogFilter.None, 10));
+        Assert.IsNotType<StructuredLogReplayCursorUnavailableException>(anchorFailure);
+        Assert.Equal("The EF structured log payload is invalid.", anchorFailure.Message);
     }
 
     [Fact]
