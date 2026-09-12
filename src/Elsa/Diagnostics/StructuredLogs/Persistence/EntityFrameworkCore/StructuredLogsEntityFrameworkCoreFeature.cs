@@ -13,7 +13,7 @@ namespace Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore;
     DisplayName = "Diagnostics Structured Logs Entity Framework Core Persistence",
     Description = "Opt-in EF Core persistence for Structured Logs. It does not provision schema or apply migrations; Groundwork remains the default.",
     DependsOn = new object[] { "DiagnosticsStructuredLogs" })]
-public sealed class StructuredLogsEntityFrameworkCoreFeature : IShellFeature
+public class StructuredLogsEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(
         DisplayName = "Provider",

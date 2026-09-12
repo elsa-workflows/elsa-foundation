@@ -35,7 +35,6 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
     private readonly StructuredLogStoreBinding binding;
     private readonly int maxRecentQuerySize;
     private readonly int maxRetainedEntries;
-    private readonly TimeProvider timeProvider;
     private readonly SemaphoreSlim operationGate = new(1, 1);
     private readonly DiagnosticsDrain<PendingAppend, StructuredLogEntry> drain;
     private int disposed;
@@ -46,8 +45,7 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
         StructuredLogStoreBinding binding,
         IDiagnosticsPersistenceObserver? observer = null,
         int maxRetainedEntries = DefaultMaxRetainedEntries,
-        int retentionInterval = RetentionInterval,
-        TimeProvider? timeProvider = null)
+        int retentionInterval = RetentionInterval)
     {
         ArgumentNullException.ThrowIfNull(scopeFactory);
         ArgumentNullException.ThrowIfNull(options);
@@ -58,7 +56,6 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
 
         this.scopeFactory = scopeFactory;
         this.binding = binding;
-        this.timeProvider = timeProvider ?? TimeProvider.System;
         maxRecentQuerySize = Math.Max(1, options.Value.MaxRecentQuerySize);
         this.maxRetainedEntries = maxRetainedEntries;
         drain = new(
@@ -110,10 +107,11 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
 
     public Task<IReadOnlyList<StructuredLogEntry>> GetRecentAsync(
         StructuredLogFilter filter,
-        CancellationToken cancellationToken = default) =>
-        ExecuteReadAsync(async (db, ct) =>
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        return ExecuteReadAsync(async (db, ct) =>
         {
-            ArgumentNullException.ThrowIfNull(filter);
             var limit = filter.MaxCount is { } requested
                 ? Math.Clamp(requested, 0, maxRecentQuerySize)
                 : maxRecentQuerySize;
@@ -143,6 +141,7 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
                 .ToArray();
             return (IReadOnlyList<StructuredLogEntry>)result;
         }, cancellationToken);
+    }
 
     public Task<StructuredLogReplayCursor?> GetTailCursorAsync(CancellationToken cancellationToken = default) =>
         ExecuteReadAsync(async (db, ct) =>
@@ -161,11 +160,12 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
         StructuredLogReplayCursor? afterCursor,
         StructuredLogFilter filter,
         int maxCount,
-        CancellationToken cancellationToken = default) =>
-        ExecuteReadAsync(async (db, ct) =>
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxCount, 1);
+        return ExecuteReadAsync(async (db, ct) =>
         {
-            ArgumentNullException.ThrowIfNull(filter);
-            ArgumentOutOfRangeException.ThrowIfLessThan(maxCount, 1);
             var limit = Math.Min(maxCount, maxRecentQuerySize);
             await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
 
@@ -202,6 +202,7 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
             await transaction.CommitAsync(ct);
             return new StructuredLogReadPage(rows.Select(ToEntry).Where(filter.Matches).ToArray(), next, hasMore);
         }, cancellationToken);
+    }
 
     public Task TrimAsync(int keepNewest, CancellationToken cancellationToken = default)
     {
@@ -260,7 +261,7 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
                 HighWater = 0,
                 Version = NewVersion()
             };
-            var now = timeProvider.GetUtcNow();
+            var now = DateTimeOffset.UtcNow;
             var cutoffAdvanced = AdvanceAppendOperationCutoff(state, now);
             if (stateWasCreated)
                 db.StreamStates.Add(state);
@@ -362,7 +363,7 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
             return 0;
         }
 
-        var now = timeProvider.GetUtcNow();
+        var now = DateTimeOffset.UtcNow;
         AdvanceAppendOperationCutoff(state, now);
         await PruneAppendOperationsAsync(db, state.AppendOperationCutoffTicks, cancellationToken);
 
@@ -462,35 +463,43 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
         }
     }
 
-    private async Task<T> ExecuteReadAsync<T>(
+    private Task<T> ExecuteReadAsync<T>(
         Func<StructuredLogsDbContext, CancellationToken, Task<T>> operation,
-        CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        await operationGate.WaitAsync(cancellationToken);
-        try
-        {
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<StructuredLogsDbContext>();
-            return await operation(db, cancellationToken);
-        }
-        finally
-        {
-            operationGate.Release();
-        }
-    }
+        CancellationToken cancellationToken) =>
+        ExecuteScopedAsync(operation, "The EF structured-log read operation failed.", cancellationToken);
 
-    private async Task<T> ExecuteWriteAsync<T>(
+    private Task<T> ExecuteWriteAsync<T>(
         Func<StructuredLogsDbContext, CancellationToken, Task<T>> operation,
+        CancellationToken cancellationToken) =>
+        ExecuteScopedAsync(operation, "The EF structured-log write operation failed.", cancellationToken);
+
+    private async Task<T> ExecuteScopedAsync<T>(
+        Func<StructuredLogsDbContext, CancellationToken, Task<T>> operation,
+        string failureMessage,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         await operationGate.WaitAsync(cancellationToken);
         try
         {
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<StructuredLogsDbContext>();
-            return await operation(db, cancellationToken);
+            try
+            {
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var db = scope.ServiceProvider.GetRequiredService<StructuredLogsDbContext>();
+                return await operation(db, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (StructuredLogsException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                throw new StructuredLogsException(failureMessage, exception);
+            }
         }
         finally
         {

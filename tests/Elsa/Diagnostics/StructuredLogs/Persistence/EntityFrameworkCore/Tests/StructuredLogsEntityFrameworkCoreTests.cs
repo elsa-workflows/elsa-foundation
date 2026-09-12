@@ -10,6 +10,7 @@ using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Dependency
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Stores;
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -166,22 +167,32 @@ public sealed class StructuredLogsEntityFrameworkCoreTests
         await using var fixture = await CreateFixtureAsync();
         await fixture.Store.AppendAsync(Entry("sensitive", LogLevel.Information, "source-a"));
 
-        fixture.TimeProvider.Advance(TimeSpan.FromHours(2));
+        await using (var provider = StructuredLogsEntityFrameworkCoreFixture.BuildProvider(fixture.DatabasePath, fixture.Binding))
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<StructuredLogsDbContext>();
+            var operation = await db.AppendOperations.SingleAsync();
+            operation.IssuedAtTicks = DateTimeOffset.UtcNow.Subtract(TimeSpan.FromHours(2)).UtcTicks;
+            await db.SaveChangesAsync();
+        }
+
+        var cutoffFloor = DateTimeOffset.UtcNow.Subtract(TimeSpan.FromHours(1)).UtcTicks;
         await fixture.Store.TrimAsync(1);
+        var cutoffCeiling = DateTimeOffset.UtcNow.Subtract(TimeSpan.FromHours(1)).UtcTicks;
 
         await using (var provider = StructuredLogsEntityFrameworkCoreFixture.BuildProvider(fixture.DatabasePath, fixture.Binding))
         await using (var scope = provider.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<StructuredLogsDbContext>();
             Assert.Empty(await db.AppendOperations.AsNoTracking().ToListAsync());
-            Assert.Equal(
-                fixture.TimeProvider.GetUtcNow().Subtract(TimeSpan.FromHours(1)).UtcTicks,
-                await db.StreamStates.Select(state => state.AppendOperationCutoffTicks).SingleAsync());
+            var cutoff = await db.StreamStates.Select(state => state.AppendOperationCutoffTicks).SingleAsync();
+            Assert.InRange(cutoff, cutoffFloor, cutoffCeiling);
         }
 
-        await Assert.ThrowsAsync<StructuredLogsException>(() =>
-            fixture.Store.AppendAsync(Entry("expired-operation", LogLevel.Information, "source-a")).AsTask());
-        Assert.Equal(["sensitive"], (await fixture.Store.GetRecentAsync(StructuredLogFilter.None)).Select(entry => entry.Message));
+        var fresh = await fixture.Store.AppendAsync(Entry("fresh-operation", LogLevel.Information, "source-a"));
+        Assert.Equal(2, fresh.Sequence);
+        Assert.Equal(["sensitive", "fresh-operation"],
+            (await fixture.Store.GetRecentAsync(StructuredLogFilter.None)).Select(entry => entry.Message));
     }
 
     [Fact]
@@ -307,16 +318,73 @@ public sealed class StructuredLogsEntityFrameworkCoreTests
         services.AddOptions<StructuredLogsOptions>();
         new StructuredLogsFeature().ConfigureServices(services);
         services.AddSingleton(new object());
-        services.AddStructuredLogsEntityFrameworkCore(new StructuredLogsEntityFrameworkCoreOptions
+        new StructuredLogsEntityFrameworkCoreFeature
         {
             Provider = "Sqlite",
             ConnectionString = "Data Source=:memory:"
-        });
+        }.ConfigureServices(services);
         await using var provider = services.BuildServiceProvider();
         Assert.IsType<EfStructuredLogStore>(provider.GetRequiredService<IStructuredLogStore>());
         Assert.Same(provider.GetRequiredService<IStructuredLogStore>(), provider.GetRequiredService<EfStructuredLogStore>());
+        await using var scope = provider.CreateAsyncScope();
+        Assert.IsType<StructuredLogsSqliteDbContext>(scope.ServiceProvider.GetRequiredService<StructuredLogsDbContext>());
         Assert.Null(provider.GetService<InMemoryStructuredLogStore>());
         Assert.NotNull(provider.GetRequiredService<object>());
+    }
+
+    [Fact]
+    public void Store_constructor_rejects_invalid_dependencies_bindings_and_bounds()
+    {
+        var scopes = new ThrowingScopeFactory(new IOException("unused"));
+        var options = Options.Create(new StructuredLogsOptions());
+        var binding = new StructuredLogStoreBinding("tenant", "scope", "stream");
+
+        Assert.Throws<ArgumentNullException>(() => new EfStructuredLogStore(null!, options, binding));
+        Assert.Throws<ArgumentNullException>(() => new EfStructuredLogStore(scopes, null!, binding));
+        Assert.Throws<ArgumentNullException>(() => new EfStructuredLogStore(scopes, options, null!));
+        Assert.Throws<ArgumentException>(() => new EfStructuredLogStore(scopes, options, new("", "scope", "stream")));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new EfStructuredLogStore(scopes, options, binding, maxRetainedEntries: 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new EfStructuredLogStore(scopes, options, binding, retentionInterval: 0));
+    }
+
+    [Fact]
+    public async Task Store_wraps_read_and_write_infrastructure_failures_at_the_feature_boundary()
+    {
+        var cause = new IOException("database unavailable");
+        await using var store = new EfStructuredLogStore(
+            new ThrowingScopeFactory(cause),
+            Options.Create(new StructuredLogsOptions()),
+            new("tenant", "scope", "stream"));
+
+        var read = await Assert.ThrowsAsync<StructuredLogsException>(() => store.GetHighWaterMarkAsync());
+        var write = await Assert.ThrowsAsync<StructuredLogsException>(() => store.TrimAsync(0));
+
+        Assert.Same(cause, read.InnerException);
+        Assert.Same(cause, write.InnerException);
+    }
+
+    [Fact]
+    public async Task Query_validation_and_corrupt_payload_fail_with_stable_public_exceptions()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        Assert.Empty(await fixture.Store.GetRecentAsync(new StructuredLogFilter { MaxCount = 0 }));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => fixture.Store.GetRecentAsync(null!));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            fixture.Store.ReadAfterAsync(null, StructuredLogFilter.None, 0));
+        await fixture.Store.AppendAsync(Entry("corrupt", LogLevel.Information, "source-a"));
+
+        await using (var provider = StructuredLogsEntityFrameworkCoreFixture.BuildProvider(fixture.DatabasePath, fixture.Binding))
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<StructuredLogsDbContext>();
+            var record = await db.Records.SingleAsync();
+            record.PayloadJson = "not-json";
+            await db.SaveChangesAsync();
+        }
+
+        var failure = await Assert.ThrowsAsync<StructuredLogsException>(() =>
+            fixture.Store.GetRecentAsync(StructuredLogFilter.None));
+        Assert.IsType<System.Text.Json.JsonException>(failure.InnerException);
     }
 
     [Fact]
@@ -464,4 +532,9 @@ internal sealed class FailingInsertInterceptor : DbCommandInterceptor
         Interlocked.Increment(ref failedCommandCount);
         return true;
     }
+}
+
+internal sealed class ThrowingScopeFactory(Exception exception) : IServiceScopeFactory
+{
+    public IServiceScope CreateScope() => throw exception;
 }

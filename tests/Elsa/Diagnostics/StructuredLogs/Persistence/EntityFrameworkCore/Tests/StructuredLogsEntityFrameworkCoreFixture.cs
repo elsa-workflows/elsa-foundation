@@ -16,28 +16,22 @@ public sealed class StructuredLogsEntityFrameworkCoreFixture : IAsyncDisposable
 
     public string DatabasePath => Path.Combine(directory, "structured-logs.db");
     public StructuredLogStoreBinding Binding { get; } = new("tenant-a", "scope-a", "stream-a");
-    public TestTimeProvider TimeProvider { get; } = new(DateTimeOffset.UtcNow);
     public EfStructuredLogStore Store => provider!.GetRequiredService<EfStructuredLogStore>();
 
     public async Task InitializeAsync()
     {
         Directory.CreateDirectory(directory);
-        provider = BuildProvider(DatabasePath, Binding, TimeProvider);
+        provider = BuildProvider(DatabasePath, Binding);
         await EnsureCreatedAsync(provider);
         Store.Start();
     }
 
-    public static ServiceProvider BuildProvider(
-        string path,
-        StructuredLogStoreBinding? binding = null,
-        TimeProvider? timeProvider = null)
+    public static ServiceProvider BuildProvider(string path, StructuredLogStoreBinding? binding = null)
     {
         var services = new ServiceCollection();
         services.AddOptions<StructuredLogsOptions>();
         if (binding is not null)
             services.AddSingleton(binding);
-        if (timeProvider is not null)
-            services.AddSingleton(timeProvider);
         services.AddStructuredLogsEntityFrameworkCore(new StructuredLogsEntityFrameworkCoreOptions
         {
             Provider = "Sqlite",
@@ -59,11 +53,4 @@ public sealed class StructuredLogsEntityFrameworkCoreFixture : IAsyncDisposable
         if (Directory.Exists(directory))
             Directory.Delete(directory, recursive: true);
     }
-}
-
-public sealed class TestTimeProvider(DateTimeOffset utcNow) : TimeProvider
-{
-    public override DateTimeOffset GetUtcNow() => utcNow;
-
-    public void Advance(TimeSpan duration) => utcNow = utcNow.Add(duration);
 }
