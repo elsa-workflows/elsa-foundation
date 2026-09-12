@@ -98,9 +98,9 @@ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | openssl pkcs8 -to
 Pipe through `openssl pkcs8 -topk8`: `genpkey -outform DER` on its own writes a PKCS#1 key, which the host
 rejects. (The same command appears in the error `ConfigureOpenIddictServerOptions` throws for a malformed key.)
 Outside `IsDevelopmentOrDemo`, a missing or malformed signing key fails with a clear error when the OpenIddict
-server options are built, and so does an `Issuer` that is not an absolute URI. The feature builds them at startup,
-so the error fails shell activation (in Workbench, `/health/ready` reports `503 shell_activation_failed`) rather
-than the first request that authenticates.
+server options are built. The feature builds them at startup, so the error fails shell activation (in Workbench,
+`/health/ready` reports `503 shell_activation_failed`) rather than the first request that authenticates. An
+`Issuer` that is not an absolute URI fails activation the same way, in any mode, with a `UriFormatException`.
 
 ### `FoundationIdentityOptions` (shared, bound from the `Elsa:Identity` section if you surface it)
 

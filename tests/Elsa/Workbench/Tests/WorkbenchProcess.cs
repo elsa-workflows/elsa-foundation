@@ -20,7 +20,7 @@ public sealed class WorkbenchProcess : IAsyncDisposable
 
     /// <summary>
     /// A ceiling for pathological hangs, not an expected duration: the host is ready in about ten seconds on a CI
-    /// runner. Activation failures and early exits end the wait immediately.
+    /// runner. Activation failures and early exits end the wait within seconds.
     /// </summary>
     private static readonly TimeSpan ReadyTimeout = TimeSpan.FromMinutes(10);
 
@@ -145,7 +145,8 @@ public sealed class WorkbenchProcess : IAsyncDisposable
                 return;
             if (readiness?.Status == "failed")
             {
-                await WaitForActivationFailureLogAsync();
+                if (readiness.Code == "shell_activation_failed")
+                    await WaitForActivationFailureLogAsync();
                 throw Failure($"reported the default shell as failed ({readiness.Code})");
             }
             if (DateTimeOffset.UtcNow > deadline)

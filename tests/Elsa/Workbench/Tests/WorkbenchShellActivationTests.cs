@@ -110,9 +110,11 @@ public sealed class WorkbenchShellActivationTests
     [InlineData("FoundationIdentityAspNetCoreIdentityGroundwork:SeedAdminPassword", "SeedAdminUserName is configured but SeedAdminPassword is not")]
     public async Task Production_shell_without_a_required_secret_fails_activation(string featureSetting, string expectedError)
     {
+        var shell = WorkbenchShell.Production.Without(featureSetting);
+
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await using var _ = await WorkbenchProcess.StartAsync(WorkbenchShell.Production.Without(featureSetting));
+            await using var _ = await WorkbenchProcess.StartAsync(shell);
         });
 
         Assert.Contains("reported the default shell as failed (shell_activation_failed)", failure.Message, StringComparison.Ordinal);
