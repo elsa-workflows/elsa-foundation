@@ -4,7 +4,7 @@ Status: active completion evidence for [#1671](https://github.com/elsa-workflows
 
 Snapshot: `main` at `7a952efcf8d53472d7d4e7e3fd7b51d7a808c1c8` (2026-09-12).
 This register covers 55 relevant test/evidence projects (51 snapshot projects plus two merged
-Studio Preferences EF projects and two Structured Logs EF projects pending merge under #1695): the original 36 Groundwork/Mongo-named
+Studio Preferences EF projects and two Structured Logs EF projects delivered by #1696): the original 36 Groundwork/Mongo-named
 projects, eight omitted direct-package consumers, two project-reference-only consumers, two host
 consumers, and three EF-only Secrets destinations. The base Secrets EF test project is one of the
 eight omitted direct-package consumers because it still exercises a dual Groundwork/EF topology.
@@ -86,8 +86,8 @@ default-flip owner explicit without repeating the same text 51 times.
 | T51 | `tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe.csproj` | #1679 / #1670 | PostgreSQL package-feed process probe | Retain only while it proves an active package boundary | | N/A |
 | T52 | `tests/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/Tests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Tests.csproj` | #1680 | SQLite behavioral contract: scope isolation, CRUD, canonical revisions, optimistic concurrency, restart and opt-in DI | SQLite; retained EF destination, merged in #1693 | #1693 | N/A |
 | T53 | `tests/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests.csproj` | #1680 | Live provider smoke: PostgreSQL/SQL Server/MySQL model binding, representative CRUD, uniqueness and concurrency | PostgreSQL/SQL Server/MySQL; retained EF destination, merged in #1693 | #1693 | N/A |
-| T54 | `tests/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests.csproj` | #1695 | SQLite behavioral contract: append/order/high-water/idempotency, retention, restart, cursor/binding and opt-in DI | SQLite; retained EF destination pending merge under #1695 | | |
-| T55 | `tests/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests.csproj` | #1695 | Live provider smoke: PostgreSQL/SQL Server/MySQL model binding plus representative append/read/CAS and rollback or stale-CAS outcome | PostgreSQL/SQL Server/MySQL; Docker-skippable retained EF destination pending merge under #1695 | | |
+| T54 | `tests/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests.csproj` | #1695 | SQLite behavioral contract: append/order/high-water/idempotency, retention, restart, cursor/binding and opt-in DI | SQLite; retained EF destination delivered by #1696 | #1696 | N/A |
+| T55 | `tests/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests.csproj` | #1695 | Live provider smoke: PostgreSQL/SQL Server/MySQL model binding plus representative append/read/CAS and rollback or stale-CAS outcome | PostgreSQL/SQL Server/MySQL; Docker-skippable retained EF destination delivered by #1696 | #1696 | N/A |
 
 ## Correctness hidden inside retiring performance surfaces
 
