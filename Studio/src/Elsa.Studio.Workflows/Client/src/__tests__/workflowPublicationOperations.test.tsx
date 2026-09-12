@@ -4,12 +4,12 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { clearApiCapabilityCache } from "../api/capabilities";
-import { activationSlotReadsUnavailableReason, type Publication, type PublicationIntent } from "../api/publishing";
+import { activationSlotReadsUnavailableReason, type Publication, type PublicationIntent, type PublicationPreflight } from "../api/publishing";
 import type { WorkflowActivationSlot } from "../api/runtime";
 import type { WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
 import { publicationBaselineFor, publicationChangesFor, publicationIntentForChannel } from "../workflow-editor/publicationReview";
 import { useWorkflowOperations } from "../workflow-editor/useWorkflowOperations";
-import { activationSlot, importedActivationSlot, publicationRecord } from "./fixtures/publicationSlots";
+import { activationSlot, foreignSlotOwner, importedActivationSlot, publicationPreflight, publicationRecord } from "./fixtures/publicationSlots";
 
 type Operations = ReturnType<typeof useWorkflowOperations>;
 
@@ -258,6 +258,73 @@ describe("workflow publication operations", () => {
     expect(fixture.saveDraft).not.toHaveBeenCalled();
     expect(fixture.postJson.mock.calls.map(([url]) => url)).toEqual(["/publishing/workflows/preflight"]);
     expect(fixture.setError).toHaveBeenLastCalledWith("The default slot is reserved for replacement publication. Choose another named slot.");
+  });
+
+  it("names the foreign owner, and not a conflict list, when the target channel is owned elsewhere", async () => {
+    const fixture = renderOperations({
+      snapshotPreflightOverrides: { canActivate: false, targetSlotOwner: foreignSlotOwner() }
+    });
+    await prepare(fixture);
+    const intent: PublicationIntent = { action: "replace", slotName: "default", expectedPublicationId: "publication-1" };
+
+    await fixture.current().confirmPublication(intent);
+    await flushUpdates();
+
+    const message = fixture.setError.mock.calls.at(-1)?.[0] as string;
+    expect(message).toContain("artifact-reconciliation (mounted-artifacts)");
+    expect(message).not.toContain("conflict");
+  });
+
+  it("keeps the conflicts-only blocked message when the target has no foreign owner", async () => {
+    const fixture = renderOperations({
+      snapshotPreflightOverrides: {
+        canActivate: false,
+        conflicts: [{ key: "http:orders", cardinality: "exclusive", publicationId: "publication-9", slotName: "default" }]
+      }
+    });
+    await prepare(fixture);
+    const intent: PublicationIntent = { action: "replace", slotName: "default", expectedPublicationId: "publication-1" };
+
+    await fixture.current().confirmPublication(intent);
+    await flushUpdates();
+
+    expect(fixture.setError).toHaveBeenLastCalledWith(
+      "Server preflight blocks this target. Resolve the listed conflicts or review another target.");
+  });
+
+  it("names both causes when the target is foreign-owned and has trigger conflicts", async () => {
+    const fixture = renderOperations({
+      snapshotPreflightOverrides: {
+        canActivate: false,
+        targetSlotOwner: foreignSlotOwner(),
+        conflicts: [{ key: "http:orders", cardinality: "exclusive", publicationId: "publication-9", slotName: "default" }]
+      }
+    });
+    await prepare(fixture);
+    const intent: PublicationIntent = { action: "replace", slotName: "default", expectedPublicationId: "publication-1" };
+
+    await fixture.current().confirmPublication(intent);
+    await flushUpdates();
+
+    const message = fixture.setError.mock.calls.at(-1)?.[0] as string;
+    expect(message).toContain("artifact-reconciliation (mounted-artifacts)");
+    expect(message).toContain("conflict");
+  });
+
+  it("names no cause when an older host blocks with empty conflicts and no owner", async () => {
+    const fixture = renderOperations({
+      // targetSlotOwner: undefined deletes the key from the fixture, matching a host predating
+      // elsa-foundation#1659 whose payload never carries the field at all.
+      snapshotPreflightOverrides: { canActivate: false, targetSlotOwner: undefined }
+    });
+    await prepare(fixture);
+    const intent: PublicationIntent = { action: "replace", slotName: "default", expectedPublicationId: "publication-1" };
+
+    await fixture.current().confirmPublication(intent);
+    await flushUpdates();
+
+    expect(fixture.setError).toHaveBeenLastCalledWith(
+      "Server preflight blocked this target without naming a cause. Review another target.");
   });
 
   it("reviews a changed target authoritatively before allowing its first mutation", async () => {
@@ -554,6 +621,7 @@ function renderOperations(options: {
   slots?: WorkflowActivationSlot[];
   publications?: Publication[];
   legacySlotContract?: boolean;
+  snapshotPreflightOverrides?: Partial<PublicationPreflight>;
 } = {}) {
   const sourceDraft = options.draft ?? draft();
   const slots = options.slots ?? [publishedSlot()];
@@ -603,22 +671,16 @@ function renderOperations(options: {
       mutationOrder.push("snapshot-preflight");
       snapshotPreflightAttempts += 1;
       if (options.failSnapshotPreflight) throw new Error("snapshot preflight unavailable");
-      return {
+      return publicationPreflight({
         preflightToken: `preflight-token-${snapshotPreflightAttempts}`,
-        candidateHash: "candidate-hash-1",
-        definitionId: "definition-1",
-        versionId: null,
-        slotName: body?.slotName ?? "default",
+        slotName: (body?.slotName as string | undefined) ?? "default",
         resolvedAction: options.resolveSideBySideAsReplace && body?.action === "sideBySide"
           ? "replace"
-          : body?.action ?? "replace",
+          : (body?.action as "replace" | "sideBySide" | undefined) ?? "replace",
         policySource: "request",
         policyRevision: 1,
-        canActivate: true,
-        claims: [],
-        triggers: [],
-        conflicts: []
-      };
+        ...options.snapshotPreflightOverrides
+      });
     }
     if (url === "/design/workflows/drafts/draft-1/promote") {
       mutationOrder.push("promote");

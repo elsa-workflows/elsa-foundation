@@ -1,4 +1,4 @@
-import type { Publication, PublicationSlot } from "../../api/publishing";
+import type { Publication, PublicationPreflight, PublicationSlot, PublicationSlotOwner } from "../../api/publishing";
 import type { WorkflowActivationSlot } from "../../api/runtime";
 
 // Publication slot fixtures in the shapes the backend serves since elsa-foundation#1498: Runtime owns
@@ -64,4 +64,39 @@ export function publishedSlot(slotName: string, overrides: Partial<Publication> 
 /** A slot without a publication record: empty, or occupied by another activation source. */
 export function withoutPublication(slot: WorkflowActivationSlot): PublicationSlot {
   return { ...slot, publication: null };
+}
+
+/**
+ * An authoritative snapshot/version preflight, as elsa-foundation serves it for a clean, activatable target.
+ *
+ * `targetSlotOwner` defaults to `null` (the field present, unowned). To model a host predating
+ * elsa-foundation#1659 — where the field is absent from the payload entirely, not merely `null` — pass
+ * `targetSlotOwner: undefined` explicitly; this deletes the key rather than leaving it `undefined` in place.
+ */
+export function publicationPreflight(overrides: Partial<PublicationPreflight> = {}): PublicationPreflight {
+  const preflight: PublicationPreflight = {
+    preflightToken: "preflight-token-1",
+    candidateHash: "candidate-hash-1",
+    definitionId: "definition-1",
+    versionId: null,
+    slotName: "default",
+    resolvedAction: "replace",
+    policySource: "host",
+    canActivate: true,
+    claims: [],
+    triggers: [],
+    conflicts: [],
+    targetSlotOwner: null,
+    ...overrides
+  };
+  if ("targetSlotOwner" in overrides && overrides.targetSlotOwner === undefined) delete preflight.targetSlotOwner;
+  return preflight;
+}
+
+/**
+ * A preflight's `targetSlotOwner`, the shape elsa-foundation#1659 added: the resolved target slot's
+ * active activation, owned by a non-publishing source Studio cannot take over from the review.
+ */
+export function foreignSlotOwner(overrides: Partial<PublicationSlotOwner> = {}): PublicationSlotOwner {
+  return { sourceKind: "artifact-reconciliation", sourceId: "mounted-artifacts", ...overrides };
 }

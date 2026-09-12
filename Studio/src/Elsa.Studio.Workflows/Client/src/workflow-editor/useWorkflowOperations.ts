@@ -30,6 +30,7 @@ import {
 import type { WorkflowEditorOperation, WorkflowErrorInput, WorkflowTestRunState } from "./editorTypes";
 import {
   createPublicationReview,
+  publicationBlockedMessage,
   publicationIntentFor,
   publicationPreflightMatchesIntent,
   type PublicationReviewState,
@@ -268,7 +269,7 @@ export function useWorkflowOperations({
       return;
     }
     if (!reviewedPreflight.canActivate) {
-      setError("Server preflight blocks this target. Resolve the listed conflicts or review another target.");
+      setError(publicationBlockedMessage(reviewedPreflight));
       return;
     }
     if (publicationReview.versionPreflight && !publicationReview.versionPreflight.isReady) {

@@ -3,10 +3,21 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PublicationReviewDialog } from "../workflow-editor/WorkflowEditor";
-import { activationSlotReadsUnavailableReason, type PublicationIntent, type PublicationPreflight } from "../api/publishing";
-import { createPublicationReview, type PublicationReviewState, type PublicationVersionSelection } from "../workflow-editor/publicationReview";
+import { activationSlotReadsUnavailableReason, type PublicationIntent } from "../api/publishing";
+import {
+  createPublicationReview,
+  publicationBlockedMessage,
+  type PublicationReviewState,
+  type PublicationVersionSelection
+} from "../workflow-editor/publicationReview";
 import type { WorkflowDraft } from "../workflowTypes";
-import { importedActivationSlot, publishedSlot, withoutPublication } from "./fixtures/publicationSlots";
+import {
+  foreignSlotOwner,
+  importedActivationSlot,
+  publicationPreflight,
+  publishedSlot,
+  withoutPublication
+} from "./fixtures/publicationSlots";
 
 let mounted: { root: ReturnType<typeof createRoot>; container: HTMLDivElement } | null = null;
 
@@ -94,6 +105,59 @@ describe("publication channel UX", () => {
       expect.anything(),
       { action: "replace", slotName: "imported" },
       { mode: "automatic" });
+  });
+
+  it("blocks on a foreign-owned target with an owner blocker, disabled Publish, and Not ready readiness", () => {
+    const container = render(review({
+      preflight: preflight({ canActivate: false, targetSlotOwner: foreignSlotOwner() })
+    }));
+
+    expect(text(container)).toContain("Publication channel is owned by another activation source");
+    expect(text(container)).toContain("occupied by an activation from artifact-reconciliation (mounted-artifacts)");
+    expect(text(container)).toContain("operator action");
+    expect(text(container)).not.toContain("Publication channel conflicts");
+    expect(text(container)).toContain("Not ready");
+    expect(button(container, "Publish").disabled).toBe(true);
+  });
+
+  it("keeps the trigger-conflicts blocker unchanged when there is no foreign owner", () => {
+    const container = render(review({
+      preflight: preflight({
+        canActivate: false,
+        conflicts: [{ key: "http:orders", cardinality: "exclusive", publicationId: "publication-9", slotName: "default" }]
+      })
+    }));
+
+    expect(text(container)).toContain("Publication channel conflicts");
+    expect(text(container)).toContain("Conflict with default: http:orders");
+    expect(text(container)).not.toContain("owned by another activation source");
+    expect(text(container)).toContain("Not ready");
+    expect(button(container, "Publish").disabled).toBe(true);
+  });
+
+  it("shows the cause-neutral message when an older host blocks with empty conflicts and no owner", () => {
+    const blockedPreflight = preflight({ canActivate: false, targetSlotOwner: undefined });
+    const container = render(review({ preflight: blockedPreflight }));
+
+    expect(text(container)).toContain(publicationBlockedMessage(blockedPreflight));
+    expect(text(container)).not.toContain("owned by another activation source");
+    expect(text(container)).not.toContain("Publication channel conflicts");
+    expect(button(container, "Publish").disabled).toBe(true);
+  });
+
+  it("shows both blockers when the target is foreign-owned and has trigger conflicts", () => {
+    const container = render(review({
+      preflight: preflight({
+        canActivate: false,
+        targetSlotOwner: foreignSlotOwner(),
+        conflicts: [{ key: "http:orders", cardinality: "exclusive", publicationId: "publication-9", slotName: "default" }]
+      })
+    }));
+
+    expect(text(container)).toContain("Publication channel is owned by another activation source");
+    expect(text(container)).toContain("Publication channel conflicts");
+    expect(text(container)).toContain("Conflict with default: http:orders");
+    expect(button(container, "Publish").disabled).toBe(true);
   });
 
   it("states that the current publication is unknown when the backend cannot provide publication slots", () => {
@@ -306,22 +370,7 @@ function draft(): WorkflowDraft {
   };
 }
 
-function preflight(overrides: Partial<PublicationPreflight> = {}): PublicationPreflight {
-  return {
-    preflightToken: "preflight-token-1",
-    candidateHash: "candidate-hash-1",
-    definitionId: "definition-1",
-    versionId: null,
-    slotName: "default",
-    resolvedAction: "replace",
-    policySource: "host",
-    canActivate: true,
-    claims: [],
-    triggers: [],
-    conflicts: [],
-    ...overrides
-  };
-}
+const preflight = publicationPreflight;
 
 function occupiedBlue() {
   return publishedSlot("blue", { artifactVersion: "1.4.0" });

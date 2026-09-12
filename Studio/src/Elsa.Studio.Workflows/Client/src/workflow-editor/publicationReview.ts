@@ -198,6 +198,51 @@ export function publicationPreflightMatchesIntent(
     && preflight.slotName === intent.slotName);
 }
 
+/**
+ * Why an authoritative preflight blocks activation, in machine-checkable form. `canActivate` is false
+ * for exactly one of three reasons: the target slot is foreign-owned, it has trigger conflicts, or
+ * both. An older host without elsa-foundation#1659's `targetSlotOwner` field can still block for an
+ * unreported reason ("unknown"). Null means the preflight does not block at all.
+ */
+export type PublicationBlockCause = "owner" | "conflicts" | "both" | "unknown";
+
+function blockCauseFromPreflight(preflight: PublicationPreflight): PublicationBlockCause {
+  const owner = Boolean(preflight.targetSlotOwner);
+  const hasConflicts = preflight.conflicts.length > 0;
+  if (owner && hasConflicts) return "both";
+  if (owner) return "owner";
+  if (hasConflicts) return "conflicts";
+  return "unknown";
+}
+
+/** The cause a blocking preflight reports, or null when the preflight does not block activation. */
+export function publicationBlockCause(preflight: PublicationPreflight): PublicationBlockCause | null {
+  if (preflight.canActivate) return null;
+  return blockCauseFromPreflight(preflight);
+}
+
+/** Why an authoritative preflight blocks activation, in the author's words. See `publicationBlockCause`. */
+export function publicationBlockedMessage(preflight: PublicationPreflight): string {
+  switch (blockCauseFromPreflight(preflight)) {
+    case "both": {
+      const owner = preflight.targetSlotOwner!;
+      return `Server preflight blocks this target: the channel is owned by ${describeActivationSource(owner)}, `
+        + "which is an operator action to take over, and it has trigger conflicts. Resolve the listed conflicts "
+        + "and publish side by side into another channel, or review another target.";
+    }
+    case "owner": {
+      const owner = preflight.targetSlotOwner!;
+      return `Server preflight blocks this target: the channel is owned by ${describeActivationSource(owner)}. `
+        + "Taking over a slot another source owns is an operator action, so publish side by side into another "
+        + "channel instead.";
+    }
+    case "conflicts":
+      return "Server preflight blocks this target. Resolve the listed conflicts or review another target.";
+    default:
+      return "Server preflight blocked this target without naming a cause. Review another target.";
+  }
+}
+
 /** Null when the channel's current state is not a Studio design version Studio can compare with. */
 export function publicationChangesFor(review: PublicationReviewState, slotName: string): PublicationChangeSummary | null {
   const occupancy = publicationChannelOccupancy(review, slotName).kind;

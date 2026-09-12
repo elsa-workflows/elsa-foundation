@@ -101,6 +101,16 @@ export interface PublicationTriggerConflict {
   slotName: string;
 }
 
+/**
+ * The non-publishing activation source occupying the resolved target slot, when one is active. Set
+ * exactly when `canActivate` is false because the slot is foreign-owned; taking over such a slot is an
+ * operator action (ADR 0043), so the review can only point the author at another channel.
+ */
+export interface PublicationSlotOwner {
+  sourceKind: string;
+  sourceId: string | null;
+}
+
 export interface PublicationPreflight {
   preflightToken: string;
   candidateHash: string;
@@ -115,6 +125,8 @@ export interface PublicationPreflight {
   triggers?: PublicationTriggerChange[];
   changes?: PublicationTriggerChange[];
   conflicts: PublicationTriggerConflict[];
+  /** Optional: older hosts without elsa-foundation#1659 never send it. Treat absent the same as `null`. */
+  targetSlotOwner?: PublicationSlotOwner | null;
 }
 
 export type ActivityVersionChangeImpact = "Breaking" | "Additive" | "NonBehavioral" | string;
@@ -472,10 +484,13 @@ export function isPublishingActivation(slot: WorkflowActivationSlot) {
   return Boolean(slot.activeActivationId) && slot.sourceKind === publishingActivationSourceKind;
 }
 
-/** Names the activation source occupying a slot, for slots whose activation is not a publication. */
-export function describeActivationSource(slot: WorkflowActivationSlot) {
-  const kind = slot.sourceKind ?? "an unidentified activation source";
-  return slot.sourceId ? `${kind} (${slot.sourceId})` : kind;
+/**
+ * Names an activation source, for a slot whose activation is not a publication or for a preflight's
+ * `targetSlotOwner`. Both shapes carry the same `sourceKind`/`sourceId` pair.
+ */
+export function describeActivationSource(source: Pick<WorkflowActivationSlot, "sourceKind" | "sourceId">) {
+  const kind = source.sourceKind ?? "an unidentified activation source";
+  return source.sourceId ? `${kind} (${source.sourceId})` : kind;
 }
 
 /**

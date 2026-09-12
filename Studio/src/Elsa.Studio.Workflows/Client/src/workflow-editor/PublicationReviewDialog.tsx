@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { describeActivationSource, type PublicationIntent } from "../api/publishing";
 import {
   publicationBaselineFor,
+  publicationBlockCause,
+  publicationBlockedMessage,
   publicationChangesFor,
   publicationChannelOccupancy,
   publicationIntentForChannel,
@@ -102,6 +104,13 @@ export function PublicationReviewDialog({
       : "No trigger changes."
     : formatChangeCount(changes?.triggers);
   const versionIssues = matchingVersionPreflight?.issues ?? [];
+  // A host predating elsa-foundation#1659 can still block without reporting why: no targetSlotOwner
+  // and no conflicts. Say so honestly instead of rendering neither blocker and leaving the author
+  // pointed at nothing.
+  const blockCause = reviewedPreflight ? publicationBlockCause(reviewedPreflight) : null;
+  const causeNeutralBlockMessage = reviewedPreflight && blockCause === "unknown"
+    ? publicationBlockedMessage(reviewedPreflight)
+    : undefined;
   const blocked = review.validationErrors.length > 0
     || !channelIsValid
     || review.reviewPending
@@ -109,7 +118,7 @@ export function PublicationReviewDialog({
     || !reviewedPreflight.canActivate
     || review.versionPreflightSupported && !versionEvidenceMatches
     || matchingVersionPreflight?.isReady === false;
-  const statusMessage = publicationStatusMessage(review, blocked);
+  const statusMessage = publicationStatusMessage(review, blocked, causeNeutralBlockMessage);
   const submitDisabled = busy || (review.phase === "partialFailure"
     ? Boolean(review.reviewPending)
     : review.phase === "savedFailure"
@@ -324,6 +333,18 @@ export function PublicationReviewDialog({
                   </div>
                 ) : null}
 
+                {reviewedPreflight?.targetSlotOwner ? (
+                  <div className="wf-publication-risks" role="alert">
+                    <strong>Publication channel is owned by another activation source</strong>
+                    <p>
+                      {selectedChannel || reviewedPreflight.slotName} is occupied by an activation
+                      from {describeActivationSource(reviewedPreflight.targetSlotOwner)}. Taking over a
+                      slot another source owns is an operator action, so this cannot be resolved from
+                      this review. Publish side by side into another channel instead.
+                    </p>
+                  </div>
+                ) : null}
+
                 {reviewedPreflight?.conflicts.length ? (
                   <div className="wf-publication-risks" role="alert">
                     <strong>Publication channel conflicts</strong>
@@ -334,6 +355,13 @@ export function PublicationReviewDialog({
                         </li>
                       ))}
                     </ul>
+                  </div>
+                ) : null}
+
+                {causeNeutralBlockMessage ? (
+                  <div className="wf-publication-risks" role="alert">
+                    <strong>Publication blocked</strong>
+                    <p>{causeNeutralBlockMessage}</p>
                   </div>
                 ) : null}
 
@@ -504,7 +532,7 @@ function compactChangeSummary(changes: PublicationReviewState["changes"]) {
   ].join(" · ");
 }
 
-function publicationStatusMessage(review: PublicationReviewState, blocked: boolean) {
+function publicationStatusMessage(review: PublicationReviewState, blocked: boolean, causeNeutralBlockMessage?: string) {
   if (review.phase === "success") return "Publication completed successfully.";
   if (review.phase === "validationBlocked") return "Resolve the blocking validation before publishing.";
   if (review.phase === "savedFailure") return "The captured draft was saved, but no version or publication was created.";
@@ -519,6 +547,6 @@ function publicationStatusMessage(review: PublicationReviewState, blocked: boole
     return review.progressStep ? messages[review.progressStep] : "Publishing…";
   }
   if (review.reviewPending) return "Checking the selected Publication channel and version…";
-  if (blocked) return "Review the highlighted issue before publishing.";
+  if (blocked) return causeNeutralBlockMessage ?? "Review the highlighted issue before publishing.";
   return "Ready to publish. Nothing changes until you choose Publish.";
 }
