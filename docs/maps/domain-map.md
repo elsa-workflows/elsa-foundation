@@ -7,7 +7,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 ## Summary
 
 - Source projects: 129
-- Test projects: 102
+- Test projects: 103
 - Domains: 28
 - Direct cross-domain references: 715
 
@@ -40,7 +40,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Studio | 3 | 2 | contract<br>feature/implementation<br>test |
 | Elsa.Tasks | 3 | 1 | contract<br>feature/implementation<br>helper<br>test |
 | Elsa.Testing | 0 | 1 | test |
-| Elsa.Workbench | 1 | 0 | host |
+| Elsa.Workbench | 1 | 1 | host<br>test |
 | Elsa.Workflows | 30 | 20 | contract<br>feature/implementation<br>test |
 | Elsa3 | 4 | 1 | feature/implementation<br>test |
 
@@ -258,6 +258,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Studio.Preferences.Tests](../../tests/Elsa/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj) | test | Elsa.Studio | Preferences.Tests | test | Elsa.Api.AspNetCore<br>Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Studio.Preferences.Api<br>Elsa.Studio.Preferences.Core<br>Elsa.Testing |
 | [Elsa.Tasks.Tests](../../tests/Elsa/Tasks/Tests/Elsa.Tasks.Tests.csproj) | test | Elsa.Tasks | Tests | test | Elsa.Tasks<br>Elsa.Tasks.Schedules |
 | [Elsa.Testing](../../tests/Elsa/Testing/Elsa.Testing.csproj) | test | Elsa.Testing | (root) | test | Elsa.Primitives |
+| [Elsa.Workbench.Tests](../../tests/Elsa/Workbench/Tests/Elsa.Workbench.Tests.csproj) | test | Elsa.Workbench | - | test | Elsa.Workbench |
 | [Elsa.Workflows.Dashboard.Persistence.Groundwork.V2.Tests](../../tests/Elsa/Workflows/Dashboard/Persistence/Groundwork/V2/Tests/Elsa.Workflows.Dashboard.Persistence.Groundwork.V2.Tests.csproj) | test | Elsa.Workflows | Dashboard.Persistence.Groundwork.V2.Tests | test | Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Dashboard.Persistence.Groundwork.V2 |
 | [Elsa.Workflows.Dashboard.Tests](../../tests/Elsa/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj) | test | Elsa.Workflows | Dashboard.Tests | test | Elsa.Testing<br>Elsa.Workflows.Dashboard |
 | [Elsa.Workflows.Design.Api.Tests](../../tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj) | test | Elsa.Workflows | Design.Api.Tests | test | Elsa.Api.Compatibility.Testing<br>Elsa.Mediator.Core<br>Elsa.Testing<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core |

@@ -7,8 +7,8 @@ Records direct project references only.
 ## Summary
 
 - Source projects: 129
-- Test projects: 102
-- Direct project references: 1185
+- Test projects: 103
+- Direct project references: 1186
 
 ## Projects
 
@@ -224,6 +224,7 @@ Records direct project references only.
 | [Elsa.Studio.Preferences.Tests](../../tests/Elsa/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj) | test | Elsa.Studio | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Studio.Preferences.Api<br>Elsa.Studio.Preferences.Core<br>Elsa.Testing |
 | [Elsa.Tasks.Tests](../../tests/Elsa/Tasks/Tests/Elsa.Tasks.Tests.csproj) | test | Elsa.Tasks | - | default | Elsa.Tasks<br>Elsa.Tasks.Schedules |
 | [Elsa.Testing](../../tests/Elsa/Testing/Elsa.Testing.csproj) | test | Elsa.Testing | - | default | Elsa.Primitives |
+| [Elsa.Workbench.Tests](../../tests/Elsa/Workbench/Tests/Elsa.Workbench.Tests.csproj) | test | Elsa.Workbench | - | default | Elsa.Workbench |
 | [Elsa.Workflows.Dashboard.Persistence.Groundwork.V2.Tests](../../tests/Elsa/Workflows/Dashboard/Persistence/Groundwork/V2/Tests/Elsa.Workflows.Dashboard.Persistence.Groundwork.V2.Tests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Dashboard.Persistence.Groundwork.V2 |
 | [Elsa.Workflows.Dashboard.Tests](../../tests/Elsa/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Testing<br>Elsa.Workflows.Dashboard |
 | [Elsa.Workflows.Design.Api.Tests](../../tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Api.Compatibility.Testing<br>Elsa.Mediator.Core<br>Elsa.Testing<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core |
@@ -275,6 +276,6 @@ Records direct project references only.
 | Elsa.Studio | 3 | 2 |
 | Elsa.Tasks | 3 | 1 |
 | Elsa.Testing | 0 | 1 |
-| Elsa.Workbench | 1 | 0 |
+| Elsa.Workbench | 1 | 1 |
 | Elsa.Workflows | 30 | 20 |
 | Elsa3 | 4 | 1 |
