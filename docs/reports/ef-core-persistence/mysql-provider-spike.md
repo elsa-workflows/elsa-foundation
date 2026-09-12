@@ -55,7 +55,7 @@ inputs to the proof, not proof results.
 | Repository EF Core pin | **10.0.10** | `Directory.Packages.props`, `Microsoft.EntityFrameworkCore` and related EF Core packages. |
 | Repository target framework | **`net10.0`** | `Directory.Build.props` sets the shared target framework. |
 | Local SDK | **10.0.300** | Verified locally with `dotnet --version` on 2026-09-12. |
-| Local .NET runtime | `Microsoft.NETCore.App 10.0.8` and `Microsoft.AspNetCore.App 10.0.8` installed | Verified locally with `dotnet --list-runtimes`; the proof must record the runtime selected by its actual test command. |
+| Local .NET runtime | `Microsoft.NETCore.App 10.0.8` and `Microsoft.AspNetCore.App 10.0.8` installed | Verified locally with `dotnet --list-runtimes`; the focused test command selected runtime 10.0.8. |
 | Provider API | `UseMySQL` | The [official Connector/NET EF Core documentation](https://dev.mysql.com/doc/connector-net/en/connector-net-entityframework-core.html) shows `DbContextOptionsBuilder.UseMySQL(...)`. |
 | MySQL server requirement | MySQL **8.0 or later** | Stated in the official [Connector/NET EF Core requirements](https://dev.mysql.com/doc/connector-net/en/connector-net-entityframework-core.html). |
 | Pinned test image | `docker.io/library/mysql:8.4.11@sha256:85b9bf2e29cf836ecb8c2a15a935d4ba0c606631dff1dd79531a11983c638f2a` | The `8.4.11` tag and immutable multi-platform digest were verified locally with Docker tooling. The [official MySQL image page](https://hub.docker.com/_/mysql) is the image source. |
@@ -80,8 +80,8 @@ unreleased branch is adopted as a substitute for a stable EF Core 10 candidate.
 
 The final local verification ran on branch `codex/ef-core10-mysql-spike`, based
 on verified-green `main` commit `f487aa0f0131b4414a0d349baab03d9f080c6200`.
-The immutable review head must be recorded in the PR comments after commit and
-push; this report cannot truthfully name that future commit.
+PR comments are the external record for the immutable review head after each
+push, because a committed report cannot self-reference its own commit.
 
 | Evidence | Exact command actually run | Result |
 | --- | --- | --- |
@@ -121,10 +121,10 @@ do not accept an arbitrary exception.
 
 ## Schema and SQL observations
 
-These are evidence slots, not predictions. Fill them with generated SQL or
-schema inspection from the proof and link each observation to its test name.
+The proof captured the following generated SQL, live schema, and behavioral
+observations; the acceptance table above links each one to its owning test.
 
-| Observation | Evidence to capture | Status |
+| Observation | Evidence captured | Status |
 | --- | --- | --- |
 | Migration history | `__EFMigrationsHistory_ElsaSecretsMySqlSpike` contains `20260912081709_Initial`; reapply is idempotent and both pending-migration and pending-model results are empty/false for the baseline model. | Verified |
 | Tables and keys | `elsa_secrets`; composite primary key `(TenantId, NormalizedName)`; index `IX_elsa_secrets_tenantId_status_normalizedName`; seven identity/lookup columns verified live as `utf8mb4_bin` despite a conflicting database default. | Verified |
@@ -163,8 +163,8 @@ module-replacement decision.
 
 ## Follow-ups after the proof
 
-The spike must leave these as explicit follow-up work; it must not claim any of
-them complete:
+The spike leaves the following explicitly owned follow-up work and does not
+claim any of it complete:
 
 - **[#1669](https://github.com/elsa-workflows/elsa-foundation/issues/1669):** carry the selected provider's migration assembly identity, history-table isolation, provider-specific DDL limitations, fresh-install and pending-model observations, and operator prerequisites into the generic four-provider migration lifecycle.
 - **[#1674](https://github.com/elsa-workflows/elsa-foundation/issues/1674):** carry the MySQL shared-connection/shared-transaction, enlistment, rollback, isolation, affected-row, and split-database findings into the generic transaction topology. Any unsupported behavior must become an explicit refusal/constraint.
