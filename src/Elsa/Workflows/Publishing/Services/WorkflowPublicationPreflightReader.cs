@@ -9,7 +9,28 @@ public sealed record WorkflowPublicationPreflightPlan(
     ResolvedPublicationAction ResolvedAction,
     WorkflowActivationSlot? Slot,
     PublicationPreflightResult Result,
-    IReadOnlyCollection<PublicationTriggerClaim> CandidateClaims);
+    IReadOnlyCollection<PublicationTriggerClaim> CandidateClaims)
+{
+    /// <summary>
+    /// The activation source that owns the target slot when it is not the publish pipeline, or <c>null</c> when the
+    /// slot is empty, deactivated (deactivation clears the source), or already owned by publishing.
+    /// </summary>
+    /// <remarks>
+    /// Derived from <see cref="Slot"/> rather than stored, so a plan cannot carry a slot and an owner that disagree.
+    /// The predicate mirrors the activation authorities' <c>ForeignSource</c> refusal for a publishing request, which
+    /// is where ownership is enforced; this only lets preflight and publish see that refusal before any write.
+    /// </remarks>
+    public WorkflowActivationSource? TargetSlotOwner =>
+        Slot is { ActiveActivationId: not null, Source: { } source } && !source.IsSameOwnerAs(PublicationActivator.Source)
+            ? source
+            : null;
+
+    /// <summary>
+    /// True only when neither a trigger conflict nor a foreign target-slot owner stands in the way. Every consumer
+    /// gates on this rather than on <see cref="PublicationPreflightResult.CanActivate"/>, which covers triggers only.
+    /// </summary>
+    public bool CanActivate => Result.CanActivate && TargetSlotOwner is null;
+}
 
 /// <summary>Builds the same policy-resolved, publication-scoped trigger plan used by preview and activation.</summary>
 public sealed class WorkflowPublicationPreflightReader(

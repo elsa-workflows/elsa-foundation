@@ -85,7 +85,7 @@ public sealed class PublicationManagementEndpointTests
             "DefinitionId", "State", "Layout", "Action", "SlotName", "ExpectedPublicationId");
         AssertProperties(typeof(PublicationSnapshotPreflightView),
             "PreflightToken", "CandidateHash", "DefinitionId", "VersionId", "SlotName", "ResolvedAction",
-            "PolicySource", "PolicyRevision", "CanActivate", "Claims", "Triggers", "Conflicts");
+            "PolicySource", "PolicyRevision", "CanActivate", "Claims", "Triggers", "Conflicts", "TargetSlotOwner");
         Assert.NotNull(typeof(PublishWorkflowRequest).GetProperty("PreflightToken"));
     }
 
