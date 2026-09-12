@@ -64,7 +64,8 @@ public sealed class MySqlContainerFixture : IAsyncLifetime
 
     private static bool IsDockerUnavailable(Exception exception) =>
         exception is DockerUnavailableException ||
-        exception.GetType().Name.Contains("Docker", StringComparison.Ordinal);
+        exception is AggregateException aggregate && aggregate.InnerExceptions.Any(IsDockerUnavailable) ||
+        exception.InnerException is not null && IsDockerUnavailable(exception.InnerException);
 }
 
 [CollectionDefinition(Name)]

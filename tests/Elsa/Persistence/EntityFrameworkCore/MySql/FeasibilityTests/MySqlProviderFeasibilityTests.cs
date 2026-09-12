@@ -123,8 +123,9 @@ public sealed class MySqlProviderFeasibilityTests(MySqlContainerFixture fixture)
         foreach (var value in values)
         {
             var loaded = await context.Secrets.AsNoTracking().SingleAsync(record => record.TenantId == value.Tenant);
-            Assert.Equal(value.Value.UtcDateTime, loaded.MaxActiveVersionExpiresAt!.Value.UtcDateTime);
-            Assert.Equal(TimeSpan.Zero, loaded.MaxActiveVersionExpiresAt.Value.Offset);
+            var loadedExpiration = Assert.IsType<DateTimeOffset>(loaded.MaxActiveVersionExpiresAt);
+            Assert.Equal(value.Value.UtcDateTime, loadedExpiration.UtcDateTime);
+            Assert.Equal(TimeSpan.Zero, loadedExpiration.Offset);
             Assert.Equal(
                 value.Value.UtcTicks,
                 await ScalarAsync<long>(

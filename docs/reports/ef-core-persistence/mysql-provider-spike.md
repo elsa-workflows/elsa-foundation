@@ -94,10 +94,10 @@ push; this report cannot truthfully name that future commit.
 | Architecture contracts | `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj --configuration Release --no-restore --logger 'console;verbosity=minimal'` | Passed: 257 tests, 0 failed, 0 skipped after placing the proof project in the canonical collapsed solution folder. |
 | Generated-map refresh and freshness | `dotnet run --project tools/maps/Elsa.Maps.Generator -- all`; `dotnet run --project tools/maps/Elsa.Maps.Generator -- check` | Passed; the six affected snapshots were refreshed and the authoritative byte-for-byte freshness check reports that the generated maps describe the tree. |
 
-The final proof must use a fresh named database and the immutable image above.
-It must report the actual provider and connector versions observed at runtime,
-not only package declarations. No command in this spike may measure elapsed
-time, throughput, a budget, or performance.
+The completed proof used a fresh named database per test on the immutable image
+above and asserted the actual provider and connector versions observed at
+runtime, rather than relying only on package declarations. No spike command
+measured elapsed time, throughput, a budget, or performance.
 
 ## Acceptance evidence
 
