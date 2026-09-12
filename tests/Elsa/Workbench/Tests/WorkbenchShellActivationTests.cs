@@ -70,8 +70,8 @@ public sealed class WorkbenchShellActivationTests
         var live = await workbench.Client.GetFromJsonAsync<Health>("/health/live");
         Assert.Equal("live", live!.Status);
 
-        // A shell-routed request runs the authentication stack: protected, not broken. A shell can report ready and
-        // still fail every request here, for example when Production has no token signing key.
+        // A shell-routed request runs the authentication stack: protected, not broken. Lazily built authentication
+        // state can let a shell report ready and still fail every request here.
         using var anonymous = await workbench.Client.GetAsync("/modularity/features");
         Assert.True(
             anonymous.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden,
@@ -96,6 +96,26 @@ public sealed class WorkbenchShellActivationTests
         AssertSetting(catalog, "WorkflowsRuntimeCheckpointPersistence", "MaxSegmentCheckpoints", "50");
         AssertSetting(catalog, "GroundworkWorkflowRuntime", "CacheWorkflowExecutables", "true");
         AssertSetting(catalog, "GroundworkWorkflowRuntime", "WorkflowExecutableCacheCapacity", "256");
+    }
+
+    /// <summary>
+    /// Each secret the Production overlay requires must fail activation when omitted, so <c>/health/ready</c> reports
+    /// the misconfiguration instead of the host reporting ready and failing later: every request, for the token
+    /// signing key, or every recovery sweep, for the recovery key.
+    /// </summary>
+    [Theory]
+    [InlineData("FoundationIdentityOpenIddict:SigningKey", "No signing key is configured for the OpenIddict identity module")]
+    [InlineData("GroundworkWorkflowRuntime:RecoveryContinuationSigningKey", "Runtime recovery continuation signing key must be configured")]
+    [InlineData("FoundationIdentityAspNetCoreIdentityGroundwork:SeedAdminPassword", "SeedAdminUserName is configured but SeedAdminPassword is not")]
+    public async Task Production_shell_without_a_required_secret_fails_activation(string featureSetting, string expectedError)
+    {
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await using var _ = await WorkbenchProcess.StartAsync(WorkbenchShell.Production.Without(featureSetting));
+        });
+
+        Assert.Contains("reported the default shell as failed (shell_activation_failed)", failure.Message, StringComparison.Ordinal);
+        Assert.Contains(expectedError, failure.Message, StringComparison.Ordinal);
     }
 
     private static void AssertSetting(IReadOnlyDictionary<string, CatalogFeature> catalog, string feature, string setting, string expected)
