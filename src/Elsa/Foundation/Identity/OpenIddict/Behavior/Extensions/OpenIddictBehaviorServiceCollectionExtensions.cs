@@ -34,8 +34,8 @@ public static class OpenIddictBehaviorServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<AuthenticationOptions>, ConfigureOpenIddictDefaultAuthenticationSchemes>());
         // The server options are otherwise first built by a request, so a missing or malformed signing key would
         // leave the shell active and every authenticated request failing. Build them at activation instead.
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IShellInitializer, ValidateOpenIddictServerOptionsInitializer>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, ValidateOpenIddictServerOptionsInitializer>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IShellInitializer, SigningKeyActivationGuard>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, SigningKeyActivationGuard>());
 
         services.AddOpenIddict()
             .AddServer(server => server.AllowCustomFlow(OpenIddictIdentityDefaults.FirstPartyGrantType))

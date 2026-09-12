@@ -38,8 +38,13 @@ public sealed record WorkbenchShell(
     public string Name => EnvironmentOverlay is null ? ShellFile : $"{ShellFile} + {EnvironmentOverlay}";
 
     /// <summary>This composition with one operator-supplied default-shell feature setting left out.</summary>
-    public WorkbenchShell Without(string featureSetting) =>
-        this with { Settings = Settings.Where(setting => setting.Key != $"{FeaturesPath}:{featureSetting}").ToDictionary() };
+    public WorkbenchShell Without(string featureSetting)
+    {
+        var key = $"{FeaturesPath}:{featureSetting}";
+        return Settings.ContainsKey(key)
+            ? this with { Settings = Settings.Where(setting => setting.Key != key).ToDictionary() }
+            : throw new ArgumentException($"{Name} does not supply {featureSetting}.", nameof(featureSetting));
+    }
 
     /// <summary>The feature names the committed shell file and overlay list for the default shell.</summary>
     public IReadOnlySet<string> ListedFeatures() =>

@@ -15,6 +15,9 @@ public sealed class WorkbenchProcess : IAsyncDisposable
 {
     public const string ManagementKeyHeader = "X-Elsa-Module-Management-Key";
 
+    /// <summary>What <c>DefaultShellWarmup</c> logs, with the exception, when the default shell fails to activate.</summary>
+    private const string ActivationFailureLog = "Default shell preparation failed";
+
     /// <summary>
     /// A ceiling for pathological hangs, not an expected duration: the host is ready in about ten seconds on a CI
     /// runner. Activation failures and early exits end the wait immediately.
@@ -141,7 +144,10 @@ public sealed class WorkbenchProcess : IAsyncDisposable
             if (readiness?.Status == "ready")
                 return;
             if (readiness?.Status == "failed")
+            {
+                await WaitForActivationFailureLogAsync();
                 throw Failure($"reported the default shell as failed ({readiness.Code})");
+            }
             if (DateTimeOffset.UtcNow > deadline)
                 throw Failure($"did not report the default shell ready within {ReadyTimeout}");
 
@@ -159,6 +165,25 @@ public sealed class WorkbenchProcess : IAsyncDisposable
         catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException)
         {
             return null; // Not listening, or not routing the readiness endpoint, yet.
+        }
+    }
+
+    /// <summary>
+    /// Readiness reports the failure just before the warmup logs why, and the console logger writes from its own
+    /// queue, so wait (bounded) until the logged failure has reached the captured output and stopped growing.
+    /// </summary>
+    private async Task WaitForActivationFailureLogAsync()
+    {
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(10);
+        var previousLength = -1;
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            var output = Output;
+            if (output.Contains(ActivationFailureLog, StringComparison.Ordinal) && output.Length == previousLength)
+                return;
+
+            previousLength = output.Length;
+            await Task.Delay(250);
         }
     }
 

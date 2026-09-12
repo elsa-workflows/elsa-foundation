@@ -100,8 +100,9 @@ public sealed class WorkbenchShellActivationTests
 
     /// <summary>
     /// Each secret the Production overlay requires must fail activation when omitted, so <c>/health/ready</c> reports
-    /// the misconfiguration instead of the host reporting ready and failing later: every request, for the token
-    /// signing key, or every recovery sweep, for the recovery key.
+    /// the misconfiguration instead of the host reporting ready and failing later: token issuance and authentication,
+    /// for the token signing key, or every recovery sweep, for the recovery key. The seed password case also proves the
+    /// overlay still names the admin to seed, since only a configured user name makes the missing password an error.
     /// </summary>
     [Theory]
     [InlineData("FoundationIdentityOpenIddict:SigningKey", "No signing key is configured for the OpenIddict identity module")]
