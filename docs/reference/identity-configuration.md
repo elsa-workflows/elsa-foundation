@@ -108,8 +108,11 @@ server options are built. The feature builds them at startup, so the error fails
 | Setting | Default | Notes |
 |---|---|---|
 | `SigningKey` | — | Fallback signing key material for the OpenIddict server. |
-| `RequireHttpsMetadata` | `true` | Keep `true` in production; the security-default guards reject HTTP metadata otherwise. |
-| `IsDevelopmentOrDemo` | `false` | Global dev switch surfaced to the security-default guards. |
+| `RequireHttpsMetadata` | `true` | Read only by the security-default guards, which no host evaluates, so it currently has no effect. The OIDC handlers take the flag from `OidcAuthenticationOptions.RequireHttpsMetadata` instead. |
+| `IsDevelopmentOrDemo` | `false` | Read only by the unevaluated security-default guards; no effect today. Each identity feature has its own `IsDevelopmentOrDemo` setting, and those are the ones that matter. |
+
+The security-default guards (`ISecurityDefaultGuard`) are registered but never evaluated at startup; see
+[#1700](https://github.com/elsa-workflows/elsa-foundation/issues/1700).
 
 ### Cookie / session hardening
 
@@ -145,7 +148,8 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
    sourced from a secret store.
 4. `FoundationIdentityOpenIddict.EncryptionKey` = a distinct base64/secret value (recommended).
 5. `FoundationIdentityOpenIddict.Issuer` = your stable absolute issuer URI.
-6. `FoundationIdentityOptions.RequireHttpsMetadata = true` (default) and serve the server over **HTTPS** (so the
+6. If you compose `FoundationIdentityOidc`, keep `OidcAuthenticationOptions.RequireHttpsMetadata = true`
+   (default) so the upstream IdP's metadata must be HTTPS. Either way, serve the server over **HTTPS** (so the
    `SecurePolicy=Always` session cookie is accepted).
 7. Provision real user accounts — either through your own onboarding, or by setting `SeedAdminUserName` with a
    secret `SeedAdminPassword` (the committed dev `admin`/`Password123!` values apply only under `IsDevelopmentOrDemo`).
