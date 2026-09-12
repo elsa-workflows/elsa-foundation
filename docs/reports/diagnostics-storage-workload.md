@@ -1,8 +1,17 @@
 # Diagnostics Storage Workload
 
-Status: decision input for [Zero-EF Persistence](../program-goals/zero-ef-persistence.md) and [Diagnostics Observability Readiness](../program-goals/diagnostics-observability-readiness.md).
+Status: historical Groundwork capability evidence and current domain-workload input for
+[EF Core Persistence issue #1681](https://github.com/elsa-workflows/elsa-foundation/issues/1681) and
+[Diagnostics Observability Readiness](../program-goals/diagnostics-observability-readiness.md).
 
-Date: 2026-07-12.
+> **Direction superseded, workload retained.** This report's Groundwork-specific architecture and
+> former [Zero-EF Persistence](../program-goals/zero-ef-persistence.md) ownership are historical.
+> Its timing-independent domain semantics—append, ordering, idempotency, bounded queries, exact
+> retention, redaction, and failure isolation—remain current inputs that #1681 must preserve in EF.
+> Performance measurements, timings, budgets, and gates retire under
+> [ADR 0073](../adr/0073-ef-core-is-the-only-first-party-persistence-family.md) without a pass claim.
+
+Evidence date: 2026-07-12.
 
 Tracking: [Elsa issue #632](https://github.com/elsa-workflows/elsa-foundation/issues/632), [Groundwork diagnostic record-store #30](https://github.com/valence-works/Groundwork/issues/30), [Elsa PRD #629](https://github.com/elsa-workflows/elsa-foundation/issues/629), and [Groundwork PRD #25](https://github.com/valence-works/Groundwork/issues/25).
 

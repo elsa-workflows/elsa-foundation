@@ -94,9 +94,10 @@ and liveness, leases and fencing, idempotency, activation authority, alterations
 and test scopes, executable/template materialization, distributed placement, durable command
 transport, and crash/restart behavior.
 
-Before broad Runtime implementation, a representative hard vertical slice must prove several of
-conditional claims or leases, fencing, compare-and-delete, idempotency, checkpoint/outbox atomicity,
-crash recovery, concurrent callers, SQLite contention, and provider-specific conflict handling.
+Before broad Runtime implementation, a representative hard vertical slice must prove several hard
+behaviors, including conditional claims or leases, fencing, compare-and-delete, idempotency,
+checkpoint/outbox atomicity, crash recovery, concurrent callers, SQLite contention, and
+provider-specific conflict handling.
 
 ### D5 — Cutover is a pre-GA clean break with evidence-gated deletion
 
