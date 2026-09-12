@@ -43,7 +43,7 @@ public interface IActivityFactory
 
 - `IActivityImplementationResolverRegistry` (kind-typed dispatch).
 - `IServiceProvider` (DI activation).
-- Expression-domain services (`IExpressionFactory` or equivalent, currently in `Elsa.Expressions.Core`) for `ArgumentValue` → `IExpression` transformation.
+- Expression-domain services for `ArgumentValue` → `IExpression` transformation. *(The speculative `IExpressionFactory` named in the original Unit B plan was later pruned as an unused public contract; no in-repo factory exists.)*
 
 ## Test surface
 

@@ -12,7 +12,7 @@ Classify the concrete `NotImplementedException` and nearby placeholder signals i
 - [Test maturity and weak implementation report](test-maturity-and-weak-implementation-report.md)
 - [Test map](../maps/test-map.md)
 - `src/Elsa/Workflows/Runtime/Core/WorkflowExecutionContext.cs`
-- `src/Elsa/Workflows/Design/Core/WorkflowDesignContext.cs`
+- `src/Elsa/Workflows/Design/Core/WorkflowDesignContext.cs` *(later pruned as an unused public contract; historical classification below retained)*
 - `src/Elsa/Expressions/Services/VariableExpressionDescriptor.cs`
 - `src/Elsa/Http/Services/MultiDownloadableContentHandler.cs`
 - `src/Elsa/Workflows/Runtime/JavaScript/Activities/RunJavaScript/TestClasses/ScriptExecutionContext.cs`
