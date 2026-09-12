@@ -3,7 +3,10 @@
 Status: active initial ledger index; #1671 must complete entry-level expansion before broad
 implementation and no removal disposition is complete.
 
-Baseline: `origin/main` at `ad127e777e442ca9ffdd2e0d035f7b84205d1d2a` (2026-09-12).
+Inventory branch-cut snapshot: `origin/main` at
+`ad127e777e442ca9ffdd2e0d035f7b84205d1d2a` (2026-09-12). PR #1685 later integrated current base
+`6bdb377bbbc76baac9ef19b59a8a8c824ede8349`; that intervening publishing change touched no
+persistence project, dependency, or ledger count. #1671 owns the next entry-level rebaseline.
 
 Program: [#1665](https://github.com/elsa-workflows/elsa-foundation/issues/1665). Governing
 decision: [ADR 0073](../adr/0073-ef-core-is-the-only-first-party-persistence-family.md). Bounded
@@ -192,7 +195,8 @@ before any later `superseded` or `retired by policy` closure.
 
 | Current issue(s) | Requirement class | New owner / disposition gate |
 |---|---|---|
-| #1626, #1628 | Bounded Secrets pilot and superseded EF policy governance | Historical inputs to ADR 0073 and #1665; no active implementation ownership remains after #1666 merges |
+| #1626 | Bounded Secrets pilot program | Historical input to ADR 0073 and #1665; surviving executable requirements are owned by #1679 |
+| #1628 | Bounded EF policy acceptance and reconciliation, including #1622/#1623 disposition | #1666 owns this PR's ADR/source-of-truth reconciliation; #1671 must record any surviving predecessor disposition before #1628 closes |
 | #1653 | Secrets production-shaped HTTP CRUD/restart proof | #1679; preserve as an executable predecessor |
 | #1654 | Repository persistence inventory | #1671; expand into the entry-level completion ledger before removal work |
 | #1657 | EF migration-tool BuildHost concurrency race | #1669 prerequisite; preserve as an executable migration-lifecycle gate |

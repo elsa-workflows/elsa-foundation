@@ -83,7 +83,8 @@ The following proven parts of ADR 0072 remain the default for ordinary relationa
 - module-specific migration-history ownership;
 - host and shell-scoped initialization;
 - runtime apply/validate and out-of-process apply over the same artifacts;
-- explicit provider/artifact pairing and concurrent-migration safety; and
+- explicit provider/artifact pairing and database-level concurrent-migration locking; out-of-process
+  tooling isolation remains unproved and is a #1669 gate with #1657 as its prerequisite; and
 - provider-specific physical mechanics behind fixed provider-neutral behavior.
 
 Runtime, distributed Runtime, publishing, import, and other operational workloads may need different
