@@ -170,9 +170,10 @@ Retention is scope-local. A noisy tenant must not evict another tenant's records
 
 Storage-scope design must also decide whether a Structured Logs source instance is part of the scope. If multiple source instances share one tenant store, Elsa must expose Groundwork's durable cursor (or a source-plus-sequence cursor) before claiming lossless cross-process SSE resume.
 
-## Smallest Specialized Groundwork Contract
+## Historical Groundwork Contract Shape (superseded)
 
-The following is a semantic shape, not a ratified API signature.
+The following was a Groundwork semantic shape, not a ratified API signature. Its domain semantics
+are input to #1681, but its API names, Groundwork ownership, and provider mechanics are historical.
 
 ```csharp
 public interface IDiagnosticRecordStore
@@ -230,7 +231,11 @@ The specialized primitive deliberately does not include:
   [Amendment 2026-07-31](#amendment-2026-07-31-grouped-reduction-is-required)); or
 - map/reduce.
 
-## Portable Semantics Versus Provider Optimizations
+## Historical Groundwork Provider-Optimization Map (superseded)
+
+This table records the former Groundwork provider mapping, including MongoDB. It is not an EF
+implementation plan or a current provider list; #1681 must translate only applicable
+timing-independent semantics to SQLite, SQL Server, PostgreSQL, and MySQL.
 
 | Portable, conformance-gated behavior | Provider-native optimization allowed behind it |
 |---|---|

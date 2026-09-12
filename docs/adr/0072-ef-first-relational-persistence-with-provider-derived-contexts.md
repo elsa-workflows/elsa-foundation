@@ -137,11 +137,12 @@ the technical pilot as successful and the broader rollout as undecided.
 
 ### Step 5 — Separate direction, final text, and rollout authority
 
-On 2026-09-11, Sipke authorized revising ADR 0072 toward a bounded EF-first relational lane. This
-records that direction and the pilot lessons. Three distinct gates remain:
+On 2026-09-11, Sipke authorized revising ADR 0072 toward a bounded EF-first relational lane. At that
+historical point, three distinct gates remained; the rollout record below records the subsequent
+acceptance and supersession:
 
 1. **Revision direction:** authorized.
-2. **Final ADR text:** still proposed until explicitly accepted after exact-head review.
+2. **Final ADR text:** was still proposed until explicitly accepted after exact-head review.
 3. **Module rollout:** separately admitted and planned; ADR acceptance alone schedules nothing.
 
 ## Decision criteria

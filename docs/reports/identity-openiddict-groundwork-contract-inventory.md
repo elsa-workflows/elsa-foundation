@@ -44,9 +44,13 @@ At the evidence date, the then-current Elsa.Server host activated
 current host composition lives in [Elsa.Workbench shells.json](../../src/Apps/Elsa.Workbench/shells.json)
 and [shells.Production.json](../../src/Apps/Elsa.Workbench/shells.Production.json).
 
-## Current Composition And Registration Seams
+## Historical Composition And Registration Seams (2026-07-12)
 
-### Existing Groundwork IAM Persistence
+Implementation-state statements and Groundwork recommendations in this and subsequent proposal
+sections are fixed at the evidence date. They are not current implementation guidance; #1682 owns
+the EF replacement, while the Workbench OpenIddict vendor boundary remains separate.
+
+### Historical Groundwork IAM Persistence
 
 Elsa already ships `IdentityGroundworkPersistenceFeature` in `Elsa.Foundation.Identity.Persistence.Groundwork`. It registers `GroundworkUserStore`, `GroundworkRoleStore`, `GroundworkExternalIdentityStore`, and `GroundworkTenantMembershipStore` for Elsa's four provider-neutral IAM abstractions and declares its own `IdentityStorageManifest` over `UserRecord`, `RoleRecord`, external-identity, and tenant-membership documents.
 
@@ -63,7 +67,7 @@ Because this product is greenfield, no data bridge from the legacy Groundwork IA
 
 ### ASP.NET Core Identity
 
-`AddFoundationAspNetCoreIdentityEntityFrameworkCore` currently:
+At the 2026-07-12 evidence cut, `AddFoundationAspNetCoreIdentityEntityFrameworkCore`:
 
 1. registers the provider-neutral Elsa identity services;
 2. registers `ApplicationIdentityDbContext`;
@@ -98,7 +102,7 @@ the proposed Groundwork implementation does not.
 
 ### OpenIddict (historical replacement proposal; superseded)
 
-`AddFoundationIdentityOpenIddict` currently:
+At the 2026-07-12 evidence cut, `AddFoundationIdentityOpenIddict`:
 
 1. registers `OpenIddictIdentityDbContext` with in-memory EF for development/demo or SQLite otherwise;
 2. calls `AddOpenIddict().AddCore(core => core.UseEntityFrameworkCore()...)`;
@@ -282,7 +286,7 @@ EF currently uses nullable application and authorization foreign keys without de
 
 Prune and revoke are scale-bearing server operations. Fetching all token/authorization documents and filtering in memory is forbidden. They require server-side date/range predicates and bulk mutation/delete support, with deterministic counts and cancellation.
 
-## Groundwork Fit And Upstream Gaps
+## Historical Groundwork Fit And Upstream Gaps
 
 ### Natural Document Fit
 
@@ -312,7 +316,7 @@ Groundwork already provides the important base mechanics:
 
 The `IQueryable` overloads are the only fundamental contract mismatch. They are extension points for consumers to supply arbitrary projections, not operations Elsa currently invokes. The recommended first release implements every named OpenIddict operation server-side, deliberately rejects generic query delegates with a documented capability error, and does not advertise a general-purpose OpenIddict store until a bounded translator exists. This keeps the agreed no-general-`IQueryable` rule intact.
 
-## Required Four-Provider Conformance
+## Historical Proposed Four-Provider Conformance
 
 Run the same black-box suite against SQLite, SQL Server, PostgreSQL, and MongoDB. MongoDB tests that require multi-document transactions must use a replica set or sharded deployment.
 
@@ -353,7 +357,7 @@ Run the same black-box suite against SQLite, SQL Server, PostgreSQL, and MongoDB
 4. Issue access/refresh tokens through `ITokenService`, call a bearer-protected endpoint, rotate the refresh token, prove replay rejection, revoke both token kinds, and prove immediate rejection.
 5. Repeat restart tests against durable provider containers and verify state, schema history, and indexes survive.
 
-## Package And Host Changes For The Implementation Slice
+## Historical Proposed Package And Host Changes
 
 Add concrete packages with no Groundwork references from core contracts, for example:
 
@@ -372,7 +376,7 @@ Then:
 8. let Groundwork's host naming policy select physical names while feature packages provide stable logical storage-unit ids and defaults;
 9. keep ASP.NET Core Identity/OpenIddict types and packages entirely in concrete foundation packages; Elsa identity abstractions remain unchanged.
 
-## Dependency-Ordered Follow-Up Work
+## Historical Dependency-Ordered Follow-Up Work
 
 1. Groundwork compound/typed/multi-value indexes and range queries.
 2. Groundwork storage-boundary tenancy and privileged sessions.

@@ -134,10 +134,13 @@ concurrent `dotnet ef` usage is multiplied.
 ### D7 — Performance measurement is retired by policy
 
 Performance benchmarks, timing measurements, performance budgets, performance gates, and their
-workflows are selected for complete retirement. They are not run locally or remotely from this
-decision onward, and this decision makes no claim that historical performance obligations passed.
-The tracked source and documentation removal remains pending under
-[#1668](https://github.com/elsa-workflows/elsa-foundation/issues/1668).
+workflows are selected for complete retirement. This decision establishes the no-run policy and
+makes no claim that historical performance obligations passed. Until the tracked source and
+documentation removal completes under [#1668](https://github.com/elsa-workflows/elsa-foundation/issues/1668),
+executable workflow definitions technically remain and are policy-forbidden: they must not be
+dispatched or treated as acceptance gates. The HTTP performance workflow is remotely disabled at
+this decision's acceptance, but that mutable setting is not fail-closed enforcement; #1668 owns
+deleting every executable performance surface.
 
 Historical results remain truthful and may be archived. Before performance infrastructure is removed,
 every timing-independent correctness obligation it carries is moved to an EF-neutral or EF-owned
