@@ -61,7 +61,12 @@ public static class PackageManifestCatalogMapper
             builder.PackageVersion = packageVersion;
             builder.Advanced = feature.Advanced;
             builder.Experimental = feature.Experimental;
-            builder.Settings = MapSettings(feature.Settings);
+            // The manifest wins for setting metadata, but a stale or third-party manifest must not un-mark a setting the
+            // loaded feature type (or an earlier manifest) declares secret, or the catalog would show its value.
+            var secretNames = builder.Settings.Where(x => x.Secret).Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            builder.Settings = MapSettings(feature.Settings)
+                .Select(x => secretNames.Contains(x.Name) ? x with { Secret = true } : x)
+                .ToArray();
             builder.ManifestPath = manifestPath;
             builder.ManifestHash = manifestHash;
 

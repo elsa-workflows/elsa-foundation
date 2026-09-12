@@ -186,6 +186,27 @@ public sealed class PackageManifestFeatureCatalogContributorTests : IAsyncDispos
     }
 
     [Fact]
+    public void ApplyKeepsASettingSecretThatTheLoadedFeatureTypeDeclaresSecret()
+    {
+        var context = FeatureCatalogTestContext.Create();
+        context.GetOrAdd("ManifestFeature").Settings =
+            [new("apiKey", "API key", null, null, null, null, "string", false, null, true, false, false, false, false, null, null, [])];
+
+        ReadAndApply("""
+        {
+          "package": { "id": "Elsa.FeaturePackage", "version": "1.0.0" },
+          "features": [
+            { "id": "ManifestFeature", "settings": [ { "name": "ApiKey", "jsonType": "string", "secret": false }, { "name": "Mode", "jsonType": "string" } ] }
+          ]
+        }
+        """, context: context);
+
+        var settings = context.Items["ManifestFeature"].Settings;
+        Assert.True(Assert.Single(settings, x => x.Name == "ApiKey").Secret);
+        Assert.False(Assert.Single(settings, x => x.Name == "Mode").Secret);
+    }
+
+    [Fact]
     public void ApplyDoesNotClobberDependenciesAlreadyFilledByAnEarlierManifest()
     {
         // Two package manifests declare the same feature and neither is loaded at runtime (DependenciesResolved stays

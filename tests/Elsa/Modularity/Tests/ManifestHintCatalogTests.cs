@@ -45,7 +45,7 @@ public sealed class ManifestHintCatalogTests
     [Fact]
     public async Task ContributorPopulatesCategoriesAndSettingsFromStartupType()
     {
-        var contributor = new RuntimeFeatureCatalogContributor(new FakeAccessor(
+        var contributor = new RuntimeFeatureCatalogContributor(new FakeRuntimeFeatureCatalog(
             new ShellFeatureDescriptor("ManifestHintFixture")
             {
                 StartupType = typeof(ManifestHintFixtureFeature),
@@ -64,7 +64,7 @@ public sealed class ManifestHintCatalogTests
     [Fact]
     public async Task ContributorDoesNotOverwriteManifestSourcedMetadata()
     {
-        var contributor = new RuntimeFeatureCatalogContributor(new FakeAccessor(
+        var contributor = new RuntimeFeatureCatalogContributor(new FakeRuntimeFeatureCatalog(
             new ShellFeatureDescriptor("ManifestHintFixture")
             {
                 StartupType = typeof(ManifestHintFixtureFeature)
@@ -84,25 +84,6 @@ public sealed class ManifestHintCatalogTests
 
     private static FeatureCatalogContributionContext CreateContext() =>
         new(new ShellFeatureConfigurationSnapshot("default", "revision", new Dictionary<string, JsonElement>()));
-
-    private sealed class FakeAccessor(params ShellFeatureDescriptor[] descriptors) : IRuntimeFeatureCatalog
-    {
-        public Task<RuntimeFeatureCatalogSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(Build());
-
-        public Task<RuntimeFeatureCatalogSnapshot> RefreshAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(Build());
-
-        private RuntimeFeatureCatalogSnapshot Build()
-        {
-            var map = new Dictionary<string, ShellFeatureDescriptor>(StringComparer.OrdinalIgnoreCase);
-            foreach (var descriptor in descriptors)
-                if (!string.IsNullOrWhiteSpace(descriptor.Id))
-                    map[descriptor.Id] = descriptor;
-
-            return new RuntimeFeatureCatalogSnapshot(1, [], descriptors, map, DateTimeOffset.UnixEpoch);
-        }
-    }
 }
 
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
