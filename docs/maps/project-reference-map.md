@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 131
 - Test projects: 108
-- Direct project references: 1202
+- Direct project references: 1203
 
 ## Projects
 
@@ -151,7 +151,7 @@ Records direct project references only.
 | [Elsa.Activities.ControlFlow.Tests](../../tests/Elsa/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj) | test | Elsa.Activities | - | default | Elsa.Activities.ControlFlow<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Sequence<br>Elsa.Activities.Testing<br>Elsa.Events<br>Elsa.Expressions<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Jint<br>Elsa.Serialization.Core<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.JavaScript |
 | [Elsa.Activities.Design.Api.Tests](../../tests/Elsa/Activities/Design/Api/Tests/Elsa.Activities.Design.Api.Tests.csproj) | test | Elsa.Activities | - | default | Elsa.Activities.Design.Api<br>Elsa.Testing |
 | [Elsa.Activities.Design.Persistence.Groundwork.TemporalProjectionTests](../../tests/Elsa/Activities/Design/Persistence/Groundwork/TemporalProjectionTests/Elsa.Activities.Design.Persistence.Groundwork.TemporalProjectionTests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Design.Persistence.Groundwork |
-| [Elsa.Activities.Design.Persistence.Groundwork.Tests](../../tests/Elsa/Activities/Design/Persistence/Groundwork/Tests/Elsa.Activities.Design.Persistence.Groundwork.Tests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Design.Persistence.Core |
+| [Elsa.Activities.Design.Persistence.Groundwork.Tests](../../tests/Elsa/Activities/Design/Persistence/Groundwork/Tests/Elsa.Activities.Design.Persistence.Groundwork.Tests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Persistence.Core |
 | [Elsa.Activities.Design.Persistence.Groundwork.V2.ProviderMatrix.Tests](../../tests/Elsa/Activities/Design/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Activities.Design.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing |
 | [Elsa.Activities.Design.Persistence.Groundwork.V2.Tests](../../tests/Elsa/Activities/Design/Persistence/Groundwork/V2/Tests/Elsa.Activities.Design.Persistence.Groundwork.V2.Tests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing |
 | [Elsa.Activities.Design.Tests.ClrFixture](../../tests/Elsa/Activities/Design/Tests/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj) | test | Elsa.Activities | - | default | Elsa.Activities.Runtime.Core |
