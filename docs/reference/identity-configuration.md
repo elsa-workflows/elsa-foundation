@@ -100,7 +100,8 @@ rejects. (The same command appears in the error `ConfigureOpenIddictServerOption
 Outside `IsDevelopmentOrDemo`, a missing or malformed signing key fails with a clear error when the OpenIddict
 server options are built. The feature builds them at startup, so the error fails shell activation (in Workbench,
 `/health/ready` reports `503 shell_activation_failed`) rather than the first request that authenticates. An
-`Issuer` that is not an absolute URI fails activation the same way, in any mode, with a `UriFormatException`.
+`Issuer` that `System.Uri` cannot parse as absolute fails activation the same way, in any mode, with a
+`UriFormatException`.
 
 ### `FoundationIdentityOptions` (shared, bound from the `Elsa:Identity` section if you surface it)
 
