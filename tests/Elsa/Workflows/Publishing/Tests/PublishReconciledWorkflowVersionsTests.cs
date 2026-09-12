@@ -260,6 +260,54 @@ public sealed class PublishReconciledWorkflowVersionsTests
     }
 
     [Fact]
+    public async Task A_target_slot_owned_by_a_foreign_source_serving_the_same_artifact_is_logged_not_silently_replayed()
+    {
+        // Before the preflight owner check, PublishWorkflow's same-artifact no-op ran before ownership was
+        // consulted and journaled an Active record the slot never pointed at, on every boot. It now refuses
+        // with slot_owner_conflict like any other foreign-owned target (reviewed on #1659); reconcile must
+        // surface that refusal through its existing catch/log/continue contract rather than treat it as the
+        // "replayed unchanged" success it used to be. PublishWorkflowRequestHandlerTests pins that no
+        // executable, source reference, or publication record is written for this case.
+        var logger = new RecordingLogger<PublishReconciledWorkflowVersions>();
+        var conflict = new PublicationActivationException(new PublicationFailure(
+            PublicationFailureCodes.SlotOwnerConflict, "slot 'default' is owned by another activation source; it already serves this artifact"));
+        var sender = new SpySender { FailFor = "ver-a", FailWith = conflict };
+        var handler = NewHandler(
+            sender,
+            definitions: [Definition("wf-a"), Definition("wf-b")],
+            versions: [Version("wf-a", "1.0.0", "ver-a"), Version("wf-b", "1.0.0", "ver-b")],
+            logger: logger);
+
+        await handler.Handle(Reconciled(Claim("wf-a", "1.0.0"), Claim("wf-b", "1.0.0")), CancellationToken.None);
+
+        Assert.Contains(sender.Sent.OfType<PublishWorkflow>(), r => r.VersionId == "ver-b");
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Error && e.Message.Contains("wf-a") && e.Exception == conflict);
+    }
+
+    [Fact]
+    public async Task A_target_slot_owned_by_a_foreign_source_serving_a_different_artifact_is_logged_and_processing_continues()
+    {
+        // This shape already failed at activation before #1659 (a foreign owner serving a different artifact
+        // was never a no-op); the preflight change only moves the same refusal ahead of the writes. Reconcile's
+        // catch/log/continue must still hold for it, and PublishWorkflowRequestHandlerTests pins that it too now
+        // leaves no executable, source reference, or publication record behind.
+        var logger = new RecordingLogger<PublishReconciledWorkflowVersions>();
+        var conflict = new PublicationActivationException(new PublicationFailure(
+            PublicationFailureCodes.SlotOwnerConflict, "slot 'default' is owned by another activation source"));
+        var sender = new SpySender { FailFor = "ver-a", FailWith = conflict };
+        var handler = NewHandler(
+            sender,
+            definitions: [Definition("wf-a"), Definition("wf-b")],
+            versions: [Version("wf-a", "1.0.0", "ver-a"), Version("wf-b", "1.0.0", "ver-b")],
+            logger: logger);
+
+        await handler.Handle(Reconciled(Claim("wf-a", "1.0.0"), Claim("wf-b", "1.0.0")), CancellationToken.None);
+
+        Assert.Contains(sender.Sent.OfType<PublishWorkflow>(), r => r.VersionId == "ver-b");
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Error && e.Message.Contains("wf-a") && e.Exception == conflict);
+    }
+
+    [Fact]
     public async Task Cancellation_of_the_provided_token_propagates()
     {
         // Host shutdown is not a per-definition failure: the pass must observe cancellation instead

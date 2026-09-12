@@ -53,6 +53,14 @@ public sealed class PublicationPolicyResolutionException(string code, string mes
 
 public sealed record PublicationFailure(string Code, string Message);
 
+/// <summary>Shared <see cref="PublicationFailure.Code"/> values used by more than one publishing component.</summary>
+public static class PublicationFailureCodes
+{
+    /// <summary>The target activation slot is owned by another activation source; ownership transfer is an
+    /// explicit operator action (ADR 0043).</summary>
+    public const string SlotOwnerConflict = "slot_owner_conflict";
+}
+
 /// <summary>Transport-facing publication status projection. Lives in Core so <see cref="PublishedWorkflowView"/>
 /// (relocated for the engine/API split, spec 145) can carry it without an Api reference. The Api mapper
 /// <c>PublicationContract.ToView</c> and other view types remain in the Api transport layer.</summary>

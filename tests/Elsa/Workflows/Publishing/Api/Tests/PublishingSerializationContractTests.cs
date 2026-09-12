@@ -6,6 +6,7 @@ using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -67,6 +68,7 @@ public sealed class PublishingSerializationContractTests
         typeof(ValueConversionProfilesResponse),
         typeof(PublicationPreflightView),
         typeof(PublicationSnapshotPreflightView),
+        typeof(PublicationSlotOwnerView),
         typeof(PublicationSlotView),
         typeof(PublicationView),
         typeof(PublicationPolicyView),
@@ -273,6 +275,39 @@ public sealed class PublishingSerializationContractTests
         var preflightJson = Serialize(preflight);
         Assert.DoesNotContain("draftId", preflightJson, StringComparison.Ordinal);
         Assert.Contains("\"expectedDraftRevision\":7", preflightJson, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(WorkflowActivationSource.ArtifactReconciliationKind, "mounted-artifacts")]
+    [InlineData("operator-import", null)]
+    [InlineData(null, null)]
+    public void Both_preflight_views_write_the_target_slot_owner_or_an_explicit_null(string? sourceKind, string? sourceId)
+    {
+        var owner = sourceKind is null ? null : PublicationSlotOwnerView.From(new WorkflowActivationSource(sourceKind, sourceId));
+        var version = new PublicationPreflightView("definition-1", "version-1", "default", PublicationActionView.Replace,
+            PublicationPolicySourceView.Host, null, owner is null, [], [], owner);
+        var snapshot = new PublicationSnapshotPreflightView("token-1", "sha256:candidate", "definition-1", null, "default",
+            PublicationActionView.Replace, PublicationPolicySourceView.Host, null, owner is null, [], [], [], owner);
+
+        foreach (var document in new[] { Serialize(version), Serialize(snapshot) }.Select(json => JsonDocument.Parse(json)))
+        {
+            using (document)
+            {
+                var written = document.RootElement.GetProperty("targetSlotOwner");
+                if (owner is null)
+                {
+                    Assert.Equal(JsonValueKind.Null, written.ValueKind);
+                    continue;
+                }
+
+                Assert.Equal(["sourceKind", "sourceId"], written.EnumerateObject().Select(property => property.Name));
+                Assert.Equal(sourceKind, written.GetProperty("sourceKind").GetString());
+                Assert.Equal(sourceId, written.GetProperty("sourceId").GetString());
+            }
+        }
+
+        Assert.Equal(owner, Deserialize<PublicationPreflightView>(Serialize(version)).TargetSlotOwner);
+        Assert.Equal(owner, Deserialize<PublicationSnapshotPreflightView>(Serialize(snapshot)).TargetSlotOwner);
     }
 
     private static JsonSerializerContext Context

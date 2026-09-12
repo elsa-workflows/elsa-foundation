@@ -65,6 +65,10 @@ public sealed class PublishWorkflowRequestHandlerTests
     private readonly PublicationSnapshotReviewService _snapshotReviews = new(
         TimeProvider.System,
         new InMemoryPublicationSnapshotReviewStore());
+    private IPublicationPreflightService _preflightService = new PublicationPreflightService();
+
+    private static readonly WorkflowActivationSource ImportOwner = WorkflowActivationSource.ArtifactReconciliation("mounted-artifacts");
+    private static readonly string DefaultSlotId = WorkflowActivationSlotIdentity.Create("definition-1", "default");
 
     [Fact]
     public async Task Publishes_reviewed_snapshot_when_candidate_and_authority_are_unchanged()
@@ -406,6 +410,65 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.Equal(2, liveReferences.Count);
         Assert.Contains(liveReferences, reference => reference.SourceReferenceId == defaultPublication.SourceReferenceId);
         Assert.Contains(liveReferences, reference => reference.SourceReferenceId == namedPublication.SourceReferenceId);
+    }
+
+    [Fact]
+    public async Task Publishing_to_a_slot_owned_by_another_activation_source_is_refused_before_any_write()
+    {
+        var imported = await OccupyDefaultSlotAsync(ImportOwner);
+
+        var refusal = await Assert.ThrowsAsync<PublicationActivationException>(() =>
+            Handler(WorkflowVersion(Node("write-one", Text("one")))).Handle(new PublishWorkflow("version-1"), CancellationToken.None));
+
+        // The same failure activation raised, but now ahead of all three writes a late refusal used to leave behind.
+        Assert.Equal("slot_owner_conflict", refusal.Code);
+        Assert.Contains(ImportOwner.Describe(), refusal.Message, StringComparison.Ordinal);
+        Assert.Equal(new PublishWrites(Executables: 0, SourceReferences: 0, PublicationRecords: 0), await CountPublishWritesAsync());
+        Assert.Equal(imported, await _activationAuthority.FindAsync("definition-1", "default"));
+    }
+
+    [Fact]
+    public async Task Publishing_the_artifact_a_foreign_owner_already_serves_is_refused_rather_than_journaled_as_active()
+    {
+        // The coordinator's same-artifact no-op answers before ownership is consulted, so without the preflight owner
+        // check this publish succeeded and journaled an Active publication that the slot never pointed at.
+        var version = WorkflowVersion(Node("write-one", Text("one")));
+        var published = await Handler(version).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var imported = await HandOverDefaultSlotAsync(published, ImportOwner);
+        var before = await CountPublishWritesAsync();
+
+        var refusal = await Assert.ThrowsAsync<PublicationActivationException>(() =>
+            Handler(version).Handle(new PublishWorkflow("version-1"), CancellationToken.None));
+
+        Assert.Equal("slot_owner_conflict", refusal.Code);
+        Assert.Equal(before, await CountPublishWritesAsync());
+        Assert.Equal(imported, await _activationAuthority.FindAsync("definition-1", "default"));
+    }
+
+    [Fact]
+    public async Task A_foreign_owner_outranks_trigger_conflicts_in_the_refusal()
+    {
+        await OccupyDefaultSlotAsync(ImportOwner);
+        _preflightService = new ClashingPreflightService();
+
+        var refusal = await Assert.ThrowsAsync<PublicationActivationException>(() =>
+            Handler(WorkflowVersion(Node("write-one", Text("one")))).Handle(new PublishWorkflow("version-1"), CancellationToken.None));
+
+        // Resolving the trigger clash would still leave the slot to its owner, so the owner is what publish reports.
+        Assert.Equal("slot_owner_conflict", refusal.Code);
+        Assert.Equal(new PublishWrites(Executables: 0, SourceReferences: 0, PublicationRecords: 0), await CountPublishWritesAsync());
+    }
+
+    [Fact]
+    public async Task Trigger_conflicts_without_a_foreign_owner_still_refuse_as_a_preflight_conflict_before_any_write()
+    {
+        _preflightService = new ClashingPreflightService();
+
+        var refusal = await Assert.ThrowsAsync<PublicationPreflightConflictException>(() =>
+            Handler(WorkflowVersion(Node("write-one", Text("one")))).Handle(new PublishWorkflow("version-1"), CancellationToken.None));
+
+        Assert.Equal(ClashingPreflightService.Clash, Assert.Single(refusal.Conflicts));
+        Assert.Equal(new PublishWrites(Executables: 0, SourceReferences: 0, PublicationRecords: 0), await CountPublishWritesAsync());
     }
 
     [Fact]
@@ -976,14 +1039,6 @@ public sealed class PublishWorkflowRequestHandlerTests
         bool configureExpressionValidator = true)
     {
         var extractor = new WorkflowTriggerBindingExtractor([]);
-        IWorkflowTriggerIndexer indexer = new WorkflowTriggerIndexer(extractor, _bindingStore);
-        var coordinator = new WorkflowActivationCoordinator(
-            _activationAuthority,
-            _referenceStore,
-            TestRootWriteLeases.Create(_store),
-            TimeProvider.System,
-            indexer,
-            _bindingStore);
         return new(
             compiler,
             _store,
@@ -995,8 +1050,8 @@ public sealed class PublishWorkflowRequestHandlerTests
             _policyStore,
             new PublicationPolicyResolver(),
             _publicationStore,
-            new PublicationPreflightService(),
-            new PublicationActivator(coordinator, _publicationStore, TimeProvider.System),
+            _preflightService,
+            new PublicationActivator(Coordinator(extractor), _publicationStore, TimeProvider.System),
             TimeProvider.System,
             workflowVersionStore: versionStore,
             snapshotReviews: _snapshotReviews,
@@ -1004,6 +1059,60 @@ public sealed class PublishWorkflowRequestHandlerTests
             expressionValidator: configureExpressionValidator
                 ? expressionValidator ?? StubExpressionValidator.Valid
                 : null);
+    }
+
+    private WorkflowActivationCoordinator Coordinator(IWorkflowTriggerBindingExtractor extractor) =>
+        new(
+            _activationAuthority,
+            _referenceStore,
+            TestRootWriteLeases.Create(_store),
+            TimeProvider.System,
+            new WorkflowTriggerIndexer(extractor, _bindingStore),
+            _bindingStore);
+
+    /// <summary>Puts an activation from <paramref name="owner"/> into the empty default slot, as an artifact mount does.</summary>
+    private async Task<WorkflowActivationSlot> OccupyDefaultSlotAsync(WorkflowActivationSource owner)
+    {
+        var transition = await _activationAuthority.TryActivateAsync(new WorkflowActivationSlotRequest(
+            "definition-1", "default", "import:artifact-1", owner, ExpectedRevision: 0, DateTimeOffset.UtcNow));
+        Assert.True(transition.Succeeded, transition.Diagnostic);
+        return transition.Slot;
+    }
+
+    /// <summary>Hands the default slot, still serving <paramref name="published"/>'s artifact, to <paramref name="owner"/> through an operator takeover.</summary>
+    private async Task<WorkflowActivationSlot> HandOverDefaultSlotAsync(PublishedWorkflowView published, WorkflowActivationSource owner)
+    {
+        var slot = await _activationAuthority.FindAsync("definition-1", "default");
+        var result = await Coordinator(new WorkflowTriggerBindingExtractor([])).ActivateAsync(new WorkflowActivationCommand(
+            (await _store.FindAsync(published.ArtifactId))!,
+            (await _referenceStore.FindAsync(published.SourceReferenceId))!,
+            "default",
+            "import:artifact-1",
+            owner,
+            slot!.Revision,
+            WorkflowActivationOwnershipIntent.TakeOver));
+        Assert.True(result.Succeeded, result.Diagnostic);
+        return result.Slot;
+    }
+
+    /// <summary>Counts each store publish writes to, retired rows included, so a refusal that wrote anything is visible.</summary>
+    private async Task<PublishWrites> CountPublishWritesAsync() => new(
+        (await _store.ListAllAsync()).Count,
+        (await _referenceStore.ListAllAsync()).Count,
+        (await _publicationStore.ListBySlotAsync(DefaultSlotId)).Count);
+
+    private sealed record PublishWrites(int Executables, int SourceReferences, int PublicationRecords);
+
+    /// <summary>Reports one authoritative Exclusive clash in another slot, whatever the candidate claims.</summary>
+    private sealed class ClashingPreflightService : IPublicationPreflightService
+    {
+        public static readonly PublicationTriggerConflict Clash = new(
+            "publication-blue", "blue", "Http", "get:/orders", PublicationTriggerCardinality.Exclusive, "claim-blue");
+
+        public PublicationPreflightResult Evaluate(
+            IReadOnlyCollection<PublicationTriggerClaim> candidateClaims,
+            IReadOnlyCollection<PublicationAuthoritativeClaimSet> authoritativeClaims) =>
+            new(CanActivate: false, [], [Clash]);
     }
 
     private sealed class StubExpressionValidator(ExpressionDraftValidationResult result) : IExpressionDraftSemanticValidator

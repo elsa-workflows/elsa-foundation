@@ -23,8 +23,9 @@ public sealed class PublishingApiContractCompatibilityTests
     {
         // T117 moved slot reads to Runtime.Api, retiring the three publishing read contracts while
         // keeping PublicationSlotView for the unpublish/restore lifecycle commands. #1625 then added
-        // GetPublicationRecord, the request for the Publishing-owned read of one journal record.
-        Assert.Equal(66, ContractTypes.Length);
+        // GetPublicationRecord, the request for the Publishing-owned read of one journal record, and #1659 added
+        // PublicationSlotOwnerView, the nullable targetSlotOwner both workflow preflight views now carry.
+        Assert.Equal(67, ContractTypes.Length);
 
         var apiAssembly = typeof(WorkflowsPublishingApiFeature).Assembly;
 
@@ -56,7 +57,8 @@ public sealed class PublishingApiContractCompatibilityTests
         // catch accidental constructor/property/method drift even when the type list still compiles.
         // They moved once when the contracts left the Api.Core assembly: a constructed generic type's
         // FullName embeds its arguments' assembly-qualified names, so the strings changed while the
-        // JSON wire shape did not.
+        // JSON wire shape did not. #1659 moved both on purpose: the two workflow preflight views gained the
+        // trailing nullable TargetSlotOwner and PublicationSlotOwnerView joined the surface, an additive wire change.
         var legacyTypes = ContractTypes.Where(type => type != typeof(ActivityPublishingDiagnosticView) &&
                                                        type != typeof(ActivityPublishingProblemDetails) &&
                                                        type != typeof(ExpressionPublicationValidationDiagnosticView) &&
@@ -64,12 +66,12 @@ public sealed class PublishingApiContractCompatibilityTests
                                                        type != typeof(RuntimePreflightProblemDetails)).ToArray();
         var legacyHash = PublicShapeHash(legacyTypes);
         Assert.Equal(
-            "6da080e5a8c7ca047054a85e33275527d95d5368d602cef2e93bf742e13a2f5d",
+            "502fe0f1102ec5a547573fc3081cde488d870d0b87d16e24fd0ce3f7e5459faf",
             legacyHash);
 
         var actualHash = PublicShapeHash(ContractTypes);
         Assert.True(
-            actualHash == "4b611e9a8c350fbd911ea59e396acabf1cd157aca36df1cdef593f99a72ea658",
+            actualHash == "8cda99df2adaf1626c2d16c837f7ff15341e01f60a5e8afcab530c253cfbe870",
             $"The Publishing API public-shape hash changed to {actualHash}.");
     }
 

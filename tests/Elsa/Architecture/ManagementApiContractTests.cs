@@ -75,6 +75,7 @@ public class ManagementApiContractTests
         "PublicationPolicy",
         "PublicationPreflight",
         "PublicationSlot",
+        "PublicationSlotOwner",
         "PublicationStatus",
         "ReplaceWorkflowDraftRequest",
         "RuntimeDiagnosticsSettings",
