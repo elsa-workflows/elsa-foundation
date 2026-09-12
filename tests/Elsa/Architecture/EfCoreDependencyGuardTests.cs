@@ -8,7 +8,7 @@ namespace Elsa.Architecture.Tests;
 /// ADR 0073 selects EF Core as the destination persistence family, but each implementation still enters
 /// through an explicitly reviewed program issue. This ratchet therefore keeps the currently admitted
 /// surface at the vendor-owned OpenIddict host boundary plus the repository implementations explicitly
-/// admitted by ADR 0072 and Program #1665. It reads
+/// admitted by ADR 0072 and ADR 0073 / Program #1665. It reads
 /// each source project's evaluated Release and Debug restore graphs and scans sources, so imported, conditional, transitive,
 /// and provider-only EF edges anywhere else under <c>src/</c> fail and name the offender. Workbench's host
 /// exception also validates its exact resolved EF package set. Each replacement changes this guard deliberately
@@ -104,6 +104,25 @@ public sealed class EfCoreDependencyGuardTests
             .ToArray();
 
         Assert.True(offenders.Length == 0, Report("drift from the reviewed Studio Preferences EF closure", offenders));
+    }
+
+    [Fact]
+    public void Every_admitted_Structured_Logs_project_resolves_only_its_reviewed_EF_closure()
+    {
+        var offenders = Adr0073StructuredLogsEf.ExpectedEfPackagesByProject
+            .SelectMany(project => RestoreConfigurations.SelectMany(configuration =>
+            {
+                var resolved = ReadProjectEfPackages(project.Key, configuration);
+                var unexpected = FindUnexpectedEfPackages(resolved, project.Value)
+                    .Select(package => $"{project.Key} ({configuration}) unexpectedly resolves {package}");
+                var missing = FindUnexpectedEfPackages(project.Value, resolved)
+                    .Select(package => $"{project.Key} ({configuration}) no longer resolves reviewed package {package}");
+                return unexpected.Concat(missing);
+            }))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        Assert.True(offenders.Length == 0, Report("drift from the reviewed Structured Logs EF closure", offenders));
     }
 
     [Fact]
@@ -335,7 +354,8 @@ public sealed class EfCoreDependencyGuardTests
                         configuration => ReadProjectEfPackages(relativePath, configuration),
                         StringComparer.Ordinal),
                     Adr0072SecretsEfPilot.IsProjectPath(relativePath) ||
-                    Adr0073RepositoryFirstEf.IsProjectPath(relativePath)));
+                    Adr0073RepositoryFirstEf.IsProjectPath(relativePath) ||
+                    Adr0073StructuredLogsEf.IsProjectPath(relativePath)));
         }
         return projects;
     }
@@ -470,6 +490,7 @@ public sealed class EfCoreDependencyGuardTests
         var relativePath = Path.GetRelativePath(RepoRoot, file).Replace('\\', '/');
         return Adr0072SecretsEfPilot.IsSurfacePath(relativePath) ||
                Adr0073RepositoryFirstEf.IsSurfacePath(relativePath) ||
+               Adr0073StructuredLogsEf.IsSurfacePath(relativePath) ||
                OpenIddictPersistenceArchitectureTests.IsWorkbenchVendorEfSource(relativePath);
     }
 
@@ -586,6 +607,51 @@ public sealed class EfCoreDependencyGuardTests
                     "Microsoft.EntityFrameworkCore.Sqlite",
                     "Microsoft.EntityFrameworkCore.Sqlite.Core"
                 ]
+            };
+
+        public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
+
+        public static bool IsSurfacePath(string relativePath) =>
+            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
+
+        public static bool IsProjectPath(string relativePath) =>
+            ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
+
+        private static string[] CorePackages() =>
+        [
+            "Microsoft.EntityFrameworkCore",
+            "Microsoft.EntityFrameworkCore.Abstractions",
+            "Microsoft.EntityFrameworkCore.Analyzers",
+            "Microsoft.EntityFrameworkCore.Relational"
+        ];
+    }
+
+    /// <summary>
+    /// ADR 0073's Diagnostics Structured Logs repository-first admission for issue #1695. The
+    /// production adapter is provider-neutral; SQLite belongs to the behavioral test project and
+    /// SQL Server, PostgreSQL, and MySQL packages belong only to the live-provider test project.
+    /// </summary>
+    internal static class Adr0073StructuredLogsEf
+    {
+        public static readonly string[] SurfacePathPrefixes =
+        [
+            "src/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/",
+            "tests/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/"
+        ];
+
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["src/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["tests/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                [
+                    .. CorePackages(),
+                    "Microsoft.EntityFrameworkCore.SqlServer",
+                    "MySql.EntityFrameworkCore",
+                    "Npgsql.EntityFrameworkCore.PostgreSQL"
+                ],
+                ["tests/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests.csproj"] =
+                [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
             };
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;

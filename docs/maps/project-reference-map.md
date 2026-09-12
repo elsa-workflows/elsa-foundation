@@ -6,9 +6,9 @@ Records direct project references only.
 
 ## Summary
 
-- Source projects: 130
-- Test projects: 106
-- Direct project references: 1196
+- Source projects: 131
+- Test projects: 108
+- Direct project references: 1202
 
 ## Projects
 
@@ -57,6 +57,7 @@ Records direct project references only.
 | [Elsa.Diagnostics.Persistence.Groundwork](../../src/Elsa/Diagnostics/Persistence/Groundwork/Elsa.Diagnostics.Persistence.Groundwork.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork<br>Elsa.Diagnostics.Persistence<br>Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork |
 | [Elsa.Diagnostics.StructuredLogs.Core](../../src/Elsa/Diagnostics/StructuredLogs/Core/Elsa.Diagnostics.StructuredLogs.Core.csproj) | source | Elsa.Diagnostics | - | default | - |
 | [Elsa.Diagnostics.StructuredLogs](../../src/Elsa/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Api.AspNetCore<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Foundation.Identity.Abstractions |
+| [Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Diagnostics.Persistence<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Persistence.EntityFramework |
 | [Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.csproj) | source | Elsa.Diagnostics | - | default | Elsa.Diagnostics.Persistence<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Persistence.Groundwork.V2 |
 | [Elsa.Events.Core](../../src/Elsa/Events/Core/Elsa.Events.Core.csproj) | source | Elsa.Events | - | default | Elsa.Pipelines.Core |
 | [Elsa.Events](../../src/Elsa/Events/Elsa.Events.csproj) | source | Elsa.Events | - | default | Elsa.Events.Core<br>Elsa.Events.Strategies<br>Elsa.Pipelines.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core |
@@ -179,6 +180,8 @@ Records direct project references only.
 | [Elsa.Diagnostics.Persistence.Groundwork.Tests](../../tests/Elsa/Diagnostics/Persistence/Groundwork/Tests/Elsa.Diagnostics.Persistence.Groundwork.Tests.csproj) | test | Elsa.Diagnostics | - | default | Elsa.Diagnostics.Persistence.Groundwork |
 | [Elsa.Diagnostics.Persistence.Groundwork.V2.Consumer](../../tests/Elsa/Diagnostics/Persistence/Groundwork/V2/Consumer/Elsa.Diagnostics.Persistence.Groundwork.V2.Consumer.csproj) | test | Elsa.Diagnostics | net10.0 | false | - |
 | [Elsa.Diagnostics.Persistence.Tests](../../tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj) | test | Elsa.Diagnostics | - | default | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork<br>Elsa.Diagnostics.Persistence<br>Elsa.Diagnostics.Persistence.Groundwork<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.V2 |
+| [Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests](../../tests/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore |
+| [Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore |
 | [Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing |
 | [Elsa.Diagnostics.StructuredLogs.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj) | test | Elsa.Diagnostics | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Compatibility.Testing<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Testing |
 | [Elsa.Events.Tests](../../tests/Elsa/Events/Tests/Elsa.Events.Tests.csproj) | test | Elsa.Events | - | default | Elsa.Events<br>Elsa.Events.Core<br>Elsa.Events.Strategies<br>Elsa.Locking.Core<br>Elsa.Tasks<br>Elsa.Tasks.Core |
@@ -261,7 +264,7 @@ Records direct project references only.
 | Elsa.Architecture | 0 | 1 |
 | Elsa.Attention | 2 | 2 |
 | Elsa.Caching | 2 | 1 |
-| Elsa.Diagnostics | 9 | 8 |
+| Elsa.Diagnostics | 10 | 10 |
 | Elsa.Events | 3 | 1 |
 | Elsa.Expressions | 9 | 3 |
 | Elsa.Foundation | 9 | 6 |

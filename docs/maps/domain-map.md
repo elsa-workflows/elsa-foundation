@@ -6,10 +6,10 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 
 ## Summary
 
-- Source projects: 130
-- Test projects: 106
+- Source projects: 131
+- Test projects: 108
 - Domains: 28
-- Direct cross-domain references: 720
+- Direct cross-domain references: 721
 
 ## Domains
 
@@ -21,7 +21,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Architecture | 0 | 1 | test |
 | Elsa.Attention | 2 | 2 | contract<br>feature/implementation<br>test |
 | Elsa.Caching | 2 | 1 | contract<br>feature/implementation<br>test |
-| Elsa.Diagnostics | 9 | 8 | contract<br>feature/implementation<br>test |
+| Elsa.Diagnostics | 10 | 10 | contract<br>feature/implementation<br>test |
 | Elsa.Events | 3 | 1 | contract<br>feature/implementation<br>helper<br>test |
 | Elsa.Expressions | 9 | 3 | contract<br>feature/implementation<br>provider/implementation<br>test |
 | Elsa.Foundation | 9 | 6 | feature/implementation<br>test |
@@ -91,6 +91,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Diagnostics.Persistence.Groundwork](../../src/Elsa/Diagnostics/Persistence/Groundwork/Elsa.Diagnostics.Persistence.Groundwork.csproj) | source | Elsa.Diagnostics | Persistence.Groundwork | feature/implementation | Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork<br>Elsa.Diagnostics.Persistence<br>Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork |
 | [Elsa.Diagnostics.StructuredLogs.Core](../../src/Elsa/Diagnostics/StructuredLogs/Core/Elsa.Diagnostics.StructuredLogs.Core.csproj) | source | Elsa.Diagnostics | StructuredLogs.Core | contract | - |
 | [Elsa.Diagnostics.StructuredLogs](../../src/Elsa/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs.csproj) | source | Elsa.Diagnostics | StructuredLogs | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Foundation.Identity.Abstractions |
+| [Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj) | source | Elsa.Diagnostics | StructuredLogs.Persistence.EntityFrameworkCore | feature/implementation | Elsa.Diagnostics.Persistence<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Persistence.EntityFramework |
 | [Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.csproj) | source | Elsa.Diagnostics | StructuredLogs.Persistence.Groundwork | feature/implementation | Elsa.Diagnostics.Persistence<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Persistence.Groundwork.V2 |
 | [Elsa.Events.Core](../../src/Elsa/Events/Core/Elsa.Events.Core.csproj) | source | Elsa.Events | Core | contract | Elsa.Pipelines.Core |
 | [Elsa.Events](../../src/Elsa/Events/Elsa.Events.csproj) | source | Elsa.Events | (root) | feature/implementation | Elsa.Events.Core<br>Elsa.Events.Strategies<br>Elsa.Pipelines.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core |
@@ -213,6 +214,8 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Diagnostics.Persistence.Groundwork.Tests](../../tests/Elsa/Diagnostics/Persistence/Groundwork/Tests/Elsa.Diagnostics.Persistence.Groundwork.Tests.csproj) | test | Elsa.Diagnostics | Persistence.Groundwork.Tests | test | Elsa.Diagnostics.Persistence.Groundwork |
 | [Elsa.Diagnostics.Persistence.Groundwork.V2.Consumer](../../tests/Elsa/Diagnostics/Persistence/Groundwork/V2/Consumer/Elsa.Diagnostics.Persistence.Groundwork.V2.Consumer.csproj) | test | Elsa.Diagnostics | Persistence.Groundwork.V2.Consumer | test | - |
 | [Elsa.Diagnostics.Persistence.Tests](../../tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj) | test | Elsa.Diagnostics | Persistence.Tests | test | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork<br>Elsa.Diagnostics.Persistence<br>Elsa.Diagnostics.Persistence.Groundwork<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.V2 |
+| [Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests](../../tests/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Diagnostics | StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests | test | Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore |
+| [Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Diagnostics | StructuredLogs.Persistence.EntityFrameworkCore.Tests | test | Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore |
 | [Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests.csproj) | test | Elsa.Diagnostics | StructuredLogs.Persistence.Groundwork.V2.Tests | test | Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing |
 | [Elsa.Diagnostics.StructuredLogs.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj) | test | Elsa.Diagnostics | StructuredLogs.Tests | test | Elsa.Api.AspNetCore<br>Elsa.Api.Compatibility.Testing<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Testing |
 | [Elsa.Events.Tests](../../tests/Elsa/Events/Tests/Elsa.Events.Tests.csproj) | test | Elsa.Events | Tests | test | Elsa.Events<br>Elsa.Events.Core<br>Elsa.Events.Strategies<br>Elsa.Locking.Core<br>Elsa.Tasks<br>Elsa.Tasks.Core |
@@ -513,6 +516,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Diagnostics.Persistence.Tests](../../tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj) | Elsa.Diagnostics | [Elsa.Persistence.Groundwork.V2](../../src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj) | Elsa.Persistence |
 | [Elsa.Diagnostics.StructuredLogs](../../src/Elsa/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs.csproj) | Elsa.Diagnostics | [Elsa.Api.AspNetCore](../../src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | Elsa.Api |
 | [Elsa.Diagnostics.StructuredLogs](../../src/Elsa/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs.csproj) | Elsa.Diagnostics | [Elsa.Foundation.Identity.Abstractions](../../src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj) | Elsa.Foundation |
+| [Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj) | Elsa.Diagnostics | [Elsa.Persistence.EntityFramework](../../src/Elsa/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
 | [Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.csproj) | Elsa.Diagnostics | [Elsa.Persistence.Groundwork.V2](../../src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj) | Elsa.Persistence |
 | [Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/V2/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.V2.Tests.csproj) | Elsa.Diagnostics | [Elsa.Persistence.Groundwork.Testing](../../tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj) | Elsa.Persistence |
 | [Elsa.Diagnostics.StructuredLogs.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj) | Elsa.Diagnostics | [Elsa.Api.AspNetCore](../../src/Elsa/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | Elsa.Api |

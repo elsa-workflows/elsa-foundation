@@ -1,12 +1,12 @@
-using System.Reflection;
-using System.Text.RegularExpressions;
-using System.Xml.Linq;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.Persistence.Extensions;
 using Elsa.Diagnostics.Persistence.Observability;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using System.Reflection;
+using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using Xunit;
 
 namespace Elsa.Diagnostics.Persistence.Tests;
@@ -432,7 +432,7 @@ public sealed partial class DiagnosticsPersistenceArchitectureTests
     private static IEnumerable<string> FindEfProjectViolations(string project)
     {
         var relativePath = RelativePath(project);
-        if (ContainsEfCore(project))
+        if (!IsApprovedEfAdapterPath(project) && ContainsEfCore(project))
             yield return $"{relativePath}: EF Core project path";
 
         var document = XDocument.Load(project);
@@ -440,25 +440,31 @@ public sealed partial class DiagnosticsPersistenceArchitectureTests
                      .Select(element => element.Attribute("Include")?.Value)
                      .OfType<string>()
                      .Where(ContainsEfCore))
-            yield return $"{relativePath}: PackageReference {package}";
+        {
+            if (!IsApprovedEfAdapterPath(project))
+                yield return $"{relativePath}: PackageReference {package}";
+        }
 
         foreach (var reference in document.Descendants("ProjectReference")
                      .Select(element => element.Attribute("Include")?.Value)
                      .OfType<string>()
                      .Where(ContainsEfCore))
-            yield return $"{relativePath}: ProjectReference {reference}";
+        {
+            if (!IsApprovedEfAdapterPath(project))
+                yield return $"{relativePath}: ProjectReference {reference}";
+        }
     }
 
     private static IEnumerable<string> FindEfDirectoryViolations() =>
         Directory.EnumerateDirectories(DiagnosticsSourceRoot, "*", SearchOption.AllDirectories)
             .Concat(Directory.EnumerateDirectories(DiagnosticsTestRoot, "*", SearchOption.AllDirectories))
-            .Where(ContainsEfCore)
+            .Where(directory => ContainsEfCore(directory) && !IsApprovedEfAdapterPath(directory))
             .Select(directory => $"{RelativePath(directory)}: EF Core directory");
 
     private static IEnumerable<string> FindEfSourceViolations() =>
         Directory.EnumerateFiles(DiagnosticsSourceRoot, "*.cs", SearchOption.AllDirectories)
             .Concat(Directory.EnumerateFiles(DiagnosticsTestRoot, "*.cs", SearchOption.AllDirectories))
-            .Where(file => !string.Equals(file, SourceFilePath, StringComparison.Ordinal))
+            .Where(file => !string.Equals(file, SourceFilePath, StringComparison.Ordinal) && !IsApprovedEfAdapterPath(file))
             .Select(file => (Path: RelativePath(file), Match: EfSourcePattern().Match(File.ReadAllText(file))))
             .Where(hit => hit.Match.Success)
             .Select(hit => $"{hit.Path}: {hit.Match.Value}");
@@ -543,6 +549,17 @@ public sealed partial class DiagnosticsPersistenceArchitectureTests
         return IsWithin("src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork") ||
                IsWithin("src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork") ||
                IsWithin("src/Elsa/Diagnostics/Persistence/Groundwork");
+
+        bool IsWithin(string root) =>
+            string.Equals(relativePath, root, StringComparison.Ordinal) ||
+            relativePath.StartsWith(root + "/", StringComparison.Ordinal);
+    }
+
+    private static bool IsApprovedEfAdapterPath(string path)
+    {
+        var relativePath = RelativePath(path);
+        return IsWithin("src/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore") ||
+               IsWithin("tests/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore");
 
         bool IsWithin(string root) =>
             string.Equals(relativePath, root, StringComparison.Ordinal) ||

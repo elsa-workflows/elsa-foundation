@@ -6,10 +6,10 @@ Records CShells feature identity, public feature properties, and dependency evid
 
 ## Summary
 
-- Feature classes: 104
+- Feature classes: 105
 - Concrete features missing explicit ShellFeature ID: 2
 - Duplicate explicit feature IDs: 0
-- Feature-bearing source projects: 86
+- Feature-bearing source projects: 87
 - IConfiguration feature-registration shape observed from: `src/Apps/Elsa.Workbench/appsettings.json`
 
 ## IConfiguration Shape Evidence
@@ -59,6 +59,7 @@ No duplicate explicit feature IDs were discovered.
 | - | GroundworkOpenTelemetryPersistenceFeature | False | Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork | Target: string? | type-name selection signal | [GroundworkOpenTelemetryPersistenceFeature.cs](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryPersistenceFeature.cs) |
 | DiagnosticsGroundworkPersistence | DiagnosticsGroundworkPersistenceFeature | False | Elsa.Diagnostics.Persistence.Groundwork | Target: string? | - | [DiagnosticsGroundworkPersistenceFeature.cs](../../src/Elsa/Diagnostics/Persistence/Groundwork/DiagnosticsGroundworkPersistenceFeature.cs) |
 | DiagnosticsStructuredLogs | StructuredLogsFeature | False | Elsa.Diagnostics.StructuredLogs | BufferCapacity: int<br>MinimumLevel: string<br>ServiceName: string?<br>SourceDisplayName: string? | - | [StructuredLogsFeature.cs](../../src/Elsa/Diagnostics/StructuredLogs/StructuredLogsFeature.cs) |
+| DiagnosticsStructuredLogsEntityFrameworkCore | StructuredLogsEntityFrameworkCoreFeature | False | Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore | ConnectionName: string?<br>ConnectionString: string?<br>Provider: string | code default<br>sensitive or deployment-specific value signal | [StructuredLogsEntityFrameworkCoreFeature.cs](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/StructuredLogsEntityFrameworkCoreFeature.cs) |
 | Events | EventsFeature | False | Elsa.Events | DefaultEventPublishingStrategy: IEventPublishingStrategy | - | [EventsFeature.cs](../../src/Elsa/Events/EventsFeature.cs) |
 | Expressions | ExpressionsFeature | False | Elsa.Expressions | EvaluatorOptions: ExpressionEvaluatorOptions | - | [ExpressionsFeature.cs](../../src/Elsa/Expressions/ExpressionsFeature.cs) |
 | ExpressionsApi | ExpressionsApiFeature | False | Elsa.Expressions.Api | - | - | [ExpressionsApiFeature.cs](../../src/Elsa/Expressions/Api/ExpressionsApiFeature.cs) |
@@ -170,6 +171,7 @@ Rows below are dependency evidence, not final policy. Feature-project references
 | - | Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork | Elsa.Persistence.Groundwork.V2 (GroundworkPersistenceShellFeatureBase, GroundworkWorkflowRuntime) | Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Diagnostics.Persistence | CShells.Abstractions 0.0.29-preview.147<br>Groundwork.Kernel 0.4.0-preview.30<br>Groundwork.Query.Model 0.4.0-preview.30<br>Groundwork.Store 0.4.0-preview.30<br>Microsoft.Extensions.DependencyInjection 10.0.10 |
 | DiagnosticsGroundworkPersistence | Elsa.Diagnostics.Persistence.Groundwork | Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork (GroundworkOpenTelemetryPersistenceFeature) | Elsa.Diagnostics.Persistence<br>Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork | CShells.Abstractions 0.0.29-preview.147<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.79<br>Microsoft.Extensions.DependencyInjection 10.0.10 |
 | DiagnosticsStructuredLogs | Elsa.Diagnostics.StructuredLogs | Elsa.Foundation.Identity.Abstractions (FoundationIdentityAbstractions) | Elsa.Api.AspNetCore<br>Elsa.Diagnostics.StructuredLogs.Core | CShells.Abstractions 0.0.29-preview.147<br>CShells.AspNetCore.Abstractions 0.0.29-preview.147<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.79<br>NativeEndpoints 1.0.0-preview.6 |
+| DiagnosticsStructuredLogsEntityFrameworkCore | Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore | Elsa.Diagnostics.StructuredLogs (DiagnosticsStructuredLogs) | Elsa.Diagnostics.Persistence<br>Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Persistence.EntityFramework | CShells.Abstractions 0.0.29-preview.147<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.79<br>Microsoft.EntityFrameworkCore 10.0.10<br>Microsoft.EntityFrameworkCore.Relational 10.0.10<br>Microsoft.Extensions.Configuration.Abstractions 10.0.10<br>Microsoft.Extensions.DependencyInjection 10.0.10<br>Microsoft.Extensions.Hosting.Abstractions 10.0.10<br>Microsoft.Extensions.Options 10.0.10 |
 | Events | Elsa.Events | - | Elsa.Events.Core<br>Elsa.Events.Strategies<br>Elsa.Pipelines.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core | CShells.Abstractions 0.0.29-preview.147<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.79<br>Microsoft.Extensions.Logging.Abstractions 10.0.10 |
 | Expressions | Elsa.Expressions | - | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Core | CShells.Abstractions 0.0.29-preview.147<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.79<br>Microsoft.Extensions.Logging.Abstractions 10.0.10 |
 | ExpressionsApi | Elsa.Expressions.Api | Elsa.Api.Capabilities (ApiCapabilities) | Elsa.Api.AspNetCore<br>Elsa.Expressions.Core<br>Elsa.Mediator.Core | CShells.Abstractions 0.0.29-preview.147<br>CShells.AspNetCore.Abstractions 0.0.29-preview.147<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.79<br>NativeEndpoints 1.0.0-preview.6 |
