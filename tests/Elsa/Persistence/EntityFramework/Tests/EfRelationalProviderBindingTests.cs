@@ -12,9 +12,17 @@ public sealed class EfRelationalProviderBindingTests
     [InlineData("SQLServer", "sqlserver")]
     [InlineData("PostgreSql", "postgresql")]
     [InlineData("Npgsql.EntityFrameworkCore.PostgreSQL", "postgresql")]
+    [InlineData("MySql", "mysql")]
+    [InlineData("MySql.EntityFrameworkCore", "mysql")]
     public void Normalize_accepts_the_default_pack_aliases(string input, string expected)
     {
         Assert.Equal(expected, EfRelationalProviderBinding.Normalize(input));
+    }
+
+    [Fact]
+    public void MySql_alias_resolves_the_Oracle_provider_name()
+    {
+        Assert.Equal("MySql.EntityFrameworkCore", EfRelationalProviderBinding.ExpectedProviderName("mysql"));
     }
 
     [Fact]

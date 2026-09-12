@@ -124,10 +124,12 @@
     {
       "outputPath": "Elsa.Server.Workbench.slnf",
       "includeProjectNames": [
-        "Elsa.Workbench"
+        "Elsa.Workbench",
+        "Elsa.Workbench.Tests"
       ],
       "requiredRootPaths": [
-        "src/Apps/Elsa.Workbench/Elsa.Workbench.csproj"
+        "src/Apps/Elsa.Workbench/Elsa.Workbench.csproj",
+        "tests/Elsa/Workbench/Tests/Elsa.Workbench.Tests.csproj"
       ]
     }
   ]

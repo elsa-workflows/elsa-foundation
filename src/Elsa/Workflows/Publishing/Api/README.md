@@ -64,6 +64,13 @@ Clients should call preflight immediately before publish, display the resolved a
 send `ExpectedPublicationId` when protecting against a stale Studio view. A `409` means the client must refresh
 authority state and preflight again; it must not assume that a candidate became active.
 
+Both preflight responses carry `targetSlotOwner` (`{ sourceKind, sourceId }`) when the resolved slot is live under an
+activation source other than publishing, such as an imported or mounted artifact, and `null` when the slot is empty,
+unpublished, or already publishing-owned. `canActivate` is false when there are trigger `conflicts` or a
+`targetSlotOwner`; `conflicts` itself stays trigger-only. Publish refuses such a slot with the same `409` a refused
+activation returned (the `slot_owner_conflict` failure, its detail naming the owner), but before it writes an executable,
+source reference, or publication record: ownership transfer is an operator action (ADR 0043).
+
 ## HTTP endpoint surface
 
 All routes are relative to the host's Elsa API base path.
@@ -74,7 +81,7 @@ All routes are relative to the host's Elsa API base path.
 | `GET` | `publishing/activities/{activityId}/construct` | `workflow-publishing.read` | Construct an activity from a catalog row. |
 | `GET` | `publishing/incident-strategies` | `workflow-publishing.read` | List safe incident-strategy descriptors and the effective default publication strategy. |
 | `GET` | `publishing/value-conversion/profiles` | `workflow-publishing.read` | List safe value-conversion profiles. |
-| `POST` | `publishing/workflows/{versionId}/preflight` | `workflow-publishing.read` | Resolve policy and return trigger changes/conflicts without changing authority. |
+| `POST` | `publishing/workflows/{versionId}/preflight` | `workflow-publishing.read` | Resolve policy and return trigger changes/conflicts and any foreign target-slot owner without changing authority. |
 | `POST` | `publishing/workflows/preflight` | `workflow-publishing.read` | Preflight a supplied workflow snapshot and issue a review token. |
 | `DELETE` | `publishing/workflows/{definitionId}/slots/{slotName}` | `workflow-publishing.manage` | Unpublish the slot authority and its serving projections. |
 | `POST` | `publishing/workflows/{definitionId}/slots/{slotName}/restore` | `workflow-publishing.manage` | Restore the latest eligible retired publication with a new authority transition. |

@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <Description>
-      Shared EF Core persistence policy for first-party Elsa modules (ADR 0072 pilot):
+      Shared EF Core persistence policy for first-party Elsa modules under accepted ADR 0073:
       per-module history table naming, provider guard, and migrate vs validate apply modes.
       This package references EF Core + Relational only — never a database provider engine.
     </Description>

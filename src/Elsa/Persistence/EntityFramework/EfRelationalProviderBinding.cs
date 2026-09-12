@@ -1,11 +1,11 @@
+using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
 using System.Reflection;
-using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
-/// Invokes the host's <c>UseSqlite</c> / <c>UseSqlServer</c> / <c>UseNpgsql</c> extension without
+/// Invokes the host's <c>UseSqlite</c>, <c>UseSqlServer</c>, <c>UseNpgsql</c>, or <c>UseMySQL</c> extension without
 /// this policy package referencing a provider engine. The host (or test/tooling project) must
 /// reference exactly one provider package so the extension type can be loaded.
 /// </summary>
@@ -38,6 +38,15 @@ public static class EfRelationalProviderBinding
             historyTableName,
             migrationsAssembly);
 
+    public static void UseMySql(DbContextOptionsBuilder builder, string connectionString, string historyTableName, string? migrationsAssembly = null) =>
+        Use(
+            builder,
+            "Microsoft.EntityFrameworkCore.MySQLDbContextOptionsExtensions, MySql.EntityFrameworkCore",
+            "UseMySQL",
+            connectionString,
+            historyTableName,
+            migrationsAssembly);
+
     public static void Use(DbContextOptionsBuilder builder, string provider, string connectionString, string historyTableName, string? migrationsAssembly = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -58,9 +67,12 @@ public static class EfRelationalProviderBinding
             case "postgres":
                 UseNpgsql(builder, connectionString, historyTableName, migrationsAssembly);
                 return;
+            case "mysql":
+                UseMySql(builder, connectionString, historyTableName, migrationsAssembly);
+                return;
             default:
                 throw new ArgumentException(
-                    $"Unknown EF relational provider '{provider}'. Expected Sqlite, SqlServer, or PostgreSql.",
+                    $"Unknown EF relational provider '{provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.",
                     nameof(provider));
         }
     }
@@ -73,6 +85,7 @@ public static class EfRelationalProviderBinding
             "sqlite" or "microsoft.entityframeworkcore.sqlite" => "sqlite",
             "sqlserver" or "sql server" or "mssql" or "microsoft.entityframeworkcore.sqlserver" => "sqlserver",
             "postgresql" or "postgres" or "npgsql" or "npgsql.entityframeworkcore.postgresql" => "postgresql",
+            "mysql" or "my sql" or "mysql.entityframeworkcore" => "mysql",
             var value => value
         };
     }
@@ -83,6 +96,7 @@ public static class EfRelationalProviderBinding
             "sqlite" => EfProviderNames.Sqlite,
             "sqlserver" => EfProviderNames.SqlServer,
             "postgresql" => EfProviderNames.PostgreSql,
+            "mysql" => EfProviderNames.MySql,
             _ => throw new ArgumentException($"Unknown EF relational provider '{provider}'.", nameof(provider))
         };
 
@@ -210,6 +224,6 @@ public static class EfRelationalProviderBinding
     private static InvalidOperationException ProviderMissing(string extensionTypeName, string methodName) =>
         new(
             $"Cannot bind {methodName} because '{extensionTypeName}' is not loaded. " +
-            "The host must PackageReference the matching EF provider engine (Sqlite, SqlServer, or Npgsql). " +
+            "The host must PackageReference the matching EF provider engine (Sqlite, SqlServer, Npgsql, or MySql.EntityFrameworkCore). " +
             "The module and policy packages stay provider-free.");
 }

@@ -1,8 +1,10 @@
 # Elsa.Secrets.Persistence.EntityFrameworkCore
 
-Additive, opt-in EF Core persistence for Secrets. **Groundwork remains the default** durable
-store. Workbench catalogs this feature so a host can enable it; default `shells.json` files
-keep `SecretsGroundworkPersistence` and do not enable this feature.
+Opt-in EF Core persistence for Secrets and the first existing implementation in the accepted
+[ADR 0073](../../../../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
+migration program. **Groundwork remains the temporary default** until the Secrets four-provider
+gate and explicit flip complete. Workbench catalogs this feature so a host can enable it; default
+`shells.json` files still keep `SecretsGroundworkPersistence` and do not enable this feature.
 
 Phase 4 (#1631) makes Groundwork Secrets provider-matrix and ledger-growth obligations
 conditional on selecting Groundwork. Enabling this feature is an EF-selected composition:
@@ -10,14 +12,17 @@ it must not have to grow `secrets-repository` Groundwork four-provider evidence,
 proves it on the independent `Secrets EF composition` job. Groundwork-default Workbench
 shells stay on Groundwork and keep that path's tests.
 
-## Proposed ADR 0072 / ADR 0042
+## Governing decision
 
-This is an intentional first-party EF pilot under **proposed**
-[ADR 0072](https://github.com/elsa-workflows/elsa-foundation/pull/1623) (provider-derived
-`DbContext` types, Variant A). [ADR 0042](../../../../../docs/adr/0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md)
-still forbids first-party EF except the OpenIddict vendor exception. The ratchet may
-exclude these proposed pilot paths for review; that exclusion is not an accepted ADR
-amendment. Accepting 0072 formally narrows 0042. This PR does not accept 0072.
+This implementation began as the provider-derived `DbContext` pilot proposed in ADR 0072.
+Accepted ADR 0073 now makes EF Core the only first-party persistence implementation family
+and supersedes ADR 0042's opposite direction. The default remains unchanged until the
+Secrets migration issue records four-provider, migration-lifecycle, host-composition, and
+[#1653 production-shaped HTTP CRUD/restart](https://github.com/elsa-workflows/elsa-foundation/issues/1653)
+proof. The [completion ledger](../../../../../docs/reports/ef-core-persistence-completion-ledger.md)
+records evidence and dispositions for that gate. ADR 0073 and the active
+[EF Core Persistence goal](../../../../../docs/program-goals/ef-core-persistence.md) govern the
+decision and program scope; the point-in-time ledger cannot override them.
 
 The module package references `Microsoft.EntityFrameworkCore` and
 `Microsoft.EntityFrameworkCore.Relational` only. Sqlite / SqlServer / Npgsql engines live
@@ -31,7 +36,7 @@ already references `Microsoft.EntityFrameworkCore.Sqlite` for OpenIddict, so Sql
 EF works without another provider package. SqlServer / PostgreSql require the host to add
 that engine.
 
-**Default stays Groundwork.** In `shells.json` (or the docker compose overlay), replace
+**Current default remains Groundwork pending the governed flip.** In `shells.json` (or the docker compose overlay), replace
 `SecretsGroundworkPersistence` with `SecretsEntityFrameworkCore`. Do not leave both keys
 in the same shell — registration throws an `InvalidOperationException` naming both backends.
 

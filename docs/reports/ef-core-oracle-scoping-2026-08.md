@@ -1,6 +1,10 @@
 # EF Core oracle scoping — Step 1 findings
 
-Status: decision input for [Zero-EF Persistence](../program-goals/zero-ef-persistence.md).
+Status: historical technical input from the superseded
+[Zero-EF Persistence](../program-goals/zero-ef-persistence.md) program. Its implementation inventory
+and timing-independent behavioural evidence remain inputs to the active
+[EF Core Persistence](../program-goals/ef-core-persistence.md) completion ledger; its removal
+direction and performance comparisons are not current acceptance policy.
 
 Date: 2026-08-11.
 

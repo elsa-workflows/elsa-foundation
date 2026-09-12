@@ -50,7 +50,7 @@ Numbers are not unique: the folder holds two independent sequences (an early Ext
 | 0039 | [Layout Sidecar Lives on the Source Reference](0039-layout-sidecar-lives-on-the-source-reference.md) | Accepted |
 | 0040 | [One Artifact Store with Reference-Derived Lifetime](0040-one-artifact-store-with-reference-derived-lifetime.md) | Accepted |
 | 0041 | [Workflow Management Advertises Optional Authoring Capabilities](0041-workflow-management-advertises-optional-authoring-capabilities.md) | Superseded |
-| 0042 | [Elsa Foundation Ships Only Groundwork Persistence Implementations](0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md) | Accepted |
+| 0042 | [Elsa Foundation Ships Only Groundwork Persistence Implementations](0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md) | Superseded |
 | 0043 | [Publication Slots Define Start Authority](0043-publication-slots-define-start-authority.md) | Accepted |
 | 0044 | [`sourceKind` is canonical on executable inspection contracts](0044-source-kind-is-canonical-on-executable-inspection.md) | Accepted |
 | 0045 | [Workflow Value Flow Uses Role-Owned Bindings And Immutable Invocation Records](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md) | Accepted |
@@ -75,11 +75,12 @@ Numbers are not unique: the folder holds two independent sequences (an early Ext
 | 0062 | [JavaScript Binding Grammar Is Selected by Host Policy and Pinned at Publish](0062-javascript-binding-grammar-is-pinned-at-publish.md) | Proposed |
 | 0063 | [BPMN moves to a host-agnostic library](0063-bpmn-moves-to-a-host-agnostic-library.md) | Proposed |
 | 0064 | [Flowchart Infers Joins From Propagated Dead Paths](0064-flowchart-infers-joins-from-propagated-dead-paths.md) | Proposed |
-| 0065 | [Groundwork Persistence Targets Are Named and Lanes Bind to Them](0065-groundwork-persistence-targets-are-named-and-lanes-bind-to-them.md) | Proposed |
+| 0065 | [Groundwork Persistence Targets Are Named and Lanes Bind to Them](0065-groundwork-persistence-targets-are-named-and-lanes-bind-to-them.md) | Superseded |
 | 0066 | [Reusable-Activity Publication Orders Its Writes Instead of Requiring One Transaction](0066-reusable-activity-publication-orders-writes-instead-of-one-transaction.md) | Accepted |
 | 0067 | [Package versioning uses two version lines with a computed patch digit](0067-package-versioning-uses-two-lines-with-computed-patch.md) | Proposed |
 | 0068 | [First-party REST APIs use ASP.NET Core Minimal APIs](0068-first-party-rest-apis-use-aspnet-core-minimal-apis.md) | Accepted |
 | 0069 | [OpenAPI contract types use stable API Core assemblies](0069-openapi-contract-types-use-stable-api-core.md) | Superseded |
 | 0070 | [REST API contracts ship in one assembly per domain](0070-rest-api-contracts-ship-in-one-assembly-per-domain.md) | Proposed |
 | 0071 | [First-party REST APIs use endpoint classes over Minimal APIs](0071-first-party-rest-apis-use-endpoint-classes.md) | Accepted |
-| 0072 | [EF-first relational persistence with provider-derived contexts](0072-ef-first-relational-persistence-with-provider-derived-contexts.md) | Proposed |
+| 0072 | [EF-first relational persistence with provider-derived contexts](0072-ef-first-relational-persistence-with-provider-derived-contexts.md) | Superseded |
+| 0073 | [EF Core is the only first-party persistence family](0073-ef-core-is-the-only-first-party-persistence-family.md) | Accepted |

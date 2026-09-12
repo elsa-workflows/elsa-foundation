@@ -6,7 +6,8 @@ namespace Elsa.Architecture.Tests;
 /// <summary>
 /// Owns the ADR 0072 Secrets EF pilot allowlist. <see cref="EfCoreDependencyGuardTests"/> exempts these
 /// paths, but not the projects that depend on them; this test is the exact inventory.
-/// ADR 0042 still forbids first-party EF until 0072 is accepted.
+/// ADR 0073 supersedes ADR 0072's bounded policy but preserves its admitted implementation as the
+/// reviewed starting surface; later EF replacements must extend the ratchet with their own evidence.
 /// </summary>
 public sealed class SecretsEfPersistencePilotArchitectureTests
 {
@@ -50,6 +51,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/Elsa/Persistence/EntityFramework/EfMigrationsHistory.cs",
         "src/Elsa/Persistence/EntityFramework/EfProviderGuard.cs",
         "src/Elsa/Persistence/EntityFramework/EfProviderNames.cs",
+        "src/Elsa/Persistence/EntityFramework/EfRelationalExceptionClassifier.cs",
         "src/Elsa/Persistence/EntityFramework/EfRelationalProviderBinding.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Configuration/SecretRecordConfiguration.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/DependencyInjection/SecretsEntityFrameworkCoreRegistration.cs",
@@ -93,6 +95,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "tests/Elsa/Persistence/EntityFramework/Tests/EfDatabaseMigratorTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/EfMigrationsHistoryTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/EfProviderGuardTests.cs",
+        "tests/Elsa/Persistence/EntityFramework/Tests/EfRelationalExceptionClassifierTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/EfRelationalProviderBindingTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Program.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/PostgreSqlEfSecretRepositoryTests.cs",
@@ -102,6 +105,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Support/SecretsPackageFeedProbeRunner.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/SqlServerContainerFixture.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/SqlServerEfSecretRepositoryTests.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/DualMigrateProcessRunnerLockTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsDesignTimeConnectionTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEfDualMigrateToolTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsEfMigrationHostedServiceTests.cs",
@@ -117,7 +121,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
     ];
 
     [Fact]
-    public void Pilot_paths_are_the_reviewed_adr_0072_allowlist()
+    public void Pilot_paths_and_projects_are_the_reviewed_adr_0072_allowlist()
     {
         Assert.Equal(
             [
@@ -127,6 +131,15 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
                 "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/"
             ],
             EfCoreDependencyGuardTests.Adr0072SecretsEfPilot.SurfacePathPrefixes);
+
+        var projects = EfCoreDependencyGuardTests.Adr0072SecretsEfPilot.SurfacePathPrefixes
+            .SelectMany(prefix => Directory.EnumerateFiles(
+                RepoPath(prefix.TrimEnd('/').Split('/')), "*.csproj", SearchOption.AllDirectories))
+            .Select(path => Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/'))
+            .Where(path => !path.Contains("/obj/", StringComparison.Ordinal) && !path.Contains("/bin/", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(EfCoreDependencyGuardTests.Adr0072SecretsEfPilot.ProjectPaths, projects);
     }
 
     [Fact]

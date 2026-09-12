@@ -1,23 +1,28 @@
 ---
-status: proposed
+status: superseded
 date: 2026-09-10
-decision_context: Spike PR #1622, completed Secrets EF pilot #1626, and verdict PR #1655; revision direction authorized by Sipke Schoorstra on 2026-09-11, with acceptance of the final text still pending.
+decision_context: Spike PR #1622, completed Secrets EF pilot #1626, verdict PR #1655, and cost evidence PR #1660; revised direction authorized by Sipke Schoorstra on 2026-09-11 and final text accepted by Sipke Schoorstra on 2026-09-12.
 ---
 
 # EF-first relational persistence with provider-derived contexts
 
-Status: proposed (2026-09-11 revision). Sipke authorized revising the ADR in this bounded
-direction after reviewing the pilot verdict. That authorization is **not** acceptance of this final
-text; acceptance requires an explicit decision after exact-head review.
+Status: superseded (2026-09-12) by
+[ADR 0073](0073-ef-core-is-the-only-first-party-persistence-family.md). Sipke Schoorstra explicitly
+approved this bounded direction after the pilot verdict, ownership-cost evidence, and review-driven
+corrections. Later the same day, the owner selected EF Core as the only first-party persistence
+family. This document preserves the bounded decision and its evidence; it is not current policy.
 
-Program goal: `none/free-flow`. If accepted, this ADR narrows
+Historical program-goal state: `none/free-flow`. The active replacement program is
+[EF Core Persistence](../program-goals/ef-core-persistence.md). This ADR narrowed
 [ADR 0042](0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md) for
 individually admitted relational modules. It does not schedule a replacement wave, switch a host
 default, delete a Groundwork adapter, or decide Runtime persistence.
 
-[ADR 0042](0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md) and the active
-[Zero-EF persistence program goal](../program-goals/zero-ef-persistence.md) remain authoritative until
-this ADR is explicitly accepted. Acceptance must reconcile both sources in the same decision change.
+[ADR 0042](0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md) is amended by
+this decision while retaining Groundwork as the default and as the first-party family for the
+excluded workloads. The former
+[Zero-EF persistence program goal](../program-goals/zero-ef-persistence.md) is retained as a
+superseded historical record rather than an active scheduling surface.
 
 Primary evidence:
 
@@ -25,6 +30,7 @@ Primary evidence:
 - [Pilot verdict and conditional replacement plan](../reports/secrets-ef-persistence-pilot-verdict-2026-09.md)
 - [Provider-derived contexts versus FluentMigrator spike #1622](https://github.com/elsa-workflows/elsa-foundation/pull/1622)
 - [Human decision and governance reconciliation #1628](https://github.com/elsa-workflows/elsa-foundation/issues/1628)
+- [Superseding all-EF Program #1665](https://github.com/elsa-workflows/elsa-foundation/issues/1665)
 
 ---
 
@@ -68,11 +74,13 @@ The completed Secrets pilot then tested that direction in product code. It prove
   conflict, normalization, and search-key contracts;
 - Workbench can remain Groundwork-default while an EF composition is opt-in.
 
-The measured cost comparison disproved the code-reduction premise for Secrets. Even after excluding
-pilot-only tests, its EF implementation carries about 2.5 times the source and 4.5 times the tests of
-the Groundwork adapter, plus three provider migration/snapshot sets and operator tooling. Runtime
-keeps Groundwork, so the shared Groundwork layer cannot be retired by moving ordinary modules. An
-EF-first decision must therefore rest on explicit benefits other than reducing owned code.
+The measured cost comparison disproved the code-reduction premise for Secrets. Excluding the 401
+lines of generated Unicode casing data, its EF module has 1,278 hand-written source lines versus 510
+for Groundwork, about 2.5 times as many. Excluding about 1,350 pilot-only test lines, it retains about
+3,187 test lines versus 690, about 4.5 times as many. It also carries three provider
+migration/snapshot sets and operator tooling. Runtime keeps Groundwork, so the shared Groundwork
+layer cannot be retired by moving ordinary modules. An EF-first decision must therefore rest on
+explicit benefits other than reducing owned code.
 
 The pilot did **not** prove existing-domain data conversion, arbitrary cross-module multi-engine
 composition, MongoDB parity, the current Foundation Host directory-feed route, or Runtime hot-path
@@ -129,11 +137,12 @@ the technical pilot as successful and the broader rollout as undecided.
 
 ### Step 5 — Separate direction, final text, and rollout authority
 
-On 2026-09-11, Sipke authorized revising ADR 0072 toward a bounded EF-first relational lane. This
-records that direction and the pilot lessons. Three distinct gates remain:
+On 2026-09-11, Sipke authorized revising ADR 0072 toward a bounded EF-first relational lane. At that
+historical point, three distinct gates remained; the rollout record below records the subsequent
+acceptance and supersession:
 
 1. **Revision direction:** authorized.
-2. **Final ADR text:** still proposed until explicitly accepted after exact-head review.
+2. **Final ADR text:** was still proposed until explicitly accepted after exact-head review.
 3. **Module rollout:** separately admitted and planned; ADR acceptance alone schedules nothing.
 
 ## Decision criteria
@@ -158,7 +167,7 @@ An acceptable policy must satisfy all of these:
 
 ### D1 — EF Core is an allowed first-party relational family for admitted modules
 
-Once this ADR is accepted, new or existing modules may use first-party EF Core only after they pass
+Under this accepted ADR, new or existing modules may use first-party EF Core only after they pass
 the admission gate in D2. This is a bounded lane, not a repository-wide rewrite and not a declaration
 that EF is best for every durable workload.
 
@@ -365,7 +374,7 @@ module or a default switch.
 
 ## Consequences
 
-If accepted:
+Consequences of acceptance:
 
 - ADR 0042 is narrowed from “Groundwork-only first-party persistence” to allow the bounded EF
   relational lane above.
@@ -396,7 +405,7 @@ Costs and risks:
 
 ### Keep Groundwork as the only first-party family
 
-This remains the standing policy until acceptance. It minimizes framework diversity and preserves
+This was the standing policy before this ADR. It minimizes framework diversity and preserves
 document/provider neutrality. The Secrets pilot showed that EF can serve the same domain contract
 with familiar relational tooling and model-drift protection, but at greater owned-code cost for this
 module. The proposed lane therefore depends on per-module evidence of benefits other than code-size
@@ -441,32 +450,32 @@ and workload evidence.
 | 2026-09-10 | Proposed | PR #1623 drafted the provider-derived EF direction from spike #1622. |
 | 2026-09-11 | Pilot concluded | Program #1626 and report PR #1655 recorded a successful bounded technical pilot and deferred product policy. |
 | 2026-09-11 | Revision authorized | Sipke authorized revising ADR 0072 in the bounded direction: separately admitted shape-simple relational modules, Groundwork retained for Runtime/document/specialized workloads. |
-| Pending | Final decision | Sipke reviews the exact final text after review convergence and explicitly accepts, revises, or rejects it. A revision returns to exact-head review. |
-| Pending | Rollout | If accepted, #1654 may inventory candidates and create separately authorized module issues. No module is scheduled by this ADR alone. |
+| 2026-09-12 | Accepted | Sipke explicitly approved the final bounded text. The acceptance record narrows ADR 0042 to admit separately governed, shape-simple relational EF modules while retaining Groundwork for excluded workloads. |
+| 2026-09-12 | Superseded | Sipke selected the all-EF destination recorded by ADR 0073. Program #1665 replaced this bounded rollout; #1654 remains historical inventory input and no module work is authorized by this ADR. |
 
 ## Follow-ups and ownership
 
-- [#1628](https://github.com/elsa-workflows/elsa-foundation/issues/1628): review and explicitly
-  accept, revise, or reject the final ADR text; a revision returns to exact-head review. Acceptance
-  reconciles ADR 0042 and the Zero-EF program goal.
-- [#1623](https://github.com/elsa-workflows/elsa-foundation/pull/1623): on acceptance, record the
-  accepted status and merge only after its gates and separate merge authority; on revision, update
-  it and repeat exact-head review; on rejection, close it without merge and record the reason.
+- [#1628](https://github.com/elsa-workflows/elsa-foundation/issues/1628): preserves the human review
+  and acceptance record for this bounded decision; reconcile it only after ADR 0073 and the active
+  program-goal state agree on `main`.
+- [#1623](https://github.com/elsa-workflows/elsa-foundation/pull/1623): merged the reviewed proposed
+  text on 2026-09-11. The acceptance follow-up records the human decision and review corrections.
 - [#1622](https://github.com/elsa-workflows/elsa-foundation/pull/1622): record an explicit disposition
-  for every final outcome. Acceptance closes it as superseded by the product pilot and this decision
-  while retaining its permalink; revision or rejection states whether further spike evidence is
-  intentionally retained or closes it with the reason. Do not merge duplicate spike product code.
+  by closing it as superseded by the product pilot and this accepted decision while retaining its
+  permalink. Do not merge duplicate spike product code.
 - [#1644](https://github.com/elsa-workflows/elsa-foundation/issues/1644): make the current
   Foundation Host/Nuplane directory-feed route production-ready.
 - [#1653](https://github.com/elsa-workflows/elsa-foundation/issues/1653): prove EF-selected Secrets
   through a production-shaped HTTP CRUD and restart journey.
-- [#1654](https://github.com/elsa-workflows/elsa-foundation/issues/1654): after acceptance, inventory
-  module eligibility, transactions, conversion, rollback, and multi-engine topology before creating
-  implementation issues.
+- [#1654](https://github.com/elsa-workflows/elsa-foundation/issues/1654): preserve its bounded
+  inventory as input to Program #1665's completion ledger. Its former Runtime exclusion and
+  conversion/rollback assumptions are superseded by ADR 0073.
 - [#1657](https://github.com/elsa-workflows/elsa-foundation/issues/1657): eliminate the concurrent
   `dotnet ef` Tooling build-host race found by the post-main pilot gate.
-- [#646](https://github.com/elsa-workflows/elsa-foundation/issues/646): retain broad native-provider
-  and performance evidence for persistence workloads.
+- [#646](https://github.com/elsa-workflows/elsa-foundation/issues/646): preserve applicable
+  provider-neutral correctness evidence; performance measurement retires by owner policy without a
+  pass claim.
 
-The broader rollout remains `none/free-flow` until an accepted governance record deliberately
-creates or selects a program-goal bucket.
+The superseding rollout is governed by [Program #1665](https://github.com/elsa-workflows/elsa-foundation/issues/1665),
+[Project 49](https://github.com/orgs/elsa-workflows/projects/49), and the active
+[EF Core Persistence goal](../program-goals/ef-core-persistence.md).

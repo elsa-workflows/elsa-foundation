@@ -86,4 +86,5 @@ bash tools/ef/dual-migrate.sh all
 ```
 
 This is the Phase 2 Nuplane dual-migrate path: apply + fail-if-pending against the
-module assembly Nuplane loads. It does not switch Workbench or accept ADR 0072.
+module assembly Nuplane loads. It does not switch Workbench; that remains an explicit gated step
+in the ADR 0073 Secrets migration slice.

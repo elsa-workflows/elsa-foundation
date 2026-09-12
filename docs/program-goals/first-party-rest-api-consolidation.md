@@ -36,7 +36,7 @@ project; public progress and validation evidence remain on the tracker and child
 - Feature dependency/settings classification and CShells Appsettings Generator implementation;
   those remain under [Feature Composition Readiness](feature-composition-readiness.md).
 - Secrets or diagnostics persistence/provider migration; those remain under
-  [Zero-EF Persistence](zero-ef-persistence.md).
+  [EF Core Persistence](ef-core-persistence.md).
 - Structured Logs/OpenTelemetry domain behavior, persistence, or Studio UI work; those remain under
   [Diagnostics Observability Readiness](diagnostics-observability-readiness.md).
 - Workflow-authored HTTP execution semantics beyond shared
@@ -150,7 +150,7 @@ and routing gates are complete. Later module waves receive separate issues rathe
 - [Current endpoint security guard](../../tests/Elsa/Architecture/EndpointSecurityTests.cs)
 - [Feature Composition Readiness](feature-composition-readiness.md)
 - [Diagnostics Observability Readiness](diagnostics-observability-readiness.md)
-- [Zero-EF Persistence](zero-ef-persistence.md)
+- [EF Core Persistence](ef-core-persistence.md)
 
 ## Drift / Review Notes
 

@@ -1376,6 +1376,21 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TriggerConflict'
+        targetSlotOwner:
+          description: >-
+            The activation source that owns the resolved slot when it is not publishing, for example an
+            imported or mounted artifact; null when the slot is empty, unpublished, or publishing-owned.
+            canActivate is false while it is set, and publish refuses the slot with 409 because ownership
+            transfer is an operator action.
+          oneOf:
+            - $ref: '#/components/schemas/PublicationSlotOwner'
+            - type: 'null'
+    PublicationSlotOwner:
+      type: object
+      required: [sourceKind]
+      properties:
+        sourceKind: { type: string }
+        sourceId: { type: [string, 'null'] }
     TriggerChange:
       type: object
       required: [change, key, cardinality]

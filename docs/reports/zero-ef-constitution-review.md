@@ -1,8 +1,15 @@
 # Critical Constitution Review: Zero-EF Persistence Boundary
 
-Status: accepted decision-review findings (2026-07-12); the constitution amendment remains pending consensus and compliance evidence.
+Status: superseded historical decision-review findings (2026-09-12).
 
-Program goals: [Zero-EF Persistence](../program-goals/zero-ef-persistence.md) and [Constitution Readiness](../program-goals/constitution-readiness.md).
+> **Historical record.** This report assessed the former Groundwork-only direction as of 2026-07-12.
+> Accepted [ADR 0073](../adr/0073-ef-core-is-the-only-first-party-persistence-family.md) supersedes
+> that product direction and the proposed amendment below. The findings remain provenance for why
+> the constitution text needs a separately governed propagation, but they are not current findings
+> and must not schedule implementation. Current replacement work is owned by the
+> [EF Core Persistence](../program-goals/ef-core-persistence.md) goal and Program #1665.
+
+Historical program goals: [Zero-EF Persistence](../program-goals/zero-ef-persistence.md) and [Constitution Readiness](../program-goals/constitution-readiness.md).
 
 Target: Elsa constitution §E2.5, with adjacent §E2.4, the §E1 domain/package inventory, §E2.2.1 Design package list, the EF-specific implementation wording in §E2.9.7, the §E5 minimum-project-size example, and framework §§2.9 and 2.20 checked for consistency.
 
@@ -34,9 +41,18 @@ Classification: missing Elsa-specific gate.
 
 ### F5 — Current code and host composition still contradict the desired end state
 
-The reference server directly references EF Core implementations for Activities Design, Workflows Design, Structured Logs, OpenTelemetry, and ASP.NET Core Identity in [`Elsa.Server.csproj`](../../src/Apps/Elsa.Server/Elsa.Server.csproj). Its default shell activates the corresponding EF features in [`shells.json`](../../src/Apps/Elsa.Server/shells.json). OpenIddict also consumes its EF Core integration, and [`Directory.Packages.props`](../../Directory.Packages.props) centrally versions both ASP.NET Core Identity EF Core and OpenIddict EF Core packages.
+At this report's evidence cut, the then-current `src/Apps/Elsa.Server/Elsa.Server.csproj` directly
+referenced EF Core implementations for Activities Design, Workflows Design, Structured Logs,
+OpenTelemetry, and ASP.NET Core Identity. Its then-current `src/Apps/Elsa.Server/shells.json`
+activated the corresponding EF features. Those paths no longer exist in the current tree and are
+preserved here as historical names rather than live links. OpenIddict also consumed its EF Core
+integration, and [`Directory.Packages.props`](../../Directory.Packages.props) centrally versioned
+both ASP.NET Core Identity EF Core and OpenIddict EF Core packages.
 
-This is expected transition evidence, not a reason to weaken the decision. EF remains a temporary oracle until Groundwork parity gates pass.
+At this report's evidence cut, the former program treated EF as a temporary oracle until Groundwork
+parity gates passed. That conclusion is historical and is superseded by
+[ADR 0073](../adr/0073-ef-core-is-the-only-first-party-persistence-family.md) and Program #1665: EF
+Core is now the destination persistence family, while Groundwork is the source being replaced.
 
 Classification: planned code drift relative to the proposed gate.
 
