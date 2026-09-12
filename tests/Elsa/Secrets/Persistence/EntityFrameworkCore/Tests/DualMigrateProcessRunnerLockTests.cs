@@ -93,6 +93,20 @@ public sealed class DualMigrateProcessRunnerLockTests
             "suggesting it was retried as if it were lock contention.");
     }
 
+    [Fact]
+    public void Lock_path_is_deterministic_and_per_worktree()
+    {
+        var rootA = Path.Join(Path.GetTempPath(), $"elsa-dual-migrate-lock-root-a-{Guid.NewGuid():N}");
+        var rootB = Path.Join(Path.GetTempPath(), $"elsa-dual-migrate-lock-root-b-{Guid.NewGuid():N}");
+
+        var first = DualMigrateProcessRunner.ComputeToolingLockPath(rootA);
+        var second = DualMigrateProcessRunner.ComputeToolingLockPath(rootA);
+        var other = DualMigrateProcessRunner.ComputeToolingLockPath(rootB);
+
+        Assert.Equal(first, second);
+        Assert.NotEqual(first, other);
+    }
+
     private static string WriteExecutableShim(string directory, string name, string contents)
     {
         if (OperatingSystem.IsWindows())

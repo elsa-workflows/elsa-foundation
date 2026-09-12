@@ -233,16 +233,20 @@ internal static class DualMigrateProcessRunner
     // contention after a five-minute wait. .NET only ever raises the plain IOException type for
     // this - DirectoryNotFoundException, PathTooLongException, etc. are subclasses and never
     // sharing violations - and it carries the platform's sharing/lock-violation code: Windows
-    // reports ERROR_SHARING_VIOLATION/ERROR_LOCK_VIOLATION; Unix surfaces the raw EAGAIN/EWOULDBLOCK
-    // errno, verified empirically to be 35 on macOS (Darwin) and known to be 11 on Linux.
+    // reports ERROR_SHARING_VIOLATION/ERROR_LOCK_VIOLATION; Unix surfaces the raw errno, but the
+    // two candidate values swap meaning across kernels, so they must not both be accepted on the
+    // same OS: on Linux, EAGAIN/EWOULDBLOCK is 11 and EDEADLK is 35; on macOS/FreeBSD it is the
+    // reverse (EAGAIN/EWOULDBLOCK is 35, EDEADLK is 11). Accepting both on one OS would let a
+    // deadlock error be silently retried as contention.
     private static bool IsLockContention(IOException ex)
     {
         if (ex.GetType() != typeof(IOException))
             return false;
 
-        return OperatingSystem.IsWindows()
-            ? ex.HResult is unchecked((int)0x80070020) or unchecked((int)0x80070021)
-            : ex.HResult is 35 or 11;
+        if (OperatingSystem.IsWindows())
+            return ex.HResult is unchecked((int)0x80070020) or unchecked((int)0x80070021);
+
+        return OperatingSystem.IsLinux() ? ex.HResult is 11 : ex.HResult is 35;
     }
 
     private static void KillProcessTree(Process process)
