@@ -80,12 +80,16 @@ public sealed class SecretSettingMaskTests
         Assert.Equal(Placeholder, masked.GetProperty("Key").GetString());
     }
 
-    [Fact]
-    public void MaskReturnsNonObjectConfigurationUnchanged()
+    [Theory]
+    [InlineData("\"Server=db;Password=material\"", true)]
+    [InlineData("42", true)]
+    [InlineData("null", false)]
+    [InlineData("\"\"", false)]
+    public void MaskHidesASetNonObjectConfigurationWhole(string configuration, bool hidden)
     {
-        var masked = SecretSettingMask.MaskConfiguration(Json("\"material\""), Settings);
+        var masked = SecretSettingMask.MaskConfiguration(Json(configuration), Settings);
 
-        Assert.Equal("material", masked.GetString());
+        Assert.Equal(hidden ? JsonSerializer.Serialize(Placeholder) : configuration, masked.GetRawText());
     }
 
     [Fact]

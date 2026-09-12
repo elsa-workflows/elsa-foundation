@@ -13,9 +13,9 @@ using Nuplane.Reconciliation;
 namespace Elsa.Modularity.Tests;
 
 /// <summary>An in-memory shell configuration whose revision changes with every feature's configuration.</summary>
-internal sealed class FakeShellStore : IShellFeatureConfigurationStore
+internal sealed class FakeShellStore(IEqualityComparer<string>? featureIdComparer = null) : IShellFeatureConfigurationStore
 {
-    public Dictionary<string, JsonElement> Features { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, JsonElement> Features { get; } = new(featureIdComparer ?? StringComparer.OrdinalIgnoreCase);
 
     public Task<ShellFeatureConfigurationSnapshot> LoadAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult(Snapshot());

@@ -80,16 +80,25 @@ public sealed class FeatureManagementService(
     }
 
     /// <summary>A client that round-trips the catalog sends the placeholder back for every hidden value it did not change.</summary>
-    private static FeatureApplyRequest RestoreSecrets(FeatureApplyRequest request, ShellFeatureConfigurationSnapshot shell) =>
-        request with
+    private static FeatureApplyRequest RestoreSecrets(FeatureApplyRequest request, ShellFeatureConfigurationSnapshot shell)
+    {
+        // A body without "features" is left for ValidateRequest to reject.
+        if (request.Features is null)
+            return request;
+
+        return request with
         {
             Features = request.Features.Select(feature =>
             {
-                // A null ID has nothing stored; ValidateRequest rejects it once the placeholders are dropped.
-                System.Text.Json.JsonElement? stored = feature.Id is not null && shell.Features.TryGetValue(feature.Id, out var value) ? value : null;
+                // Match feature IDs case-insensitively like the rest of this service, whatever the store's comparer.
+                var stored = shell.Features
+                    .Where(x => string.Equals(x.Key, feature.Id, StringComparison.OrdinalIgnoreCase))
+                    .Select(x => (System.Text.Json.JsonElement?)x.Value)
+                    .FirstOrDefault();
                 return feature with { Configuration = SecretSettingMask.Restore(feature.Configuration, stored) };
             }).ToArray()
         };
+    }
 
     private static void ValidateRequest(FeatureApplyRequest request, FeatureCatalogResponse current)
     {

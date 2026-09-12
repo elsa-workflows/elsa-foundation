@@ -23,6 +23,10 @@ public static class SecretSettingMask
     /// <summary>Returns <paramref name="configuration"/> with every set hidden value replaced by the placeholder.</summary>
     public static JsonElement MaskConfiguration(JsonElement configuration, IReadOnlyList<FeatureSettingDescriptor> settings)
     {
+        // No setting can declare a value that is not an object of named settings, so a set one is hidden whole.
+        if (configuration.ValueKind is not JsonValueKind.Object)
+            return IsUnset(configuration) ? configuration : s_placeholder;
+
         // Configuration binding matches keys case-insensitively, so a name must be recognised however it is cased. A
         // name any source declares secret stays hidden even if another declares it plain.
         var visibleNames = settings.Where(x => !x.Secret).Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);

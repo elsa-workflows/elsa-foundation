@@ -197,6 +197,29 @@ public sealed class FeatureManagementServiceTests
     }
 
     [Fact]
+    public async Task ApplyRestoresASecretWhenTheStoreMatchesFeatureIdsCaseSensitively()
+    {
+        var store = new FakeShellStore(StringComparer.Ordinal);
+        store.Features[SecuredFeatureId] = Json($$"""{"SigningKey":"{{SigningKeyValue}}"}""");
+        var service = new FeatureManagementService(store, [SecuredFeature()], _refresher, _reloader);
+        var catalog = await service.GetCatalogAsync();
+
+        await service.ApplyAsync(new FeatureApplyRequest(
+            catalog.Revision,
+            [new(SecuredFeatureId.ToLowerInvariant(), true, Json($$"""{"SigningKey":"{{SecretSettingMask.Placeholder}}"}"""))]));
+
+        Assert.Equal(SigningKeyValue, store.Features[SecuredFeatureId.ToLowerInvariant()].GetProperty("SigningKey").GetString());
+    }
+
+    [Fact]
+    public async Task ApplyWithoutFeaturesIsRejectedAsAnInvalidRequest()
+    {
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => CreateService().ApplyAsync(new FeatureApplyRequest("", null!)));
+
+        Assert.Contains("Revision is required", exception.Message);
+    }
+
+    [Fact]
     public async Task ApplyRejectsAFeatureWithoutAnId()
     {
         var service = CreateService();
