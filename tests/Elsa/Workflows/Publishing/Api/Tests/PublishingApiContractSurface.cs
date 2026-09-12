@@ -52,6 +52,7 @@ internal static class PublishingApiContractSurface
         typeof(PublicationPreflightView),
         typeof(PublicationTriggerClaimView),
         typeof(PublicationSnapshotPreflightView),
+        typeof(PublicationSlotOwnerView),
         typeof(ActivityPublishingDiagnosticView),
         typeof(ActivityPublishingProblemDetails),
         typeof(ExpressionPublicationValidationDiagnosticView),

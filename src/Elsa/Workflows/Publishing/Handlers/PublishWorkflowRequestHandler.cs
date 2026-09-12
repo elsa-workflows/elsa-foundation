@@ -98,11 +98,21 @@ public sealed class PublishWorkflowRequestHandler(
             await snapshotReviews.ValidateAndConsumeAsync(
                 request.PreflightToken!, candidateHash, plan, request.TenantId, cancellationToken);
         }
-        if (!plan.Result.CanActivate)
+        if (!plan.CanActivate)
+        {
+            // A slot another activation source owns is not publishing's to take: ownership transfer is an operator
+            // action. Activation enforces that only after the writes below, and not at all for the artifact the owner
+            // already serves, so refuse here with its slot_owner_conflict. It outranks trigger conflicts, because
+            // resolving those would still leave the slot to its owner.
+            if (plan.TargetSlotOwner is { } slotOwner)
+                throw ActivationFailed(publicationId, identity.DefinitionId,
+                    SlotOwnerConflict(identity.DefinitionId, plan.ResolvedAction.SlotName, slotOwner));
             throw new PublicationPreflightConflictException(plan.Result.Conflicts);
+        }
 
         // A supplied snapshot token is fully revalidated and consumed before this first write. Stale candidates,
-        // intents, policies, and slot authorities therefore fail without persisting an executable or publication.
+        // intents, policies, slot authorities, and foreign slot owners therefore fail without persisting an
+        // executable, source reference, or publication.
         await executableStore.SaveAsync(executable, cancellationToken);
 
         var resolved = plan.ResolvedAction;
@@ -145,17 +155,29 @@ public sealed class PublishWorkflowRequestHandler(
             new PublicationActivationRequest(candidate, executable, reference),
             cancellationToken);
         if (!activation.Succeeded)
-        {
-            logger?.LogWarning(
-                "Publish: activation of publication {PublicationId} for workflow definition {DefinitionId} failed with '{FailureCode}'",
-                publicationId,
-                identity.DefinitionId,
-                activation.Failure?.Code);
-            throw new PublicationActivationException(activation.Failure);
-        }
+            throw ActivationFailed(publicationId, identity.DefinitionId, activation.Failure);
 
         return PublishedWorkflowView.From(executable, reference, activation.Publication);
     }
+
+    /// <summary>
+    /// Logs and builds the activation failure. The early owner refusal shares this log line with a refused activation,
+    /// so moving that refusal ahead of the writes does not remove the warning operators already see for it.
+    /// </summary>
+    private PublicationActivationException ActivationFailed(string publicationId, string definitionId, PublicationFailure? failure)
+    {
+        logger?.LogWarning(
+            "Publish: activation of publication {PublicationId} for workflow definition {DefinitionId} failed with '{FailureCode}'",
+            publicationId,
+            definitionId,
+            failure?.Code);
+        return new PublicationActivationException(failure);
+    }
+
+    private static PublicationFailure SlotOwnerConflict(string definitionId, string slotName, WorkflowActivationSource owner) => new(
+        "slot_owner_conflict",
+        $"Definition '{definitionId}' slot '{slotName}' is owned by activation source '{owner.Describe()}'; " +
+        $"'{PublicationActivator.Source.Describe()}' cannot publish to it. Ownership transfer is an explicit operator action.");
 
     private ValueTask<WorkflowExecutable> CompileAsync(
         string versionId,

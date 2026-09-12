@@ -109,6 +109,7 @@ internal static class WorkflowsPublishingJsonOptions
 [JsonSerializable(typeof(PublicationSlotView))]
 [JsonSerializable(typeof(PublicationPolicyView))]
 [JsonSerializable(typeof(PublicationPreflightView))]
+[JsonSerializable(typeof(PublicationSlotOwnerView))]
 [JsonSerializable(typeof(PublicationTriggerClaimView))]
 [JsonSerializable(typeof(PublicationTriggerChangeView))]
 [JsonSerializable(typeof(PublicationTriggerConflictView))]
