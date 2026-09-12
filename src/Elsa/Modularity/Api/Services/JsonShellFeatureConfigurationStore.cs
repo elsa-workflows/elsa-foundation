@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using CShells;
@@ -20,6 +21,8 @@ public sealed class JsonShellFeatureConfigurationStore(
     {
         WriteIndented = true
     };
+
+    private static readonly byte[] s_processRevisionKey = RandomNumberGenerator.GetBytes(32);
 
     private static readonly JsonElement s_emptyObject = CreateEmptyObject();
     private static JsonElement CreateEmptyObject() { using var d = JsonDocument.Parse("{}"); return d.RootElement.Clone(); }
@@ -151,10 +154,15 @@ public sealed class JsonShellFeatureConfigurationStore(
             : Path.Combine(environment.ContentRootPath, path);
     }
 
-    private static string CreateRevision(string value)
+    /// <summary>
+    /// The revision covers the raw features section, secret values included, so changing a secret still conflicts with
+    /// a stale apply. It is keyed because the catalog shows everything else in that section: a plain hash would let a
+    /// reader rebuild the section with each candidate secret and compare, which recovers a guessable one.
+    /// </summary>
+    private string CreateRevision(string value)
     {
-        var bytes = System.Text.Encoding.UTF8.GetBytes(value);
-        return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        var key = string.IsNullOrWhiteSpace(Options.RevisionKey) ? s_processRevisionKey : Encoding.UTF8.GetBytes(Options.RevisionKey);
+        return Convert.ToHexStringLower(HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(value)));
     }
 
     private FeatureManagementOptions Options => options.Value;
