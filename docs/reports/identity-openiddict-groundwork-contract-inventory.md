@@ -13,7 +13,11 @@ Historical program goal: [Zero-EF Persistence](../program-goals/zero-ef-persiste
 Historical decision: [ADR 0042](../adr/0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md),
 superseded by [ADR 0073](../adr/0073-ef-core-is-the-only-first-party-persistence-family.md).
 
-## Executive Finding
+## Historical Executive Finding (2026-07-12)
+
+The feasibility conclusion and five gaps below describe the former Groundwork replacement direction.
+They are not an implementation recommendation for #1682. Only the time-bounded framework contract
+inventory remains input to its EF design; OpenIddict keeps its separate vendor EF boundary.
 
 Replacing both EF integrations is feasible without adding Groundwork to Elsa's core identity contracts. The concrete packages can implement the framework-facing store interfaces over Groundwork documents while Elsa's `IUserStore`, `IRoleStore`, `IExternalIdentityStore`, and `ITenantMembershipStore` remain provider-neutral.
 
@@ -117,7 +121,7 @@ that replacement: OpenIddict remains on its separate vendor-owned EF Core contex
 migrations, and package boundary. #1682 may use this section's framework contract inventory, but it
 must not replace or merge the OpenIddict persistence boundary.
 
-## ASP.NET Core Identity Store Inventory
+## Framework Contract Inventory: ASP.NET Core Identity (2026-07-12)
 
 The .NET 10 EF `UserStore` currently registered by `AddEntityFrameworkStores` advertises every interface below. The first column distinguishes direct framework-manager use from storage shapes Elsa's separate IAM adapters currently exercise. Those IAM adapters access the shared EF sets directly; that does not make an otherwise optional framework interface mandatory.
 
@@ -201,7 +205,7 @@ Identity normalization remains framework-owned: `ILookupNormalizer` produces nor
 
 Groundwork's expected-version compare-and-swap model fits this. The adapter should keep the Groundwork envelope version as the authoritative compare-and-swap value and project a stable opaque representation into `ConcurrencyStamp`; it must not do an unconditional upsert. Multi-record changes to claims, roles, logins, and tokens use one unit of work.
 
-## OpenIddict 7.5 Store Inventory
+## Framework Contract Inventory: OpenIddict 7.5 (2026-07-12)
 
 `UseEntityFrameworkCore` registers all four core store families even though Elsa's current first-party token service directly exercises only tokens. A replacement registered with OpenIddict core must either implement all four contracts or deliberately register a reduced custom resolver set and prove that unused manager paths fail at startup with a clear capability error. The safe compatibility target is all four.
 

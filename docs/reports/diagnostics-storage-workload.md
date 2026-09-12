@@ -364,7 +364,10 @@ Diagnostics persistence cannot rely solely on logs or telemetry that it captures
 
 Do not put raw payloads, secrets, tenant ids, trace ids, or record ids into low-cardinality metric labels. Error logs should include bounded operation/stream/provider context and exception details without diagnostic payload content.
 
-## Current Gaps and Follow-up Slices
+## Historical Groundwork Gaps and Follow-up Slices (superseded)
+
+The slices below record the former Groundwork delivery plan. They are not current instructions;
+#1681 owns the EF replacement and must preserve only the applicable timing-independent behavior.
 
 ### Upstream Groundwork capability slices
 
@@ -394,6 +397,9 @@ These can be delivered incrementally, but the Elsa diagnostic adapters should no
 
 This report does not absorb issue #420's SSE-writer deduplication, in-memory ring-buffer reuse/drop counting, culture-invariant request parsing, serializer null policy, option clamping, or enum validation. The current EF resource/instrument full-table scans are relevant evidence, but the durable fix is keyed Groundwork catalog lookup rather than carrying the EF implementation forward. Issue #420's original claim that persistence failures were silent is stale in current source: the shared drain base now logs retries, exhausted batches, pruning failures, and overload shedding. This report owns durable queue/retry/shutdown loss categories, durable trim counts, and recursion-safe telemetry; #420 retains in-memory retention-eviction accounting.
 
-## Decision
+## Historical Groundwork Decision (superseded)
 
-Resolve `diagnostic-storage` with the specialized record-store shape above. Counts are required; generic reduce is not. Profile-bound grouped reduction is required — see [Amendment 2026-07-31](#amendment-2026-07-31-grouped-reduction-is-required). Capture buffering stays in Elsa. Mutable catalogs stay in ordinary Groundwork documents. Every durable operation is explicit-scope, idempotent where retried, bounded, server-side, restart-safe, and conformance-tested across all four mandatory providers.
+The former decision was to resolve `diagnostic-storage` with the specialized Groundwork record-store
+shape above. That provider choice is superseded. Exact counts, profile-bound grouped reduction,
+capture buffering, scope, idempotency, bounded queries, restart safety, and the other
+timing-independent semantics remain workload inputs for the EF design owned by #1681.

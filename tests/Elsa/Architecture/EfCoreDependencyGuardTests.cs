@@ -22,7 +22,7 @@ public sealed class EfCoreDependencyGuardTests
     private static readonly Dictionary<string, Project> Projects = LoadSrcProjects();
 
     [Fact]
-    public void Only_the_allowed_consumers_and_their_dependents_reach_ef_core_packages()
+    public void Only_the_allowed_consumers_reach_ef_core_packages()
     {
         Assert.All(AllowedEfConsumers, name => Assert.Contains(name, Projects.Keys));
 
@@ -30,9 +30,9 @@ public sealed class EfCoreDependencyGuardTests
             .Where(project => Reachable([project.Name], name => Projects[name].References).Any(name => Projects[name].DeclaresEf))
             .Select(project => project.Name);
 
-        var offenders = reachingEf.Except(AllowedClosure()).Where(name => !Projects[name].IsPilot).Order().ToArray();
+        var offenders = reachingEf.Except(AllowedEfConsumers).Where(name => !Projects[name].IsPilot).Order().ToArray();
 
-        Assert.True(offenders.Length == 0, Report("reach an EF Core package outside the allowed consumers and their dependents", offenders));
+        Assert.True(offenders.Length == 0, Report("reach an EF Core package outside the allowed consumers", offenders));
     }
 
     [Fact]
@@ -41,7 +41,7 @@ public sealed class EfCoreDependencyGuardTests
         var offenders = Projects.Values
             .Where(project => project.DeclaresEf && !project.IsPilot)
             .Select(project => project.Name)
-            .Except(AllowedClosure())
+            .Except(AllowedEfConsumers)
             .Order()
             .ToArray();
 
@@ -60,10 +60,6 @@ public sealed class EfCoreDependencyGuardTests
 
         Assert.True(offenders.Length == 0, Report("mention Microsoft.EntityFrameworkCore in source", offenders));
     }
-
-    // The allowed consumers plus every src project that (transitively) references one of them.
-    private static HashSet<string> AllowedClosure() =>
-        Reachable(AllowedEfConsumers, name => Projects.Values.Where(p => p.References.Contains(name)).Select(p => p.Name));
 
     private static HashSet<string> Reachable(IEnumerable<string> roots, Func<string, IEnumerable<string>> next)
     {
@@ -87,7 +83,7 @@ public sealed class EfCoreDependencyGuardTests
                 .ToHashSet(StringComparer.Ordinal);
             var declaresEf = document.Descendants("PackageReference")
                 .Any(x => EfPackagePrefixes.Any(prefix => (x.Attribute("Include")?.Value ?? "").StartsWith(prefix, StringComparison.OrdinalIgnoreCase)));
-            var isPilot = Adr0072SecretsEfPilot.IsSurfacePath(Path.GetRelativePath(RepoRoot, file).Replace('\\', '/'));
+            var isPilot = Adr0072SecretsEfPilot.IsProjectPath(Path.GetRelativePath(RepoRoot, file).Replace('\\', '/'));
             projects.Add(Path.GetFileNameWithoutExtension(file), new Project(Path.GetFileNameWithoutExtension(file), references, declaresEf, isPilot));
         }
         return projects;
@@ -130,7 +126,22 @@ public sealed class EfCoreDependencyGuardTests
             "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/"
         ];
 
+        public static readonly string[] ProjectPaths =
+        [
+            "src/Elsa/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
+            "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj",
+            "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling.csproj",
+            "tests/Elsa/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj",
+            "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe.csproj",
+            "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj",
+            "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj",
+            "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj"
+        ];
+
         public static bool IsSurfacePath(string relativePath) =>
             SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
+
+        public static bool IsProjectPath(string relativePath) =>
+            ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
     }
 }

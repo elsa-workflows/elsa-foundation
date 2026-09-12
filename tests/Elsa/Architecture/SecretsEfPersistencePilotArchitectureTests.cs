@@ -118,7 +118,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
     ];
 
     [Fact]
-    public void Pilot_paths_are_the_reviewed_adr_0072_allowlist()
+    public void Pilot_paths_and_projects_are_the_reviewed_adr_0072_allowlist()
     {
         Assert.Equal(
             [
@@ -128,6 +128,15 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
                 "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/"
             ],
             EfCoreDependencyGuardTests.Adr0072SecretsEfPilot.SurfacePathPrefixes);
+
+        var projects = EfCoreDependencyGuardTests.Adr0072SecretsEfPilot.SurfacePathPrefixes
+            .SelectMany(prefix => Directory.EnumerateFiles(
+                RepoPath(prefix.TrimEnd('/').Split('/')), "*.csproj", SearchOption.AllDirectories))
+            .Select(path => Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/'))
+            .Where(path => !path.Contains("/obj/", StringComparison.Ordinal) && !path.Contains("/bin/", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(EfCoreDependencyGuardTests.Adr0072SecretsEfPilot.ProjectPaths, projects);
     }
 
     [Fact]

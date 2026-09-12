@@ -1,6 +1,9 @@
 # Contract: Groundwork-Only Reference-Host Matrix
 
-> **Current scope — 2026-09-07:** Apply [the amended first-party boundary](../spec.md#current-governing-scope--2026-09-07). Groundwork covers Elsa-owned durable lanes; the Workbench vendor OpenIddict store is a permitted exception and requires no Groundwork adapter. This historical full-provider matrix belongs to the separate #646 validation harness, not the current implementation gate.
+> **Historical contract — superseded 2026-09-12.** The
+> [historical first-party boundary](../spec.md#historical-governing-scope--superseded-2026-09-12) and
+> Groundwork/MongoDB matrix below are provenance, not current requirements. ADR 0073 and Program
+> #1665 own the four-provider EF direction while OpenIddict retains its separate vendor EF boundary.
 
 ## Purpose
 
