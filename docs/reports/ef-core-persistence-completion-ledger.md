@@ -20,13 +20,17 @@ correctness requirements must first move to an EF-neutral or EF-owned row.
 
 ## Verified baseline
 
-- 14 Groundwork production projects: 238 C# files and 46,809 lines.
-- 7 Workbench Groundwork/Mongo glue files: 276 lines, outside the 14 projects.
+- 14 Groundwork production projects: 232 C# files and 46,809 lines.
+- 7 Workbench Groundwork/Mongo glue files: 276 lines, outside the 14 projects. Six of those files
+  also match a broad `/Groundwork/` path scan, which is why that scan reports 238 rather than the
+  project-root count of 232; the categories here do not overlap.
 - 17 Groundwork shell features.
 - 95 declared Groundwork storage units: Runtime 29, distributed Runtime 3, Activities Design 21,
   Identity 17, OpenTelemetry 8, Publishing 6, Workflows Design 5, Elsa3 import 3, Secrets 1,
   Structured Logs 1, and Studio Preferences 1. Dashboard reuses Design/Runtime units.
-- 36 strict Groundwork/Mongo test projects: 197 C# files and 53,031 lines.
+- 36 listed Groundwork/Mongo test projects: 199 C# files and 55,516 lines. A broad path/name scan
+  finds 206 C# files and 57,211 lines because it also catches Groundwork-dependent tests outside
+  those 36 project roots; #1671 must enumerate that full dependency surface.
 - 5 benchmark projects; 101 tracked C# files and 28,962 lines. Historical ignored result logs explain
   the planning input's larger approximate total.
 - EF currently comprises shared policy plus the opt-in Secrets implementation with SQLite, SQL
