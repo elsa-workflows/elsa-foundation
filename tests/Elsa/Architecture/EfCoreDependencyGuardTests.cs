@@ -8,13 +8,26 @@ namespace Elsa.Architecture.Tests;
 /// through an explicitly reviewed program issue. This ratchet therefore keeps the currently admitted
 /// surface at the vendor-owned OpenIddict host boundary plus ADR 0072's accepted Secrets EF tree. It reads
 /// each source project's evaluated restore graph and scans sources, so imported, conditional, transitive,
-/// and provider-only EF edges anywhere else under <c>src/</c> fail and name the offender. Each replacement
-/// changes this guard deliberately with its own architecture evidence; the destination ADR alone is not a
-/// repository-wide exemption.
+/// and provider-only EF edges anywhere else under <c>src/</c> fail and name the offender. Workbench's host
+/// exception also validates its exact resolved EF package set. Each replacement changes this guard deliberately
+/// with its own architecture evidence; the destination ADR alone is not a repository-wide exemption.
 /// </summary>
 public sealed class EfCoreDependencyGuardTests
 {
     private static readonly string[] AllowedEfConsumers = ["Elsa.Workbench"];
+    private static readonly string[] AllowedWorkbenchEfPackages =
+    [
+        "Microsoft.EntityFrameworkCore",
+        "Microsoft.EntityFrameworkCore.Abstractions",
+        "Microsoft.EntityFrameworkCore.Analyzers",
+        "Microsoft.EntityFrameworkCore.Design",
+        "Microsoft.EntityFrameworkCore.InMemory",
+        "Microsoft.EntityFrameworkCore.Relational",
+        "Microsoft.EntityFrameworkCore.Sqlite",
+        "Microsoft.EntityFrameworkCore.Sqlite.Core",
+        "OpenIddict.EntityFrameworkCore",
+        "OpenIddict.EntityFrameworkCore.Models"
+    ];
     private const string EfPackageToken = "EntityFrameworkCore";
 
     private static readonly string RepoRoot = FindRepoRoot();
@@ -37,17 +50,73 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     [Fact]
+    public void Workbench_resolves_only_reviewed_vendor_and_pilot_EF_packages()
+    {
+        var workbenchAssets = LoadSrcProjects()["Elsa.Workbench"].EfPackages;
+        var offenders = FindUnexpectedEfPackages(workbenchAssets, AllowedWorkbenchEfPackages);
+
+        Assert.True(offenders.Length == 0, Report("are unreviewed EF packages resolved by Workbench", offenders));
+    }
+
+    [Fact]
+    public void Workbench_package_allowlist_rejects_an_unreviewed_transitive_wrapper()
+    {
+        const string assets = """
+            {
+              "libraries": {
+                "Contoso.Persistence/1.0.0": { "type": "package" },
+                "Microsoft.EntityFrameworkCore/10.0.0": { "type": "package" }
+              },
+              "targets": {
+                "net10.0": {
+                  "Contoso.Persistence/1.0.0": {
+                    "type": "package",
+                    "dependencies": { "Microsoft.EntityFrameworkCore": "10.0.0" }
+                  },
+                  "Microsoft.EntityFrameworkCore/10.0.0": { "type": "package" }
+                }
+              }
+            }
+            """;
+
+        Assert.Equal(["Contoso.Persistence"], FindUnexpectedEfPackages(ReadEfDependencyPackages(assets), AllowedWorkbenchEfPackages));
+    }
+
+    [Fact]
     public void Evaluated_assets_detect_an_imported_provider_only_dependency()
     {
         const string assets = """
             {
               "libraries": {
-                "Npgsql.EntityFrameworkCore.PostgreSQL/10.0.0": { "type": "package" }
+                "Npgsql.EntityFrameworkCore.PostgreSQL/10.0.0": { "type": "package" },
+                "Microsoft.EntityFrameworkCore/10.0.0": { "type": "package" }
+              },
+              "targets": {
+                "net10.0": {
+                  "Npgsql.EntityFrameworkCore.PostgreSQL/10.0.0": {
+                    "type": "package",
+                    "dependencies": { "Microsoft.EntityFrameworkCore": "10.0.0" }
+                  },
+                  "Microsoft.EntityFrameworkCore/10.0.0": { "type": "package" }
+                }
               }
             }
             """;
 
         Assert.True(ResolvesEfCore(assets));
+        Assert.Equal(
+            ["Npgsql.EntityFrameworkCore.PostgreSQL"],
+            FindUnexpectedEfPackages(ReadEfDependencyPackages(assets), AllowedWorkbenchEfPackages));
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"libraries\": []}")]
+    [InlineData("{\"libraries\": {}}")]
+    [InlineData("{\"libraries\": {}, \"targets\": []}")]
+    public void Evaluated_assets_reject_missing_or_non_object_dependency_graphs(string assets)
+    {
+        Assert.Throws<InvalidOperationException>(() => ResolvesEfCore(assets));
     }
 
     [Fact]
@@ -75,20 +144,65 @@ public sealed class EfCoreDependencyGuardTests
 
             projects.Add(
                 Path.GetFileNameWithoutExtension(file),
-                new Project(Path.GetFileNameWithoutExtension(file), ResolvesEfCore(File.ReadAllText(assetsPath)), Adr0072SecretsEfPilot.IsProjectPath(relativePath)));
+                new Project(Path.GetFileNameWithoutExtension(file), ReadEfDependencyPackages(File.ReadAllText(assetsPath)), Adr0072SecretsEfPilot.IsProjectPath(relativePath)));
         }
         return projects;
     }
 
-    private static bool ResolvesEfCore(string assetsJson)
+    private static bool ResolvesEfCore(string assetsJson) => ReadEfDependencyPackages(assetsJson).Length > 0;
+
+    private static string[] ReadEfDependencyPackages(string assetsJson)
     {
         using var document = JsonDocument.Parse(assetsJson);
-        if (!document.RootElement.TryGetProperty("libraries", out var libraries))
-            return false;
+        if (!document.RootElement.TryGetProperty("libraries", out var libraries) || libraries.ValueKind != JsonValueKind.Object)
+            throw new InvalidOperationException("Evaluated restore assets must contain an object-valued 'libraries' graph.");
 
-        return libraries.EnumerateObject()
-            .Any(library => library.Name.Split('/', 2)[0].Contains(EfPackageToken, StringComparison.OrdinalIgnoreCase));
+        if (!document.RootElement.TryGetProperty("targets", out var targets) || targets.ValueKind != JsonValueKind.Object)
+            throw new InvalidOperationException("Evaluated restore assets must contain an object-valued 'targets' graph.");
+
+        var packageNames = libraries.EnumerateObject()
+            .Where(library => library.Value.TryGetProperty("type", out var type) && type.ValueEquals("package"))
+            .Select(library => library.Name.Split('/', 2)[0])
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var dependencies = packageNames.ToDictionary(name => name, _ => new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var target in targets.EnumerateObject())
+        {
+            if (target.Value.ValueKind != JsonValueKind.Object)
+                throw new InvalidOperationException($"Evaluated restore target '{target.Name}' must be an object.");
+
+            foreach (var library in target.Value.EnumerateObject())
+            {
+                var name = library.Name.Split('/', 2)[0];
+                if (!packageNames.Contains(name) || !library.Value.TryGetProperty("dependencies", out var libraryDependencies))
+                    continue;
+                if (libraryDependencies.ValueKind != JsonValueKind.Object)
+                    throw new InvalidOperationException($"Evaluated dependencies for '{name}' must be an object.");
+
+                dependencies[name].UnionWith(libraryDependencies.EnumerateObject().Select(dependency => dependency.Name).Where(packageNames.Contains));
+            }
+        }
+
+        var efDependencyPackages = packageNames
+            .Where(name => name.Contains(EfPackageToken, StringComparison.OrdinalIgnoreCase))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        while (true)
+        {
+            var newlyDiscovered = dependencies
+                .Where(package => package.Value.Overlaps(efDependencyPackages) && !efDependencyPackages.Contains(package.Key))
+                .Select(package => package.Key)
+                .ToArray();
+            if (newlyDiscovered.Length == 0)
+                break;
+
+            efDependencyPackages.UnionWith(newlyDiscovered);
+        }
+
+        return efDependencyPackages.Order(StringComparer.OrdinalIgnoreCase).ToArray();
     }
+
+    private static string[] FindUnexpectedEfPackages(IEnumerable<string> resolved, IEnumerable<string> allowed) =>
+        resolved.Except(allowed, StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToArray();
 
     private static bool IsAdmittedEfSource(string file)
     {
@@ -110,7 +224,10 @@ public sealed class EfCoreDependencyGuardTests
         throw new DirectoryNotFoundException("Could not find repository root.");
     }
 
-    private sealed record Project(string Name, bool ResolvesEf, bool IsPilot);
+    private sealed record Project(string Name, string[] EfPackages, bool IsPilot)
+    {
+        public bool ResolvesEf => EfPackages.Length > 0;
+    }
 
     /// <summary>
     /// ADR 0072's accepted, now-superseded Secrets EF surface. ADR 0073 preserves this as the only currently

@@ -359,13 +359,13 @@ retired under ADR 0073; they are not acceptance criteria for #1681.
 ## Failure Observability
 
 The EF replacement should emit timing-independent operational evidence for batch/row counts,
-idempotency replays, selected execution plan, trim deletions, cancellations, and failures. Elsa
+idempotency replays, server-side execution, trim deletions, cancellations, and failures. Elsa
 should emit queue depth/high-water, batches drained, retry attempts, queue-overflow drops,
 retry-exhausted drops, writes-after-stop, shutdown failure, and final drain outcome.
 
-Durable-adapter loss counters must distinguish at least `queue_overflow`, `retry_exhausted`, `shutdown_timeout`, and `writer_closed`. OpenTelemetry's per-signal counts remain useful; Structured Logs needs equivalent process-local durable-queue counters rather than only a warning. Groundwork trim results/inspection must distinguish durable retained-record eviction from failed persistence and subscriber delivery loss. In-memory ring-buffer eviction accounting remains owned by #420.
+Durable-adapter loss counters must distinguish at least `queue_overflow`, `retry_exhausted`, `shutdown_timeout`, and `writer_closed`. OpenTelemetry's per-signal counts remain useful; Structured Logs needs equivalent process-local durable-queue counters rather than only a warning. Durable-adapter trim results and inspection must distinguish retained-record eviction from failed persistence and subscriber delivery loss. In-memory ring-buffer eviction accounting remains owned by #420.
 
-Diagnostics persistence cannot rely solely on logs or telemetry that it captures itself. Instrumentation must have a non-recursive path, using `Meter`, health/readiness state, and explicitly suppressed `Activity`/logger capture around the persistence implementation. Groundwork provider logging that is fed back into Structured Logs, or Groundwork tracing exported into the OpenTelemetry store it describes, can create an amplification loop. Conformance should prove that one append does not recursively generate another diagnostic append.
+Diagnostics persistence cannot rely solely on logs or telemetry that it captures itself. Instrumentation must have a non-recursive path, using `Meter`, health/readiness state, and explicitly suppressed `Activity`/logger capture around the persistence implementation. EF-adapter or database-driver logging fed back into Structured Logs, or persistence tracing exported into the OpenTelemetry store it describes, can create an amplification loop. Conformance should prove that one append does not recursively generate another diagnostic append.
 
 Do not put raw payloads, secrets, tenant ids, trace ids, or record ids into low-cardinality metric labels. Error logs should include bounded operation/stream/provider context and exception details without diagnostic payload content.
 

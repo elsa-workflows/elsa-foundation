@@ -83,9 +83,10 @@ The following proven parts of ADR 0072 remain the default for ordinary relationa
 - module-specific migration-history ownership;
 - host and shell-scoped initialization;
 - runtime apply/validate and out-of-process apply over the same artifacts;
-- explicit provider/artifact pairing and selection of EF's database-level migration-lock path;
-  concurrent-apply behavior, out-of-process tooling isolation, and lifecycle-mode proof remain
-  unproved and are a #1669 gate with #1657 as its prerequisite; and
+- explicit provider/artifact pairing. The Secrets pilot establishes EF's database-level
+  migration-lock path only as a baseline hypothesis; concurrent-apply behavior, out-of-process
+  tooling isolation, and lifecycle-mode proof remain unproved and are a #1669 gate with #1657 as
+  its prerequisite; and
 - provider-specific physical mechanics behind fixed provider-neutral behavior.
 
 Runtime, distributed Runtime, publishing, import, and other operational workloads may need different
