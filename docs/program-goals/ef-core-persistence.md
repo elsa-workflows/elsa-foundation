@@ -30,22 +30,24 @@ boundary. The [Zero-EF goal](zero-ef-persistence.md) remains superseded historic
 - Performance measurement is retired by owner policy. Timing-independent correctness remains.
 - Delivery uses coherent PRs to `main`, one authoritative Project queue, and one merge lane.
 
-## Active objective
+## Initial governance objective
 
-Complete [ADR issue #1666](https://github.com/elsa-workflows/elsa-foundation/issues/1666): record
-ADR 0073, reconcile historical governance, establish the initial ledger, and create the program
-control surface. No persistence implementation is active under this objective.
+At program creation, [ADR issue #1666](https://github.com/elsa-workflows/elsa-foundation/issues/1666)
+records ADR 0073, reconciles historical governance, establishes the initial ledger, and creates the
+program control surface. After that issue closes, Project 49 is authoritative for the one current
+active leaf; this page does not pin a completed issue as active.
 
 ## Dependency sequence
 
 1. [Governance, verified inventory, and architecture #1673](https://github.com/elsa-workflows/elsa-foundation/issues/1673),
    including the [completion ledger #1671](https://github.com/elsa-workflows/elsa-foundation/issues/1671)
-   and three proving spikes [#1675](https://github.com/elsa-workflows/elsa-foundation/issues/1675),
+   and all four proving spikes: [#1675](https://github.com/elsa-workflows/elsa-foundation/issues/1675),
    [#1674](https://github.com/elsa-workflows/elsa-foundation/issues/1674),
-   and [#1669](https://github.com/elsa-workflows/elsa-foundation/issues/1669).
+   [#1669](https://github.com/elsa-workflows/elsa-foundation/issues/1669), and the cross-Epic
+   [hard Runtime proving slice #1676](https://github.com/elsa-workflows/elsa-foundation/issues/1676),
+   which remains a child of Runtime Epic #1672 but gates step 2.
 2. [Shared EF foundation and independent modules #1667](https://github.com/elsa-workflows/elsa-foundation/issues/1667).
-3. [Runtime and distributed Runtime #1672](https://github.com/elsa-workflows/elsa-foundation/issues/1672),
-   beginning with the cross-Epic prerequisite [hard Runtime proving slice #1676](https://github.com/elsa-workflows/elsa-foundation/issues/1676).
+3. [Runtime and distributed Runtime #1672](https://github.com/elsa-workflows/elsa-foundation/issues/1672).
 4. [Design, Publishing, import, and Dashboard #1677](https://github.com/elsa-workflows/elsa-foundation/issues/1677).
 5. [Default flip, removal, and final audit #1670](https://github.com/elsa-workflows/elsa-foundation/issues/1670),
    including [performance-measurement retirement #1668](https://github.com/elsa-workflows/elsa-foundation/issues/1668).

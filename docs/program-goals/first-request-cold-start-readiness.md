@@ -74,10 +74,13 @@ work belongs to [EF Core Persistence](ef-core-persistence.md).
 ## Out of scope
 
 - Warm steady-state latency (done in `runtime-http-performance-2026-07`; ADR 0031/0032).
-- EF-provider consolidation (Zero-EF bucket).
+- EF-provider consolidation was historically outside this bucket; current work belongs to
+  [EF Core Persistence](ef-core-persistence.md).
 - First-user navigability / docs / tour (Workspace Launch Readiness bucket).
 
-## Active objectives
+## Historical objectives at supersession
+
+These items preserve the former queue and do not authorize measurement or timing work.
 
 1. Land spec 129: instrument, deterministic op count, recipe, baseline report. **(this unit)**
 2. Size units 2–5 from the baseline report and pick the next unit by measured share.

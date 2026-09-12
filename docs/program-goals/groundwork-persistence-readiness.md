@@ -77,7 +77,12 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 
 ## Current Roadmap Notes
 
-- Historical status update: Groundwork now lives in its own repository and Elsa consumes the unified `0.0.1-preview.72` package family. The successor [Zero-EF Persistence](zero-ef-persistence.md) bucket owns current adoption, provider evidence, performance verdicts, host switching, and EF removal; this completed bucket is no longer an active implementation queue.
+- Historical status update: Groundwork moved to its own repository and Elsa consumed the unified
+  `0.0.1-preview.72` package family. The former
+  [Zero-EF Persistence](zero-ef-persistence.md) successor owned adoption, provider evidence,
+  performance verdicts, host switching, and EF removal at that time. Current replacement ownership
+  belongs to [EF Core Persistence](ef-core-persistence.md); this completed bucket is not an active
+  implementation queue.
 
 - G0 defines the product and planning boundary only.
 - G1 adds generic Groundwork core/planner packages and tests before any Elsa store migration.

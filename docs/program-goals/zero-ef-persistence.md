@@ -1,6 +1,6 @@
 # Zero-EF Persistence
 
-> **Historical program — superseded 2026-09-12.** This goal records the completed Groundwork
+> **Historical program — superseded 2026-09-12.** This goal records the former Groundwork
 > consolidation direction and any residual issue provenance, but it is no longer an active policy or
 > scheduling surface. [ADR 0073](../adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
 > and the active [EF Core Persistence goal](ef-core-persistence.md) own the opposite all-EF
