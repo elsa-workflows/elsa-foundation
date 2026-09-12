@@ -536,6 +536,9 @@
   <Folder Name="/tests/Elsa/Tasks/">
     <Project Path="tests/Elsa/Tasks/Tests/Elsa.Tasks.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Workbench/">
+    <Project Path="tests/Elsa/Workbench/Tests/Elsa.Workbench.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Workflows/" />
   <Folder Name="/tests/Elsa/Workflows/Design/">
     <Project Path="tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj" />

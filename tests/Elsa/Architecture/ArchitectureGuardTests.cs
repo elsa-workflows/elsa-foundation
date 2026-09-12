@@ -210,50 +210,6 @@ public sealed class ArchitectureGuardTests
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
 
-    [Theory]
-    [InlineData("shells.json")]
-    [InlineData("shells.baseline.json")]
-    public void Server_default_shell_diagnostics_target_names_an_enabled_provider(string fileName)
-    {
-        // The Workbench keeps one SQLite file by owner decision; a separate diagnostics connection stays an
-        // opt-in (#1569, pending valence-works/groundwork-v2#424). When a shell does opt in, the target it
-        // names must be provided by an enabled provider feature.
-        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
-        if (features["DiagnosticsGroundworkPersistence"] is not JsonObject diagnostics ||
-            diagnostics["Target"]?.GetValue<string>() is not { } target)
-            return;
-
-        Assert.Equal("diagnostics", target);
-        Assert.True(
-            features.ContainsKey("GroundworkProviderSqliteDiagnostics"),
-            $"{fileName} targets '{target}' for diagnostics persistence, so it must enable GroundworkProviderSqliteDiagnostics.");
-    }
-
-    [Theory]
-    [InlineData("shells.json")]
-    [InlineData("shells.baseline.json")]
-    public void Server_default_shell_enables_flowchart_runtime_feature(string fileName)
-    {
-        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
-
-        Assert.True(
-            features.ContainsKey("ActivitiesFlowchart"),
-            $"{fileName} must enable ActivitiesFlowchart so Flowchart root activities can resolve runtime services.");
-    }
-
-    [Theory]
-    [InlineData("shells.json")]
-    [InlineData("shells.baseline.json")]
-    public void Server_default_shell_enables_graph_authoring_when_activity_design_is_enabled(string fileName)
-    {
-        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
-
-        Assert.True(features.ContainsKey("ActivitiesDesignApi"));
-        Assert.True(
-            features.ContainsKey("ActivitiesGraphDesign"),
-            $"{fileName} must enable ActivitiesGraphDesign so Activity Design advertises the graph authoring provider.");
-    }
-
     [Fact]
     public void Docker_reference_shell_enables_graph_authoring_with_activity_design()
     {
@@ -308,66 +264,6 @@ public sealed class ArchitectureGuardTests
         Assert.Contains("-p:PublishReadyToRun=true", publishCommand, StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData("shells.json")]
-    [InlineData("shells.baseline.json")]
-    public void Server_default_shell_enables_http_endpoint_activity_feature(string fileName)
-    {
-        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
-
-        Assert.True(
-            features.ContainsKey("ActivitiesHttp"),
-            $"{fileName} must enable ActivitiesHttp so a clean server checkout can publish and serve HTTP-triggered workflows.");
-    }
-
-    [Theory]
-    [InlineData("shells.json")]
-    [InlineData("shells.baseline.json")]
-    public void Server_default_shell_enables_coalesced_checkpoint_persistence(string fileName)
-    {
-        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
-        var settings = Assert.IsType<JsonObject>(features["WorkflowsRuntimeCheckpointPersistence"]);
-
-        Assert.Equal("Coalesced", settings["Mode"]?.GetValue<string>());
-        Assert.Equal(50, settings["MaxSegmentCheckpoints"]?.GetValue<int>());
-    }
-
-    /// <summary>
-    /// The reference shell owns its composition explicitly: one provider connection is selected and each
-    /// Groundwork lane is enabled by its own feature. The provider and lane features all default to the
-    /// same target, preserving the old single-database reference shape without consuming an Elsa Unified preset.
-    /// </summary>
-    [Theory]
-    [InlineData("shells.json")]
-    [InlineData("shells.baseline.json")]
-    public void Server_default_shell_inlines_the_Groundwork_lanes(string fileName)
-    {
-        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
-
-        foreach (var feature in new[]
-                 {
-                     "GroundworkProviderSqlite",
-                     "GroundworkWorkflowRuntime",
-                     "ActivitiesDesignGroundworkPersistence",
-                     "WorkflowsDesignGroundworkPersistence",
-                     "WorkflowsRuntimeDistributedGroundworkPersistence",
-                     "WorkflowsPublishingGroundwork",
-                     "GroundworkWorkflowDashboard"
-                 })
-        {
-            Assert.True(features.ContainsKey(feature), $"{fileName} must explicitly enable {feature}.");
-        }
-
-        Assert.False(features.ContainsKey("GroundworkUnifiedPersistenceSqlite"),
-            $"{fileName} must not consume the Elsa Unified Groundwork preset.");
-        Assert.False(features.ContainsKey("GroundworkTargets"),
-            $"{fileName} is the single-database reference shape and must not declare targets explicitly.");
-        Assert.False(features.ContainsKey("WorkflowsDesignPersistenceEFCoreSqlite"),
-            $"{fileName} must not override unified workflow-design persistence with EF Core.");
-        Assert.False(features.ContainsKey("ActivitiesDesignPersistenceEFCoreSqlite"),
-            $"{fileName} must not override unified activity-design persistence with EF Core.");
-    }
-
     /// <summary>
     /// Groundwork target names are opaque operator-chosen labels. A provider leaf must never learn what a
     /// persistence lane is, or the neutrality the target registry depends on quietly erodes.
@@ -398,18 +294,6 @@ public sealed class ArchitectureGuardTests
         }
 
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations.Distinct()));
-    }
-
-    [Theory]
-    [InlineData("shells.json")]
-    [InlineData("shells.baseline.json")]
-    public void Server_default_shell_enables_the_bounded_executable_cache(string fileName)
-    {
-        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
-        var settings = Assert.IsType<JsonObject>(features["GroundworkWorkflowRuntime"]);
-
-        Assert.True(settings["CacheWorkflowExecutables"]?.GetValue<bool>());
-        Assert.Equal(256, settings["WorkflowExecutableCacheCapacity"]?.GetValue<int>());
     }
 
     /// <summary>
@@ -636,145 +520,12 @@ public sealed class ArchitectureGuardTests
                 !candidate.RelativePath.Contains("/bin/", StringComparison.Ordinal));
 
     [Fact]
-    public void Server_catalogs_http_endpoint_feature_and_its_runtime_dependency()
-    {
-        var server = ProjectFiles().Single(project => project.Name == "Elsa.Workbench");
-        var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
-        var program = File.ReadAllText(Path.Join(RepoRoot, "src", "Apps", "Elsa.Workbench", "Program.cs"));
-
-        Assert.Contains("Elsa.Activities.Http", references);
-        Assert.Contains("Elsa.Workflows.Runtime.Http", references);
-        Assert.Contains(".WithHostAssemblies()", program, StringComparison.Ordinal);
-    }
-
-    [Theory]
-    [InlineData("shells.json")]
-    [InlineData("shells.baseline.json")]
-    public void Server_catalogs_and_enables_dashboard_dependencies_in_the_default_shell(string fileName)
-    {
-        var server = ProjectFiles().Single(project => project.Name == "Elsa.Workbench");
-        var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
-        var program = File.ReadAllText(Path.Join(RepoRoot, "src", "Apps", "Elsa.Workbench", "Program.cs"));
-        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
-
-        Assert.Contains("Elsa.Workflows.Design.Validations", references);
-        Assert.Contains("Elsa.Workflows.Runtime.Resumption", references);
-        Assert.Contains("typeof(Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature).Assembly", program, StringComparison.Ordinal);
-        Assert.Contains("typeof(WorkflowsRuntimeResumptionFeature).Assembly", program, StringComparison.Ordinal);
-        Assert.Contains("WorkflowDesignValidations", features);
-        Assert.Contains("WorkflowsRuntimeResumption", features);
-    }
-
-    [Theory]
-    [InlineData("shells.json")]
-    [InlineData("shells.baseline.json")]
-    public void Server_default_shell_enables_the_publish_engine_alongside_its_transport(string fileName)
-    {
-        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
-
-        // spec 145: WorkflowsPublishingApi is transport-only and DependsOn the endpoint-free
-        // WorkflowsPublishing engine. CShells auto-enables the dependency, so publishing works either way —
-        // but an unlisted engine is reported disabled by GET /modularity/features while it is composed, which
-        // reads to an operator as "the publish engine is off". Every other DependsOn edge in the stock shell
-        // resolves to an explicitly enabled feature; this keeps that invariant whole.
-        Assert.True(
-            features.ContainsKey("WorkflowsPublishingApi"),
-            $"{fileName} must enable WorkflowsPublishingApi so the publish endpoints are mounted.");
-        Assert.True(
-            features.ContainsKey("WorkflowsPublishing"),
-            $"{fileName} must also enable the WorkflowsPublishing engine its transport depends on.");
-    }
-
-    [Fact]
     public void Docker_reference_shell_enables_the_publish_engine_alongside_its_transport()
     {
         var features = ReadDefaultShellFeatures(Path.Combine(RepoRoot, "docker", "compose", "elsa-workbench.shells.json"));
 
         Assert.True(features.ContainsKey("WorkflowsPublishingApi"));
         Assert.True(features.ContainsKey("WorkflowsPublishing"));
-    }
-
-    [Fact]
-    public void Server_catalogs_graph_design_separately_from_graph_runtime()
-    {
-        var server = ProjectFiles().Single(project => project.Name == "Elsa.Workbench");
-        var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
-        var program = File.ReadAllText(Path.Join(RepoRoot, "src", "Apps", "Elsa.Workbench", "Program.cs"));
-
-        Assert.Contains("Elsa.Activities.Graph.Design", references);
-        Assert.Contains("Elsa.Activities.Graph.Runtime", references);
-        Assert.Contains("typeof(GraphActivitiesDesignFeature).Assembly", program, StringComparison.Ordinal);
-        Assert.Contains("typeof(GraphActivitiesRuntimeFeature).Assembly", program, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Server_catalogs_workflow_json_reconciliation_for_file_based_deployment()
-    {
-        var server = ProjectFiles().Single(project => project.Name == "Elsa.Workbench");
-        var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
-        var program = File.ReadAllText(Path.Join(RepoRoot, "src", "Apps", "Elsa.Workbench", "Program.cs"));
-
-        // spec 147 (#1157): the workflow-side reconciliation family must be in the runtime feature catalog so
-        // a shells.json enabling JsonWorkflowReconciliation deploys mounted definition files at startup instead
-        // of being silently skipped. Deliberately NOT enabled in any default shell: the feature requires a
-        // SourceId plus exactly one file/folder path and fails registration on empty options.
-        Assert.Contains("Elsa.Workflows.Design.Reconciliation", references);
-        Assert.Contains("Elsa.Workflows.Design.Reconciliation.Json", references);
-        Assert.Contains("typeof(WorkflowsDesignReconciliationFeature).Assembly", program, StringComparison.Ordinal);
-        Assert.Contains("typeof(JsonWorkflowReconciliationFeature).Assembly", program, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Server_catalogs_workflow_design_validations_required_by_dashboard()
-    {
-        var server = ProjectFiles().Single(project => project.Name == "Elsa.Workbench");
-        var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
-        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Workbench", "Program.cs"));
-
-        Assert.Contains("Elsa.Workflows.Design.Validations", references);
-        Assert.Contains(
-            "typeof(Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature).Assembly",
-            program,
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Server_exposes_distinct_root_liveness_and_readiness_paths()
-    {
-        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Workbench", "Program.cs"));
-        var endpoints = File.ReadAllText(Path.Combine(
-            RepoRoot,
-            "src",
-            "Apps",
-            "Elsa.Workbench",
-            "Readiness",
-            "ShellReadinessEndpointExtensions.cs"));
-
-        var live = endpoints.IndexOf("MapGet(\"/health/live\"", StringComparison.Ordinal);
-        var ready = endpoints.IndexOf("MapGet(\"/health/ready\"", StringComparison.Ordinal);
-        var health = program.IndexOf("MapShellReadiness()", StringComparison.Ordinal);
-        var shells = program.IndexOf("MapShells()", StringComparison.Ordinal);
-
-        Assert.True(live >= 0, "The reference server must expose GET /health/live at the process root.");
-        Assert.True(ready >= 0, "The reference server must expose GET /health/ready at the process root.");
-        Assert.NotEqual(live, ready);
-        Assert.True(health >= 0 && health < shells, "Health endpoints must be root-mapped independently of shell endpoints.");
-    }
-
-    [Fact]
-    public void Server_excludes_both_health_paths_from_cshells_resolution()
-    {
-        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Workbench", "Program.cs"));
-        var webRouting = Regex.Match(
-            program,
-            @"\.WithWebRouting\(options\s*=>\s*\{(?<body>.*?)\}\)",
-            RegexOptions.Singleline);
-
-        Assert.True(webRouting.Success, "The reference server must configure CShells web routing explicitly.");
-        var body = webRouting.Groups["body"].Value;
-        Assert.Contains("ExcludePaths", body, StringComparison.Ordinal);
-        Assert.Contains("/health/live", body, StringComparison.Ordinal);
-        Assert.Contains("/health/ready", body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1172,15 +923,6 @@ public sealed class ArchitectureGuardTests
 
         return document["CShells"]?["Shells"]?["default"]?["Features"] as JsonObject
             ?? throw new InvalidOperationException($"{Path.GetFileName(path)} must contain CShells.Shells.default.Features.");
-    }
-
-    private static string ServerConfigurationPath(string fileName)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
-        if (Path.IsPathRooted(fileName) || !StringComparer.Ordinal.Equals(Path.GetFileName(fileName), fileName))
-            throw new ArgumentException("The server configuration name must be a relative file name.", nameof(fileName));
-
-        return Path.Join(RepoRoot, "src", "Apps", "Elsa.Workbench", fileName);
     }
 
     private static string StripCommentsAndStringLiterals(string text)
