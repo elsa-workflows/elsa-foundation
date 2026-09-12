@@ -6,9 +6,9 @@ Records direct project references only.
 
 ## Summary
 
-- Source projects: 129
-- Test projects: 104
-- Direct project references: 1188
+- Source projects: 130
+- Test projects: 106
+- Direct project references: 1194
 
 ## Projects
 
@@ -105,6 +105,7 @@ Records direct project references only.
 | [Elsa.Serialization.SystemText](../../src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj) | source | Elsa.Serialization | - | default | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core |
 | [Elsa.Studio.Preferences.Api](../../src/Elsa/Studio/Preferences/Api/Elsa.Studio.Preferences.Api.csproj) | source | Elsa.Studio | - | default | Elsa.Api.AspNetCore<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Studio.Preferences.Core |
 | [Elsa.Studio.Preferences.Core](../../src/Elsa/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj) | source | Elsa.Studio | - | default | - |
+| [Elsa.Studio.Preferences.Persistence.EntityFrameworkCore](../../src/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj) | source | Elsa.Studio | - | default | Elsa.Persistence.EntityFramework<br>Elsa.Studio.Preferences.Core |
 | [Elsa.Studio.Preferences.Persistence.Groundwork](../../src/Elsa/Studio/Preferences/Persistence/Groundwork/Elsa.Studio.Preferences.Persistence.Groundwork.csproj) | source | Elsa.Studio | - | default | Elsa.Persistence.Groundwork.V2<br>Elsa.Studio.Preferences.Core |
 | [Elsa.Tasks.Core](../../src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj) | source | Elsa.Tasks | - | default | - |
 | [Elsa.Tasks](../../src/Elsa/Tasks/Elsa.Tasks.csproj) | source | Elsa.Tasks | - | default | Elsa.Locking.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core |
@@ -221,6 +222,8 @@ Records direct project references only.
 | [Elsa.Secrets.Persistence.Groundwork.V2.Tests](../../tests/Elsa/Secrets/Persistence/Groundwork/V2/Tests/Elsa.Secrets.Persistence.Groundwork.V2.Tests.csproj) | test | Elsa.Secrets | net10.0 | false | Elsa.Persistence.Groundwork.Testing<br>Elsa.Secrets.Persistence.Groundwork |
 | [Elsa.Secrets.Tests](../../tests/Elsa/Secrets/Tests/Elsa.Secrets.Tests.csproj) | test | Elsa.Secrets | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Compatibility.Testing<br>Elsa.Expressions<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Secrets<br>Elsa.Secrets.Api<br>Elsa.Secrets.Core<br>Elsa.Testing<br>Elsa.Workflows.Runtime |
 | [Elsa.Serialization.Tests](../../tests/Elsa/Serialization/Tests/Elsa.Serialization.Tests.csproj) | test | Elsa.Serialization | - | default | Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Serialization.SystemText |
+| [Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests](../../tests/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Studio | net10.0 | false | Elsa.Studio.Preferences.Persistence.EntityFrameworkCore |
+| [Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Tests](../../tests/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/Tests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Studio | net10.0 | false | Elsa.Studio.Preferences.Core<br>Elsa.Studio.Preferences.Persistence.EntityFrameworkCore<br>Elsa.Studio.Preferences.Persistence.Groundwork |
 | [Elsa.Studio.Preferences.Persistence.Groundwork.Tests](../../tests/Elsa/Studio/Preferences/Persistence/Groundwork/Tests/Elsa.Studio.Preferences.Persistence.Groundwork.Tests.csproj) | test | Elsa.Studio | net10.0 | false | Elsa.Studio.Preferences.Persistence.Groundwork |
 | [Elsa.Studio.Preferences.Tests](../../tests/Elsa/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj) | test | Elsa.Studio | - | default | Elsa.Api.AspNetCore<br>Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Studio.Preferences.Api<br>Elsa.Studio.Preferences.Core<br>Elsa.Testing |
 | [Elsa.Tasks.Tests](../../tests/Elsa/Tasks/Tests/Elsa.Tasks.Tests.csproj) | test | Elsa.Tasks | - | default | Elsa.Tasks<br>Elsa.Tasks.Schedules |
@@ -274,7 +277,7 @@ Records direct project references only.
 | Elsa.Samples | 0 | 1 |
 | Elsa.Secrets | 6 | 7 |
 | Elsa.Serialization | 3 | 1 |
-| Elsa.Studio | 3 | 2 |
+| Elsa.Studio | 4 | 4 |
 | Elsa.Tasks | 3 | 1 |
 | Elsa.Testing | 0 | 1 |
 | Elsa.Workbench | 1 | 1 |
