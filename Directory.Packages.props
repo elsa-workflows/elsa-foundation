@@ -103,6 +103,8 @@
     <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
     <PackageVersion Include="YamlDotNet" Version="16.3.0" />
     <PackageVersion Include="MongoDB.Driver" Version="3.10.0" />
+    <PackageVersion Include="MySql.Data" Version="26.7.0" />
+    <PackageVersion Include="MySql.EntityFrameworkCore" Version="10.0.9" />
     <!--
       The endpoint-class framework this repository used to carry in src/Elsa/Api/Endpoints. The
       three ids version together: Elsa.Api.AspNetCore consumes the core, and the OpenApi and
@@ -134,6 +136,7 @@
     <PackageVersion Include="System.Reflection.MetadataLoadContext" Version="10.0.8" />
     <PackageVersion Include="Testcontainers.MongoDb" Version="4.15.0" />
     <PackageVersion Include="Testcontainers.MsSql" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.MySql" Version="4.15.0" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
