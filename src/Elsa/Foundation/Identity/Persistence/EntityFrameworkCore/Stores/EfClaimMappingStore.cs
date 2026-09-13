@@ -75,7 +75,11 @@ public sealed class EfClaimMappingStore(
         ValidateRule(rule); Prepare(rule.TenantId, cancellationToken);
         var operation = createOnly ? "create-claim-mapping" : "save-claim-mapping";
         var fingerprint = EfIdentityStoreSupport.Fingerprint(operation, rule.TenantId, rule.Provider, rule.Id, rule.MatchClaimType, rule.MatchValue, EfIdentityStoreSupport.SerializeSet(rule.GrantRoles), EfIdentityStoreSupport.SerializeSet(rule.GrantPermissions), rule.Order.ToString(CultureInfo.InvariantCulture), rule.StopOnMatch.ToString(), expectedVersion?.ToString(CultureInfo.InvariantCulture));
-        return await atomic.ExecuteAsync(EfIdentityAtomicMutation.Create(operation, fingerprint, rule.TenantId), async token =>
+        return await atomic.ExecuteAsync(EfIdentityAtomicMutation.Create(
+            operation,
+            fingerprint,
+            rule.TenantId,
+            createOnly || expectedVersion is not null ? fingerprint : null), async token =>
         {
             var id = Id(rule.TenantId, rule.Provider, rule.Id);
             var row = await context.ClaimMappings.SingleOrDefaultAsync(x => x.Id == id, token);

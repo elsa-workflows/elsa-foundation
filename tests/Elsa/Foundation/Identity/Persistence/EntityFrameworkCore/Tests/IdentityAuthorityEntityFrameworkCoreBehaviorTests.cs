@@ -63,6 +63,66 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
     }
 
     [Fact]
+    public async Task Unconditional_saves_apply_a_later_matching_payload_after_intervening_state()
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await using var scope = await EfIdentityScope.OpenAsync(databasePath, "tenant-a");
+
+            var userA = User("tenant-a", "aba-user", "User A", "a@example.test");
+            var userB = userA with { DisplayName = "User B" };
+            await scope.Users.SaveAsync(userA);
+            await scope.Users.SaveAsync(userB);
+            await scope.Users.SaveAsync(userA);
+            AssertUser(userA, Assert.IsType<UserRecord>(await scope.Users.FindAsync(userA.TenantId, userA.Id)));
+            Assert.Equal(3, (await scope.Context.Users.AsNoTracking().SingleAsync()).Revision);
+
+            var roleA = Role("tenant-a", "aba-role", "Role A");
+            var roleB = roleA with { Description = "Role B" };
+            await scope.Roles.SaveAsync(roleA);
+            await scope.Roles.SaveAsync(roleB);
+            await scope.Roles.SaveAsync(roleA);
+            AssertRole(roleA, Assert.IsType<RoleRecord>(await scope.Roles.FindAsync(roleA.TenantId, roleA.Id)));
+            Assert.Equal(3, (await scope.Context.Roles.AsNoTracking().SingleAsync()).Revision);
+
+            var mappingA = ClaimMapping("tenant-a", "oidc", "aba-mapping", order: 10);
+            var mappingB = mappingA with { Order = 20 };
+            await scope.ClaimMappings.SaveAsync(mappingA);
+            await scope.ClaimMappings.SaveAsync(mappingB);
+            await scope.ClaimMappings.SaveAsync(mappingA);
+            Assert.Equal(10, Assert.Single(await scope.ClaimMappings.ListForProviderAsync(mappingA.TenantId, mappingA.Provider)).Order);
+            Assert.Equal(3, (await scope.Context.ClaimMappings.AsNoTracking().SingleAsync()).Revision);
+
+            var externalA = ExternalIdentity("tenant-a", userA.Id, "oidc", "aba-subject");
+            var externalB = externalA with { LastSeenAt = DateTimeOffset.UnixEpoch.AddDays(1) };
+            await scope.ExternalIdentities.SaveAsync(externalA);
+            await scope.ExternalIdentities.SaveAsync(externalB);
+            await scope.ExternalIdentities.SaveAsync(externalA);
+            Assert.Equal(
+                externalA.LastSeenAt,
+                (await scope.ExternalIdentities.FindBySubjectAsync(externalA.TenantId, externalA.Provider, externalA.ProviderSubject))!.LastSeenAt);
+            Assert.Equal(3, (await scope.Context.ExternalIdentities.AsNoTracking().SingleAsync()).Revision);
+
+            var membershipA = Membership("tenant-a", userA.Id, roleA.Id);
+            var membershipB = membershipA with { Status = TenantMembershipStatus.Suspended };
+            await scope.Memberships.SaveAsync(membershipA);
+            await scope.Memberships.SaveAsync(membershipB);
+            await scope.Memberships.SaveAsync(membershipA);
+            Assert.Equal(
+                membershipA.Status,
+                (await scope.Memberships.FindAsync(membershipA.TenantId, membershipA.UserId))!.Status);
+            Assert.Equal(3, (await scope.Context.TenantMemberships.AsNoTracking().SingleAsync()).Revision);
+
+            Assert.Equal(15, await scope.Context.MutationReceipts.CountAsync());
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
+    [Fact]
     public async Task User_lookup_is_normalized_and_ambiguous_email_is_not_resolved()
     {
         var databasePath = TemporaryDatabasePath();
@@ -1139,6 +1199,25 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
         {
             DeleteDatabaseFiles(databasePath);
         }
+    }
+
+    [Fact]
+    public void Atomic_mutation_factory_separates_invocations_and_replays_explicit_tenant_scoped_keys()
+    {
+        var first = EfIdentityAtomicMutation.Create("save-authority", "same-payload", "tenant-a");
+        var second = EfIdentityAtomicMutation.Create("save-authority", "same-payload", "tenant-a");
+        Assert.NotEqual(first.OperationId, second.OperationId);
+        Assert.NotEqual(first.MutationReceiptId, second.MutationReceiptId);
+
+        var replay = EfIdentityAtomicMutation.Create("save-authority", "same-payload", "tenant-a", "request-1");
+        var sameReplay = EfIdentityAtomicMutation.Create("save-authority", "same-payload", "tenant-a", "request-1");
+        Assert.Equal(replay.OperationId, sameReplay.OperationId);
+        Assert.Equal(replay.MutationReceiptId, sameReplay.MutationReceiptId);
+
+        var otherTenant = EfIdentityAtomicMutation.Create("save-authority", "same-payload", "tenant-b", "request-1");
+        Assert.NotEqual(replay.OperationId, otherTenant.OperationId);
+        Assert.Throws<ArgumentException>(() =>
+            EfIdentityAtomicMutation.Create("save-authority", "same-payload", "tenant-a", " "));
     }
 
     [Fact]

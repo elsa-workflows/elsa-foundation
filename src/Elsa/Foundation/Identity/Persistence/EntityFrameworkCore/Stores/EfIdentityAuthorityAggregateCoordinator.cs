@@ -84,7 +84,8 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 return existing.Revision == 1 ? Inserted(id, 1) : Updated(id, existing.Revision);
             },
             cancellationToken,
-            user.TenantId);
+            user.TenantId,
+            replayByFingerprint: expectedVersion is not null || requestIdentity is not null);
         return new EfIdentityAuthorityWriteResult(result, conflict == EfIdentityAuthorityConflict.None ? MapConflict(result.FailedUnitId) : conflict);
     }
 
@@ -136,7 +137,8 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 return existing.Revision == 1 ? Inserted(id, 1) : Updated(id, existing.Revision);
             },
             cancellationToken,
-            role.TenantId);
+            role.TenantId,
+            replayByFingerprint: expectedVersion is not null || requestIdentity is not null);
         return new EfIdentityAuthorityWriteResult(result, conflict == EfIdentityAuthorityConflict.None ? MapConflict(result.FailedUnitId) : conflict);
     }
 
@@ -266,7 +268,8 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 context.Users.Remove(user);
                 return Deleted(id, expectedVersion);
             }, cancellationToken,
-            tenantId);
+            tenantId,
+            replayByFingerprint: true);
     }
 
     private async Task<EfIdentityWriteResult> DeleteRoleCoreAsync(string tenantId, string roleId, long expectedVersion, CancellationToken cancellationToken)
@@ -337,7 +340,8 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 context.Roles.Remove(role);
                 return Deleted(id, expectedVersion);
             }, cancellationToken,
-            tenantId);
+            tenantId,
+            replayByFingerprint: true);
     }
 
     private async Task<EfIdentityWriteResult> ExecuteAsync(
@@ -345,10 +349,17 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
         string fingerprint,
         Func<CancellationToken, Task<EfIdentityWriteResult>> stageAsync,
         CancellationToken cancellationToken,
-        string tenantId)
+        string tenantId,
+        bool replayByFingerprint)
     {
         return await atomicWrite.ExecuteAsync(
-            EfIdentityAtomicMutation.Create(operation, fingerprint, tenantId), stageAsync, cancellationToken);
+            EfIdentityAtomicMutation.Create(
+                operation,
+                fingerprint,
+                tenantId,
+                replayByFingerprint ? fingerprint : null),
+            stageAsync,
+            cancellationToken);
     }
 
     private async Task<bool> ReserveUserNameAsync(UserNameReservationEntity reservation, string userId, CancellationToken cancellationToken)

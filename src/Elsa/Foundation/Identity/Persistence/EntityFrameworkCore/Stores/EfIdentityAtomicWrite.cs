@@ -11,12 +11,17 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 /// <summary>Identity-owned transactional mutation identity used for durable acknowledgement replay.</summary>
 public sealed record EfIdentityAtomicMutation
 {
-    private EfIdentityAtomicMutation(string operationName, string requestFingerprint, string? tenantId)
+    private EfIdentityAtomicMutation(string operationName, string requestFingerprint, string? tenantId, string? idempotencyKey)
     {
         OperationName = operationName;
         RequestFingerprint = requestFingerprint;
         TenantId = tenantId;
-        OperationId = IdentityEntityFrameworkKey.FramedRecordId(operationName, requestFingerprint);
+        // A fingerprint describes payload equality, not invocation identity. Unconditional writes
+        // therefore receive a fresh durable acknowledgement identity. Conditional callers may
+        // supply a stable idempotency key (normally one that includes the expected resource state)
+        // so a retry can replay its receipt without suppressing a later valid write.
+        var invocationIdentity = idempotencyKey ?? Guid.NewGuid().ToString("N");
+        OperationId = IdentityEntityFrameworkKey.FramedRecordId(operationName, tenantId, invocationIdentity);
         MutationReceiptId = IdentityEntityFrameworkKey.FramedRecordId("mutation-receipt", OperationId);
     }
 
@@ -26,11 +31,21 @@ public sealed record EfIdentityAtomicMutation
     public string? TenantId { get; }
     public string MutationReceiptId { get; }
 
-    public static EfIdentityAtomicMutation Create(string operationName, string requestFingerprint, string? tenantId = null)
+    /// <summary>
+    /// Creates a mutation. Omitting <paramref name="idempotencyKey"/> creates a distinct invocation;
+    /// supplying one allows the same tenant-scoped request and fingerprint to replay its receipt.
+    /// </summary>
+    public static EfIdentityAtomicMutation Create(
+        string operationName,
+        string requestFingerprint,
+        string? tenantId = null,
+        string? idempotencyKey = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(operationName);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestFingerprint);
-        return new EfIdentityAtomicMutation(operationName, requestFingerprint, tenantId);
+        if (idempotencyKey is not null)
+            ArgumentException.ThrowIfNullOrWhiteSpace(idempotencyKey);
+        return new EfIdentityAtomicMutation(operationName, requestFingerprint, tenantId, idempotencyKey);
     }
 }
 

@@ -78,7 +78,7 @@ public sealed class EfCoreIdentityFrameworkContractTests
     [Fact]
     public async Task Login_display_names_round_trip_null_and_unpaired_surrogates_after_a_context_reopen()
     {
-        var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-identity-login-display-{Guid.NewGuid():N}.db");
+        var databasePath = Path.Join(Path.GetTempPath(), $"elsa-identity-login-display-{Guid.NewGuid():N}.db");
         await using var first = await EfCoreIdentityScenario.CreateAsync(databasePath: databasePath);
         var user = await first.CreateUserAsync("DisplayNames");
         Assert.True((await first.Users.AddLoginAsync(user, new UserLoginInfo("oidc", "null-display", null))).Succeeded);
@@ -785,7 +785,7 @@ public sealed class EfCoreIdentityFrameworkContractTests
     [Fact]
     public async Task Two_concurrent_ef_seeders_converge_to_one_admin_aggregate_and_membership()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"elsa-identity-seeder-race-{Guid.NewGuid():N}.db");
+        var path = Path.Join(Path.GetTempPath(), $"elsa-identity-seeder-race-{Guid.NewGuid():N}.db");
         var seed = new IdentitySeedOptions
         {
             UserName = "admin",

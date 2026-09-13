@@ -333,7 +333,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
             EnsureUserRelationshipCapacity(user, beforeCount);
             user.Revision = checked(user.Revision + 1);
             return Updated(id, membership.Revision);
-        }, cancellationToken);
+        }, cancellationToken, replayByFingerprint: enforce);
 
     private async Task<EfIdentityWriteResult> MutateExternalIdentityAsync(ExternalIdentityEntity login, long? expectedNewOwnerVersion, long? expectedLoginVersion, bool enforceLoginVersion, EfExternalLoginOwnershipPolicy policy, bool returnOwnerResult, bool replaceProviderDisplayName, CancellationToken cancellationToken)
     {
@@ -423,7 +423,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
                     ownerResult = Updated(pair.Value.Id, pair.Value.Revision);
             }
             return returnOwnerResult ? ownerResult! : Updated(id, newRevision);
-        }, cancellationToken);
+        }, cancellationToken, replayByFingerprint: enforceLoginVersion || expectedNewOwnerVersion is not null);
     }
 
     private async Task<EfIdentityWriteResult> DeleteExternalIdentityCoreAsync(string tenantId, string userId, string provider, string providerSubject, long expectedVersion, CancellationToken cancellationToken) =>
@@ -510,10 +510,23 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
         return role;
     }
 
-    private Task<EfIdentityWriteResult> ExecuteAsync(string tenantId, string operation, string fingerprint, Func<CancellationToken, Task<EfIdentityWriteResult>> stage, CancellationToken cancellationToken)
+    private Task<EfIdentityWriteResult> ExecuteAsync(
+        string tenantId,
+        string operation,
+        string fingerprint,
+        Func<CancellationToken, Task<EfIdentityWriteResult>> stage,
+        CancellationToken cancellationToken,
+        bool replayByFingerprint = true)
     {
         EfIdentityStoreSupport.EnsureTenant(access, tenantId);
-        return atomicWrite.ExecuteAsync(EfIdentityAtomicMutation.Create(operation, fingerprint, tenantId), stage, cancellationToken).AsTask();
+        return atomicWrite.ExecuteAsync(
+            EfIdentityAtomicMutation.Create(
+                operation,
+                fingerprint,
+                tenantId,
+                replayByFingerprint ? fingerprint : null),
+            stage,
+            cancellationToken).AsTask();
     }
 
     private static void Prepare(UserClaimEntity row, string tenant, string user) { row.TenantId = tenant; row.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(tenant); row.UserId = user; row.UserLookupKey = EfIdentityStoreSupport.Lookup(tenant, user); row.ClaimKey = EfIdentityStoreSupport.CompoundKey(tenant, row.ClaimType, row.ClaimValue); row.Id = ClaimId(tenant, user, row.ClaimType, row.ClaimValue); row.Revision = row.Revision == 0 ? 1 : row.Revision; }
