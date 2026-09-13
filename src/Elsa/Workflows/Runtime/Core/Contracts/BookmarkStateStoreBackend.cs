@@ -50,10 +50,39 @@ public sealed class BookmarkStateStoreBackend
         .Any(descriptor => descriptor.ServiceType is { } serviceType &&
                            (serviceType == typeof(IBookmarkStateStore) || serviceType == typeof(IBookmarkStimulusIndex)));
 
+    /// <summary>Registers the Runtime-owned in-memory bookmark store without claiming an explicit host registration.</summary>
+    public static void TryRegisterDefaultStateStore(IServiceCollection services, ServiceDescriptor descriptor)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(descriptor);
+        if (descriptor.ServiceType != typeof(IBookmarkStateStore))
+            throw new ArgumentException("The default descriptor must register IBookmarkStateStore.", nameof(descriptor));
+
+        var registrations = DefaultStateStoreRegistrations(services);
+        if (registrations.Length > 0)
+        {
+            EnsureDefaultStateStoreOwnership(services, registrations);
+            return;
+        }
+
+        if (services.Any(candidate => candidate.ServiceType == typeof(IBookmarkStateStore)))
+            return;
+
+        services.Add(descriptor);
+        services.AddSingleton(new DefaultStateStoreRegistration(descriptor));
+    }
+
     /// <summary>Registers the Runtime-owned bridge from the selected bookmark store to its stimulus index.</summary>
     public static void TryRegisterDefaultStimulusIndex(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+        var registrations = DefaultStimulusIndexRegistrations(services);
+        if (registrations.Length > 0)
+        {
+            EnsureDefaultStimulusIndexOwnership(services, registrations);
+            return;
+        }
+
         if (services.Any(descriptor => descriptor.ServiceType == typeof(IBookmarkStimulusIndex)))
             return;
 
@@ -67,31 +96,38 @@ public sealed class BookmarkStateStoreBackend
     public static void RemoveDefaultStimulusIndex(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
-        var registrations = services
-            .Select(descriptor => descriptor.ImplementationInstance)
-            .OfType<DefaultStimulusIndexRegistration>()
-            .ToArray();
-        var indexDescriptors = services
-            .Where(descriptor => descriptor.ServiceType == typeof(IBookmarkStimulusIndex))
-            .ToArray();
+        var registrations = DefaultStimulusIndexRegistrations(services);
+
+        EnsureDefaultStimulusIndexOwnership(services, registrations);
 
         if (registrations.Length == 0)
-        {
-            if (indexDescriptors.Length > 0)
-                throw new InvalidOperationException("An explicit IBookmarkStimulusIndex is already registered; persistence refuses to replace it implicitly.");
             return;
-        }
-
-        if (registrations.Length != 1 || indexDescriptors.Length != 1 ||
-            !ReferenceEquals(registrations[0].Descriptor, indexDescriptors[0]))
-            throw new InvalidOperationException("The Runtime-owned IBookmarkStimulusIndex bridge no longer exclusively owns the contract.");
 
         services.Remove(registrations[0].Descriptor);
-        for (var index = services.Count - 1; index >= 0; index--)
-        {
-            if (ReferenceEquals(services[index].ImplementationInstance, registrations[0]))
-                services.RemoveAt(index);
-        }
+        RemoveMarker(services, registrations[0]);
+    }
+
+    /// <summary>Removes the Runtime-owned in-memory bookmark store, refusing to remove an explicit store.</summary>
+    public static void RemoveDefaultStateStore(IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        var registrations = DefaultStateStoreRegistrations(services);
+
+        EnsureDefaultStateStoreOwnership(services, registrations);
+
+        if (registrations.Length == 0)
+            return;
+
+        services.Remove(registrations[0].Descriptor);
+        RemoveMarker(services, registrations[0]);
+    }
+
+    /// <summary>Validates that any unselected bookmark contracts are Runtime-owned defaults before replacement.</summary>
+    public static void EnsureRuntimeDefaultsOwnRegisteredContracts(IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        EnsureDefaultStateStoreOwnership(services, DefaultStateStoreRegistrations(services));
+        EnsureDefaultStimulusIndexOwnership(services, DefaultStimulusIndexRegistrations(services));
     }
 
     public static void EnsureKnown(string name)
@@ -126,4 +162,62 @@ public sealed class BookmarkStateStoreBackend
     }
 
     private sealed record DefaultStimulusIndexRegistration(ServiceDescriptor Descriptor);
+    private sealed record DefaultStateStoreRegistration(ServiceDescriptor Descriptor);
+
+    private static DefaultStateStoreRegistration[] DefaultStateStoreRegistrations(IServiceCollection services) => services
+        .Select(descriptor => descriptor.ImplementationInstance)
+        .OfType<DefaultStateStoreRegistration>()
+        .ToArray();
+
+    private static DefaultStimulusIndexRegistration[] DefaultStimulusIndexRegistrations(IServiceCollection services) => services
+        .Select(descriptor => descriptor.ImplementationInstance)
+        .OfType<DefaultStimulusIndexRegistration>()
+        .ToArray();
+
+    private static void EnsureDefaultStateStoreOwnership(
+        IServiceCollection services,
+        IReadOnlyCollection<DefaultStateStoreRegistration> registrations)
+    {
+        var descriptors = services.Where(descriptor => descriptor.ServiceType == typeof(IBookmarkStateStore)).ToArray();
+        if (registrations.Count == 0)
+        {
+            if (descriptors.Length > 0)
+                throw new InvalidOperationException("An explicit IBookmarkStateStore is already registered; persistence refuses to replace it implicitly.");
+            return;
+        }
+
+        if (registrations.Count != 1 || descriptors.Length != 1)
+            throw new InvalidOperationException("The Runtime-owned IBookmarkStateStore default no longer exclusively owns the contract.");
+        var registration = registrations.Single();
+        if (!ReferenceEquals(registration.Descriptor, descriptors[0]))
+            throw new InvalidOperationException("The Runtime-owned IBookmarkStateStore default no longer exclusively owns the contract.");
+    }
+
+    private static void EnsureDefaultStimulusIndexOwnership(
+        IServiceCollection services,
+        IReadOnlyCollection<DefaultStimulusIndexRegistration> registrations)
+    {
+        var descriptors = services.Where(descriptor => descriptor.ServiceType == typeof(IBookmarkStimulusIndex)).ToArray();
+        if (registrations.Count == 0)
+        {
+            if (descriptors.Length > 0)
+                throw new InvalidOperationException("An explicit IBookmarkStimulusIndex is already registered; persistence refuses to replace it implicitly.");
+            return;
+        }
+
+        if (registrations.Count != 1 || descriptors.Length != 1)
+            throw new InvalidOperationException("The Runtime-owned IBookmarkStimulusIndex bridge no longer exclusively owns the contract.");
+        var registration = registrations.Single();
+        if (!ReferenceEquals(registration.Descriptor, descriptors[0]))
+            throw new InvalidOperationException("The Runtime-owned IBookmarkStimulusIndex bridge no longer exclusively owns the contract.");
+    }
+
+    private static void RemoveMarker(IServiceCollection services, object marker)
+    {
+        for (var index = services.Count - 1; index >= 0; index--)
+        {
+            if (ReferenceEquals(services[index].ImplementationInstance, marker))
+                services.RemoveAt(index);
+        }
+    }
 }

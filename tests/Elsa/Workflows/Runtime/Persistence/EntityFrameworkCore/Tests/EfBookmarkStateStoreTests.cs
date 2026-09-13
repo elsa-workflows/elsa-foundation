@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -9,6 +10,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -287,6 +289,47 @@ public sealed class EfBookmarkStateStoreTests
     }
 
     [Fact]
+    public async Task Shell_feature_registers_the_selected_provider_and_owned_store()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        new RuntimeBookmarksEntityFrameworkCoreFeature
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        }.ConfigureServices(services);
+
+        await using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        Assert.IsType<BookmarkStateSqliteDbContext>(scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
+        Assert.IsType<EfBookmarkStateStore>(scope.ServiceProvider.GetRequiredService<IBookmarkStateStore>());
+    }
+
+    [Fact]
+    public void Named_connection_rejects_an_empty_configured_value_when_the_context_is_resolved()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:runtime"] = "   "
+            })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddRuntimeBookmarksEntityFrameworkCore(new RuntimeBookmarksEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionName = "runtime"
+        });
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            scope.ServiceProvider.GetRequiredService<BookmarkStateSqliteDbContext>());
+        Assert.Contains("not found or was empty", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Registration_is_idempotent_and_refuses_custom_ownership()
     {
         var options = new RuntimeBookmarksEntityFrameworkCoreOptions { Provider = "Sqlite", ConnectionString = "Data Source=:memory:" };
@@ -302,6 +345,16 @@ public sealed class EfBookmarkStateStoreTests
         var custom = new ServiceCollection();
         custom.AddSingleton<IBookmarkStateStore, CustomBookmarkStateStore>();
         Assert.Throws<InvalidOperationException>(() => custom.AddRuntimeBookmarksEntityFrameworkCore(options));
+
+        var explicitInMemory = new ServiceCollection();
+        explicitInMemory.AddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
+        Assert.Throws<InvalidOperationException>(() => explicitInMemory.AddRuntimeBookmarksEntityFrameworkCore(options));
+
+        var customContext = new ServiceCollection();
+        customContext.AddScoped<BookmarkStateSqliteDbContext>(_ => throw new NotSupportedException());
+        Assert.Throws<InvalidOperationException>(() => customContext.AddRuntimeBookmarksEntityFrameworkCore(options));
+        Assert.DoesNotContain(customContext, descriptor =>
+            descriptor.ImplementationInstance is RuntimeBookmarksEntityFrameworkCoreOptions);
 
         var customIndex = new ServiceCollection();
         customIndex.AddWorkflowRuntime();

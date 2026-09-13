@@ -35,6 +35,54 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
     }
 
     [Fact]
+    public void Groundwork_registration_remains_reorderable_with_runtime_defaults()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddGroundworkV2RuntimeStores();
+
+        services.AddWorkflowRuntime();
+        services.AddGroundworkV2RuntimeStores();
+
+        Assert.Equal(BookmarkStateStoreBackend.Groundwork, BookmarkStateStoreBackend.Find(services)!.Name);
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2BookmarkStateStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStateStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStimulusIndex));
+    }
+
+    [Fact]
+    public void Groundwork_refuses_to_replace_an_explicit_unowned_state_store()
+    {
+        var services = new ServiceCollection();
+        var explicitStore = ServiceDescriptor.Singleton<IBookmarkStateStore, UnownedStateStore>();
+        ((IServiceCollection)services).Add(explicitStore);
+
+        Assert.Throws<InvalidOperationException>(() => services.AddGroundworkV2RuntimeStores());
+
+        Assert.Contains(services, descriptor => ReferenceEquals(descriptor, explicitStore));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2BookmarkStateStore));
+    }
+
+    [Fact]
+    public void Groundwork_then_ef_refuses_an_unowned_provider_context_before_removing_groundwork()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddGroundworkV2RuntimeStores();
+        var hostOwnedContext = ServiceDescriptor.Scoped<BookmarkStateSqliteDbContext>(_ =>
+            throw new NotSupportedException());
+        ((IServiceCollection)services).Add(hostOwnedContext);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            services.AddRuntimeBookmarksEntityFrameworkCore(EfOptions));
+
+        Assert.Equal(BookmarkStateStoreBackend.Groundwork, BookmarkStateStoreBackend.Find(services)!.Name);
+        Assert.Contains(services, descriptor => ReferenceEquals(descriptor, hostOwnedContext));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2BookmarkStateStore));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(EfBookmarkStateStore));
+    }
+
+    [Fact]
     public void Ef_then_groundwork_withdraws_only_the_ef_bookmark_backend()
     {
         var services = new ServiceCollection();
@@ -49,6 +97,24 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2BookmarkStateStore));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStateStore));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStimulusIndex));
+    }
+
+    [Fact]
+    public void Ef_then_groundwork_preserves_a_host_owned_provider_context_registration()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddRuntimeBookmarksEntityFrameworkCore(EfOptions);
+        var hostOwnedContext = ServiceDescriptor.Scoped<BookmarkStateSqliteDbContext>(_ =>
+            throw new NotSupportedException());
+        ((IServiceCollection)services).Add(hostOwnedContext);
+
+        services.AddGroundworkV2RuntimeStores();
+
+        Assert.Contains(services, descriptor => ReferenceEquals(descriptor, hostOwnedContext));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(EfBookmarkStateStore));
     }
 
     [Fact]
@@ -72,5 +138,22 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
         public ValueTask<RuntimeStorePage<BookmarkState>> ListByStimulusTypePageAsync(
             BookmarkStimulusTypePageQuery query,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class UnownedStateStore : IBookmarkStateStore
+    {
+        public ValueTask<BookmarkState> SaveAsync(BookmarkState state, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<BookmarkState?> FindAsync(string workflowExecutionId, string bookmarkId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<RuntimeStorePage<BookmarkState>> ListPageAsync(
+            BookmarkStatePageQuery query,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }

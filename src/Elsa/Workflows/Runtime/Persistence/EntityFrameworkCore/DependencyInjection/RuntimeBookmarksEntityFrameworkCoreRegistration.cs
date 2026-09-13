@@ -4,7 +4,6 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 
@@ -40,51 +39,74 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
                 throw new InvalidOperationException("Runtime bookmarks EF persistence is already registered with different provider options.");
             return services;
         }
+
+        switch (provider)
+        {
+            case "sqlite": EnsureContextIsUnregistered<BookmarkStateSqliteDbContext>(services); break;
+            case "sqlserver": EnsureContextIsUnregistered<BookmarkStateSqlServerDbContext>(services); break;
+            case "postgresql": EnsureContextIsUnregistered<BookmarkStatePostgreSqlDbContext>(services); break;
+            case "mysql": EnsureContextIsUnregistered<BookmarkStateMySqlDbContext>(services); break;
+            default: throw new ArgumentException($"Unknown Runtime bookmarks EF provider '{options.Provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.", nameof(options));
+        }
+
         if (existingBackend is null && BookmarkStateStoreBackend.HasRegisteredContract(services))
         {
-            var descriptors = services.Where(descriptor => descriptor.ServiceType == typeof(IBookmarkStateStore)).ToArray();
-            if (descriptors.Any(descriptor => descriptor.ImplementationType != typeof(Elsa.Workflows.Runtime.Core.Services.InMemoryBookmarkStateStore)))
-                throw new InvalidOperationException("An explicit IBookmarkStateStore is already registered; EF bookmark persistence refuses to replace it implicitly.");
+            BookmarkStateStoreBackend.EnsureRuntimeDefaultsOwnRegisteredContracts(services);
             BookmarkStateStoreBackend.RemoveDefaultStimulusIndex(services);
-            foreach (var descriptor in descriptors)
-                services.Remove(descriptor);
+            BookmarkStateStoreBackend.RemoveDefaultStateStore(services);
         }
         else
         {
             existingBackend?.RemoveOwnedArtifacts(services);
         }
 
-        services.AddSingleton(configured);
+        var ownedArtifacts = new List<ServiceDescriptor>();
+        var optionsDescriptor = ServiceDescriptor.Singleton(configured);
+        services.Add(optionsDescriptor);
+        ownedArtifacts.Add(optionsDescriptor);
         switch (provider)
         {
-            case "sqlite": AddContext<BookmarkStateSqliteDbContext>(services, configured, EfRelationalProviderBinding.UseSqlite); break;
-            case "sqlserver": AddContext<BookmarkStateSqlServerDbContext>(services, configured, EfRelationalProviderBinding.UseSqlServer); break;
-            case "postgresql": AddContext<BookmarkStatePostgreSqlDbContext>(services, configured, EfRelationalProviderBinding.UseNpgsql); break;
-            case "mysql": AddContext<BookmarkStateMySqlDbContext>(services, configured, EfRelationalProviderBinding.UseMySql); break;
+            case "sqlite": ownedArtifacts.AddRange(AddContext<BookmarkStateSqliteDbContext>(services, configured, EfRelationalProviderBinding.UseSqlite)); break;
+            case "sqlserver": ownedArtifacts.AddRange(AddContext<BookmarkStateSqlServerDbContext>(services, configured, EfRelationalProviderBinding.UseSqlServer)); break;
+            case "postgresql": ownedArtifacts.AddRange(AddContext<BookmarkStatePostgreSqlDbContext>(services, configured, EfRelationalProviderBinding.UseNpgsql)); break;
+            case "mysql": ownedArtifacts.AddRange(AddContext<BookmarkStateMySqlDbContext>(services, configured, EfRelationalProviderBinding.UseMySql)); break;
             default: throw new ArgumentException($"Unknown Runtime bookmarks EF provider '{options.Provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.", nameof(options));
         }
 
         var descriptorState = ServiceDescriptor.Scoped<IBookmarkStateStore>(provider => provider.GetRequiredService<EfBookmarkStateStore>());
         var descriptorIndex = ServiceDescriptor.Scoped<IBookmarkStimulusIndex>(provider => provider.GetRequiredService<EfBookmarkStateStore>());
+        var storeDescriptor = ServiceDescriptor.Scoped<EfBookmarkStateStore, EfBookmarkStateStore>();
         services.Add(descriptorState);
-        services.AddScoped<EfBookmarkStateStore>();
+        services.Add(storeDescriptor);
+        ownedArtifacts.Add(storeDescriptor);
         services.Add(descriptorIndex);
         BookmarkStateStoreBackend.Register(services, new BookmarkStateStoreBackend(
             BookmarkStateStoreBackend.EntityFramework,
             descriptorState,
             descriptorIndex,
-            RemoveEfArtifacts));
+            collection => RemoveEfArtifacts(collection, ownedArtifacts)));
         return services;
     }
 
     public static IServiceCollection AddRuntimeBookmarkEntityFrameworkCore(this IServiceCollection services, RuntimeBookmarksEntityFrameworkCoreOptions options) =>
         services.AddRuntimeBookmarksEntityFrameworkCore(options);
 
-    private static void AddContext<TContext>(IServiceCollection services, RuntimeBookmarksEntityFrameworkCoreOptions options, Action<DbContextOptionsBuilder, string, string, string?> bind)
+    private static IReadOnlyCollection<ServiceDescriptor> AddContext<TContext>(IServiceCollection services, RuntimeBookmarksEntityFrameworkCoreOptions options, Action<DbContextOptionsBuilder, string, string, string?> bind)
         where TContext : BookmarkStateDbContext
     {
+        var start = services.Count;
         services.AddDbContext<TContext>((provider, builder) => bind(builder, ResolveConnectionString(provider, options), BookmarkStateEfModule.HistoryTableName, typeof(BookmarkStateDbContext).Assembly.GetName().Name));
         services.AddScoped<BookmarkStateDbContext>(provider => provider.GetRequiredService<TContext>());
+        return services.Skip(start).ToArray();
+    }
+
+    private static void EnsureContextIsUnregistered<TContext>(IServiceCollection services)
+        where TContext : BookmarkStateDbContext
+    {
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(TContext) ||
+                                       descriptor.ServiceType == typeof(DbContextOptions<TContext>) ||
+                                       descriptor.ServiceType == typeof(BookmarkStateDbContext)))
+            throw new InvalidOperationException($"A {typeof(TContext).Name} registration already exists; Runtime bookmarks EF persistence refuses to reuse or replace an unowned context.");
     }
 
     private static string ResolveConnectionString(IServiceProvider provider, RuntimeBookmarksEntityFrameworkCoreOptions options)
@@ -92,22 +114,25 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
         if (!string.IsNullOrWhiteSpace(options.ConnectionString)) return options.ConnectionString;
         var configuration = provider.GetService<IConfiguration>();
         if (!string.IsNullOrWhiteSpace(options.ConnectionName))
-            return configuration?.GetConnectionString(options.ConnectionName) ?? throw new InvalidOperationException($"Runtime bookmarks EF connection '{options.ConnectionName}' was not found in ConnectionStrings.");
+        {
+            var namedConnection = configuration?.GetConnectionString(options.ConnectionName);
+            if (string.IsNullOrWhiteSpace(namedConnection))
+                throw new InvalidOperationException($"Runtime bookmarks EF connection '{options.ConnectionName}' was not found or was empty in ConnectionStrings.");
+            return namedConnection;
+        }
         var fallback = configuration?.GetConnectionString(BookmarkStateEfModule.DefaultConnectionName);
         if (!string.IsNullOrWhiteSpace(fallback)) return fallback;
         if (EfRelationalProviderBinding.Normalize(options.Provider) == "sqlite") return BookmarkStateEfModule.DefaultSqliteConnectionString;
         throw new InvalidOperationException("Runtime bookmarks EF requires ConnectionString or ConnectionName for a non-Sqlite provider.");
     }
 
-    private static void RemoveEfArtifacts(IServiceCollection services)
+    private static void RemoveEfArtifacts(IServiceCollection services, IReadOnlyCollection<ServiceDescriptor> ownedArtifacts)
     {
-        services.RemoveAll<BookmarkStateDbContext>();
-        services.RemoveAll<BookmarkStateSqliteDbContext>();
-        services.RemoveAll<BookmarkStateSqlServerDbContext>();
-        services.RemoveAll<BookmarkStatePostgreSqlDbContext>();
-        services.RemoveAll<BookmarkStateMySqlDbContext>();
-        services.RemoveAll<EfBookmarkStateStore>();
-        services.RemoveAll<RuntimeBookmarksEntityFrameworkCoreOptions>();
+        if (ownedArtifacts.Any(descriptor => services.Count(candidate => ReferenceEquals(candidate, descriptor)) != 1))
+            throw new InvalidOperationException("Runtime bookmarks EF persistence no longer exclusively owns its auxiliary registrations.");
+
+        foreach (var descriptor in ownedArtifacts)
+            services.Remove(descriptor);
     }
 }
 

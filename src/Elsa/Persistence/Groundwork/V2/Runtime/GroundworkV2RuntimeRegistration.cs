@@ -58,7 +58,11 @@ public static class GroundworkV2RuntimeRegistration
         RegisterExecutableStore(services, cacheOptions, target);
         var existingBookmarkBackend = BookmarkStateStoreBackend.Find(services);
         if (existingBookmarkBackend is null)
+        {
+            BookmarkStateStoreBackend.EnsureRuntimeDefaultsOwnRegisteredContracts(services);
             BookmarkStateStoreBackend.RemoveDefaultStimulusIndex(services);
+            BookmarkStateStoreBackend.RemoveDefaultStateStore(services);
+        }
         else
             existingBookmarkBackend.RemoveOwnedArtifacts(services);
         services.RemoveAll<BookmarkStateStoreBackend>();
