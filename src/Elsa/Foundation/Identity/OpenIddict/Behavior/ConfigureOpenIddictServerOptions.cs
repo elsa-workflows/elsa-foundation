@@ -20,7 +20,8 @@ namespace Elsa.Foundation.Identity.OpenIddict;
 /// environment-blind by design; the Development-environment requirement for the flag is enforced separately by
 /// the startup <c>DevelopmentOrDemoGuard</c>, which refuses the flag outside Development.</item>
 /// <item><b>Production</b>: <see cref="OpenIddictIdentityOptions.SigningKey"/> (falling back to
-/// <see cref="FoundationIdentityOptions.SigningKey"/>) must hold a base64-encoded PKCS#8 RSA private key.</item>
+/// <see cref="FoundationIdentityOptions.SigningKey"/>) must hold a base64-encoded PKCS#8 RSA private key of at
+/// least 2048 bits.</item>
 /// </list>
 /// The encryption credential (required by OpenIddict even though access-token encryption is disabled) is
 /// symmetric, derived (SHA-256, domain-separated) from <see cref="OpenIddictIdentityOptions.EncryptionKey"/>
@@ -31,8 +32,13 @@ internal sealed class ConfigureOpenIddictServerOptions(
     IOptions<OpenIddictIdentityOptions> identityOptions,
     IOptions<FoundationIdentityOptions> foundationOptions) : IConfigureOptions<OpenIddictServerOptions>
 {
+    private const int MinimumSigningKeySizeInBits = 2048;
+
+    private const string GenerateSigningKeyHint =
+        "Generate one with: openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | openssl pkcs8 -topk8 -nocrypt -outform DER | base64";
+
     private static readonly Lazy<RsaSecurityKey> DevelopmentSigningKey = new(() =>
-        new RsaSecurityKey(RSA.Create(2048)) { KeyId = "elsa-identity-dev-signing" });
+        new RsaSecurityKey(RSA.Create(MinimumSigningKeySizeInBits)) { KeyId = "elsa-identity-dev-signing" });
 
     private static readonly Lazy<byte[]> DevelopmentEncryptionKey = new(() => RandomNumberGenerator.GetBytes(32));
 
@@ -74,8 +80,16 @@ internal sealed class ConfigureOpenIddictServerOptions(
                 // Expected bad-key inputs: FormatException (not base64), CryptographicException (not PKCS#8 RSA).
                 rsa.Dispose();
                 throw new InvalidOperationException(
-                    "The configured OpenIddict signing key must be a base64-encoded PKCS#8 RSA private key. Generate one with: " +
-                    "openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | openssl pkcs8 -topk8 -nocrypt -outform DER | base64", exception);
+                    $"The configured OpenIddict signing key must be a base64-encoded PKCS#8 RSA private key. {GenerateSigningKeyHint}", exception);
+            }
+
+            // Neither OpenIddict nor the token handler refuses a short RSA key, so a 1024-bit key would sign tokens.
+            if (rsa.KeySize < MinimumSigningKeySizeInBits)
+            {
+                var keySize = rsa.KeySize;
+                rsa.Dispose();
+                throw new InvalidOperationException(
+                    $"The configured OpenIddict signing key is a {keySize}-bit RSA key; at least {MinimumSigningKeySizeInBits} bits are required. {GenerateSigningKeyHint}");
             }
 
             return new RsaSecurityKey(rsa) { KeyId = "elsa-identity-signing" };

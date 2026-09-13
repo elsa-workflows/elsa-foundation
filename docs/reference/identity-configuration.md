@@ -79,7 +79,7 @@ is never written to the log; the username xor password half-configured is a star
 |---|---|---|
 | `IsDevelopmentOrDemo` | In-memory token store + ephemeral keys. | **`false`.** |
 | `Issuer` | Logical issuer URI written into (and required from) first-party access tokens. | Set to a stable absolute URI, e.g. `https://elsa.example.com/`. |
-| `SigningKey` | Base64-encoded **PKCS#8 RSA private key** used to sign access tokens (RS256). Falls back to `FoundationIdentityOptions.SigningKey`. | **Required.** See generation command below. |
+| `SigningKey` | Base64-encoded **PKCS#8 RSA private key** of at least 2048 bits, used to sign access tokens (RS256). Falls back to `FoundationIdentityOptions.SigningKey`. | **Required.** See generation command below. |
 | `EncryptionKey` | Key material for OpenIddict's encryption credentials. Defaults to a key derived (domain-separated) from `SigningKey`. | Recommended: set a **distinct** value from `SigningKey`. |
 | `ConnectionString` | Sqlite connection string for the OpenIddict token store. | Optional; set for a dedicated token DB. |
 | `AutoMigrate` | Lets Workbench's host-owned OpenIddict EF provider migrate its schema during startup. Defaults to `true`. | Turn off for multi-instance deployments that apply migrations out-of-band. |
@@ -96,8 +96,9 @@ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | openssl pkcs8 -to
 ```
 
 Pipe through `openssl pkcs8 -topk8`: `genpkey -outform DER` on its own writes a PKCS#1 key, which the host
-rejects. (The same command appears in the error `ConfigureOpenIddictServerOptions` throws for a malformed key.)
-Outside `IsDevelopmentOrDemo`, a missing or malformed signing key fails with a clear error when the OpenIddict
+rejects. (The same command appears in the errors `ConfigureOpenIddictServerOptions` throws for a malformed or short
+key.) Outside `IsDevelopmentOrDemo`, a missing or malformed signing key, or an RSA key under 2048 bits, fails with a
+clear error when the OpenIddict
 server options are built. The feature builds them at startup, so the error fails shell activation (in Workbench,
 `/health/ready` reports `503 shell_activation_failed`) rather than the first request that authenticates. An
 `Issuer` that `System.Uri` cannot parse as absolute fails activation the same way, in any mode, with a
@@ -115,8 +116,6 @@ registered and the provider only validates bearer tokens. For what each setting 
 | Setting | Default | Notes |
 |---|---|---|
 | `SigningKey` | — | Fallback signing key material for the OpenIddict server. |
-| `RequireHttpsMetadata` | `true` | Nothing reads it, so it has no effect. The OIDC handlers take the flag from the `FoundationIdentityOidc` feature's `RequireHttpsMetadata` setting. |
-| `IsDevelopmentOrDemo` | `false` | Nothing reads it, so it has no effect. The `FoundationIdentityOpenIddict` and `FoundationIdentityAspNetCoreIdentityGroundwork` features have their own `IsDevelopmentOrDemo` settings, and those are the ones that matter. |
 
 ### Cookie / session hardening
 
@@ -173,7 +172,7 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
     Groundwork Identity schema initialization is owned by the selected Groundwork provider; it does not require
     an ASP.NET Core Identity EF migration step.
 
-If the signing key is missing or malformed outside `IsDevelopmentOrDemo`, startup fails (shell activation, for a
+If the signing key is missing, malformed, or under 2048 bits outside `IsDevelopmentOrDemo`, startup fails (shell activation, for a
 shell host) with an error that says how to fix it (see the `SigningKey` note above). The encryption key falls back to
 the signing key, so it cannot be missing on its own. A missing key never silently degrades to an insecure default.
 

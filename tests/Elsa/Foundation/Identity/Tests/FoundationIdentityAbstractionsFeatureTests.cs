@@ -2,7 +2,6 @@ using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Ownership;
-using Elsa.Foundation.Identity.Abstractions.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -24,7 +23,6 @@ public sealed class FoundationIdentityAbstractionsFeatureTests
         Assert.NotNull(provider.GetRequiredService<IClaimsNormalizer>());
         Assert.NotNull(provider.GetRequiredService<IOwnershipModeProvider>());
         Assert.NotNull(provider.GetRequiredService<IEffectiveCapabilitiesResolver>());
-        Assert.NotNull(provider.GetRequiredService<ISecurityDefaultGuardEvaluator>());
         Assert.IsType<RequirePermissionPolicyProvider>(provider.GetRequiredService<IAuthorizationPolicyProvider>());
     }
 

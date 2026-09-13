@@ -1,6 +1,6 @@
 # Extension points - Foundation Identity domain
 
-The Foundation Identity Abstractions feature owns the provider-agnostic authentication, IAM, authorization, ownership, and security-default seams. Concrete OIDC, OpenIddict, ASP.NET Core Identity, and legacy Elsa Identity providers implement these contracts from sibling modules; none are implemented here.
+The Foundation Identity Abstractions feature owns the provider-agnostic authentication, IAM, authorization, and ownership seams. Concrete OIDC, OpenIddict, ASP.NET Core Identity, and legacy Elsa Identity providers implement these contracts from sibling modules; none are implemented here.
 
 ## Overridable contracts
 
@@ -22,7 +22,6 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 | `IRevisionAwareCredentialStore` | Same scoped Groundwork or EF credential store selected for `ICredentialStore` | A replacement must preserve create-only saves, opaque revisions, atomic compare-and-swap, and conflict/not-found distinctions. |
 | `IProviderConfigurationStore` | `GroundworkProviderConfigurationStore` (`Elsa.Foundation.Identity.Persistence.Groundwork`); opt-in `EfProviderConfigurationStore` (`Elsa.Foundation.Identity.Persistence.EntityFrameworkCore`) | A host selects a different durable provider-configuration backend while preserving tenant/global access, effective fallback, and unconditional upsert semantics. The EF feature replaces only this contract and its revision-aware companion. |
 | `IRevisionAwareProviderConfigurationStore` | Same scoped Groundwork or EF provider-configuration store selected for `IProviderConfigurationStore` | A replacement must preserve create-only saves, opaque revisions, atomic compare-and-swap, and conflict/not-found distinctions. |
-| `ISecurityDefaultGuardEvaluator` | `SecurityDefaultGuardEvaluator` (`Elsa.Foundation.Identity.Abstractions`) | A host that calls the evaluator itself needs custom aggregation/reporting of security-default guard results. No first-party host or feature calls it; see [`ISecurityDefaultGuard`](#isecuritydefaultguard). |
 
 ## Implementable contributor interfaces
 
@@ -82,22 +81,6 @@ window for external hosts, but the built-in HTTP adapters mark their permission 
 fail closed rather than blocking on asynchronous work. First-party production callers are migrated to
 the async siblings. The synchronous members are candidates for removal in the next major release;
 hosts should migrate replacements before then.
-
-### `ISecurityDefaultGuard`
-
-- **Kind:** Validator (action-named contributor that returns startup/configuration violations).
-- **Register:** `services.AddScoped<ISecurityDefaultGuard, MySecurityGuard>()`.
-- **Consumed by:** `SecurityDefaultGuardEvaluator`, which returns all violations rather than swallowing failures.
-  **No first-party host (`Elsa.Workbench`, `Elsa.Foundation.Host`) or shell feature calls the evaluator**, although
-  `AddFoundationIdentityAbstractions` registers it and the three guards. So none of these guards runs, and a
-  violation does not fail activation. A host that wants them must build a `SecurityGuardContext` itself (the signing
-  and HTTPS guards read only that context, so `FoundationIdentityOptions.IsDevelopmentOrDemo` and
-  `RequireHttpsMetadata` take effect only if the host copies them in) and call `ISecurityDefaultGuardEvaluator`.
-  Retiring or wiring the seam, and enforcing a minimum RSA key size, is tracked in
-  [#1700](https://github.com/elsa-workflows/elsa-foundation/issues/1700). The checks that do run are under
-  "Production key requirements" in
-  [authentication-architecture.md](../../../../../docs/reference/authentication-architecture.md#7-security-posture).
-- **Known implementations:** `SigningKeySecurityDefaultGuard`, `HttpsMetadataSecurityDefaultGuard`, `SecretHashSecurityDefaultGuard` *(intra-domain - default)*.
 
 ## Events
 

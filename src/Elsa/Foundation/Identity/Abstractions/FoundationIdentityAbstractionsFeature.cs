@@ -11,7 +11,7 @@ namespace Elsa.Foundation.Identity.Abstractions;
 [ShellFeature(
     name: "FoundationIdentityAbstractions",
     DisplayName = "Foundation Identity Abstractions",
-    Description = "Registers provider-agnostic authentication, IAM, authorization, ownership, and security guard contracts."
+    Description = "Registers provider-agnostic authentication, IAM, authorization, and ownership contracts."
 )]
 public class FoundationIdentityAbstractionsFeature : IShellFeature
 {

@@ -22,14 +22,13 @@ public sealed class OpenIddictSigningKeyActivationTests
     [Theory]
     [InlineData(null, MissingKeyError)]
     [InlineData("not-a-pkcs8-key", "must be a base64-encoded PKCS#8 RSA private key")]
-    public async Task Unusable_Signing_Key_Fails_Shell_Activation(string? signingKey, string expectedError)
-    {
-        await using var host = await StartShellHostAsync(signingKey);
+    public Task Unusable_Signing_Key_Fails_Shell_Activation(string? signingKey, string expectedError) =>
+        AssertShellActivationFailsAsync(signingKey, expectedError);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(host.ActivateShellAsync);
-
-        Assert.Contains(expectedError, exception.Message, StringComparison.Ordinal);
-    }
+    // A well-formed key that is too short parses, and nothing downstream refuses to sign with it.
+    [Fact]
+    public Task Signing_Key_Under_2048_Bits_Fails_Shell_Activation() =>
+        AssertShellActivationFailsAsync(GenerateSigningKey(1024), "is a 1024-bit RSA key; at least 2048 bits are required");
 
     [Fact]
     public async Task Configured_Signing_Key_Activates_The_Shell()
@@ -60,6 +59,15 @@ public sealed class OpenIddictSigningKeyActivationTests
         Assert.Contains(MissingKeyError, exception.Message, StringComparison.Ordinal);
     }
 
+    private static async Task AssertShellActivationFailsAsync(string? signingKey, string expectedError)
+    {
+        await using var host = await StartShellHostAsync(signingKey);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(host.ActivateShellAsync);
+
+        Assert.Contains(expectedError, exception.Message, StringComparison.Ordinal);
+    }
+
     // Like Workbench, the host owns the vendor token store; CShells copies root registrations into the shell.
     private static Task<WebApplication> StartShellHostAsync(string? signingKey) =>
         ShellActivationHost.StartAsync<OpenIddictIdentityFeature>(
@@ -77,9 +85,9 @@ public sealed class OpenIddictSigningKeyActivationTests
         services.AddOpenIddictVendorForTests(store => OpenIddictIdentityFixture.ConfigureInMemoryStore(store, databaseName));
     }
 
-    private static string GenerateSigningKey()
+    private static string GenerateSigningKey(int keySizeInBits = 2048)
     {
-        using var rsa = RSA.Create(2048);
+        using var rsa = RSA.Create(keySizeInBits);
         return Convert.ToBase64String(rsa.ExportPkcs8PrivateKey());
     }
 }
