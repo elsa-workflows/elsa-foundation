@@ -1011,8 +1011,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PublicationSnapshotPreflight'
+        '400':
+          $ref: '#/components/responses/PublicationBadRequest'
         '409':
-          $ref: '#/components/responses/Conflict'
+          $ref: '#/components/responses/PublicationConflict'
 
   /runtime/workflows/executables:
     get:
