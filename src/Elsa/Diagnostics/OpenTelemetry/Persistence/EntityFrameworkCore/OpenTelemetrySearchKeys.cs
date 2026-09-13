@@ -60,7 +60,7 @@ internal static class OpenTelemetrySearchKeys
         return Key(value, parameterName);
     }
 
-    public static string TraceKey(string traceId) => Hash(Key(traceId, nameof(traceId)));
+    public static string TraceKey(string traceId) => Hash(TraceId(traceId));
     public static string OrderKey(string value) => Hash(Key(value, nameof(value)));
     public static string TraceId(string value) => Bounded(value, MaximumTraceIdCodeUnits, nameof(value));
     public static string ResourceId(string value) => Bounded(value, 512, nameof(value));
@@ -74,8 +74,9 @@ internal static class OpenTelemetrySearchKeys
 
     private static string Bounded(string? value, int maximum, string parameterName)
     {
-        _ = RequiredKey(value, parameterName);
-        if (value!.Length > maximum)
+        if (string.IsNullOrWhiteSpace(value))
+            throw new ArgumentException($"OpenTelemetry field '{parameterName}' is required.", parameterName);
+        if (value.Length > maximum)
             throw new ArgumentOutOfRangeException(parameterName, value.Length, $"The OpenTelemetry value exceeds the maximum of {maximum} UTF-16 code units.");
         return Key(value, parameterName);
     }

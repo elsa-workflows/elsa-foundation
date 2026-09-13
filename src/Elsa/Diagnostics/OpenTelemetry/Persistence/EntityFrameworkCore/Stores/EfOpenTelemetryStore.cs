@@ -109,13 +109,15 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
         if (drain.State == DiagnosticsDrainState.Created)
             throw new InvalidOperationException("The EF OpenTelemetry capture drain must be started before use.");
         ValidateBatchContent(batch);
+        cancellationToken.ThrowIfCancellationRequested();
+        var accepted = drain.TryEnqueue(batch, out var acknowledgement);
+        if (accepted && sourceRegistry is not null)
+            foreach (var resource in batch.Resources)
+                sourceRegistry.MarkSeen(resource);
         try
         {
-            await drain.EnqueueAsync(batch, cancellationToken);
+            await acknowledgement.WaitAsync(cancellationToken);
             await drain.ApplyPendingRetentionAsync(cancellationToken);
-            if (sourceRegistry is not null)
-                foreach (var resource in batch.Resources)
-                    sourceRegistry.MarkSeen(resource);
         }
         catch (DiagnosticsDrainException exception)
         {
@@ -147,7 +149,8 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     public async ValueTask<OpenTelemetryResourceResult> QueryResourcesAsync(OpenTelemetryResourceFilter filter, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
-        var take = ClampTake(filter.Take);
+        cancellationToken.ThrowIfCancellationRequested();
+        var take = Math.Min(ClampTake(filter.Take), resourceCapacity);
         if (take == 0 || resourceCapacity == 0)
             return new([], sourceRegistry?.DroppedCount ?? 0);
         var serviceNameKey = string.IsNullOrWhiteSpace(filter.ServiceName) ? null : OpenTelemetrySearchKeys.ServiceName(filter.ServiceName);
@@ -170,17 +173,18 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     public async ValueTask<OpenTelemetryTraceResult> QueryTracesAsync(OpenTelemetryTraceFilter filter, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
+        cancellationToken.ThrowIfCancellationRequested();
         ValidateRange(filter.From, filter.To);
         var take = Math.Min(ClampTake(filter.Take), traceCapacity);
         if (take == 0)
             return new([], Interlocked.Read(ref droppedTraces));
-        var traceIdKey = string.IsNullOrWhiteSpace(filter.TraceId) ? null : OpenTelemetrySearchKeys.Key(filter.TraceId, nameof(filter.TraceId));
+        var traceIdKey = string.IsNullOrWhiteSpace(filter.TraceId) ? null : OpenTelemetrySearchKeys.TraceId(filter.TraceId);
         var searchKey = string.IsNullOrWhiteSpace(filter.Search) ? null : OpenTelemetrySearchKeys.Key(filter.Search, nameof(filter.Search));
         var resourceKey = string.IsNullOrWhiteSpace(filter.ResourceId) ? null : OpenTelemetrySearchKeys.ResourceId(filter.ResourceId);
         var resourceHash = resourceKey is null ? null : OpenTelemetrySearchKeys.Hash(resourceKey);
         var serviceNameKey = string.IsNullOrWhiteSpace(filter.ServiceName) ? null : OpenTelemetrySearchKeys.ServiceName(filter.ServiceName);
         var serviceNameHash = serviceNameKey is null ? null : OpenTelemetrySearchKeys.Hash(serviceNameKey);
-        var workflowInstanceKey = string.IsNullOrWhiteSpace(filter.WorkflowInstanceId) ? null : OpenTelemetrySearchKeys.Key(filter.WorkflowInstanceId, nameof(filter.WorkflowInstanceId));
+        var workflowInstanceKey = string.IsNullOrWhiteSpace(filter.WorkflowInstanceId) ? null : OpenTelemetrySearchKeys.SummaryElement(filter.WorkflowInstanceId);
         return await ExecuteAsync("QueryTraces", async (db, ct) =>
         {
             var query = db.TraceSummaries.AsNoTracking().Where(x => x.ScopeKey == binding.ScopeKey);
@@ -208,6 +212,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     public async ValueTask<OpenTelemetryTraceDetail?> GetTraceAsync(string traceId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(traceId);
+        cancellationToken.ThrowIfCancellationRequested();
         var traceKey = OpenTelemetrySearchKeys.TraceKey(traceId);
         var traceSearchKey = OpenTelemetrySearchKeys.TraceId(traceId);
         return await ExecuteAsync("GetTrace", async (db, ct) =>
@@ -224,8 +229,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
                 return null;
             var spans = await db.Spans.AsNoTracking().Where(x => x.ScopeKey == binding.ScopeKey && x.TraceKey == traceKey).OrderBy(x => x.StartTimeTicks).ThenBy(x => x.SpanIdOrderKey).ThenBy(x => x.Sequence).ToListAsync(ct);
             var logs = await db.Logs.AsNoTracking().Where(x => x.ScopeKey == binding.ScopeKey && x.TraceIdSearchKey == traceSearchKey).OrderBy(x => x.TimestampTicks).ThenBy(x => x.IdOrderKey).ThenBy(x => x.Sequence).ToListAsync(ct);
-            var resourceIds = await db.TraceSummaryMemberships.AsNoTracking().Where(x => x.ScopeKey == binding.ScopeKey && x.TraceKey == traceKey && x.Kind == OpenTelemetryTraceSummaryMembershipKind.Resource).Select(x => x.Value).ToListAsync(ct);
-            var resourceKeys = resourceIds.Select(OpenTelemetrySearchKeys.ResourceId);
+            var resourceKeys = trace.ResourceIds.Select(OpenTelemetrySearchKeys.ResourceId);
             var resources = await LoadBySearchKeysAsync(
                 resourceKeys,
                 keys => db.Resources.AsNoTracking()
@@ -241,6 +245,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     public async ValueTask<OpenTelemetryMetricResult> QueryMetricsAsync(OpenTelemetryMetricFilter filter, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
+        cancellationToken.ThrowIfCancellationRequested();
         ValidateRange(filter.From, filter.To);
         var take = Math.Min(ClampTake(filter.Take), metricPointCapacity);
         if (take == 0)
@@ -279,6 +284,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     public async ValueTask<OpenTelemetryLogResult> QueryLogsAsync(OpenTelemetryLogFilter filter, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
+        cancellationToken.ThrowIfCancellationRequested();
         ValidateRange(filter.From, filter.To);
         var take = Math.Min(ClampTake(filter.Take), logCapacity);
         if (take == 0)
@@ -286,8 +292,8 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
         var resourceKey = string.IsNullOrWhiteSpace(filter.ResourceId) ? null : OpenTelemetrySearchKeys.ResourceId(filter.ResourceId);
         var serviceNameKey = string.IsNullOrWhiteSpace(filter.ServiceName) ? null : OpenTelemetrySearchKeys.ServiceName(filter.ServiceName);
         var serviceNameHash = serviceNameKey is null ? null : OpenTelemetrySearchKeys.Hash(serviceNameKey);
-        var traceIdKey = string.IsNullOrWhiteSpace(filter.TraceId) ? null : OpenTelemetrySearchKeys.Key(filter.TraceId, nameof(filter.TraceId));
-        var spanIdKey = string.IsNullOrWhiteSpace(filter.SpanId) ? null : OpenTelemetrySearchKeys.Key(filter.SpanId, nameof(filter.SpanId));
+        var traceIdKey = string.IsNullOrWhiteSpace(filter.TraceId) ? null : OpenTelemetrySearchKeys.TraceId(filter.TraceId);
+        var spanIdKey = string.IsNullOrWhiteSpace(filter.SpanId) ? null : OpenTelemetrySearchKeys.LogSpanId(filter.SpanId);
         var severityKey = string.IsNullOrWhiteSpace(filter.Severity) ? null : OpenTelemetrySearchKeys.Key(filter.Severity, nameof(filter.Severity));
         var searchKey = string.IsNullOrWhiteSpace(filter.Search) ? null : OpenTelemetrySearchKeys.Key(filter.Search, nameof(filter.Search));
         return await ExecuteAsync("QueryLogs", async (db, ct) =>

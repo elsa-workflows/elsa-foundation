@@ -61,6 +61,48 @@ public sealed class EfOpenTelemetryDurabilityTests
     }
 
     [Fact]
+    public async Task Caller_cancellation_after_acceptance_does_not_orphan_source_registration()
+    {
+        var directory = Path.Join(Path.GetTempPath(), "elsa-otel-cancelled-source-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Join(directory, "opentelemetry.db");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var interceptor = new BlockingReaderInterceptor();
+            await using var provider = OpenTelemetryEntityFrameworkCoreFixture.BuildInterceptingProvider(path, interceptor);
+            await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(provider);
+            var store = provider.GetRequiredService<EfOpenTelemetryStore>();
+            var registry = provider.GetRequiredService<IOpenTelemetrySourceRegistry>();
+            var batch = TelemetryTestData.Batch("cancelled-source");
+            store.Start();
+            interceptor.Arm();
+            using var cancellation = new CancellationTokenSource();
+            var write = store.WriteAsync(batch, cancellation.Token).AsTask();
+            await interceptor.WaitForReaderAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            try
+            {
+                Assert.Equal(batch.Resources.Single().Id, Assert.Single(registry.List()).Id);
+                cancellation.Cancel();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => write);
+            }
+            finally
+            {
+                interceptor.Release();
+            }
+
+            await store.StopAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(batch.Resources.Single().Id, Assert.Single(registry.List()).Id);
+            await using var scope = provider.CreateAsyncScope();
+            Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<OpenTelemetryDbContext>().Resources.CountAsync());
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Durable_group_commits_each_capture_once_and_replays_as_a_unit()
     {
         await using var fixture = await CreateFixtureAsync();

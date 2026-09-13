@@ -1,6 +1,7 @@
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
+using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Diagnostics.Persistence.Draining;
 using Microsoft.EntityFrameworkCore;
@@ -115,6 +116,22 @@ public sealed class EfOpenTelemetryStoreTests
     }
 
     [Fact]
+    public async Task Trace_detail_loads_resources_from_the_validated_summary_when_membership_rows_are_stale()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        var resource = TelemetryTestData.Resource("resource-summary-detail", "orders");
+        var trace = TelemetryTestData.Trace("trace-summary-detail", resource.Id, spanCount: 1);
+        await fixture.Store.WriteAsync(new([resource], [trace], [], [], [], []));
+        await fixture.WithDbAsync(db => db.TraceSummaryMemberships
+            .Where(x => x.Kind == OpenTelemetryTraceSummaryMembershipKind.Resource)
+            .ExecuteDeleteAsync());
+
+        var detail = await fixture.Store.GetTraceAsync(trace.TraceId);
+
+        Assert.Equal(resource.Id, Assert.Single(detail!.Resources).Id);
+    }
+
+    [Fact]
     public async Task Repeated_trace_records_merge_start_end_status_span_count_and_workflows()
     {
         await using var fixture = await CreateFixtureAsync();
@@ -191,6 +208,13 @@ public sealed class EfOpenTelemetryStoreTests
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => fixture.Store.QueryTracesAsync(new() { ResourceId = overBound }).AsTask());
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => fixture.Store.QueryMetricsAsync(new() { ResourceId = overBound }).AsTask());
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => fixture.Store.QueryLogsAsync(new() { ResourceId = overBound }).AsTask());
+        var overBoundTraceId = new string('x', 257);
+        var overBoundSummaryElement = new string('x', 513);
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => fixture.Store.QueryTracesAsync(new() { TraceId = overBoundTraceId }).AsTask());
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => fixture.Store.QueryTracesAsync(new() { WorkflowInstanceId = overBoundSummaryElement }).AsTask());
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => fixture.Store.QueryLogsAsync(new() { TraceId = overBoundTraceId }).AsTask());
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => fixture.Store.QueryLogsAsync(new() { SpanId = overBoundTraceId }).AsTask());
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => fixture.Store.GetTraceAsync(overBoundTraceId).AsTask());
     }
 
     [Fact]
@@ -347,6 +371,18 @@ public sealed class EfOpenTelemetryStoreTests
     }
 
     [Fact]
+    public async Task Resource_query_is_capacity_bounded_before_the_retention_barrier()
+    {
+        await using var fixture = await CreateFixtureAsync(new() { ResourceCapacity = 1, MaxQuerySize = 10 });
+        var older = TelemetryTestData.Resource("resource-capacity-old", "orders", TelemetryTestData.Now);
+        var newer = TelemetryTestData.Resource("resource-capacity-new", "orders", TelemetryTestData.Now.AddTicks(1));
+
+        await fixture.EfStore.WriteAsync(DiagnosticsDrainBatchId.New(), new([older, newer], [], [], [], [], []));
+
+        Assert.Equal([newer.Id], (await fixture.Store.QueryResourcesAsync(new() { Take = 10 })).Items.Select(x => x.Id));
+    }
+
+    [Fact]
     public async Task Trace_name_bound_accepts_the_declared_limit_and_refuses_longer_names()
     {
         await using var fixture = await CreateFixtureAsync();
@@ -491,6 +527,13 @@ public sealed class EfOpenTelemetryStoreTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fixture.Store.WriteAsync(TelemetryTestData.Batch("cancelled"), cancellation.Token).AsTask());
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fixture.Store.QueryTracesAsync(new(), cancellation.Token).AsTask());
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fixture.Store.GetTraceAsync("trace", cancellation.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fixture.Store.QueryResourcesAsync(new() { Take = 0 }, cancellation.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fixture.Store.QueryTracesAsync(new() { Take = 0 }, cancellation.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fixture.Store.QueryMetricsAsync(new() { Take = 0 }, cancellation.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fixture.Store.QueryLogsAsync(new() { Take = 0 }, cancellation.Token).AsTask());
+
+        await using var zeroCapacity = await CreateFixtureAsync(new() { ResourceCapacity = 0 });
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => zeroCapacity.Store.QueryResourcesAsync(new() { Take = 10 }, cancellation.Token).AsTask());
     }
 
     private static async Task<OpenTelemetryEntityFrameworkCoreFixture> CreateFixtureAsync(OpenTelemetryDiagnosticsOptions? options = null)

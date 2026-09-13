@@ -4,6 +4,7 @@ using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Diagnostics.OpenTelemetry.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
@@ -56,6 +57,7 @@ internal sealed class OpenTelemetryEntityFrameworkCoreFixture : IAsyncDisposable
             builder.UseSqlite($"Data Source={path}").AddInterceptors(interceptor));
         services.AddScoped<OpenTelemetryDbContext>(provider => provider.GetRequiredService<OpenTelemetrySqliteDbContext>());
         services.AddScoped<EfOpenTelemetryDbContext>(provider => provider.GetRequiredService<OpenTelemetrySqliteDbContext>());
+        services.AddSingleton<IOpenTelemetrySourceRegistry, OpenTelemetrySourceRegistry>();
         services.AddSingleton<EfOpenTelemetryStore>();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
