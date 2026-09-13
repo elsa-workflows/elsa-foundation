@@ -34,9 +34,12 @@ again, so the survivor that claims placement re-leases and re-drives it on failo
 and the ack-based hold-until-commit dequeue recorded in `docs/runtime-durable-resumption.md`. Re-driven commands are
 made safe — not merely deduplicated — by the fencing token described above.
 
-## In-memory defaults and durable Groundwork stores
+## In-memory defaults and durable persistence stores
 
 The placement store and command transport in this unit are in-memory implementations, shared by every node container in
 a single process (that is the two-node test harness shape). They are the default when the host does not select a durable
-provider. The opt-in `WorkflowsRuntimeDistributedGroundworkPersistence` feature replaces them with scoped,
-Groundwork-backed placement and transport stores that share the same frozen v1 wire format and survive process restarts.
+provider. The opt-in `WorkflowsRuntimeDistributedGroundworkPersistence` feature replaces both with scoped Groundwork
+stores. The independent `WorkflowsRuntimeDistributedEntityFrameworkCorePersistence` and
+`WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence` features replace placement and transport,
+respectively, with scoped EF Core stores. Each durable implementation preserves the same frozen wire semantics and
+survives process restarts.

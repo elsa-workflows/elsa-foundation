@@ -291,6 +291,38 @@ public sealed class EfExecutionPlacementStoreTests
     }
 
     [Theory]
+    [InlineData("token")]
+    [InlineData("revision")]
+    [InlineData("expiry")]
+    public async Task Corrupt_scalar_lease_state_fails_closed_before_claim_or_release_mutation(string corruption)
+    {
+        await using var fixture = await Fixture.CreateAsync("scope-a");
+        var lease = (await fixture.Store.TryClaimAsync(Claim("node-a", "wf-scalar-corrupt"), Now)).Lease;
+        var row = await fixture.Context.PlacementLeases.SingleAsync();
+        switch (corruption)
+        {
+            case "token":
+                row.PlacementToken = 0;
+                break;
+            case "revision":
+                row.Revision = 0;
+                break;
+            case "expiry":
+                row.ExpiresAtUtcTicks = row.AcquiredAt.UtcTicks;
+                row.ExpiresAtOffsetMinutes = checked((int)row.AcquiredAt.Offset.TotalMinutes);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(corruption));
+        }
+        await fixture.Context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<ExecutionPlacementEntityFrameworkPersistenceException>(() =>
+            fixture.Store.TryClaimAsync(Claim("node-a", "wf-scalar-corrupt"), Now.AddSeconds(1)).AsTask());
+        await Assert.ThrowsAsync<ExecutionPlacementEntityFrameworkPersistenceException>(() =>
+            fixture.Store.ReleaseAsync(lease).AsTask());
+    }
+
+    [Theory]
     [InlineData("finding", "wf-provider")]
     [InlineData("claiming", "wf-provider")]
     [InlineData("releasing", "wf-provider")]
