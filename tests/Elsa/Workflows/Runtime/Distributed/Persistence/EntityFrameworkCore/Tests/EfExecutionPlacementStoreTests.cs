@@ -178,6 +178,20 @@ public sealed class EfExecutionPlacementStoreTests
     }
 
     [Fact]
+    public async Task Non_UTC_timestamps_round_trip_losslessly_with_one_expiry_query_authority()
+    {
+        var requestedAt = new DateTimeOffset(2026, 9, 13, 15, 30, 0, TimeSpan.FromHours(5.5));
+        await using var fixture = await Fixture.CreateAsync("scope-a");
+
+        var claimed = await fixture.Store.TryClaimAsync(Claim("node-a", "wf-offset", requestedAt), requestedAt);
+        AssertLeaseEqual(claimed.Lease, await fixture.Store.FindAsync("wf-offset"));
+        AssertLeaseEqual(claimed.Lease, Assert.Single(await fixture.Store.ListOwnedAsync(new("node-a", requestedAt))));
+
+        await using var reopened = await fixture.ReopenAsync("scope-a");
+        AssertLeaseEqual(claimed.Lease, await reopened.Store.FindAsync("wf-offset"));
+    }
+
+    [Fact]
     public async Task Distinct_unpaired_surrogate_scopes_do_not_alias_and_reopen_losslessly()
     {
         await using var firstScope = await Fixture.CreateAsync("tenant-\uD800");
@@ -196,7 +210,7 @@ public sealed class EfExecutionPlacementStoreTests
     }
 
     [Fact]
-    public async Task Corrupt_derived_projections_fail_closed_and_are_not_silently_dropped_from_listing()
+    public async Task Corrupt_derived_projections_and_expiry_offset_fail_closed_without_unbounded_listing()
     {
         await using var fixture = await Fixture.CreateAsync("scope-a");
         await fixture.Store.TryClaimAsync(Claim("node-a", "wf-projection"), Now);
@@ -204,7 +218,6 @@ public sealed class EfExecutionPlacementStoreTests
         var originalScopeHash = row.ScopeKeyHash;
         var originalOwnerHash = row.OwnerIdHash;
         var originalOrderKey = row.WorkflowExecutionIdOrderKey;
-        var originalExpiryTicks = row.ExpiresAtUtcTicks;
 
         row.ScopeKeyHash = "corrupt";
         await fixture.Context.SaveChangesAsync();
@@ -221,7 +234,7 @@ public sealed class EfExecutionPlacementStoreTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.ListOwnedAsync(new("node-a", Now)).AsTask());
 
         row.WorkflowExecutionIdOrderKey = originalOrderKey;
-        row.ExpiresAtUtcTicks = originalExpiryTicks + 1;
+        row.ExpiresAtOffsetMinutes = 14 * 60 + 1;
         await fixture.Context.SaveChangesAsync();
         await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.FindAsync("wf-projection").AsTask());
     }
@@ -256,7 +269,9 @@ public sealed class EfExecutionPlacementStoreTests
         Assert.Equal(expected.OwnerId, actual.OwnerId);
         Assert.Equal(expected.PlacementToken, actual.PlacementToken);
         Assert.Equal(expected.AcquiredAt, actual.AcquiredAt);
+        Assert.Equal(expected.AcquiredAt.Offset, actual.AcquiredAt.Offset);
         Assert.Equal(expected.ExpiresAt, actual.ExpiresAt);
+        Assert.Equal(expected.ExpiresAt.Offset, actual.ExpiresAt.Offset);
     }
 
     private sealed class Fixture : IAsyncDisposable

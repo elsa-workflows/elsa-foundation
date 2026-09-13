@@ -100,8 +100,8 @@ public sealed class EfExecutionPlacementStore(
                     current.OwnerIdHash = PlacementIdentity.CreateHash(lease.OwnerId);
                     current.PlacementToken = lease.PlacementToken;
                     current.AcquiredAt = lease.AcquiredAt;
-                    current.ExpiresAt = lease.ExpiresAt;
                     current.ExpiresAtUtcTicks = lease.ExpiresAt.UtcTicks;
+                    current.ExpiresAtOffsetMinutes = checked((int)lease.ExpiresAt.Offset.TotalMinutes);
                     current.Revision = checked(current.Revision + 1);
                 }
 
@@ -276,22 +276,33 @@ public sealed class EfExecutionPlacementStore(
 
         if (!StringComparer.Ordinal.Equals(row.ScopeKeyHash, PlacementIdentity.CreateHash(scope)) ||
             !StringComparer.Ordinal.Equals(row.OwnerIdHash, PlacementIdentity.CreateHash(row.OwnerId)) ||
-            !StringComparer.Ordinal.Equals(row.WorkflowExecutionIdOrderKey, PlacementIdentity.CreateOrderKey(row.WorkflowExecutionId)) ||
-            row.ExpiresAtUtcTicks != row.ExpiresAt.UtcTicks)
+            !StringComparer.Ordinal.Equals(row.WorkflowExecutionIdOrderKey, PlacementIdentity.CreateOrderKey(row.WorkflowExecutionId)))
             throw new InvalidOperationException("The placement row contains inconsistent derived projections.");
+
+        _ = ReadExpiresAt(row);
     }
 
-    private static bool IsLive(ExecutionPlacementLeaseEntity row, DateTimeOffset now)
+    private static bool IsLive(ExecutionPlacementLeaseEntity row, DateTimeOffset now) =>
+        ReadExpiresAt(row) > now;
+
+    private static DateTimeOffset ReadExpiresAt(ExecutionPlacementLeaseEntity row)
     {
-        var canonical = row.ExpiresAt > now;
-        var projected = row.ExpiresAtUtcTicks > now.UtcTicks;
-        if (canonical != projected)
-            throw new InvalidOperationException("The placement row contains inconsistent expiry projections.");
-        return canonical;
+        if (row.ExpiresAtOffsetMinutes is < -14 * 60 or > 14 * 60)
+            throw new InvalidOperationException("The placement row contains an invalid expiry offset.");
+
+        try
+        {
+            return new DateTimeOffset(row.ExpiresAtUtcTicks, TimeSpan.Zero)
+                .ToOffset(TimeSpan.FromMinutes(row.ExpiresAtOffsetMinutes));
+        }
+        catch (ArgumentException exception)
+        {
+            throw new InvalidOperationException("The placement row contains an invalid expiry value.", exception);
+        }
     }
 
     private static ExecutionPlacementLease Map(ExecutionPlacementLeaseEntity row) =>
-        new(row.WorkflowExecutionId, row.OwnerId, row.PlacementToken, row.AcquiredAt, row.ExpiresAt);
+        new(row.WorkflowExecutionId, row.OwnerId, row.PlacementToken, row.AcquiredAt, ReadExpiresAt(row));
 
     private static ExecutionPlacementLeaseEntity ToEntity(ExecutionPlacementLease lease, string scope, string id, long revision) => new()
     {
@@ -304,8 +315,8 @@ public sealed class EfExecutionPlacementStore(
         OwnerIdHash = PlacementIdentity.CreateHash(lease.OwnerId),
         PlacementToken = lease.PlacementToken,
         AcquiredAt = lease.AcquiredAt,
-        ExpiresAt = lease.ExpiresAt,
         ExpiresAtUtcTicks = lease.ExpiresAt.UtcTicks,
+        ExpiresAtOffsetMinutes = checked((int)lease.ExpiresAt.Offset.TotalMinutes),
         Revision = revision
     };
 

@@ -19,6 +19,8 @@ public sealed class ProviderModelTests
         Assert.Equal(ExecutionPlacementEfModule.TableName, entity!.GetTableName());
         Assert.NotNull(entity.FindPrimaryKey());
         Assert.Equal(ExpectedScopeColumnType(provider), entity.FindProperty(nameof(Entities.ExecutionPlacementLeaseEntity.ScopeKey))!.GetColumnType());
+        Assert.NotNull(entity.FindProperty(nameof(Entities.ExecutionPlacementLeaseEntity.ExpiresAtOffsetMinutes)));
+        Assert.Null(entity.FindProperty("ExpiresAt"));
         Assert.Contains(ExpectedProviderFragment(provider), context.Database.ProviderName, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(entity.GetIndexes(), index => index.Properties.Select(property => property.Name).SequenceEqual([
             nameof(Entities.ExecutionPlacementLeaseEntity.ScopeKeyHash),

@@ -12,7 +12,7 @@ public sealed class ExecutionPlacementLeaseEntity
     public string OwnerIdHash { get; set; } = null!;
     public long PlacementToken { get; set; }
     public DateTimeOffset AcquiredAt { get; set; }
-    public DateTimeOffset ExpiresAt { get; set; }
     public long ExpiresAtUtcTicks { get; set; }
+    public int ExpiresAtOffsetMinutes { get; set; }
     public long Revision { get; set; }
 }
