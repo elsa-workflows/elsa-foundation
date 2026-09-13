@@ -43,7 +43,7 @@ feature), which defines the contracts both planes speak:
 | `IClaimsNormalizer` / `IClaimMappingRule` | IAM | Map raw provider claims (roles, group memberships) into Elsa `elsa.identity.role` / `elsa.identity.permission` claims. |
 | `IPermissionCatalog` / `IPermissionEvaluator` / `IPermissionAuthorizationService` | IAM | The permission model: catalog, implication expansion, and canonical policy or request-internal evaluation. |
 | `IUserStore` / `IRoleStore` / `IExternalIdentityStore` / `ITenantMembershipStore` | IAM | User/role/link/tenant persistence. |
-| `ISecurityDefaultGuard` | cross-cutting | Refuse weak/missing keys and non-HTTPS metadata outside development. |
+| `ISecurityDefaultGuard` | cross-cutting | Validator contract for weak/missing keys and non-HTTPS metadata. Registered, but no host or feature evaluates it yet; see [§7](#7-security-posture). |
 
 Because these contracts are provider-agnostic, Minimal APIs use `RequirePermission(...)`,
 `RequireAnyPermission(...)`, or `RequireAllPermissions(...)`; transitional FastEndpoints bases
@@ -327,11 +327,23 @@ browser drops the cookie. Host the Studio SPA **same-origin** so the cookie flow
 fails startup, which for a shell host means shell activation (see
 [`FoundationIdentityOpenIddict`](identity-configuration.md#foundationidentityopeniddict)). A missing key never
 silently degrades to an insecure default.
-The `SigningKey` must be a base64-encoded PKCS#8 RSA private key (RS256). The `SecurityDefaultGuard`s
-additionally reject short or well-known weak keys, and non-HTTPS provider metadata when HTTPS metadata
-is required. **Recommendation: set a distinct `EncryptionKey` from `SigningKey` in production** — the
-encryption key otherwise defaults to a value domain-separated from the signing key, and separating them
-is stronger.
+The `SigningKey` must be a base64-encoded PKCS#8 RSA private key (RS256). That parse is the only check
+on the key. Placeholder values such as `changeme` or `secret` fail it because they do not decode to
+an RSA key, but the RSA key size is not checked: a 1024-bit key activates and signs. Generate a 2048-bit
+key with the command in the configuration guide. Non-HTTPS provider metadata is refused by ASP.NET
+Core's own OpenID Connect and JWT bearer handlers while `OidcAuthenticationOptions.RequireHttpsMetadata`
+is `true` (the default). That check runs when the handler's options are first built, which is the
+first request that uses the scheme, not shell activation. **Recommendation: set a distinct
+`EncryptionKey` from `SigningKey` in production** — the encryption key otherwise defaults to a value
+domain-separated from the signing key, and separating them is stronger.
+
+The `ISecurityDefaultGuard` implementations in `Identity/Abstractions` (`SigningKeySecurityDefaultGuard`,
+`HttpsMetadataSecurityDefaultGuard`, `SecretHashSecurityDefaultGuard`) are registered, but no host or
+feature evaluates them, so they add no protection at startup. The same goes for the
+`FoundationIdentityOptions.IsDevelopmentOrDemo`, `RequireHttpsMetadata`, and
+`AllowedSecretHashAlgorithms` settings, which only those guards read. Whether to retire the seam or
+wire it in, and whether to enforce a minimum RSA key size, is tracked in
+[#1700](https://github.com/elsa-workflows/elsa-foundation/issues/1700).
 
 For the exact settings, generation command, and the full **go-live checklist**, see
 [`identity-configuration.md`](identity-configuration.md).

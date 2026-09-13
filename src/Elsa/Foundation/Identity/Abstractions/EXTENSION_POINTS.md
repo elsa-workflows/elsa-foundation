@@ -16,7 +16,7 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 | `IAuthSessionService` | `ClaimsAuthSessionService` (`Elsa.Foundation.Identity.Api`) | The host needs to enrich the provider-agnostic Studio session from server-side state beyond normalized claims. |
 | `IClaimsNormalizer` | `DefaultClaimsNormalizer` (`Elsa.Foundation.Identity.Abstractions`) | A provider needs custom claim projection while still emitting normalized Elsa role/permission claims. |
 | `IClaimMappingRuleEvaluator` | `ClaimMappingRuleEvaluator` (`Elsa.Foundation.Identity.Abstractions`) | Mapping rules need richer matching than exact claim-type/value comparisons. |
-| `ISecurityDefaultGuardEvaluator` | `SecurityDefaultGuardEvaluator` (`Elsa.Foundation.Identity.Abstractions`) | A host needs custom aggregation/reporting of security-default guard results. |
+| `ISecurityDefaultGuardEvaluator` | `SecurityDefaultGuardEvaluator` (`Elsa.Foundation.Identity.Abstractions`) | A host that calls the evaluator itself needs custom aggregation/reporting of security-default guard results. No first-party host or feature calls it; see [`ISecurityDefaultGuard`](#isecuritydefaultguard). |
 
 ## Implementable contributor interfaces
 
@@ -83,6 +83,12 @@ hosts should migrate replacements before then.
 - **Register:** `services.AddScoped<ISecurityDefaultGuard, MySecurityGuard>()`.
 - **Consumed by:** `SecurityDefaultGuardEvaluator`, which returns all violations rather than swallowing failures.
 - **Known implementations:** `SigningKeySecurityDefaultGuard`, `HttpsMetadataSecurityDefaultGuard`, `SecretHashSecurityDefaultGuard` *(intra-domain - default)*.
+- **Not evaluated at startup.** `AddFoundationIdentityAbstractions` registers the evaluator and the three guards,
+  but no first-party host (`Elsa.Workbench`, `Elsa.Foundation.Host`) or shell feature calls the evaluator, so
+  none of these guards runs and a violation does not fail activation. A registered custom guard runs only when
+  the host builds a `SecurityGuardContext` and calls `ISecurityDefaultGuardEvaluator` itself. The protections
+  that actually run are described under "Production key requirements" in
+  [authentication-architecture.md](../../../../../docs/reference/authentication-architecture.md#7-security-posture).
 
 ## Events
 
