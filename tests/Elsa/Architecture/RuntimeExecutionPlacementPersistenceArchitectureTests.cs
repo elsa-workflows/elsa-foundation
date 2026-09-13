@@ -3,7 +3,7 @@ using Xunit;
 
 namespace Elsa.Architecture.Tests;
 
-/// <summary>Owns the D01 production-boundary and subtraction guard.</summary>
+/// <summary>Owns the distributed Runtime EF production-boundary and subtraction guard.</summary>
 public sealed class RuntimeExecutionPlacementPersistenceArchitectureTests
 {
     private static readonly string RepoRoot = FindRepoRoot();
@@ -44,6 +44,39 @@ public sealed class RuntimeExecutionPlacementPersistenceArchitectureTests
         Assert.Contains("EfExecutionPlacementStore.cs", paths);
         Assert.Contains("DistributedRuntimeExecutionPlacementEntityFrameworkCoreRegistration.cs", paths);
         Assert.Contains("DistributedRuntimeExecutionPlacementEntityFrameworkCoreFeature.cs", paths);
+    }
+
+    [Fact]
+    public void D02_D03_surface_contains_the_shared_context_entities_mappings_registration_and_feature()
+    {
+        var paths = Directory.EnumerateFiles(ProductionRoot, "*.cs", SearchOption.AllDirectories)
+            .Select(path => Path.GetFileName(path))
+            .ToArray();
+
+        Assert.Contains("ExecutionCommandTransportDbContext.cs", paths);
+        Assert.Contains("ExecutionCommandStreamHeadEntity.cs", paths);
+        Assert.Contains("ExecutionCommandTransportItemEntity.cs", paths);
+        Assert.Contains("ExecutionCommandStreamHeadEntityConfiguration.cs", paths);
+        Assert.Contains("ExecutionCommandTransportItemEntityConfiguration.cs", paths);
+        Assert.Contains("ExecutionCommandTransportEfModule.cs", paths);
+        Assert.Contains("ExecutionCommandTransportEntityFrameworkPersistenceException.cs", paths);
+        Assert.Contains("DistributedRuntimeExecutionCommandTransportEntityFrameworkCoreRegistration.cs", paths);
+        Assert.Contains("DistributedRuntimeExecutionCommandTransportEntityFrameworkCoreFeature.cs", paths);
+        Assert.Contains("EfExecutionCommandTransport.cs", paths);
+    }
+
+    [Fact]
+    public void D02_D03_production_source_does_not_advertise_runtime_lease_fencing_or_provider_engines()
+    {
+        var source = Directory.EnumerateFiles(ProductionRoot, "*.cs", SearchOption.AllDirectories)
+            .Select(File.ReadAllText)
+            .ToArray();
+
+        Assert.DoesNotContain(source, text => text.Contains("IWorkflowExecutionLeaseFencingCapability", StringComparison.Ordinal));
+        Assert.DoesNotContain(source, text => text.Contains("Microsoft.EntityFrameworkCore.Sqlite", StringComparison.Ordinal));
+        Assert.DoesNotContain(source, text => text.Contains("Microsoft.EntityFrameworkCore.SqlServer", StringComparison.Ordinal));
+        Assert.DoesNotContain(source, text => text.Contains("Npgsql.EntityFrameworkCore", StringComparison.Ordinal));
+        Assert.DoesNotContain(source, text => text.Contains("MySql.EntityFrameworkCore", StringComparison.Ordinal));
     }
 
     private static string FindRepoRoot()

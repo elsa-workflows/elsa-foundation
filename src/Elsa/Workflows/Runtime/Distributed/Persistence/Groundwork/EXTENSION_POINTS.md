@@ -10,7 +10,11 @@ nodes through one host-selected provider connection. The store contracts themsel
 overridable persistence provider for them.
 
 When the opt-in EF Core D01 provider is selected, this feature retains Groundwork ownership of
-`IExecutionCommandTransport` and leaves EF ownership of `IExecutionPlacementStore` intact.
+`IExecutionCommandTransport` and leaves EF ownership of `IExecutionPlacementStore` intact. When
+the opt-in EF Core D02-D03 provider is selected, the inverse mixed composition is supported: this
+feature retains Groundwork ownership of `IExecutionPlacementStore` while EF owns
+`IExecutionCommandTransport`. The two ownership markers are independent and neither registration
+order may provision a second active implementation or withdraw the unrelated persistence unit.
 
 ## Provider selection — host composition
 
@@ -18,17 +22,15 @@ When the opt-in EF Core D01 provider is selected, this feature retains Groundwor
 |---|---|---|
 | `WorkflowsRuntimeDistributedGroundworkPersistence` | Server runtime (DependsOn `WorkflowsRuntimeDistributed`) | `WorkflowsRuntimeDistributedGroundworkPersistenceFeature` → `AddGroundworkDistributedRuntimeStores()` |
 
-`AddGroundworkDistributedRuntimeStores()` always replaces command transport with the scoped Groundwork adapter. For
-placement, it first validates the exact descriptor owned by the backend marker: an EF-owned placement descriptor is
-preserved, while the in-memory or Groundwork-owned descriptor is replaced with the Groundwork adapter. An explicit
-unmarked host placement store is never overwritten implicitly. The distributed feature registers its in-memory
-placement default only when no placement store already exists, so both feature orderings remain deterministic. The
-singleton pump and actor provider resolve these stores only inside fresh persistence operation scopes. The host selects
-exactly one public v2 provider connection. A Groundwork-only composition registers all three ordinary scoped storage
-units. When EF owns placement, Groundwork registers only the command-stream-head and command-transport units; selecting
-EF after Groundwork withdraws every Groundwork placement-unit declaration before the provider is built. Both composition
-orders therefore retain Groundwork transport without provisioning an unused parallel placement schema. MongoDB must be
-a writable transaction-capable replica set whenever the selected combined host claims checkpoint atomicity.
+`AddGroundworkDistributedRuntimeStores()` validates both backend markers before changing the service collection. An
+EF-owned placement or transport descriptor is preserved, while each in-memory or Groundwork-owned descriptor is
+replaced with its scoped Groundwork adapter. An explicit unmarked host implementation is never overwritten implicitly.
+The distributed feature registers each in-memory default only when that contract has no owner, so both feature
+orderings remain deterministic. The singleton pump and actor provider resolve these stores only inside fresh persistence
+operation scopes. The host selects exactly one public v2 provider connection. A Groundwork-only composition registers
+all three ordinary scoped storage units. When EF owns one contract, Groundwork registers only the units for the other;
+selecting EF after Groundwork withdraws exactly the replaced unit declarations before the provider is built. MongoDB
+must be a writable transaction-capable replica set whenever the selected combined host claims checkpoint atomicity.
 
 ## Persisted storage units
 
@@ -57,9 +59,10 @@ correctness backstop: W5 single-writer fencing at checkpoint commit remains the 
 
 ## Capability admission and actor fencing
 
-The distributed runtime's process-local default implements `IWorkflowExecutionLeaseFencingCapability` as
-unavailable. This Groundwork leaf replaces it and reports available only when the selected v2 connection advertises
-`AtomicCommit`; command sequence-head advancement and row insertion then execute in one exact two-unit UOW.
+The distributed runtime's process-local default implements `IWorkflowExecutionLeaseFencingCapability` as unavailable.
+This Groundwork slice persists routing and transport but still reports that checkpoint lease fencing is unavailable;
+command sequence-head advancement and row insertion remain atomic within their exact two-unit UOW. The EF placement and
+command-transport leaves likewise do not claim the separate checkpoint-fencing capability.
 
 ## Schema evolution
 

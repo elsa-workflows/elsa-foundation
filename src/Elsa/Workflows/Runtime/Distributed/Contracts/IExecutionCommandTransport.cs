@@ -3,6 +3,12 @@ using Elsa.Workflows.Runtime.Distributed.Models;
 
 namespace Elsa.Workflows.Runtime.Distributed.Contracts;
 
+/// <summary>Marks the command transport as a single-implementation replacement contract.</summary>
+[AttributeUsage(AttributeTargets.Interface, Inherited = false)]
+public sealed class ExecutionCommandTransportReplacementContractAttribute : Attribute
+{
+}
+
 /// <summary>
 /// Durable cross-node command inbox for workflow executions. When a command arrives on a node that does not own an
 /// execution's placement, it is sent here; the owning node's placement pump leases pending items and dispatches them to
@@ -18,6 +24,11 @@ namespace Elsa.Workflows.Runtime.Distributed.Contracts;
 /// <c>docs/runtime-durable-resumption.md</c>; the fencing token checked at checkpoint commit is what prevents a
 /// re-driven command from producing a second durable execution.
 /// </remarks>
+/// <remarks>
+/// Persistence leaves replace exactly this contract. They do not replace execution placement, checkpoint, outbox, or
+/// lease-fencing services; those remain independently owned composition units during the opt-in migration.
+/// </remarks>
+[ExecutionCommandTransportReplacementContract]
 public interface IExecutionCommandTransport
 {
     /// <summary>Appends a command for <paramref name="workflowExecutionId"/> to its durable inbox.</summary>

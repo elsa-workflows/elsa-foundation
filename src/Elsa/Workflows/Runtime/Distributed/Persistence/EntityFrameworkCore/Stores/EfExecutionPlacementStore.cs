@@ -1,12 +1,11 @@
-using System.Buffers.Binary;
 using System.Data.Common;
-using System.Security.Cryptography;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Models;
 using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Exceptions;
+using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Stores;
@@ -30,7 +29,7 @@ public sealed class EfExecutionPlacementStore(
         DistributedRuntimeIdentityConstraints.Validate(workflowExecutionId, nameof(workflowExecutionId));
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        var id = PlacementIdentity.CreateId(scope, workflowExecutionId);
+        var id = EfDistributedIdentity.CreateId(scope, workflowExecutionId);
         try
         {
             var row = await context.PlacementLeases.AsNoTracking().SingleOrDefaultAsync(
@@ -66,7 +65,7 @@ public sealed class EfExecutionPlacementStore(
         DistributedRuntimeIdentityConstraints.Validate(claim.OwnerId, nameof(claim.OwnerId));
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        var id = PlacementIdentity.CreateId(scope, claim.WorkflowExecutionId);
+        var id = EfDistributedIdentity.CreateId(scope, claim.WorkflowExecutionId);
 
         Exception lastContention = null!;
         for (var attempt = 0; attempt < MaxCasAttempts; attempt++)
@@ -109,7 +108,7 @@ public sealed class EfExecutionPlacementStore(
                 else
                 {
                     current.OwnerId = lease.OwnerId;
-                    current.OwnerIdHash = PlacementIdentity.CreateHash(lease.OwnerId);
+                    current.OwnerIdHash = EfDistributedIdentity.Hash(lease.OwnerId);
                     current.PlacementToken = lease.PlacementToken;
                     current.AcquiredAt = lease.AcquiredAt;
                     current.ExpiresAtUtcTicks = lease.ExpiresAt.UtcTicks;
@@ -162,7 +161,7 @@ public sealed class EfExecutionPlacementStore(
         DistributedRuntimeIdentityConstraints.Validate(lease.OwnerId, nameof(lease.OwnerId));
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        var id = PlacementIdentity.CreateId(scope, lease.WorkflowExecutionId);
+        var id = EfDistributedIdentity.CreateId(scope, lease.WorkflowExecutionId);
 
         Exception lastContention = null!;
         for (var attempt = 0; attempt < MaxCasAttempts; attempt++)
@@ -226,9 +225,9 @@ public sealed class EfExecutionPlacementStore(
         DistributedRuntimeIdentityConstraints.Validate(request.OwnerId, nameof(request.OwnerId));
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        var encodedScope = PlacementIdentity.EncodeScope(scope);
-        var scopeHash = PlacementIdentity.CreateHash(scope);
-        var ownerHash = PlacementIdentity.CreateHash(request.OwnerId);
+        var encodedScope = EfDistributedIdentity.EncodeScope(scope);
+        var scopeHash = EfDistributedIdentity.Hash(scope);
+        var ownerHash = EfDistributedIdentity.Hash(request.OwnerId);
 
         try
         {
@@ -281,7 +280,7 @@ public sealed class EfExecutionPlacementStore(
             !StringComparer.Ordinal.Equals(row.OwnerId, expectedOwnerId))
             throw new InvalidOperationException("The placement row belongs to a different owner.");
 
-        var id = PlacementIdentity.CreateId(scope, row.WorkflowExecutionId);
+        var id = EfDistributedIdentity.CreateId(scope, row.WorkflowExecutionId);
         EnsureIdentity(row, scope, row.WorkflowExecutionId, id);
         return Map(row);
     }
@@ -289,16 +288,18 @@ public sealed class EfExecutionPlacementStore(
     private static void EnsureIdentity(ExecutionPlacementLeaseEntity row, string scope, string workflowExecutionId, string id)
     {
         if (!StringComparer.Ordinal.Equals(row.Id, id) ||
-            !StringComparer.Ordinal.Equals(PlacementIdentity.DecodeScope(row.ScopeKey), scope) ||
+            !StringComparer.Ordinal.Equals(EfDistributedIdentity.DecodeScope(row.ScopeKey), scope) ||
             !StringComparer.Ordinal.Equals(row.WorkflowExecutionId, workflowExecutionId))
             throw new InvalidOperationException("The placement identity digest maps to a different scope or execution identity.");
 
-        if (!StringComparer.Ordinal.Equals(row.ScopeKeyHash, PlacementIdentity.CreateHash(scope)) ||
-            !StringComparer.Ordinal.Equals(row.OwnerIdHash, PlacementIdentity.CreateHash(row.OwnerId)) ||
-            !row.WorkflowExecutionIdOrderKey.AsSpan().SequenceEqual(PlacementIdentity.CreateOrderKey(row.WorkflowExecutionId)))
+        if (!StringComparer.Ordinal.Equals(row.ScopeKeyHash, EfDistributedIdentity.Hash(scope)) ||
+            !StringComparer.Ordinal.Equals(row.OwnerIdHash, EfDistributedIdentity.Hash(row.OwnerId)) ||
+            !row.WorkflowExecutionIdOrderKey.AsSpan().SequenceEqual(EfDistributedIdentity.CreateOrderKey(row.WorkflowExecutionId, ExecutionPlacementEfModule.WorkflowExecutionIdOrderKeyWidth)))
             throw new InvalidOperationException("The placement row contains inconsistent derived projections.");
 
-        _ = ReadExpiresAt(row);
+        var expiresAt = ReadExpiresAt(row);
+        if (row.PlacementToken <= 0 || row.Revision <= 0 || expiresAt <= row.AcquiredAt)
+            throw new InvalidOperationException("The placement row contains invalid lease state.");
     }
 
     private static bool IsLive(ExecutionPlacementLeaseEntity row, DateTimeOffset now) =>
@@ -326,12 +327,12 @@ public sealed class EfExecutionPlacementStore(
     private static ExecutionPlacementLeaseEntity ToEntity(ExecutionPlacementLease lease, string scope, string id, long revision) => new()
     {
         Id = id,
-        ScopeKey = PlacementIdentity.EncodeScope(scope),
-        ScopeKeyHash = PlacementIdentity.CreateHash(scope),
+        ScopeKey = EfDistributedIdentity.EncodeScope(scope),
+        ScopeKeyHash = EfDistributedIdentity.Hash(scope),
         WorkflowExecutionId = lease.WorkflowExecutionId,
-        WorkflowExecutionIdOrderKey = PlacementIdentity.CreateOrderKey(lease.WorkflowExecutionId),
+        WorkflowExecutionIdOrderKey = EfDistributedIdentity.CreateOrderKey(lease.WorkflowExecutionId, ExecutionPlacementEfModule.WorkflowExecutionIdOrderKeyWidth),
         OwnerId = lease.OwnerId,
-        OwnerIdHash = PlacementIdentity.CreateHash(lease.OwnerId),
+        OwnerIdHash = EfDistributedIdentity.Hash(lease.OwnerId),
         PlacementToken = lease.PlacementToken,
         AcquiredAt = lease.AcquiredAt,
         ExpiresAtUtcTicks = lease.ExpiresAt.UtcTicks,
@@ -355,65 +356,4 @@ public sealed class EfExecutionPlacementStore(
         Exception inner) =>
         new(operation, identity, $"The EF execution placement store could not complete {operation} placement '{identity}' after {MaxCasAttempts} bounded compare-and-swap attempts.", inner);
 
-    private static class PlacementIdentity
-    {
-        public static string CreateId(string scope, string executionId) =>
-            CreateHash($"{scope.Length}:{scope}{executionId.Length}:{executionId}");
-
-        public static string CreateHash(string value)
-        {
-            return Convert.ToHexString(SHA256.HashData(EncodeUtf16CodeUnits(value)));
-        }
-
-        public static string EncodeScope(string value)
-            => Convert.ToBase64String(EncodeUtf16CodeUnits(value));
-
-        private static byte[] EncodeUtf16CodeUnits(string value)
-        {
-            var bytes = new byte[checked(value.Length * sizeof(char))];
-            for (var index = 0; index < value.Length; index++)
-            {
-                var codeUnit = value[index];
-                bytes[index * sizeof(char)] = (byte)codeUnit;
-                bytes[index * sizeof(char) + 1] = (byte)(codeUnit >> 8);
-            }
-
-            return bytes;
-        }
-
-        public static string DecodeScope(string encoded)
-        {
-            try
-            {
-                var bytes = Convert.FromBase64String(encoded);
-                if (bytes.Length % sizeof(char) != 0)
-                    throw new FormatException("The encoded scope does not contain complete UTF-16 code units.");
-
-                var chars = new char[bytes.Length / sizeof(char)];
-                for (var index = 0; index < chars.Length; index++)
-                    chars[index] = (char)(bytes[index * sizeof(char)] | bytes[index * sizeof(char) + 1] << 8);
-                return new string(chars);
-            }
-            catch (Exception exception) when (exception is FormatException or ArgumentException)
-            {
-                throw new InvalidOperationException("The placement row contains an invalid encoded scope projection.", exception);
-            }
-        }
-
-        public static byte[] CreateOrderKey(string value)
-        {
-            var result = new byte[ExecutionPlacementEfModule.WorkflowExecutionIdOrderKeyWidth];
-            for (var index = 0; index < value.Length; index++)
-            {
-                BinaryPrimitives.WriteUInt16BigEndian(
-                    result.AsSpan(index * sizeof(char), sizeof(char)),
-                    value[index]);
-            }
-
-            BinaryPrimitives.WriteUInt16BigEndian(
-                result.AsSpan(result.Length - sizeof(ushort), sizeof(ushort)),
-                checked((ushort)value.Length));
-            return result;
-        }
-    }
 }

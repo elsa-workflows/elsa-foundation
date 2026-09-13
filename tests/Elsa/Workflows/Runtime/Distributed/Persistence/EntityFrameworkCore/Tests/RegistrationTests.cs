@@ -1,5 +1,7 @@
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Models;
@@ -27,12 +29,213 @@ public sealed class RegistrationTests
         ConnectionString = "Data Source=registration-test.db"
     };
 
+    private static readonly DistributedRuntimeExecutionCommandTransportEntityFrameworkCoreOptions CommandOptions = new()
+    {
+        Provider = "Sqlite",
+        ConnectionString = "Data Source=command-registration-test.db"
+    };
+
     [Fact]
     public void Placement_store_declares_single_implementation_replacement_semantics()
     {
         Assert.True(typeof(IExecutionPlacementStore).IsDefined(
             typeof(ExecutionPlacementStoreReplacementContractAttribute),
             inherit: false));
+    }
+
+    [Fact]
+    public void Command_transport_declares_single_implementation_replacement_semantics()
+    {
+        Assert.True(typeof(IExecutionCommandTransport).IsDefined(
+            typeof(ExecutionCommandTransportReplacementContractAttribute),
+            inherit: false));
+    }
+
+    [Fact]
+    public void EF_command_transport_replaces_only_transport_after_the_distributed_default_is_composed()
+    {
+        var services = new ServiceCollection();
+        services.AddPersistenceCore();
+        new WorkflowsRuntimeDistributedFeature().ConfigureServices(services);
+        var originalPlacement = services.Single(descriptor => descriptor.ServiceType == typeof(IExecutionPlacementStore));
+
+        services.AddDistributedRuntimeExecutionCommandTransportEntityFrameworkCore(CommandOptions);
+
+        Assert.Same(originalPlacement, services.Single(descriptor => descriptor.ServiceType == typeof(IExecutionPlacementStore)));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IExecutionCommandTransport));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IExecutionCommandTransport) && descriptor.ImplementationFactory is not null);
+        Assert.Equal(ExecutionCommandTransportBackend.EntityFramework, CommandBackend(services));
+        Assert.Equal(ExecutionPlacementStoreBackend.InMemory, Backend(services));
+    }
+
+    [Fact]
+    public void Repeating_the_same_command_transport_registration_is_idempotent()
+    {
+        var services = new ServiceCollection();
+        services.AddDistributedRuntimeExecutionCommandTransportEntityFrameworkCore(CommandOptions);
+        var before = services.ToArray();
+
+        services.AddDistributedRuntimeExecutionCommandTransportEntityFrameworkCore(new()
+        {
+            Provider = CommandOptions.Provider,
+            ConnectionString = CommandOptions.ConnectionString
+        });
+
+        Assert.Equal(before, services);
+    }
+
+    [Fact]
+    public void Conflicting_command_transport_reregistration_fails_without_partial_mutation()
+    {
+        var services = new ServiceCollection();
+        services.AddDistributedRuntimeExecutionCommandTransportEntityFrameworkCore(CommandOptions);
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddDistributedRuntimeExecutionCommandTransportEntityFrameworkCore(new()
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=different-command.db"
+        }));
+        Assert.Equal(before, services);
+    }
+
+    [Fact]
+    public void Explicit_unmarked_command_transport_is_rejected_without_partial_mutation()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IExecutionCommandTransport, ExplicitTransport>();
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddDistributedRuntimeExecutionCommandTransportEntityFrameworkCore(CommandOptions));
+        Assert.Equal(before, services);
+    }
+
+    [Fact]
+    public void Groundwork_rejects_an_explicit_unmarked_command_transport_without_partial_mutation()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IExecutionCommandTransport, ExplicitTransport>();
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddGroundworkDistributedRuntimeStores());
+
+        Assert.Equal(before, services);
+    }
+
+    [Fact]
+    public void EF_command_transport_and_EF_placement_have_independent_ownership()
+    {
+        var services = new ServiceCollection();
+        services.AddDistributedRuntimeExecutionPlacementEntityFrameworkCore(Options);
+        services.AddDistributedRuntimeExecutionCommandTransportEntityFrameworkCore(CommandOptions);
+
+        Assert.Equal(ExecutionPlacementStoreBackend.EntityFramework, Backend(services));
+        Assert.Equal(ExecutionCommandTransportBackend.EntityFramework, CommandBackend(services));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IExecutionPlacementStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IExecutionCommandTransport));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(ExecutionPlacementDbContext));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(ExecutionCommandTransportDbContext));
+    }
+
+    [Fact]
+    public void Groundwork_then_EF_command_transport_withdraws_only_command_units_and_preserves_placement()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkDistributedRuntimeStores();
+        services.AddDistributedRuntimeExecutionCommandTransportEntityFrameworkCore(CommandOptions);
+
+        Assert.Equal(ExecutionPlacementStoreBackend.Groundwork, Backend(services));
+        Assert.Equal(ExecutionCommandTransportBackend.EntityFramework, CommandBackend(services));
+        Assert.Contains(GroundworkUnitIds(services), unitId => unitId == DistributedGroundworkStorageManifest.PlacementUnitId);
+        Assert.DoesNotContain(GroundworkUnitIds(services), unitId => unitId == DistributedGroundworkStorageManifest.CommandStreamHeadUnitId);
+        Assert.DoesNotContain(GroundworkUnitIds(services), unitId => unitId == DistributedGroundworkStorageManifest.CommandTransportUnitId);
+    }
+
+    [Fact]
+    public void EF_command_transport_then_Groundwork_preserves_EF_transport_and_adds_only_placement_units()
+    {
+        var services = new ServiceCollection();
+        services.AddDistributedRuntimeExecutionCommandTransportEntityFrameworkCore(CommandOptions);
+        services.AddGroundworkDistributedRuntimeStores();
+
+        Assert.Equal(ExecutionPlacementStoreBackend.Groundwork, Backend(services));
+        Assert.Equal(ExecutionCommandTransportBackend.EntityFramework, CommandBackend(services));
+        Assert.Contains(GroundworkUnitIds(services), unitId => unitId == DistributedGroundworkStorageManifest.PlacementUnitId);
+        Assert.DoesNotContain(GroundworkUnitIds(services), unitId => unitId == DistributedGroundworkStorageManifest.CommandStreamHeadUnitId);
+        Assert.DoesNotContain(GroundworkUnitIds(services), unitId => unitId == DistributedGroundworkStorageManifest.CommandTransportUnitId);
+    }
+
+    [Fact]
+    public void EF_command_transport_does_not_advertise_checkpoint_lease_fencing()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkDistributedRuntimeStores();
+        services.AddDistributedRuntimeExecutionCommandTransportEntityFrameworkCore(CommandOptions);
+
+        using var provider = services.BuildServiceProvider();
+        var capability = provider.GetService<IWorkflowExecutionLeaseFencingCapability>();
+        Assert.True(capability is null || !capability.IsAvailable);
+        var evidence = provider.GetServices<IWorkflowDispatchDurabilityEvidence>()
+            .Where(item => item.Component == WorkflowDispatchDurabilityComponents.DistributionPersistence)
+            .ToArray();
+        Assert.Single(evidence);
+        Assert.Contains("EntityFramework", evidence[0].GetType().Name, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Command_transport_feature_maps_settings_and_resolves_a_working_scoped_store()
+    {
+        var databasePath = Path.Join(Path.GetTempPath(), $"elsa-command-transport-feature-{Guid.NewGuid():N}.db");
+        try
+        {
+            var services = new ServiceCollection();
+            services.AddPersistenceCore("command-feature-scope");
+            var feature = new DistributedRuntimeExecutionCommandTransportEntityFrameworkCoreFeature
+            {
+                Provider = "Sqlite",
+                ConnectionString = $"Data Source={databasePath}",
+                ConnectionName = "IgnoredBecauseExplicitConnectionWins"
+            };
+
+            feature.ConfigureServices(services);
+
+            await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+            var configured = provider.GetRequiredService<DistributedRuntimeExecutionCommandTransportEntityFrameworkCoreOptions>();
+            await using var scope = provider.CreateAsyncScope();
+            var context = scope.ServiceProvider.GetRequiredService<ExecutionCommandTransportDbContext>();
+            var transport = scope.ServiceProvider.GetRequiredService<IExecutionCommandTransport>();
+
+            Assert.Equal(feature.Provider, configured.Provider);
+            Assert.Equal(feature.ConnectionString, configured.ConnectionString);
+            Assert.Equal(feature.ConnectionName, configured.ConnectionName);
+            Assert.IsType<ExecutionCommandTransportSqliteDbContext>(context);
+            Assert.IsType<EfExecutionCommandTransport>(transport);
+            Assert.Equal("Microsoft.EntityFrameworkCore.Sqlite", context.Database.ProviderName);
+
+            await context.Database.EnsureCreatedAsync();
+            var sent = await transport.SendAsync(
+                "wf-command-feature",
+                new WorkflowExecutionCommandEnvelope(
+                    "envelope-command-feature",
+                    "wf-command-feature",
+                    new WorkflowExecutionCommand(
+                        "command-feature",
+                        "wf-command-feature",
+                        WorkflowExecutionCommandKind.RunSchedulerWork,
+                        DateTimeOffset.UtcNow,
+                        null,
+                        new Dictionary<string, string>()),
+                    "idempotency-command-feature",
+                    WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
+                    DateTimeOffset.UtcNow,
+                    partition: new WorkflowExecutionPartition("command-feature-scope")),
+                DateTimeOffset.UtcNow);
+            Assert.Equal(1, sent.Sequence);
+        }
+        finally
+        {
+            DeleteSqliteFiles(databasePath);
+        }
     }
 
     [Fact]
@@ -557,6 +760,12 @@ public sealed class RegistrationTests
         ? backend.Name
         : throw new InvalidOperationException("The placement backend marker was not registered.");
 
+    private static string CommandBackend(IServiceCollection services) => services
+        .Single(descriptor => descriptor.ImplementationInstance is ExecutionCommandTransportBackend)
+        .ImplementationInstance is ExecutionCommandTransportBackend backend
+        ? backend.Name
+        : throw new InvalidOperationException("The command transport backend marker was not registered.");
+
     private static void RegisterBackend(IServiceCollection services, string backend)
     {
         switch (backend)
@@ -635,5 +844,14 @@ public sealed class RegistrationTests
         public ValueTask<ExecutionPlacementClaimResult> TryClaimAsync(ExecutionPlacementClaim claim, DateTimeOffset now, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask ReleaseAsync(ExecutionPlacementLease lease, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<IReadOnlyList<ExecutionPlacementLease>> ListOwnedAsync(ExecutionPlacementLeaseListRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class ExplicitTransport : IExecutionCommandTransport
+    {
+        public ValueTask<ExecutionCommandTransportItem> SendAsync(string workflowExecutionId, WorkflowExecutionCommandEnvelope envelope, DateTimeOffset now, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> LeaseAsync(string workflowExecutionId, string ownerId, DateTimeOffset now, TimeSpan leaseDuration, int maxItems, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<bool> AckAsync(string workflowExecutionId, string transportItemId, string ownerId, long leaseToken, DateTimeOffset now, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<IReadOnlyCollection<string>> ListPendingExecutionIdsAsync(DateTimeOffset now, int maxItems, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<int> CountPendingAsync(string workflowExecutionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }
