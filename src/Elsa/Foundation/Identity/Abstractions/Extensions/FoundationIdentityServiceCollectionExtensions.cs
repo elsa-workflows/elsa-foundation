@@ -97,15 +97,25 @@ public static class FoundationIdentityServiceCollectionExtensions
             descriptor = services.Last(x => x.ServiceType == typeof(TContract));
         }
 
-        if (!services.Any(item => item.ServiceType == typeof(FoundationIdentityReplacementRegistration) &&
-                                 item.ImplementationInstance is FoundationIdentityReplacementRegistration marker &&
-                                 marker.ContractType == typeof(TContract)))
-        {
-            services.AddSingleton(new FoundationIdentityReplacementRegistration(
-                typeof(TContract),
-                descriptor.ImplementationType ?? descriptor.ImplementationInstance?.GetType() ?? typeof(TDefault),
-                descriptor));
-        }
+        var markerDescriptors = services
+            .Where(item => item.ServiceType == typeof(FoundationIdentityReplacementRegistration) &&
+                           item.ImplementationInstance is FoundationIdentityReplacementRegistration marker &&
+                           marker.ContractType == typeof(TContract))
+            .ToArray();
+        if (markerDescriptors.Length > 1)
+            throw new InvalidOperationException(
+                $"Replacement contract '{typeof(TContract).FullName}' has conflicting registration markers.");
+
+        var marker = markerDescriptors.SingleOrDefault()?.ImplementationInstance as FoundationIdentityReplacementRegistration;
+        if (FoundationIdentityRegistrationValidator.DescriptorMatches(descriptor, marker))
+            return services;
+
+        if (markerDescriptors.Length == 1)
+            services.Remove(markerDescriptors[0]);
+        services.AddSingleton(new FoundationIdentityReplacementRegistration(
+            typeof(TContract),
+            descriptor.ImplementationType ?? descriptor.ImplementationInstance?.GetType() ?? typeof(TDefault),
+            descriptor));
 
         return services;
     }

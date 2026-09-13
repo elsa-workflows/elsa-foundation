@@ -122,6 +122,7 @@ public interface IPagedClaimMappingStore
         CancellationToken cancellationToken = default);
 }
 
+[ReplacementContract]
 public interface IProviderConfigurationStore
 {
     ValueTask<ProviderConfigurationRecord?> FindGlobalAsync(string provider, CancellationToken cancellationToken = default);
@@ -140,6 +141,7 @@ public interface IProviderConfigurationStore
     }
 }
 
+[ReplacementContract]
 public interface IRevisionAwareProviderConfigurationStore
 {
     ValueTask<IamRevisionedRecord<ProviderConfigurationRecord>?> FindGlobalWithRevisionAsync(string provider, CancellationToken cancellationToken = default);
