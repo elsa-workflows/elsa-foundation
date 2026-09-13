@@ -103,12 +103,19 @@ server options are built. The feature builds them at startup, so the error fails
 `Issuer` that `System.Uri` cannot parse as absolute fails activation the same way, in any mode, with a
 `UriFormatException`.
 
+### `FoundationIdentityOidc`
+
+Only for an external IdP. Its settings are `Authority`, `ClientId`, `ClientSecret` (secret; supply it from a
+secret store), `RequireHttpsMetadata` and `IsDefault`. With no `ClientId` the interactive sign-in handler is not
+registered and the provider only validates bearer tokens. For what each setting means and per-IdP recipes, see
+[authentication-architecture §8](authentication-architecture.md#8-per-idp-recipes-for-the-oidc-module).
+
 ### `FoundationIdentityOptions` (shared, bound from the `Elsa:Identity` section if you surface it)
 
 | Setting | Default | Notes |
 |---|---|---|
 | `SigningKey` | — | Fallback signing key material for the OpenIddict server. |
-| `RequireHttpsMetadata` | `true` | Nothing reads it, so it has no effect. The OIDC handlers take the flag from `OidcAuthenticationOptions.RequireHttpsMetadata`. |
+| `RequireHttpsMetadata` | `true` | Nothing reads it, so it has no effect. The OIDC handlers take the flag from the `FoundationIdentityOidc` feature's `RequireHttpsMetadata` setting. |
 | `IsDevelopmentOrDemo` | `false` | Nothing reads it, so it has no effect. The `FoundationIdentityOpenIddict` and `FoundationIdentityAspNetCoreIdentityGroundwork` features have their own `IsDevelopmentOrDemo` settings, and those are the ones that matter. |
 
 ### Cookie / session hardening
@@ -145,10 +152,9 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
    sourced from a secret store.
 4. `FoundationIdentityOpenIddict.EncryptionKey` = a distinct base64/secret value (recommended).
 5. `FoundationIdentityOpenIddict.Issuer` = your stable absolute issuer URI.
-6. If you compose `FoundationIdentityOidc`, leave `OidcAuthenticationOptions.RequireHttpsMetadata` at its default
-   `true` so the upstream IdP's metadata must be HTTPS. The shell feature does not expose it, so only host code can
-   turn it off (for example through `AddFoundationIdentityOidc(configure)`). Either way, serve the server over **HTTPS** (so the
-   `SecurePolicy=Always` session cookie is accepted).
+6. If you compose `FoundationIdentityOidc`, keep its `RequireHttpsMetadata` setting at the default `true` so the
+   upstream IdP's metadata must be HTTPS, and supply `ClientSecret` from a secret store. Either way, serve the
+   server over **HTTPS** (so the `SecurePolicy=Always` session cookie is accepted).
 7. Provision real user accounts — either through your own onboarding, or by setting `SeedAdminUserName` with a
    secret `SeedAdminPassword` (the committed dev `admin`/`Password123!` values apply only under `IsDevelopmentOrDemo`).
 8. Ensure `ApiSecurity.AllowAnonymous` is **not** set on any shell (it is ignored outside `Development`, but
