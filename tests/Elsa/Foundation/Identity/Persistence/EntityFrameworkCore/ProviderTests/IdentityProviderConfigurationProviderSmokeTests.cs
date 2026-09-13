@@ -36,7 +36,7 @@ internal static class IdentityProviderProviderSmoke
     public static async Task RunAsync(IdentityProviderFixture fixture, string provider)
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? $"{provider} is unavailable.");
-        var tenant = "provider-smoke-tenant";
+        var tenant = $"provider-smoke-{provider}-{Guid.NewGuid():N}";
         await using var context = CreateContext(provider, fixture.ConnectionString);
         await context.Database.EnsureCreatedAsync();
         if (provider == "MySql")
