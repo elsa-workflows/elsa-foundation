@@ -3,7 +3,7 @@ using System.Globalization;
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 
 /// <summary>Preserves the public Groundwork Identity revision shape while storage is EF-backed.</summary>
-internal static class IdentityProviderConfigurationRevisionCodec
+internal static class IdentityEntityFrameworkRevisionCodec
 {
     public static string FromVersion(long version)
     {

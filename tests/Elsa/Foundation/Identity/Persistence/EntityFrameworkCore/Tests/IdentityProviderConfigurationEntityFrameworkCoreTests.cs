@@ -522,8 +522,12 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
     {
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IUserStore) && descriptor.ImplementationType == typeof(GroundworkUserStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRoleStore) && descriptor.ImplementationType == typeof(GroundworkRoleStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IApplicationStore) && descriptor.ImplementationType == typeof(GroundworkApplicationStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(ICredentialStore) && descriptor.ImplementationType == typeof(GroundworkCredentialStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(GroundworkApplicationStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IApplicationStore) && descriptor.ImplementationFactory is not null);
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRevisionAwareApplicationStore) && descriptor.ImplementationFactory is not null);
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(GroundworkCredentialStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(ICredentialStore) && descriptor.ImplementationFactory is not null);
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRevisionAwareCredentialStore) && descriptor.ImplementationFactory is not null);
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IClaimMappingStore) && descriptor.ImplementationType == typeof(GroundworkClaimMappingStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IExternalIdentityStore) && descriptor.ImplementationType == typeof(GroundworkExternalIdentityStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(ITenantMembershipStore) && descriptor.ImplementationType == typeof(GroundworkTenantMembershipStore));

@@ -145,9 +145,9 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     [Fact]
-    public void Every_admitted_Identity_provider_configuration_project_resolves_only_its_reviewed_EF_closure()
+    public void Every_admitted_Identity_EF_project_resolves_only_its_reviewed_closure()
     {
-        var offenders = Adr0073IdentityProviderConfigurationEf.ExpectedEfPackagesByProject
+        var offenders = Adr0073IdentityEf.ExpectedEfPackagesByProject
             .SelectMany(project => RestoreConfigurations.SelectMany(configuration =>
             {
                 var resolved = ReadProjectEfPackages(project.Key, configuration);
@@ -160,7 +160,7 @@ public sealed class EfCoreDependencyGuardTests
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        Assert.True(offenders.Length == 0, Report("drift from the reviewed Identity provider-configuration EF closure", offenders));
+        Assert.True(offenders.Length == 0, Report("drift from the reviewed Identity EF closure", offenders));
     }
 
     [Fact]
@@ -395,7 +395,7 @@ public sealed class EfCoreDependencyGuardTests
                     Adr0073RepositoryFirstEf.IsProjectPath(relativePath) ||
                     Adr0073StructuredLogsEf.IsProjectPath(relativePath) ||
                     Adr0073OpenTelemetryEf.IsProjectPath(relativePath) ||
-                    Adr0073IdentityProviderConfigurationEf.IsProjectPath(relativePath)));
+                    Adr0073IdentityEf.IsProjectPath(relativePath)));
         }
         return projects;
     }
@@ -532,7 +532,7 @@ public sealed class EfCoreDependencyGuardTests
                Adr0073RepositoryFirstEf.IsSurfacePath(relativePath) ||
                Adr0073StructuredLogsEf.IsSurfacePath(relativePath) ||
                Adr0073OpenTelemetryEf.IsSurfacePath(relativePath) ||
-               Adr0073IdentityProviderConfigurationEf.IsSurfacePath(relativePath) ||
+               Adr0073IdentityEf.IsSurfacePath(relativePath) ||
                OpenIddictPersistenceArchitectureTests.IsWorkbenchVendorEfSource(relativePath);
     }
 
@@ -761,10 +761,10 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// ADR 0073's Identity provider-configuration repository-first admission for issue #1708.
+    /// ADR 0073's repository-first Identity EF admissions for issues #1708 and #1710.
     /// The production adapter stays provider-neutral; engines remain in focused test projects.
     /// </summary>
-    internal static class Adr0073IdentityProviderConfigurationEf
+    internal static class Adr0073IdentityEf
     {
         public static readonly string[] SurfacePathPrefixes =
         [

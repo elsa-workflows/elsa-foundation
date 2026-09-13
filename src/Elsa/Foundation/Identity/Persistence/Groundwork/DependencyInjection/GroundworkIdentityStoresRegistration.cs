@@ -18,6 +18,19 @@ public static class GroundworkIdentityStoresRegistration
 {
     public static IServiceCollection AddGroundworkIdentityStores(this IServiceCollection services)
     {
+        var existingIamBackend = services
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<IdentityApplicationCredentialStoreBackend>()
+            .SingleOrDefault();
+        if (existingIamBackend is not null)
+            existingIamBackend.EnsureOwnsRegisteredContracts(services);
+        else if (IdentityApplicationCredentialStoreBackend.HasAnyRegisteredContract(services))
+            throw new InvalidOperationException("Groundwork Identity application/credential persistence conflicts with an unowned host registration.");
+        var entityFrameworkIamAlreadySelected = string.Equals(existingIamBackend?.Name, "entity-framework", StringComparison.Ordinal);
+        var groundworkIamAlreadySelected = string.Equals(existingIamBackend?.Name, "groundwork", StringComparison.Ordinal);
+        if (!entityFrameworkIamAlreadySelected)
+            IdentityApplicationCredentialStoreBackend.EnsureCompatible(existingIamBackend?.Name, "groundwork");
+
         var existingProviderConfigurationBackend = services
             .Select(descriptor => descriptor.ImplementationInstance)
             .OfType<ProviderConfigurationStoreBackend>()
@@ -52,8 +65,13 @@ public static class GroundworkIdentityStoresRegistration
 
         services.RemoveAll<IUserStore>();
         services.RemoveAll<IRoleStore>();
-        services.RemoveAll<IApplicationStore>();
-        services.RemoveAll<ICredentialStore>();
+        if (!entityFrameworkIamAlreadySelected && !groundworkIamAlreadySelected)
+        {
+            services.RemoveAll<IApplicationStore>();
+            services.RemoveAll<IRevisionAwareApplicationStore>();
+            services.RemoveAll<ICredentialStore>();
+            services.RemoveAll<IRevisionAwareCredentialStore>();
+        }
         services.RemoveAll<IClaimMappingStore>();
         if (!entityFrameworkProviderConfigurationAlreadySelected && !groundworkProviderConfigurationAlreadySelected)
         {
@@ -65,8 +83,25 @@ public static class GroundworkIdentityStoresRegistration
 
         services.AddScoped<IUserStore, GroundworkUserStore>();
         services.AddScoped<IRoleStore, GroundworkRoleStore>();
-        services.AddScoped<IApplicationStore, GroundworkApplicationStore>();
-        services.AddScoped<ICredentialStore, GroundworkCredentialStore>();
+        if (!entityFrameworkIamAlreadySelected && !groundworkIamAlreadySelected)
+        {
+            services.AddFoundationIdentityAbstractions();
+            services.TryAddScoped<GroundworkApplicationStore>();
+            services.TryAddScoped<GroundworkCredentialStore>();
+            services.Add(ServiceDescriptor.Scoped<IApplicationStore>(provider =>
+                provider.GetRequiredService<GroundworkApplicationStore>()));
+            services.Add(ServiceDescriptor.Scoped<IRevisionAwareApplicationStore>(provider =>
+                provider.GetRequiredService<GroundworkApplicationStore>()));
+            services.Add(ServiceDescriptor.Scoped<ICredentialStore>(provider =>
+                provider.GetRequiredService<GroundworkCredentialStore>()));
+            services.Add(ServiceDescriptor.Scoped<IRevisionAwareCredentialStore>(provider =>
+                provider.GetRequiredService<GroundworkCredentialStore>()));
+            services.EnsureReplacementContract<IApplicationStore, GroundworkApplicationStore>();
+            services.EnsureReplacementContract<IRevisionAwareApplicationStore, GroundworkApplicationStore>();
+            services.EnsureReplacementContract<ICredentialStore, GroundworkCredentialStore>();
+            services.EnsureReplacementContract<IRevisionAwareCredentialStore, GroundworkCredentialStore>();
+            services.AddSingleton(new IdentityApplicationCredentialStoreBackend("groundwork", services));
+        }
         services.AddScoped<IClaimMappingStore, GroundworkClaimMappingStore>();
         if (!entityFrameworkProviderConfigurationAlreadySelected && !groundworkProviderConfigurationAlreadySelected)
         {

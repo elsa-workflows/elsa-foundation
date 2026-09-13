@@ -44,6 +44,7 @@ public interface IPagedRoleStore
         CancellationToken cancellationToken = default);
 }
 
+[ReplacementContract]
 public interface IApplicationStore
 {
     ValueTask<ApplicationRecord?> FindAsync(string tenantId, string applicationId, CancellationToken cancellationToken = default);
@@ -51,6 +52,7 @@ public interface IApplicationStore
     ValueTask SaveAsync(ApplicationRecord application, CancellationToken cancellationToken = default);
 }
 
+[ReplacementContract]
 public interface IRevisionAwareApplicationStore
 {
     ValueTask<IamRevisionedRecord<ApplicationRecord>?> FindWithRevisionAsync(string tenantId, string applicationId, CancellationToken cancellationToken = default);
@@ -58,6 +60,7 @@ public interface IRevisionAwareApplicationStore
     ValueTask<IamRevisionSaveResult> SaveWithRevisionAsync(ApplicationRecord application, string? expectedRevision, CancellationToken cancellationToken = default);
 }
 
+[ReplacementContract]
 public interface ICredentialStore
 {
     ValueTask<CredentialRecord?> FindAsync(string tenantId, string credentialId, CancellationToken cancellationToken = default);
@@ -65,6 +68,7 @@ public interface ICredentialStore
     ValueTask SaveAsync(CredentialRecord credential, CancellationToken cancellationToken = default);
 }
 
+[ReplacementContract]
 public interface IRevisionAwareCredentialStore
 {
     ValueTask<IamRevisionedRecord<CredentialRecord>?> FindWithRevisionAsync(string tenantId, string credentialId, CancellationToken cancellationToken = default);

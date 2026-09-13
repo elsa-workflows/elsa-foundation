@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 107
+- Discovered feature classes: 108
 
 ## Features
 
@@ -59,6 +59,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | AspNetCoreIdentityGroundworkFeature | direct IShellFeature | Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork | IShellFeature | [AspNetCoreIdentityGroundworkFeature.cs](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/AspNetCoreIdentityGroundworkFeature.cs) |
 | OidcAuthenticationFeature | direct IShellFeature | Elsa.Foundation.Identity.Oidc | IShellFeature | [OidcAuthenticationFeature.cs](../../src/Elsa/Foundation/Identity/Oidc/OidcAuthenticationFeature.cs) |
 | OpenIddictIdentityFeature | direct IShellFeature | Elsa.Foundation.Identity.OpenIddict | IShellFeature | [OpenIddictIdentityFeature.cs](../../src/Elsa/Foundation/Identity/OpenIddict/OpenIddictIdentityFeature.cs) |
+| IdentityIamEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Foundation.Identity.Persistence.EntityFrameworkCore | IShellFeature | [IdentityIamEntityFrameworkCoreFeature.cs](../../src/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/IdentityIamEntityFrameworkCoreFeature.cs) |
 | IdentityProviderConfigurationEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Foundation.Identity.Persistence.EntityFrameworkCore | IShellFeature | [IdentityProviderConfigurationEntityFrameworkCoreFeature.cs](../../src/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/IdentityProviderConfigurationEntityFrameworkCoreFeature.cs) |
 | IdentityGroundworkPersistenceFeature | direct IShellFeature | Elsa.Foundation.Identity.Persistence.Groundwork | IShellFeature | [IdentityGroundworkPersistenceFeature.cs](../../src/Elsa/Foundation/Identity/Persistence/Groundwork/IdentityGroundworkPersistenceFeature.cs) |
 | HttpFeature | direct IShellFeature | Elsa.Http | IShellFeature | [HttpFeature.cs](../../src/Elsa/Http/HttpFeature.cs) |
