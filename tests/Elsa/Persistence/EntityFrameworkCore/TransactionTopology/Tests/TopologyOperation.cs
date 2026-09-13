@@ -9,6 +9,7 @@ internal sealed class TopologyOperation : IAsyncDisposable
 {
     private bool committed;
     private bool commitAttempted;
+    private bool rollbackAttempted;
     private bool rolledBack;
     private bool disposed;
     private readonly Func<Task> commit;
@@ -106,7 +107,10 @@ internal sealed class TopologyOperation : IAsyncDisposable
         ObjectDisposedException.ThrowIf(disposed, this);
         if (rolledBack || committed || commitAttempted)
             return;
+        if (rollbackAttempted)
+            throw new InvalidOperationException("The transaction rollback attempt is terminal; inspect the outcome before recovery.");
 
+        rollbackAttempted = true;
         await Transaction.RollbackAsync();
         rolledBack = true;
     }
@@ -120,7 +124,7 @@ internal sealed class TopologyOperation : IAsyncDisposable
         Exception? failure = null;
         try
         {
-            if (!committed && !commitAttempted && !rolledBack)
+            if (!committed && !commitAttempted && !rollbackAttempted)
                 await Transaction.RollbackAsync();
         }
         catch (Exception exception)
@@ -157,7 +161,7 @@ internal sealed class TopologyOperation : IAsyncDisposable
 
     private void EnsureCanMutate(string? suffix = null)
     {
-        if (commitAttempted || rolledBack)
+        if (commitAttempted || rollbackAttempted || rolledBack)
         {
             var detail = suffix is null
                 ? "no further enlistment or mutation is allowed."

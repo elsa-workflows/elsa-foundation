@@ -190,6 +190,30 @@ public sealed class SqliteTopologyTests
     }
 
     [Fact]
+    public async Task Failed_rollback_is_terminal_and_rejects_reuse()
+    {
+        var connection = new FaultingTopologyConnection(failRollback: true);
+        var operation = await TopologyOperation.BeginAsync(connection, "shell-a", "tenant-a");
+
+        var failure = await Assert.ThrowsAsync<IOException>(() => operation.RollbackAsync());
+        Assert.Equal("rollback failed", failure.Message);
+
+        var enlistment = Assert.Throws<InvalidOperationException>(() =>
+            operation.Enlist(null!, "shell-a", "tenant-a"));
+        Assert.Contains("terminal", enlistment.Message, StringComparison.Ordinal);
+
+        var commit = await Assert.ThrowsAsync<InvalidOperationException>(() => operation.CommitAsync());
+        Assert.Contains("terminal", commit.Message, StringComparison.Ordinal);
+
+        var repeatedRollback = await Assert.ThrowsAsync<InvalidOperationException>(() => operation.RollbackAsync());
+        Assert.Contains("terminal", repeatedRollback.Message, StringComparison.Ordinal);
+
+        await operation.DisposeAsync();
+        Assert.Equal(1, connection.Transaction.DisposeAsyncCalls);
+        Assert.Equal(1, connection.DisposeAsyncCalls);
+    }
+
+    [Fact]
     public async Task Dispose_attempts_all_owner_cleanup_and_preserves_primary_failure()
     {
         var connection = new FaultingTopologyConnection(
