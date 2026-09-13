@@ -447,6 +447,9 @@
   <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/Tests/">
     <Project Path="tests/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/">
+    <Project Path="tests/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.Tests.csproj" />
   </Folder>

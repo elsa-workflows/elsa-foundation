@@ -21,6 +21,7 @@ public static class IdentityProviderConfigurationEntityFrameworkCoreRegistration
         ArgumentNullException.ThrowIfNull(options);
 
         var provider = EfRelationalProviderBinding.Normalize(options.Provider);
+        EnsureSupportedProvider(provider, options.Provider);
         var registration = new IdentityProviderConfigurationEfRegistration(provider, options.ConnectionString, options.ConnectionName);
         var existing = services.Select(descriptor => descriptor.ImplementationInstance)
             .OfType<IdentityProviderConfigurationEfRegistration>()
@@ -29,9 +30,11 @@ public static class IdentityProviderConfigurationEntityFrameworkCoreRegistration
             .Select(descriptor => descriptor.ImplementationInstance)
             .OfType<ProviderConfigurationStoreBackend>()
             .FirstOrDefault();
+        if (existing is not null && existing != registration)
+            throw new InvalidOperationException("Identity provider-configuration EF persistence is already registered with different options.");
         if (existingBackend?.Name is "entity-framework")
         {
-            if (existing is null || existing != registration)
+            if (existing is null)
                 throw new InvalidOperationException("Identity provider-configuration EF persistence is already registered with different options.");
             return services;
         }
@@ -39,8 +42,6 @@ public static class IdentityProviderConfigurationEntityFrameworkCoreRegistration
             ProviderConfigurationStoreBackend.EnsureCompatible(existingBackend.Name, StoreBackendName);
         services.RemoveAll<ProviderConfigurationStoreBackend>();
         services.AddSingleton(new ProviderConfigurationStoreBackend(StoreBackendName));
-        if (existing is not null && existing != registration)
-            throw new InvalidOperationException("Identity provider-configuration EF persistence is already registered with different options.");
         if (existing is not null)
             return services;
         services.AddSingleton(registration);
@@ -63,14 +64,18 @@ public static class IdentityProviderConfigurationEntityFrameworkCoreRegistration
             case "mysql":
                 AddContext<IdentityProviderConfigurationMySqlDbContext>(services, options, EfRelationalProviderBinding.UseMySql);
                 break;
-            default:
-                throw new ArgumentException($"Unknown Identity provider-configuration EF provider '{options.Provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.", nameof(options));
         }
 
         services.AddScoped<EfProviderConfigurationStore>();
         services.AddScoped<IProviderConfigurationStore>(provider => provider.GetRequiredService<EfProviderConfigurationStore>());
         services.AddScoped<IRevisionAwareProviderConfigurationStore>(provider => provider.GetRequiredService<EfProviderConfigurationStore>());
         return services;
+    }
+
+    private static void EnsureSupportedProvider(string provider, string configuredProvider)
+    {
+        if (provider is not ("sqlite" or "sqlserver" or "postgresql" or "mysql"))
+            throw new ArgumentException($"Unknown Identity provider-configuration EF provider '{configuredProvider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.", nameof(configuredProvider));
     }
 
     private static void AddContext<TContext>(

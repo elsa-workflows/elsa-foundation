@@ -21,7 +21,12 @@ public static class GroundworkIdentityStoresRegistration
             .Select(descriptor => descriptor.ImplementationInstance)
             .OfType<ProviderConfigurationStoreBackend>()
             .FirstOrDefault();
-        ProviderConfigurationStoreBackend.EnsureCompatible(existingProviderConfigurationBackend?.Name, "groundwork");
+        var entityFrameworkProviderConfigurationAlreadySelected = string.Equals(
+            existingProviderConfigurationBackend?.Name,
+            "entity-framework",
+            StringComparison.Ordinal);
+        if (!entityFrameworkProviderConfigurationAlreadySelected)
+            ProviderConfigurationStoreBackend.EnsureCompatible(existingProviderConfigurationBackend?.Name, "groundwork");
         if (existingProviderConfigurationBackend is null)
             services.AddSingleton(new ProviderConfigurationStoreBackend("groundwork"));
 
@@ -41,7 +46,8 @@ public static class GroundworkIdentityStoresRegistration
         services.RemoveAll<IApplicationStore>();
         services.RemoveAll<ICredentialStore>();
         services.RemoveAll<IClaimMappingStore>();
-        services.RemoveAll<IProviderConfigurationStore>();
+        if (!entityFrameworkProviderConfigurationAlreadySelected)
+            services.RemoveAll<IProviderConfigurationStore>();
         services.RemoveAll<IExternalIdentityStore>();
         services.RemoveAll<ITenantMembershipStore>();
 
@@ -50,7 +56,8 @@ public static class GroundworkIdentityStoresRegistration
         services.AddScoped<IApplicationStore, GroundworkApplicationStore>();
         services.AddScoped<ICredentialStore, GroundworkCredentialStore>();
         services.AddScoped<IClaimMappingStore, GroundworkClaimMappingStore>();
-        services.AddScoped<IProviderConfigurationStore, GroundworkProviderConfigurationStore>();
+        if (!entityFrameworkProviderConfigurationAlreadySelected)
+            services.AddScoped<IProviderConfigurationStore, GroundworkProviderConfigurationStore>();
         services.AddScoped<IExternalIdentityStore, GroundworkExternalIdentityStore>();
         services.AddScoped<ITenantMembershipStore, GroundworkTenantMembershipStore>();
 

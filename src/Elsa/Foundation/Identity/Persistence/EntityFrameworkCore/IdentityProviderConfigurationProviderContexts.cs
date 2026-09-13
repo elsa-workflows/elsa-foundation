@@ -8,6 +8,7 @@ public sealed class IdentityProviderConfigurationSqliteDbContext(DbContextOption
     : IdentityProviderConfigurationDbContext(options)
 {
     public const string ExpectedProviderName = Elsa.Persistence.EntityFramework.EfProviderNames.Sqlite;
+    protected override string ExpectedProviderNameValue => ExpectedProviderName;
 
     protected override void ConfigureProvider(ModelBuilder modelBuilder) => ConfigureText(modelBuilder, "TEXT");
 
@@ -32,6 +33,7 @@ public sealed class IdentityProviderConfigurationSqlServerDbContext(DbContextOpt
     : IdentityProviderConfigurationDbContext(options)
 {
     public const string ExpectedProviderName = Elsa.Persistence.EntityFramework.EfProviderNames.SqlServer;
+    protected override string ExpectedProviderNameValue => ExpectedProviderName;
 
     protected override void ConfigureProvider(ModelBuilder modelBuilder)
     {
@@ -54,6 +56,7 @@ public sealed class IdentityProviderConfigurationPostgreSqlDbContext(DbContextOp
     : IdentityProviderConfigurationDbContext(options)
 {
     public const string ExpectedProviderName = Elsa.Persistence.EntityFramework.EfProviderNames.PostgreSql;
+    protected override string ExpectedProviderNameValue => ExpectedProviderName;
 
     protected override void ConfigureProvider(ModelBuilder modelBuilder)
     {
@@ -75,6 +78,7 @@ public sealed class IdentityProviderConfigurationMySqlDbContext(DbContextOptions
     : IdentityProviderConfigurationDbContext(options)
 {
     public const string ExpectedProviderName = Elsa.Persistence.EntityFramework.EfProviderNames.MySql;
+    protected override string ExpectedProviderNameValue => ExpectedProviderName;
 
     protected override void ConfigureProvider(ModelBuilder modelBuilder)
     {
@@ -86,7 +90,9 @@ public sealed class IdentityProviderConfigurationMySqlDbContext(DbContextOptions
         where TEntity : ProviderConfigurationEntity
     {
         entity.Property(record => record.SettingsJson).HasColumnType("longtext");
-        entity.Property(record => record.TenantLookupKey).UseCollation("utf8mb4_bin");
-        entity.Property(record => record.ProviderLookupKey).UseCollation("utf8mb4_bin");
+        // NO PAD keeps trailing spaces distinct in canonical projections. IDs are still the
+        // authoritative binary identity, so this collation is a defensive provider projection.
+        entity.Property(record => record.TenantLookupKey).UseCollation("utf8mb4_0900_bin");
+        entity.Property(record => record.ProviderLookupKey).UseCollation("utf8mb4_0900_bin");
     }
 }

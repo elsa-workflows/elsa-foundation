@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 
 /// <summary>
@@ -5,6 +7,7 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 /// lookup values are persisted separately from the original values so reads do not depend on a
 /// database's collation and round trips do not rewrite user-supplied provider names or tenants.
 /// </summary>
+[NotMapped]
 public abstract class ProviderConfigurationEntity
 {
     public string Id { get; set; } = "";

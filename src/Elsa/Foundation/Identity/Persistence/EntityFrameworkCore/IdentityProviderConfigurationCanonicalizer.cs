@@ -50,13 +50,6 @@ internal static class IdentityProviderConfigurationCanonicalizer
             return;
         if (value.Length > MaximumIdentityLength)
             throw new ArgumentException($"Identity key values cannot exceed {MaximumIdentityLength} UTF-16 code units.", parameterName);
-        for (var index = 0; index < value.Length; index++)
-        {
-            if (char.IsLowSurrogate(value[index]) ||
-                (char.IsHighSurrogate(value[index]) &&
-                 (++index >= value.Length || !char.IsLowSurrogate(value[index]))))
-                throw new ArgumentException("Identity key values must be well-formed UTF-16.", parameterName);
-        }
     }
 
     private static bool ContainsGarayCapital(string value)
@@ -77,12 +70,16 @@ internal static class IdentityProviderConfigurationCanonicalizer
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         var lengthBuffer = new byte[sizeof(int)];
+        var codeUnitBuffer = new byte[2];
         foreach (var part in parts)
         {
-            var bytes = Encoding.UTF8.GetBytes(part);
-            BinaryPrimitives.WriteInt32BigEndian(lengthBuffer, bytes.Length);
+            checked { BinaryPrimitives.WriteInt32BigEndian(lengthBuffer, part.Length * 2); }
             hash.AppendData(lengthBuffer);
-            hash.AppendData(bytes);
+            foreach (var codeUnit in part)
+            {
+                BinaryPrimitives.WriteUInt16BigEndian(codeUnitBuffer, codeUnit);
+                hash.AppendData(codeUnitBuffer);
+            }
         }
 
         return Convert.ToHexStringLower(hash.GetHashAndReset());

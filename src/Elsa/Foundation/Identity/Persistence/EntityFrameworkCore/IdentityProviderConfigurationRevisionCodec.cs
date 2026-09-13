@@ -5,7 +5,12 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 /// <summary>Preserves the public Groundwork Identity revision shape while storage is EF-backed.</summary>
 internal static class IdentityProviderConfigurationRevisionCodec
 {
-    public static string FromVersion(long version) => "gw:" + version.ToString("D20", CultureInfo.InvariantCulture);
+    public static string FromVersion(long version)
+    {
+        if (version <= 0)
+            throw new ArgumentOutOfRangeException(nameof(version), "Identity revisions must be positive.");
+        return "gw:" + version.ToString("D20", CultureInfo.InvariantCulture);
+    }
 
     public static bool TryGetVersion(string? value, out long version)
     {

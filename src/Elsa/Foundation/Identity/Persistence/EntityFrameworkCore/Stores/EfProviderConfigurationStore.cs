@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Abstractions.Ownership;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
@@ -25,6 +24,7 @@ public sealed class EfProviderConfigurationStore(
         CancellationToken cancellationToken = default)
     {
         IdentityProviderConfigurationCanonicalizer.Validate(provider, nameof(provider));
+        context.EnsureProviderBinding();
         IdentityEntityFrameworkAccessGuard.EnsureGlobal(accessContextAccessor);
         cancellationToken.ThrowIfCancellationRequested();
         try
@@ -37,7 +37,11 @@ public sealed class EfProviderConfigurationStore(
                 ? null
                 : Map(row);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            context.ChangeTracker.Clear();
+            throw;
+        }
         catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
         {
             throw Failure("Unable to read the global provider configuration.", exception);
@@ -51,6 +55,7 @@ public sealed class EfProviderConfigurationStore(
     {
         IdentityProviderConfigurationCanonicalizer.Validate(tenantId, nameof(tenantId));
         IdentityProviderConfigurationCanonicalizer.Validate(provider, nameof(provider));
+        context.EnsureProviderBinding();
         IdentityEntityFrameworkAccessGuard.EnsureTenant(accessContextAccessor, tenantId);
         cancellationToken.ThrowIfCancellationRequested();
         try
@@ -63,7 +68,11 @@ public sealed class EfProviderConfigurationStore(
                 ? null
                 : Map(row);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            context.ChangeTracker.Clear();
+            throw;
+        }
         catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
         {
             throw Failure("Unable to read the tenant provider configuration.", exception);
@@ -73,17 +82,59 @@ public sealed class EfProviderConfigurationStore(
     public ValueTask SaveAsync(ProviderConfigurationRecord configuration, CancellationToken cancellationToken = default) =>
         new(SaveUnconditionallyAsync(configuration, cancellationToken));
 
+    /// <summary>
+    /// Resolves the tenant row first. The optional fallback is an explicit operation authorized by
+    /// this contract; it does not make direct global reads legal from a tenant scope.
+    /// </summary>
+    public async ValueTask<ProviderConfigurationRecord?> FindEffectiveAsync(
+        string tenantId,
+        string provider,
+        bool allowGlobalFallback = false,
+        CancellationToken cancellationToken = default)
+    {
+        IdentityProviderConfigurationCanonicalizer.Validate(tenantId, nameof(tenantId));
+        IdentityProviderConfigurationCanonicalizer.Validate(provider, nameof(provider));
+        IdentityEntityFrameworkAccessGuard.EnsureTenant(accessContextAccessor, tenantId);
+        context.EnsureProviderBinding();
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            var tenant = await FindTenantEntityAsync(tenantId, provider, cancellationToken);
+            if (tenant is not null)
+                return Map(tenant);
+            if (!allowGlobalFallback)
+                return null;
+            var global = await FindGlobalEntityAsync(provider, cancellationToken, requireGlobalAccess: false);
+            return global is null ? null : Map(global);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            context.ChangeTracker.Clear();
+            throw;
+        }
+        catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
+        {
+            context.ChangeTracker.Clear();
+            throw Failure("Unable to resolve the effective provider configuration.", exception);
+        }
+    }
+
     public async ValueTask<IamRevisionedRecord<ProviderConfigurationRecord>?> FindGlobalWithRevisionAsync(
         string provider,
         CancellationToken cancellationToken = default)
     {
         IdentityProviderConfigurationCanonicalizer.Validate(provider, nameof(provider));
+        context.EnsureProviderBinding();
         try
         {
             var row = await FindGlobalEntityAsync(provider, cancellationToken);
             return row is null ? null : new IamRevisionedRecord<ProviderConfigurationRecord>(Map(row), IdentityProviderConfigurationRevisionCodec.FromVersion(row.Revision));
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { context.ChangeTracker.Clear(); throw; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            context.ChangeTracker.Clear();
+            throw;
+        }
         catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
         {
             context.ChangeTracker.Clear();
@@ -98,12 +149,17 @@ public sealed class EfProviderConfigurationStore(
     {
         IdentityProviderConfigurationCanonicalizer.Validate(tenantId, nameof(tenantId));
         IdentityProviderConfigurationCanonicalizer.Validate(provider, nameof(provider));
+        context.EnsureProviderBinding();
         try
         {
             var row = await FindTenantEntityAsync(tenantId, provider, cancellationToken);
             return row is null ? null : new IamRevisionedRecord<ProviderConfigurationRecord>(Map(row), IdentityProviderConfigurationRevisionCodec.FromVersion(row.Revision));
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { context.ChangeTracker.Clear(); throw; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            context.ChangeTracker.Clear();
+            throw;
+        }
         catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
         {
             context.ChangeTracker.Clear();
@@ -133,12 +189,13 @@ public sealed class EfProviderConfigurationStore(
         ArgumentNullException.ThrowIfNull(configuration);
         ValidateConfiguration(configuration);
         EnsureWriteAccess(configuration);
+        context.EnsureProviderBinding();
 
         for (var attempt = 0; attempt < MaximumWriteAttempts; attempt++)
         {
-            cancellationToken.ThrowIfCancellationRequested();
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var row = await FindEntityForWriteAsync(configuration, cancellationToken);
                 if (row is null)
                 {
@@ -161,7 +218,15 @@ public sealed class EfProviderConfigurationStore(
             {
                 context.ChangeTracker.Clear();
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { context.ChangeTracker.Clear(); throw; }
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception) && attempt + 1 < MaximumWriteAttempts)
+            {
+                context.ChangeTracker.Clear();
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                context.ChangeTracker.Clear();
+                throw;
+            }
             catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
             {
                 context.ChangeTracker.Clear();
@@ -176,78 +241,113 @@ public sealed class EfProviderConfigurationStore(
     private async Task<IamRevisionSaveResult> SaveCreateOnlyAsync(ProviderConfigurationRecord configuration, CancellationToken cancellationToken)
     {
         EnsureWriteAccess(configuration);
-        try
+        context.EnsureProviderBinding();
+        for (var attempt = 0; attempt < MaximumWriteAttempts; attempt++)
         {
-            if (await FindEntityForWriteAsync(configuration, cancellationToken) is not null)
+            try
+            {
+                if (await FindEntityForWriteAsync(configuration, cancellationToken) is not null)
+                {
+                    context.ChangeTracker.Clear();
+                    return Conflict();
+                }
+
+                context.Add(CreateEntity(configuration, revision: 1));
+                await context.SaveChangesAsync(cancellationToken);
+                return Saved(1);
+            }
+            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
             {
                 context.ChangeTracker.Clear();
                 return Conflict();
             }
+            catch (DbUpdateConcurrencyException)
+            {
+                context.ChangeTracker.Clear();
+                return Conflict();
+            }
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception) && attempt + 1 < MaximumWriteAttempts)
+            {
+                context.ChangeTracker.Clear();
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                context.ChangeTracker.Clear();
+                throw;
+            }
+            catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
+            {
+                context.ChangeTracker.Clear();
+                throw Failure("Unable to create the provider configuration.", exception);
+            }
+        }
 
-            context.Add(CreateEntity(configuration, revision: 1));
-            await context.SaveChangesAsync(cancellationToken);
-            return Saved(1);
-        }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
-        {
-            context.ChangeTracker.Clear();
-            return Conflict();
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            context.ChangeTracker.Clear();
-            return Conflict();
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { context.ChangeTracker.Clear(); throw; }
-        catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
-        {
-            context.ChangeTracker.Clear();
-            throw Failure("Unable to create the provider configuration.", exception);
-        }
+        context.ChangeTracker.Clear();
+        throw Failure("Unable to create the provider configuration after bounded transient retries.", new InvalidOperationException("The provider configuration could not be created."));
     }
 
     private async Task<IamRevisionSaveResult> SaveCompareAndSwapAsync(ProviderConfigurationRecord configuration, long expectedVersion, CancellationToken cancellationToken)
     {
         EnsureWriteAccess(configuration);
-        try
+        context.EnsureProviderBinding();
+        for (var attempt = 0; attempt < MaximumWriteAttempts; attempt++)
         {
-            var row = await FindEntityForWriteAsync(configuration, cancellationToken);
-            if (row is null)
-            {
-                context.ChangeTracker.Clear();
-                return new IamRevisionSaveResult(IamRevisionSaveStatus.NotFound);
-            }
-            if (row.Revision != expectedVersion)
-            {
-                context.ChangeTracker.Clear();
-                return Conflict();
-            }
-
-            var nextRevision = checked(row.Revision + 1);
-            Apply(row, configuration);
-            row.Revision = nextRevision;
-            await context.SaveChangesAsync(cancellationToken);
-            return Saved(nextRevision);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            context.ChangeTracker.Clear();
             try
             {
-                return await ExistsAsync(configuration, cancellationToken) ? Conflict() : new IamRevisionSaveResult(IamRevisionSaveStatus.NotFound);
+                var row = await FindEntityForWriteAsync(configuration, cancellationToken);
+                if (row is null)
+                {
+                    context.ChangeTracker.Clear();
+                    return new IamRevisionSaveResult(IamRevisionSaveStatus.NotFound);
+                }
+                if (row.Revision != expectedVersion)
+                {
+                    context.ChangeTracker.Clear();
+                    return Conflict();
+                }
+
+                var nextRevision = checked(row.Revision + 1);
+                Apply(row, configuration);
+                row.Revision = nextRevision;
+                await context.SaveChangesAsync(cancellationToken);
+                return Saved(nextRevision);
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (DbUpdateConcurrencyException)
+            {
+                context.ChangeTracker.Clear();
+                try
+                {
+                    var exists = await ExistsAsync(configuration, cancellationToken);
+                    context.ChangeTracker.Clear();
+                    return exists ? Conflict() : new IamRevisionSaveResult(IamRevisionSaveStatus.NotFound);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
+                {
+                    throw Failure("Unable to classify the provider configuration concurrency conflict.", exception);
+                }
+            }
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception) && attempt + 1 < MaximumWriteAttempts)
+            {
+                context.ChangeTracker.Clear();
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                context.ChangeTracker.Clear();
+                throw;
+            }
             catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
             {
-                throw Failure("Unable to classify the provider configuration concurrency conflict.", exception);
+                context.ChangeTracker.Clear();
+                throw Failure("Unable to update the provider configuration.", exception);
             }
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { context.ChangeTracker.Clear(); throw; }
-        catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
-        {
-            context.ChangeTracker.Clear();
-            throw Failure("Unable to update the provider configuration.", exception);
-        }
+
+        context.ChangeTracker.Clear();
+        throw Failure("Unable to update the provider configuration after bounded transient retries.", new InvalidOperationException("The provider configuration could not be updated."));
     }
 
     private async Task<ProviderConfigurationEntity?> FindEntityForWriteAsync(ProviderConfigurationRecord configuration, CancellationToken cancellationToken)
@@ -257,9 +357,10 @@ public sealed class EfProviderConfigurationStore(
         return await FindTenantEntityAsync(configuration.TenantId, configuration.Provider, cancellationToken);
     }
 
-    private async Task<GlobalProviderConfigurationEntity?> FindGlobalEntityAsync(string provider, CancellationToken cancellationToken)
+    private async Task<GlobalProviderConfigurationEntity?> FindGlobalEntityAsync(string provider, CancellationToken cancellationToken, bool requireGlobalAccess = true)
     {
-        IdentityEntityFrameworkAccessGuard.EnsureGlobal(accessContextAccessor);
+        if (requireGlobalAccess)
+            IdentityEntityFrameworkAccessGuard.EnsureGlobal(accessContextAccessor);
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
@@ -267,7 +368,10 @@ public sealed class EfProviderConfigurationStore(
             var row = await context.GlobalProviderConfigurations.SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
             return row is null || !Matches(row, null, provider) ? null : row;
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
         {
             throw Failure("Unable to query the global provider configuration.", exception);
@@ -284,7 +388,10 @@ public sealed class EfProviderConfigurationStore(
             var row = await context.TenantProviderConfigurations.SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
             return row is null || !Matches(row, tenantId, provider) ? null : row;
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
         {
             throw Failure("Unable to query the tenant provider configuration.", exception);
@@ -332,12 +439,11 @@ public sealed class EfProviderConfigurationStore(
         entity.SupportsRefresh = configuration.Capabilities.SupportsRefresh;
         entity.SupportsRevocation = configuration.Capabilities.SupportsRevocation;
         entity.PermissionPropagation = (int)configuration.Capabilities.PermissionPropagation;
-        entity.SettingsJson = SerializeSettings(configuration.Settings);
+        entity.SettingsJson = IdentityProviderConfigurationSettingsCodec.Serialize(configuration.Settings);
     }
 
     private static ProviderConfigurationRecord Map(ProviderConfigurationEntity entity)
     {
-        var settings = JsonSerializer.Deserialize<Dictionary<string, string>>(entity.SettingsJson) ?? new(StringComparer.Ordinal);
         return new ProviderConfigurationRecord(
             entity.Provider,
             entity.TenantId,
@@ -353,15 +459,7 @@ public sealed class EfProviderConfigurationStore(
                 entity.SupportsRefresh,
                 entity.SupportsRevocation,
                 (PermissionPropagationMode)entity.PermissionPropagation),
-            settings);
-    }
-
-    private static string SerializeSettings(IReadOnlyDictionary<string, string> settings)
-    {
-        ArgumentNullException.ThrowIfNull(settings);
-        var ordered = settings.OrderBy(pair => pair.Key, StringComparer.Ordinal)
-            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
-        return JsonSerializer.Serialize(ordered);
+            IdentityProviderConfigurationSettingsCodec.Deserialize(entity.SettingsJson));
     }
 
     private static IamRevisionSaveResult Saved(long revision) => new(IamRevisionSaveStatus.Saved, IdentityProviderConfigurationRevisionCodec.FromVersion(revision));
@@ -373,6 +471,8 @@ public sealed class EfProviderConfigurationStore(
         IdentityProviderConfigurationCanonicalizer.Validate(configuration.TenantId, nameof(configuration.TenantId));
         IdentityProviderConfigurationCanonicalizer.Validate(configuration.Provider, nameof(configuration.Provider));
         IdentityProviderConfigurationCanonicalizer.Validate(configuration.Kind, nameof(configuration.Kind));
+        ArgumentNullException.ThrowIfNull(configuration.Capabilities);
+        ArgumentNullException.ThrowIfNull(configuration.Settings);
     }
 
     private static bool Matches(ProviderConfigurationEntity entity, string? tenantId, string provider) =>

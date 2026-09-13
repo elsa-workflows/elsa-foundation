@@ -3,10 +3,13 @@ using Elsa.Foundation.Identity.Abstractions.Ownership;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Foundation.Identity.Persistence.Groundwork.DependencyInjection;
+using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -48,6 +51,8 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
 
         var created = await fixture.TenantRevisionStore.SaveWithRevisionAsync(first, expectedRevision: null);
         Assert.Equal(IamRevisionSaveStatus.Saved, created.Status);
+        Assert.Equal(IamRevisionSaveStatus.Conflict, (await fixture.TenantRevisionStore.SaveWithRevisionAsync(first, "gw:00000000000000000000")).Status);
+        Assert.Equal(IamRevisionSaveStatus.NotFound, (await fixture.TenantRevisionStore.SaveWithRevisionAsync(Configuration("acme", "missing", "kind"), created.Revision)).Status);
         Assert.Equal(IamRevisionSaveStatus.Conflict, (await fixture.TenantRevisionStore.SaveWithRevisionAsync(second, null)).Status);
         var updated = await fixture.TenantRevisionStore.SaveWithRevisionAsync(second, created.Revision);
         Assert.Equal(IamRevisionSaveStatus.Saved, updated.Status);
@@ -68,14 +73,26 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
     {
         await using var fixture = await Fixture.CreateAsync();
         IProviderConfigurationStore store = fixture.TenantStore;
-        await Assert.ThrowsAsync<InvalidOperationException>(() => store.FindEffectiveAsync("acme", "missing", allowGlobalFallback: true).AsTask());
+        var global = Configuration(null, "fallback", "global");
+        await fixture.GlobalStore.SaveAsync(global);
+        Assert.Null(await store.FindEffectiveAsync("acme", "missing", allowGlobalFallback: false));
+        Assert.Equal(global.Kind, (await store.FindEffectiveAsync("acme", "fallback", allowGlobalFallback: true))!.Kind);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.FindGlobalAsync("fallback").AsTask());
+        var tenant = Configuration("acme", "fallback", "tenant");
+        await fixture.TenantStore.SaveAsync(tenant);
+        Assert.Equal(tenant.Kind, (await store.FindEffectiveAsync("acme", "fallback", allowGlobalFallback: true))!.Kind);
     }
 
     [Fact]
     public async Task Identity_keys_are_rejected_before_provider_io_and_settings_json_is_deterministic()
     {
         await using var fixture = await Fixture.CreateAsync();
-        await Assert.ThrowsAsync<ArgumentException>(() => fixture.GlobalStore.FindGlobalAsync("bad\ud800").AsTask());
+        var high = Configuration(null, "bad\ud800", "kind");
+        var low = Configuration(null, "bad\udc00", "kind");
+        await fixture.GlobalStore.SaveAsync(high);
+        await fixture.GlobalStore.SaveAsync(low);
+        Assert.Equal(high.Provider, (await fixture.GlobalStore.FindGlobalAsync(high.Provider))!.Provider);
+        Assert.Equal(low.Provider, (await fixture.GlobalStore.FindGlobalAsync(low.Provider))!.Provider);
         await Assert.ThrowsAsync<ArgumentException>(() => fixture.GlobalStore.FindGlobalAsync(new string('x', 401)).AsTask());
 
         var first = Configuration("acme", "settings", "kind") with
@@ -105,12 +122,112 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IProviderConfigurationStore));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IRevisionAwareProviderConfigurationStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IdentityProviderConfigurationDbContext));
+        services.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = "Data Source=:memory:" });
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IProviderConfigurationStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IRevisionAwareProviderConfigurationStore));
+    }
+
+    [Fact]
+    public async Task Registration_resolves_both_contracts_to_one_scoped_EF_store()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IPersistenceAccessContextAccessor>(new FakeAccessAccessor(
+            PersistenceAccessContext.Scoped(new PersistenceScope("acme"))));
+        services.AddIdentityProviderConfigurationEntityFrameworkCore(new()
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        });
+
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using var scope = provider.CreateAsyncScope();
+        var primary = scope.ServiceProvider.GetRequiredService<IProviderConfigurationStore>();
+        var revisionAware = scope.ServiceProvider.GetRequiredService<IRevisionAwareProviderConfigurationStore>();
+
+        Assert.IsType<EfProviderConfigurationStore>(primary);
+        Assert.Same(primary, revisionAware);
+        Assert.IsType<IdentityProviderConfigurationSqliteDbContext>(
+            scope.ServiceProvider.GetRequiredService<IdentityProviderConfigurationDbContext>());
+    }
+
+    [Fact]
+    public async Task Public_feature_binds_the_module_history_options_without_merging_OpenIddict()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IPersistenceAccessContextAccessor>(new FakeAccessAccessor(
+            PersistenceAccessContext.Scoped(new PersistenceScope("acme"))));
+        new IdentityProviderConfigurationEntityFrameworkCoreFeature
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        }.ConfigureServices(services);
+
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using var scope = provider.CreateAsyncScope();
+        var context = Assert.IsType<IdentityProviderConfigurationSqliteDbContext>(
+            scope.ServiceProvider.GetRequiredService<IdentityProviderConfigurationDbContext>());
+        var relational = context.GetService<IDbContextOptions>().Extensions
+            .OfType<RelationalOptionsExtension>()
+            .Single();
+
+        Assert.Equal(IdentityProviderConfigurationEfModule.HistoryTableName, relational.MigrationsHistoryTableName);
+        Assert.Equal(typeof(IdentityProviderConfigurationDbContext).Assembly.GetName().Name, relational.MigrationsAssembly);
+        Assert.DoesNotContain(context.Model.GetEntityTypes(), entity =>
+            entity.ClrType.FullName?.Contains("OpenIddict", StringComparison.Ordinal) == true);
+    }
+
+    [Fact]
+    public void Registration_is_order_independent_and_preserves_groundwork_unrelated_stores()
+    {
+        var groundworkFirst = new ServiceCollection();
+        groundworkFirst.AddGroundworkIdentityStores();
+        var unrelated = groundworkFirst.Where(descriptor => descriptor.ServiceType != typeof(ProviderConfigurationStoreBackend) && descriptor.ServiceType != typeof(IProviderConfigurationStore) && descriptor.ServiceType != typeof(IRevisionAwareProviderConfigurationStore)).ToArray();
+        groundworkFirst.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = "Data Source=:memory:" });
+        Assert.Equal(unrelated, groundworkFirst.Where(descriptor => descriptor.ServiceType != typeof(ProviderConfigurationStoreBackend) && descriptor.ServiceType != typeof(IProviderConfigurationStore) && descriptor.ServiceType != typeof(IRevisionAwareProviderConfigurationStore) && descriptor.ServiceType != typeof(IdentityProviderConfigurationDbContext)).Take(unrelated.Length));
+        Assert.Single(groundworkFirst, descriptor => descriptor.ServiceType == typeof(IProviderConfigurationStore) && descriptor.ImplementationType is null);
+        Assert.DoesNotContain(groundworkFirst, descriptor => descriptor.ServiceType == typeof(IProviderConfigurationStore) && descriptor.ImplementationType?.Name.Contains("Groundwork", StringComparison.Ordinal) == true);
+        AssertGroundworkUnrelatedStoresPresent(groundworkFirst);
+
+        var efFirst = new ServiceCollection();
+        efFirst.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = "Data Source=:memory:" });
+        efFirst.AddGroundworkIdentityStores();
+        Assert.Single(efFirst, descriptor => descriptor.ServiceType == typeof(IProviderConfigurationStore) && descriptor.ImplementationType is null);
+        Assert.Single(efFirst, descriptor => descriptor.ServiceType == typeof(IRevisionAwareProviderConfigurationStore) && descriptor.ImplementationType is null);
+        Assert.DoesNotContain(efFirst, descriptor => descriptor.ServiceType == typeof(IProviderConfigurationStore) && descriptor.ImplementationType?.Name.Contains("Groundwork", StringComparison.Ordinal) == true);
+        AssertGroundworkUnrelatedStoresPresent(efFirst);
+    }
+
+    [Fact]
+    public void Invalid_or_conflicting_registration_does_not_partially_mutate_services()
+    {
+        var invalid = new ServiceCollection();
+        Assert.Throws<ArgumentException>(() => invalid.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = "unknown" }));
+        Assert.Empty(invalid);
+
+        var services = new ServiceCollection();
+        services.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = "Data Source=:memory:" });
+        var before = services.ToArray();
+        Assert.Throws<InvalidOperationException>(() => services.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = "SqlServer", ConnectionString = "Server=localhost" }));
+        Assert.Equal(before, services);
+        Assert.Throws<InvalidOperationException>(() => services.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = "Data Source=other.db" }));
+        Assert.Equal(before, services);
+    }
+
+    private static void AssertGroundworkUnrelatedStoresPresent(IServiceCollection services)
+    {
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IUserStore) && descriptor.ImplementationType == typeof(GroundworkUserStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRoleStore) && descriptor.ImplementationType == typeof(GroundworkRoleStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IApplicationStore) && descriptor.ImplementationType == typeof(GroundworkApplicationStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(ICredentialStore) && descriptor.ImplementationType == typeof(GroundworkCredentialStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IClaimMappingStore) && descriptor.ImplementationType == typeof(GroundworkClaimMappingStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IExternalIdentityStore) && descriptor.ImplementationType == typeof(GroundworkExternalIdentityStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(ITenantMembershipStore) && descriptor.ImplementationType == typeof(GroundworkTenantMembershipStore));
     }
 
     private static ProviderConfigurationRecord Configuration(string? tenantId, string provider, string kind) => new(
         provider, tenantId, kind, true, false,
         new ProviderCapabilities(true, false, false, true, true, true, false),
-        new Dictionary<string, string> { ["client_secret"] = "value:with:delimiters", ["empty"] = "" });
+        new Dictionary<string, string> { ["client_secret"] = "value:with:delimiters", ["empty"] = "", ["unicode-😀"] = "naïve" });
 
     private sealed class Fixture : IAsyncDisposable
     {

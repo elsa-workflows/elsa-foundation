@@ -1,5 +1,6 @@
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Configuration;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
@@ -10,10 +11,13 @@ public abstract class IdentityProviderConfigurationDbContext(DbContextOptions op
     public DbSet<TenantProviderConfigurationEntity> TenantProviderConfigurations => Set<TenantProviderConfigurationEntity>();
     public DbSet<GlobalProviderConfigurationEntity> GlobalProviderConfigurations => Set<GlobalProviderConfigurationEntity>();
 
+    protected abstract string ExpectedProviderNameValue { get; }
+
+    /// <summary>Fails closed when a host binds a derived context to the wrong provider engine.</summary>
+    public void EnsureProviderBinding() => EfProviderGuard.Ensure(this, ExpectedProviderNameValue);
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<ProviderConfigurationEntity>().UseTpcMappingStrategy();
-        modelBuilder.Entity<ProviderConfigurationEntity>().HasKey(record => record.Id);
         modelBuilder.ApplyConfiguration(new TenantProviderConfigurationEntityConfiguration());
         modelBuilder.ApplyConfiguration(new GlobalProviderConfigurationEntityConfiguration());
         ConfigureProvider(modelBuilder);

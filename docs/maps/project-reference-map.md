@@ -6,9 +6,9 @@ Records direct project references only.
 
 ## Summary
 
-- Source projects: 132
-- Test projects: 110
-- Direct project references: 1211
+- Source projects: 133
+- Test projects: 112
+- Direct project references: 1219
 
 ## Projects
 
@@ -79,6 +79,7 @@ Records direct project references only.
 | [Elsa.Foundation.Identity.Oidc](../../src/Elsa/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj) | source | Elsa.Foundation | - | default | Elsa.Foundation.Identity.Abstractions |
 | [Elsa.Foundation.Identity.OpenIddict.Behavior](../../src/Elsa/Foundation/Identity/OpenIddict/Behavior/Elsa.Foundation.Identity.OpenIddict.Behavior.csproj) | source | Elsa.Foundation | net10.0 | default | Elsa.Foundation.Identity.Abstractions |
 | [Elsa.Foundation.Identity.OpenIddict](../../src/Elsa/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj) | source | Elsa.Foundation | - | default | Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.OpenIddict.Behavior |
+| [Elsa.Foundation.Identity.Persistence.EntityFrameworkCore](../../src/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj) | source | Elsa.Foundation | - | default | Elsa.Foundation.Identity.Abstractions<br>Elsa.Persistence.EntityFramework<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Foundation.Identity.Persistence.Groundwork](../../src/Elsa/Foundation/Identity/Persistence/Groundwork/Elsa.Foundation.Identity.Persistence.Groundwork.csproj) | source | Elsa.Foundation | - | default | Elsa.Foundation.Identity.Abstractions<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Git](../../src/Elsa/Git/Elsa.Git.csproj) | source | Elsa.Git | - | default | - |
 | [Elsa.Http.Core](../../src/Elsa/Http/Core/Elsa.Http.Core.csproj) | source | Elsa.Http | - | default | - |
@@ -194,6 +195,8 @@ Records direct project references only.
 | [Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.ProcessProbe](../../tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/ProcessProbe/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.ProcessProbe.csproj) | test | Elsa.Foundation | - | default | Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork<br>Elsa.Foundation.Identity.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.V2 |
 | [Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests](../../tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests.csproj) | test | Elsa.Foundation | - | default | Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.ProcessProbe<br>Elsa.Foundation.Identity.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Testing |
 | [Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.V2.ProviderMatrix.Tests](../../tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/V2/ProviderMatrix/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.V2.ProviderMatrix.Tests.csproj) | test | Elsa.Foundation | - | false | Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.ProcessProbe<br>Elsa.Foundation.Identity.Persistence.Groundwork |
+| [Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests](../../tests/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Foundation | net10.0 | false | Elsa.Foundation.Identity.Persistence.EntityFrameworkCore |
+| [Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests](../../tests/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Foundation | net10.0 | false | Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Persistence.EntityFrameworkCore<br>Elsa.Foundation.Identity.Persistence.Groundwork<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Foundation.Identity.Persistence.Groundwork.Tests](../../tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.Tests.csproj) | test | Elsa.Foundation | - | default | Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing |
 | [Elsa.Foundation.Identity.Persistence.Groundwork.V2.ProviderMatrix.Tests](../../tests/Elsa/Foundation/Identity/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj) | test | Elsa.Foundation | net10.0 | false | Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Persistence.Groundwork |
 | [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | Elsa.Foundation | - | default | Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork<br>Elsa.Foundation.Identity.Oidc<br>Elsa.Foundation.Identity.OpenIddict<br>Elsa.Foundation.Identity.Persistence.Groundwork<br>Elsa.Groundwork.StorePerformance.Benchmarks<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Runtime.Core |
@@ -270,7 +273,7 @@ Records direct project references only.
 | Elsa.Diagnostics | 11 | 12 |
 | Elsa.Events | 3 | 1 |
 | Elsa.Expressions | 9 | 3 |
-| Elsa.Foundation | 9 | 6 |
+| Elsa.Foundation | 10 | 8 |
 | Elsa.Git | 1 | 0 |
 | Elsa.Groundwork | 0 | 1 |
 | Elsa.Http | 3 | 1 |

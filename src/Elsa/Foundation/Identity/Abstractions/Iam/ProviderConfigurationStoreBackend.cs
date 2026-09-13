@@ -2,8 +2,8 @@ namespace Elsa.Foundation.Identity.Abstractions.Iam;
 
 /// <summary>
 /// Identifies the selected provider-configuration backend. Persistence features share this marker
-/// so incompatible Groundwork and EF selections fail deterministically instead of depending on
-/// registration order.
+/// so incompatible concrete selections fail deterministically instead of depending on registration
+/// order.
 /// </summary>
 public sealed record ProviderConfigurationStoreBackend(string Name)
 {
