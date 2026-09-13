@@ -89,6 +89,7 @@ All routes are relative to the host's Elsa API base path.
 | `GET` | `publishing/workflows/{definitionId}/policy` | `workflow-publishing.read` | Read the effective workflow/host policy. |
 | `PUT` | `publishing/workflows/{definitionId}/policy` | `workflow-publishing.manage` | CAS-update workflow publication policy. |
 | `POST` | `publishing/workflows/{versionId}/publish` | `workflow-publishing.manage` | Compile, prepare, CAS-activate, reconcile, and return the publication. |
+| `GET` | `publishing/workflows/{versionId}/executable-export` | `workflow-publishing.read` | Download the published executable closure as an attachment. |
 | `POST` | `publishing/workflows/{versionId}/test-runs` | `workflow-publishing.manage` | Compile and run a persisted Design version without granting publication authority. |
 | `POST` | `publishing/workflows/drafts/test-runs` | `workflow-publishing.manage` | Compile and run a supplied draft snapshot without granting publication authority. |
 | `POST` | `publishing/preflight` | `workflow-publishing.read` | Validate Runtime Evidence requirements for supplied executable artifacts. |

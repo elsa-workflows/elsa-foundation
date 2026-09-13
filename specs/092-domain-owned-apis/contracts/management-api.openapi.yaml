@@ -414,6 +414,104 @@ paths:
                     items:
                       $ref: '#/components/schemas/ActivityAvailabilityDiagnostic'
 
+  /design/activities/drafts/{draftId}/publication-preflight:
+    parameters:
+      - $ref: '#/components/parameters/DraftId'
+    post:
+      tags: [Publishing]
+      operationId: preflightActivityDraftPublication
+      description: >-
+        Non-mutating exact draft/head-bound readiness assessment: diff, impact-first changes, dependency
+        evidence, and provider/storage/runtime capability readiness. Returns the review token publish must
+        echo back. Requires the workflow-publishing.read permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedDraftRevision]
+              properties:
+                expectedDraftRevision: { type: integer, format: int64 }
+                expectedDefinitionHeadVersionId: { type: [string, 'null'] }
+                version: { type: [string, 'null'] }
+      responses:
+        '200':
+          description: Draft publication readiness
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityPublicationPreflight'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /design/activities/drafts/{draftId}/publish:
+    parameters:
+      - $ref: '#/components/parameters/DraftId'
+    post:
+      tags: [Publishing]
+      operationId: publishActivityDraft
+      description: >-
+        Rechecks readiness and atomically applies an idempotent reviewed activity publication. Requires the
+        review token from publication-preflight, one exact offered version, and a caller-stable idempotency
+        key; replaying the same operation identity returns the recorded receipt without another publication.
+        Requires the workflow-publishing.manage permission.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedDraftRevision, version, reviewToken, idempotencyKey]
+              properties:
+                expectedDraftRevision: { type: integer, format: int64 }
+                expectedDefinitionHeadVersionId: { type: [string, 'null'] }
+                version: { type: string }
+                reviewToken: { type: string }
+                idempotencyKey: { type: string }
+      responses:
+        '200':
+          description: Existing receipt for a replayed idempotency key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityPublicationReceipt'
+        '201':
+          description: Activity publication applied; the Location header names the receipt
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityPublicationReceipt'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /design/activities/publications/{idempotencyKey}:
+    parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+    get:
+      tags: [Publishing]
+      operationId: getActivityPublicationReceipt
+      description: >-
+        Reads the durable activity publication receipt and its terminal outcome. Requires the
+        workflow-publishing.read permission.
+      responses:
+        '200':
+          description: Activity publication receipt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityPublicationReceipt'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /expressions/descriptors:
     get:
       tags: [Expressions]
@@ -450,6 +548,171 @@ paths:
                     items:
                       $ref: '#/components/schemas/VariableTypeDescriptor'
 
+  /publishing/activities:
+    get:
+      tags: [Publishing]
+      operationId: listConstructableActivities
+      description: >-
+        Lists catalog rows the publishing surface can construct, optionally filtered by stable Runtime
+        consumer key. Requires the workflow-publishing.read permission.
+      parameters:
+        - name: consumerKey
+          in: query
+          schema:
+            type: [string, 'null']
+      responses:
+        '200':
+          description: Constructable activity catalog rows
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConstructableActivity'
+
+  /publishing/activities/{activityId}/construct:
+    parameters:
+      - $ref: '#/components/parameters/ActivityId'
+    get:
+      tags: [Publishing]
+      operationId: constructActivity
+      description: >-
+        Projects the persisted authored contract used to configure an activity node, without runtime
+        activation. Requires the workflow-publishing.read permission.
+      responses:
+        '200':
+          description: Constructed activity contract
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConstructedActivity'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /publishing/activity-drafts/{draftId}/test-runs:
+    parameters:
+      - $ref: '#/components/parameters/DraftId'
+    post:
+      tags: [Publishing]
+      operationId: startActivityDraftTestRun
+      description: Starts a test run of an activity draft. Requires the workflow-publishing.manage permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartActivityDraftTestRunRequest'
+      responses:
+        '202':
+          description: Test run accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityDraftTestRun'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /publishing/activity-drafts/{draftId}/test-runs/idempotency/{idempotencyKey}:
+    parameters:
+      - $ref: '#/components/parameters/DraftId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+    get:
+      tags: [Publishing]
+      operationId: getActivityDraftTestRunByIdempotencyKey
+      description: >-
+        Resolves an activity draft test run by its draft-scoped idempotency key. Requires the
+        workflow-publishing.manage permission.
+      responses:
+        '200':
+          description: Activity draft test run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityDraftTestRun'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /publishing/activity-test-runs/{testRunId}:
+    parameters:
+      - $ref: '#/components/parameters/TestRunId'
+    get:
+      tags: [Publishing]
+      operationId: getActivityDraftTestRun
+      description: Reads an activity draft test run. Requires the workflow-publishing.manage permission.
+      responses:
+        '200':
+          description: Activity draft test run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityDraftTestRun'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /publishing/activity-test-runs/{testRunId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/TestRunId'
+    post:
+      tags: [Publishing]
+      operationId: cancelActivityDraftTestRun
+      description: >-
+        Requests cancellation of an activity draft test run. Requires the workflow-publishing.manage
+        permission.
+      responses:
+        '202':
+          description: Cancellation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityDraftTestRun'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /publishing/incident-strategies:
+    get:
+      tags: [Publishing]
+      operationId: listIncidentStrategies
+      description: >-
+        Lists safe incident-strategy descriptors and the effective publishing default (see also the
+        Incident Strategy Discovery contract, specs/140-incident-strategies). Requires the
+        workflow-publishing.read permission.
+      responses:
+        '200':
+          description: Deterministically ordered descriptor catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentStrategiesResponse'
+
+  /publishing/preflight:
+    post:
+      tags: [Publishing]
+      operationId: runRuntimeRequirementPreflight
+      description: >-
+        Validates Runtime Evidence requirements for supplied executable artifacts. Requires the
+        workflow-publishing.read permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scope]
+              properties:
+                scope: { type: string }
+                artifactIds:
+                  type: [array, 'null']
+                  items: { type: string }
+      responses:
+        '200':
+          description: Runtime requirement readiness
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeRequirementPreflight'
+
   /publishing/publications/{publicationId}:
     parameters:
       - $ref: '#/components/parameters/PublicationId'
@@ -465,6 +728,50 @@ paths:
                 $ref: '#/components/schemas/Publication'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /publishing/value-conversion/profiles:
+    get:
+      tags: [Publishing]
+      operationId: listValueConversionProfiles
+      description: >-
+        Projects the active shell's registered conversion profiles for visual authoring pickers. Requires
+        the workflow-publishing.read permission.
+      responses:
+        '200':
+          description: Registered conversion profiles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValueConversionProfilesResponse'
+
+  /publishing/workflows/{versionId}/executable-export:
+    parameters:
+      - $ref: '#/components/parameters/VersionId'
+    get:
+      tags: [Publishing]
+      operationId: exportWorkflowExecutableClosure
+      description: >-
+        Downloads the published executable closure for the named workflow definition version as an
+        attachment. This is a plain Minimal API operation that streams the target's inline payload bytes
+        rather than a typed response object, so the body is an opaque JSON envelope rather than a documented
+        schema. Requires the workflow-publishing.read permission.
+      responses:
+        '200':
+          description: Executable closure envelope, served as a downloadable attachment
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: 'attachment; filename="<definitionId>-<artifactVersion>-closure.json"'
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /publishing/workflows/{versionId}/preflight:
     parameters:
@@ -501,7 +808,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PublicationIntent'
+              $ref: '#/components/schemas/PublishWorkflowRequest'
       responses:
         '200':
           description: Existing identical publication remains authoritative
@@ -604,6 +911,19 @@ paths:
     post:
       tags: [Publishing]
       operationId: startWorkflowVersionTestRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                inputs:
+                  type: object
+                  additionalProperties: true
+                acknowledgeUnavailableExpressionValidation:
+                  type: boolean
+                  default: false
       responses:
         '201':
           description: Test-run source reference and execution created
@@ -632,6 +952,18 @@ paths:
                 inputs:
                   type: object
                   additionalProperties: true
+                activityPresentation:
+                  type: array
+                  items:
+                    type: object
+                    required: [nodeId]
+                    properties:
+                      nodeId: { type: string }
+                      displayName: { type: [string, 'null'] }
+                      description: { type: [string, 'null'] }
+                acknowledgeUnavailableExpressionValidation:
+                  type: boolean
+                  default: false
       responses:
         '201':
           description: Draft snapshot, test-run source reference, and execution created
@@ -639,6 +971,40 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TestRun'
+
+  /publishing/workflows/preflight:
+    post:
+      tags: [Publishing]
+      operationId: preflightWorkflowPublicationSnapshot
+      description: >-
+        Preflights a supplied workflow snapshot (not yet a persisted Design version) and issues a review
+        token bound to the candidate hash. Requires the workflow-publishing.read permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/PublicationIntent'
+                - type: object
+                  required: [definitionId, state]
+                  properties:
+                    definitionId: { type: string }
+                    state:
+                      $ref: '#/components/schemas/WorkflowDefinitionState'
+                    layout:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/DesignMetadata'
+      responses:
+        '200':
+          description: Resolved action, slot, claims, trigger changes, and conflicts for the snapshot candidate
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationSnapshotPreflight'
+        '409':
+          $ref: '#/components/responses/Conflict'
 
   /runtime/workflows/executables:
     get:
@@ -934,6 +1300,25 @@ components:
         minLength: 1
     WorkflowExecutionId:
       name: workflowExecutionId
+      in: path
+      required: true
+      schema:
+        type: string
+    ActivityId:
+      name: activityId
+      in: path
+      required: true
+      schema:
+        type: string
+    IdempotencyKey:
+      name: idempotencyKey
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    TestRunId:
+      name: testRunId
       in: path
       required: true
       schema:
@@ -1358,6 +1743,14 @@ components:
         expectedPublicationId:
           type: [string, 'null']
           description: Optional optimistic-concurrency token for the occupied slot
+    PublishWorkflowRequest:
+      allOf:
+        - $ref: '#/components/schemas/PublicationIntent'
+        - type: object
+          properties:
+            preflightToken:
+              type: [string, 'null']
+              description: Opaque token returned by a snapshot preflight (POST publishing/workflows/preflight)
     PublicationPreflight:
       type: object
       required: [definitionId, versionId, slotName, resolvedAction, triggers, canActivate]
@@ -1406,28 +1799,79 @@ components:
         cardinality: { type: string, enum: [exclusive, fanOut] }
         publicationId: { type: string }
         slotName: { type: string }
+    TriggerClaim:
+      type: object
+      required: [key, cardinality]
+      properties:
+        key: { type: string }
+        cardinality: { type: string, enum: [exclusive, fanOut] }
+    PublicationSnapshotPreflight:
+      type: object
+      required: [preflightToken, candidateHash, definitionId, slotName, resolvedAction, canActivate, claims, triggers, conflicts]
+      properties:
+        preflightToken: { type: string }
+        candidateHash: { type: string }
+        definitionId: { type: string }
+        versionId: { type: [string, 'null'] }
+        slotName: { type: string }
+        resolvedAction: { type: string, enum: [replace, sideBySide] }
+        policySource: { type: string, enum: [request, workflow, host] }
+        canActivate: { type: boolean }
+        claims:
+          type: array
+          items:
+            $ref: '#/components/schemas/TriggerClaim'
+        triggers:
+          type: array
+          items:
+            $ref: '#/components/schemas/TriggerChange'
+        conflicts:
+          type: array
+          items:
+            $ref: '#/components/schemas/TriggerConflict'
+        targetSlotOwner:
+          oneOf:
+            - $ref: '#/components/schemas/PublicationSlotOwner'
+            - type: 'null'
     Publication:
       type: object
-      required: [publicationId, definitionId, versionId, artifactId, slotName, status, sourceReferenceId]
+      required: [publicationId, definitionId, versionId, artifactId, slotName, status, createdAt]
       properties:
         publicationId: { type: string }
         definitionId: { type: string }
         versionId: { type: string }
         artifactId: { type: string }
         slotName: { type: string }
-        sourceReferenceId: { type: string }
+        sourceReferenceId: { type: [string, 'null'] }
         status:
           $ref: '#/components/schemas/PublicationStatus'
+        createdAt: { type: string, format: date-time }
         activatedAt: { type: [string, 'null'], format: date-time }
         retiredAt: { type: [string, 'null'], format: date-time }
+        failure:
+          oneOf:
+            - $ref: '#/components/schemas/PublicationFailure'
+            - type: 'null'
+    PublicationFailure:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
     PublicationSlot:
       type: object
-      required: [definitionId, slotName, status]
+      required: [slotId, definitionId, slotName, revision, updatedAt]
       properties:
+        slotId: { type: string }
         definitionId: { type: string }
         slotName: { type: string }
+        activePublicationId: { type: [string, 'null'] }
+        revision: { type: integer, format: int64 }
+        updatedAt: { type: string, format: date-time }
         status:
-          $ref: '#/components/schemas/PublicationStatus'
+          oneOf:
+            - $ref: '#/components/schemas/PublicationStatus'
+            - type: 'null'
         publication:
           oneOf:
             - $ref: '#/components/schemas/Publication'
@@ -1449,25 +1893,374 @@ components:
       enum: [preparing, pending, active, retiring, retired, failed]
     PublicationPolicy:
       type: object
-      required: [defaultAction, defaultSlotName, source]
+      required: [definitionId, defaultAction, defaultSlotName, source, revision, updatedAt]
       properties:
+        definitionId: { type: string }
         defaultAction: { type: string, enum: [replace, requireExplicitSlot] }
         defaultSlotName: { type: string, default: default }
         source: { type: string, enum: [workflow, host] }
+        revision: { type: integer, format: int64 }
+        updatedAt: { type: string, format: date-time }
     SetPublicationPolicyRequest:
       type: object
       properties:
         defaultAction: { type: string, enum: [replace, requireExplicitSlot] }
         defaultSlotName: { type: string, default: default }
+        expectedRevision: { type: integer, format: int64, default: 0 }
     TestRun:
       type: object
-      required: [testRunId, artifactId, sourceReferenceId, workflowExecutionId, expiresAt]
+      required: [testRunId, definitionId, definitionVersionId, status, metadata]
       properties:
         testRunId: { type: string }
-        artifactId: { type: string }
+        definitionId: { type: string }
+        definitionVersionId: { type: string }
+        artifactId: { type: [string, 'null'] }
+        workflowExecutionId: { type: [string, 'null'] }
+        status: { type: string }
+        commandDispatchStatus: { type: [string, 'null'] }
+        reason: { type: [string, 'null'] }
+        expiresAt: { type: [string, 'null'], format: date-time }
+        metadata:
+          type: object
+          additionalProperties: { type: string }
+
+    ConstructableActivity:
+      type: object
+      required: [activityVersionId, definitionId, version, providerKey, providerSchemaVersion, consumerKey, consumerSchemaVersion]
+      properties:
+        activityVersionId: { type: string }
+        definitionId: { type: string }
+        version: { type: string }
+        providerKey: { type: string }
+        providerSchemaVersion: { type: string }
+        consumerKey: { type: string }
+        consumerSchemaVersion: { type: string }
+    ConstructedActivity:
+      type: object
+      required: [activityVersionId, descriptorType, descriptorPayload, inputs, outputs]
+      properties:
+        activityVersionId: { type: string }
+        descriptorType: { type: string }
+        descriptorPayload:
+          type: object
+          additionalProperties: true
+        inputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/Argument'
+        outputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/Argument'
+    Argument:
+      description: >-
+        A bound argument of a constructed activity instance, as distinct from the authoring-time
+        ActivityInputDescriptor/ActivityOutputDescriptor schemas.
+      type: object
+      required: [referenceKey, name, typeName]
+      properties:
+        referenceKey: { type: string }
+        name: { type: string }
+        typeName: { type: string }
+
+    IncidentStrategyReference:
+      type: object
+      required: [alias, version]
+      properties:
+        alias: { type: string }
+        version: { type: string }
+    IncidentStrategyDescriptor:
+      type: object
+      required: [alias, version, displayName]
+      properties:
+        alias: { type: string }
+        version: { type: string }
+        displayName: { type: string }
+        description: { type: [string, 'null'] }
+    IncidentStrategiesResponse:
+      type: object
+      required: [items, defaultStrategy]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/IncidentStrategyDescriptor'
+        defaultStrategy:
+          $ref: '#/components/schemas/IncidentStrategyReference'
+
+    ValueRepresentation:
+      type: string
+      enum: [typedValue, structuredValue, textValue, formattedContent, binaryContent, durableReference, transientResource]
+    ValueConversionProfileReference:
+      type: object
+      required: [id, version]
+      properties:
+        id: { type: string }
+        version: { type: string }
+    ValueConversionProfile:
+      type: object
+      required: [profile, supportedSourceRepresentations, supportedTargetAliases]
+      properties:
+        profile:
+          $ref: '#/components/schemas/ValueConversionProfileReference'
+        supportedSourceRepresentations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValueRepresentation'
+        supportedTargetAliases:
+          type: array
+          items: { type: string }
+    ValueConversionProfilesResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValueConversionProfile'
+
+    RuntimeRequirementPreflightItem:
+      type: object
+      required: [consumerKey, schemaVersion, status, affectedArtifactCount]
+      properties:
+        consumerKey: { type: string }
+        schemaVersion: { type: string }
+        status: { type: string }
+        affectedArtifactCount: { type: integer, minimum: 0 }
+    RuntimeRequirementPreflight:
+      type: object
+      required: [checkedArtifactCount, isReady, requirements, diagnostics]
+      properties:
+        checkedArtifactCount: { type: integer, minimum: 0 }
+        isReady: { type: boolean }
+        requirements:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuntimeRequirementPreflightItem'
+        diagnostics:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityDiagnostic'
+
+    ActivityDiagnosticSubject:
+      type: object
+      required: [kind, id]
+      properties:
+        kind: { type: string }
+        id: { type: string }
+        definitionId: { type: [string, 'null'] }
+        versionId: { type: [string, 'null'] }
+        revision: { type: [integer, 'null'], format: int64 }
+    ActivityDiagnostic:
+      type: object
+      required: [code, severity, message, subject, metadata]
+      properties:
+        code: { type: string }
+        severity: { type: string, enum: [info, warning, error] }
+        message: { type: string }
+        subject:
+          $ref: '#/components/schemas/ActivityDiagnosticSubject'
+        location:
+          type: [object, 'null']
+          additionalProperties: true
+          description: Optional provider/JSON-pointer/reference-key/dependency-path location detail
+        remediation: { type: [string, 'null'] }
+        metadata:
+          type: object
+          additionalProperties: { type: string }
+
+    ActivityPublicationDependencyEvidence:
+      type: object
+      required: [definitionId, versionId, version, templateHash, occurrenceId]
+      properties:
+        definitionId: { type: string }
+        versionId: { type: string }
+        version: { type: string }
+        templateHash: { type: string }
+        occurrenceId: { type: string }
+    ActivityPublicationCapabilityReadiness:
+      type: object
+      required: [kind, key, status, supportedSchemaVersions]
+      properties:
+        kind: { type: string }
+        key: { type: string }
+        schemaVersion: { type: [string, 'null'] }
+        status: { type: string }
+        supportedSchemaVersions:
+          type: array
+          items: { type: string }
+    ActivityPublicationPreflight:
+      type: object
+      required:
+        - draftId
+        - draftRevision
+        - definitionId
+        - hasBaseline
+        - reviewToken
+        - isPublishable
+        - minimumVersion
+        - validVersions
+        - impactFirstChanges
+        - dependencies
+        - provider
+        - storage
+        - runtime
+        - diagnostics
+        - reviewedVersion
+      properties:
+        draftId: { type: string }
+        draftRevision: { type: integer, format: int64 }
+        definitionId: { type: string }
+        definitionHeadVersionId: { type: [string, 'null'] }
+        hasBaseline: { type: boolean }
+        reviewToken: { type: string }
+        isPublishable: { type: boolean }
+        minimumVersion: { type: string }
+        validVersions:
+          type: array
+          items: { type: string }
+        diff:
+          type: [object, 'null']
+          additionalProperties: true
+          description: Activity version diff summary (Activity Design domain shape)
+        impactFirstChanges:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        dependencies:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityPublicationDependencyEvidence'
+        provider:
+          $ref: '#/components/schemas/ActivityPublicationCapabilityReadiness'
+        storage:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityPublicationCapabilityReadiness'
+        runtime:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityPublicationCapabilityReadiness'
+        diagnostics:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityDiagnostic'
+        reviewedVersion: { type: string }
+    ActivityPublicationOutcome:
+      type: object
+      required: [definitionId, definitionVersionId, draftId, version, templateId, templateHash, sourceReferenceId, publishedAt]
+      properties:
+        definitionId: { type: string }
+        definitionVersionId: { type: string }
+        draftId: { type: string }
+        version: { type: string }
+        templateId: { type: string }
+        templateHash: { type: string }
         sourceReferenceId: { type: string }
+        publishedAt: { type: string, format: date-time }
+    ActivityPublicationReceipt:
+      type: object
+      required: [idempotencyKey, status, draftId, expectedDraftRevision, reviewToken, requestedVersion, diagnostics, updatedAt]
+      properties:
+        idempotencyKey: { type: string }
+        status: { type: string, enum: [applied, rejected, stale, failed, outcomeUnknown] }
+        draftId: { type: string }
+        expectedDraftRevision: { type: integer, format: int64 }
+        expectedDefinitionHeadVersionId: { type: [string, 'null'] }
+        reviewToken: { type: string }
+        requestedVersion: { type: string }
+        outcome:
+          oneOf:
+            - $ref: '#/components/schemas/ActivityPublicationOutcome'
+            - type: 'null'
+        errorCode: { type: [string, 'null'] }
+        diagnostics:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityDiagnostic'
+        updatedAt: { type: string, format: date-time }
+
+    ActivityDraftTestRunInput:
+      type: object
+      required: [state]
+      properties:
+        state: { type: string }
+        value: {}
+    StartActivityDraftTestRunRequest:
+      type: object
+      required: [expectedRevision, idempotencyKey]
+      properties:
+        expectedRevision: { type: integer, format: int64 }
+        idempotencyKey: { type: string }
+        inputs:
+          type: [object, 'null']
+          additionalProperties:
+            $ref: '#/components/schemas/ActivityDraftTestRunInput'
+        correlationId: { type: [string, 'null'] }
+    ActivityDraftTestRunFailure:
+      type: object
+      required: [kind, code, message, diagnostics]
+      properties:
+        kind: { type: string }
+        code: { type: string }
+        message: { type: string }
+        diagnostics:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityDiagnostic'
+    ActivityDraftTestRunExpiration:
+      type: object
+      required:
+        - sourceReferenceExpiresAt
+        - sourceReferenceExpired
+        - sourceReferenceRetained
+        - evidenceRetention
+        - evidenceRetained
+        - runStillActive
+        - receiptExpiresAt
+      properties:
+        sourceReferenceExpiresAt: { type: string, format: date-time }
+        sourceReferenceExpired: { type: boolean }
+        sourceReferenceRetained: { type: boolean }
+        evidenceRetention: { type: string }
+        evidenceExpiresAt: { type: [string, 'null'], format: date-time }
+        evidenceRetained: { type: boolean }
+        runExpiresAt: { type: [string, 'null'], format: date-time }
+        runStillActive: { type: boolean }
+        receiptExpiresAt: { type: string, format: date-time }
+    ActivityDraftTestRunCancellation:
+      type: object
+      required: [capabilityAdvertised, available, status]
+      properties:
+        capabilityAdvertised: { type: boolean }
+        available: { type: boolean }
+        status: { type: string }
+        reason: { type: [string, 'null'] }
+    ActivityDraftTestRun:
+      type: object
+      required: [testRunId, draftId, draftRevision, workflowExecutionId, status, expiration, cancellation, requestedAt, updatedAt]
+      properties:
+        testRunId: { type: string }
+        draftId: { type: string }
+        draftRevision: { type: integer, format: int64 }
+        artifactId: { type: [string, 'null'] }
+        sourceReferenceId: { type: [string, 'null'] }
         workflowExecutionId: { type: string }
-        expiresAt: { type: string, format: date-time }
+        outerActivityExecutionId: { type: [string, 'null'] }
+        status: { type: string }
+        commandDispatchStatus: { type: [string, 'null'] }
+        reason: { type: [string, 'null'] }
+        failure:
+          oneOf:
+            - $ref: '#/components/schemas/ActivityDraftTestRunFailure'
+            - type: 'null'
+        expiration:
+          $ref: '#/components/schemas/ActivityDraftTestRunExpiration'
+        cancellation:
+          $ref: '#/components/schemas/ActivityDraftTestRunCancellation'
+        requestedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
 
     SourceReferenceScope:
       type: string
