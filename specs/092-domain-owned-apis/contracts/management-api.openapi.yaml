@@ -754,7 +754,7 @@ paths:
         Downloads the published executable closure for the named workflow definition version as an
         attachment. This is a plain Minimal API operation that streams the target's inline payload bytes
         rather than a typed response object, so the body is an opaque JSON envelope rather than a documented
-        schema.
+        schema. Requires the workflow-publishing.read permission.
       responses:
         '200':
           description: Executable closure envelope, served as a downloadable attachment
@@ -1953,6 +1953,9 @@ components:
           items:
             $ref: '#/components/schemas/Argument'
     Argument:
+      description: >-
+        A bound argument of a constructed activity instance, as distinct from the authoring-time
+        ActivityInputDescriptor/ActivityOutputDescriptor schemas.
       type: object
       required: [referenceKey, name, typeName]
       properties:
