@@ -55,10 +55,6 @@ public static class FoundationIdentityServiceCollectionExtensions
         services.TryAddScoped<IClaimMappingRuleEvaluator, ClaimMappingRuleEvaluator>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IPermissionContributor, DefaultIdentityPermissionCatalog>());
         EnsureReplacement<IPermissionCatalog, CompositePermissionCatalog>(services, ServiceLifetime.Singleton);
-        services.TryAddScoped<ISecurityDefaultGuardEvaluator, SecurityDefaultGuardEvaluator>();
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<ISecurityDefaultGuard, SigningKeySecurityDefaultGuard>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<ISecurityDefaultGuard, HttpsMetadataSecurityDefaultGuard>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<ISecurityDefaultGuard, SecretHashSecurityDefaultGuard>());
 
         return services;
     }

@@ -43,7 +43,6 @@ feature), which defines the contracts both planes speak:
 | `IClaimsNormalizer` / `IClaimMappingRule` | IAM | Map raw provider claims (roles, group memberships) into Elsa `elsa.identity.role` / `elsa.identity.permission` claims. |
 | `IPermissionCatalog` / `IPermissionEvaluator` / `IPermissionAuthorizationService` | IAM | The permission model: catalog, implication expansion, and canonical policy or request-internal evaluation. |
 | `IUserStore` / `IRoleStore` / `IExternalIdentityStore` / `ITenantMembershipStore` | IAM | User/role/link/tenant persistence. |
-| `ISecurityDefaultGuard` | cross-cutting | Validator contract for weak/missing keys and non-HTTPS metadata. Registered, but no host or feature evaluates it yet; see [§7](#7-security-posture). |
 
 Because these contracts are provider-agnostic, Minimal APIs use `RequirePermission(...)`,
 `RequireAnyPermission(...)`, or `RequireAllPermissions(...)`; transitional FastEndpoints bases
@@ -79,7 +78,7 @@ The stack is a set of composable CShells features. You enable them per shell in 
 
 | Feature (shells.json key) | Assembly | What it is | Plane |
 |---|---|---|---|
-| `FoundationIdentityAbstractions` | `…Identity.Abstractions` | Contracts + default implementations: permission catalog, claims normalizer, provider resolver, security guards. **Always on** (every other identity feature registers it). | seam |
+| `FoundationIdentityAbstractions` | `…Identity.Abstractions` | Contracts + default implementations: permission catalog, claims normalizer, provider resolver. **Always on** (every other identity feature registers it). | seam |
 | `FoundationIdentityAspNetCoreIdentity` | `…Identity.AspNetCoreIdentity` | The provider-neutral IAM domain: contracts, user/role managers, the Elsa principal factory, the first-party sign-in service, the local provider module, and antiforgery. | IAM |
 | `FoundationIdentityAspNetCoreIdentityGroundwork` | `…AspNetCoreIdentity.Groundwork` | The first-party durable Groundwork user/role store, ASP.NET Core Identity core (`SignInManager`, token providers), the **cookie sign-in scheme**, the **backend login page**, and configured admin seeding. | IAM / protocol |
 | `FoundationIdentityOpenIddict` | `…Identity.OpenIddict` | **Be your own IdP:** first-party JWT issuance (`ITokenService` over the OpenIddict pipeline) + local bearer validation, plus the composite scheme selector. | protocol |
@@ -323,14 +322,14 @@ checking credentials. JSON API callers never carry the field/cookie and are unaf
 browser drops the cookie. Host the Studio SPA **same-origin** so the cookie flows with
 `credentials: include`; cross-origin needs CORS + `SameSite=None; Secure`.
 
-**Production key requirements.** Outside `IsDevelopmentOrDemo`, a missing or malformed OpenIddict signing key
-fails startup, which for a shell host means shell activation (see
+**Production key requirements.** Outside `IsDevelopmentOrDemo`, a missing, malformed, or short OpenIddict
+signing key fails startup, which for a shell host means shell activation (see
 [`FoundationIdentityOpenIddict`](identity-configuration.md#foundationidentityopeniddict)). A missing key never
 silently degrades to an insecure default.
-The `SigningKey` must be a base64-encoded PKCS#8 RSA private key (RS256). That parse is the only check
-on the key. Placeholder values such as `changeme` or `secret` fail it because they do not decode to
-an RSA key, but the RSA key size is not checked: a 1024-bit key activates and signs. Generate a key of at
-least 2048 bits with the [command in the configuration guide](identity-configuration.md#foundationidentityopeniddict).
+The `SigningKey` must be a base64-encoded PKCS#8 RSA private key (RS256) of at least 2048 bits. Placeholder
+values such as `changeme` or `secret` fail because they do not decode to an RSA key, and a well-formed key
+under 2048 bits is refused by size. Generate one with the
+[command in the configuration guide](identity-configuration.md#foundationidentityopeniddict).
 Non-HTTPS provider metadata is refused by ASP.NET Core's own OpenID Connect and JWT bearer handlers while
 `OidcAuthenticationOptions.RequireHttpsMetadata` is `true` (the default). That check runs when a handler's options
 are first built, not at shell activation: `/health/ready` stays green, and requests that authenticate through the
@@ -339,9 +338,6 @@ scheme is the shell's default, or its interactive handler is registered, that is
 **Recommendation: set a distinct
 `EncryptionKey` from `SigningKey` in production** — the encryption key otherwise defaults to a value
 domain-separated from the signing key, and separating them is stronger.
-
-The `ISecurityDefaultGuard` validators are registered, but no first-party host or shell feature evaluates them, so
-they add no protection at startup; see [`ISecurityDefaultGuard`](../../src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md#isecuritydefaultguard).
 
 For the exact settings, generation command, and the full **go-live checklist**, see
 [`identity-configuration.md`](identity-configuration.md).

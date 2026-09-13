@@ -73,6 +73,7 @@ public sealed class WorkbenchConfigurationTests
         Assert.False(string.IsNullOrWhiteSpace(signingKey));
         using var rsa = RSA.Create();
         rsa.ImportPkcs8PrivateKey(Convert.FromBase64String(signingKey), out _);
+        Assert.True(rsa.KeySize >= 2048, $"The OpenIddict signing key is {rsa.KeySize} bits; shell activation requires at least 2048.");
 
         var recoveryKey = features["GroundworkWorkflowRuntime:RecoveryContinuationSigningKey"] ?? "";
         Assert.True(Encoding.UTF8.GetByteCount(recoveryKey) >= 32, "The recovery continuation signing key needs at least 32 UTF-8 bytes.");
