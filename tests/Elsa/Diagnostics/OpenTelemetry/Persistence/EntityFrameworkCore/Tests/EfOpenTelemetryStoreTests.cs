@@ -137,6 +137,63 @@ public sealed class EfOpenTelemetryStoreTests
     }
 
     [Fact]
+    public async Task Equal_start_trace_records_merge_with_a_stable_tie_breaker()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        var resource = TelemetryTestData.Resource("resource-stable-merge", "orders");
+        var firstArrival = TelemetryTestData.Trace("trace-stable-merge", resource.Id) with
+        {
+            RootSpanId = "root-z",
+            Name = "operation-z"
+        };
+        var secondArrival = firstArrival with
+        {
+            RootSpanId = "root-a",
+            Name = "operation-a"
+        };
+
+        await fixture.Store.WriteAsync(new([resource], [firstArrival], [], [], [], []));
+        await fixture.Store.WriteAsync(new([], [secondArrival], [], [], [], []));
+
+        var summary = Assert.Single((await fixture.Store.QueryTracesAsync(new() { Take = 10 })).Items);
+        Assert.Equal(secondArrival.RootSpanId, summary.RootSpanId);
+        Assert.Equal(secondArrival.Name, summary.Name);
+    }
+
+    [Fact]
+    public async Task Trace_membership_bound_is_applied_after_canonicalization()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        var resource = TelemetryTestData.Resource("resource-canonical-bound", "orders");
+        var trace = TelemetryTestData.Trace("trace-canonical-bound", resource.Id) with
+        {
+            ResourceIds = Enumerable.Repeat(resource.Id, 5_001).ToArray()
+        };
+
+        await fixture.Store.WriteAsync(new([resource], [trace], [], [], [], []));
+
+        var summary = Assert.Single((await fixture.Store.QueryTracesAsync(new() { Take = 10 })).Items);
+        Assert.Equal([resource.Id], summary.ResourceIds);
+    }
+
+    [Fact]
+    public async Task Invalid_query_filters_remain_caller_validation_failures()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        const string malformed = "\ud800";
+        var overBound = new string('x', 513);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.QueryResourcesAsync(new() { ServiceName = malformed }).AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.QueryTracesAsync(new() { WorkflowInstanceId = malformed }).AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.QueryMetricsAsync(new() { InstrumentName = malformed }).AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.QueryLogsAsync(new() { Search = malformed }).AsTask());
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => fixture.Store.QueryResourcesAsync(new() { ServiceName = overBound }).AsTask());
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => fixture.Store.QueryTracesAsync(new() { ResourceId = overBound }).AsTask());
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => fixture.Store.QueryMetricsAsync(new() { ResourceId = overBound }).AsTask());
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => fixture.Store.QueryLogsAsync(new() { ResourceId = overBound }).AsTask());
+    }
+
+    [Fact]
     public async Task Trace_filters_use_case_insensitive_unicode_canonical_keys_and_multi_resource_services()
     {
         await using var fixture = await CreateFixtureAsync();
@@ -376,6 +433,11 @@ public sealed class EfOpenTelemetryStoreTests
         Assert.Single((await fixture.Store.QueryResourcesAsync(new() { Take = 10 })).Items);
         Assert.Single((await fixture.Store.QueryMetricsAsync(new() { Take = 10 })).Points);
         Assert.Single((await fixture.Store.QueryLogsAsync(new() { Take = 10 })).Items);
+        var fingerprint = await fixture.WithDbAsync(db => db.CaptureLedger
+            .Where(item => item.BatchId == batchId.Value)
+            .Select(item => item.Fingerprint)
+            .SingleAsync());
+        Assert.Equal("0db20969a84d22f8d700db369c437439e88f2406d5fc711631b5e39480c323a2", fingerprint);
 
         var changed = batch with { Traces = [batch.Traces.Single() with { Name = "changed" }] };
         await Assert.ThrowsAnyAsync<Exception>(() => fixture.EfStore.WriteAsync(batchId, changed).AsTask());

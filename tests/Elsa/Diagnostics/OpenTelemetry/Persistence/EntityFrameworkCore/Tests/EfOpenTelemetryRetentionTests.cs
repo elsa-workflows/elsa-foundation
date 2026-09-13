@@ -110,6 +110,47 @@ public sealed class EfOpenTelemetryRetentionTests
     }
 
     [Fact]
+    public async Task Catalog_upserts_do_not_regress_last_seen_for_out_of_order_observations()
+    {
+        var now = TelemetryTestData.Now.AddMinutes(30);
+        await using var fixture = new OpenTelemetryEntityFrameworkCoreFixture();
+        await fixture.InitializeAsync(new OpenTelemetryDiagnosticsOptions
+        {
+            ResourceCapacity = 10,
+            MetricInstrumentCapacity = 10,
+            MaxQuerySize = 10
+        }, new FixedTimeProvider(now));
+        var newestAt = now.AddMinutes(-1);
+        var olderAt = now.AddMinutes(-2);
+        var oldestAt = now.AddMinutes(-3);
+        var newestResource = TelemetryTestData.Resource("resource-shared", "service-newest", newestAt);
+        var olderResource = TelemetryTestData.Resource("RESOURCE-SHARED", "service-older", olderAt);
+        var oldestResource = TelemetryTestData.Resource("Resource-Shared", "service-oldest", oldestAt);
+        var newestInstrument = TelemetryTestData.Instrument("instrument-shared", newestResource.Id, "instrument-newest");
+        var olderInstrument = TelemetryTestData.Instrument("INSTRUMENT-SHARED", olderResource.Id, "instrument-older");
+        var oldestInstrument = TelemetryTestData.Instrument("Instrument-Shared", oldestResource.Id, "instrument-oldest");
+        var oldestTrace = TelemetryTestData.Trace("trace-out-of-order-catalog", oldestResource.Id, oldestAt, spanCount: 1);
+
+        await fixture.EfStore.WriteGroupAsync(
+        [
+            (new DiagnosticsDrainBatchId(Guid.NewGuid(), newestAt), new([newestResource], [], [], [newestInstrument], [], [])),
+            (new DiagnosticsDrainBatchId(Guid.NewGuid(), olderAt), new([olderResource], [], [], [olderInstrument], [], []))
+        ]);
+        await fixture.EfStore.WriteAsync(
+            new DiagnosticsDrainBatchId(Guid.NewGuid(), oldestAt),
+            new([oldestResource], [oldestTrace], [], [oldestInstrument], [], []));
+
+        var resource = Assert.Single((await fixture.Store.QueryResourcesAsync(new() { Take = 10 })).Items);
+        var instrument = await fixture.WithDbAsync(db => db.Instruments
+            .Select(x => new { x.Id, x.Name, x.LastSeenTicks })
+            .SingleAsync());
+        Assert.Equal((newestResource.Id, newestResource.ServiceName, newestAt), (resource.Id, resource.ServiceName, resource.LastSeen));
+        Assert.Equal((newestInstrument.Id, newestInstrument.Name, newestAt.UtcTicks), (instrument.Id, instrument.Name, instrument.LastSeenTicks));
+        Assert.Equal([oldestTrace.TraceId], (await fixture.Store.QueryTracesAsync(new() { ServiceName = newestResource.ServiceName, Take = 10 })).Items.Select(x => x.TraceId));
+        Assert.Empty((await fixture.Store.QueryTracesAsync(new() { ServiceName = oldestResource.ServiceName, Take = 10 })).Items);
+    }
+
+    [Fact]
     public async Task Trace_retention_recomputes_a_partially_retained_summary()
     {
         await using var fixture = await CreateFixtureAsync(new OpenTelemetryDiagnosticsOptions
@@ -163,6 +204,30 @@ public sealed class EfOpenTelemetryRetentionTests
             .Items.Select(item => item.TraceId));
         Assert.Equal([newerCatalogResource.Id],
             (await fixture.Store.QueryResourcesAsync(new() { Take = 10 })).Items.Select(item => item.Id));
+    }
+
+    [Fact]
+    public async Task Retention_deletes_large_overflow_in_bounded_batches_and_recomputes_the_summary()
+    {
+        await using var fixture = await CreateFixtureAsync(new OpenTelemetryDiagnosticsOptions
+        {
+            TraceCapacity = 2,
+            MaxQuerySize = 10
+        });
+        var resource = TelemetryTestData.Resource("resource-bounded-retention", "orders");
+        var traces = Enumerable.Range(0, 602)
+            .Select(index => TelemetryTestData.Trace(
+                "trace-bounded-retention",
+                resource.Id,
+                TelemetryTestData.Now.AddTicks(index),
+                spanCount: 1))
+            .ToArray();
+
+        await fixture.Store.WriteAsync(new([resource], traces, [], [], [], []));
+
+        var summary = (await fixture.Store.GetTraceAsync("trace-bounded-retention"))!.Trace;
+        Assert.Equal(2, summary.SpanCount);
+        Assert.Equal(2, await fixture.WithDbAsync(db => db.Traces.CountAsync()));
     }
 
     [Fact]

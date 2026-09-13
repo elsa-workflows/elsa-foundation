@@ -10,12 +10,56 @@ using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Diagnostics.Persistence.Draining;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Xunit;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests;
 
 public sealed class EfOpenTelemetryDurabilityTests
 {
+    [Fact]
+    public void Binding_scope_identity_is_portable_and_rejects_malformed_utf16()
+    {
+        Assert.Equal(
+            "9aba52fe1e4f3bc8c4bd47dd67fe1fa459749d9df36c3dde0dc2f9784106a6c8",
+            EfOpenTelemetryBinding.Default.ScopeKey);
+        _ = new EfOpenTelemetryBinding("\ufffd", "scope", "source");
+        _ = new EfOpenTelemetryBinding("\ud83d\ude80", "scope", "source");
+        Assert.Throws<ArgumentException>(() => new EfOpenTelemetryBinding("\ud800", "scope", "source"));
+        Assert.Throws<ArgumentException>(() => new EfOpenTelemetryBinding("\udc00", "scope", "source"));
+        Assert.Throws<ArgumentException>(() => new EfOpenTelemetryBinding("\ud800A", "scope", "source"));
+    }
+
+    [Fact]
+    public async Task Synchronous_disposal_does_not_race_an_in_flight_query()
+    {
+        var directory = Path.Join(Path.GetTempPath(), "elsa-otel-dispose-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Join(directory, "opentelemetry.db");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var interceptor = new BlockingReaderInterceptor();
+            await using var provider = OpenTelemetryEntityFrameworkCoreFixture.BuildInterceptingProvider(path, interceptor);
+            await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(provider);
+            var store = provider.GetRequiredService<EfOpenTelemetryStore>();
+            interceptor.Arm();
+
+            var query = store.QueryResourcesAsync(new() { Take = 1 }).AsTask();
+            await interceptor.WaitForReaderAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            store.Dispose();
+            interceptor.Release();
+
+            Assert.Empty((await query).Items);
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => store.QueryResourcesAsync(new() { Take = 1 }).AsTask());
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task Durable_group_commits_each_capture_once_and_replays_as_a_unit()
     {
@@ -169,12 +213,60 @@ public sealed class EfOpenTelemetryDurabilityTests
 
         var second = original with
         {
-            Traces = [original.Traces.Single() with { StartTime = TelemetryTestData.Now.AddSeconds(1) }]
+            Traces = [original.Traces.Single() with
+            {
+                StartTime = original.Traces.Single().StartTime.AddSeconds(1),
+                EndTime = original.Traces.Single().EndTime.AddSeconds(1)
+            }]
         };
         var failure = await Assert.ThrowsAsync<OpenTelemetryPersistenceDataException>(() => fixture.Store.WriteAsync(second).AsTask());
         Assert.Equal(OpenTelemetryPersistenceFailureReason.CorruptData, failure.Reason);
         var rawTraceCount = await fixture.WithDbAsync(db => db.Traces.CountAsync());
         Assert.Equal(1, rawTraceCount);
+    }
+
+    [Theory]
+    [InlineData("payload-identity")]
+    [InlineData("scalar-projection")]
+    [InlineData("search-projection")]
+    [InlineData("invalid-shape")]
+    public async Task Corrupt_trace_payload_or_scalar_projection_fails_the_data_boundary_atomically(string corruption)
+    {
+        await using var fixture = await CreateFixtureAsync();
+        var original = TelemetryTestData.Batch("corrupt-trace-projection");
+        await fixture.Store.WriteAsync(original);
+        await fixture.WithDbAsync(async db =>
+        {
+            var summary = await db.TraceSummaries.SingleAsync();
+            switch (corruption)
+            {
+                case "payload-identity":
+                    var serializerOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+                    serializerOptions.Converters.Add(new JsonStringEnumConverter());
+                    var payload = JsonSerializer.Deserialize<TelemetryTrace>(summary.PayloadJson, serializerOptions)!;
+                    summary.PayloadJson = JsonSerializer.Serialize(payload with { TraceId = "different-trace" }, serializerOptions);
+                    break;
+                case "scalar-projection":
+                    summary.SpanCount++;
+                    break;
+                case "search-projection":
+                    summary.TraceIdSearchKey = "corrupt";
+                    break;
+                case "invalid-shape":
+                    summary.PayloadJson = "{}";
+                    break;
+            }
+            await db.SaveChangesAsync();
+        });
+
+        var readFailure = await Assert.ThrowsAsync<OpenTelemetryPersistenceDataException>(
+            () => fixture.Store.GetTraceAsync(original.Traces.Single().TraceId).AsTask());
+        Assert.Equal(OpenTelemetryPersistenceFailureReason.CorruptData, readFailure.Reason);
+
+        var appendFailure = await Assert.ThrowsAsync<OpenTelemetryPersistenceDataException>(
+            () => fixture.Store.WriteAsync(original with { Traces = [original.Traces.Single() with { SpanCount = 2 }] }).AsTask());
+        Assert.Equal(OpenTelemetryPersistenceFailureReason.CorruptData, appendFailure.Reason);
+        Assert.Equal(1, await fixture.WithDbAsync(db => db.Traces.CountAsync()));
     }
 
     [Fact]

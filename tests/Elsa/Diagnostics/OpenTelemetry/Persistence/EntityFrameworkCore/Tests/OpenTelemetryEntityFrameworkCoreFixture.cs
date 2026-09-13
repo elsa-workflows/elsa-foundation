@@ -131,6 +131,30 @@ internal sealed class TransientTransactionStartInterceptor : DbTransactionInterc
     }
 }
 
+internal sealed class BlockingReaderInterceptor : DbCommandInterceptor
+{
+    private readonly TaskCompletionSource readerStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource releaseReader = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private int armed;
+
+    public void Arm() => Interlocked.Exchange(ref armed, 1);
+    public Task WaitForReaderAsync() => readerStarted.Task;
+    public void Release() => releaseReader.TrySetResult();
+
+    public override async ValueTask<InterceptionResult<System.Data.Common.DbDataReader>> ReaderExecutingAsync(
+        System.Data.Common.DbCommand command,
+        CommandEventData eventData,
+        InterceptionResult<System.Data.Common.DbDataReader> result,
+        CancellationToken cancellationToken = default)
+    {
+        if (Volatile.Read(ref armed) == 0)
+            return result;
+        readerStarted.TrySetResult();
+        await releaseReader.Task.WaitAsync(cancellationToken);
+        return result;
+    }
+}
+
 internal static class TelemetryTestData
 {
     public static readonly DateTimeOffset Now = new(2026, 9, 12, 10, 0, 0, TimeSpan.Zero);
