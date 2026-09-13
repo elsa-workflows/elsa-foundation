@@ -5,8 +5,11 @@ using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInjecti
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Foundation.Identity.Persistence.Groundwork.DependencyInjection;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Kernel;
+using Groundwork.Store;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -132,6 +135,28 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
     }
 
     [Fact]
+    public async Task Canonical_lookup_applies_every_unicode16_garay_case_pair()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        for (var capital = 0x10D50; capital <= 0x10D65; capital++)
+        {
+            var upper = char.ConvertFromUtf32(capital);
+            var lower = char.ConvertFromUtf32(capital + 0x20);
+            await fixture.GlobalStore.SaveAsync(Configuration(null, lower, $"garay-{capital:x}"));
+
+            var loaded = Assert.IsType<ProviderConfigurationRecord>(
+                await fixture.GlobalStore.FindGlobalAsync(upper));
+            Assert.Equal(lower, loaded.Provider);
+        }
+
+        var upperComposite = string.Concat("x", "\uD800", char.ConvertFromUtf32(0x10D50), "y");
+        var lowerComposite = string.Concat("x", "\uD800", char.ConvertFromUtf32(0x10D70), "y");
+        await fixture.GlobalStore.SaveAsync(Configuration(null, lowerComposite, "garay-surrogate"));
+        Assert.Equal(lowerComposite,
+            (await fixture.GlobalStore.FindGlobalAsync(upperComposite))!.Provider);
+    }
+
+    [Fact]
     public void Registration_replaces_only_the_two_provider_configuration_contracts()
     {
         var services = new ServiceCollection();
@@ -172,6 +197,24 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
     }
 
     [Fact]
+    public async Task Groundwork_registration_resolves_both_contracts_to_one_scoped_store()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IGroundworkStorageSessionSource, UnusedGroundworkStorageSessionSource>();
+        services.AddSingleton<IPersistenceAccessContextAccessor>(new FakeAccessAccessor(
+            PersistenceAccessContext.Scoped(new PersistenceScope("acme"))));
+        services.AddGroundworkIdentityStores();
+
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using var scope = provider.CreateAsyncScope();
+        var primary = scope.ServiceProvider.GetRequiredService<IProviderConfigurationStore>();
+        var revisionAware = scope.ServiceProvider.GetRequiredService<IRevisionAwareProviderConfigurationStore>();
+
+        Assert.IsType<GroundworkProviderConfigurationStore>(primary);
+        Assert.Same(primary, revisionAware);
+    }
+
+    [Fact]
     public async Task Public_feature_binds_the_module_history_options_without_merging_OpenIddict()
     {
         var services = new ServiceCollection();
@@ -195,6 +238,18 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
         Assert.Equal(typeof(IdentityProviderConfigurationDbContext).Assembly.GetName().Name, relational.MigrationsAssembly);
         Assert.DoesNotContain(context.Model.GetEntityTypes(), entity =>
             entity.ClrType.FullName?.Contains("OpenIddict", StringComparison.Ordinal) == true);
+    }
+
+    [Fact]
+    public void Public_feature_preserves_the_inheritance_extension_seam()
+    {
+        var featureType = typeof(IdentityProviderConfigurationEntityFrameworkCoreFeature);
+        var configureServices = featureType.GetMethod(nameof(IdentityProviderConfigurationEntityFrameworkCoreFeature.ConfigureServices));
+
+        Assert.False(featureType.IsSealed);
+        Assert.NotNull(configureServices);
+        Assert.True(configureServices!.IsVirtual);
+        Assert.False(configureServices.IsFinal);
     }
 
     [Fact]
@@ -292,5 +347,19 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
     private sealed class FakeAccessAccessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
     {
         public PersistenceAccessContext Current { get; } = current;
+    }
+
+    private sealed class UnusedGroundworkStorageSessionSource : IGroundworkStorageSessionSource
+    {
+        public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) =>
+            throw new NotSupportedException();
+
+        public IUnitOfWork BeginUnitOfWork(
+            StorageAccess access,
+            BatchWriteOptions options,
+            IReadOnlyList<string> unitIds,
+            string? targetName = null) => throw new NotSupportedException();
+
+        public StorageUnit Unit(string unitId, string? targetName = null) => throw new NotSupportedException();
     }
 }

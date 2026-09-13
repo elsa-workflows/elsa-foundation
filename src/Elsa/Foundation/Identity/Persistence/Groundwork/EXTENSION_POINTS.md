@@ -1,30 +1,57 @@
-# Extension points — Foundation Identity Groundwork persistence
+# Extension points — Foundation Identity persistence
 
-The Groundwork document-store bridge that makes the Foundation identity domain durable. It replaces the
-in-memory identity stores (`InMemoryIdentityStore`) with Groundwork-backed stores so users, roles, external
-identities, and tenant memberships survive process restarts. The IAM store contracts themselves
+Foundation Identity persistence supplies replaceable durable implementations of the IAM store contracts.
+Groundwork remains the default implementation for the complete Identity authority; the opt-in EF Core feature
+can replace only tenant and global provider-configuration persistence while the remaining stores stay on
+Groundwork. The IAM store contracts themselves
 (`IUserStore`, `IRoleStore`, `IExternalIdentityStore`, `ITenantMembershipStore`) are owned by
-[`Foundation Identity Abstractions`](../../Abstractions/EXTENSION_POINTS.md); this feature is a concrete,
-overridable persistence provider for them.
+[`Foundation Identity Abstractions`](../../Abstractions/EXTENSION_POINTS.md); these persistence features supply
+concrete, overridable implementations for them.
 
 ## Provider selection — host composition
 
 | Shell feature | Scope | Registration |
 |---|---|---|
 | `IdentityGroundworkPersistence` | Server runtime | `IdentityGroundworkPersistenceFeature` → `AddGroundworkIdentityStores()` |
+| `IdentityProviderConfigurationEntityFrameworkCore` | Server runtime; provider configuration only | `IdentityProviderConfigurationEntityFrameworkCoreFeature` → `AddIdentityProviderConfigurationEntityFrameworkCore()` |
 | `FoundationIdentityAspNetCoreIdentityGroundwork` | Server runtime | `AspNetCoreIdentityGroundworkFeature` → `AddFoundationAspNetCoreIdentityGroundwork()` |
 
-`AddGroundworkIdentityStores()` calls `RemoveAll` for each IAM store contract, then registers the
-Groundwork-backed store as scoped. Registration is override-friendly: a host that composes this
-feature and then registers its own store still wins.
+`AddGroundworkIdentityStores()` registers the Groundwork-backed stores as scoped. When the EF feature is not
+selected, Groundwork owns both provider-configuration contracts as part of that default. Selecting
+`IdentityProviderConfigurationEntityFrameworkCore` replaces only `IProviderConfigurationStore` and
+`IRevisionAwareProviderConfigurationStore`; the backend marker preserves that selection regardless of whether
+the Groundwork or EF registration call runs first. Repeating an equivalent EF registration is idempotent, while
+an incompatible provider or connection registration fails before partially mutating the service collection.
+The host must reference the selected EF provider package and provide the matching SQLite, SQL Server,
+PostgreSQL, or MySQL options. Schema migration and default host selection remain separate rollout gates.
 
 For ASP.NET Core Identity hosts, select `FoundationIdentityAspNetCoreIdentityGroundwork` instead of
 the lower-level IAM persistence feature directly. It registers the framework-facing
 `UserManager`/`RoleManager` stores and the Elsa IAM adapters over one authoritative Groundwork Identity
 authority. Groundwork is the only currently shipped first-party Elsa Identity persistence authority,
-pending its evidence-gated EF replacement under
+while provider configuration now has the narrower opt-in EF implementation described above. The remaining
+evidence-gated EF replacement is governed by
 [ADR 0073](../../../../../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md);
 a host-owned integration must be explicitly selected when replacing it.
+
+## Overridable contracts
+
+| Contract | Layer | Default implementation | Opt-in implementation | Selection behavior |
+|---|---|---|---|---|
+| `IProviderConfigurationStore` | *Feature contract — Elsa.Foundation.Identity.Abstractions* | `GroundworkProviderConfigurationStore` in `Elsa.Foundation.Identity.Persistence.Groundwork` | `EfProviderConfigurationStore` in `Elsa.Foundation.Identity.Persistence.EntityFrameworkCore` | Exactly one backend wins; the EF feature replaces only this contract and its revision-aware companion |
+| `IRevisionAwareProviderConfigurationStore` | *Feature contract — Elsa.Foundation.Identity.Abstractions* | `GroundworkProviderConfigurationStore` in `Elsa.Foundation.Identity.Persistence.Groundwork` | `EfProviderConfigurationStore` in `Elsa.Foundation.Identity.Persistence.EntityFrameworkCore` | Uses the same scoped store instance and preserves the opaque `gw:` revision contract |
+
+Override these contracts when a host owns a different provider-configuration persistence boundary. Consumers
+depend only on the abstractions; implementations must preserve tenant/global access checks, effective fallback,
+unconditional upsert, and optimistic compare-and-swap semantics.
+
+## Implementable contributor interfaces
+
+This persistence feature exposes no additive contributor interfaces.
+
+## Events
+
+This persistence feature publishes no domain events.
 
 ## Persisted document kinds
 

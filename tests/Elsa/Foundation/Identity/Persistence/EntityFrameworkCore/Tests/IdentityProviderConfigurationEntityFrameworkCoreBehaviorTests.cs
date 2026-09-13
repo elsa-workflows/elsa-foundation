@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Abstractions.Ownership;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
@@ -192,6 +193,56 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreBehaviorTest
         }
     }
 
+    [Fact]
+    public async Task Read_only_revision_and_effective_queries_observe_external_updates()
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await EnsureDatabaseAsync(databasePath);
+            var tenant = Configuration("acme", "stale-read", "original");
+            var global = Configuration(null, "stale-read", "global");
+            await using (var seed = CreateContext(databasePath))
+            {
+                await Store(seed, "acme").SaveAsync(tenant);
+                await GlobalStore(seed).SaveAsync(global);
+            }
+
+            await using var reader = CreateContext(databasePath);
+            var tenantReader = Store(reader, "acme");
+            var globalReader = GlobalStore(reader);
+            var tenantBefore = Assert.IsType<IamRevisionedRecord<ProviderConfigurationRecord>>(
+                await tenantReader.FindForTenantWithRevisionAsync("acme", tenant.Provider));
+            var globalBefore = Assert.IsType<IamRevisionedRecord<ProviderConfigurationRecord>>(
+                await globalReader.FindGlobalWithRevisionAsync(global.Provider));
+            Assert.Equal("original", (await tenantReader.FindEffectiveAsync("acme", tenant.Provider, allowGlobalFallback: true))!.Kind);
+            Assert.Empty(reader.ChangeTracker.Entries());
+
+            await using (var writer = CreateContext(databasePath))
+            {
+                Assert.Equal(IamRevisionSaveStatus.Saved,
+                    (await Store(writer, "acme").SaveWithRevisionAsync(tenant with { Kind = "updated" }, tenantBefore.Revision)).Status);
+                Assert.Equal(IamRevisionSaveStatus.Saved,
+                    (await GlobalStore(writer).SaveWithRevisionAsync(global with { Kind = "updated" }, globalBefore.Revision)).Status);
+            }
+
+            var tenantAfter = Assert.IsType<IamRevisionedRecord<ProviderConfigurationRecord>>(
+                await tenantReader.FindForTenantWithRevisionAsync("acme", tenant.Provider));
+            var globalAfter = Assert.IsType<IamRevisionedRecord<ProviderConfigurationRecord>>(
+                await globalReader.FindGlobalWithRevisionAsync(global.Provider));
+            Assert.Equal("updated", tenantAfter.Record.Kind);
+            Assert.Equal("updated", globalAfter.Record.Kind);
+            Assert.NotEqual(tenantBefore.Revision, tenantAfter.Revision);
+            Assert.NotEqual(globalBefore.Revision, globalAfter.Revision);
+            Assert.Equal("updated", (await tenantReader.FindEffectiveAsync("acme", tenant.Provider, allowGlobalFallback: true))!.Kind);
+            Assert.Empty(reader.ChangeTracker.Entries());
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
     [Theory]
     [InlineData("gw:00000000000000000000")]
     [InlineData("GW:00000000000000000001")]
@@ -276,6 +327,139 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreBehaviorTest
         }
     }
 
+    [Fact]
+    public async Task Create_only_transient_conflicts_retry_with_a_bound_and_leave_no_ghost_row()
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await EnsureDatabaseAsync(databasePath);
+            var retryOnce = new TransientSaveInterceptor(failures: 1);
+            await using (var retryContext = CreateContext(databasePath, retryOnce))
+            {
+                var result = await Store(retryContext, "acme")
+                    .SaveWithRevisionAsync(Configuration("acme", "create-retry", "saved"), expectedRevision: null);
+                Assert.Equal(IamRevisionSaveStatus.Saved, result.Status);
+                Assert.Equal(2, retryOnce.Attempts);
+            }
+
+            var exhaustRetries = new TransientSaveInterceptor(failures: int.MaxValue);
+            await using (var failedContext = CreateContext(databasePath, exhaustRetries))
+            {
+                await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() =>
+                    Store(failedContext, "acme")
+                        .SaveWithRevisionAsync(Configuration("acme", "create-retry-failure", "never-saved"), expectedRevision: null)
+                        .AsTask());
+                Assert.Equal(3, exhaustRetries.Attempts);
+                Assert.Empty(failedContext.ChangeTracker.Entries());
+            }
+
+            await using var verification = CreateContext(databasePath);
+            Assert.Null(await Store(verification, "acme").FindForTenantAsync("acme", "create-retry-failure"));
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
+    [Fact]
+    public async Task Cas_transient_conflicts_retry_with_a_bound_and_preserve_the_last_committed_row()
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await EnsureDatabaseAsync(databasePath);
+            var retryRecord = Configuration("acme", "cas-retry", "original");
+            var failureRecord = Configuration("acme", "cas-retry-failure", "original");
+            string retryRevision;
+            string failureRevision;
+            await using (var seed = CreateContext(databasePath))
+            {
+                retryRevision = Assert.IsType<string>((await Store(seed, "acme").SaveWithRevisionAsync(retryRecord, null)).Revision);
+                failureRevision = Assert.IsType<string>((await Store(seed, "acme").SaveWithRevisionAsync(failureRecord, null)).Revision);
+            }
+
+            var retryOnce = new TransientSaveInterceptor(failures: 1);
+            await using (var retryContext = CreateContext(databasePath, retryOnce))
+            {
+                var result = await Store(retryContext, "acme")
+                    .SaveWithRevisionAsync(retryRecord with { Kind = "updated" }, retryRevision);
+                Assert.Equal(IamRevisionSaveStatus.Saved, result.Status);
+                Assert.Equal(2, retryOnce.Attempts);
+            }
+
+            var exhaustRetries = new TransientSaveInterceptor(failures: int.MaxValue);
+            await using (var failedContext = CreateContext(databasePath, exhaustRetries))
+            {
+                await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() =>
+                    Store(failedContext, "acme")
+                        .SaveWithRevisionAsync(failureRecord with { Kind = "never-saved" }, failureRevision)
+                        .AsTask());
+                Assert.Equal(3, exhaustRetries.Attempts);
+                Assert.Empty(failedContext.ChangeTracker.Entries());
+            }
+
+            await using var verification = CreateContext(databasePath);
+            Assert.Equal("updated", (await Store(verification, "acme").FindForTenantAsync("acme", retryRecord.Provider))!.Kind);
+            Assert.Equal("original", (await Store(verification, "acme").FindForTenantAsync("acme", failureRecord.Provider))!.Kind);
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
+    [Theory]
+    [InlineData("tenant")]
+    [InlineData("global")]
+    [InlineData("effective")]
+    [InlineData("tenant-revision")]
+    [InlineData("global-revision")]
+    public async Task Provider_read_failures_are_wrapped_and_leave_no_tracked_state(string operation)
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await EnsureDatabaseAsync(databasePath);
+            await using var context = CreateContext(databasePath, new FailingReadInterceptor());
+            var tenantStore = Store(context, "acme");
+            var globalStore = GlobalStore(context);
+
+            async Task ReadAsync()
+            {
+                switch (operation)
+                {
+                    case "tenant":
+                        await tenantStore.FindForTenantAsync("acme", "oidc");
+                        break;
+                    case "global":
+                        await globalStore.FindGlobalAsync("oidc");
+                        break;
+                    case "effective":
+                        await tenantStore.FindEffectiveAsync("acme", "oidc", allowGlobalFallback: true);
+                        break;
+                    case "tenant-revision":
+                        await tenantStore.FindForTenantWithRevisionAsync("acme", "oidc");
+                        break;
+                    case "global-revision":
+                        await globalStore.FindGlobalWithRevisionAsync("oidc");
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(operation), operation, null);
+                }
+            }
+
+            var exception = await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(ReadAsync);
+            Assert.IsType<SqliteException>(exception.InnerException);
+            Assert.Empty(context.ChangeTracker.Entries());
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
     private static async Task RunOrderedUnconditionalRaceAsync(string databasePath, string provider, bool seed)
     {
         if (seed)
@@ -323,7 +507,7 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreBehaviorTest
     private static EfProviderConfigurationStore GlobalStore(IdentityProviderConfigurationDbContext context) =>
         new(context, new FixedAccess(PersistenceAccessContext.PrivilegedGlobal(new PersistenceAccessPurpose("test"))));
 
-    private static IdentityProviderConfigurationSqliteDbContext CreateContext(string databasePath, SaveChangesInterceptor? interceptor = null)
+    private static IdentityProviderConfigurationSqliteDbContext CreateContext(string databasePath, IInterceptor? interceptor = null)
     {
         var builder = new DbContextOptionsBuilder<IdentityProviderConfigurationSqliteDbContext>()
             .UseSqlite($"Data Source={databasePath};Default Timeout=5");
@@ -411,6 +595,17 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreBehaviorTest
                 throw new SqliteException("database is locked", 5);
             return ValueTask.FromResult(result);
         }
+    }
+
+    private sealed class FailingReadInterceptor : DbCommandInterceptor
+    {
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<InterceptionResult<DbDataReader>>(
+                new SqliteException("Injected provider read failure.", 1));
     }
 
     private sealed class DeterministicSaveBarrier

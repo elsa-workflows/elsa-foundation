@@ -47,7 +47,10 @@ public static class GroundworkIdentityStoresRegistration
         services.RemoveAll<ICredentialStore>();
         services.RemoveAll<IClaimMappingStore>();
         if (!entityFrameworkProviderConfigurationAlreadySelected)
+        {
             services.RemoveAll<IProviderConfigurationStore>();
+            services.RemoveAll<IRevisionAwareProviderConfigurationStore>();
+        }
         services.RemoveAll<IExternalIdentityStore>();
         services.RemoveAll<ITenantMembershipStore>();
 
@@ -57,7 +60,11 @@ public static class GroundworkIdentityStoresRegistration
         services.AddScoped<ICredentialStore, GroundworkCredentialStore>();
         services.AddScoped<IClaimMappingStore, GroundworkClaimMappingStore>();
         if (!entityFrameworkProviderConfigurationAlreadySelected)
-            services.AddScoped<IProviderConfigurationStore, GroundworkProviderConfigurationStore>();
+        {
+            services.AddScoped<GroundworkProviderConfigurationStore>();
+            services.AddScoped<IProviderConfigurationStore>(provider => provider.GetRequiredService<GroundworkProviderConfigurationStore>());
+            services.AddScoped<IRevisionAwareProviderConfigurationStore>(provider => provider.GetRequiredService<GroundworkProviderConfigurationStore>());
+        }
         services.AddScoped<IExternalIdentityStore, GroundworkExternalIdentityStore>();
         services.AddScoped<ITenantMembershipStore, GroundworkTenantMembershipStore>();
 

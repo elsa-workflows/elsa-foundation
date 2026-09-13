@@ -16,6 +16,8 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 | `IAuthSessionService` | `ClaimsAuthSessionService` (`Elsa.Foundation.Identity.Api`) | The host needs to enrich the provider-agnostic Studio session from server-side state beyond normalized claims. |
 | `IClaimsNormalizer` | `DefaultClaimsNormalizer` (`Elsa.Foundation.Identity.Abstractions`) | A provider needs custom claim projection while still emitting normalized Elsa role/permission claims. |
 | `IClaimMappingRuleEvaluator` | `ClaimMappingRuleEvaluator` (`Elsa.Foundation.Identity.Abstractions`) | Mapping rules need richer matching than exact claim-type/value comparisons. |
+| `IProviderConfigurationStore` | `GroundworkProviderConfigurationStore` (`Elsa.Foundation.Identity.Persistence.Groundwork`); opt-in `EfProviderConfigurationStore` (`Elsa.Foundation.Identity.Persistence.EntityFrameworkCore`) | A host selects a different durable provider-configuration backend while preserving tenant/global access, effective fallback, and unconditional upsert semantics. The EF feature replaces only this contract and its revision-aware companion. |
+| `IRevisionAwareProviderConfigurationStore` | Same scoped Groundwork or EF provider-configuration store selected for `IProviderConfigurationStore` | A replacement must preserve create-only saves, opaque revisions, atomic compare-and-swap, and conflict/not-found distinctions. |
 | `ISecurityDefaultGuardEvaluator` | `SecurityDefaultGuardEvaluator` (`Elsa.Foundation.Identity.Abstractions`) | A host that calls the evaluator itself needs custom aggregation/reporting of security-default guard results. No first-party host or feature calls it; see [`ISecurityDefaultGuard`](#isecuritydefaultguard). |
 
 ## Implementable contributor interfaces

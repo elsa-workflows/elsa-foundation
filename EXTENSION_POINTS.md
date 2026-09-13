@@ -90,6 +90,7 @@ not automatic constitution violations.
 | Agent core (sessions, policy, context, proposals, provider facade, audit) | [`src/Elsa/Agent/Core/EXTENSION_POINTS.md`](src/Elsa/Agent/Core/EXTENSION_POINTS.md) |
 | Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities, security guards) | [`src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md) |
 | Foundation Identity ASP.NET Core Identity Groundwork provider (concrete Groundwork authority, schema CLI, topology) | [`src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/README.md`](src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/README.md) |
+| Foundation Identity EF provider configuration (opt-in backend selection and OpenIddict boundary) | [`src/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/README.md`](src/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/README.md) |
 | Workflow Agent (workflow explain/troubleshoot/change-proposal contribution) | [`src/Elsa/Agent/Workflows/EXTENSION_POINTS.md`](src/Elsa/Agent/Workflows/EXTENSION_POINTS.md) |
 
 ### Secrets
@@ -107,7 +108,7 @@ not automatic constitution violations.
 | Provider-neutral persistence access and scope selection | [`src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md) |
 | Groundwork runtime persistence (document serializer + schema-version upcasters) | [`src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md) |
 | Entity Framework persistence policy (history table, provider guard, migrate vs validate; shared policy under ADR 0073) | [`src/Elsa/Persistence/EntityFramework/EXTENSION_POINTS.md`](src/Elsa/Persistence/EntityFramework/EXTENSION_POINTS.md) |
-| Foundation Identity Groundwork persistence (durable users/roles/external-identities/memberships; Identity schema selection) | [`src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md) |
+| Foundation Identity persistence (Groundwork authority plus opt-in EF provider configuration; backend and schema selection) | [`src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md) |
 
 ### Activities
 

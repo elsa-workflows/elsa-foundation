@@ -353,11 +353,15 @@ public sealed class EfProviderConfigurationStore(
     private async Task<ProviderConfigurationEntity?> FindEntityForWriteAsync(ProviderConfigurationRecord configuration, CancellationToken cancellationToken)
     {
         if (configuration.TenantId is null)
-            return await FindGlobalEntityAsync(configuration.Provider, cancellationToken);
-        return await FindTenantEntityAsync(configuration.TenantId, configuration.Provider, cancellationToken);
+            return await FindGlobalEntityAsync(configuration.Provider, cancellationToken, track: true);
+        return await FindTenantEntityAsync(configuration.TenantId, configuration.Provider, cancellationToken, track: true);
     }
 
-    private async Task<GlobalProviderConfigurationEntity?> FindGlobalEntityAsync(string provider, CancellationToken cancellationToken, bool requireGlobalAccess = true)
+    private async Task<GlobalProviderConfigurationEntity?> FindGlobalEntityAsync(
+        string provider,
+        CancellationToken cancellationToken,
+        bool requireGlobalAccess = true,
+        bool track = false)
     {
         context.EnsureProviderBinding();
         if (requireGlobalAccess)
@@ -366,7 +370,10 @@ public sealed class EfProviderConfigurationStore(
         try
         {
             var id = IdentityProviderConfigurationCanonicalizer.GlobalProviderId(provider);
-            var row = await context.GlobalProviderConfigurations.SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+            var rows = track
+                ? context.GlobalProviderConfigurations
+                : context.GlobalProviderConfigurations.AsNoTracking();
+            var row = await rows.SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
             return row is null || !Matches(row, null, provider) ? null : row;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -379,7 +386,11 @@ public sealed class EfProviderConfigurationStore(
         }
     }
 
-    private async Task<TenantProviderConfigurationEntity?> FindTenantEntityAsync(string tenantId, string provider, CancellationToken cancellationToken)
+    private async Task<TenantProviderConfigurationEntity?> FindTenantEntityAsync(
+        string tenantId,
+        string provider,
+        CancellationToken cancellationToken,
+        bool track = false)
     {
         context.EnsureProviderBinding();
         IdentityEntityFrameworkAccessGuard.EnsureTenant(accessContextAccessor, tenantId);
@@ -387,7 +398,10 @@ public sealed class EfProviderConfigurationStore(
         try
         {
             var id = IdentityProviderConfigurationCanonicalizer.TenantProviderId(tenantId, provider);
-            var row = await context.TenantProviderConfigurations.SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+            var rows = track
+                ? context.TenantProviderConfigurations
+                : context.TenantProviderConfigurations.AsNoTracking();
+            var row = await rows.SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
             return row is null || !Matches(row, tenantId, provider) ? null : row;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -401,7 +415,9 @@ public sealed class EfProviderConfigurationStore(
     }
 
     private async Task<bool> ExistsAsync(ProviderConfigurationRecord configuration, CancellationToken cancellationToken) =>
-        await FindEntityForWriteAsync(configuration, cancellationToken) is not null;
+        configuration.TenantId is null
+            ? await FindGlobalEntityAsync(configuration.Provider, cancellationToken) is not null
+            : await FindTenantEntityAsync(configuration.TenantId, configuration.Provider, cancellationToken) is not null;
 
     private void EnsureWriteAccess(ProviderConfigurationRecord configuration)
     {
