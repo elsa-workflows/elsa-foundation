@@ -7,8 +7,8 @@ Records direct project references only.
 ## Summary
 
 - Source projects: 136
-- Test projects: 118
-- Direct project references: 1236
+- Test projects: 119
+- Direct project references: 1238
 
 ## Projects
 
@@ -228,6 +228,7 @@ Records direct project references only.
 | [Elsa.Primitives.Hosting.Tests](../../tests/Elsa/Primitives/Hosting/Tests/Elsa.Primitives.Hosting.Tests.csproj) | test | Elsa.Primitives | - | default | Elsa.Primitives.Hosting |
 | [Elsa.Primitives.Tests](../../tests/Elsa/Primitives/Tests/Elsa.Primitives.Tests.csproj) | test | Elsa.Primitives | - | default | Elsa.Primitives |
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | test | Elsa.Samples | - | default | Elsa.Activities.Design.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Samples.Nuplane.Activities |
+| [Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests.csproj) | test | Elsa.Secrets | - | default | Elsa.Secrets<br>Elsa.Secrets.Persistence.EntityFrameworkCore |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe.csproj) | test | Elsa.Secrets | - | default | Elsa.Persistence.EntityFramework<br>Elsa.Secrets<br>Elsa.Secrets.Core |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj) | test | Elsa.Secrets | - | default | Elsa.Secrets<br>Elsa.Secrets.Persistence.EntityFrameworkCore<br>Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe<br>Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling |
 | [Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests](../../tests/Elsa/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj) | test | Elsa.Secrets | - | default | Elsa.Secrets.Persistence.EntityFrameworkCore |
@@ -293,7 +294,7 @@ Records direct project references only.
 | Elsa.Pipelines | 1 | 0 |
 | Elsa.Primitives | 2 | 2 |
 | Elsa.Samples | 0 | 1 |
-| Elsa.Secrets | 6 | 7 |
+| Elsa.Secrets | 6 | 8 |
 | Elsa.Serialization | 3 | 1 |
 | Elsa.Studio | 4 | 4 |
 | Elsa.Tasks | 3 | 1 |

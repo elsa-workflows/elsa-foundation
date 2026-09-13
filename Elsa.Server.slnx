@@ -538,6 +538,9 @@
   <Folder Name="/tests/Elsa/Secrets/Persistence/EntityFrameworkCore/">
     <Project Path="tests/Elsa/Secrets/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Secrets/Persistence/EntityFrameworkCore/MySql/">
+    <Project Path="tests/Elsa/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/">
     <Project Path="tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe.csproj" />
     <Project Path="tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj" />

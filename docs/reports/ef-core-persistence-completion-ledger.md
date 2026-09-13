@@ -34,8 +34,9 @@ correctness requirements must first move to an EF-neutral or EF-owned row.
 - 5 benchmark projects; 101 tracked C# files and 28,962 lines. Historical ignored result logs explain
   the planning input's larger approximate total.
 - EF currently comprises shared policy plus the opt-in Secrets implementation with SQLite, SQL
-  Server, and PostgreSQL derived contexts. MySQL has no package pin, binding, context, migration,
-  fixture, or test.
+  Server, PostgreSQL, and MySQL derived contexts. MySQL production binding/context selection and
+  focused Testcontainers repository proof landed in #1726; provider-specific migrations/tooling,
+  full lifecycle, default flip, and Groundwork removal remain pending.
 - `.github/workflows/http-workflow-performance.yml` and
   `.github/workflows/groundwork-ledger.yml` are present and active in source. The HTTP workflow is
   currently `disabled_manually` in GitHub, verified by workflow id 322696414 on 2026-09-12; neither
@@ -58,7 +59,7 @@ correctness requirements must first move to an EF-neutral or EF-owned row.
 
 | ID | Current production project | Declared units / role | EF replacement owner | Dependencies / blockers | Required correctness evidence | Replacement PR | Default-flip PR | Deletion PR | Disposition |
 |---|---|---|---|---|---|---|---|---|---|
-| P01 | `src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj` | 1 Secrets unit | #1679; executable predecessor #1653 | MySQL and migration spikes | Existing repository contract, OCC, normalization/search, four providers, migration lifecycle, HTTP CRUD/restart | | | | Opt-in EF exists for 3 providers; Groundwork remains default |
+| P01 | `src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj` | 1 Secrets unit | #1679; executable predecessor #1653 | MySQL and migration spikes | Existing repository contract, OCC, normalization/search, four providers, migration lifecycle, HTTP CRUD/restart | | | | Opt-in EF exists for 4 providers; MySQL model/repository smoke delivered in #1726; Groundwork remains default |
 | P02 | `src/Elsa/Studio/Preferences/Persistence/Groundwork/Elsa.Studio.Preferences.Persistence.Groundwork.csproj` | 1 preferences unit | #1680 | MySQL and migration spikes | Contract parity, tenancy, last-write/concurrency semantics, four providers, restart/e2e | | | | Pending |
 | P03 | `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.csproj` | 1 structured-log unit | #1681 | MySQL/migration spikes; correctness extraction from #646/#1529/#1521 | Append/idempotency, sequence/order, exact retention, bounded reads, redaction, four providers | | | | Pending |
 | P04 | `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.csproj` | 8 trace/log/metric units | #1681 | Same as P03 | Atomic append, idempotency, exact retention, bounded queries, failure isolation, four providers | | | | Pending |
@@ -86,7 +87,7 @@ correctness requirements must first move to an EF-neutral or EF-owned row.
 | X07 | Distributed command transport atomically writes stream head and command item | #1672/#1676; #1720 | Prove idempotent ordering, conflicts, crash recovery and concurrent writers | #1721 | D02-D03 implementation and focused SQLite/provider proof are merged; default flip and Groundwork deletion remain pending |
 | X08 | Identity batch writes reservations and mutation receipts in one unit of work | #1682 | Prove normalized uniqueness, receipt idempotency and rollback | | Pending |
 | X09 | Activation authority uses a transaction factory | #1674/#1676/#1677 | Prove exclusive activation and recovery under four providers | | Pending |
-| X10 | Secrets projection reindex uses an explicit EF transaction per bounded 100-row batch | #1679 | Preserve bounded batching, rollback and resume semantics across MySQL and existing providers | | Existing opt-in evidence; four-provider/default proof pending |
+| X10 | Secrets projection reindex uses an explicit EF transaction per bounded 100-row batch | #1679 | Preserve bounded batching, rollback and resume semantics across MySQL and existing providers | | Existing opt-in evidence; MySQL transaction/repository smoke delivered in #1726; projection reindex and four-provider/default proof pending |
 | X11 | OpenIddict migrates through its vendor `OpenIddictIdentityDbContext` | Vendor boundary, Program #1665 audit | Keep separate from Elsa IAM contexts and exclude from first-party-removal scans | | Retained vendor boundary |
 
 ## Shell-feature ledger
@@ -125,7 +126,7 @@ default-composition proof, then explicit deletion evidence.
 | H04 | `docker/compose/elsa-workbench.shells.json` | #1670 | PostgreSQL compose starts fresh, migrates, runs representative journeys and restarts | | Pending |
 | H05 | `src/Elsa/Persistence/EntityFramework` shared policy | #1678 | General module lifecycle, provider pairing, locking, history isolation, diagnostics and no universal domain abstraction | | Existing Secrets-specific foundation; generalization pending |
 | H06 | Secrets SQLite, SQL Server and PostgreSQL contexts plus 15 migration/snapshot files | #1679 | Fresh install, pending-model detection, runtime/out-of-process parity, wrong-provider refusal | | Existing opt-in evidence; revalidate current head |
-| H07 | Missing MySQL provider, binding, context, migrations, fixture and tests | #1675 | Exact compatible package/API and every capability named by ADR 0073 | | Absent; critical blocker |
+| H07 | MySQL provider binding/context and focused Secrets proof; provider-specific migrations/tooling remain absent | #1675/#1726 | Exact compatible package/API and every capability named by ADR 0073 | | Production context/selection and focused model/repository proof delivered in #1726; migration/lifecycle evidence remains pending |
 | H08 | `tools/ef` scripts hard-coded to Secrets and three contexts | #1669; prerequisite #1657 | Module-parameterized tooling, concurrent invocation safety, current compiled artifacts | | Pending |
 | H09 | `src/Apps/Elsa.Workbench/OpenIddict/OpenIddictIdentityDbContext.cs` and vendor migrations | Vendor boundary | Remains isolated and operational after IAM migration | | Retain |
 
