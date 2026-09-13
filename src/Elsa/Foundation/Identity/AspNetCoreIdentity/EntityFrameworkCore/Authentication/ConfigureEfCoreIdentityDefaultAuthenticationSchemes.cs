@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Authentication;
 
-internal sealed class ConfigureEfCoreIdentityDefaultAuthenticationSchemes : IConfigureOptions<AuthenticationOptions>
+public sealed class ConfigureEfCoreIdentityDefaultAuthenticationSchemes : IConfigureOptions<AuthenticationOptions>
 {
     public void Configure(AuthenticationOptions options)
     {

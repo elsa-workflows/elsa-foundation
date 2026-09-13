@@ -1,3 +1,4 @@
+using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Extensions;
@@ -129,6 +130,25 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         Assert.NotSame(credential, secondScope.ServiceProvider.GetRequiredService<ICredentialStore>());
         Assert.NotSame(user, secondScope.ServiceProvider.GetRequiredService<IUserStore>());
         Assert.NotSame(role, secondScope.ServiceProvider.GetRequiredService<IRoleStore>());
+    }
+
+    [Fact]
+    public void Authority_registration_validator_reports_valid_and_replaced_contract_ownership()
+    {
+        var services = new ServiceCollection();
+        services.AddIdentityIamEntityFrameworkCore(SqliteOptions());
+        var backend = Assert.Single(services
+            .Where(descriptor => descriptor.ServiceType == typeof(IdentityAuthorityStoreBackend))
+            .Select(descriptor => Assert.IsType<IdentityAuthorityStoreBackend>(descriptor.ImplementationInstance)));
+        var validator = new IdentityAuthorityStoreRegistrationValidator(services, backend);
+
+        Assert.True(validator.Validate(null, new FoundationIdentityOptions()).Succeeded);
+
+        ((IServiceCollection)services).Add(
+            ServiceDescriptor.Scoped<IUserStore>(_ => throw new InvalidOperationException("not resolved")));
+        var rejected = validator.Validate(null, new FoundationIdentityOptions());
+        Assert.False(rejected.Succeeded);
+        Assert.Contains(typeof(IUserStore).FullName!, rejected.FailureMessage!, StringComparison.Ordinal);
     }
 
     [Fact]

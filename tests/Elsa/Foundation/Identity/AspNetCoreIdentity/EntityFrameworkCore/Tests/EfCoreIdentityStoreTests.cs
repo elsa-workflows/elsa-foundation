@@ -60,8 +60,8 @@ public sealed class EfCoreIdentityStoreTests
         }
         finally
         {
-            foreach (var path in new[] { databasePath, databasePath + "-wal", databasePath + "-shm" })
-                if (File.Exists(path)) File.Delete(path);
+            foreach (var path in new[] { databasePath, databasePath + "-wal", databasePath + "-shm" }.Where(File.Exists))
+                File.Delete(path);
         }
     }
 
@@ -99,8 +99,8 @@ public sealed class EfCoreIdentityStoreTests
         }
         finally
         {
-            foreach (var path in new[] { databasePath, databasePath + "-wal", databasePath + "-shm" })
-                if (File.Exists(path)) File.Delete(path);
+            foreach (var path in new[] { databasePath, databasePath + "-wal", databasePath + "-shm" }.Where(File.Exists))
+                File.Delete(path);
         }
     }
 }

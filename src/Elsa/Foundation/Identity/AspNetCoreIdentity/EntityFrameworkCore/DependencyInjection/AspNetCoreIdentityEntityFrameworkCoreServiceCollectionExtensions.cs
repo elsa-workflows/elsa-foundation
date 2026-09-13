@@ -126,7 +126,7 @@ public static class AspNetCoreIdentityEntityFrameworkCoreServiceCollectionExtens
     private sealed record AspNetCoreIdentityEntityFrameworkCoreRegistration(
         bool IsDevelopmentOrDemo,
         string? SeedFingerprint,
-        Action<AspNetCoreIdentityOptions>? ConfigureIdentity)
+        string IdentityOptionsFingerprint)
     {
         public static AspNetCoreIdentityEntityFrameworkCoreRegistration Create(
             IdentitySeedOptions? seed,
@@ -142,15 +142,36 @@ public static class AspNetCoreIdentityEntityFrameworkCoreServiceCollectionExtens
                         seed.Email,
                         seed.RoleName,
                         seed.IsDevelopmentSeed.ToString()),
-                configureIdentity);
+                FingerprintIdentityOptions(configureIdentity));
 
         public void EnsureEquivalent(AspNetCoreIdentityEntityFrameworkCoreRegistration incoming)
         {
-            if (this != incoming)
+            if (IsDevelopmentOrDemo != incoming.IsDevelopmentOrDemo ||
+                !string.Equals(SeedFingerprint, incoming.SeedFingerprint, StringComparison.Ordinal) ||
+                !string.Equals(IdentityOptionsFingerprint, incoming.IdentityOptionsFingerprint, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
                     "ASP.NET Core Identity EF persistence is already registered with different framework or seed options.");
             }
+        }
+
+        private static string FingerprintIdentityOptions(Action<AspNetCoreIdentityOptions>? configureIdentity)
+        {
+            var options = new AspNetCoreIdentityOptions();
+            configureIdentity?.Invoke(options);
+            var values = new List<string?>
+            {
+                options.ProviderId,
+                options.DisplayName,
+                options.TenantId,
+                options.Enabled.ToString(),
+                options.IsDefault.ToString(),
+                options.DefaultTenantId,
+                options.AllowedReturnUrlOrigins?.Count.ToString()
+            };
+            if (options.AllowedReturnUrlOrigins is not null)
+                values.AddRange(options.AllowedReturnUrlOrigins);
+            return IdentityEntityFrameworkAdapterSupport.FramedRecordId(values.ToArray());
         }
     }
 }

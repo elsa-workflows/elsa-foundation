@@ -466,8 +466,9 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
             var userIds = Registry(user, UserRegistry.RoleLinks);
             var roleIds = EfIdentityStoreSupport.DeserializeSet(role.UserLinkIdsJson).ToHashSet(StringComparer.Ordinal);
             var userRoleIds = EfIdentityStoreSupport.DeserializeSet(user.RoleIdsJson).ToHashSet(StringComparer.Ordinal);
+            userRoleIds.RemoveWhere(existingRoleId => Same(existingRoleId, roleId));
             if (delete)
-            { if (existing is not null) context.UserRoles.Remove(existing); userIds.Remove(id); roleIds.Remove(id); userRoleIds.Remove(roleId); }
+            { if (existing is not null) context.UserRoles.Remove(existing); userIds.Remove(id); roleIds.Remove(id); }
             else
             {
                 link.Id = id;

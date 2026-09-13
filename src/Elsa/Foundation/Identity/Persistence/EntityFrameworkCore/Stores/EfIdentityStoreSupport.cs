@@ -379,7 +379,7 @@ internal static class EfIdentityStoreSupport
             context.ChangeTracker.Clear();
             throw;
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException and not IdentityEntityFrameworkPersistenceException)
         {
             context.ChangeTracker.Clear();
             throw Failure(operation, exception);

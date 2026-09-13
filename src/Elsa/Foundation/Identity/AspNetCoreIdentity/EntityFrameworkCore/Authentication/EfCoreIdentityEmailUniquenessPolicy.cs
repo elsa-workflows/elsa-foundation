@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Authentication;
 
-internal sealed class EfCoreIdentityEmailUniquenessPolicy(IOptions<IdentityOptions> options) : IIdentityEmailUniquenessPolicy
+public sealed class EfCoreIdentityEmailUniquenessPolicy(IOptions<IdentityOptions> options) : IIdentityEmailUniquenessPolicy
 {
     public bool RequireUniqueEmail => options.Value.User.RequireUniqueEmail;
 }

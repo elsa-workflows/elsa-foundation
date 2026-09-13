@@ -10,7 +10,7 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInj
 /// remains mutable until the host is built, so this catches a later unowned store descriptor that
 /// could otherwise silently override the EF registration after feature composition.
 /// </summary>
-internal sealed class IdentityAuthorityStoreRegistrationValidator(
+public sealed class IdentityAuthorityStoreRegistrationValidator(
     IServiceCollection services,
     IdentityAuthorityStoreBackend backend) : IValidateOptions<FoundationIdentityOptions>
 {

@@ -1,9 +1,9 @@
 # Extension points — Foundation Identity persistence
 
 Foundation Identity persistence supplies replaceable durable implementations of the IAM store contracts.
-Groundwork remains the default implementation for the complete Identity authority; the opt-in EF Core feature
-can independently replace tenant/global provider configurations or tenant-local applications and credentials
-while the remaining stores stay on Groundwork. The IAM store contracts themselves
+Groundwork remains the default implementation for the complete Identity authority. The opt-in EF Core features
+can independently replace tenant/global provider configurations or the complete tenant-local IAM authority,
+including users, roles, relationships, memberships, applications, and credentials. The IAM store contracts themselves
 (`IUserStore`, `IRoleStore`, `IExternalIdentityStore`, `ITenantMembershipStore`) are owned by
 [`Foundation Identity Abstractions`](../../Abstractions/EXTENSION_POINTS.md); these persistence features supply
 concrete, overridable implementations for them.
@@ -14,26 +14,26 @@ concrete, overridable implementations for them.
 |---|---|---|
 | `IdentityGroundworkPersistence` | Server runtime | `IdentityGroundworkPersistenceFeature` → `AddGroundworkIdentityStores()` |
 | `IdentityProviderConfigurationEntityFrameworkCore` | Server runtime; provider configuration only | `IdentityProviderConfigurationEntityFrameworkCoreFeature` → `AddIdentityProviderConfigurationEntityFrameworkCore()` |
-| `IdentityIamEntityFrameworkCore` | Server runtime; applications and credentials only | `IdentityIamEntityFrameworkCoreFeature` → `AddIdentityIamEntityFrameworkCore()` |
+| `IdentityIamEntityFrameworkCore` | Server runtime; complete tenant-local IAM authority | `IdentityIamEntityFrameworkCoreFeature` → `AddIdentityIamEntityFrameworkCore()` |
 | `FoundationIdentityAspNetCoreIdentityGroundwork` | Server runtime | `AspNetCoreIdentityGroundworkFeature` → `AddFoundationAspNetCoreIdentityGroundwork()` |
+| `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore` | Server runtime; opt-in ASP.NET Identity adapter over the shared EF authority | `AspNetCoreIdentityEntityFrameworkCoreFeature` → `AddFoundationAspNetCoreIdentityEntityFrameworkCore()` |
 
 `AddGroundworkIdentityStores()` registers the Groundwork-backed stores as scoped. When an EF feature is not
 selected, Groundwork owns its corresponding contracts as part of that default. Selecting
 `IdentityProviderConfigurationEntityFrameworkCore` replaces only `IProviderConfigurationStore` and
 `IRevisionAwareProviderConfigurationStore`; the backend marker preserves that selection regardless of whether
-the Groundwork or EF registration call runs first. Selecting `IdentityIamEntityFrameworkCore` likewise replaces
-exactly the application and credential primary/revision-aware contracts. Each backend group is independently
+the Groundwork or EF registration call runs first. Selecting `IdentityIamEntityFrameworkCore` replaces the
+complete tenant-local authority as one ownership group. Each backend group is independently
 order-safe. Repeating an equivalent EF registration is idempotent, while an incompatible provider or connection
 registration fails before partially mutating the service collection.
 The host must reference the selected EF provider package and provide the matching SQLite, SQL Server,
 PostgreSQL, or MySQL options. Schema migration and default host selection remain separate rollout gates.
 
-For ASP.NET Core Identity hosts, select `FoundationIdentityAspNetCoreIdentityGroundwork` instead of
-the lower-level IAM persistence feature directly. It registers the framework-facing
-`UserManager`/`RoleManager` stores and the Elsa IAM adapters over one authoritative Groundwork Identity
-authority. Groundwork remains the default first-party Elsa Identity persistence authority, while provider
-configuration and applications/credentials now have the narrower opt-in EF implementations described above.
-The remaining evidence-gated EF replacement is governed by
+For ASP.NET Core Identity hosts, select either `FoundationIdentityAspNetCoreIdentityGroundwork` or the opt-in
+`FoundationIdentityAspNetCoreIdentityEntityFrameworkCore` adapter instead of composing the lower-level authority
+and framework stores independently. Each registers `UserManager`/`RoleManager` over one authoritative persistence
+family. Groundwork remains the default first-party Elsa Identity persistence authority until the later rollout flip.
+The EF replacement is governed by
 [ADR 0073](../../../../../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md);
 a host-owned integration must be explicitly selected when replacing it.
 
@@ -41,10 +41,15 @@ a host-owned integration must be explicitly selected when replacing it.
 
 | Contract | Layer | Default implementation | Opt-in implementation | Selection behavior |
 |---|---|---|---|---|
-| `IApplicationStore` | *Feature contract — Elsa.Foundation.Identity.Abstractions* | `GroundworkApplicationStore` in `Elsa.Foundation.Identity.Persistence.Groundwork` | `EfApplicationStore` in `Elsa.Foundation.Identity.Persistence.EntityFrameworkCore` | Exactly one backend wins; the EF IAM feature replaces the application/credential contract group only |
-| `IRevisionAwareApplicationStore` | *Feature contract — Elsa.Foundation.Identity.Abstractions* | Same scoped `GroundworkApplicationStore` | Same scoped `EfApplicationStore` | Uses the same scoped store instance and preserves the opaque `gw:` revision contract |
-| `ICredentialStore` | *Feature contract — Elsa.Foundation.Identity.Abstractions* | `GroundworkCredentialStore` in `Elsa.Foundation.Identity.Persistence.Groundwork` | `EfCredentialStore` in `Elsa.Foundation.Identity.Persistence.EntityFrameworkCore` | Exactly one backend wins; the EF IAM feature replaces the application/credential contract group only |
-| `IRevisionAwareCredentialStore` | *Feature contract — Elsa.Foundation.Identity.Abstractions* | Same scoped `GroundworkCredentialStore` | Same scoped `EfCredentialStore` | Uses the same scoped store instance and preserves the opaque `gw:` revision contract |
+| `IUserStore`, `IRevisionAwareUserStore` | *Feature contracts — Elsa.Foundation.Identity.Abstractions* | `GroundworkUserStore` | `EfUserStore` | Complete-authority selection; preserves tenant-local normalized lookup, reservations, aggregate atomicity, and CAS |
+| `IRoleStore`, `IRevisionAwareRoleStore`, `IPagedRoleStore` | *Feature contracts — Elsa.Foundation.Identity.Abstractions* | `GroundworkRoleStore` | `EfRoleStore` | Complete-authority selection; preserves stable bounded enumeration, reservations, and CAS |
+| `IClaimMappingStore`, `IRevisionAwareClaimMappingStore`, `IPagedClaimMappingStore` | *Feature contracts — Elsa.Foundation.Identity.Abstractions* | `GroundworkClaimMappingStore` | `EfClaimMappingStore` | Complete-authority selection; preserves provider-local ordering and revisions |
+| `IExternalIdentityStore`, `IRevisionAwareExternalIdentityStore`, `IPagedExternalIdentityStore` | *Feature contracts — Elsa.Foundation.Identity.Abstractions* | `GroundworkExternalIdentityStore` | `EfExternalIdentityStore` | Complete-authority selection; preserves subject uniqueness, ownership/rebind rules, bounded ordering, and atomic owner updates |
+| `ITenantMembershipStore`, `IRevisionAwareTenantMembershipStore` | *Feature contracts — Elsa.Foundation.Identity.Abstractions* | `GroundworkTenantMembershipStore` | `EfTenantMembershipStore` | Complete-authority selection; preserves tenant isolation, lossless sets, and atomic user ownership |
+| `IApplicationStore` | *Feature contract — Elsa.Foundation.Identity.Abstractions* | `GroundworkApplicationStore` | `EfApplicationStore` | Complete-authority selection; preserves lossless records and normalized lookup |
+| `IRevisionAwareApplicationStore` | *Feature contract — Elsa.Foundation.Identity.Abstractions* | Same scoped `GroundworkApplicationStore` | Same scoped `EfApplicationStore` | Uses the selected scoped store and preserves opaque create-only/CAS revisions |
+| `ICredentialStore` | *Feature contract — Elsa.Foundation.Identity.Abstractions* | `GroundworkCredentialStore` | `EfCredentialStore` | Complete-authority selection; preserves hashed-secret-only persistence and normalized lookup |
+| `IRevisionAwareCredentialStore` | *Feature contract — Elsa.Foundation.Identity.Abstractions* | Same scoped `GroundworkCredentialStore` | Same scoped `EfCredentialStore` | Uses the selected scoped store and preserves opaque create-only/CAS revisions |
 | `IProviderConfigurationStore` | *Feature contract — Elsa.Foundation.Identity.Abstractions* | `GroundworkProviderConfigurationStore` in `Elsa.Foundation.Identity.Persistence.Groundwork` | `EfProviderConfigurationStore` in `Elsa.Foundation.Identity.Persistence.EntityFrameworkCore` | Exactly one backend wins; the EF feature replaces only this contract and its revision-aware companion |
 | `IRevisionAwareProviderConfigurationStore` | *Feature contract — Elsa.Foundation.Identity.Abstractions* | `GroundworkProviderConfigurationStore` in `Elsa.Foundation.Identity.Persistence.Groundwork` | `EfProviderConfigurationStore` in `Elsa.Foundation.Identity.Persistence.EntityFrameworkCore` | Uses the same scoped store instance and preserves the opaque `gw:` revision contract |
 

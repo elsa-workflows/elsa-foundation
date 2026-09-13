@@ -1095,6 +1095,53 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
     }
 
     [Fact]
+    public async Task User_role_registry_replaces_and_removes_case_variant_role_ids()
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await using var scope = await EfIdentityScope.OpenAsync(databasePath, "tenant-a");
+            var user = User("tenant-a", "case-role-user", "Case Role User", null) with { RoleIds = Set() };
+            var role = Role("tenant-a", "Role-Case", "Case Role");
+            await scope.Users.SaveAsync(user);
+            await scope.Roles.SaveAsync(role);
+            var relationships = new EfIdentityAuthorityRelationshipCoordinator(
+                scope.Context,
+                new EfIdentityAtomicWrite(scope.Context),
+                scope.Access);
+
+            var added = await relationships.AddUserRoleAsync(
+                "tenant-a",
+                user.Id,
+                role.Id,
+                expectedUserVersion: 1,
+                new UserRoleEntity());
+            var replaced = await relationships.AddUserRoleAsync(
+                "tenant-a",
+                user.Id,
+                role.Id.ToLowerInvariant(),
+                expectedUserVersion: Assert.IsType<long>(added.Version),
+                new UserRoleEntity());
+            var afterReplace = await scope.Context.Users.AsNoTracking().SingleAsync();
+            Assert.Equal([role.Id.ToLowerInvariant()], JsonSet(afterReplace.RoleIdsJson));
+
+            var removed = await relationships.DeleteUserRoleAsync(
+                "tenant-a",
+                user.Id,
+                role.Id.ToUpperInvariant(),
+                expectedUserVersion: Assert.IsType<long>(replaced.Version));
+
+            Assert.Equal(EfIdentityWriteStatus.Updated, removed.Status);
+            Assert.Empty(JsonSet((await scope.Context.Users.AsNoTracking().SingleAsync()).RoleIdsJson));
+            Assert.Empty(await scope.Context.UserRoles.AsNoTracking().ToListAsync());
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
+    [Fact]
     public async Task Concurrent_identical_atomic_mutations_replay_one_committed_receipt()
     {
         var databasePath = TemporaryDatabasePath();

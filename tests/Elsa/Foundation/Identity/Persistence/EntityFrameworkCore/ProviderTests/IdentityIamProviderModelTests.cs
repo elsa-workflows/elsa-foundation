@@ -8,6 +8,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests
 
 public sealed class IdentityIamProviderModelTests
 {
+    private const int SortableIdentityKeyWidth = 400 * sizeof(char) + sizeof(ushort);
+
     private static readonly HashSet<string> TechnicalKeyProperties =
     [
         "TenantLookupKey",
@@ -103,12 +105,13 @@ public sealed class IdentityIamProviderModelTests
             });
         Assert.All(
             entityTypes.Where(IsAuthorityEntity).SelectMany(entity => entity.GetProperties())
-                .Where(property => property.ClrType == typeof(string) && SortableKeyProperties.Contains(property.Name)),
+                .Where(property => property.ClrType == typeof(byte[]) && SortableKeyProperties.Contains(property.Name)),
             property =>
             {
                 Assert.Null(property.GetValueConverter());
-                Assert.Equal(512, property.GetMaxLength());
-                Assert.False(property.IsUnicode());
+                Assert.Equal(
+                    property.Name == "ExternalOrderKey" ? SortableIdentityKeyWidth * 2 : SortableIdentityKeyWidth,
+                    property.GetMaxLength());
             });
         Assert.All(
             entityTypes.Where(IsAuthorityEntity).SelectMany(entity => entity.GetProperties())

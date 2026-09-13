@@ -562,6 +562,101 @@ public sealed class EfCoreIdentityFrameworkContractTests
     }
 
     [Fact]
+    public void Independently_created_equivalent_identity_callbacks_are_idempotent()
+    {
+        var services = new ServiceCollection();
+        var persistence = new IdentityIamEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        };
+
+        services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(
+            persistence,
+            configureIdentity: options =>
+            {
+                options.DisplayName = "Local Identity";
+                options.DefaultTenantId = "tenant-a";
+                options.AllowedReturnUrlOrigins.Add("https://studio.example.test");
+            });
+        services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(
+            persistence,
+            configureIdentity: options =>
+            {
+                options.DisplayName = "Local Identity";
+                options.DefaultTenantId = "tenant-a";
+                options.AllowedReturnUrlOrigins.Add("https://studio.example.test");
+            });
+
+        using var provider = services.BuildServiceProvider();
+        var options = provider.GetRequiredService<IOptions<AspNetCoreIdentityOptions>>().Value;
+        Assert.Equal("Local Identity", options.DisplayName);
+        Assert.Equal("tenant-a", options.DefaultTenantId);
+        Assert.Equal(["https://studio.example.test"], options.AllowedReturnUrlOrigins);
+    }
+
+    [Fact]
+    public void Different_identity_callback_values_are_rejected_without_mutation()
+    {
+        var services = new ServiceCollection();
+        var persistence = new IdentityIamEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        };
+        services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(
+            persistence,
+            configureIdentity: options => options.DisplayName = "First");
+        var before = services.ToArray();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(
+                persistence,
+                configureIdentity: options => options.DisplayName = "Second"));
+
+        Assert.Contains("different framework or seed options", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(before, services.ToArray());
+    }
+
+    [Fact]
+    public void Default_authentication_scheme_configurer_preserves_explicit_defaults_and_fills_missing_fallbacks()
+    {
+        var subject = new ConfigureEfCoreIdentityDefaultAuthenticationSchemes();
+        var explicitDefault = new AuthenticationOptions
+        {
+            DefaultScheme = "explicit",
+            DefaultAuthenticateScheme = "authenticate",
+            DefaultSignInScheme = "sign-in"
+        };
+        subject.Configure(explicitDefault);
+        Assert.Equal("authenticate", explicitDefault.DefaultAuthenticateScheme);
+        Assert.Equal("sign-in", explicitDefault.DefaultSignInScheme);
+
+        var defaults = new AuthenticationOptions();
+        subject.Configure(defaults);
+        Assert.Equal(AspNetCoreIdentityDefaults.CookieScheme, defaults.DefaultAuthenticateScheme);
+        Assert.Equal(AspNetCoreIdentityDefaults.CookieScheme, defaults.DefaultSignInScheme);
+
+        var fallback = new AuthenticationOptions { DefaultAuthenticateScheme = "authenticate" };
+        subject.Configure(fallback);
+        Assert.Equal("authenticate", fallback.DefaultAuthenticateScheme);
+        Assert.Equal(AspNetCoreIdentityDefaults.CookieScheme, fallback.DefaultSignInScheme);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Email_uniqueness_policy_projects_framework_options(bool requireUniqueEmail)
+    {
+        var options = new IdentityOptions();
+        options.User.RequireUniqueEmail = requireUniqueEmail;
+
+        var policy = new EfCoreIdentityEmailUniquenessPolicy(Options.Create(options));
+
+        Assert.Equal(requireUniqueEmail, policy.RequireUniqueEmail);
+    }
+
+    [Fact]
     public void Conflicting_framework_registration_is_rejected_before_partial_mutation()
     {
         var services = new ServiceCollection();
@@ -745,6 +840,45 @@ public sealed class EfCoreIdentityFrameworkContractTests
         Assert.Single(services, x => x.ServiceType == typeof(IdentityAuthorityStoreBackend));
         Assert.Contains(services, x => x.ServiceType == typeof(IUserStore<AspNetCoreIdentityUser>));
         Assert.DoesNotContain(services, x => x.ServiceType == typeof(IOptions<IdentitySeedOptions>));
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateOnBuild = true,
+            ValidateScopes = true
+        });
+        using var scope = provider.CreateScope();
+        foreach (var serviceType in new[]
+        {
+            typeof(IdentityIamDbContext),
+            typeof(IUserStore),
+            typeof(IRevisionAwareUserStore),
+            typeof(IRoleStore),
+            typeof(IRevisionAwareRoleStore),
+            typeof(IPagedRoleStore),
+            typeof(IClaimMappingStore),
+            typeof(IRevisionAwareClaimMappingStore),
+            typeof(IPagedClaimMappingStore),
+            typeof(IExternalIdentityStore),
+            typeof(IRevisionAwareExternalIdentityStore),
+            typeof(IPagedExternalIdentityStore),
+            typeof(ITenantMembershipStore),
+            typeof(IRevisionAwareTenantMembershipStore),
+            typeof(IApplicationStore),
+            typeof(IRevisionAwareApplicationStore),
+            typeof(ICredentialStore),
+            typeof(IRevisionAwareCredentialStore),
+            typeof(IUserStore<AspNetCoreIdentityUser>),
+            typeof(IUserLoginStore<AspNetCoreIdentityUser>),
+            typeof(IUserClaimStore<AspNetCoreIdentityUser>),
+            typeof(IUserRoleStore<AspNetCoreIdentityUser>),
+            typeof(IRoleStore<IdentityRole>),
+            typeof(IRoleClaimStore<IdentityRole>),
+            typeof(IUserClaimsPrincipalFactory<AspNetCoreIdentityUser>),
+            typeof(IIdentityEmailUniquenessPolicy),
+            typeof(IAuthenticationSessionInvalidator),
+            typeof(EfCoreIdentityCookieEvents)
+        })
+            Assert.NotNull(scope.ServiceProvider.GetRequiredService(serviceType));
     }
 
     [Theory]
