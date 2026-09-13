@@ -1,9 +1,11 @@
+using System.Data.Common;
 using Elsa.Foundation.Identity.Abstractions.Ownership;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests;
@@ -47,14 +49,25 @@ internal static class IdentityProviderProviderSmoke
             string.Concat("roundtrip-", new string('k', 800), "\ud800"));
 
         await store.SaveAsync(configuration);
-        var duplicateCreate = await store.SaveWithRevisionAsync(configuration with { Kind = "duplicate" }, expectedRevision: null);
-        Assert.Equal(IamRevisionSaveStatus.Conflict, duplicateCreate.Status);
         var roundTrip = await store.FindForTenantAsync(tenant, configuration.Provider);
         Assert.NotNull(roundTrip);
         Assert.Equal(configuration.Provider, roundTrip!.Provider);
         Assert.Equal(configuration.TenantId, roundTrip.TenantId);
         Assert.Equal(configuration.Kind, roundTrip.Kind);
         Assert.Equal(configuration.Settings, roundTrip.Settings);
+
+        var createBarrier = new ConcurrentCreateBarrier();
+        await using var firstCreateContext = CreateContext(provider, fixture.ConnectionString, createBarrier);
+        await using var secondCreateContext = CreateContext(provider, fixture.ConnectionString, createBarrier);
+        var createConfiguration = Configuration(tenant, provider + "-create-race", "create-race");
+        var createResults = await Task.WhenAll(
+            new EfProviderConfigurationStore(firstCreateContext, access)
+                .SaveWithRevisionAsync(createConfiguration, expectedRevision: null).AsTask(),
+            new EfProviderConfigurationStore(secondCreateContext, access)
+                .SaveWithRevisionAsync(createConfiguration, expectedRevision: null).AsTask());
+        Assert.Equal(2, createBarrier.Arrivals);
+        Assert.Single(createResults, result => result.Status == IamRevisionSaveStatus.Saved);
+        Assert.Single(createResults, result => result.Status == IamRevisionSaveStatus.Conflict);
 
         await using (var transaction = await context.Database.BeginTransactionAsync())
         {
@@ -80,13 +93,29 @@ internal static class IdentityProviderProviderSmoke
         Assert.Single(results, result => result.Status == IamRevisionSaveStatus.Conflict);
     }
 
-    private static IdentityProviderConfigurationDbContext CreateContext(string provider, string connectionString) => provider switch
+    private static IdentityProviderConfigurationDbContext CreateContext(
+        string provider,
+        string connectionString,
+        DbCommandInterceptor? interceptor = null) => provider switch
     {
-        "PostgreSql" => new IdentityProviderConfigurationPostgreSqlDbContext(new DbContextOptionsBuilder<IdentityProviderConfigurationPostgreSqlDbContext>().UseNpgsql(connectionString).Options),
-        "SqlServer" => new IdentityProviderConfigurationSqlServerDbContext(new DbContextOptionsBuilder<IdentityProviderConfigurationSqlServerDbContext>().UseSqlServer(connectionString).Options),
-        "MySql" => new IdentityProviderConfigurationMySqlDbContext(new DbContextOptionsBuilder<IdentityProviderConfigurationMySqlDbContext>().UseMySQL(connectionString).Options),
+        "PostgreSql" => new IdentityProviderConfigurationPostgreSqlDbContext(
+            Configure(new DbContextOptionsBuilder<IdentityProviderConfigurationPostgreSqlDbContext>().UseNpgsql(connectionString), interceptor).Options),
+        "SqlServer" => new IdentityProviderConfigurationSqlServerDbContext(
+            Configure(new DbContextOptionsBuilder<IdentityProviderConfigurationSqlServerDbContext>().UseSqlServer(connectionString), interceptor).Options),
+        "MySql" => new IdentityProviderConfigurationMySqlDbContext(
+            Configure(new DbContextOptionsBuilder<IdentityProviderConfigurationMySqlDbContext>().UseMySQL(connectionString), interceptor).Options),
         _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, null)
     };
+
+    private static DbContextOptionsBuilder<TContext> Configure<TContext>(
+        DbContextOptionsBuilder<TContext> builder,
+        DbCommandInterceptor? interceptor)
+        where TContext : DbContext
+    {
+        if (interceptor is not null)
+            builder.AddInterceptors(interceptor);
+        return builder;
+    }
 
     private static async Task AssertMySqlTableEncodingAsync(IdentityProviderConfigurationDbContext context)
     {
@@ -115,5 +144,27 @@ internal static class IdentityProviderProviderSmoke
     private sealed class FixedAccess(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
     {
         public PersistenceAccessContext Current { get; } = current;
+    }
+
+    private sealed class ConcurrentCreateBarrier : DbCommandInterceptor
+    {
+        private readonly TaskCompletionSource bothReadersCompleted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int arrivals;
+
+        public int Arrivals => Volatile.Read(ref arrivals);
+
+        public override async ValueTask<DbDataReader> ReaderExecutedAsync(
+            DbCommand command,
+            CommandExecutedEventData eventData,
+            DbDataReader result,
+            CancellationToken cancellationToken = default)
+        {
+            if (!command.CommandText.TrimStart().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
+                return result;
+            if (Interlocked.Increment(ref arrivals) >= 2)
+                bothReadersCompleted.TrySetResult();
+            await bothReadersCompleted.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
+            return result;
+        }
     }
 }

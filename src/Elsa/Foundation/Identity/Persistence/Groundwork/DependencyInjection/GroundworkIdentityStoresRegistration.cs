@@ -1,4 +1,5 @@
 using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Foundation.Identity.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Persistence.Groundwork.Composition;
@@ -69,6 +70,7 @@ public static class GroundworkIdentityStoresRegistration
         services.AddScoped<IClaimMappingStore, GroundworkClaimMappingStore>();
         if (!entityFrameworkProviderConfigurationAlreadySelected && !groundworkProviderConfigurationAlreadySelected)
         {
+            services.AddFoundationIdentityAbstractions();
             services.TryAddScoped<GroundworkProviderConfigurationStore>();
             var providerDescriptor = ServiceDescriptor.Scoped<IProviderConfigurationStore>(provider =>
                 provider.GetRequiredService<GroundworkProviderConfigurationStore>());
@@ -76,6 +78,8 @@ public static class GroundworkIdentityStoresRegistration
                 provider.GetRequiredService<GroundworkProviderConfigurationStore>());
             services.Add(providerDescriptor);
             services.Add(revisionDescriptor);
+            services.EnsureReplacementContract<IProviderConfigurationStore, GroundworkProviderConfigurationStore>();
+            services.EnsureReplacementContract<IRevisionAwareProviderConfigurationStore, GroundworkProviderConfigurationStore>();
             services.AddSingleton(new ProviderConfigurationStoreBackend("groundwork", providerDescriptor, revisionDescriptor));
         }
         services.AddScoped<IExternalIdentityStore, GroundworkExternalIdentityStore>();

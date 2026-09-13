@@ -240,6 +240,7 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
 
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         await using var scope = provider.CreateAsyncScope();
+        provider.GetRequiredService<IStartupValidator>().Validate();
         var primary = scope.ServiceProvider.GetRequiredService<IProviderConfigurationStore>();
         var revisionAware = scope.ServiceProvider.GetRequiredService<IRevisionAwareProviderConfigurationStore>();
 
@@ -370,6 +371,22 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
             Provider = "Sqlite",
             ConnectionString = "Data Source=:memory:"
         });
+        services.AddScoped<IProviderConfigurationStore, CustomProviderConfigurationStore>();
+        services.AddScoped<IRevisionAwareProviderConfigurationStore, CustomProviderConfigurationStore>();
+
+        using var provider = services.BuildServiceProvider();
+        var exception = Assert.Throws<OptionsValidationException>(
+            provider.GetRequiredService<IStartupValidator>().Validate);
+
+        Assert.Contains(typeof(IProviderConfigurationStore).FullName!, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(typeof(IRevisionAwareProviderConfigurationStore).FullName!, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Custom_provider_configuration_registrations_after_Groundwork_fail_startup_validation()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkIdentityStores();
         services.AddScoped<IProviderConfigurationStore, CustomProviderConfigurationStore>();
         services.AddScoped<IRevisionAwareProviderConfigurationStore, CustomProviderConfigurationStore>();
 
