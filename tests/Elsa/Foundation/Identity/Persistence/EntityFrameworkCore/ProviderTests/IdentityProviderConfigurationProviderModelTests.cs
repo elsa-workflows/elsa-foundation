@@ -45,9 +45,16 @@ public sealed class IdentityProviderConfigurationProviderModelTests
         Assert.DoesNotContain(entityTypes, entity => entity.ClrType == typeof(ProviderConfigurationEntity));
         Assert.DoesNotContain(entityTypes, entity => entity.ClrType.FullName?.Contains("OpenIddict", StringComparison.Ordinal) == true);
 
-        var lookup = context.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(GlobalProviderConfigurationEntity))!.FindProperty(nameof(GlobalProviderConfigurationEntity.ProviderLookupKey));
+        var designTimeModel = context.GetService<IDesignTimeModel>().Model;
+        var lookup = designTimeModel.FindEntityType(typeof(GlobalProviderConfigurationEntity))!.FindProperty(nameof(GlobalProviderConfigurationEntity.ProviderLookupKey));
         Assert.NotNull(lookup);
         if (provider == "MySql")
-            Assert.Equal("utf8mb4_0900_bin", lookup!.GetCollation());
+        {
+            Assert.Equal(IdentityProviderConfigurationMySqlDbContext.CharacterSet, designTimeModel.FindAnnotation("MySQL:Charset")?.Value);
+            Assert.Equal(IdentityProviderConfigurationMySqlDbContext.Collation, designTimeModel.GetCollation());
+            Assert.Equal(IdentityProviderConfigurationMySqlDbContext.Collation,
+                designTimeModel.FindEntityType(typeof(GlobalProviderConfigurationEntity))!.FindAnnotation("MySQL:Collation")?.Value);
+            Assert.Equal(IdentityProviderConfigurationMySqlDbContext.Collation, lookup!.FindAnnotation("MySQL:Collation")?.Value);
+        }
     }
 }

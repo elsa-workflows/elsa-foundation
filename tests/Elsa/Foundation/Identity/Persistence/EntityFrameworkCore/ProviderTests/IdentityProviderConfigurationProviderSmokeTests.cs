@@ -37,6 +37,8 @@ internal static class IdentityProviderProviderSmoke
         var tenant = "provider-smoke-tenant";
         await using var context = CreateContext(provider, fixture.ConnectionString);
         await context.Database.EnsureCreatedAsync();
+        if (provider == "MySql")
+            await AssertMySqlTableEncodingAsync(context);
         var access = new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
         var store = new EfProviderConfigurationStore(context, access);
         var configuration = Configuration(tenant, provider + "-unicode-😀", "roundtrip");
@@ -82,6 +84,25 @@ internal static class IdentityProviderProviderSmoke
         "MySql" => new IdentityProviderConfigurationMySqlDbContext(new DbContextOptionsBuilder<IdentityProviderConfigurationMySqlDbContext>().UseMySQL(connectionString).Options),
         _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, null)
     };
+
+    private static async Task AssertMySqlTableEncodingAsync(IdentityProviderConfigurationDbContext context)
+    {
+        await context.Database.OpenConnectionAsync();
+        foreach (var tableName in new[]
+                 {
+                     IdentityProviderConfigurationEfModule.TenantTableName,
+                     IdentityProviderConfigurationEfModule.GlobalTableName
+                 })
+        {
+            await using var command = context.Database.GetDbConnection().CreateCommand();
+            command.CommandText = $"SHOW CREATE TABLE `{tableName}`";
+            await using var reader = await command.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            var ddl = reader.GetString(1);
+            Assert.Contains($"DEFAULT CHARSET={IdentityProviderConfigurationMySqlDbContext.CharacterSet}", ddl, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(IdentityProviderConfigurationMySqlDbContext.Collation, ddl, StringComparison.OrdinalIgnoreCase);
+        }
+    }
 
     private static ProviderConfigurationRecord Configuration(string tenantId, string provider, string kind) => new(
         provider, tenantId, kind, true, false,

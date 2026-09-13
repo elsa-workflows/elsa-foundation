@@ -77,11 +77,21 @@ public sealed class IdentityProviderConfigurationPostgreSqlDbContext(DbContextOp
 public sealed class IdentityProviderConfigurationMySqlDbContext(DbContextOptions<IdentityProviderConfigurationMySqlDbContext> options)
     : IdentityProviderConfigurationDbContext(options)
 {
+    private const string CharacterSetAnnotation = "MySQL:Charset";
+    private const string CollationAnnotation = "MySQL:Collation";
+
     public const string ExpectedProviderName = Elsa.Persistence.EntityFramework.EfProviderNames.MySql;
+    public const string CharacterSet = "utf8mb4";
+    public const string Collation = "utf8mb4_0900_bin";
     protected override string ExpectedProviderNameValue => ExpectedProviderName;
 
     protected override void ConfigureProvider(ModelBuilder modelBuilder)
     {
+        // The Oracle provider owns this annotation. Setting it by its stable metadata name keeps
+        // the shipped module provider-neutral while ensuring generated DDL does not inherit an
+        // incompatible database default charset.
+        modelBuilder.Model.SetAnnotation(CharacterSetAnnotation, CharacterSet);
+        modelBuilder.UseCollation(Collation);
         ConfigureEntity(modelBuilder.Entity<TenantProviderConfigurationEntity>());
         ConfigureEntity(modelBuilder.Entity<GlobalProviderConfigurationEntity>());
     }
@@ -89,10 +99,11 @@ public sealed class IdentityProviderConfigurationMySqlDbContext(DbContextOptions
     private static void ConfigureEntity<TEntity>(EntityTypeBuilder<TEntity> entity)
         where TEntity : ProviderConfigurationEntity
     {
+        entity.Metadata.SetAnnotation(CollationAnnotation, Collation);
         entity.Property(record => record.SettingsJson).HasColumnType("longtext");
         // NO PAD keeps trailing spaces distinct in canonical projections. IDs are still the
         // authoritative binary identity, so this collation is a defensive provider projection.
-        entity.Property(record => record.TenantLookupKey).UseCollation("utf8mb4_0900_bin");
-        entity.Property(record => record.ProviderLookupKey).UseCollation("utf8mb4_0900_bin");
+        entity.Property(record => record.TenantLookupKey).Metadata.SetAnnotation(CollationAnnotation, Collation);
+        entity.Property(record => record.ProviderLookupKey).Metadata.SetAnnotation(CollationAnnotation, Collation);
     }
 }
