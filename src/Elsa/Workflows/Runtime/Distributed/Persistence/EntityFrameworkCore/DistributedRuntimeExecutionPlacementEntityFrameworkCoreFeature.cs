@@ -25,7 +25,7 @@ public class DistributedRuntimeExecutionPlacementEntityFrameworkCoreFeature : IS
     [ManifestSetting(DisplayName = "Connection name", Description = "Named connection under ConnectionStrings when Connection string is omitted.", Category = "Persistence")]
     public string? ConnectionName { get; set; }
 
-    public void ConfigureServices(IServiceCollection services) => services.AddDistributedRuntimeExecutionPlacementEntityFrameworkCore(
+    public virtual void ConfigureServices(IServiceCollection services) => services.AddDistributedRuntimeExecutionPlacementEntityFrameworkCore(
         new DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions
         {
             Provider = Provider,

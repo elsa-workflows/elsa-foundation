@@ -20,8 +20,10 @@ public static class GroundworkDistributedStoresRegistration
         else if (ExecutionPlacementStoreBackend.HasRegisteredContract(services))
             throw new InvalidOperationException("An explicit IExecutionPlacementStore is already registered; Groundwork placement persistence refuses to replace it implicitly.");
 
-        foreach (var unit in DistributedGroundworkStorageManifest.CreateUnits())
-            services.AddGroundworkStorageUnit(unit, targetName);
+        if (!string.Equals(existingBackend?.Name, ExecutionPlacementStoreBackend.EntityFramework, StringComparison.Ordinal))
+            services.AddGroundworkStorageUnit(DistributedGroundworkStorageManifest.CreatePlacementUnit(), targetName);
+        services.AddGroundworkStorageUnit(DistributedGroundworkStorageManifest.CreateCommandStreamHeadUnit(), targetName);
+        services.AddGroundworkStorageUnit(DistributedGroundworkStorageManifest.CreateCommandTransportUnit(), targetName);
 
         if (!string.Equals(existingBackend?.Name, ExecutionPlacementStoreBackend.EntityFramework, StringComparison.Ordinal))
         {
@@ -32,7 +34,10 @@ public static class GroundworkDistributedStoresRegistration
                 provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
                 targetName));
             services.Add(placementDescriptor);
-            services.AddSingleton(new ExecutionPlacementStoreBackend(ExecutionPlacementStoreBackend.Groundwork, placementDescriptor));
+            services.AddSingleton(new ExecutionPlacementStoreBackend(
+                ExecutionPlacementStoreBackend.Groundwork,
+                placementDescriptor,
+                collection => collection.RemoveGroundworkStorageUnit(DistributedGroundworkStorageManifest.PlacementUnitId)));
         }
         services.RemoveAll<IExecutionCommandTransport>();
         services.AddScoped<IExecutionCommandTransport>(provider => new GroundworkExecutionCommandTransport(

@@ -24,15 +24,18 @@ preserved, while the in-memory or Groundwork-owned descriptor is replaced with t
 unmarked host placement store is never overwritten implicitly. The distributed feature registers its in-memory
 placement default only when no placement store already exists, so both feature orderings remain deterministic. The
 singleton pump and actor provider resolve these stores only inside fresh persistence operation scopes. The host selects
-exactly one public v2 provider connection and `AddGroundworkDistributedRuntimeStores()` registers three ordinary scoped
-storage units. MongoDB must be a writable transaction-capable replica set whenever the selected combined host claims
-checkpoint atomicity.
+exactly one public v2 provider connection. A Groundwork-only composition registers all three ordinary scoped storage
+units. When EF owns placement, Groundwork registers only the command-stream-head and command-transport units; selecting
+EF after Groundwork withdraws every Groundwork placement-unit declaration before the provider is built. Both composition
+orders therefore retain Groundwork transport without provisioning an unused parallel placement schema. MongoDB must be
+a writable transaction-capable replica set whenever the selected combined host claims checkpoint atomicity.
 
 ## Persisted storage units
 
-The adapter declares fresh v2 units through `DistributedGroundworkStorageManifest.CreateUnits()`. Each row carries
+The adapter declares fresh v2 units through `DistributedGroundworkStorageManifest`. Each row carries
 typed query columns plus one canonical JSON payload for the Elsa domain object. The clean break intentionally has no
-v1 envelope, schema stamp, upcaster, or compatibility path.
+v1 envelope, schema stamp, upcaster, or compatibility path. The placement unit is conditional as described above;
+the two command units remain registered whenever Groundwork owns command transport.
 
 | Storage unit | Scope | Payload | Primary key | Declared indexes |
 |---|---|---|---|---|

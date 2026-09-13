@@ -4,7 +4,9 @@ This opt-in provider replaces exactly `IExecutionPlacementStore` with
 `EfExecutionPlacementStore`. It owns one provider-neutral EF Core model and does not register,
 replace, or depend on the distributed command transport. `WorkflowsRuntimeDistributed` remains the
 default in-memory composition; the Groundwork feature remains the default durable composition for
-the existing distributed family until a separately authorized default-flip and deletion slice.
+the existing distributed family until a separately authorized default-flip and deletion slice. In a mixed
+composition Groundwork retains its two command-transport units, while the unused Groundwork placement-unit
+declaration is skipped or withdrawn in either registration order so only the EF D01 schema is provisioned.
 
 ## Provider boundary
 

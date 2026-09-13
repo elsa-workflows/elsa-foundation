@@ -14,12 +14,16 @@ namespace Elsa.Workflows.Runtime.Distributed.Contracts;
 public sealed class ExecutionPlacementStoreBackend
 {
     private readonly ServiceDescriptor _placementDescriptor;
+    private readonly Action<IServiceCollection>? _removeOwnedArtifacts;
 
     public const string InMemory = "in-memory";
     public const string Groundwork = "groundwork";
     public const string EntityFramework = "entity-framework";
 
-    public ExecutionPlacementStoreBackend(string name, ServiceDescriptor placementDescriptor)
+    public ExecutionPlacementStoreBackend(
+        string name,
+        ServiceDescriptor placementDescriptor,
+        Action<IServiceCollection>? removeOwnedArtifacts = null)
     {
         EnsureKnown(name);
         ArgumentNullException.ThrowIfNull(placementDescriptor);
@@ -28,6 +32,7 @@ public sealed class ExecutionPlacementStoreBackend
 
         Name = name;
         _placementDescriptor = placementDescriptor;
+        _removeOwnedArtifacts = removeOwnedArtifacts;
     }
 
     public string Name { get; }
@@ -66,5 +71,15 @@ public sealed class ExecutionPlacementStoreBackend
                 $"Execution placement backend '{Name}' no longer exclusively owns IExecutionPlacementStore. " +
                 $"Descriptors: {descriptors.Length}. Remove conflicting host registrations or select only the intended backend.");
         }
+    }
+
+    /// <summary>
+    /// Removes backend-specific composition artifacts immediately before another backend takes ownership.
+    /// </summary>
+    public void RemoveOwnedArtifacts(IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        EnsureOwnsRegisteredContract(services);
+        _removeOwnedArtifacts?.Invoke(services);
     }
 }

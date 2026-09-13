@@ -49,6 +49,7 @@ public static class DistributedRuntimeExecutionPlacementEntityFrameworkCoreRegis
         if (existingBackend?.Name == StoreBackendName)
             throw new InvalidOperationException("Distributed runtime execution placement EF persistence is already registered with different options.");
 
+        existingBackend?.RemoveOwnedArtifacts(services);
         services.AddSingleton(registration);
         services.AddSingleton(configuredOptions);
         services.RemoveAll<ExecutionPlacementStoreBackend>();
