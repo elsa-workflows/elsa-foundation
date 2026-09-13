@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
-import { authSessionEndedEvent } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, type StudioRuntimeIdentity } from "@elsa-workflows/studio-sdk";
 import { register, type WorkflowDesignerPanelContext } from "../module";
 import { activationSlotReadsUnavailableReason, type Publication } from "../api/publishing";
 import type { WorkflowActivationSlot } from "../api/runtime";
@@ -12,6 +12,8 @@ import { isConnectEndOverExistingWorkflowNode, resolveConnectEndSource } from ".
 import { createDraftSnapshotId, insertSequenceNodeAfter } from "../workflow-editor/editorHelpers";
 import { ValidationPanel } from "../workflow-editor/editorPanels";
 import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
+import { setDialogs } from "../workflow-editor/dialogs";
+import { WorkflowFolderNavigation, type WorkflowFolderSelection } from "../workflow-editor/WorkflowFolderNavigation";
 import { createActivityDefinitionRecoveryStore } from "../activityDefinitionRecovery";
 import { capabilityDocument, definition, renderRegisteredRoute, response, runJavaScriptTypeKey, testApi } from "./routeRenderingHelpers";
 
@@ -113,30 +115,28 @@ describe("workflows module", () => {
   });
 
   it("clears Activity Definition recovery on logout without mounting the editor route", () => {
-    const api = testApi();
-    api.runtime.identity = { tenantId: "tenant-1", subject: "author-1" };
-    const store = createActivityDefinitionRecoveryStore({ enabled: true }, api.runtime.identity)!;
-    store.write({
-      draftId: "draft-1",
-      definitionId: "definition-1",
-      tenantId: "tenant-1",
-      revision: 2,
-      sourceVersionId: null,
-      status: "active",
-      contract: { contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [] },
-      provider: { providerKey: "elsa.activity-graph", schemaVersion: "1", manifestFingerprint: "sha256:test", payload: { local: true } },
-      layout: [],
-      validation: null,
-      createdAt: "2026-07-17T10:00:00Z",
-      updatedAt: "2026-07-17T10:00:00Z",
-      presentationLabel: null
-    });
+    const { api } = apiWithRecoveryDraft({ tenantId: "tenant-1", subject: "author-1" });
 
     register(api);
     expect(window.localStorage.length).toBe(1);
     window.dispatchEvent(new Event(authSessionEndedEvent));
 
     expect(window.localStorage.length).toBe(0);
+  });
+
+  it("reacts on behalf of only the latest registration when register() runs more than once, instead of stacking a listener per call", () => {
+    const { api: firstApi, store: firstStore } = apiWithRecoveryDraft({ tenantId: "tenant-1", subject: "author-1" });
+    const { api: secondApi, store: secondStore } = apiWithRecoveryDraft({ tenantId: "tenant-2", subject: "author-2" });
+
+    register(firstApi);
+    register(secondApi);
+    expect(window.localStorage.length).toBe(2);
+    window.dispatchEvent(new Event(authSessionEndedEvent));
+
+    // A listener stacked per register() call would also react on firstApi's now-stale closure and
+    // clear its recovery entry too. Only one listener should be live, bound to the latest registration.
+    expect(secondStore.read(activityDefinitionRecoveryDraft())).toBeNull();
+    expect(firstStore.read(activityDefinitionRecoveryDraft())).not.toBeNull();
   });
 
   it("tears down a route host its test never unmounted before the next test starts", async () => {
@@ -4198,13 +4198,10 @@ describe("workflows module", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, workflowFolderMutationCapabilities());
-    // Folder names are read from the tree alone: the definitions table ("Operations workflow") and the
-    // selected folder's breadcrumb, which refreshes to the new name after the rename, render them too.
-    const folderTree = () => container.querySelector<HTMLElement>(".wf-folder-nav")!;
 
     await waitForText(container, parent.name);
     await click(buttonByLabel(container, `Expand ${parent.name}`));
-    await waitForText(folderTree(), child.name);
+    await waitForText(folderTree(container), child.name);
     await click([...container.querySelectorAll<HTMLElement>("[data-folder-id]")].find(item => item.dataset.folderId === child.id) ?? null);
     await click(buttonByLabel(container, `Collapse ${parent.name}`));
     await click(buttonByText(container, "Rename"));
@@ -4213,9 +4210,9 @@ describe("workflows module", () => {
 
     await waitForText(container, "Folder renamed");
     expect(childPageRequests).toBe(1);
-    expect(folderTree().textContent).not.toContain("Platform operations");
+    expect(folderTree(container).textContent).not.toContain("Platform operations");
     await click(buttonByLabel(container, `Expand ${parent.name}`));
-    await waitForText(folderTree(), "Platform operations");
+    await waitForText(folderTree(container), "Platform operations");
     expect(childPageRequests).toBe(2);
     await unmount();
   });
@@ -4250,6 +4247,7 @@ describe("workflows module", () => {
     const descendant = { id: "folder-descendant", parentId: selected.id, name: "Private descendant", normalizedName: "private descendant", createdAt: "", lastModifiedAt: "" };
     let moveRequest: unknown;
     let detailRequests = 0;
+    let resolveAncestorChildren: (() => void) | null = null;
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/folders/folder-edit/move") && init?.method === "POST") {
@@ -4264,7 +4262,20 @@ describe("workflows module", () => {
         if (url.includes("/folders/folder-destination")) return response({ folder: destination, ancestors: [] });
         if (url.includes("/folders/folder-descendant")) return response({ folder: descendant, ancestors: [ancestor, selected] });
       }
-      if (url.includes("/folders?pageSize=100&parentId=folder-ancestor")) return response({ items: selected.parentId === ancestor.id ? [selected] : [], nextContinuationToken: null });
+      if (url.includes("/folders?pageSize=100&parentId=folder-ancestor")) {
+        const items = selected.parentId === ancestor.id ? [selected] : [];
+        // Held pending on the first call only, until the test resolves it explicitly below. That lets
+        // the test prove the ambiguity a scoped wait guards against is real: the definitions table's
+        // "Operations workflow" row (which renders independently of the folder tree) is on the page
+        // well before this folder row is. A wait that isn't scoped to the folder tree would match that
+        // row and let the click below run before the folder row exists.
+        if (!resolveAncestorChildren) {
+          return new Promise<Response>(resolve => {
+            resolveAncestorChildren = () => resolve(response({ items, nextContinuationToken: null }));
+          });
+        }
+        return response({ items, nextContinuationToken: null });
+      }
       if (url.includes("/folders?pageSize=100&parentId=folder-destination")) return response({ items: selected.parentId === destination.id ? [selected] : [], nextContinuationToken: null });
       if (url.includes("/folders?pageSize=100")) return response({
         items: [ancestor, destination],
@@ -4277,8 +4288,16 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, workflowFolderMutationCapabilities());
 
     await waitForText(container, ancestor.name);
+    await waitForText(container, "Operations workflow");
     await click(buttonByLabel(container, `Expand ${ancestor.name}`));
-    await waitForText(container, selected.name);
+    await vi.waitFor(() => expect(resolveAncestorChildren).not.toBeNull());
+    // The ambiguity a scoped wait guards against, made concrete: "Operations" (selected.name) is
+    // already on the page via the definitions table row, while the folder tree itself has no such
+    // row yet because its children request is still pending.
+    expect(container.textContent).toContain(selected.name);
+    expect(folderTree(container).textContent).not.toContain(selected.name);
+    resolveAncestorChildren!();
+    await waitForText(folderTree(container), selected.name);
     await click([...container.querySelectorAll<HTMLElement>("[data-folder-id]")].find(item => item.dataset.folderId === selected.id) ?? null);
     await vi.waitFor(() => expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain(selected.name));
     const detailRequestsBeforeDialog = detailRequests;
@@ -4370,6 +4389,58 @@ describe("workflows module", () => {
     expect(container.querySelector("[data-folder-id='folder-parent']")?.getAttribute("aria-selected")).toBe("true");
     await vi.waitFor(() => expect(document.activeElement?.getAttribute("data-folder-id")).toBe("folder-parent"));
     await unmount();
+  });
+
+  it("restores delete-focus within the navigation that performed the delete, not the first .wf-folder-nav in the document", async () => {
+    const parent = { id: "folder-parent", parentId: null, name: "Platform", normalizedName: "platform", createdAt: "", lastModifiedAt: "" };
+    const child = { id: "folder-child", parentId: parent.id, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/capabilities")) return response(workflowFolderMutationCapabilities());
+      if (url.endsWith("/folders/folder-child") && init?.method === "DELETE") {
+        return new Response(null, { status: 204 });
+      }
+      if (url.includes("/folders/folder-child")) return response({ folder: child, ancestors: [parent] });
+      if (url.includes("/folders/folder-parent")) return response({ folder: parent, ancestors: [] });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [parent], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    setDialogs({ confirm: vi.fn(async () => true), prompt: vi.fn(async () => null), alert: vi.fn(async () => undefined) });
+    const context = testApi().backend;
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    // Second navigation is the one performing the delete. Old code targeted `document.querySelector(".wf-folder-nav")`,
+    // which always resolves to the first navigation in DOM order regardless of which one is acting. Each
+    // navigation is wrapped in its own host div so its tree and action bar (siblings, not nested) can be
+    // queried together without ambiguity against the other navigation's identical folder markup.
+    function TwoNavigations() {
+      const [secondSelection, setSecondSelection] = React.useState<WorkflowFolderSelection>({ id: child.id });
+      return <>
+        <div data-testid="first-host"><WorkflowFolderNavigation context={context} selection="all" onSelect={() => {}} onAvailable={() => {}} /></div>
+        <div data-testid="second-host"><WorkflowFolderNavigation context={context} selection={secondSelection} onSelect={setSecondSelection} onAvailable={() => {}} /></div>
+      </>;
+    }
+
+    try {
+      flushSync(() => root.render(<TwoNavigations />));
+      await waitForText(container, "Platform");
+      const firstHost = container.querySelector<HTMLElement>('[data-testid="first-host"]')!;
+      const secondHost = container.querySelector<HTMLElement>('[data-testid="second-host"]')!;
+      expect(container.querySelectorAll(".wf-folder-nav")).toHaveLength(2);
+
+      await waitForButtonByText(secondHost, "Delete");
+      await click(buttonByText(secondHost, "Delete"));
+
+      await vi.waitFor(() => expect(document.activeElement?.getAttribute("data-folder-id")).toBe(parent.id));
+      expect(secondHost.contains(document.activeElement)).toBe(true);
+      expect(firstHost.contains(document.activeElement)).toBe(false);
+    } finally {
+      flushSync(() => root.unmount());
+      container.remove();
+    }
   });
 
   it("keeps opaque folder IDs out of selectors and ARIA IDs through paging, focus, and delete recovery", async () => {
@@ -4926,6 +4997,32 @@ function workflowDraft(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+function activityDefinitionRecoveryDraft() {
+  return {
+    draftId: "draft-1",
+    definitionId: "definition-1",
+    tenantId: "tenant-1",
+    revision: 2,
+    sourceVersionId: null,
+    status: "active",
+    contract: { contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [] },
+    provider: { providerKey: "elsa.activity-graph", schemaVersion: "1", manifestFingerprint: "sha256:test", payload: { local: true } },
+    layout: [],
+    validation: null,
+    createdAt: "2026-07-17T10:00:00Z",
+    updatedAt: "2026-07-17T10:00:00Z",
+    presentationLabel: null
+  };
+}
+
+function apiWithRecoveryDraft(identity: StudioRuntimeIdentity) {
+  const api = testApi();
+  api.runtime.identity = identity;
+  const store = createActivityDefinitionRecoveryStore({ enabled: true }, identity)!;
+  store.write(activityDefinitionRecoveryDraft());
+  return { api, store };
+}
+
 function draftWithFlowchartRoot(activities: unknown[] = [], inputs: unknown[] = []) {
   return workflowDraft({ state: { variables: [], rootActivity: flowchartRoot(activities), inputs, outputs: [] } });
 }
@@ -5163,6 +5260,12 @@ async function fireDrag(element: Element | null, type: "dragstart" | "dragover" 
 function buttonByText(container: HTMLElement, text: string) {
   return Array.from(container.querySelectorAll("button"))
     .find(button => button.textContent?.trim() === text) ?? null;
+}
+
+// Folder names are read from the tree alone: the definitions table (e.g. "Operations workflow") and
+// the selected folder's breadcrumb, which can refresh to a new name after a rename, render them too.
+function folderTree(container: HTMLElement) {
+  return container.querySelector<HTMLElement>(".wf-folder-nav")!;
 }
 
 function buttonByLabel(container: HTMLElement, label: string) {

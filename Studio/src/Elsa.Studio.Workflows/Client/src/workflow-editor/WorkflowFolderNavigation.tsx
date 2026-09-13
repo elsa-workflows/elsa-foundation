@@ -35,6 +35,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   const [status, setStatus] = useState("");
   const [pendingChildFocusId, setPendingChildFocusId] = useState<string | null>(null);
   const keyboardExpansionIntents = useRef(new Set<string>());
+  const navigationRef = useRef<HTMLElement>(null);
   const folderPickerButtonRef = useRef<HTMLButtonElement>(null);
   const renameButtonRef = useRef<HTMLButtonElement>(null);
   const moveButtonRef = useRef<HTMLButtonElement>(null);
@@ -159,8 +160,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
         folderPickerButtonRef.current?.focus();
         return;
       }
-      const navigation = document.querySelector<HTMLElement>(".wf-folder-nav");
-      findTreeItemByKey(navigation, key)?.focus();
+      findTreeItemByKey(navigationRef.current, key)?.focus();
     });
   };
 
@@ -228,7 +228,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
       <button ref={folderPickerButtonRef} type="button" onClick={() => setDrawerOpen(true)} aria-expanded={drawerOpen} aria-controls="workflow-folder-picker"><Menu size={15} /> Folders</button>
     </div>
     {!drawerOpen ? (
-      <aside className="wf-folder-nav" aria-label="Workflow folders">
+      <aside ref={navigationRef} className="wf-folder-nav" aria-label="Workflow folders">
         <div className="wf-folder-nav-heading"><strong>Folders</strong><button type="button" title="Create folder" aria-label="Create folder" onClick={() => void createFolder()}><FolderPlus size={16} /></button></div>
         <FolderTree {...treeProps} />
       </aside>

@@ -21,6 +21,20 @@ const Elsa3ReusableImportPage = lazy(() => import("./Elsa3ReusableImportPage").t
 const ActivityAvailabilityPage = lazy(() => import("./ActivityAvailabilityPage").then(module => ({ default: module.ActivityAvailabilityPage })));
 const RuntimeDiagnosticsSettingsPage = lazy(() => import("./RuntimeDiagnosticsSettingsPage").then(module => ({ default: module.RuntimeDiagnosticsSettingsPage })));
 
+// register() has no host-provided teardown to unregister this listener, and it can run more than once
+// (module reloads, tests). Keeping the handler as a stable module-level reference makes repeat
+// registration a no-op for addEventListener instead of piling up one listener per call; the handler
+// reads the most recently registered module's identity so it always reacts on behalf of the current
+// registration.
+let latestModuleApi: ElsaStudioModuleApi | null = null;
+
+function clearActivityDefinitionRecoveryOnAuthSessionEnded() {
+  const identity = latestModuleApi?.runtime.identity;
+  if (identity?.subject && identity.tenantId) {
+    clearActivityDefinitionRecoveryForIdentity(identity);
+  }
+}
+
 // WorkflowDesignerPanelContext is the TContext behind the workflow.designer.panels slot — exported so
 // contributed-panel authors can type their `context` prop instead of hand-copying the shape.
 export type { WorkflowConnectSource, WorkflowDesignerPanelContext } from "./workflow-editor/editorTypes";
@@ -40,12 +54,9 @@ export function register(api: ElsaStudioModuleApi) {
   registerInputReferenceContribution(api.expressionEditors);
   api.activityEditors.add(activityGraphImplementationEditorContribution);
   api.activityEditors.add(activityGraphSchema2ImplementationEditorContribution);
+  latestModuleApi = api;
   if (typeof window !== "undefined") {
-    window.addEventListener(authSessionEndedEvent, () => {
-      if (api.runtime.identity?.subject && api.runtime.identity.tenantId) {
-        clearActivityDefinitionRecoveryForIdentity(api.runtime.identity);
-      }
-    });
+    window.addEventListener(authSessionEndedEvent, clearActivityDefinitionRecoveryOnAuthSessionEnded);
   }
   const runInputEditors = () => api.workflowRunInputEditors?.list() ?? [];
   const deferred = (label: string, content: ReactNode) =>
