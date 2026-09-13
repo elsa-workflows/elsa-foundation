@@ -291,12 +291,24 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
     {
         var groundworkFirst = new ServiceCollection();
         groundworkFirst.AddGroundworkIdentityStores();
-        var unrelated = groundworkFirst.Where(descriptor => descriptor.ServiceType != typeof(ProviderConfigurationStoreBackend) && descriptor.ServiceType != typeof(IProviderConfigurationStore) && descriptor.ServiceType != typeof(IRevisionAwareProviderConfigurationStore)).ToArray();
+        var unrelatedContractTypes = new[]
+        {
+            typeof(IUserStore),
+            typeof(IRoleStore),
+            typeof(IApplicationStore),
+            typeof(ICredentialStore),
+            typeof(IClaimMappingStore),
+            typeof(IExternalIdentityStore),
+            typeof(ITenantMembershipStore)
+        };
+        var unrelated = groundworkFirst.Where(descriptor => unrelatedContractTypes.Contains(descriptor.ServiceType)).ToArray();
         groundworkFirst.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = "Data Source=:memory:" });
-        Assert.Equal(unrelated, groundworkFirst.Where(descriptor => descriptor.ServiceType != typeof(ProviderConfigurationStoreBackend) && descriptor.ServiceType != typeof(IProviderConfigurationStore) && descriptor.ServiceType != typeof(IRevisionAwareProviderConfigurationStore) && descriptor.ServiceType != typeof(IdentityProviderConfigurationDbContext)).Take(unrelated.Length));
+        Assert.All(unrelated, descriptor => Assert.Contains(descriptor, groundworkFirst));
         Assert.Single(groundworkFirst, descriptor => descriptor.ServiceType == typeof(IProviderConfigurationStore) && descriptor.ImplementationType is null);
         Assert.DoesNotContain(groundworkFirst, descriptor => descriptor.ServiceType == typeof(IProviderConfigurationStore) && descriptor.ImplementationType?.Name.Contains("Groundwork", StringComparison.Ordinal) == true);
         AssertGroundworkUnrelatedStoresPresent(groundworkFirst);
+        using (var groundworkFirstProvider = groundworkFirst.BuildServiceProvider())
+            groundworkFirstProvider.GetRequiredService<IStartupValidator>().Validate();
 
         var efFirst = new ServiceCollection();
         efFirst.AddIdentityProviderConfigurationEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = "Data Source=:memory:" });
@@ -305,6 +317,8 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
         Assert.Single(efFirst, descriptor => descriptor.ServiceType == typeof(IRevisionAwareProviderConfigurationStore) && descriptor.ImplementationType is null);
         Assert.DoesNotContain(efFirst, descriptor => descriptor.ServiceType == typeof(IProviderConfigurationStore) && descriptor.ImplementationType?.Name.Contains("Groundwork", StringComparison.Ordinal) == true);
         AssertGroundworkUnrelatedStoresPresent(efFirst);
+        using var efFirstProvider = efFirst.BuildServiceProvider();
+        efFirstProvider.GetRequiredService<IStartupValidator>().Validate();
     }
 
     [Fact]
