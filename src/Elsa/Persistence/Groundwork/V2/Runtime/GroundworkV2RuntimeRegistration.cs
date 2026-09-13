@@ -56,8 +56,13 @@ public static class GroundworkV2RuntimeRegistration
             services.AddGroundworkStorageUnit(unit, target);
 
         RegisterExecutableStore(services, cacheOptions, target);
+        var existingBookmarkBackend = BookmarkStateStoreBackend.Find(services);
+        existingBookmarkBackend?.RemoveOwnedArtifacts(services);
+        services.RemoveAll<BookmarkStateStoreBackend>();
         ReplaceScoped<GroundworkV2BookmarkStateStore>(services, Standard<GroundworkV2BookmarkStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IBookmarkStateStore), typeof(IBookmarkStimulusIndex));
+        var bookmarkDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IBookmarkStateStore));
+        BookmarkStateStoreBackend.Register(services, new BookmarkStateStoreBackend(BookmarkStateStoreBackend.Groundwork, bookmarkDescriptor));
         ReplaceScoped<GroundworkV2ExecutableActivityTemplateStore>(services, Standard<GroundworkV2ExecutableActivityTemplateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IExecutableActivityTemplateStore), typeof(IExecutableActivityTemplateReader), typeof(IExecutableActivityTemplateWriter));
         ReplaceScoped<GroundworkV2WorkflowExecutableSourceReferenceStore>(services, Standard<GroundworkV2WorkflowExecutableSourceReferenceStore>(target, static (sessions, access, target) => new(sessions, access, target)),
