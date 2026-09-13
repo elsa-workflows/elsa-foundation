@@ -20,7 +20,7 @@ public sealed class RuntimeBookmarksEntityFrameworkCoreFeature : IShellFeature
         DisplayName = "Provider",
         Description = "Relational provider for the Runtime bookmark DbContext: Sqlite, SqlServer, PostgreSql, or MySql. The host must reference that provider package; this feature does not provision schema.",
         Category = "Persistence")]
-    public string? Provider { get; set; }
+    public string Provider { get; set; } = "Sqlite";
 
     [ManifestSetting(
         DisplayName = "Connection string",
@@ -38,7 +38,7 @@ public sealed class RuntimeBookmarksEntityFrameworkCoreFeature : IShellFeature
     public void ConfigureServices(IServiceCollection services) => services.AddRuntimeBookmarksEntityFrameworkCore(
         new RuntimeBookmarksEntityFrameworkCoreOptions
         {
-            Provider = Provider ?? "Sqlite",
+            Provider = Provider,
             ConnectionString = ConnectionString,
             ConnectionName = ConnectionName
         });

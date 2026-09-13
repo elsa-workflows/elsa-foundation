@@ -332,6 +332,31 @@ public sealed class EfBookmarkStateStoreTests
     }
 
     [Fact]
+    public void Shell_feature_exposes_manifest_metadata_and_the_sqlite_default()
+    {
+        var feature = new RuntimeBookmarksEntityFrameworkCoreFeature();
+        Assert.Equal("Sqlite", feature.Provider);
+
+        foreach (var propertyName in new[]
+                 {
+                     nameof(RuntimeBookmarksEntityFrameworkCoreFeature.Provider),
+                     nameof(RuntimeBookmarksEntityFrameworkCoreFeature.ConnectionString),
+                     nameof(RuntimeBookmarksEntityFrameworkCoreFeature.ConnectionName)
+                 })
+        {
+            var property = typeof(RuntimeBookmarksEntityFrameworkCoreFeature).GetProperty(propertyName);
+            Assert.Contains(property!.CustomAttributes, attribute => attribute.AttributeType.Name == "ManifestSettingAttribute");
+        }
+
+        var connectionString = typeof(RuntimeBookmarksEntityFrameworkCoreFeature)
+            .GetProperty(nameof(RuntimeBookmarksEntityFrameworkCoreFeature.ConnectionString));
+        var setting = Assert.Single(connectionString!.CustomAttributes,
+            attribute => attribute.AttributeType.Name == "ManifestSettingAttribute");
+        Assert.Contains(setting.NamedArguments,
+            argument => argument.MemberName == "Secret" && argument.TypedValue.Value is true);
+    }
+
+    [Fact]
     public void Named_connection_rejects_an_empty_configured_value_when_the_context_is_resolved()
     {
         var configuration = new ConfigurationBuilder()
