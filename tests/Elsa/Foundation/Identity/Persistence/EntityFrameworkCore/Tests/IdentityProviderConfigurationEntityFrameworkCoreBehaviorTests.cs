@@ -452,6 +452,84 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreBehaviorTest
     }
 
     [Theory]
+    [InlineData("null-settings")]
+    [InlineData("non-pair-settings")]
+    [InlineData("odd-utf16")]
+    [InlineData("nonpositive-revision")]
+    [InlineData("negative-revision")]
+    public async Task Corrupt_persisted_rows_fail_through_the_stable_boundary_without_tracking(string corruption)
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await EnsureDatabaseAsync(databasePath);
+            await using var context = CreateContext(databasePath);
+            var store = Store(context, "acme");
+            var configuration = Configuration("acme", $"corrupt-{corruption}", "kind");
+            await store.SaveAsync(configuration);
+            var id = await context.TenantProviderConfigurations
+                .AsNoTracking()
+                .Where(entity => entity.Provider == configuration.Provider)
+                .Select(entity => entity.Id)
+                .SingleAsync();
+
+            switch (corruption)
+            {
+                case "null-settings":
+                    await context.Database.ExecuteSqlRawAsync(
+                        "UPDATE \"identity_provider_configurations\" SET \"SettingsJson\" = {0} WHERE \"Id\" = {1}",
+                        "null",
+                        id);
+                    break;
+                case "non-pair-settings":
+                    await context.Database.ExecuteSqlRawAsync(
+                        "UPDATE \"identity_provider_configurations\" SET \"SettingsJson\" = {0} WHERE \"Id\" = {1}",
+                        "[[\"AA==\"]]",
+                        id);
+                    break;
+                case "odd-utf16":
+                    await context.Database.ExecuteSqlRawAsync(
+                        "UPDATE \"identity_provider_configurations\" SET \"SettingsJson\" = {0} WHERE \"Id\" = {1}",
+                        "[[\"AQ==\",\"dmFsdWU=\"]]",
+                        id);
+                    break;
+                case "nonpositive-revision":
+                    await context.Database.ExecuteSqlRawAsync(
+                        "UPDATE \"identity_provider_configurations\" SET \"Revision\" = 0 WHERE \"Id\" = {0}",
+                        id);
+                    break;
+                case "negative-revision":
+                    await context.Database.ExecuteSqlRawAsync(
+                        "UPDATE \"identity_provider_configurations\" SET \"Revision\" = -1 WHERE \"Id\" = {0}",
+                        id);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(corruption), corruption, null);
+            }
+
+            context.ChangeTracker.Clear();
+            async Task ReadAsync()
+            {
+                if (corruption is "nonpositive-revision" or "negative-revision")
+                    await store.FindForTenantWithRevisionAsync("acme", configuration.Provider);
+                else
+                    await store.FindForTenantAsync("acme", configuration.Provider);
+            }
+
+            var exception = await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(ReadAsync);
+            if (corruption is "nonpositive-revision" or "negative-revision")
+                Assert.IsType<ArgumentOutOfRangeException>(exception.InnerException);
+            else
+                Assert.IsType<FormatException>(exception.InnerException);
+            Assert.Empty(context.ChangeTracker.Entries());
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
+    [Theory]
     [InlineData("tenant")]
     [InlineData("global")]
     [InlineData("effective")]

@@ -125,9 +125,10 @@ public sealed class EfProviderConfigurationStore(
     {
         IdentityProviderConfigurationCanonicalizer.Validate(provider, nameof(provider));
         context.EnsureProviderBinding();
+        IdentityEntityFrameworkAccessGuard.EnsureGlobal(accessContextAccessor);
         try
         {
-            var row = await FindGlobalEntityAsync(provider, cancellationToken);
+            var row = await FindGlobalEntityAsync(provider, cancellationToken, requireGlobalAccess: false);
             return row is null ? null : new IamRevisionedRecord<ProviderConfigurationRecord>(Map(row), IdentityProviderConfigurationRevisionCodec.FromVersion(row.Revision));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -150,6 +151,7 @@ public sealed class EfProviderConfigurationStore(
         IdentityProviderConfigurationCanonicalizer.Validate(tenantId, nameof(tenantId));
         IdentityProviderConfigurationCanonicalizer.Validate(provider, nameof(provider));
         context.EnsureProviderBinding();
+        IdentityEntityFrameworkAccessGuard.EnsureTenant(accessContextAccessor, tenantId);
         try
         {
             var row = await FindTenantEntityAsync(tenantId, provider, cancellationToken);

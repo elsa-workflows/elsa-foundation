@@ -70,6 +70,8 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
     {
         await using var fixture = await Fixture.CreateAsync();
         await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.TenantStore.FindForTenantAsync("other", "oidc").AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.TenantRevisionStore.FindForTenantWithRevisionAsync("other", "oidc").AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.TenantStore.FindGlobalWithRevisionAsync("oidc").AsTask());
         await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.UnprivilegedGlobalStore.SaveAsync(Configuration(null, "oidc", "global")).AsTask());
     }
 
@@ -252,8 +254,6 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
     public async Task Public_feature_binds_the_module_history_options_without_merging_OpenIddict()
     {
         var services = new ServiceCollection();
-        services.AddSingleton<IPersistenceAccessContextAccessor>(new FakeAccessAccessor(
-            PersistenceAccessContext.Scoped(new PersistenceScope("acme"))));
         new IdentityProviderConfigurationEntityFrameworkCoreFeature
         {
             Provider = "Sqlite",
@@ -262,12 +262,18 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
 
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         await using var scope = provider.CreateAsyncScope();
+        provider.GetRequiredService<IStartupValidator>().Validate();
         var context = Assert.IsType<IdentityProviderConfigurationSqliteDbContext>(
             scope.ServiceProvider.GetRequiredService<IdentityProviderConfigurationDbContext>());
+        var primary = scope.ServiceProvider.GetRequiredService<IProviderConfigurationStore>();
+        var revisionAware = scope.ServiceProvider.GetRequiredService<IRevisionAwareProviderConfigurationStore>();
         var relational = context.GetService<IDbContextOptions>().Extensions
             .OfType<RelationalOptionsExtension>()
             .Single();
 
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextAccessor>());
+        Assert.IsType<EfProviderConfigurationStore>(primary);
+        Assert.Same(primary, revisionAware);
         Assert.Equal(IdentityProviderConfigurationEfModule.HistoryTableName, relational.MigrationsHistoryTableName);
         Assert.Equal(typeof(IdentityProviderConfigurationDbContext).Assembly.GetName().Name, relational.MigrationsAssembly);
         Assert.DoesNotContain(context.Model.GetEntityTypes(), entity =>
