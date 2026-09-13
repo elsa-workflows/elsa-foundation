@@ -10,6 +10,9 @@ using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Diagnostics.Persistence.Draining;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Xunit;
@@ -29,6 +32,32 @@ public sealed class EfOpenTelemetryDurabilityTests
         Assert.Throws<ArgumentException>(() => new EfOpenTelemetryBinding("\ud800", "scope", "source"));
         Assert.Throws<ArgumentException>(() => new EfOpenTelemetryBinding("\udc00", "scope", "source"));
         Assert.Throws<ArgumentException>(() => new EfOpenTelemetryBinding("\ud800A", "scope", "source"));
+    }
+
+    [Fact]
+    public void Search_projection_identity_and_every_scalar_are_pinned()
+    {
+        var searchKeys = typeof(EfOpenTelemetryStore).Assembly.GetType(
+            "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.OpenTelemetrySearchKeys",
+            throwOnError: true)!;
+        Assert.Equal(
+            "elsa-opentelemetry-unicode-ordinal-ignore-case-v1-bcbcc4bf0951b182137ed0f42681f30bafda7777f500c42203cf58bb7e4eaaa1",
+            searchKeys.GetField("AlgorithmId", BindingFlags.Public | BindingFlags.Static)!.GetRawConstantValue());
+
+        var project = (Func<string, string, string>)searchKeys
+            .GetMethod("Key", BindingFlags.Public | BindingFlags.Static)!
+            .CreateDelegate(typeof(Func<string, string, string>));
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        for (var scalar = 0; scalar <= 0x10FFFF; scalar++)
+        {
+            if (scalar is >= 0xD800 and <= 0xDFFF)
+                continue;
+            hash.AppendData(Encoding.ASCII.GetBytes(project(char.ConvertFromUtf32(scalar), "value")));
+        }
+
+        Assert.Equal(
+            "8ae0e65a0e54d6dcf528d2e67eb6141f4433e855dd8abb8b82d5f9fc5069f3d7",
+            Convert.ToHexStringLower(hash.GetHashAndReset()));
     }
 
     [Fact]
@@ -240,8 +269,7 @@ public sealed class EfOpenTelemetryDurabilityTests
     }
 
     [Theory]
-    [InlineData("{not-json}")]
-    [InlineData("[\"z\",\"a\"]")]
+    [MemberData(nameof(CorruptMembershipDocuments))]
     public async Task Corrupt_durable_summary_is_reported_as_data_corruption_without_a_partial_append(string persistedMemberships)
     {
         await using var fixture = await CreateFixtureAsync();
@@ -265,6 +293,14 @@ public sealed class EfOpenTelemetryDurabilityTests
         Assert.Equal(OpenTelemetryPersistenceFailureReason.CorruptData, failure.Reason);
         var rawTraceCount = await fixture.WithDbAsync(db => db.Traces.CountAsync());
         Assert.Equal(1, rawTraceCount);
+    }
+
+    public static IEnumerable<object[]> CorruptMembershipDocuments()
+    {
+        yield return ["{not-json}"];
+        yield return ["[\"z\",\"a\"]"];
+        yield return ["[null]"];
+        yield return [JsonSerializer.Serialize(Enumerable.Range(0, 5_001).Select(index => $"resource-{index:D4}").ToArray())];
     }
 
     [Theory]

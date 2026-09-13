@@ -154,6 +154,23 @@ public sealed class EfOpenTelemetryStoreTests
     }
 
     [Fact]
+    public async Task Repeated_trace_memberships_merge_by_the_pinned_projection()
+    {
+        await using var fixture = await CreateFixtureAsync();
+        var longS = TelemetryTestData.Resource("resource-ſ", "orders");
+        var asciiS = TelemetryTestData.Resource("resource-s", "orders");
+        var first = TelemetryTestData.Trace("trace-pinned-merge", longS.Id, workflowInstanceIds: ["workflow-ſ"]);
+        var second = TelemetryTestData.Trace("trace-pinned-merge", asciiS.Id, workflowInstanceIds: ["workflow-s"]);
+
+        await fixture.Store.WriteAsync(new([longS], [first], [], [], [], []));
+        await fixture.Store.WriteAsync(new([asciiS], [second], [], [], [], []));
+
+        var summary = Assert.Single((await fixture.Store.QueryTracesAsync(new() { Take = 10 })).Items);
+        Assert.Equal([asciiS.Id], summary.ResourceIds);
+        Assert.Equal(["workflow-s"], summary.WorkflowInstanceIds);
+    }
+
+    [Fact]
     public async Task Equal_start_trace_records_merge_with_a_stable_tie_breaker()
     {
         await using var fixture = await CreateFixtureAsync();
@@ -191,6 +208,22 @@ public sealed class EfOpenTelemetryStoreTests
 
         var summary = Assert.Single((await fixture.Store.QueryTracesAsync(new() { Take = 10 })).Items);
         Assert.Equal([resource.Id], summary.ResourceIds);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Null_trace_membership_collections_are_caller_validation_failures(bool nullResources)
+    {
+        await using var fixture = await CreateFixtureAsync();
+        var resource = TelemetryTestData.Resource("resource-null-memberships", "orders");
+        var valid = TelemetryTestData.Trace("trace-null-memberships", resource.Id, workflowInstanceIds: ["workflow"]);
+        var invalid = nullResources
+            ? valid with { ResourceIds = null! }
+            : valid with { WorkflowInstanceIds = null! };
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() => fixture.Store.WriteAsync(new([resource], [invalid], [], [], [], [])).AsTask());
+        Assert.Equal(0, (await fixture.Store.GetDiagnosticsAsync()).TraceCount);
     }
 
     [Fact]

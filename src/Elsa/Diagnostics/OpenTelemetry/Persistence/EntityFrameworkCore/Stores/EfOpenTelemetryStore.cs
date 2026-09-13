@@ -714,18 +714,28 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
         };
     }
 
-    private static TelemetryTrace MergeTraceRecords(IEnumerable<TelemetryTrace> records) =>
-        NormalizeSummary(TelemetryTraceMerger.Merge(records
+    private static TelemetryTrace MergeTraceRecords(IEnumerable<TelemetryTrace> records)
+    {
+        var normalizedRecords = records
+            .Select(NormalizeSummary)
             .OrderBy(record => record.StartTime)
             .ThenBy(record => record.TraceId, StringComparer.Ordinal)
             .ThenBy(record => record.RootSpanId, StringComparer.Ordinal)
             .ThenBy(record => record.Name, StringComparer.Ordinal)
             .ThenBy(record => record.EndTime)
             .ThenBy(record => record.SpanCount)
-            .ToArray()));
+            .ToArray();
+        var merged = TelemetryTraceMerger.Merge(normalizedRecords);
+        return NormalizeSummary(merged with
+        {
+            ResourceIds = CanonicalSummaryElements(normalizedRecords.SelectMany(record => record.ResourceIds), nameof(merged.ResourceIds)),
+            WorkflowInstanceIds = CanonicalSummaryElements(normalizedRecords.SelectMany(record => record.WorkflowInstanceIds), nameof(merged.WorkflowInstanceIds))
+        });
+    }
 
     private static string[] CanonicalSummaryElements(IEnumerable<string> values, string field)
     {
+        ArgumentNullException.ThrowIfNull(values, field);
         var canonical = values
             .Select((value, index) => (Value: value, Key: OpenTelemetrySearchKeys.SummaryElement(value)))
             .GroupBy(x => x.Key, StringComparer.Ordinal)
@@ -741,7 +751,15 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     private static string[] ValidatePersistedMemberships(string json, string field)
     {
         var values = Deserialize<string[]>(json);
-        var canonical = CanonicalSummaryElements(values, field);
+        string[] canonical;
+        try
+        {
+            canonical = CanonicalSummaryElements(values, field);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new InvalidDataException($"The persisted OpenTelemetry field '{field}' contains invalid membership data.", exception);
+        }
         if (!values.SequenceEqual(canonical, StringComparer.Ordinal))
             throw new InvalidDataException($"The persisted OpenTelemetry field '{field}' was not strictly ordered and unique.");
         return values;
