@@ -1,4 +1,3 @@
-using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -9,6 +8,51 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests
 
 public sealed class IdentityIamProviderModelTests
 {
+    private static readonly HashSet<string> TechnicalKeyProperties =
+    [
+        "TenantLookupKey",
+        "NormalizedUserNameKey",
+        "NormalizedEmailKey",
+        "NormalizedNameKey",
+        "NormalizedRoleNameKey",
+        "ProviderLookupKey",
+        "ProviderSubjectLookupKey",
+        "ExternalOrderKey",
+        "RuleLookupKey",
+        "RuleIdOrderKey",
+        "UserLookupKey",
+        "RoleLookupKey",
+        "RoleIdOrderKey",
+        "ClaimKey",
+        "TokenKey"
+    ];
+
+    private static readonly HashSet<string> SortableKeyProperties =
+    [
+        "ExternalOrderKey",
+        "RuleIdOrderKey",
+        "RoleIdOrderKey"
+    ];
+
+    private static readonly string[] ExpectedIamTables =
+    [
+        "identity_applications",
+        "identity_credentials",
+        "identity_users",
+        "identity_roles",
+        "identity_claim_mappings",
+        "identity_external_logins",
+        "identity_user_claims",
+        "identity_role_claims",
+        "identity_user_roles",
+        "identity_user_tokens",
+        "identity_tenant_memberships",
+        "identity_user_name_reservations",
+        "identity_email_reservations",
+        "identity_role_name_reservations",
+        "identity_mutation_receipts"
+    ];
+
     [Theory]
     [InlineData("SqlServer", "PostgreSql")]
     [InlineData("PostgreSql", "MySql")]
@@ -29,7 +73,7 @@ public sealed class IdentityIamProviderModelTests
     [InlineData("SqlServer", "Microsoft.EntityFrameworkCore.SqlServer")]
     [InlineData("PostgreSql", "Npgsql.EntityFrameworkCore.PostgreSQL")]
     [InlineData("MySql", "MySql.EntityFrameworkCore")]
-    public void Provider_model_builds_offline_with_exactly_application_and_credential_entities(
+    public void Provider_model_builds_offline_with_exactly_the_authoritative_IAM_entities(
         string provider,
         string expectedProvider)
     {
@@ -38,45 +82,83 @@ public sealed class IdentityIamProviderModelTests
         Assert.Equal(expectedProvider, context.Database.ProviderName);
 
         var entityTypes = context.Model.GetEntityTypes().ToArray();
-        Assert.Equal(
-            new[] { typeof(ApplicationEntity), typeof(CredentialEntity) },
-            entityTypes.Select(entity => entity.ClrType).OrderBy(type => type.FullName));
+        Assert.Equal(ExpectedIamTables.OrderBy(name => name), entityTypes.Select(entity => entity.GetTableName()).OrderBy(name => name));
+        Assert.All(entityTypes, entity =>
+        {
+            Assert.Equal(64, entity.FindProperty("Id")!.GetMaxLength());
+            if (entity.FindProperty("TenantId") is { } tenantId)
+                Assert.False(tenantId.IsNullable);
+            Assert.True(entity.FindProperty("Revision")!.IsConcurrencyToken);
+        });
+        Assert.All(
+            entityTypes.Where(IsAuthorityEntity).SelectMany(entity => entity.GetProperties())
+                .Where(property => property.ClrType == typeof(string) &&
+                                   TechnicalKeyProperties.Contains(property.Name) &&
+                                   !SortableKeyProperties.Contains(property.Name)),
+            property =>
+            {
+                Assert.Null(property.GetValueConverter());
+                Assert.Equal(64, property.GetMaxLength());
+                Assert.False(property.IsUnicode());
+            });
+        Assert.All(
+            entityTypes.Where(IsAuthorityEntity).SelectMany(entity => entity.GetProperties())
+                .Where(property => property.ClrType == typeof(string) && SortableKeyProperties.Contains(property.Name)),
+            property =>
+            {
+                Assert.Null(property.GetValueConverter());
+                Assert.Equal(512, property.GetMaxLength());
+                Assert.False(property.IsUnicode());
+            });
+        Assert.All(
+            entityTypes.Where(IsAuthorityEntity).SelectMany(entity => entity.GetProperties())
+                .Where(property => property.ClrType == typeof(string) &&
+                                   property.Name != "Id" &&
+                                   !property.Name.EndsWith("Json", StringComparison.Ordinal) &&
+                                   !TechnicalKeyProperties.Contains(property.Name)),
+            property => Assert.NotNull(property.GetValueConverter()));
         Assert.DoesNotContain(
             entityTypes,
             entity => entity.ClrType.FullName?.Contains("OpenIddict", StringComparison.Ordinal) == true);
 
         var designTimeModel = context.GetService<IDesignTimeModel>().Model;
-        Assert.Equal(
-            new[] { typeof(ApplicationEntity), typeof(CredentialEntity) },
-            designTimeModel.GetEntityTypes().Select(entity => entity.ClrType).OrderBy(type => type.FullName));
+        Assert.Equal(ExpectedIamTables.OrderBy(name => name), designTimeModel.GetEntityTypes().Select(entity => entity.GetTableName()).OrderBy(name => name));
 
-        var application = Assert.IsAssignableFrom<IEntityType>(designTimeModel.FindEntityType(typeof(ApplicationEntity)));
-        var credential = Assert.IsAssignableFrom<IEntityType>(designTimeModel.FindEntityType(typeof(CredentialEntity)));
-        Assert.Equal(64, application.FindProperty(nameof(ApplicationEntity.Id))!.GetMaxLength());
-        Assert.False(application.FindProperty(nameof(ApplicationEntity.TenantId))!.IsNullable);
-        Assert.False(application.FindProperty(nameof(ApplicationEntity.ApplicationId))!.IsNullable);
-        Assert.True(application.FindProperty(nameof(ApplicationEntity.Revision))!.IsConcurrencyToken);
-        Assert.Equal(64, credential.FindProperty(nameof(CredentialEntity.Id))!.GetMaxLength());
-        Assert.False(credential.FindProperty(nameof(CredentialEntity.TenantId))!.IsNullable);
-        Assert.False(credential.FindProperty(nameof(CredentialEntity.CredentialId))!.IsNullable);
-        Assert.True(credential.FindProperty(nameof(CredentialEntity.Revision))!.IsConcurrencyToken);
-        var expiry = credential.FindProperty(nameof(CredentialEntity.ExpiresAt))!;
+        var application = Assert.IsAssignableFrom<IEntityType>(designTimeModel.GetEntityTypes().Single(entity => entity.GetTableName() == "identity_applications"));
+        var credential = Assert.IsAssignableFrom<IEntityType>(designTimeModel.GetEntityTypes().Single(entity => entity.GetTableName() == "identity_credentials"));
+        Assert.Equal(64, application.FindProperty("Id")!.GetMaxLength());
+        Assert.False(application.FindProperty("TenantId")!.IsNullable);
+        Assert.False(application.FindProperty("ApplicationId")!.IsNullable);
+        Assert.True(application.FindProperty("Revision")!.IsConcurrencyToken);
+        Assert.Equal(64, credential.FindProperty("Id")!.GetMaxLength());
+        Assert.False(credential.FindProperty("TenantId")!.IsNullable);
+        Assert.False(credential.FindProperty("CredentialId")!.IsNullable);
+        Assert.True(credential.FindProperty("Revision")!.IsConcurrencyToken);
+        var expiry = credential.FindProperty("ExpiresAt")!;
         Assert.True(expiry.IsNullable);
         Assert.Equal(35, expiry.GetMaxLength());
         Assert.Equal(typeof(string), expiry.GetValueConverter()!.ProviderClrType);
+
+        AssertUniqueIndex(designTimeModel, "identity_external_logins", "TenantLookupKey", "ProviderLookupKey", "ProviderSubjectLookupKey");
+        AssertUniqueIndex(designTimeModel, "identity_user_roles", "TenantLookupKey", "UserLookupKey", "RoleLookupKey");
+        AssertUniqueIndex(designTimeModel, "identity_user_tokens", "TenantLookupKey", "UserLookupKey", "TokenKey");
+        AssertUniqueIndex(designTimeModel, "identity_user_name_reservations", "TenantLookupKey", "NormalizedUserNameKey");
+        AssertUniqueIndex(designTimeModel, "identity_email_reservations", "TenantLookupKey", "NormalizedEmailKey");
+        AssertUniqueIndex(designTimeModel, "identity_role_name_reservations", "TenantLookupKey", "NormalizedRoleNameKey");
+        AssertUniqueIndex(designTimeModel, "identity_mutation_receipts", "MutationReceiptId");
 
         if (provider == "MySql")
         {
             Assert.Equal(IdentityIamMySqlDbContext.CharacterSet, designTimeModel.FindAnnotation("MySQL:Charset")?.Value);
             Assert.Equal(IdentityIamMySqlDbContext.Collation, designTimeModel.GetCollation());
-            Assert.Equal(
-                IdentityIamMySqlDbContext.Collation,
-                designTimeModel.FindEntityType(typeof(ApplicationEntity))!.FindAnnotation("MySQL:Collation")?.Value);
-            Assert.Equal(
-                IdentityIamMySqlDbContext.Collation,
-                designTimeModel.FindEntityType(typeof(CredentialEntity))!.FindAnnotation("MySQL:Collation")?.Value);
+            Assert.All(
+                designTimeModel.GetEntityTypes(),
+                entity => Assert.Equal(IdentityIamMySqlDbContext.Collation, entity.FindAnnotation("MySQL:Collation")?.Value));
         }
     }
+
+    private static bool IsAuthorityEntity(IEntityType entity) =>
+        entity.GetTableName() is not ("identity_applications" or "identity_credentials");
 
     private static IdentityIamDbContext CreateContext(string contextProvider, string actualProvider) =>
         contextProvider switch
@@ -89,6 +171,14 @@ public sealed class IdentityIamProviderModelTests
                 Configure(new DbContextOptionsBuilder<IdentityIamMySqlDbContext>(), actualProvider).Options),
             _ => throw new ArgumentOutOfRangeException(nameof(contextProvider), contextProvider, null)
         };
+
+    private static void AssertUniqueIndex(IModel model, string tableName, params string[] propertyNames)
+    {
+        var entity = model.GetEntityTypes().Single(entityType => entityType.GetTableName() == tableName);
+        Assert.Contains(
+            entity.GetIndexes(),
+            index => index.IsUnique && index.Properties.Select(property => property.Name).SequenceEqual(propertyNames));
+    }
 
     private static DbContextOptionsBuilder<TContext> Configure<TContext>(
         DbContextOptionsBuilder<TContext> builder,

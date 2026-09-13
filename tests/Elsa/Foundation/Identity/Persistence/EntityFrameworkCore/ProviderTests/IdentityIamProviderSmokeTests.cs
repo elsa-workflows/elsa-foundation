@@ -45,34 +45,86 @@ internal static class IdentityIamProviderSmoke
         await using var context = CreateContext(provider, fixture.ConnectionString);
         Assert.Equal(ExpectedProvider(provider), context.Database.ProviderName);
         Assert.Equal(
-            new[] { typeof(ApplicationEntity), typeof(CredentialEntity) },
+            new[]
+            {
+                typeof(ApplicationEntity), typeof(CredentialEntity), typeof(UserEntity), typeof(RoleEntity),
+                typeof(ClaimMappingEntity), typeof(ExternalIdentityEntity), typeof(UserClaimEntity),
+                typeof(RoleClaimEntity), typeof(UserRoleEntity), typeof(UserTokenEntity), typeof(TenantMembershipEntity),
+                typeof(UserNameReservationEntity), typeof(EmailReservationEntity), typeof(RoleNameReservationEntity),
+                typeof(MutationReceiptEntity)
+            }.OrderBy(type => type.FullName),
             context.Model.GetEntityTypes().Select(entity => entity.ClrType).OrderBy(type => type.FullName));
         await IdentityEfProviderDatabaseProvisioning.EnsureModuleTablesAsync(
             context,
             provider,
             IdentityIamEfModule.ApplicationTableName,
-            IdentityIamEfModule.CredentialTableName);
+            IdentityIamEfModule.CredentialTableName,
+            IdentityIamEfModule.UserTableName,
+            IdentityIamEfModule.RoleTableName,
+            IdentityIamEfModule.ClaimMappingTableName,
+            IdentityIamEfModule.ExternalIdentityTableName,
+            IdentityIamEfModule.UserClaimTableName,
+            IdentityIamEfModule.RoleClaimTableName,
+            IdentityIamEfModule.UserRoleTableName,
+            IdentityIamEfModule.UserTokenTableName,
+            IdentityIamEfModule.TenantMembershipTableName,
+            IdentityIamEfModule.UserNameReservationTableName,
+            IdentityIamEfModule.EmailReservationTableName,
+            IdentityIamEfModule.RoleNameReservationTableName,
+            IdentityIamEfModule.MutationReceiptTableName);
         if (provider == "MySql")
             await AssertMySqlTableEncodingAsync(context);
 
         var access = new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
         var applicationStore = new EfApplicationStore(context, access);
         var credentialStore = new EfCredentialStore(context, access);
+        var userStore = new EfUserStore(context, access);
+        var roleStore = new EfRoleStore(context, access);
         var application = Application(tenant, "app-primary");
         var expiresAt = new DateTimeOffset(2031, 4, 5, 6, 7, 8, TimeSpan.FromHours(-7.5));
         var credential = Credential(tenant, "credential-primary", expiresAt);
+        var user = User(tenant, "user-primary");
+        var role = Role(tenant, "role-primary");
 
         await applicationStore.SaveAsync(application);
         await credentialStore.SaveAsync(credential);
+        await userStore.SaveAsync(user);
+        await roleStore.SaveAsync(role);
+
+        var relationships = new EfIdentityAuthorityRelationshipCoordinator(
+            context,
+            new EfIdentityAtomicWrite(context, accessContextAccessor: access),
+            access);
+        var relationship = await relationships.AddUserRoleAsync(
+            tenant,
+            user.Id,
+            role.Id,
+            expectedUserVersion: 1,
+            new UserRoleEntity { TenantId = "caller", UserId = "caller", RoleId = "caller" });
+        Assert.Equal(EfIdentityWriteStatus.Updated, relationship.Status);
+
+        var duplicateUser = await userStore.SaveWithRevisionAsync(
+            user with { Id = "user-name-conflict" },
+            expectedRevision: null);
+        Assert.Equal(IamRevisionSaveStatus.Conflict, duplicateUser.Status);
+        var duplicateRole = await roleStore.SaveWithRevisionAsync(
+            role with { Id = "role-name-conflict" },
+            expectedRevision: null);
+        Assert.Equal(IamRevisionSaveStatus.Conflict, duplicateRole.Status);
 
         await AssertApplicationReadbackAsync(applicationStore, application);
         await AssertCredentialReadbackAsync(credentialStore, credential, expiresAt);
+        AssertUser(user, Assert.IsType<UserRecord>(await userStore.FindAsync(tenant, user.Id)));
+        AssertRole(role, Assert.IsType<RoleRecord>(await roleStore.FindAsync(tenant, role.Id)));
+        Assert.Equal(1, await context.UserRoles.CountAsync());
         await AssertDeterministicSetsAsync(context, applicationStore, application);
 
         await using (var transaction = await context.Database.BeginTransactionAsync())
         {
             await applicationStore.SaveAsync(application with { DisplayName = "rolled-back" });
             await credentialStore.SaveAsync(credential with { Status = CredentialStatus.Revoked });
+            await userStore.SaveAsync(user with { DisplayName = "rolled-back" });
+            await roleStore.SaveAsync(role with { Description = "rolled-back" });
             await transaction.RollbackAsync();
         }
 
@@ -88,6 +140,9 @@ internal static class IdentityIamProviderSmoke
             Assert.NotNull(reopenedCredential);
             Assert.Equal(credential.Status, reopenedCredential!.Status);
             Assert.Equal(expiresAt, reopenedCredential.ExpiresAt);
+            Assert.Equal(user.DisplayName, Assert.IsType<UserRecord>(await new EfUserStore(reopenedAfterRollback, reopenedAccess).FindAsync(tenant, user.Id)).DisplayName);
+            Assert.Equal(role.Description, Assert.IsType<RoleRecord>(await new EfRoleStore(reopenedAfterRollback, reopenedAccess).FindAsync(tenant, role.Id)).Description);
+            Assert.Equal(1, await reopenedAfterRollback.UserRoles.CountAsync());
         }
 
         await AssertCreateConflictAndCasAsync(applicationStore, credentialStore, application, credential);
@@ -104,6 +159,9 @@ internal static class IdentityIamProviderSmoke
         var finalExpiresAt = Assert.IsType<DateTimeOffset>(finalCredential.ExpiresAt);
         Assert.Equal(expiresAt.Ticks, finalExpiresAt.Ticks);
         Assert.Equal(expiresAt.Offset, finalExpiresAt.Offset);
+        Assert.Equal("user-primary", Assert.IsType<UserRecord>(await new EfUserStore(reopened, finalAccess).FindAsync(tenant, user.Id)).DisplayName);
+        Assert.Equal("role-primary", Assert.IsType<RoleRecord>(await new EfRoleStore(reopened, finalAccess).FindAsync(tenant, role.Id)).Description);
+        Assert.Equal(1, await reopened.UserRoles.CountAsync());
     }
 
     private static async Task AssertApplicationReadbackAsync(
@@ -213,6 +271,12 @@ internal static class IdentityIamProviderSmoke
             tenant,
             "credential-concurrent-cas",
             new DateTimeOffset(2032, 5, 6, 7, 8, 9, TimeSpan.FromHours(5.5)).AddTicks(4321));
+        var user = User(tenant, "user-concurrent-cas") with
+        {
+            UserName = "user-concurrent-cas",
+            Email = "user-concurrent-cas@example.test"
+        };
+        var role = Role(tenant, "role-concurrent-cas") with { Name = "role-concurrent-cas" };
 
         await using (var seed = CreateContext(provider, fixture.ConnectionString))
         {
@@ -223,10 +287,18 @@ internal static class IdentityIamProviderSmoke
             Assert.Equal(
                 IamRevisionSaveStatus.Saved,
                 (await new EfCredentialStore(seed, access).SaveWithRevisionAsync(credential, null)).Status);
+            Assert.Equal(
+                IamRevisionSaveStatus.Saved,
+                (await new EfUserStore(seed, access).SaveWithRevisionAsync(user, null)).Status);
+            Assert.Equal(
+                IamRevisionSaveStatus.Saved,
+                (await new EfRoleStore(seed, access).SaveWithRevisionAsync(role, null)).Status);
         }
 
         await AssertConcurrentApplicationCasAsync(fixture.ConnectionString, provider, tenant, application);
         await AssertConcurrentCredentialCasAsync(fixture.ConnectionString, provider, tenant, credential);
+        await AssertConcurrentUserCasAsync(fixture.ConnectionString, provider, tenant, user);
+        await AssertConcurrentRoleCasAsync(fixture.ConnectionString, provider, tenant, role);
     }
 
     private static async Task AssertConcurrentApplicationCasAsync(
@@ -279,6 +351,56 @@ internal static class IdentityIamProviderSmoke
         Assert.Single(results, result => result.Status == IamRevisionSaveStatus.Conflict);
     }
 
+    private static async Task AssertConcurrentUserCasAsync(
+        string connectionString,
+        string provider,
+        string tenant,
+        UserRecord user)
+    {
+        var barrier = new ConcurrentSaveBarrier(participants: 2);
+        await using var firstContext = CreateContext(provider, connectionString, barrier);
+        await using var secondContext = CreateContext(provider, connectionString, barrier);
+        var access = new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
+        var firstStore = new EfUserStore(firstContext, access);
+        var secondStore = new EfUserStore(secondContext, access);
+        var firstRevision = Assert.IsType<string>((await firstStore.FindWithRevisionAsync(tenant, user.Id))!.Revision);
+        var secondRevision = Assert.IsType<string>((await secondStore.FindWithRevisionAsync(tenant, user.Id))!.Revision);
+        Assert.Equal(firstRevision, secondRevision);
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var results = await Task.WhenAll(
+            firstStore.SaveWithRevisionAsync(user with { DisplayName = "race-a" }, firstRevision, timeout.Token).AsTask(),
+            secondStore.SaveWithRevisionAsync(user with { DisplayName = "race-b" }, secondRevision, timeout.Token).AsTask());
+
+        Assert.Single(results, result => result.Status == IamRevisionSaveStatus.Saved);
+        Assert.Single(results, result => result.Status == IamRevisionSaveStatus.Conflict);
+    }
+
+    private static async Task AssertConcurrentRoleCasAsync(
+        string connectionString,
+        string provider,
+        string tenant,
+        RoleRecord role)
+    {
+        var barrier = new ConcurrentSaveBarrier(participants: 2);
+        await using var firstContext = CreateContext(provider, connectionString, barrier);
+        await using var secondContext = CreateContext(provider, connectionString, barrier);
+        var access = new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
+        var firstStore = new EfRoleStore(firstContext, access);
+        var secondStore = new EfRoleStore(secondContext, access);
+        var firstRevision = Assert.IsType<string>((await firstStore.FindWithRevisionAsync(tenant, role.Id))!.Revision);
+        var secondRevision = Assert.IsType<string>((await secondStore.FindWithRevisionAsync(tenant, role.Id))!.Revision);
+        Assert.Equal(firstRevision, secondRevision);
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var results = await Task.WhenAll(
+            firstStore.SaveWithRevisionAsync(role with { Description = "race-a" }, firstRevision, timeout.Token).AsTask(),
+            secondStore.SaveWithRevisionAsync(role with { Description = "race-b" }, secondRevision, timeout.Token).AsTask());
+
+        Assert.Single(results, result => result.Status == IamRevisionSaveStatus.Saved);
+        Assert.Single(results, result => result.Status == IamRevisionSaveStatus.Conflict);
+    }
+
     private static async Task AssertMySqlTableEncodingAsync(IdentityIamDbContext context)
     {
         await context.Database.OpenConnectionAsync();
@@ -287,7 +409,20 @@ internal static class IdentityIamProviderSmoke
             foreach (var tableName in new[]
                      {
                          IdentityIamEfModule.ApplicationTableName,
-                         IdentityIamEfModule.CredentialTableName
+                         IdentityIamEfModule.CredentialTableName,
+                         IdentityIamEfModule.UserTableName,
+                         IdentityIamEfModule.RoleTableName,
+                         IdentityIamEfModule.ClaimMappingTableName,
+                         IdentityIamEfModule.ExternalIdentityTableName,
+                         IdentityIamEfModule.UserClaimTableName,
+                         IdentityIamEfModule.RoleClaimTableName,
+                         IdentityIamEfModule.UserRoleTableName,
+                         IdentityIamEfModule.UserTokenTableName,
+                         IdentityIamEfModule.TenantMembershipTableName,
+                         IdentityIamEfModule.UserNameReservationTableName,
+                         IdentityIamEfModule.EmailReservationTableName,
+                         IdentityIamEfModule.RoleNameReservationTableName,
+                         IdentityIamEfModule.MutationReceiptTableName
                      })
             {
                 await using var command = context.Database.GetDbConnection().CreateCommand();
@@ -357,6 +492,46 @@ internal static class IdentityIamProviderSmoke
         "argon2id",
         CredentialStatus.Active,
         expiresAt);
+
+    private static UserRecord User(string tenant, string id) => new(
+        id,
+        tenant,
+        "user-name",
+        "user@example.test",
+        "user-primary",
+        UserStatus.Active,
+        ResourceOwnership.Foundation,
+        new HashSet<string>(["role-primary"], StringComparer.Ordinal),
+        new HashSet<string>(["identity.users.read"], StringComparer.Ordinal));
+
+    private static RoleRecord Role(string tenant, string id) => new(
+        id,
+        tenant,
+        "role-name",
+        "role-primary",
+        new HashSet<string>(["identity.users.read"], StringComparer.Ordinal),
+        false);
+
+    private static void AssertUser(UserRecord expected, UserRecord actual)
+    {
+        Assert.Equal(expected.Id, actual.Id);
+        Assert.Equal(expected.TenantId, actual.TenantId);
+        Assert.Equal(expected.UserName, actual.UserName);
+        Assert.Equal(expected.Email, actual.Email);
+        Assert.Equal(expected.DisplayName, actual.DisplayName);
+        Assert.True(expected.RoleIds.SetEquals(actual.RoleIds));
+        Assert.True(expected.DirectPermissions.SetEquals(actual.DirectPermissions));
+    }
+
+    private static void AssertRole(RoleRecord expected, RoleRecord actual)
+    {
+        Assert.Equal(expected.Id, actual.Id);
+        Assert.Equal(expected.TenantId, actual.TenantId);
+        Assert.Equal(expected.Name, actual.Name);
+        Assert.Equal(expected.Description, actual.Description);
+        Assert.Equal(expected.System, actual.System);
+        Assert.True(expected.Permissions.SetEquals(actual.Permissions));
+    }
 
     private sealed class FixedAccess(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
     {

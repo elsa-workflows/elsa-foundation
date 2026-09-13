@@ -18,6 +18,22 @@ public static class GroundworkIdentityStoresRegistration
 {
     public static IServiceCollection AddGroundworkIdentityStores(this IServiceCollection services)
     {
+        var existingAuthorityBackend = services
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<IdentityAuthorityStoreBackend>()
+            .SingleOrDefault();
+        existingAuthorityBackend?.EnsureOwnsRegisteredContracts(services);
+        var entityFrameworkAuthorityAlreadySelected = string.Equals(
+            existingAuthorityBackend?.Name,
+            "entity-framework",
+            StringComparison.Ordinal);
+        var groundworkAuthorityAlreadySelected = string.Equals(
+            existingAuthorityBackend?.Name,
+            "groundwork",
+            StringComparison.Ordinal);
+        if (!entityFrameworkAuthorityAlreadySelected)
+            IdentityAuthorityStoreBackend.EnsureCompatible(existingAuthorityBackend?.Name, "groundwork");
+
         var existingIamBackend = services
             .Select(descriptor => descriptor.ImplementationInstance)
             .OfType<IdentityApplicationCredentialStoreBackend>()
@@ -63,8 +79,22 @@ public static class GroundworkIdentityStoresRegistration
         services.TryAddScoped<GroundworkIdentityAuthorityRelationshipCoordinator>();
         services.TryAddScoped<GroundworkIdentityAuthorityAggregateCoordinator>();
 
-        services.RemoveAll<IUserStore>();
-        services.RemoveAll<IRoleStore>();
+        if (!entityFrameworkAuthorityAlreadySelected && !groundworkAuthorityAlreadySelected)
+        {
+            services.RemoveAll<IUserStore>();
+            services.RemoveAll<IRevisionAwareUserStore>();
+            services.RemoveAll<IRoleStore>();
+            services.RemoveAll<IRevisionAwareRoleStore>();
+            services.RemoveAll<IPagedRoleStore>();
+            services.RemoveAll<IClaimMappingStore>();
+            services.RemoveAll<IRevisionAwareClaimMappingStore>();
+            services.RemoveAll<IPagedClaimMappingStore>();
+            services.RemoveAll<IExternalIdentityStore>();
+            services.RemoveAll<IRevisionAwareExternalIdentityStore>();
+            services.RemoveAll<IPagedExternalIdentityStore>();
+            services.RemoveAll<ITenantMembershipStore>();
+            services.RemoveAll<IRevisionAwareTenantMembershipStore>();
+        }
         if (!entityFrameworkIamAlreadySelected && !groundworkIamAlreadySelected)
         {
             services.RemoveAll<IApplicationStore>();
@@ -72,17 +102,36 @@ public static class GroundworkIdentityStoresRegistration
             services.RemoveAll<ICredentialStore>();
             services.RemoveAll<IRevisionAwareCredentialStore>();
         }
-        services.RemoveAll<IClaimMappingStore>();
         if (!entityFrameworkProviderConfigurationAlreadySelected && !groundworkProviderConfigurationAlreadySelected)
         {
             services.RemoveAll<IProviderConfigurationStore>();
             services.RemoveAll<IRevisionAwareProviderConfigurationStore>();
         }
-        services.RemoveAll<IExternalIdentityStore>();
-        services.RemoveAll<ITenantMembershipStore>();
-
-        services.AddScoped<IUserStore, GroundworkUserStore>();
-        services.AddScoped<IRoleStore, GroundworkRoleStore>();
+        if (!entityFrameworkAuthorityAlreadySelected && !groundworkAuthorityAlreadySelected)
+        {
+            services.AddScoped<IUserStore, GroundworkUserStore>();
+            services.Add(ServiceDescriptor.Scoped<IRevisionAwareUserStore>(provider =>
+                (IRevisionAwareUserStore)provider.GetRequiredService<IUserStore>()));
+            services.AddScoped<IRoleStore, GroundworkRoleStore>();
+            services.Add(ServiceDescriptor.Scoped<IRevisionAwareRoleStore>(provider =>
+                (IRevisionAwareRoleStore)provider.GetRequiredService<IRoleStore>()));
+            services.Add(ServiceDescriptor.Scoped<IPagedRoleStore>(provider =>
+                (IPagedRoleStore)provider.GetRequiredService<IRoleStore>()));
+            services.AddScoped<IClaimMappingStore, GroundworkClaimMappingStore>();
+            services.Add(ServiceDescriptor.Scoped<IRevisionAwareClaimMappingStore>(provider =>
+                (IRevisionAwareClaimMappingStore)provider.GetRequiredService<IClaimMappingStore>()));
+            services.Add(ServiceDescriptor.Scoped<IPagedClaimMappingStore>(provider =>
+                (IPagedClaimMappingStore)provider.GetRequiredService<IClaimMappingStore>()));
+            services.AddScoped<IExternalIdentityStore, GroundworkExternalIdentityStore>();
+            services.Add(ServiceDescriptor.Scoped<IRevisionAwareExternalIdentityStore>(provider =>
+                (IRevisionAwareExternalIdentityStore)provider.GetRequiredService<IExternalIdentityStore>()));
+            services.Add(ServiceDescriptor.Scoped<IPagedExternalIdentityStore>(provider =>
+                (IPagedExternalIdentityStore)provider.GetRequiredService<IExternalIdentityStore>()));
+            services.AddScoped<ITenantMembershipStore, GroundworkTenantMembershipStore>();
+            services.Add(ServiceDescriptor.Scoped<IRevisionAwareTenantMembershipStore>(provider =>
+                (IRevisionAwareTenantMembershipStore)provider.GetRequiredService<ITenantMembershipStore>()));
+            services.AddSingleton(new IdentityAuthorityStoreBackend("groundwork", services));
+        }
         if (!entityFrameworkIamAlreadySelected && !groundworkIamAlreadySelected)
         {
             services.AddFoundationIdentityAbstractions();
@@ -102,7 +151,6 @@ public static class GroundworkIdentityStoresRegistration
             services.EnsureReplacementContract<IRevisionAwareCredentialStore, GroundworkCredentialStore>();
             services.AddSingleton(new IdentityApplicationCredentialStoreBackend("groundwork", services));
         }
-        services.AddScoped<IClaimMappingStore, GroundworkClaimMappingStore>();
         if (!entityFrameworkProviderConfigurationAlreadySelected && !groundworkProviderConfigurationAlreadySelected)
         {
             services.AddFoundationIdentityAbstractions();
@@ -117,9 +165,6 @@ public static class GroundworkIdentityStoresRegistration
             services.EnsureReplacementContract<IRevisionAwareProviderConfigurationStore, GroundworkProviderConfigurationStore>();
             services.AddSingleton(new ProviderConfigurationStoreBackend("groundwork", providerDescriptor, revisionDescriptor));
         }
-        services.AddScoped<IExternalIdentityStore, GroundworkExternalIdentityStore>();
-        services.AddScoped<ITenantMembershipStore, GroundworkTenantMembershipStore>();
-
         return services;
     }
 }

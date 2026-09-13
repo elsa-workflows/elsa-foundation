@@ -1,4 +1,5 @@
 using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.Extensions;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
@@ -20,22 +21,41 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests;
 
 public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
 {
+    private static readonly Type[] ApplicationCredentialContracts =
+    [
+        typeof(IApplicationStore),
+        typeof(IRevisionAwareApplicationStore),
+        typeof(ICredentialStore),
+        typeof(IRevisionAwareCredentialStore)
+    ];
+
+    private static readonly Type[] AuthorityContracts =
+    [
+        typeof(IUserStore),
+        typeof(IRevisionAwareUserStore),
+        typeof(IRoleStore),
+        typeof(IRevisionAwareRoleStore),
+        typeof(IPagedRoleStore),
+        typeof(IClaimMappingStore),
+        typeof(IRevisionAwareClaimMappingStore),
+        typeof(IPagedClaimMappingStore),
+        typeof(IExternalIdentityStore),
+        typeof(IRevisionAwareExternalIdentityStore),
+        typeof(IPagedExternalIdentityStore),
+        typeof(ITenantMembershipStore),
+        typeof(IRevisionAwareTenantMembershipStore)
+    ];
+
     [Fact]
-    public void Registration_replaces_exactly_the_four_application_and_credential_contracts()
+    public void Registration_replaces_exactly_the_seventeen_IAM_contracts()
     {
         var services = new ServiceCollection();
 
         services.AddIdentityIamEntityFrameworkCore(SqliteOptions());
 
-        var replacementContracts = new[]
-        {
-            typeof(IApplicationStore),
-            typeof(IRevisionAwareApplicationStore),
-            typeof(ICredentialStore),
-            typeof(IRevisionAwareCredentialStore)
-        };
+        var replacementContracts = ApplicationCredentialContracts.Concat(AuthorityContracts).ToArray();
 
-        Assert.Equal(4, services.Count(descriptor => replacementContracts.Contains(descriptor.ServiceType)));
+        Assert.Equal(17, services.Count(descriptor => replacementContracts.Contains(descriptor.ServiceType)));
         Assert.All(replacementContracts, contract =>
         {
             var descriptor = Assert.Single(services, candidate => candidate.ServiceType == contract);
@@ -44,6 +64,16 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         });
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfApplicationStore));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfCredentialStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfUserStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfRoleStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfClaimMappingStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfExternalIdentityStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfTenantMembershipStore));
+        Assert.Equal(IdentityIamEntityFrameworkCoreRegistration.StoreBackendName,
+            Assert.Single(services
+                .Where(descriptor => descriptor.ServiceType == typeof(IdentityAuthorityStoreBackend))
+                .Select(descriptor => Assert.IsType<IdentityAuthorityStoreBackend>(descriptor.ImplementationInstance)))
+                .Name);
         Assert.Equal(
             IdentityIamEntityFrameworkCoreRegistration.StoreBackendName,
             Assert.Single(services
@@ -53,7 +83,7 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
     }
 
     [Fact]
-    public async Task Registration_resolves_application_and_credential_aliases_to_one_scoped_EF_store_each()
+    public async Task Registration_resolves_all_seventeen_contracts_to_one_scoped_EF_store_each()
     {
         var services = new ServiceCollection();
         services.AddIdentityIamEntityFrameworkCore(SqliteOptions());
@@ -73,9 +103,30 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         Assert.Same(credential, revisionAwareCredential);
         Assert.NotSame(application, credential);
 
+        var user = firstScope.ServiceProvider.GetRequiredService<IUserStore>();
+        Assert.IsType<EfUserStore>(user);
+        Assert.Same(user, firstScope.ServiceProvider.GetRequiredService<IRevisionAwareUserStore>());
+        var role = firstScope.ServiceProvider.GetRequiredService<IRoleStore>();
+        Assert.IsType<EfRoleStore>(role);
+        Assert.Same(role, firstScope.ServiceProvider.GetRequiredService<IRevisionAwareRoleStore>());
+        Assert.Same(role, firstScope.ServiceProvider.GetRequiredService<IPagedRoleStore>());
+        var claimMapping = firstScope.ServiceProvider.GetRequiredService<IClaimMappingStore>();
+        Assert.IsType<EfClaimMappingStore>(claimMapping);
+        Assert.Same(claimMapping, firstScope.ServiceProvider.GetRequiredService<IRevisionAwareClaimMappingStore>());
+        Assert.Same(claimMapping, firstScope.ServiceProvider.GetRequiredService<IPagedClaimMappingStore>());
+        var externalIdentity = firstScope.ServiceProvider.GetRequiredService<IExternalIdentityStore>();
+        Assert.IsType<EfExternalIdentityStore>(externalIdentity);
+        Assert.Same(externalIdentity, firstScope.ServiceProvider.GetRequiredService<IRevisionAwareExternalIdentityStore>());
+        Assert.Same(externalIdentity, firstScope.ServiceProvider.GetRequiredService<IPagedExternalIdentityStore>());
+        var membership = firstScope.ServiceProvider.GetRequiredService<ITenantMembershipStore>();
+        Assert.IsType<EfTenantMembershipStore>(membership);
+        Assert.Same(membership, firstScope.ServiceProvider.GetRequiredService<IRevisionAwareTenantMembershipStore>());
+
         await using var secondScope = provider.CreateAsyncScope();
         Assert.NotSame(application, secondScope.ServiceProvider.GetRequiredService<IApplicationStore>());
         Assert.NotSame(credential, secondScope.ServiceProvider.GetRequiredService<ICredentialStore>());
+        Assert.NotSame(user, secondScope.ServiceProvider.GetRequiredService<IUserStore>());
+        Assert.NotSame(role, secondScope.ServiceProvider.GetRequiredService<IRoleStore>());
     }
 
     [Fact]
@@ -97,33 +148,25 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         Assert.Same(application, revisionAwareApplication);
         Assert.IsType<GroundworkCredentialStore>(credential);
         Assert.Same(credential, revisionAwareCredential);
+        AssertGroundworkAuthorityStores(services);
     }
 
     [Fact]
-    public void Registration_preserves_unrelated_Groundwork_stores_and_provider_configuration()
+    public void Registration_replaces_all_Groundwork_IAM_authority_stores_and_preserves_provider_configuration()
     {
         var services = GroundworkServices();
         services.AddGroundworkIdentityStores();
 
-        var groundworkUser = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IUserStore));
-        var groundworkRole = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IRoleStore));
-        var groundworkClaimMapping = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IClaimMappingStore));
-        var groundworkExternalIdentity = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IExternalIdentityStore));
-        var groundworkMembership = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(ITenantMembershipStore));
         var groundworkProvider = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IProviderConfigurationStore));
         var groundworkRevisionProvider = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IRevisionAwareProviderConfigurationStore));
 
         services.AddIdentityIamEntityFrameworkCore(SqliteOptions());
 
-        Assert.Same(groundworkUser, Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IUserStore)));
-        Assert.Same(groundworkRole, Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IRoleStore)));
-        Assert.Same(groundworkClaimMapping, Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IClaimMappingStore)));
-        Assert.Same(groundworkExternalIdentity, Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IExternalIdentityStore)));
-        Assert.Same(groundworkMembership, Assert.Single(services, descriptor => descriptor.ServiceType == typeof(ITenantMembershipStore)));
         Assert.Same(groundworkProvider, Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IProviderConfigurationStore)));
         Assert.Same(groundworkRevisionProvider, Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IRevisionAwareProviderConfigurationStore)));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(GroundworkProviderConfigurationStore));
-        AssertGroundworkUnrelatedStores(services);
+        AssertIamAuthorityBackend(services);
+        AssertIamApplicationCredentialBackend(services);
     }
 
     [Fact]
@@ -139,8 +182,8 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
 
         AssertIamBackend(groundworkFirst, typeof(EfApplicationStore), typeof(EfCredentialStore));
         AssertIamBackend(efFirst, typeof(EfApplicationStore), typeof(EfCredentialStore));
-        AssertGroundworkUnrelatedStores(groundworkFirst);
-        AssertGroundworkUnrelatedStores(efFirst);
+        AssertIamAuthorityBackend(groundworkFirst);
+        AssertIamAuthorityBackend(efFirst);
         AssertProviderConfigurationIsGroundwork(groundworkFirst);
         AssertProviderConfigurationIsGroundwork(efFirst);
 
@@ -148,6 +191,19 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
             groundworkFirstProvider.GetRequiredService<IStartupValidator>().Validate();
         using var efFirstProvider = efFirst.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         efFirstProvider.GetRequiredService<IStartupValidator>().Validate();
+    }
+
+    [Fact]
+    public void Registration_accepts_the_known_in_memory_authority_factory_shape()
+    {
+        var services = new ServiceCollection();
+        services.AddInMemoryAuthorityShape();
+
+        services.AddIdentityIamEntityFrameworkCore(SqliteOptions());
+
+        AssertIamAuthorityBackend(services);
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        provider.GetRequiredService<IStartupValidator>().Validate();
     }
 
     [Fact]
@@ -240,6 +296,71 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         Assert.Contains(typeof(IRevisionAwareApplicationStore).FullName!, exception.Message, StringComparison.Ordinal);
         Assert.Contains(typeof(ICredentialStore).FullName!, exception.Message, StringComparison.Ordinal);
         Assert.Contains(typeof(IRevisionAwareCredentialStore).FullName!, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Unowned_authority_registration_before_EF_is_rejected_without_mutation()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IUserStore, UnownedAuthorityStore>();
+        var before = services.ToArray();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            services.AddIdentityIamEntityFrameworkCore(SqliteOptions()));
+
+        Assert.Contains("unowned host registration", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(before, services.ToArray());
+    }
+
+    [Fact]
+    public void Custom_authority_backend_before_EF_is_rejected_without_mutation()
+    {
+        var services = new ServiceCollection();
+        foreach (var contract in AuthorityContracts)
+        {
+            ((IServiceCollection)services).Add(ServiceDescriptor.Describe(
+                contract,
+                static _ => new object(),
+                ServiceLifetime.Scoped));
+        }
+
+        services.AddSingleton(new IdentityAuthorityStoreBackend("custom", services));
+        var before = services.ToArray();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            services.AddIdentityIamEntityFrameworkCore(SqliteOptions()));
+
+        Assert.Contains("already bound to 'custom'", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(before, services.ToArray());
+    }
+
+    [Fact]
+    public void Unowned_authority_registration_after_Groundwork_is_rejected_without_mutation()
+    {
+        var services = GroundworkServices();
+        services.AddGroundworkIdentityStores();
+        services.AddScoped<IUserStore, UnownedAuthorityStore>();
+        var before = services.ToArray();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            services.AddIdentityIamEntityFrameworkCore(SqliteOptions()));
+
+        Assert.Contains("no longer exclusively owns", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(before, services.ToArray());
+    }
+
+    [Fact]
+    public void Unowned_authority_registration_after_EF_fails_startup_validation()
+    {
+        var services = new ServiceCollection();
+        services.AddIdentityIamEntityFrameworkCore(SqliteOptions());
+        services.AddScoped<IUserStore, UnownedAuthorityStore>();
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        var exception = Assert.Throws<OptionsValidationException>(
+            provider.GetRequiredService<IStartupValidator>().Validate);
+
+        Assert.Contains(typeof(IUserStore).FullName!, exception.Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -434,6 +555,40 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
                 .Name);
     }
 
+    private static void AssertIamApplicationCredentialBackend(IServiceCollection services)
+    {
+        foreach (var contract in ApplicationCredentialContracts)
+        {
+            var descriptor = Assert.Single(services, candidate => candidate.ServiceType == contract);
+            Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+            Assert.NotNull(descriptor.ImplementationFactory);
+        }
+
+        Assert.Equal(
+            IdentityIamEntityFrameworkCoreRegistration.StoreBackendName,
+            Assert.Single(services
+                .Where(descriptor => descriptor.ServiceType == typeof(IdentityApplicationCredentialStoreBackend))
+                .Select(descriptor => Assert.IsType<IdentityApplicationCredentialStoreBackend>(descriptor.ImplementationInstance)))
+                .Name);
+    }
+
+    private static void AssertIamAuthorityBackend(IServiceCollection services)
+    {
+        foreach (var contract in AuthorityContracts)
+        {
+            var descriptor = Assert.Single(services, candidate => candidate.ServiceType == contract);
+            Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+            Assert.NotNull(descriptor.ImplementationFactory);
+        }
+
+        Assert.Equal(
+            IdentityIamEntityFrameworkCoreRegistration.StoreBackendName,
+            Assert.Single(services
+                .Where(descriptor => descriptor.ServiceType == typeof(IdentityAuthorityStoreBackend))
+                .Select(descriptor => Assert.IsType<IdentityAuthorityStoreBackend>(descriptor.ImplementationInstance)))
+                .Name);
+    }
+
     private static void AssertGroundworkUnrelatedStores(IServiceCollection services)
     {
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IUserStore) && descriptor.ImplementationType == typeof(GroundworkUserStore));
@@ -441,6 +596,16 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IClaimMappingStore) && descriptor.ImplementationType == typeof(GroundworkClaimMappingStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IExternalIdentityStore) && descriptor.ImplementationType == typeof(GroundworkExternalIdentityStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(ITenantMembershipStore) && descriptor.ImplementationType == typeof(GroundworkTenantMembershipStore));
+    }
+
+    private static void AssertGroundworkAuthorityStores(IServiceCollection services)
+    {
+        AssertGroundworkUnrelatedStores(services);
+        foreach (var contract in AuthorityContracts)
+        {
+            var descriptor = Assert.Single(services, candidate => candidate.ServiceType == contract);
+            Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
+        }
     }
 
     private static void AssertProviderConfigurationIsGroundwork(IServiceCollection services)
@@ -512,6 +677,18 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
             throw new NotSupportedException();
 
         ValueTask<IamRevisionSaveResult> IRevisionAwareCredentialStore.SaveWithRevisionAsync(CredentialRecord credential, string? expectedRevision, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class UnownedAuthorityStore : IUserStore
+    {
+        public ValueTask<UserRecord?> FindAsync(string tenantId, string userId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<UserRecord?> FindByEmailAsync(string tenantId, string email, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask SaveAsync(UserRecord user, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }
 

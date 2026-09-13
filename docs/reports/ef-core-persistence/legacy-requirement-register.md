@@ -1,14 +1,14 @@
 # EF Core persistence legacy-requirement register
 
-Status: active completion evidence for [#1671](https://github.com/elsa-workflows/elsa-foundation/issues/1671).
+Status: active completion evidence for Program [#1665](https://github.com/elsa-workflows/elsa-foundation/issues/1665), initially delivered by [#1671](https://github.com/elsa-workflows/elsa-foundation/issues/1671).
 
-Live state checked 2026-09-12. This register maps 77 open requirement-bearing/current-program issues
-and one closed predecessor that materially constrain the Groundwork-to-EF program. It is deliberately broader than
+Live state checked 2026-09-13. This register maps requirement-bearing current-program issues and
+closed predecessors that materially constrain the Groundwork-to-EF program. It is deliberately broader than
 a title-only `Groundwork` search: provider failures, Runtime semantics, e2e defects, fixture behavior,
 and EF defects remain relevant even when their titles do not name the current adapter.
 
-No issue is closed by this inventory. Before later closure, the named EF owner must either prove the
-carried requirement, link a successor containing every unresolved criterion, or record the exact
+Closing a mapped issue does not discard its carried requirements. Before closure, the named EF owner must
+either prove the requirement, link a successor containing every unresolved criterion, or record the exact
 owner-authorized policy retirement. Performance-only criteria retire by owner decision; concurrency,
 leases, fencing, idempotency, bounded queries, retention, atomicity, deadlock handling, crash
 recovery, and failure behavior do not.
@@ -17,10 +17,10 @@ recovery, and failure behavior do not.
 
 | Issue | Live state | Requirement carried forward | EF owner / closure gate | Disposition |
 |---|---|---|---|---|
-| [#1626](https://github.com/elsa-workflows/elsa-foundation/issues/1626) Secrets EF persistence pilot and replacement decision | Open | Preserve the pilot's technical evidence and bounded scope; do not treat it as Runtime/MySQL/repository-wide proof | #1679; close as superseded only after all surviving pilot criteria are linked | Supersede later |
-| [#1628](https://github.com/elsa-workflows/elsa-foundation/issues/1628) Secrets EF pilot ADR decision and governance reconciliation | Open | Preserve ADR 0072 as bounded history and reconcile #1622/#1623 without restoring old policy | #1666/#1671; ADR 0073 is current authority | Supersede later |
+| [#1626](https://github.com/elsa-workflows/elsa-foundation/issues/1626) Secrets EF persistence pilot and replacement decision | Closed | Preserve the pilot's technical evidence and bounded scope; do not treat it as Runtime/MySQL/repository-wide proof | #1679 carries surviving rollout criteria | Closed completed 2026-09-13 after ADR 0073 reconciliation |
+| [#1628](https://github.com/elsa-workflows/elsa-foundation/issues/1628) Secrets EF pilot ADR decision and governance reconciliation | Closed | Preserve ADR 0072 as bounded history and reconcile #1622/#1623 without restoring old policy | #1666/#1671; ADR 0073 is current authority | Closed completed 2026-09-13; #1622 explicitly superseded |
 | [#1653](https://github.com/elsa-workflows/elsa-foundation/issues/1653) Secrets production-shaped HTTP CRUD and restart | Open | Real host CRUD, persistence, restart and response behavior | #1679 | Preserve and prove |
-| [#1654](https://github.com/elsa-workflows/elsa-foundation/issues/1654) Persistence inventory and transaction boundaries | Open | Verified repository inventory and explicit transaction topology | #1671 records the complete successor evidence | Supersede after #1671 closure |
+| [#1654](https://github.com/elsa-workflows/elsa-foundation/issues/1654) Persistence inventory and transaction boundaries | Closed | Verified repository inventory and explicit transaction topology | #1671 records the complete successor evidence | Closed completed 2026-09-13 as superseded by #1671 |
 | [#1657](https://github.com/elsa-workflows/elsa-foundation/issues/1657) Concurrent `dotnet-ef` BuildHost race | Open | Safe concurrent tooling using current compiled artifacts | #1669 prerequisite | Preserve and prove |
 | [#1644](https://github.com/elsa-workflows/elsa-foundation/issues/1644) Foundation Host cannot share unsigned CShells assemblies with Nuplane package graphs | Open | Packaged EF shell discovery, assembly identity, readiness failure and restart/reconciliation | #1670/#1679 | Preserve host-composition requirement |
 | [#1665](https://github.com/elsa-workflows/elsa-foundation/issues/1665) Replace Groundwork with EF Core persistence | Open | Full terminal requirement audit | Program issue; closes last | Active authority |
@@ -28,11 +28,11 @@ recovery, and failure behavior do not.
 | [#1668](https://github.com/elsa-workflows/elsa-foundation/issues/1668) Retire persistence performance measurement and preserve correctness evidence | Open | Remove all performance infrastructure without losing timing-independent safety or correctness | #1668 with module owners | Active feature |
 | [#1669](https://github.com/elsa-workflows/elsa-foundation/issues/1669) Four-provider migration lifecycle and isolation | Open | Provider/artifact pairing, histories, runtime/out-of-process apply, locks, pending model, fresh install and failure-before-activation | #1669 after #1657 | Active spike |
 | [#1670](https://github.com/elsa-workflows/elsa-foundation/issues/1670) Default flip, Groundwork/Mongo removal and closure audit | Open | EF default hosts, complete active-surface deletion and final audit | #1670 after all replacements | Active epic |
-| [#1671](https://github.com/elsa-workflows/elsa-foundation/issues/1671) Complete ledger and legacy mapping | Open | Entry-level registers and truthful ownership/disposition | Current active leaf | In progress |
+| [#1671](https://github.com/elsa-workflows/elsa-foundation/issues/1671) Complete ledger and legacy mapping | Closed | Entry-level registers and truthful ownership/disposition | Program #1665 owns continuing updates | Closed/Passed; delivered by PR #1687 |
 | [#1672](https://github.com/elsa-workflows/elsa-foundation/issues/1672) EF Runtime and distributed Runtime | Open | All Runtime/distributed semantics and 32 storage units | #1676 then elaborated children | Active epic |
 | [#1673](https://github.com/elsa-workflows/elsa-foundation/issues/1673) Governance, inventory and architecture decisions | Open | Governance plus four spikes | Parent of #1671/#1674-#1676/#1669 | Active epic |
 | [#1674](https://github.com/elsa-workflows/elsa-foundation/issues/1674) Cross-module EF transaction topology | Open | All transaction acceptance rows A01-A13 in the surface register | #1674 | Active spike |
-| [#1675](https://github.com/elsa-workflows/elsa-foundation/issues/1675) EF Core 10 MySQL feasibility | Open | Exact provider/API/version and complete MySQL capability matrix | #1675 | Active spike |
+| [#1675](https://github.com/elsa-workflows/elsa-foundation/issues/1675) EF Core 10 MySQL feasibility | Closed | Exact provider/API/version and complete MySQL capability matrix | #1675 evidence remains the provider baseline | Closed/Passed |
 | [#1676](https://github.com/elsa-workflows/elsa-foundation/issues/1676) Hard EF Runtime proving slice | Open | Claims/leases/fencing/idempotency/checkpoint-outbox/crash/concurrency/SQLite contention | #1676 | Active spike |
 | [#1677](https://github.com/elsa-workflows/elsa-foundation/issues/1677) EF Design, Publishing, Elsa3 import and Dashboard | Open | 35 owned units plus cross-module publication/import/dashboard semantics | Elaborate worker-ready children after spikes | Active epic |
 | [#1678](https://github.com/elsa-workflows/elsa-foundation/issues/1678) General EF lifecycle policy and four-provider test kit | Open | Reusable lifecycle without a universal domain abstraction | #1678 after spikes | Active feature |
@@ -78,7 +78,7 @@ recovery, and failure behavior do not.
 | Issue | Live state | Timing-independent requirement carried forward | EF owner / closure gate | Disposition |
 |---|---|---|---|---|
 | [#420](https://github.com/elsa-workflows/elsa-foundation/issues/420) Diagnostics duplication and OTel store behavior | Open | Normalized/bounded OTel queries, failure logging, option validation and consistent API behavior | #1681; timing claims retire | Preserve correctness; split unrelated DRY work |
-| [#646](https://github.com/elsa-workflows/elsa-foundation/issues/646) Groundwork diagnostics performance budgets | Open | Retain provider correctness, concurrency, bounded queries, retention, redaction and failure evidence | #1681/#1668; all native-plan/timing/budget verdict criteria retire by owner policy | Retire measurement after correctness mapping |
+| [#646](https://github.com/elsa-workflows/elsa-foundation/issues/646) Groundwork diagnostics performance budgets | Closed | Retain provider correctness, concurrency, bounded queries, retention, redaction and failure evidence | #1681/#1668 carry timing-independent correctness; all native-plan/timing/budget verdict criteria retire by owner policy | Closed not planned 2026-09-13; no performance verdict claimed |
 | [#1185](https://github.com/elsa-workflows/elsa-foundation/issues/1185) SQL Server design search route failure | Open | Bounded, correct SQL Server search/paging with no provider-plan failure | #1677 child/#1678 | Preserve |
 | [#1223](https://github.com/elsa-workflows/elsa-foundation/issues/1223) Hard-stop append test continuation flake | Open | A hard stop settles every accepted append without relying on `IsCompleted` scheduling | #1681; verify existing #1222 fix remains represented | Close later as implemented/superseded, not by migration |
 | [#1297](https://github.com/elsa-workflows/elsa-foundation/issues/1297) Groundwork SQLite HTTP endpoint starts no workflow | Open | Real HTTP route starts and persists workflow, returns correct response, survives restart | #1672/#1670; T37 and host e2e | Preserve |
@@ -90,7 +90,7 @@ recovery, and failure behavior do not.
 | [#1425](https://github.com/elsa-workflows/elsa-foundation/issues/1425) Store-performance adapter and concurrency measurement | Open | Concurrent checkpoint/lease correctness discovered by the adapter remains required | #1676/#1668; adapter/measurement request retires | Retire measurement after extraction |
 | [#1521](https://github.com/elsa-workflows/elsa-foundation/issues/1521) OTel EF full-table materialization | Open | Push bounded/filterable queries to the database and use normalized lookup with correct parity | #1681 | Preserve bounded-query correctness; no timing gate |
 | [#1529](https://github.com/elsa-workflows/elsa-foundation/issues/1529) Structured Logs/Identity EF bug and observability batch | Open | Batched role claims, error-code classification, exception context/logging and operational visibility | #1681/#1682 | Preserve applicable defects |
-| [#1576](https://github.com/elsa-workflows/elsa-foundation/issues/1576) Groundwork validation/performance program | Open | Keep stress/concurrency/recovery correctness not otherwise owned | #1668 maps and retires measurement program; module owners carry correctness | Supersede/retire later |
+| [#1576](https://github.com/elsa-workflows/elsa-foundation/issues/1576) Groundwork validation/performance program | Closed | Keep stress/concurrency/recovery correctness not otherwise owned | #1668 and module owners carry timing-independent correctness | Closed not planned 2026-09-13 under ADR 0073; no performance verdict claimed |
 | [#1594](https://github.com/elsa-workflows/elsa-foundation/issues/1594) Typed native-plan evidence/parser deletion | Open | Provider-neutral functional evidence may move to normal contract tests | #1668/#1670; native-plan admission and parser migration retire with performance policy | Retire after correctness audit |
 | [#1611](https://github.com/elsa-workflows/elsa-foundation/issues/1611) Mongo diagnostics measurement child records no commands | Open | Structured-log reopen/read/high-water correctness remains covered relationally | #1681; Mongo measurement/topology retires | Retire Mongo/measurement after mapping |
 | [#1659](https://github.com/elsa-workflows/elsa-foundation/issues/1659) Publishing foreign slot ownership | Closed | Preflight refuses foreign-owned slot before any write; activation cannot fail after partial publication | #1674/#1677 must retain regression coverage despite closed state | Closed predecessor; preserve criterion |

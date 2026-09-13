@@ -3,9 +3,10 @@
 Status: active completion evidence for [#1671](https://github.com/elsa-workflows/elsa-foundation/issues/1671).
 
 Snapshot: `main` at `7a952efcf8d53472d7d4e7e3fd7b51d7a808c1c8` (2026-09-12).
-This register covers 57 relevant test/evidence projects (51 snapshot projects plus two merged
+This register covers 60 relevant test/evidence projects (51 snapshot projects plus two merged
 Studio Preferences EF projects, two Structured Logs EF projects delivered by #1696, and two
-OpenTelemetry EF projects being implemented under #1697): the original 36 Groundwork/Mongo-named
+OpenTelemetry EF projects delivered by #1701, plus the two Identity EF behavioral/provider projects and the
+ASP.NET Identity EF adapter project being implemented under #1712): the original 36 Groundwork/Mongo-named
 projects, eight omitted direct-package consumers, two project-reference-only consumers, two host
 consumers, and three EF-only Secrets destinations. The base Secrets EF test project is one of the
 eight omitted direct-package consumers because it still exercises a dual Groundwork/EF topology.
@@ -24,7 +25,7 @@ default-flip owner explicit without repeating the same text 51 times.
 |---|---|---|
 | T01-T04, T15-T20, T32-T35, T42, T44, T46 | #1677 worker-ready children after MySQL, transaction and migration spikes; Runtime replacements where named | Owning Activities/Workflows Design, Publishing, Dashboard or import production row; blank pending merge |
 | T05-T08, T39, T54-T57 | #1681 after shared EF foundation, MySQL and migration lifecycle | Diagnostics production/host rows; blank pending merge |
-| T09-T13, T40 | #1682 after shared EF foundation, MySQL, transaction and migration lifecycle | Identity production/host rows; blank pending merge |
+| T09-T13, T40, T58-T60 | #1682 after shared EF foundation, MySQL, transaction and migration lifecycle | Identity production/host rows; blank pending merge |
 | T14, T21-T25, T28, T45, T47-T48, T51 | #1670 after the relevant replacements; #1678/#1669 where test-kit or migration behavior is involved | Host/default-flip row or N/A for a pure tool/guard; blank pending merge |
 | T26-T27, T36-T38, T43 | #1672/#1676 after MySQL, transaction and migration spikes | Runtime/distributed Runtime host row; blank pending merge |
 | T29-T30, T41, T49-T50 | #1679 after MySQL and migration-lifecycle spikes | Secrets production/host row; blank pending merge |
@@ -91,6 +92,9 @@ default-flip owner explicit without repeating the same text 51 times.
 | T55 | `tests/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests.csproj` | #1695 | Live provider smoke: PostgreSQL/SQL Server/MySQL model binding plus representative append/read/CAS and rollback or stale-CAS outcome | PostgreSQL/SQL Server/MySQL; Docker-skippable retained EF destination delivered by #1696 | #1696 | N/A |
 | T56 | `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests.csproj` | #1697 | SQLite behavioral contract: all-signal atomic capture, scoped queries/detail, canonical search, explicit replay ledger, trace-summary merge/CAS, retention/recovery, restart and opt-in DI | SQLite; retained EF destination delivered by #1701 | #1701 | N/A |
 | T57 | `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests.csproj` | #1697 | Four-provider model binding plus live PostgreSQL/SQL Server/MySQL representative all-signal CRUD/query/transaction, restart, isolation and concurrent trace-summary merge | PostgreSQL/SQL Server/MySQL; Docker-skippable retained EF destination delivered by #1701 | #1701 | N/A |
+| T58 | `tests/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests.csproj` | #1712 | SQLite IAM authority behavior: tenant isolation, lossless CRUD, bounded ordering, reservations, relationships, atomicity, replay/recovery and optimistic concurrency | SQLite comprehensive; implementation in progress | | N/A |
+| T59 | `tests/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests.csproj` | #1712 | SQL Server, PostgreSQL, and MySQL model creation and representative CRUD/query/transaction/concurrency smoke | SQL Server/PostgreSQL/MySQL focused provider smoke; implementation in progress | | N/A |
+| T60 | `tests/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Tests.csproj` | #1712 | Complete ASP.NET Core Identity store surface, tenant isolation, normalized uniqueness, relationship atomicity, concurrency stamps, sign-in/session, and seeding over the shared EF authority | SQLite comprehensive; implementation in progress | | N/A |
 
 ## Correctness hidden inside retiring performance surfaces
 
