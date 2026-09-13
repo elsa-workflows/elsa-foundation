@@ -39,14 +39,14 @@ never started concurrently by this project. MySQL uses the pinned
 
 | Row | Evidence and disposition |
 | --- | --- |
-| A01 shared connection ownership | **Proved in SQLite and all three native smokes.** Ownership transfers to the operation; callers do not independently dispose the connection. Idempotent operation disposal closes it exactly once. |
-| A02 transaction ownership/enlistment | **Proved in all providers.** Three borrowers explicitly call `UseTransaction`; a different connection is refused before writes. |
+| A01 shared connection ownership | **Exercised in SQLite and all three native smokes.** Ownership transfers to the operation; callers do not independently dispose the connection. SQLite additionally asserts idempotent operation disposal closes the connection exactly once; native smokes do not assert a disposal count or closed state. |
+| A02 transaction ownership/enlistment | **Proved in all providers.** Three borrowers explicitly call `UseTransaction`. Split-connection refusal before writes is explicitly asserted in SQLite; native smokes use one shared connection but do not duplicate that refusal assertion. |
 | A03 construction/disposal | **Proved for the test topology.** Runtime, Design, and Publishing contexts are independently constructed and can be disposed before owner commit. Production factories and shell lifetime remain #1678/#1670 work. |
-| A04 lifetime/commit/rollback | **Proved.** Commit makes all three rows visible; explicit rollback and owner teardown rollback leave no rows. Commit exceptions are classified as unknown outcome, never success, and a second commit attempt is refused after the first attempt. A network-induced ambiguous commit was not injected. |
+| A04 lifetime/commit/rollback | **Proved.** Commit makes all three rows visible; explicit rollback and owner teardown rollback leave no rows. Explicit rollback is terminal and idempotent. Commit exceptions are classified as unknown outcome, never success, and a second commit attempt is refused after the first attempt. A network-induced ambiguous commit was not injected. |
 | A05 partial `SaveChanges` failure | **Proved for an exception after an earlier save** in SQLite and native smokes. SQLite additionally proves savepoint-scoped rollback. A provider-specific duplicate-key failure matrix remains module/provider work. |
 | A06 retries/execution strategies | **Policy fixed, not a production implementation.** Retry ownership is the whole operation with fresh owner and borrowers; per-context replay is forbidden. EF provider execution strategies must wrap the whole operation before manual enlistment, or be explicitly disabled/ adapted. |
 | A07 savepoints | **Executable for all four providers.** SQLite, PostgreSQL, and MySQL use `SAVEPOINT`/`ROLLBACK TO SAVEPOINT`; SQL Server uses `SAVE TRANSACTION`/`ROLLBACK TRANSACTION`. The syntax proof is topology evidence, not a claim that every module's savepoint/retry interaction is settled; #1678/provider owners retain the matrix. |
-| A08 isolation | **Topology-boundary selection only.** SQLite is opened with `Serializable` for the WAL/locking proof; native smokes use `ReadCommitted`. This does not prove module-level anomaly freedom. Each module owner must select its invariant's isolation level and provide its own concurrency-anomaly matrix downstream. |
+| A08 isolation | **Topology-boundary selection only.** The SQLite three-borrower commit test explicitly selects `Serializable`; the SQLite contention test and remaining SQLite operations use `ReadCommitted`. Native smokes use `ReadCommitted`. This does not prove module-level anomaly freedom. Each module owner must select its invariant's isolation level and provide its own concurrency-anomaly matrix downstream. |
 | A09 shell isolation/teardown/reload | **Owner teardown is proved** and target identity is fixed at operation creation. Actual shell activation, reload, and configuration-change orchestration remains #1670. |
 | A10 tenant boundaries | **Topology-boundary evidence only.** Tenant identity is captured by the owner and a mismatch is refused before enlistment/writes in SQLite. Module tenant filters, identity predicates, cross-tenant read/write refusal, and tenant/concurrency matrices remain mandatory downstream work for #1678 and each owning module. |
 | A11 migration ordering | **Explicitly outside this transaction.** This project has no migrations; deterministic module ordering, history isolation, and fail-before-activation belong to #1669. |
@@ -91,7 +91,7 @@ dotnet test tests/Elsa/Persistence/EntityFrameworkCore/TransactionTopology/Tests
 dotnet test tests/Elsa/Persistence/EntityFrameworkCore/TransactionTopology/Tests/Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests.csproj --configuration Release --no-build --no-restore --filter FullyQualifiedName~MySqlTopologyTests --logger 'console;verbosity=minimal'
 ```
 
-Results: build passed with 0 warnings/0 errors; SQLite 9/9 passed;
+Results: build passed with 0 warnings/0 errors; SQLite 12/12 passed;
 PostgreSQL 1/1 passed; SQL Server 1/1 passed; MySQL 1/1 passed. No hosted CI,
 benchmark, timing measurement, migration command, or performance check was
 run.

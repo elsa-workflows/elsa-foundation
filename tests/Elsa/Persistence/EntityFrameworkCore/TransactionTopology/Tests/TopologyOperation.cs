@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Runtime.ExceptionServices;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests;
@@ -8,6 +9,7 @@ internal sealed class TopologyOperation : IAsyncDisposable
 {
     private bool committed;
     private bool commitAttempted;
+    private bool rolledBack;
     private bool disposed;
     private readonly Func<Task> commit;
 
@@ -42,7 +44,17 @@ internal sealed class TopologyOperation : IAsyncDisposable
         Func<DbTransaction, Task>? commit = null)
     {
         if (connection.State != ConnectionState.Open)
-            await connection.OpenAsync();
+        {
+            try
+            {
+                await connection.OpenAsync();
+            }
+            catch
+            {
+                await DisposeConnectionPreservingFailureAsync(connection);
+                throw;
+            }
+        }
 
         DbTransaction transaction;
         try
@@ -51,15 +63,7 @@ internal sealed class TopologyOperation : IAsyncDisposable
         }
         catch
         {
-            try
-            {
-                await connection.DisposeAsync();
-            }
-            catch
-            {
-                // Preserve the transaction-start failure when provider cleanup also fails.
-            }
-
+            await DisposeConnectionPreservingFailureAsync(connection);
             throw;
         }
 
@@ -69,8 +73,7 @@ internal sealed class TopologyOperation : IAsyncDisposable
     public void Enlist(TopologyDbContext borrower, string target, string tenant)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
-        if (commitAttempted)
-            throw new InvalidOperationException("The transaction commit attempt is terminal; no further enlistment or mutation is allowed.");
+        EnsureCanMutate();
         if (!string.Equals(Target, target, StringComparison.Ordinal))
             throw new InvalidOperationException($"Transaction target mismatch: operation '{Target}', borrower '{target}'.");
         if (!string.Equals(Tenant, tenant, StringComparison.Ordinal))
@@ -84,8 +87,7 @@ internal sealed class TopologyOperation : IAsyncDisposable
     public async Task CommitAsync()
     {
         ObjectDisposedException.ThrowIf(disposed, this);
-        if (commitAttempted)
-            throw new InvalidOperationException("The transaction commit attempt is terminal; inspect the outcome before recovery.");
+        EnsureCanMutate("inspect the outcome before recovery");
 
         commitAttempted = true;
         try
@@ -102,8 +104,11 @@ internal sealed class TopologyOperation : IAsyncDisposable
     public async Task RollbackAsync()
     {
         ObjectDisposedException.ThrowIf(disposed, this);
-        if (!committed && !commitAttempted)
-            await Transaction.RollbackAsync();
+        if (rolledBack || committed || commitAttempted)
+            return;
+
+        await Transaction.RollbackAsync();
+        rolledBack = true;
     }
 
     public async ValueTask DisposeAsync()
@@ -112,21 +117,65 @@ internal sealed class TopologyOperation : IAsyncDisposable
             return;
 
         disposed = true;
-        if (!committed && !commitAttempted)
+        Exception? failure = null;
+        try
+        {
+            if (!committed && !commitAttempted && !rolledBack)
+                await Transaction.RollbackAsync();
+        }
+        catch (Exception exception)
+        {
+            failure = exception;
+        }
+        finally
         {
             try
             {
-                await Transaction.RollbackAsync();
+                await Transaction.DisposeAsync();
             }
-            catch (InvalidOperationException)
+            catch (Exception exception)
             {
-                // The provider may have already closed the transaction while tearing down.
+                failure ??= exception;
+            }
+            finally
+            {
+                ConnectionDisposeCount++;
+                try
+                {
+                    await Connection.DisposeAsync();
+                }
+                catch (Exception exception)
+                {
+                    failure ??= exception;
+                }
             }
         }
 
-        await Transaction.DisposeAsync();
-        ConnectionDisposeCount++;
-        await Connection.DisposeAsync();
+        if (failure is not null)
+            ExceptionDispatchInfo.Capture(failure).Throw();
+    }
+
+    private void EnsureCanMutate(string? suffix = null)
+    {
+        if (commitAttempted || rolledBack)
+        {
+            var detail = suffix is null
+                ? "no further enlistment or mutation is allowed."
+                : $"{suffix}.";
+            throw new InvalidOperationException($"The transaction operation is terminal; {detail}");
+        }
+    }
+
+    private static async Task DisposeConnectionPreservingFailureAsync(DbConnection connection)
+    {
+        try
+        {
+            await connection.DisposeAsync();
+        }
+        catch
+        {
+            // Preserve the connection open or transaction-start failure when provider cleanup also fails.
+        }
     }
 }
 

@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -156,6 +157,67 @@ public sealed class SqliteTopologyTests
         {
             DeleteDatabase(database);
         }
+    }
+
+    [Fact]
+    public async Task Explicit_rollback_is_terminal_and_idempotent()
+    {
+        var database = await CreateDatabaseAsync();
+        try
+        {
+            var ownerConnection = NewConnection(database);
+            await ConfigureSqliteAsync(ownerConnection);
+            await using var operation = await TopologyOperation.BeginAsync(ownerConnection, "shell-a", "tenant-a");
+
+            await operation.RollbackAsync();
+            await operation.RollbackAsync();
+
+            await using (var postRollbackBorrower = TopologyContexts.Create(ownerConnection, TopologyProvider.Sqlite, TopologyLane.Runtime))
+            {
+                var enlistment = Assert.Throws<InvalidOperationException>(() =>
+                    operation.Enlist(postRollbackBorrower, "shell-a", "tenant-a"));
+                Assert.Contains("terminal", enlistment.Message, StringComparison.Ordinal);
+            }
+
+            var commit = await Assert.ThrowsAsync<InvalidOperationException>(() => operation.CommitAsync());
+            Assert.Contains("terminal", commit.Message, StringComparison.Ordinal);
+            Assert.Empty(await ReadIdsAsync(database));
+        }
+        finally
+        {
+            DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
+    public async Task Dispose_attempts_all_owner_cleanup_and_preserves_primary_failure()
+    {
+        var connection = new FaultingTopologyConnection(
+            failRollback: true,
+            failTransactionDispose: true,
+            failConnectionDispose: true);
+        var operation = await TopologyOperation.BeginAsync(connection, "shell-a", "tenant-a");
+
+        var failure = await Assert.ThrowsAsync<IOException>(() => operation.DisposeAsync().AsTask());
+
+        Assert.Equal("rollback failed", failure.Message);
+        Assert.Equal(1, connection.Transaction.DisposeAsyncCalls);
+        Assert.Equal(1, connection.DisposeAsyncCalls);
+        await operation.DisposeAsync();
+        Assert.Equal(1, connection.Transaction.DisposeAsyncCalls);
+        Assert.Equal(1, connection.DisposeAsyncCalls);
+    }
+
+    [Fact]
+    public async Task Failed_open_closes_transferred_connection()
+    {
+        var connection = new FaultingTopologyConnection(failOpen: true);
+
+        var failure = await Assert.ThrowsAsync<IOException>(() =>
+            TopologyOperation.BeginAsync(connection, "shell-a", "tenant-a"));
+
+        Assert.Equal("open failed", failure.Message);
+        Assert.Equal(1, connection.DisposeAsyncCalls);
     }
 
     [Fact]
@@ -369,4 +431,77 @@ internal static class TopologyPolicy
     public const string RetryScope = "whole-operation";
     public const string ExecutionStrategy = "external-owner-only";
     public const string CommitAmbiguity = "unknown-outcome-recovery";
+}
+
+internal sealed class FaultingTopologyConnection(
+    bool failOpen = false,
+    bool failRollback = false,
+    bool failTransactionDispose = false,
+    bool failConnectionDispose = false) : DbConnection
+{
+    private ConnectionState state = ConnectionState.Closed;
+
+    public FaultingTopologyTransaction Transaction { get; } = new(failRollback, failTransactionDispose);
+    public int DisposeAsyncCalls { get; private set; }
+
+    [AllowNull]
+    public override string ConnectionString { get; set; } = string.Empty;
+    public override string Database => "faulting";
+    public override string DataSource => "faulting";
+    public override string ServerVersion => "faulting";
+    public override ConnectionState State => state;
+
+    protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
+    {
+        Transaction.ConnectionOwner = this;
+        return Transaction;
+    }
+
+    protected override DbCommand CreateDbCommand() => throw new NotSupportedException();
+
+    public override void ChangeDatabase(string databaseName) => throw new NotSupportedException();
+
+    public override void Close() => state = ConnectionState.Closed;
+
+    public override void Open()
+    {
+        if (failOpen)
+            throw new IOException("open failed");
+
+        state = ConnectionState.Open;
+    }
+
+    public override ValueTask DisposeAsync()
+    {
+        DisposeAsyncCalls++;
+        state = ConnectionState.Closed;
+        return failConnectionDispose
+            ? ValueTask.FromException(new InvalidOperationException("connection dispose failed"))
+            : ValueTask.CompletedTask;
+    }
+}
+
+internal sealed class FaultingTopologyTransaction(bool failRollback, bool failDispose) : DbTransaction
+{
+    public DbConnection? ConnectionOwner { get; set; }
+    public int DisposeAsyncCalls { get; private set; }
+
+    protected override DbConnection? DbConnection => ConnectionOwner;
+    public override IsolationLevel IsolationLevel => IsolationLevel.ReadCommitted;
+
+    public override void Commit() => throw new NotSupportedException();
+
+    public override void Rollback()
+    {
+        if (failRollback)
+            throw new IOException("rollback failed");
+    }
+
+    public override ValueTask DisposeAsync()
+    {
+        DisposeAsyncCalls++;
+        return failDispose
+            ? ValueTask.FromException(new InvalidOperationException("transaction dispose failed"))
+            : ValueTask.CompletedTask;
+    }
 }
