@@ -104,10 +104,10 @@ internal sealed class WorkflowPublishingFaultRenderer : IEndpointFaultRenderer
         // Not scoped by endpoint metadata: every Publishing failure below carries a code (issue #1699), so it
         // renders here regardless of which endpoint raised it, ahead of WorkflowPublishingExceptionTranslator,
         // which handles only the codeless arms (404, generic 400).
-        if (TryClassifyCodedFailure(exception, out var status, out var code))
+        if (ClassifyCodedFailure(exception) is { } coded)
         {
             var problem = WorkflowPublishingLegacyProblems.Build(
-                context, EndpointProblem.General(status, exception.Message), code);
+                context, EndpointProblem.General(coded.Status, exception.Message), coded.Code);
             await WorkflowPublishingLegacyProblems.WriteAsync(context, problem);
             return true;
         }
@@ -115,34 +115,19 @@ internal sealed class WorkflowPublishingFaultRenderer : IEndpointFaultRenderer
         return false;
     }
 
-    private static bool TryClassifyCodedFailure(Exception exception, out int status, out string code)
+    private static (int Status, string Code)? ClassifyCodedFailure(Exception exception) => exception switch
     {
-        switch (exception)
-        {
-            case PublicationActivationException activation:
-                (status, code) = (StatusCodes.Status409Conflict, activation.Code);
-                return true;
-            case PublicationPreflightConflictException preflight:
-                (status, code) = (StatusCodes.Status409Conflict, preflight.Code);
-                return true;
-            case PublicationSnapshotReviewException review:
-                (status, code) = (StatusCodes.Status409Conflict, review.Code);
-                return true;
-            case PublicationPolicyRevisionConflictException policyRevision:
-                (status, code) = (StatusCodes.Status409Conflict, policyRevision.Code);
-                return true;
-            case PublicationPolicyResolutionException policy:
-                (status, code) = (
-                    policy.Code == PublicationFailureCodes.ExpectedPublicationMismatch
-                        ? StatusCodes.Status409Conflict
-                        : StatusCodes.Status400BadRequest,
-                    policy.Code);
-                return true;
-            default:
-                (status, code) = (0, "");
-                return false;
-        }
-    }
+        PublicationActivationException activation => (StatusCodes.Status409Conflict, activation.Code),
+        PublicationPreflightConflictException preflight => (StatusCodes.Status409Conflict, preflight.Code),
+        PublicationSnapshotReviewException review => (StatusCodes.Status409Conflict, review.Code),
+        PublicationPolicyRevisionConflictException policyRevision => (StatusCodes.Status409Conflict, policyRevision.Code),
+        PublicationPolicyResolutionException policy => (
+            policy.Code == PublicationFailureCodes.ExpectedPublicationMismatch
+                ? StatusCodes.Status409Conflict
+                : StatusCodes.Status400BadRequest,
+            policy.Code),
+        _ => null,
+    };
 
     private static async Task WriteRuntimePreflightAsync(HttpContext context, RuntimePreflightProblemDetails problem)
     {

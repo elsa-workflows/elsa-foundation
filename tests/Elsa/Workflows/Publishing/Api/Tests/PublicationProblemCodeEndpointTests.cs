@@ -37,6 +37,7 @@ public sealed class PublicationProblemCodeEndpointTests : IAsyncLifetime
     private const string PolicyRoute = $"/publishing/workflows/{DefinitionId}/policy";
     private static readonly DateTimeOffset Now = new(2026, 9, 13, 12, 0, 0, TimeSpan.Zero);
 
+    private readonly TriggerConflictSupport.StubTriggerExtractor _triggers = new();
     private PublishingMinimalApiScenarioHost _host = null!;
 
     public async Task InitializeAsync() =>
@@ -45,12 +46,12 @@ public sealed class PublicationProblemCodeEndpointTests : IAsyncLifetime
             configureServices: ConfigureServices);
 
     /// <summary>
-    /// The version store, expression validator, and trigger indexer every test in this class needs to reach a
-    /// real publish or unpublish. <see cref="IWorkflowTriggerIndexer"/> is normally contributed by the runtime
-    /// triggers feature, which this host does not mount; without it the activation coordinator refuses to run at
-    /// all, so a publish that got past preflight could never reach the authority.
+    /// The version store, expression validator, trigger indexer, and trigger extractor every test in this class
+    /// needs to reach a real publish or unpublish. <see cref="IWorkflowTriggerIndexer"/> is normally contributed by
+    /// the runtime triggers feature, which this host does not mount; without it the activation coordinator refuses
+    /// to run at all, so a publish that got past preflight could never reach the authority.
     /// </summary>
-    private static void ConfigureServices(IServiceCollection services)
+    private void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<IWorkflowDefinitionVersionStore>(new FakeVersionStore(
             new WorkflowDefinitionVersion(DefinitionId, "1.0.0")
@@ -61,6 +62,8 @@ public sealed class PublicationProblemCodeEndpointTests : IAsyncLifetime
             }));
         services.AddSingleton<IExpressionDraftSemanticValidator, ValidExpressions>();
         services.TryAddScoped<IWorkflowTriggerIndexer, WorkflowTriggerIndexer>();
+        services.RemoveAll<IWorkflowTriggerBindingExtractor>();
+        services.AddSingleton<IWorkflowTriggerBindingExtractor>(_triggers);
     }
 
     public async Task DisposeAsync() => await _host.DisposeAsync();
@@ -155,6 +158,29 @@ public sealed class PublicationProblemCodeEndpointTests : IAsyncLifetime
         var raw = await response.Content.ReadAsStringAsync();
 
         AssertCodedProblem(response, raw, HttpStatusCode.Conflict, "policy_revision_conflict");
+    }
+
+    [Fact]
+    public async Task A_real_trigger_conflict_on_publish_carries_trigger_conflict()
+    {
+        await TriggerConflictSupport.ClaimExclusiveTriggerInAnotherSlotAsync(
+            _host.Services.GetRequiredService<IWorkflowActivationAuthority>(),
+            _host.Services.GetRequiredService<IWorkflowTriggerBindingStore>(),
+            _triggers, DefinitionId, "blue", "publication-blue", Now);
+
+        using var response = await PostAsync(PublishRoute, "{}");
+        var raw = await response.Content.ReadAsStringAsync();
+
+        AssertCodedProblem(response, raw, HttpStatusCode.Conflict, "trigger_conflict");
+    }
+
+    [Fact]
+    public async Task An_unknown_preflight_token_on_publish_carries_publication_snapshot_stale()
+    {
+        using var response = await PostAsync(PublishRoute, """{"preflightToken":"does-not-exist"}""");
+        var raw = await response.Content.ReadAsStringAsync();
+
+        AssertCodedProblem(response, raw, HttpStatusCode.Conflict, "publication_snapshot_stale");
     }
 
     private static bool IsSuccess(HttpStatusCode status) =>

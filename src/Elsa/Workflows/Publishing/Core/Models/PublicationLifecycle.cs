@@ -54,9 +54,9 @@ public sealed class PublicationPolicyResolutionException(string code, string mes
 public sealed record PublicationFailure(string Code, string Message);
 
 /// <summary>
-/// The wire contract for every Publishing failure code: every <see cref="PublicationFailure.Code"/> and coded
-/// publishing exception raised on the activation, policy and review paths is defined here and nowhere else, so a
-/// client can match on these values without parsing English prose (issue #1699).
+/// The single source for every Publishing failure code, surfaced either as a problem response's
+/// <c>errorCode</c> or as a publication record's <see cref="PublicationFailure.Code"/>, so a client can match on
+/// these values without parsing English prose (issue #1699).
 /// </summary>
 public static class PublicationFailureCodes
 {

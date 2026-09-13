@@ -159,6 +159,10 @@ at every raise and map site (issue #1699).
 | `unsupported_action`              | 400    | The requested publication action is not supported. |
 | `named_slot_required`             | 400    | Side-by-side publication requires a meaningful named slot other than the default slot. |
 
+A publication record's `failure.code` (`GET publishing/publications/{publicationId}`) uses the same vocabulary;
+`publication_activation_refused` and `projection_delivery_failed` are recorded there only and never appear as a
+problem response's `errorCode`.
+
 See [the Publishing extension-point catalog](EXTENSION_POINTS.md) for supported replacements and provider work,
 and [the feature quickstart](../../../../../specs/092-domain-owned-apis/quickstart.md) for the `/foo` to `/bar`
 replacement scenario.
