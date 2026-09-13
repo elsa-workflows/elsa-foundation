@@ -443,11 +443,8 @@
     <Project Path="tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/V2/ProviderMatrix/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.V2.ProviderMatrix.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/" />
-  <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/" />
-  <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/Tests/">
+  <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/">
     <Project Path="tests/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/">
     <Project Path="tests/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/Groundwork/">
