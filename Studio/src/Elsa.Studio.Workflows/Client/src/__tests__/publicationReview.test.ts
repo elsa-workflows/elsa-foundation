@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { activationSlotReadsUnavailableReason } from "../api/publishing";
-import type { ActivityCatalogItem, WorkflowDefinitionVersionDetails, WorkflowDraft } from "../workflowTypes";
+import type { ActivityCatalogItem, WorkflowDraft } from "../workflowTypes";
 import {
   createPublicationReview,
   publicationBaselineFor,
@@ -10,7 +10,7 @@ import {
   summarizePublicationChanges
 } from "../workflow-editor/publicationReview";
 import { flowchartActivity, sequenceActivity } from "./fixtures";
-import { activationSlot, importedActivationSlot, publishedSlot, withoutPublication } from "./fixtures/publicationSlots";
+import { activationSlot, importedActivationSlot, publishedSlot, versionDetails, withoutPublication } from "./fixtures/publicationSlots";
 
 describe("publication review model", () => {
   it("summarizes changed activities, inputs, and outputs against the source version", () => {
@@ -135,18 +135,31 @@ describe("publication review model", () => {
       details: null,
       slotVersions: {},
       policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
-      slots: [publishedSlot("default", { publicationId: "publication-1", versionId: "version-1", artifactVersion: "1.0.0" })],
+      slots: [publishedSlot("default", { publicationId: "publication-1", versionId: "version-1" })],
       catalog: []
     });
 
     expect(review.phase).toBe("validationBlocked");
     expect(review.validationErrors).toEqual(["Workflow has no root activity."]);
-    expect(review.currentVersion).toBe("1.0.0");
+    expect(review.currentVersion).toBe("version-1");
     expect(publicationIntentFor(review, "replace", "default")).toEqual({
       action: "replace",
       slotName: "default",
       expectedPublicationId: "publication-1"
     });
+  });
+
+  it("prefers the fetched design version's label over the publication's version id", () => {
+    const review = createPublicationReview({
+      draft: draft(),
+      details: null,
+      slotVersions: { default: versionDetails("version-1") },
+      policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
+      slots: [publishedSlot("default", { publicationId: "publication-1", versionId: "version-1" })],
+      catalog: []
+    });
+
+    expect(review.currentVersion).toBe("1.0.0");
   });
 
   it("captures an immutable snapshot before publication", () => {
@@ -205,7 +218,7 @@ describe("publication review model", () => {
     const review = createPublicationReview({
       draft: draft(),
       details: null,
-      slotVersions: { blue: version("version-blue", { inputs: [{ name: "blue" }] }) },
+      slotVersions: { blue: versionDetails("version-blue", { state: { inputs: [{ name: "blue" }] } }) },
       policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
       slots: [publishedSlot("blue")],
       catalog: []
@@ -222,9 +235,9 @@ describe("publication review model", () => {
     const review = createPublicationReview({
       draft: draft(),
       details: null,
-      slotVersions: { blue: version("version-blue", {}) },
+      slotVersions: { blue: versionDetails("version-blue") },
       policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
-      slots: [publishedSlot("blue", { artifactVersion: "1.4.0" })],
+      slots: [publishedSlot("blue")],
       catalog: []
     });
 
@@ -237,8 +250,21 @@ describe("publication review model", () => {
       action: "sideBySide",
       slotName: "canary"
     });
-    expect(publicationBaselineFor(review, "blue")).toBe("blue · 1.4.0");
+    expect(publicationBaselineFor(review, "blue")).toBe("blue · 1.0.0");
     expect(publicationBaselineFor(review, "canary")).toBe("New channel · canary · no previous publication");
+  });
+
+  it("falls back to the publication's version id when no design version detail was fetched for the slot", () => {
+    const review = createPublicationReview({
+      draft: draft(),
+      details: null,
+      slotVersions: {},
+      policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
+      slots: [publishedSlot("blue")],
+      catalog: []
+    });
+
+    expect(publicationBaselineFor(review, "blue")).toBe("blue · version-blue");
   });
 
   it("recomputes changes against the selected occupied slot", () => {
@@ -246,8 +272,8 @@ describe("publication review model", () => {
       draft: draft({ inputs: [{ name: "draft-only" }] }),
       details: null,
       slotVersions: {
-        default: version("version-default", { inputs: [{ name: "draft-only" }] }),
-        blue: version("version-blue", { inputs: [{ name: "blue-only" }] })
+        default: versionDetails("version-default", { state: { inputs: [{ name: "draft-only" }] } }),
+        blue: versionDetails("version-blue", { state: { inputs: [{ name: "blue-only" }] } })
       },
       policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
       slots: [],
@@ -332,19 +358,4 @@ function sequence(activities: ReturnType<typeof activity>[]) {
       payload: { activities }
     }
   }, sequenceActivity.activityVersionId);
-}
-
-function version(id: string, state: Partial<WorkflowDefinitionVersionDetails["state"]>): WorkflowDefinitionVersionDetails {
-  return {
-    id,
-    version: "1.0.0",
-    definition: {
-      id: "definition-1",
-      name: "Orders",
-      createdAt: "2026-07-01T00:00:00Z",
-      lastModifiedAt: "2026-07-01T00:00:00Z"
-    },
-    state: { rootActivity: activity("root"), ...state },
-    layout: []
-  };
 }

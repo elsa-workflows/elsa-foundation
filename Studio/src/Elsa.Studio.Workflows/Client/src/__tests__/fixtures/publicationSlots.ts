@@ -1,5 +1,6 @@
 import type { Publication, PublicationPreflight, PublicationSlot, PublicationSlotOwner } from "../../api/publishing";
 import type { WorkflowActivationSlot } from "../../api/runtime";
+import type { WorkflowDefinitionVersionDetails } from "../../workflowTypes";
 
 // Publication slot fixtures in the shapes the backend serves since elsa-foundation#1498: Runtime owns
 // the (unjoined) activation slot view, Publishing serves one publication record per publication id.
@@ -34,6 +35,19 @@ export function importedActivationSlot(): WorkflowActivationSlot {
     sourceKind: "artifact-reconciliation",
     sourceId: "orders-bundle"
   });
+}
+
+/** A fetched design version, as `slotVersions` serves it for a publication's baseline. */
+export function versionDetails(id: string, overrides: Partial<WorkflowDefinitionVersionDetails> = {}): WorkflowDefinitionVersionDetails {
+  const { state, ...rest } = overrides;
+  return {
+    id,
+    version: "1.0.0",
+    definition: { id: "definition-1", name: "Orders", createdAt: "2026-07-01T00:00:00Z", lastModifiedAt: "2026-07-01T00:00:00Z" },
+    layout: [],
+    ...rest,
+    state: { rootActivity: { nodeId: "root", activityVersionId: "activity-root", inputs: [], outputs: [] }, ...state }
+  };
 }
 
 export function publicationRecord(slotName: string, overrides: Partial<Publication> = {}): Publication {

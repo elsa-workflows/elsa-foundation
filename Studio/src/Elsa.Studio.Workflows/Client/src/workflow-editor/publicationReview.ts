@@ -68,8 +68,7 @@ export function createPublicationReview(input: {
     source: "host"
   };
   const activeSlot = input.slots.find(slot => slot.slotName === policy.defaultSlotName);
-  const currentVersion = activeSlot?.publication?.artifactVersion
-    ?? activeSlot?.publication?.versionId
+  const currentVersion = publicationVersionLabel(activeSlot?.publication, input.slotVersions[policy.defaultSlotName])
     ?? input.details?.definition.latestVersion
     ?? "None";
   const draftSnapshot = structuredClone(input.draft);
@@ -111,6 +110,18 @@ export function createPublicationReview(input: {
 }
 
 /**
+ * The label the review shows for a publication's version: the fetched design version's human-readable
+ * label when Studio has it, falling back to the publication's version id otherwise. Kept as the single
+ * precedence rule so the baseline and every other review surface that names a current version agree.
+ */
+function publicationVersionLabel(
+  publication: Publication | null | undefined,
+  versionDetail: WorkflowDefinitionVersionDetails | undefined
+): string | undefined {
+  return versionDetail?.version ?? publication?.versionId;
+}
+
+/**
  * What occupies a Publication channel, as far as Studio can know. A channel is occupied exactly when its
  * Runtime activation slot has an active activation; only a publishing-sourced one has a design version.
  */
@@ -148,9 +159,7 @@ export function publicationBaselineFor(review: PublicationReviewState, slotName:
   if (occupancy.kind === "foreign") {
     return `${normalizedSlot} · occupied by ${describeActivationSource(occupancy.slot)} · not a Studio design version`;
   }
-  const version = occupancy.slot?.publication?.artifactVersion
-    ?? occupancy.slot?.publication?.versionId
-    ?? review.slotVersions[normalizedSlot]?.version;
+  const version = publicationVersionLabel(occupancy.slot?.publication, review.slotVersions[normalizedSlot]);
   if (version) return `${normalizedSlot} · ${version}`;
   return occupancy.slot
     ? `${normalizedSlot} · no active publication`

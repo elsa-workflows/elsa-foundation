@@ -16,6 +16,7 @@ import {
   importedActivationSlot,
   publicationPreflight,
   publishedSlot,
+  versionDetails,
   withoutPublication
 } from "./fixtures/publicationSlots";
 
@@ -89,6 +90,25 @@ describe("publication channel UX", () => {
       expect.anything(),
       { action: "replace", slotName: "blue", expectedPublicationId: "publication-blue" },
       { mode: "automatic" });
+  });
+
+  it("shows the fetched design version's label in the baseline when one was fetched for the slot", () => {
+    const onReview = vi.fn(async () => undefined);
+    const container = render(review({
+      slots: [occupiedBlue()],
+      slotVersions: { blue: versionDetails("version-blue", { version: "1.4.0", state: { rootActivity: null } }) }
+    }), { onReview });
+    changeSelect(container.querySelector<HTMLSelectElement>("select[aria-label='Publication channel']")!, "blue");
+
+    expect(text(container)).toContain("Baseline: blue · 1.4.0");
+  });
+
+  it("falls back to the publication's version id in the baseline when no design version was fetched for the slot", () => {
+    const onReview = vi.fn(async () => undefined);
+    const container = render(review({ slots: [occupiedBlue()] }), { onReview });
+    changeSelect(container.querySelector<HTMLSelectElement>("select[aria-label='Publication channel']")!, "blue");
+
+    expect(text(container)).toContain("Baseline: blue · version-blue");
   });
 
   it("names the source of a channel occupied by another activation source instead of a publication", () => {
@@ -373,7 +393,7 @@ function draft(): WorkflowDraft {
 const preflight = publicationPreflight;
 
 function occupiedBlue() {
-  return publishedSlot("blue", { artifactVersion: "1.4.0" });
+  return publishedSlot("blue");
 }
 
 function button(container: HTMLElement, label: string) {

@@ -305,7 +305,6 @@ export interface Publication {
   createdAt?: string;
   activatedAt?: string | null;
   retiredAt?: string | null;
-  artifactVersion?: string;
   artifactHash?: string;
   rootActivityId?: string;
   nodeCount?: number;
