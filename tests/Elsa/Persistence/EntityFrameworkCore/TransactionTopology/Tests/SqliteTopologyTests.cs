@@ -137,6 +137,13 @@ public sealed class SqliteTopologyTests
 
             var wrapped = await Assert.ThrowsAsync<CommitOutcomeUnknownException>(() => operation.CommitAsync());
             Assert.IsType<IOException>(wrapped.InnerException);
+            await using (var postCommitBorrower = TopologyContexts.Create(ownerConnection, TopologyProvider.Sqlite, TopologyLane.Runtime))
+            {
+                var enlistment = Assert.Throws<InvalidOperationException>(() =>
+                    operation.Enlist(postCommitBorrower, "shell-a", "tenant-a"));
+                Assert.Contains("terminal", enlistment.Message, StringComparison.Ordinal);
+            }
+
             var terminal = await Assert.ThrowsAsync<InvalidOperationException>(() => operation.CommitAsync());
             Assert.Contains("terminal", terminal.Message, StringComparison.Ordinal);
             Assert.Equal(1, commitCalls);
@@ -198,7 +205,7 @@ public sealed class SqliteTopologyTests
         var database = await CreateDatabaseAsync();
         try
         {
-            await using var ownerConnection = NewConnection(database);
+            var ownerConnection = NewConnection(database);
             await ConfigureSqliteAsync(ownerConnection);
             await using var operation = await TopologyOperation.BeginAsync(ownerConnection, "shell-a", "tenant-a");
             await using var runtime = Enlist(operation, ownerConnection, TopologyLane.Runtime);
@@ -226,6 +233,18 @@ public sealed class SqliteTopologyTests
         {
             DeleteDatabase(database);
         }
+    }
+
+    [Fact]
+    public async Task Failed_begin_transaction_closes_transferred_connection()
+    {
+        await using var ownerConnection = new SqliteConnection("Data Source=:memory:");
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
+            TopologyOperation.BeginAsync(ownerConnection, "shell-a", "tenant-a", IsolationLevel.Chaos));
+
+        Assert.Contains("isolation", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(ConnectionState.Closed, ownerConnection.State);
     }
 
     [Fact]

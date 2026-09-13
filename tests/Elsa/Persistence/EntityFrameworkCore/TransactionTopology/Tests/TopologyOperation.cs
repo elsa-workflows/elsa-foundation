@@ -44,13 +44,33 @@ internal sealed class TopologyOperation : IAsyncDisposable
         if (connection.State != ConnectionState.Open)
             await connection.OpenAsync();
 
-        var transaction = await connection.BeginTransactionAsync(isolationLevel);
+        DbTransaction transaction;
+        try
+        {
+            transaction = await connection.BeginTransactionAsync(isolationLevel);
+        }
+        catch
+        {
+            try
+            {
+                await connection.DisposeAsync();
+            }
+            catch
+            {
+                // Preserve the transaction-start failure when provider cleanup also fails.
+            }
+
+            throw;
+        }
+
         return new TopologyOperation(connection, transaction, target, tenant, commit);
     }
 
     public void Enlist(TopologyDbContext borrower, string target, string tenant)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+        if (commitAttempted)
+            throw new InvalidOperationException("The transaction commit attempt is terminal; no further enlistment or mutation is allowed.");
         if (!string.Equals(Target, target, StringComparison.Ordinal))
             throw new InvalidOperationException($"Transaction target mismatch: operation '{Target}', borrower '{target}'.");
         if (!string.Equals(Tenant, tenant, StringComparison.Ordinal))
