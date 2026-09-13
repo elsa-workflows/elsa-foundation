@@ -69,6 +69,27 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreTests
     }
 
     [Fact]
+    public async Task Revision_reads_reject_a_mismatched_provider_before_database_access()
+    {
+        var options = new DbContextOptionsBuilder<IdentityProviderConfigurationSqlServerDbContext>()
+            .UseSqlite("Data Source=:memory:")
+            .Options;
+        await using var context = new IdentityProviderConfigurationSqlServerDbContext(options);
+        var globalStore = new EfProviderConfigurationStore(context,
+            new FakeAccessAccessor(PersistenceAccessContext.PrivilegedGlobal(new PersistenceAccessPurpose("test"))));
+        var tenantStore = new EfProviderConfigurationStore(context,
+            new FakeAccessAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("acme"))));
+
+        var globalException = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => globalStore.FindGlobalWithRevisionAsync("oidc").AsTask());
+        var tenantException = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => tenantStore.FindForTenantWithRevisionAsync("acme", "oidc").AsTask());
+
+        Assert.Contains(IdentityProviderConfigurationSqlServerDbContext.ExpectedProviderName, globalException.Message, StringComparison.Ordinal);
+        Assert.Contains(IdentityProviderConfigurationSqlServerDbContext.ExpectedProviderName, tenantException.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Effective_fallback_does_not_bypass_explicit_global_access()
     {
         await using var fixture = await Fixture.CreateAsync();

@@ -359,6 +359,7 @@ public sealed class EfProviderConfigurationStore(
 
     private async Task<GlobalProviderConfigurationEntity?> FindGlobalEntityAsync(string provider, CancellationToken cancellationToken, bool requireGlobalAccess = true)
     {
+        context.EnsureProviderBinding();
         if (requireGlobalAccess)
             IdentityEntityFrameworkAccessGuard.EnsureGlobal(accessContextAccessor);
         cancellationToken.ThrowIfCancellationRequested();
@@ -380,6 +381,7 @@ public sealed class EfProviderConfigurationStore(
 
     private async Task<TenantProviderConfigurationEntity?> FindTenantEntityAsync(string tenantId, string provider, CancellationToken cancellationToken)
     {
+        context.EnsureProviderBinding();
         IdentityEntityFrameworkAccessGuard.EnsureTenant(accessContextAccessor, tenantId);
         cancellationToken.ThrowIfCancellationRequested();
         try
