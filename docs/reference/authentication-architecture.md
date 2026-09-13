@@ -299,7 +299,7 @@ ConsoleStream SignalR hub via an access-token factory.
 
 ## 7. Security posture
 
-**Everything requires auth by default.** The selector/JwtBearer scheme is the default challenge
+**Every API route requires auth by default.** The selector/JwtBearer scheme is the default challenge
 scheme, so an unauthenticated API call is rejected with `401`. A host-chosen `DefaultScheme` always
 wins if you want to override.
 
