@@ -1,3 +1,4 @@
+using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Extensions;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
@@ -58,6 +59,7 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         Assert.Equal(17, services.Count(descriptor => replacementContracts.Contains(descriptor.ServiceType)));
         Assert.All(replacementContracts, contract =>
         {
+            Assert.True(contract.IsDefined(typeof(ReplacementContractAttribute), inherit: false));
             var descriptor = Assert.Single(services, candidate => candidate.ServiceType == contract);
             Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
             Assert.NotNull(descriptor.ImplementationFactory);

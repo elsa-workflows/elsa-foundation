@@ -86,6 +86,7 @@ public sealed class ExternalIdentityEntity
     public string TenantId { get; set; } = "";
     public string TenantLookupKey { get; set; } = "";
     public string Provider { get; set; } = "";
+    public string? ProviderDisplayName { get; set; }
     public string ProviderLookupKey { get; set; } = "";
     public string ProviderSubject { get; set; } = "";
     public string ProviderSubjectLookupKey { get; set; } = "";

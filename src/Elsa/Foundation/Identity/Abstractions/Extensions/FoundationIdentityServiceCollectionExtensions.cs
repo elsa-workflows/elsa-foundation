@@ -116,6 +116,38 @@ public static class FoundationIdentityServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// Tags the complete tenant-local IAM authority as one replacement group while retaining
+    /// the individual contract markers consumed by the standard registration validator.
+    /// </summary>
+    public static IServiceCollection EnsureIdentityAuthorityReplacementContracts<
+        TUserStore,
+        TRoleStore,
+        TClaimMappingStore,
+        TExternalIdentityStore,
+        TTenantMembershipStore>(this IServiceCollection services)
+        where TUserStore : class, IUserStore, IRevisionAwareUserStore
+        where TRoleStore : class, IRoleStore, IRevisionAwareRoleStore, IPagedRoleStore
+        where TClaimMappingStore : class, IClaimMappingStore, IRevisionAwareClaimMappingStore, IPagedClaimMappingStore
+        where TExternalIdentityStore : class, IExternalIdentityStore, IRevisionAwareExternalIdentityStore, IPagedExternalIdentityStore
+        where TTenantMembershipStore : class, ITenantMembershipStore, IRevisionAwareTenantMembershipStore
+    {
+        services.EnsureReplacementContract<IUserStore, TUserStore>();
+        services.EnsureReplacementContract<IRevisionAwareUserStore, TUserStore>();
+        services.EnsureReplacementContract<IRoleStore, TRoleStore>();
+        services.EnsureReplacementContract<IRevisionAwareRoleStore, TRoleStore>();
+        services.EnsureReplacementContract<IPagedRoleStore, TRoleStore>();
+        services.EnsureReplacementContract<IClaimMappingStore, TClaimMappingStore>();
+        services.EnsureReplacementContract<IRevisionAwareClaimMappingStore, TClaimMappingStore>();
+        services.EnsureReplacementContract<IPagedClaimMappingStore, TClaimMappingStore>();
+        services.EnsureReplacementContract<IExternalIdentityStore, TExternalIdentityStore>();
+        services.EnsureReplacementContract<IRevisionAwareExternalIdentityStore, TExternalIdentityStore>();
+        services.EnsureReplacementContract<IPagedExternalIdentityStore, TExternalIdentityStore>();
+        services.EnsureReplacementContract<ITenantMembershipStore, TTenantMembershipStore>();
+        services.EnsureReplacementContract<IRevisionAwareTenantMembershipStore, TTenantMembershipStore>();
+        return services;
+    }
+
     public static IServiceCollection ReplacePermissionPolicyNameFormatter<TFormatter>(this IServiceCollection services)
         where TFormatter : class, IPermissionPolicyNameFormatter =>
         Replace<IPermissionPolicyNameFormatter, TFormatter>(services, ServiceLifetime.Singleton);

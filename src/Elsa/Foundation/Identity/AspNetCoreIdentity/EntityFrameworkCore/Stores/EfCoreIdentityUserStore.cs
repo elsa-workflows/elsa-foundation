@@ -343,6 +343,7 @@ public sealed class EfCoreIdentityUserStore(
             {
                 TenantId = user.TenantId,
                 Provider = login.LoginProvider,
+                ProviderDisplayName = login.ProviderDisplayName,
                 ProviderSubject = login.ProviderKey,
                 UserId = user.Id,
                 LinkedAt = DateTimeOffset.UtcNow,
@@ -384,7 +385,7 @@ public sealed class EfCoreIdentityUserStore(
                     .OrderBy(x => x.Id).Take(MaximumMaterializedRelationshipEntries + 1).ToListAsync(cancellationToken));
         EnsureRelationshipMaterializationLimit(rows.Count, "external logins");
         return rows
-            .Select(x => new UserLoginInfo(x.Provider, x.ProviderSubject, x.Provider))
+            .Select(x => new UserLoginInfo(x.Provider, x.ProviderSubject, x.ProviderDisplayName))
             .ToList();
     }
 

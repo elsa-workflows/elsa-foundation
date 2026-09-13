@@ -78,7 +78,17 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
         EfExternalLoginOwnershipPolicy ownershipPolicy,
         bool returnOwnerResult,
         CancellationToken cancellationToken = default) =>
-        MutateExternalIdentityAsync(login, expectedNewOwnerVersion, expectedLoginVersion, enforceLoginVersion, ownershipPolicy, returnOwnerResult, cancellationToken);
+        MutateExternalIdentityAsync(login, expectedNewOwnerVersion, expectedLoginVersion, enforceLoginVersion, ownershipPolicy, returnOwnerResult, replaceProviderDisplayName: true, cancellationToken);
+
+    internal Task<EfIdentityWriteResult> SaveExternalIdentityPreservingProviderDisplayNameAsync(
+        ExternalIdentityEntity login,
+        long? expectedNewOwnerVersion,
+        long? expectedLoginVersion,
+        bool enforceLoginVersion,
+        EfExternalLoginOwnershipPolicy ownershipPolicy,
+        bool returnOwnerResult,
+        CancellationToken cancellationToken = default) =>
+        MutateExternalIdentityAsync(login, expectedNewOwnerVersion, expectedLoginVersion, enforceLoginVersion, ownershipPolicy, returnOwnerResult, replaceProviderDisplayName: false, cancellationToken);
 
     public Task<EfIdentityWriteResult> DeleteExternalIdentityAsync(string tenantId, string userId, string provider, string providerSubject, long expectedUserVersion, CancellationToken cancellationToken = default) =>
         DeleteExternalIdentityCoreAsync(tenantId, userId, provider, providerSubject, expectedUserVersion, cancellationToken);
@@ -325,7 +335,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
             return Updated(id, membership.Revision);
         }, cancellationToken);
 
-    private async Task<EfIdentityWriteResult> MutateExternalIdentityAsync(ExternalIdentityEntity login, long? expectedNewOwnerVersion, long? expectedLoginVersion, bool enforceLoginVersion, EfExternalLoginOwnershipPolicy policy, bool returnOwnerResult, CancellationToken cancellationToken)
+    private async Task<EfIdentityWriteResult> MutateExternalIdentityAsync(ExternalIdentityEntity login, long? expectedNewOwnerVersion, long? expectedLoginVersion, bool enforceLoginVersion, EfExternalLoginOwnershipPolicy policy, bool returnOwnerResult, bool replaceProviderDisplayName, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(login);
         _ = EfIdentityStoreSupport.ExternalOrderKey(login.Provider, login.ProviderSubject);
@@ -334,6 +344,8 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
             operation,
             login.TenantId,
             login.Provider,
+            replaceProviderDisplayName ? "replace-display-name" : "preserve-display-name",
+            replaceProviderDisplayName ? login.ProviderDisplayName : null,
             login.ProviderSubject,
             login.UserId,
             login.LinkedAt.ToString("O", CultureInfo.InvariantCulture),
@@ -385,6 +397,8 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
                 return Conflict(newOwner.Id);
 
             Prepare(login, login.TenantId, login.UserId);
+            if (existing is not null && !replaceProviderDisplayName)
+                login.ProviderDisplayName = existing.ProviderDisplayName;
             var newRevision = existing is null ? 1 : checked(existing.Revision + 1);
             login.Revision = newRevision;
             if (existing is null)
@@ -511,7 +525,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
     private static void Apply(RoleClaimEntity target, RoleClaimEntity source) { target.TenantId = source.TenantId; target.TenantLookupKey = source.TenantLookupKey; target.RoleId = source.RoleId; target.RoleLookupKey = source.RoleLookupKey; target.ClaimType = source.ClaimType; target.ClaimValue = source.ClaimValue; target.ClaimKey = source.ClaimKey; }
     private static void Apply(UserTokenEntity target, UserTokenEntity source) { target.TenantId = source.TenantId; target.TenantLookupKey = source.TenantLookupKey; target.UserId = source.UserId; target.UserLookupKey = source.UserLookupKey; target.LoginProvider = source.LoginProvider; target.Name = source.Name; target.TokenKey = source.TokenKey; target.Value = source.Value; }
     private static void Apply(UserRoleEntity target, UserRoleEntity source) { target.TenantId = source.TenantId; target.TenantLookupKey = source.TenantLookupKey; target.UserId = source.UserId; target.UserLookupKey = source.UserLookupKey; target.RoleId = source.RoleId; target.RoleLookupKey = source.RoleLookupKey; }
-    private static void Apply(ExternalIdentityEntity target, ExternalIdentityEntity source) { target.TenantId = source.TenantId; target.TenantLookupKey = source.TenantLookupKey; target.UserId = source.UserId; target.UserLookupKey = source.UserLookupKey; target.Provider = source.Provider; target.ProviderLookupKey = source.ProviderLookupKey; target.ProviderSubject = source.ProviderSubject; target.ProviderSubjectLookupKey = source.ProviderSubjectLookupKey; target.ExternalOrderKey = source.ExternalOrderKey; target.LinkedAt = source.LinkedAt; target.LastSeenAt = source.LastSeenAt; target.LinkPolicy = source.LinkPolicy; target.Revision = source.Revision; }
+    private static void Apply(ExternalIdentityEntity target, ExternalIdentityEntity source) { target.TenantId = source.TenantId; target.TenantLookupKey = source.TenantLookupKey; target.UserId = source.UserId; target.UserLookupKey = source.UserLookupKey; target.Provider = source.Provider; target.ProviderDisplayName = source.ProviderDisplayName; target.ProviderLookupKey = source.ProviderLookupKey; target.ProviderSubject = source.ProviderSubject; target.ProviderSubjectLookupKey = source.ProviderSubjectLookupKey; target.ExternalOrderKey = source.ExternalOrderKey; target.LinkedAt = source.LinkedAt; target.LastSeenAt = source.LastSeenAt; target.LinkPolicy = source.LinkPolicy; target.Revision = source.Revision; }
     private static void Apply(TenantMembershipEntity target, TenantMembershipEntity source) { target.Status = source.Status; target.RoleIdsJson = source.RoleIdsJson; target.DirectPermissionsJson = source.DirectPermissionsJson; }
 
     private static HashSet<string> Registry(UserEntity user, UserRegistry registry) => EfIdentityStoreSupport.DeserializeSet(registry switch { UserRegistry.Claims => user.ClaimIdsJson, UserRegistry.Logins => user.LoginIdsJson, UserRegistry.RoleLinks => user.RoleLinkIdsJson, UserRegistry.Tokens => user.TokenIdsJson, UserRegistry.TenantMemberships => user.TenantMembershipIdsJson, _ => "[]" }).ToHashSet(StringComparer.Ordinal);

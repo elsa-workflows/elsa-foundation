@@ -130,6 +130,12 @@ public static class GroundworkIdentityStoresRegistration
             services.AddScoped<ITenantMembershipStore, GroundworkTenantMembershipStore>();
             services.Add(ServiceDescriptor.Scoped<IRevisionAwareTenantMembershipStore>(provider =>
                 (IRevisionAwareTenantMembershipStore)provider.GetRequiredService<ITenantMembershipStore>()));
+            services.EnsureIdentityAuthorityReplacementContracts<
+                GroundworkUserStore,
+                GroundworkRoleStore,
+                GroundworkClaimMappingStore,
+                GroundworkExternalIdentityStore,
+                GroundworkTenantMembershipStore>();
             services.AddSingleton(new IdentityAuthorityStoreBackend("groundwork", services));
         }
         if (!entityFrameworkIamAlreadySelected && !groundworkIamAlreadySelected)

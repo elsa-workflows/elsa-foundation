@@ -35,4 +35,5 @@ OpenIddict remains in its separate vendor-owned context. This module does not re
 ## Extension points
 
 - Contract ownership and replacement semantics: [Foundation Identity abstractions](../../Abstractions/EXTENSION_POINTS.md).
+- ASP.NET Core Identity adapter composition and framework surfaces: [ASP.NET Core Identity EF adapter](../../AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md).
 - Known persistence implementations and backend composition: [Foundation Identity persistence](../Groundwork/EXTENSION_POINTS.md).

@@ -53,6 +53,9 @@ public static class AspNetCoreIdentityEntityFrameworkCoreServiceCollectionExtens
             return services;
         }
 
+        IdentityIamEntityFrameworkCoreRegistration.EnsureCanAddIdentityIamEntityFrameworkCore(
+            services,
+            persistenceOptions);
         services.SelectIdentityPersistenceAuthority(
             AuthorityName,
             new IdentityAuthorityCompatibility(UnmarkedFrameworkStoreAuthority, IsUnmarkedFrameworkStoreDescriptor));

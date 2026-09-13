@@ -569,7 +569,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
         return EfIdentityStoreSupport.SerializeSet(values);
     }
 
-    private static bool CanWrite(long? current, long? expected) => expected is null ? true : current is null ? expected == 0 : current == expected;
+    private static bool CanWrite(long? current, long? expected) => expected is null || (current is null ? expected == 0 : current == expected);
     private static bool Same(string? left, string? right) => string.Equals(EfIdentityStoreSupport.Normalize(left), EfIdentityStoreSupport.Normalize(right), StringComparison.Ordinal);
     private static void ValidateIdentity(string value, string parameter)
     {

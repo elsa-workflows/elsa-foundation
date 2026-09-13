@@ -227,12 +227,27 @@ internal static class EfIdentityStoreSupport
     {
         ArgumentNullException.ThrowIfNull(exception);
 
-        // Entries is the provider-neutral source of truth when EF has retained the pending
-        // inserts. Check the reservation rows first because a single SaveChanges call can also
-        // contain a user/role root and multiple relationship rows.
-        foreach (var entry in exception.Entries)
+        var providerConstraint = ClassifyProviderUniqueConstraint(exception.ToString());
+        switch (providerConstraint)
         {
-            var unit = entry.Entity switch
+            case ProviderUniqueConstraint.UserNameReservation:
+                return IdentityIamEfModule.UserNameReservationTableName;
+            case ProviderUniqueConstraint.EmailReservation:
+                return IdentityIamEfModule.EmailReservationTableName;
+            case ProviderUniqueConstraint.RoleNameReservation:
+                return IdentityIamEfModule.RoleNameReservationTableName;
+            case ProviderUniqueConstraint.MutationReceipt:
+            case ProviderUniqueConstraint.OtherIdentityUnit:
+                return null;
+        }
+
+        // A sole retained entry identifies the failed unit without provider text. A batch can
+        // contain both a root and reservations, so multiple entries cannot identify which row
+        // caused the unique violation. Provider constraint identity above always wins because
+        // Entries can contain pending rows other than the row that actually failed.
+        if (exception.Entries.Count == 1)
+        {
+            var unit = exception.Entries.Single().Entity switch
             {
                 UserNameReservationEntity => IdentityIamEfModule.UserNameReservationTableName,
                 EmailReservationEntity => IdentityIamEfModule.EmailReservationTableName,
@@ -242,20 +257,6 @@ internal static class EfIdentityStoreSupport
             if (unit is not null)
                 return unit;
         }
-
-        // Some providers do not populate DbUpdateException.Entries for a server-side unique
-        // violation. Their messages include the table/index identifier; matching only our own
-        // bounded names keeps this fallback provider-neutral and avoids leaking provider text.
-        var message = exception.ToString();
-        if (message.Contains(IdentityIamEfModule.UserNameReservationTableName, StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("ux_identity_user_name_reservations_key", StringComparison.OrdinalIgnoreCase))
-            return IdentityIamEfModule.UserNameReservationTableName;
-        if (message.Contains(IdentityIamEfModule.EmailReservationTableName, StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("ux_identity_email_reservations_key", StringComparison.OrdinalIgnoreCase))
-            return IdentityIamEfModule.EmailReservationTableName;
-        if (message.Contains(IdentityIamEfModule.RoleNameReservationTableName, StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("ux_identity_role_name_reservations_key", StringComparison.OrdinalIgnoreCase))
-            return IdentityIamEfModule.RoleNameReservationTableName;
 
         return null;
     }
@@ -270,14 +271,58 @@ internal static class EfIdentityStoreSupport
     {
         ArgumentNullException.ThrowIfNull(exception);
 
-        var message = exception.ToString();
-        if (message.Contains(IdentityIamEfModule.MutationReceiptTableName, StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("ux_identity_mutation_receipts_id", StringComparison.OrdinalIgnoreCase))
-            return true;
+        var providerConstraint = ClassifyProviderUniqueConstraint(exception.ToString());
+        if (providerConstraint != ProviderUniqueConstraint.Unidentified)
+            return providerConstraint == ProviderUniqueConstraint.MutationReceipt;
 
         // Entries can contain every pending row in a failed batch, not only the row whose
         // constraint failed. Treat it as authoritative only when the receipt is the sole entry.
         return exception.Entries.Count == 1 && exception.Entries[0].Entity is MutationReceiptEntity;
+    }
+
+    private static ProviderUniqueConstraint ClassifyProviderUniqueConstraint(string message)
+    {
+        if (message.Contains("ux_identity_user_name_reservations_key", StringComparison.OrdinalIgnoreCase))
+            return ProviderUniqueConstraint.UserNameReservation;
+        if (message.Contains("ux_identity_email_reservations_key", StringComparison.OrdinalIgnoreCase))
+            return ProviderUniqueConstraint.EmailReservation;
+        if (message.Contains("ux_identity_role_name_reservations_key", StringComparison.OrdinalIgnoreCase))
+            return ProviderUniqueConstraint.RoleNameReservation;
+        if (message.Contains("ux_identity_mutation_receipts_id", StringComparison.OrdinalIgnoreCase))
+            return ProviderUniqueConstraint.MutationReceipt;
+
+        // SQL Server and PostgreSQL report the configured constraint name. MySQL can report only
+        // PRIMARY; when the table is unavailable that is still authoritative evidence that a
+        // pending reservation or receipt entry must not be guessed as the failed unit.
+        if (message.Contains("ux_identity_", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("PK_identity_", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("for key 'PRIMARY'", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("for key `PRIMARY`", StringComparison.OrdinalIgnoreCase))
+            return ProviderUniqueConstraint.OtherIdentityUnit;
+
+        // SQLite reports table/column identifiers instead of the configured index name.
+        if (message.Contains(IdentityIamEfModule.UserNameReservationTableName, StringComparison.OrdinalIgnoreCase))
+            return ProviderUniqueConstraint.UserNameReservation;
+        if (message.Contains(IdentityIamEfModule.EmailReservationTableName, StringComparison.OrdinalIgnoreCase))
+            return ProviderUniqueConstraint.EmailReservation;
+        if (message.Contains(IdentityIamEfModule.RoleNameReservationTableName, StringComparison.OrdinalIgnoreCase))
+            return ProviderUniqueConstraint.RoleNameReservation;
+        if (message.Contains(IdentityIamEfModule.MutationReceiptTableName, StringComparison.OrdinalIgnoreCase))
+            return ProviderUniqueConstraint.MutationReceipt;
+        if (message.Contains("identity_", StringComparison.OrdinalIgnoreCase))
+            return ProviderUniqueConstraint.OtherIdentityUnit;
+
+        return ProviderUniqueConstraint.Unidentified;
+    }
+
+    private enum ProviderUniqueConstraint
+    {
+        Unidentified,
+        UserNameReservation,
+        EmailReservation,
+        RoleNameReservation,
+        MutationReceipt,
+        OtherIdentityUnit
     }
 
     public static string SerializeSet(IReadOnlySet<string> values)

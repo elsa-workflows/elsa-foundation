@@ -86,7 +86,7 @@ public sealed class EfExternalIdentityStore(
         ArgumentNullException.ThrowIfNull(record); Validate(record.TenantId, nameof(record.TenantId)); Validate(record.Provider, nameof(record.Provider)); Validate(record.ProviderSubject, nameof(record.ProviderSubject)); _ = EfIdentityStoreSupport.ExternalOrderKey(record.Provider, record.ProviderSubject); Validate(record.UserId, nameof(record.UserId));
         Prepare(record.TenantId, cancellationToken);
         var row = ToEntity(record);
-        var result = await relationship.SaveExternalIdentityAsync(row, expectedNewOwnerVersion: null, expectedLoginVersion: createOnly ? 0 : expectedVersion, enforceLoginVersion: createOnly || expectedVersion is not null, ownershipPolicy: createOnly || expectedVersion is null ? EfExternalLoginOwnershipPolicy.CreateOrSameOwner : EfExternalLoginOwnershipPolicy.RevisionEnforcedRebind, returnOwnerResult: false, cancellationToken);
+        var result = await relationship.SaveExternalIdentityPreservingProviderDisplayNameAsync(row, expectedNewOwnerVersion: null, expectedLoginVersion: createOnly ? 0 : expectedVersion, enforceLoginVersion: createOnly || expectedVersion is not null, ownershipPolicy: createOnly || expectedVersion is null ? EfExternalLoginOwnershipPolicy.CreateOrSameOwner : EfExternalLoginOwnershipPolicy.RevisionEnforcedRebind, returnOwnerResult: false, cancellationToken);
         if (!result.Succeeded && !createOnly && expectedVersion is null) throw new IdentityEntityFrameworkPersistenceException("Unable to save the external Identity login.", new InvalidOperationException(result.Message));
         return result;
     }

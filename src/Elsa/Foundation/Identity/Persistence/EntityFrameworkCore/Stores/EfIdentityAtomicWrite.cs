@@ -233,7 +233,7 @@ public sealed class EfIdentityAtomicWrite
                     continue;
                 }
 
-                var failure = rollbackException is null ? exception : new AggregateException(exception, rollbackException);
+                var failure = exception;
                 throw EfIdentityStoreSupport.Failure($"Identity mutation '{mutation.OperationId}' exceeded the {EfIdentityStoreSupport.MaximumWriteAttempts}-attempt transient conflict limit.", failure);
             }
             catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
@@ -502,7 +502,7 @@ public sealed class EfIdentityAtomicWrite
         }
         if (receipt is not null)
             return receipt;
-        var failure = rollbackException is null ? exception : new AggregateException(exception, rollbackException);
+        var failure = exception;
         if (exception is DbUpdateException or DbUpdateConcurrencyException)
             return ConflictResult(mutation, exception);
         throw new IdentityEntityFrameworkPersistenceException($"Identity mutation '{mutation.OperationId}' conflicted without a durable receipt.", failure);

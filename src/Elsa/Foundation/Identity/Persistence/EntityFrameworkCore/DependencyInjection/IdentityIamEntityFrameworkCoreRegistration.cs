@@ -17,6 +17,23 @@ public static class IdentityIamEntityFrameworkCoreRegistration
 {
     public const string StoreBackendName = "entity-framework";
 
+    /// <summary>
+    /// Executes the complete registration validation against an isolated descriptor list so a
+    /// composing adapter can reject an IAM conflict before it selects its own authority.
+    /// </summary>
+    public static void EnsureCanAddIdentityIamEntityFrameworkCore(
+        IServiceCollection services,
+        IdentityIamEntityFrameworkCoreOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(options);
+
+        var probe = new ServiceCollection();
+        foreach (var descriptor in services)
+            probe.Add(descriptor);
+        probe.AddIdentityIamEntityFrameworkCore(options);
+    }
+
     public static IServiceCollection AddIdentityIamEntityFrameworkCore(
         this IServiceCollection services,
         IdentityIamEntityFrameworkCoreOptions options)
@@ -140,6 +157,12 @@ public static class IdentityIamEntityFrameworkCoreRegistration
         services.Add(ServiceDescriptor.Scoped<IPagedExternalIdentityStore>(provider => provider.GetRequiredService<EfExternalIdentityStore>()));
         services.Add(ServiceDescriptor.Scoped<ITenantMembershipStore>(provider => provider.GetRequiredService<EfTenantMembershipStore>()));
         services.Add(ServiceDescriptor.Scoped<IRevisionAwareTenantMembershipStore>(provider => provider.GetRequiredService<EfTenantMembershipStore>()));
+        services.EnsureIdentityAuthorityReplacementContracts<
+            EfUserStore,
+            EfRoleStore,
+            EfClaimMappingStore,
+            EfExternalIdentityStore,
+            EfTenantMembershipStore>();
 
         services.AddScoped<EfApplicationStore>();
         services.AddScoped<EfCredentialStore>();

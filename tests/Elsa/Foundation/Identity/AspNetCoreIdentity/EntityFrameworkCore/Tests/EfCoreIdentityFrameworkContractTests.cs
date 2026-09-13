@@ -50,7 +50,9 @@ public sealed class EfCoreIdentityFrameworkContractTests
 
         var login = new UserLoginInfo("oidc", "subject-1", "OIDC");
         Assert.True((await scenario.Users.AddLoginAsync(user, login)).Succeeded);
-        Assert.Equal(login.ProviderKey, Assert.Single(await scenario.Users.GetLoginsAsync(user)).ProviderKey);
+        var persistedLogin = Assert.Single(await scenario.Users.GetLoginsAsync(user));
+        Assert.Equal(login.ProviderKey, persistedLogin.ProviderKey);
+        Assert.Equal(login.ProviderDisplayName, persistedLogin.ProviderDisplayName);
         Assert.Equal(user.Id, (await scenario.Users.FindByLoginAsync(login.LoginProvider, login.ProviderKey))?.Id);
         Assert.True((await scenario.Users.RemoveLoginAsync(user, login.LoginProvider, login.ProviderKey)).Succeeded);
 
@@ -71,6 +73,67 @@ public sealed class EfCoreIdentityFrameworkContractTests
         await ((EfCoreIdentityRoleStore)roleClaimStore).ReplaceClaimAsync(role, roleClaim, roleClaimReplacement);
         await roleClaimStore.RemoveClaimAsync(role, roleClaimReplacement);
         Assert.Empty(await scenario.Roles.GetClaimsAsync(role));
+    }
+
+    [Fact]
+    public async Task Login_display_names_round_trip_null_and_unpaired_surrogates_after_a_context_reopen()
+    {
+        var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-identity-login-display-{Guid.NewGuid():N}.db");
+        await using var first = await EfCoreIdentityScenario.CreateAsync(databasePath: databasePath);
+        var user = await first.CreateUserAsync("DisplayNames");
+        Assert.True((await first.Users.AddLoginAsync(user, new UserLoginInfo("oidc", "null-display", null))).Succeeded);
+        Assert.True((await first.Users.AddLoginAsync(user, new UserLoginInfo("oidc", "surrogate-display", "OIDC\ud800"))).Succeeded);
+        await first.Services.GetRequiredService<IdentityIamDbContext>().Database.CloseConnectionAsync();
+
+        await using var reopened = await EfCoreIdentityScenario.CreateAsync(databasePath: databasePath, ensureSchema: false);
+        var loadedUser = await reopened.Users.FindByIdAsync(user.Id);
+        var logins = (await reopened.Users.GetLoginsAsync(Assert.IsType<AspNetCoreIdentityUser>(loadedUser)))
+            .OrderBy(login => login.ProviderKey, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Collection(
+            logins,
+            login =>
+            {
+                Assert.Equal("null-display", login.ProviderKey);
+                Assert.Null(login.ProviderDisplayName);
+            },
+            login =>
+            {
+                Assert.Equal("surrogate-display", login.ProviderKey);
+                Assert.Equal("OIDC\ud800", login.ProviderDisplayName);
+            });
+    }
+
+    [Fact]
+    public async Task Provider_neutral_external_identity_update_preserves_framework_display_name()
+    {
+        await using var scenario = await EfCoreIdentityScenario.CreateAsync();
+        var user = await scenario.CreateUserAsync("ProviderNeutralDisplay");
+        var login = new UserLoginInfo("oidc", "subject-preserve", "Friendly OIDC");
+        Assert.True((await scenario.Users.AddLoginAsync(user, login)).Succeeded);
+
+        var externalIdentities = scenario.Services.GetRequiredService<IExternalIdentityStore>();
+        var record = Assert.IsType<ExternalIdentityRecord>(
+            await externalIdentities.FindBySubjectAsync(scenario.TenantId, login.LoginProvider, login.ProviderKey));
+        await externalIdentities.SaveAsync(record with { LastSeenAt = DateTimeOffset.UtcNow });
+
+        var persisted = Assert.Single(await scenario.Users.GetLoginsAsync(user));
+        Assert.Equal(login.ProviderDisplayName, persisted.ProviderDisplayName);
+    }
+
+    [Fact]
+    public async Task Different_framework_display_names_are_distinct_external_login_mutations()
+    {
+        await using var scenario = await EfCoreIdentityScenario.CreateAsync();
+        var user = await scenario.CreateUserAsync("DisplayReplayIdentity");
+        var store = scenario.Services.GetRequiredService<IUserLoginStore<AspNetCoreIdentityUser>>();
+
+        await store.AddLoginAsync(user, new UserLoginInfo("oidc", "subject-replay", "First name"), CancellationToken.None);
+        await store.AddLoginAsync(user, new UserLoginInfo("oidc", "subject-replay", "Second name"), CancellationToken.None);
+
+        var persisted = Assert.Single(await store.GetLoginsAsync(user, CancellationToken.None));
+        Assert.Equal("Second name", persisted.ProviderDisplayName);
     }
 
     [Fact]
@@ -243,6 +306,41 @@ public sealed class EfCoreIdentityFrameworkContractTests
         var duplicateRoleResult = await scenario.Roles.CreateAsync(duplicateRole);
         Assert.False(duplicateRoleResult.Succeeded);
         Assert.Contains(duplicateRoleResult.Errors, x => x.Code == nameof(IdentityErrorDescriber.DuplicateRoleName));
+    }
+
+    [Fact]
+    public async Task Duplicate_authority_root_with_a_new_reservation_maps_to_concurrency_not_name_collision()
+    {
+        await using var scenario = await EfCoreIdentityScenario.CreateAsync();
+        var existingUser = new AspNetCoreIdentityUser
+        {
+            Id = "shared-user-id",
+            TenantId = scenario.TenantId,
+            UserName = "FirstUser"
+        };
+        Assert.True((await scenario.Users.CreateAsync(existingUser)).Succeeded);
+
+        var duplicateUserRoot = new AspNetCoreIdentityUser
+        {
+            Id = existingUser.Id,
+            TenantId = scenario.TenantId,
+            UserName = "SecondUser",
+            NormalizedUserName = "SECONDUSER"
+        };
+        var userStore = scenario.Services.GetRequiredService<IUserStore<AspNetCoreIdentityUser>>();
+        var userResult = await userStore.CreateAsync(duplicateUserRoot, CancellationToken.None);
+        Assert.False(userResult.Succeeded);
+        Assert.Contains(userResult.Errors, error => error.Code == nameof(IdentityErrorDescriber.ConcurrencyFailure));
+        Assert.DoesNotContain(userResult.Errors, error => error.Code == nameof(IdentityErrorDescriber.DuplicateUserName));
+
+        var existingRole = new IdentityRole { Id = "shared-role-id", Name = "FirstRole" };
+        Assert.True((await scenario.Roles.CreateAsync(existingRole)).Succeeded);
+        var duplicateRoleRoot = new IdentityRole { Id = existingRole.Id, Name = "SecondRole", NormalizedName = "SECONDROLE" };
+        var roleStore = scenario.Services.GetRequiredService<IRoleStore<IdentityRole>>();
+        var roleResult = await roleStore.CreateAsync(duplicateRoleRoot, CancellationToken.None);
+        Assert.False(roleResult.Succeeded);
+        Assert.Contains(roleResult.Errors, error => error.Code == nameof(IdentityErrorDescriber.ConcurrencyFailure));
+        Assert.DoesNotContain(roleResult.Errors, error => error.Code == nameof(IdentityErrorDescriber.DuplicateRoleName));
     }
 
     [Fact]
@@ -485,6 +583,25 @@ public sealed class EfCoreIdentityFrameworkContractTests
     }
 
     [Fact]
+    public void Unowned_IAM_contract_is_rejected_before_ASP_NET_authority_mutation()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IClaimMappingStore>(_ => throw new InvalidOperationException("not resolved"));
+        var originalDescriptors = services.ToArray();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(
+                new IdentityIamEntityFrameworkCoreOptions
+                {
+                    Provider = "Sqlite",
+                    ConnectionString = "Data Source=:memory:"
+                }));
+
+        Assert.Contains("unowned host registration", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(originalDescriptors, services.ToArray());
+    }
+
+    [Fact]
     public async Task Ef_seeder_converges_admin_user_role_and_membership_after_host_schema_initialization()
     {
         await using var scenario = await EfCoreIdentityScenario.CreateAsync(initialAdmin: new IdentitySeedOptions
@@ -627,6 +744,60 @@ public sealed class EfCoreIdentityFrameworkContractTests
         }.ConfigureServices(services);
         Assert.Single(services, x => x.ServiceType == typeof(IdentityAuthorityStoreBackend));
         Assert.Contains(services, x => x.ServiceType == typeof(IUserStore<AspNetCoreIdentityUser>));
+        Assert.DoesNotContain(services, x => x.ServiceType == typeof(IOptions<IdentitySeedOptions>));
+    }
+
+    [Theory]
+    [InlineData("admin", null)]
+    [InlineData(null, "Correct Horse1!")]
+    public void Feature_rejects_half_configured_seed(string? userName, string? password)
+    {
+        var services = new ServiceCollection();
+        var feature = new AspNetCoreIdentityEntityFrameworkCoreFeature
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:",
+            SeedAdminUserName = userName,
+            SeedAdminPassword = password
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            feature.ConfigureServices(services));
+
+        Assert.Contains("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("both SeedAdminUserName and SeedAdminPassword", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(services);
+    }
+
+    [Theory]
+    [InlineData(null, null, "admin@elsa.local", IdentitySeedOptions.DefaultRoleName, true)]
+    [InlineData("owner@example.test", "Owners", "owner@example.test", "Owners", false)]
+    public void Feature_applies_seed_defaults_and_explicit_overrides(
+        string? configuredEmail,
+        string? configuredRole,
+        string expectedEmail,
+        string expectedRole,
+        bool isDevelopment)
+    {
+        var services = new ServiceCollection();
+        new AspNetCoreIdentityEntityFrameworkCoreFeature
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:",
+            IsDevelopmentOrDemo = isDevelopment,
+            SeedAdminUserName = "admin",
+            SeedAdminPassword = "Correct Horse1!",
+            SeedAdminEmail = configuredEmail,
+            SeedAdminRoleName = configuredRole
+        }.ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        var seed = provider.GetRequiredService<IOptions<IdentitySeedOptions>>().Value;
+        Assert.Equal("admin", seed.UserName);
+        Assert.Equal("Correct Horse1!", seed.Password);
+        Assert.Equal(expectedEmail, seed.Email);
+        Assert.Equal(expectedRole, seed.RoleName);
+        Assert.Equal(isDevelopment, seed.IsDevelopmentSeed);
     }
 }
 

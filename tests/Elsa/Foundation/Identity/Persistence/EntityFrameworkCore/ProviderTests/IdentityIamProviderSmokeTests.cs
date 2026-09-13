@@ -102,6 +102,24 @@ internal static class IdentityIamProviderSmoke
             expectedUserVersion: 1,
             new UserRoleEntity { TenantId = "caller", UserId = "caller", RoleId = "caller" });
         Assert.Equal(EfIdentityWriteStatus.Updated, relationship.Status);
+        const string providerDisplayName = "Provider \ud800";
+        var externalLogin = await relationships.SaveExternalIdentityAsync(
+            new ExternalIdentityEntity
+            {
+                TenantId = tenant,
+                Provider = "oidc",
+                ProviderDisplayName = providerDisplayName,
+                ProviderSubject = "subject-primary",
+                UserId = user.Id,
+                LinkedAt = DateTimeOffset.UnixEpoch,
+                LinkPolicy = (int)ExternalIdentityLinkPolicy.Admin
+            },
+            expectedNewOwnerVersion: Assert.IsType<long>(relationship.Version),
+            expectedLoginVersion: null,
+            enforceLoginVersion: false,
+            EfExternalLoginOwnershipPolicy.CreateOrSameOwner,
+            returnOwnerResult: true);
+        Assert.Equal(EfIdentityWriteStatus.Updated, externalLogin.Status);
 
         var duplicateUser = await userStore.SaveWithRevisionAsync(
             user with { Id = "user-name-conflict" },
@@ -117,6 +135,7 @@ internal static class IdentityIamProviderSmoke
         AssertUser(user, Assert.IsType<UserRecord>(await userStore.FindAsync(tenant, user.Id)));
         AssertRole(role, Assert.IsType<RoleRecord>(await roleStore.FindAsync(tenant, role.Id)));
         Assert.Equal(1, await context.UserRoles.CountAsync());
+        Assert.Equal(providerDisplayName, (await context.ExternalIdentities.AsNoTracking().SingleAsync()).ProviderDisplayName);
         await AssertDeterministicSetsAsync(context, applicationStore, application);
 
         await using (var transaction = await context.Database.BeginTransactionAsync())
@@ -143,6 +162,7 @@ internal static class IdentityIamProviderSmoke
             Assert.Equal(user.DisplayName, Assert.IsType<UserRecord>(await new EfUserStore(reopenedAfterRollback, reopenedAccess).FindAsync(tenant, user.Id)).DisplayName);
             Assert.Equal(role.Description, Assert.IsType<RoleRecord>(await new EfRoleStore(reopenedAfterRollback, reopenedAccess).FindAsync(tenant, role.Id)).Description);
             Assert.Equal(1, await reopenedAfterRollback.UserRoles.CountAsync());
+            Assert.Equal(providerDisplayName, (await reopenedAfterRollback.ExternalIdentities.AsNoTracking().SingleAsync()).ProviderDisplayName);
         }
 
         await AssertCreateConflictAndCasAsync(applicationStore, credentialStore, application, credential);
@@ -162,6 +182,7 @@ internal static class IdentityIamProviderSmoke
         Assert.Equal("user-primary", Assert.IsType<UserRecord>(await new EfUserStore(reopened, finalAccess).FindAsync(tenant, user.Id)).DisplayName);
         Assert.Equal("role-primary", Assert.IsType<RoleRecord>(await new EfRoleStore(reopened, finalAccess).FindAsync(tenant, role.Id)).Description);
         Assert.Equal(1, await reopened.UserRoles.CountAsync());
+        Assert.Equal(providerDisplayName, (await reopened.ExternalIdentities.AsNoTracking().SingleAsync()).ProviderDisplayName);
     }
 
     private static async Task AssertApplicationReadbackAsync(

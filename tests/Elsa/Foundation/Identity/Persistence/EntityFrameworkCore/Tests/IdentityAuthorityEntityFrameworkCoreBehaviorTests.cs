@@ -155,6 +155,82 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
         }
     }
 
+    [Theory]
+    [InlineData("PK_identity_users", EfIdentityAuthorityConflict.None)]
+    [InlineData("ux_identity_user_name_reservations_key", EfIdentityAuthorityConflict.UserName)]
+    public async Task Provider_constraint_identity_wins_over_mixed_pending_entries(
+        string constraintName,
+        EfIdentityAuthorityConflict expectedConflict)
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await using (var schema = CreateContext(databasePath))
+                await schema.Database.EnsureCreatedAsync();
+
+            var interceptor = new NamedUniqueConstraintFailureInterceptor(constraintName);
+            await using var context = CreateContext(databasePath, interceptor);
+            var access = new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+            var coordinator = new EfIdentityAuthorityAggregateCoordinator(context, access);
+
+            var result = await coordinator.SaveUserAsync(
+                User("tenant-a", "user-mixed-conflict", "Mixed Conflict", null),
+                expectedVersion: null,
+                requireUniqueEmail: false);
+
+            Assert.Equal(EfIdentityWriteStatus.Conflict, result.WriteResult.Status);
+            Assert.Equal(expectedConflict, result.Conflict);
+            Assert.Contains(typeof(UserEntity), interceptor.PendingEntityTypes);
+            Assert.Contains(typeof(UserNameReservationEntity), interceptor.PendingEntityTypes);
+            Assert.Contains(typeof(MutationReceiptEntity), interceptor.PendingEntityTypes);
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
+    [Fact]
+    public async Task Concurrent_same_name_creates_have_one_duplicate_name_loser()
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await using (var schema = CreateContext(databasePath))
+                await schema.Database.EnsureCreatedAsync();
+
+            await using var firstContext = CreateContext(databasePath);
+            await using var secondContext = CreateContext(databasePath);
+            var firstAccess = new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+            var secondAccess = new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+            var first = new EfIdentityAuthorityAggregateCoordinator(firstContext, firstAccess);
+            var second = new EfIdentityAuthorityAggregateCoordinator(secondContext, secondAccess);
+
+            var results = await Task.WhenAll(
+                first.SaveUserAsync(
+                    User("tenant-a", "concurrent-name-a", "Shared Name", null),
+                    expectedVersion: null,
+                    requireUniqueEmail: false),
+                second.SaveUserAsync(
+                    User("tenant-a", "concurrent-name-b", "shared name", null),
+                    expectedVersion: null,
+                    requireUniqueEmail: false));
+
+            Assert.Single(results, result => result.WriteResult.Succeeded);
+            var loser = Assert.Single(results, result => !result.WriteResult.Succeeded);
+            Assert.Equal(EfIdentityWriteStatus.Conflict, loser.WriteResult.Status);
+            Assert.Equal(EfIdentityAuthorityConflict.UserName, loser.Conflict);
+
+            await using var verification = CreateContext(databasePath);
+            Assert.Equal(1, await verification.Users.CountAsync());
+            Assert.Equal(1, await verification.UserNameReservations.CountAsync());
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
     [Fact]
     public async Task Role_pages_are_bounded_and_stably_ordered_by_the_contract_key()
     {
@@ -2339,5 +2415,32 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                 throw new SqliteException("database is locked", 5);
             return ValueTask.FromResult(result);
         }
+    }
+
+    private sealed class NamedUniqueConstraintFailureInterceptor(string constraintName) : SaveChangesInterceptor
+    {
+        public IReadOnlyList<Type> PendingEntityTypes { get; private set; } = [];
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            var entries = eventData.Context!.ChangeTracker.Entries().ToArray();
+            if (!entries.Any(entry => entry.Entity is UserEntity) ||
+                !entries.Any(entry => entry.Entity is MutationReceiptEntity))
+                return ValueTask.FromResult(result);
+
+            PendingEntityTypes = entries.Select(entry => entry.Entity.GetType()).ToArray();
+            throw new DbUpdateException(
+                $"Violation of unique constraint '{constraintName}'.",
+                new SqlException(2627),
+                entries);
+        }
+    }
+
+    private sealed class SqlException(int number) : Exception("Synthetic SQL Server uniqueness conflict")
+    {
+        public int Number { get; } = number;
     }
 }
