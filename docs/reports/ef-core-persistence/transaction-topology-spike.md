@@ -91,7 +91,7 @@ dotnet test tests/Elsa/Persistence/EntityFrameworkCore/TransactionTopology/Tests
 dotnet test tests/Elsa/Persistence/EntityFrameworkCore/TransactionTopology/Tests/Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests.csproj --configuration Release --no-build --no-restore --filter FullyQualifiedName~MySqlTopologyTests --logger 'console;verbosity=minimal'
 ```
 
-Results: build passed with 0 warnings/0 errors; SQLite 8/8 passed;
+Results: build passed with 0 warnings/0 errors; SQLite 9/9 passed;
 PostgreSQL 1/1 passed; SQL Server 1/1 passed; MySQL 1/1 passed. No hosted CI,
 benchmark, timing measurement, migration command, or performance check was
 run.
