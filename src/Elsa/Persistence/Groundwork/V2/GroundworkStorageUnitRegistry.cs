@@ -53,6 +53,24 @@ public sealed class GroundworkStorageUnitRegistry
         }
     }
 
+    /// <summary>
+    /// Withdraws every declaration for <paramref name="unitId"/> before the service provider is built.
+    /// This supports order-independent composition when another persistence backend replaces a store
+    /// while other Groundwork units remain active.
+    /// </summary>
+    public void Withdraw(string unitId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(unitId);
+        lock (gate)
+        {
+            foreach (var key in registrations.Keys.Where(candidate =>
+                         StringComparer.Ordinal.Equals(candidate.UnitId, unitId)).ToArray())
+            {
+                registrations.Remove(key);
+            }
+        }
+    }
+
     public GroundworkStorageUnitRegistration Require(string unitId, string? targetName = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(unitId);

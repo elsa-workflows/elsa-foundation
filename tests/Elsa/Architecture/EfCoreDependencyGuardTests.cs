@@ -107,6 +107,25 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     [Fact]
+    public void Every_admitted_Runtime_placement_project_resolves_only_its_reviewed_EF_closure()
+    {
+        var offenders = Adr0073RuntimePlacementEf.ExpectedEfPackagesByProject
+            .SelectMany(project => RestoreConfigurations.SelectMany(configuration =>
+            {
+                var resolved = ReadProjectEfPackages(project.Key, configuration);
+                var unexpected = FindUnexpectedEfPackages(resolved, project.Value)
+                    .Select(package => $"{project.Key} ({configuration}) unexpectedly resolves {package}");
+                var missing = FindUnexpectedEfPackages(project.Value, resolved)
+                    .Select(package => $"{project.Key} ({configuration}) no longer resolves reviewed package {package}");
+                return unexpected.Concat(missing);
+            }))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        Assert.True(offenders.Length == 0, Report("drift from the reviewed Runtime placement EF closure", offenders));
+    }
+
+    [Fact]
     public void Every_admitted_Structured_Logs_project_resolves_only_its_reviewed_EF_closure()
     {
         var offenders = Adr0073StructuredLogsEf.ExpectedEfPackagesByProject
@@ -395,7 +414,8 @@ public sealed class EfCoreDependencyGuardTests
                     Adr0073RepositoryFirstEf.IsProjectPath(relativePath) ||
                     Adr0073StructuredLogsEf.IsProjectPath(relativePath) ||
                     Adr0073OpenTelemetryEf.IsProjectPath(relativePath) ||
-                    Adr0073IdentityEf.IsProjectPath(relativePath)));
+                    Adr0073IdentityEf.IsProjectPath(relativePath) ||
+                    Adr0073RuntimePlacementEf.IsProjectPath(relativePath)));
         }
         return projects;
     }
@@ -533,6 +553,7 @@ public sealed class EfCoreDependencyGuardTests
                Adr0073StructuredLogsEf.IsSurfacePath(relativePath) ||
                Adr0073OpenTelemetryEf.IsSurfacePath(relativePath) ||
                Adr0073IdentityEf.IsSurfacePath(relativePath) ||
+               Adr0073RuntimePlacementEf.IsSurfacePath(relativePath) ||
                OpenIddictPersistenceArchitectureTests.IsWorkbenchVendorEfSource(relativePath);
     }
 
@@ -648,6 +669,56 @@ public sealed class EfCoreDependencyGuardTests
                     .. CorePackages(),
                     "Microsoft.EntityFrameworkCore.Sqlite",
                     "Microsoft.EntityFrameworkCore.Sqlite.Core"
+                ]
+            };
+
+        public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
+
+        public static bool IsSurfacePath(string relativePath) =>
+            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
+
+        public static bool IsProjectPath(string relativePath) =>
+            ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
+
+        private static string[] CorePackages() =>
+        [
+            "Microsoft.EntityFrameworkCore",
+            "Microsoft.EntityFrameworkCore.Abstractions",
+            "Microsoft.EntityFrameworkCore.Analyzers",
+            "Microsoft.EntityFrameworkCore.Relational"
+        ];
+    }
+
+    /// <summary>
+    /// ADR 0073's Runtime D01 repository-first admission for issue #1717. The production
+    /// adapter is provider-neutral; provider engines remain in focused test projects.
+    /// </summary>
+    internal static class Adr0073RuntimePlacementEf
+    {
+        public static readonly string[] SurfacePathPrefixes =
+        [
+            "src/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/",
+            "tests/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/"
+        ];
+
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["src/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["tests/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests.csproj"] =
+                [
+                    .. CorePackages(),
+                    "Microsoft.EntityFrameworkCore.Sqlite",
+                    "Microsoft.EntityFrameworkCore.Sqlite.Core"
+                ],
+                ["tests/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                [
+                    .. CorePackages(),
+                    "Microsoft.EntityFrameworkCore.Sqlite",
+                    "Microsoft.EntityFrameworkCore.Sqlite.Core",
+                    "Microsoft.EntityFrameworkCore.SqlServer",
+                    "MySql.EntityFrameworkCore",
+                    "Npgsql.EntityFrameworkCore.PostgreSQL"
                 ]
             };
 

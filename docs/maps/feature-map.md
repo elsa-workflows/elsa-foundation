@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 109
+- Discovered feature classes: 110
 
 ## Features
 
@@ -109,6 +109,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | WorkflowsRuntimeCheckpointPersistenceFeature | direct IShellFeature | Elsa.Workflows.Runtime.Api | IShellFeature, IPostConfigureShellServices | [WorkflowsRuntimeCheckpointPersistenceFeature.cs](../../src/Elsa/Workflows/Runtime/Api/Coalescing/WorkflowsRuntimeCheckpointPersistenceFeature.cs) |
 | WorkflowsRuntimeTriggersFeature | direct IShellFeature | Elsa.Workflows.Runtime.Api | IShellFeature | [WorkflowsRuntimeTriggersFeature.cs](../../src/Elsa/Workflows/Runtime/Api/WorkflowsRuntimeTriggersFeature.cs) |
 | WorkflowsRuntimeDistributedFeature | direct IShellFeature | Elsa.Workflows.Runtime.Distributed | IShellFeature | [WorkflowsRuntimeDistributedFeature.cs](../../src/Elsa/Workflows/Runtime/Distributed/WorkflowsRuntimeDistributedFeature.cs) |
+| DistributedRuntimeExecutionPlacementEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore | IShellFeature | [DistributedRuntimeExecutionPlacementEntityFrameworkCoreFeature.cs](../../src/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/DistributedRuntimeExecutionPlacementEntityFrameworkCoreFeature.cs) |
 | WorkflowsRuntimeDistributedGroundworkPersistenceFeature | direct IShellFeature | Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork | IShellFeature | [WorkflowsRuntimeDistributedGroundworkPersistenceFeature.cs](../../src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/WorkflowsRuntimeDistributedGroundworkPersistenceFeature.cs) |
 | WorkflowsRuntimeHttpFeature | direct IShellFeature | Elsa.Workflows.Runtime.Http | IShellFeature | [WorkflowsRuntimeHttpFeature.cs](../../src/Elsa/Workflows/Runtime/Http/WorkflowsRuntimeHttpFeature.cs) |
 | JavaScriptActivitiesEndpointsFeature | direct IWebShellFeature | Elsa.Workflows.Runtime.JavaScript | IWebShellFeature | [JavaScriptActivitiesEndpointsFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesEndpointsFeature.cs) |

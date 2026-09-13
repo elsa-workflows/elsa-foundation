@@ -94,7 +94,7 @@ Owner: Runtime program #1672 and proving slice #1676. Dependencies: S1-S4.
 
 | ID | Groundwork unit / physical name | Domain contract or semantic role | Evidence | Blockers | Replacement PR | Default-flip PR | Deletion PR | Disposition |
 |---|---|---|---|---|---|---|---|---|
-| D01 | `elsa-distributed-execution-placement` / `elsa_distributed_execution_placement` | `IExecutionPlacementStore`; exclusive placement, ownership and fencing | E-CLAIM | S1-S4 | | | | Pending |
+| D01 | `elsa-distributed-execution-placement` / `elsa_distributed_execution_placement` | `IExecutionPlacementStore`; exclusive placement, ownership and fencing | E-CLAIM | S1-S4 | #1718 | | | Opt-in EF Core replacement implemented; Groundwork remains default and migration/default-flip/deletion evidence is explicitly pending |
 | D02 | `elsa-distributed-command-stream-head` / `elsa_distributed_command_stream_head` | Atomic per-execution sequence head used by command transport | E-CLAIM | S1-S4 | | | | Pending |
 | D03 | `elsa-distributed-command-transport` / `elsa_distributed_command_transport` | `IExecutionCommandTransport`; ordered enqueue, lease, ack and redelivery | E-CLAIM | S1-S4 | | | | Pending |
 
