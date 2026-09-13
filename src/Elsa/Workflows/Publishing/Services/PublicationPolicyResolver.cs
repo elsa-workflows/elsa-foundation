@@ -19,19 +19,19 @@ public sealed class PublicationPolicyResolver : IPublicationPolicyResolver
 
         if (workflowPolicy?.WorkflowDefinitionId is { } policyDefinitionId &&
             !StringComparer.Ordinal.Equals(policyDefinitionId, workflowDefinitionId))
-            throw new PublicationPolicyResolutionException("workflow_policy_mismatch", "The workflow publication policy belongs to another workflow definition.");
+            throw new PublicationPolicyResolutionException(PublicationFailureCodes.WorkflowPolicyMismatch, "The workflow publication policy belongs to another workflow definition.");
 
         if (hostPolicy.WorkflowDefinitionId is not null)
-            throw new PublicationPolicyResolutionException("invalid_host_policy", "The host publication policy cannot be scoped to a workflow definition.");
+            throw new PublicationPolicyResolutionException(PublicationFailureCodes.InvalidHostPolicy, "The host publication policy cannot be scoped to a workflow definition.");
 
         if (request is not null)
             return ResolveRequest(workflowDefinitionId, workflowDefinitionVersionId, request, workflowPolicy ?? hostPolicy);
 
         var selectedPolicy = workflowPolicy ?? hostPolicy;
         if (selectedPolicy.DefaultAction == PublicationPolicyDefaultAction.RequireExplicitSlot)
-            throw new PublicationPolicyResolutionException("explicit_slot_required", "This workflow requires an explicit publication slot.");
+            throw new PublicationPolicyResolutionException(PublicationFailureCodes.ExplicitSlotRequired, "This workflow requires an explicit publication slot.");
 
-        var slotName = RequireSlotName(selectedPolicy.DefaultSlotName, "invalid_default_slot");
+        var slotName = RequireSlotName(selectedPolicy.DefaultSlotName, PublicationFailureCodes.InvalidDefaultSlot);
         return new ResolvedPublicationAction(
             workflowDefinitionId,
             workflowDefinitionVersionId,
@@ -51,9 +51,9 @@ public sealed class PublicationPolicyResolver : IPublicationPolicyResolver
         {
             PublicationAction.PublishSideBySide => RequireNamedSideBySideSlot(request.SlotName),
             PublicationAction.Replace => string.IsNullOrWhiteSpace(request.SlotName)
-                ? RequireSlotName(fallbackPolicy.DefaultSlotName, "invalid_default_slot")
+                ? RequireSlotName(fallbackPolicy.DefaultSlotName, PublicationFailureCodes.InvalidDefaultSlot)
                 : request.SlotName.Trim(),
-            _ => throw new PublicationPolicyResolutionException("unsupported_action", $"Publication action '{request.Action}' is not supported.")
+            _ => throw new PublicationPolicyResolutionException(PublicationFailureCodes.UnsupportedAction, $"Publication action '{request.Action}' is not supported.")
         };
 
         return new ResolvedPublicationAction(
@@ -67,9 +67,9 @@ public sealed class PublicationPolicyResolver : IPublicationPolicyResolver
 
     private static string RequireNamedSideBySideSlot(string? slotName)
     {
-        var normalized = RequireSlotName(slotName, "named_slot_required");
+        var normalized = RequireSlotName(slotName, PublicationFailureCodes.NamedSlotRequired);
         if (StringComparer.Ordinal.Equals(normalized, "default"))
-            throw new PublicationPolicyResolutionException("named_slot_required", "Side-by-side publication requires a meaningful named slot other than 'default'.");
+            throw new PublicationPolicyResolutionException(PublicationFailureCodes.NamedSlotRequired, "Side-by-side publication requires a meaningful named slot other than 'default'.");
         return normalized;
     }
 

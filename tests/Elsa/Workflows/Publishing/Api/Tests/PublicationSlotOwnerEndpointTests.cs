@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
+using static Elsa.Workflows.Publishing.Api.Tests.Support.CodedProblemAssertions;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
@@ -40,12 +41,10 @@ public sealed class PublicationSlotOwnerEndpointTests : IAsyncLifetime
 
     // The scenario host's capture compiler answers every compile with this definition, so every route resolves its slot.
     private const string DefinitionId = "capture-definition";
-    private const string StimulusType = "Http";
-    private const string StimulusHash = "get:/orders";
     private static readonly DateTimeOffset Now = new(2026, 8, 17, 12, 0, 0, TimeSpan.Zero);
     private static readonly WorkflowActivationSource ImportOwner = WorkflowActivationSource.ArtifactReconciliation("mounted-artifacts");
 
-    private readonly StubTriggerExtractor _triggers = new();
+    private readonly TriggerConflictSupport.StubTriggerExtractor _triggers = new();
     private PublishingMinimalApiScenarioHost _host = null!;
     private IWorkflowActivationAuthority _authority = null!;
 
@@ -145,8 +144,7 @@ public sealed class PublicationSlotOwnerEndpointTests : IAsyncLifetime
         var raw = await response.Content.ReadAsStringAsync();
 
         // The conflict problem a refused activation already produced, now reached before the first write.
-        Assert.True(response.StatusCode == HttpStatusCode.Conflict, $"{(int)response.StatusCode}: {raw}");
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        AssertCodedProblem(response, raw, HttpStatusCode.Conflict, "slot_owner_conflict");
         using var problem = JsonDocument.Parse(raw);
         Assert.Contains(ImportOwner.Describe(), problem.RootElement.GetProperty("detail").GetString(), StringComparison.Ordinal);
         Assert.Empty(await _host.Services.GetRequiredService<IWorkflowExecutableStore>().ListAllAsync());
@@ -189,17 +187,10 @@ public sealed class PublicationSlotOwnerEndpointTests : IAsyncLifetime
     }
 
     /// <summary>Makes another live slot hold an Exclusive claim that the candidate then claims too.</summary>
-    private async Task ClaimExclusiveTriggerInAnotherSlotAsync(string slotName, string activationId)
-    {
-        await ActivateAsync(slotName, activationId, WorkflowActivationSource.Publishing);
-        await _host.Services.GetRequiredService<IWorkflowTriggerBindingStore>().SaveAsync(
-            ExclusiveBinding($"artifact-{slotName}", $"{slotName}-node") with
-            {
-                ActivationId = activationId,
-                SlotId = WorkflowActivationSlotIdentity.Create(DefinitionId, slotName)
-            });
-        _triggers.ClaimsExclusiveTrigger = true;
-    }
+    private Task ClaimExclusiveTriggerInAnotherSlotAsync(string slotName, string activationId) =>
+        TriggerConflictSupport.ClaimExclusiveTriggerInAnotherSlotAsync(
+            _authority, _host.Services.GetRequiredService<IWorkflowTriggerBindingStore>(), _triggers,
+            DefinitionId, slotName, activationId, Now);
 
     private async Task<JsonElement> PreflightAsync(string route)
     {
@@ -220,32 +211,6 @@ public sealed class PublicationSlotOwnerEndpointTests : IAsyncLifetime
         };
         request.Headers.TryAddWithoutValidation(PublishingCompatibilityCases.IdentityHeader, "trusted-success");
         return await _host.Client.SendAsync(request);
-    }
-
-    private static WorkflowTriggerBinding ExclusiveBinding(string artifactId, string executableNodeId) =>
-        new(
-            WorkflowTriggerBinding.BuildId(artifactId, executableNodeId, StimulusHash),
-            artifactId,
-            DefinitionId,
-            "1.0",
-            "capture-hash",
-            executableNodeId,
-            StimulusType,
-            StimulusHash,
-            CorrelationScope: null,
-            new Dictionary<string, string>(),
-            Now,
-            Cardinality: TriggerCardinality.Exclusive);
-
-    /// <summary>Claims one Exclusive stimulus on the candidate's root node once a test asks for a trigger clash.</summary>
-    private sealed class StubTriggerExtractor : IWorkflowTriggerBindingExtractor
-    {
-        public bool ClaimsExclusiveTrigger { get; set; }
-
-        public IReadOnlyCollection<WorkflowTriggerBinding> Extract(WorkflowExecutable executable) =>
-            ClaimsExclusiveTrigger
-                ? [ExclusiveBinding(executable.Identity.ArtifactId, executable.RootActivity.ExecutableNodeId)]
-                : [];
     }
 
     /// <summary>Hands the publish request to the real handler, as the mediator would; the capture sender would answer it.</summary>

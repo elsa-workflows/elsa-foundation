@@ -102,7 +102,7 @@ public sealed class UnpublishPublicationSlotRequestHandler(
     {
         WorkflowActivationConflict.ForeignSource =>
             new(PublicationFailureCodes.SlotOwnerConflict, diagnostic ?? "The activation slot is owned by another activation source."),
-        _ => new("slot_revision_conflict", diagnostic ?? "The publication slot revision changed.")
+        _ => new(PublicationFailureCodes.SlotRevisionConflict, diagnostic ?? "The publication slot revision changed.")
     };
 }
 

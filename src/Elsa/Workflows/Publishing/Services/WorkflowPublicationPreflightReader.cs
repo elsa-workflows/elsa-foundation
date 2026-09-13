@@ -104,6 +104,6 @@ public sealed class WorkflowPublicationPreflightReader(
     {
         if (expectedPublicationId is not null &&
             !StringComparer.Ordinal.Equals(expectedPublicationId, slot?.ActiveActivationId))
-            throw new PublicationPolicyResolutionException("expected_publication_mismatch", "The publication slot authority changed.");
+            throw new PublicationPolicyResolutionException(PublicationFailureCodes.ExpectedPublicationMismatch, "The publication slot authority changed.");
     }
 }
