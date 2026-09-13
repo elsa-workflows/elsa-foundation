@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 105
+- Discovered feature classes: 106
 
 ## Features
 
@@ -40,6 +40,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | AttentionApiFeature | direct IWebShellFeature | Elsa.Attention.Api | IWebShellFeature | [AttentionApiFeature.cs](../../src/Elsa/Attention/Api/AttentionApiFeature.cs) |
 | MemoryCacheFeature | direct IShellFeature | Elsa.Caching.Memory | IShellFeature | [MemoryCacheFeature.cs](../../src/Elsa/Caching/Memory/MemoryCacheFeature.cs) |
 | OpenTelemetryFeature | direct IWebShellFeature | Elsa.Diagnostics.OpenTelemetry | IWebShellFeature | [OpenTelemetryFeature.cs](../../src/Elsa/Diagnostics/OpenTelemetry/OpenTelemetryFeature.cs) |
+| EfOpenTelemetryFeature | direct IShellFeature | Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore | IShellFeature | [EfOpenTelemetryFeature.cs](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/EfOpenTelemetryFeature.cs) |
 | GroundworkOpenTelemetryPersistenceFeature | direct IShellFeature | Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork | IShellFeature | [GroundworkOpenTelemetryPersistenceFeature.cs](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryPersistenceFeature.cs) |
 | DiagnosticsGroundworkPersistenceFeature | direct IShellFeature | Elsa.Diagnostics.Persistence.Groundwork | IShellFeature | [DiagnosticsGroundworkPersistenceFeature.cs](../../src/Elsa/Diagnostics/Persistence/Groundwork/DiagnosticsGroundworkPersistenceFeature.cs) |
 | StructuredLogsFeature | direct IWebShellFeature | Elsa.Diagnostics.StructuredLogs | IWebShellFeature | [StructuredLogsFeature.cs](../../src/Elsa/Diagnostics/StructuredLogs/StructuredLogsFeature.cs) |
