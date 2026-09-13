@@ -62,8 +62,8 @@ internal static class NativeProviderTopologySmoke
             await setup.Database.EnsureCreatedAsync();
         }
 
-        await using (var ownerConnection = createConnection(connectionString))
         {
+            var ownerConnection = createConnection(connectionString);
             await using var operation = await TopologyOperation.BeginAsync(ownerConnection, "native", "tenant-native");
             await using (var runtime = Enlist(operation, ownerConnection, provider, TopologyLane.Runtime))
             await using (var design = Enlist(operation, ownerConnection, provider, TopologyLane.Design))
@@ -84,8 +84,37 @@ internal static class NativeProviderTopologySmoke
 
         Assert.Equal(3, await CountAsync(connectionString, provider));
 
-        await using (var ownerConnection = createConnection(connectionString))
         {
+            var ownerConnection = createConnection(connectionString);
+            await using var operation = await TopologyOperation.BeginAsync(ownerConnection, "native", "tenant-native");
+            await using (var runtime = Enlist(operation, ownerConnection, provider, TopologyLane.Runtime))
+            {
+                runtime.Rows.Add(Row("native-savepoint-runtime", TopologyLane.Runtime));
+                await runtime.SaveChangesAsync();
+            }
+
+            await SavepointAsync(ownerConnection, operation.Transaction, provider, "after_runtime");
+            await using (var design = Enlist(operation, ownerConnection, provider, TopologyLane.Design))
+            {
+                design.Rows.Add(Row("native-savepoint-design-rolled-back", TopologyLane.Design));
+                await design.SaveChangesAsync();
+            }
+
+            await RollbackToSavepointAsync(ownerConnection, operation.Transaction, provider, "after_runtime");
+            await using (var publishing = Enlist(operation, ownerConnection, provider, TopologyLane.Publishing))
+            {
+                publishing.Rows.Add(Row("native-savepoint-publishing", TopologyLane.Publishing));
+                await publishing.SaveChangesAsync();
+            }
+
+            await operation.CommitAsync();
+        }
+
+        Assert.Equal(5, await CountAsync(connectionString, provider));
+        Assert.Equal(0, await CountByIdAsync(connectionString, provider, "native-savepoint-design-rolled-back"));
+
+        {
+            var ownerConnection = createConnection(connectionString);
             await using var operation = await TopologyOperation.BeginAsync(ownerConnection, "native", "tenant-native");
             await using var runtime = Enlist(operation, ownerConnection, provider, TopologyLane.Runtime);
             runtime.Rows.Add(Row("native-explicit-rollback", TopologyLane.Runtime));
@@ -93,8 +122,8 @@ internal static class NativeProviderTopologySmoke
             await operation.RollbackAsync();
         }
 
-        await using (var ownerConnection = createConnection(connectionString))
         {
+            var ownerConnection = createConnection(connectionString);
             await using var operation = await TopologyOperation.BeginAsync(ownerConnection, "native", "tenant-native");
             await using var runtime = Enlist(operation, ownerConnection, provider, TopologyLane.Runtime);
             runtime.Rows.Add(Row("native-forced-failure", TopologyLane.Runtime));
@@ -109,8 +138,8 @@ internal static class NativeProviderTopologySmoke
             }
         }
 
-        await using (var ownerConnection = createConnection(connectionString))
         {
+            var ownerConnection = createConnection(connectionString);
             await using var operation = await TopologyOperation.BeginAsync(ownerConnection, "native", "tenant-native");
             await using (var runtime = Enlist(operation, ownerConnection, provider, TopologyLane.Runtime))
             {
@@ -121,7 +150,7 @@ internal static class NativeProviderTopologySmoke
             await operation.CommitAsync();
         }
 
-        Assert.Equal(4, await CountAsync(connectionString, provider));
+        Assert.Equal(6, await CountAsync(connectionString, provider));
         Assert.Equal(0, await CountByIdAsync(connectionString, provider, "native-explicit-rollback"));
         Assert.Equal(0, await CountByIdAsync(connectionString, provider, "native-forced-failure"));
     }
@@ -154,5 +183,33 @@ internal static class NativeProviderTopologySmoke
         return id is null
             ? await context.Rows.CountAsync()
             : await context.Rows.CountAsync(row => row.Id == id);
+    }
+
+    private static async Task SavepointAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        TopologyProvider provider,
+        string name)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = provider == TopologyProvider.SqlServer
+            ? $"SAVE TRANSACTION {name}"
+            : $"SAVEPOINT {name}";
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task RollbackToSavepointAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        TopologyProvider provider,
+        string name)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = provider == TopologyProvider.SqlServer
+            ? $"ROLLBACK TRANSACTION {name}"
+            : $"ROLLBACK TO SAVEPOINT {name}";
+        await command.ExecuteNonQueryAsync();
     }
 }

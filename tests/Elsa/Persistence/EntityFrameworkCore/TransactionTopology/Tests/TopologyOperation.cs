@@ -9,13 +9,22 @@ internal sealed class TopologyOperation : IAsyncDisposable
     private bool committed;
     private bool commitAttempted;
     private bool disposed;
+    private readonly Func<Task> commit;
 
-    private TopologyOperation(DbConnection connection, DbTransaction transaction, string target, string tenant)
+    private TopologyOperation(
+        DbConnection connection,
+        DbTransaction transaction,
+        string target,
+        string tenant,
+        Func<DbTransaction, Task>? commit)
     {
         Connection = connection;
         Transaction = transaction;
         Target = target;
         Tenant = tenant;
+        this.commit = commit is null
+            ? () => transaction.CommitAsync()
+            : () => commit(transaction);
     }
 
     public DbConnection Connection { get; }
@@ -23,18 +32,20 @@ internal sealed class TopologyOperation : IAsyncDisposable
     public string Target { get; }
     public string Tenant { get; }
     public bool CommitWasAttempted => commitAttempted;
+    public int ConnectionDisposeCount { get; private set; }
 
     public static async Task<TopologyOperation> BeginAsync(
         DbConnection connection,
         string target,
         string tenant,
-        IsolationLevel isolationLevel = IsolationLevel.ReadCommitted)
+        IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
+        Func<DbTransaction, Task>? commit = null)
     {
         if (connection.State != ConnectionState.Open)
             await connection.OpenAsync();
 
         var transaction = await connection.BeginTransactionAsync(isolationLevel);
-        return new TopologyOperation(connection, transaction, target, tenant);
+        return new TopologyOperation(connection, transaction, target, tenant, commit);
     }
 
     public void Enlist(TopologyDbContext borrower, string target, string tenant)
@@ -53,10 +64,13 @@ internal sealed class TopologyOperation : IAsyncDisposable
     public async Task CommitAsync()
     {
         ObjectDisposedException.ThrowIf(disposed, this);
+        if (commitAttempted)
+            throw new InvalidOperationException("The transaction commit attempt is terminal; inspect the outcome before recovery.");
+
         commitAttempted = true;
         try
         {
-            await Transaction.CommitAsync();
+            await commit();
             committed = true;
         }
         catch (Exception exception)
@@ -91,6 +105,7 @@ internal sealed class TopologyOperation : IAsyncDisposable
         }
 
         await Transaction.DisposeAsync();
+        ConnectionDisposeCount++;
         await Connection.DisposeAsync();
     }
 }

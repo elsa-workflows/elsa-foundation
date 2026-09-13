@@ -1,4 +1,5 @@
 using System.Data;
+using System.Data.Common;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -13,7 +14,7 @@ public sealed class SqliteTopologyTests
         var database = await CreateDatabaseAsync();
         try
         {
-            await using var ownerConnection = NewConnection(database);
+            var ownerConnection = NewConnection(database);
             await ConfigureSqliteAsync(ownerConnection);
             await using var operation = await TopologyOperation.BeginAsync(
                 ownerConnection, "shell-a", "tenant-a", IsolationLevel.Serializable);
@@ -49,8 +50,8 @@ public sealed class SqliteTopologyTests
         var database = await CreateDatabaseAsync();
         try
         {
-            await using (var ownerConnection = NewConnection(database))
             {
+                var ownerConnection = NewConnection(database);
                 await ConfigureSqliteAsync(ownerConnection);
                 await using var operation = await TopologyOperation.BeginAsync(ownerConnection, "shell-a", "tenant-a");
                 await using var runtime = Enlist(operation, ownerConnection, TopologyLane.Runtime);
@@ -61,8 +62,8 @@ public sealed class SqliteTopologyTests
 
             Assert.DoesNotContain("explicit-rollback", await ReadIdsAsync(database));
 
-            await using (var ownerConnection = NewConnection(database))
             {
+                var ownerConnection = NewConnection(database);
                 await ConfigureSqliteAsync(ownerConnection);
                 await using var operation = await TopologyOperation.BeginAsync(ownerConnection, "shell-a", "tenant-a");
                 await using var runtime = Enlist(operation, ownerConnection, TopologyLane.Runtime);
@@ -88,12 +89,75 @@ public sealed class SqliteTopologyTests
     }
 
     [Fact]
+    public async Task Abandoned_operation_dispose_rolls_back_and_closes_owned_connection_once()
+    {
+        var database = await CreateDatabaseAsync();
+        try
+        {
+            var ownerConnection = NewConnection(database);
+            await ConfigureSqliteAsync(ownerConnection);
+            var operation = await TopologyOperation.BeginAsync(ownerConnection, "shell-a", "tenant-a");
+            await using (var runtime = Enlist(operation, ownerConnection, TopologyLane.Runtime))
+            {
+                runtime.Rows.Add(Row("abandoned", TopologyLane.Runtime, "tenant-a"));
+                await runtime.SaveChangesAsync();
+            }
+
+            await operation.DisposeAsync();
+            await operation.DisposeAsync();
+
+            Assert.Equal(ConnectionState.Closed, ownerConnection.State);
+            Assert.Equal(1, operation.ConnectionDisposeCount);
+            Assert.Empty(await ReadIdsAsync(database));
+        }
+        finally
+        {
+            DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
+    public async Task Failed_commit_is_terminal_and_wraps_unknown_outcome_once()
+    {
+        var database = await CreateDatabaseAsync();
+        try
+        {
+            var ownerConnection = NewConnection(database);
+            await ConfigureSqliteAsync(ownerConnection);
+            var commitCalls = 0;
+            var operation = await TopologyOperation.BeginAsync(
+                ownerConnection,
+                "shell-a",
+                "tenant-a",
+                commit: _ =>
+                {
+                    commitCalls++;
+                    return Task.FromException(new IOException("simulated connection loss after commit request"));
+                });
+
+            var wrapped = await Assert.ThrowsAsync<CommitOutcomeUnknownException>(() => operation.CommitAsync());
+            Assert.IsType<IOException>(wrapped.InnerException);
+            var terminal = await Assert.ThrowsAsync<InvalidOperationException>(() => operation.CommitAsync());
+            Assert.Contains("terminal", terminal.Message, StringComparison.Ordinal);
+            Assert.Equal(1, commitCalls);
+            Assert.True(operation.CommitWasAttempted);
+
+            await operation.DisposeAsync();
+            Assert.Equal(ConnectionState.Closed, ownerConnection.State);
+        }
+        finally
+        {
+            DeleteDatabase(database);
+        }
+    }
+
+    [Fact]
     public async Task Split_connection_target_and_tenant_mismatches_refuse_before_writes()
     {
         var database = await CreateDatabaseAsync();
         try
         {
-            await using var ownerConnection = NewConnection(database);
+            var ownerConnection = NewConnection(database);
             await ConfigureSqliteAsync(ownerConnection);
             await using var operation = await TopologyOperation.BeginAsync(ownerConnection, "shell-a", "tenant-a");
 
@@ -170,7 +234,7 @@ public sealed class SqliteTopologyTests
         var database = await CreateDatabaseAsync();
         try
         {
-            await using var writerConnection = NewConnection(database);
+            var writerConnection = NewConnection(database);
             await ConfigureSqliteAsync(writerConnection);
             await using var operation = await TopologyOperation.BeginAsync(writerConnection, "shell-a", "tenant-a");
             await using var writer = Enlist(operation, writerConnection, TopologyLane.Runtime);
@@ -184,7 +248,8 @@ public sealed class SqliteTopologyTests
             await using var contender = TopologyContexts.Create(contenderConnection, TopologyProvider.Sqlite, TopologyLane.Design);
             contender.Rows.Add(Row("contention-contender", TopologyLane.Design, "tenant-a"));
 
-            var exception = await Assert.ThrowsAnyAsync<Exception>(() => contender.SaveChangesAsync());
+            using var livenessGuard = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var exception = await Assert.ThrowsAnyAsync<Exception>(() => contender.SaveChangesAsync(livenessGuard.Token));
             Assert.True(ContainsBusySqliteError(exception), $"Expected SQLITE_BUSY/LOCKED, got {exception}");
             await operation.RollbackAsync();
             Assert.Empty(await ReadIdsAsync(database));
