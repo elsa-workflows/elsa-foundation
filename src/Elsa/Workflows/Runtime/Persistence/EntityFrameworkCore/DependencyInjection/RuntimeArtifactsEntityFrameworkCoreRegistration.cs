@@ -19,7 +19,12 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
             return services;
         var provider = EfRelationalProviderBinding.Normalize(options.Provider);
         _ = EfRelationalProviderBinding.ExpectedProviderName(options.Provider);
-        BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName);
+        BookmarkStateEfContextRegistration.EnsureCompatible(
+            services,
+            provider,
+            options.ConnectionString,
+            options.ConnectionName,
+            RuntimeArtifactEfModule.DefaultSqliteConnectionString);
         var configured = new RuntimeArtifactsEntityFrameworkCoreOptions { Provider = options.Provider, ConnectionString = options.ConnectionString, ConnectionName = options.ConnectionName };
         services.TryAddSingleton(configured);
         switch (provider)

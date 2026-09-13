@@ -567,6 +567,26 @@ public sealed class EfBookmarkStateStoreTests
     }
 
     [Fact]
+    public void Combined_runtime_ef_registration_rejects_different_default_connections_in_either_order()
+    {
+        foreach (var register in new[] { "bookmarks-first", "artifacts-first" })
+        {
+            var services = new ServiceCollection();
+            services.AddWorkflowRuntime();
+            if (register == "bookmarks-first")
+            {
+                services.AddRuntimeBookmarksEntityFrameworkCore(new());
+                Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(new()));
+            }
+            else
+            {
+                services.AddRuntimeArtifactsEntityFrameworkCore(new());
+                Assert.Throws<InvalidOperationException>(() => services.AddRuntimeBookmarksEntityFrameworkCore(new()));
+            }
+        }
+    }
+
+    [Fact]
     public async Task Combined_runtime_ef_registration_accepts_matching_options_in_either_order()
     {
         var bookmarks = new RuntimeBookmarksEntityFrameworkCoreOptions

@@ -238,6 +238,25 @@ public sealed class EfRuntimeArtifactScopeTests
         }
     }
 
+    [Fact]
+    public async Task Lease_dictionary_keys_remain_case_sensitive()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Executable.SaveAsync(Executable("case-sensitive-leases"));
+        var row = await fixture.Context.WorkflowExecutableCoordinations
+            .SingleAsync(x => x.ArtifactId == "case-sensitive-leases");
+        row.ContentJson = "{\"Leases\":{\"A\":{\"Id\":\"A\",\"Token\":\"token-a\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"},\"a\":{\"Id\":\"a\",\"Token\":\"token-b\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"Guard\":null}";
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        Assert.Null(await fixture.Executable.TryBeginDeletionAsync(
+            "case-sensitive-leases",
+            "operation",
+            DateTimeOffset.UtcNow.AddMinutes(5),
+            DateTimeOffset.UtcNow));
+    }
+
     private static WorkflowExecutableSourceReference Reference(string id, string artifact) => new(
         id, artifact, "WorkflowDefinition", "definition", "1", "definition", "definition-version", "1",
         DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, WorkflowExecutableReferenceScope.Published);

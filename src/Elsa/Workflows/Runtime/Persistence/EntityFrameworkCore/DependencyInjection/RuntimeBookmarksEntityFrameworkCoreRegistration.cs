@@ -27,7 +27,8 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
             services,
             provider,
             options.ConnectionString,
-            options.ConnectionName);
+            options.ConnectionName,
+            BookmarkStateEfModule.DefaultSqliteConnectionString);
 
         var existingBackend = BookmarkStateStoreBackend.Find(services);
         existingBackend?.EnsureOwnsRegisteredContract(services);

@@ -518,22 +518,24 @@ public sealed class EfWorkflowExecutableStore(
         }
     }
 
-    private static void EnsureUniqueProperties(JsonElement element)
+    private static void EnsureUniqueProperties(JsonElement element, bool dictionaryKeys = false)
     {
         if (element.ValueKind == JsonValueKind.Object)
         {
-            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var names = new HashSet<string>(dictionaryKeys ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase);
             foreach (var property in element.EnumerateObject())
             {
                 if (!names.Add(property.Name))
                     throw new InvalidDataException("The persisted workflow executable coordination contains duplicate JSON properties.");
-                EnsureUniqueProperties(property.Value);
+                var isLeaseDictionary = !dictionaryKeys &&
+                                        property.Name.Equals("Leases", StringComparison.OrdinalIgnoreCase);
+                EnsureUniqueProperties(property.Value, isLeaseDictionary);
             }
         }
         else if (element.ValueKind == JsonValueKind.Array)
         {
             foreach (var item in element.EnumerateArray())
-                EnsureUniqueProperties(item);
+                EnsureUniqueProperties(item, dictionaryKeys);
         }
     }
 

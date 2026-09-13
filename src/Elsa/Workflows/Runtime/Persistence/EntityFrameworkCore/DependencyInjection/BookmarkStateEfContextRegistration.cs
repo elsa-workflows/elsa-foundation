@@ -9,7 +9,8 @@ internal static class BookmarkStateEfContextRegistration
         IServiceCollection services,
         string provider,
         string? connectionString,
-        string? connectionName)
+        string? connectionName,
+        string defaultConnectionString)
     {
         EnsureCompatible(
             services.Select(x => x.ImplementationInstance)
@@ -18,6 +19,7 @@ internal static class BookmarkStateEfContextRegistration
             provider,
             connectionString,
             connectionName,
+            defaultConnectionString,
             "Runtime bookmarks");
         EnsureCompatible(
             services.Select(x => x.ImplementationInstance)
@@ -26,6 +28,7 @@ internal static class BookmarkStateEfContextRegistration
             provider,
             connectionString,
             connectionName,
+            defaultConnectionString,
             "Runtime artifacts");
     }
 
@@ -34,27 +37,46 @@ internal static class BookmarkStateEfContextRegistration
         string provider,
         string? connectionString,
         string? connectionName,
+        string defaultConnectionString,
         string owner)
         where TOptions : class
     {
         if (existing is null)
             return;
 
-        var (existingProvider, existingConnectionString, existingConnectionName) = existing switch
+        var (existingProvider, existingConnectionString, existingConnectionName, existingDefaultConnectionString) = existing switch
         {
             RuntimeBookmarksEntityFrameworkCoreOptions options =>
-                (options.Provider, options.ConnectionString, options.ConnectionName),
+                (options.Provider, options.ConnectionString, options.ConnectionName, BookmarkStateEfModule.DefaultSqliteConnectionString),
             RuntimeArtifactsEntityFrameworkCoreOptions options =>
-                (options.Provider, options.ConnectionString, options.ConnectionName),
+                (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeArtifactEfModule.DefaultSqliteConnectionString),
             _ => throw new InvalidOperationException("Unknown Runtime EF context options.")
         };
 
-        if (!string.Equals(EfRelationalProviderBinding.Normalize(existingProvider), provider, StringComparison.Ordinal) ||
-            !string.Equals(existingConnectionString, connectionString, StringComparison.Ordinal) ||
-            !string.Equals(existingConnectionName, connectionName, StringComparison.Ordinal))
+        var existingIdentity = EffectiveIdentity(
+            existingProvider,
+            existingConnectionString,
+            existingConnectionName,
+            existingDefaultConnectionString);
+        var currentIdentity = EffectiveIdentity(provider, connectionString, connectionName, defaultConnectionString);
+        if (!string.Equals(existingIdentity, currentIdentity, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
                 $"Combined Runtime bookmarks and artifact EF persistence requires compatible provider options; {owner} is already registered differently.");
         }
+    }
+
+    private static string EffectiveIdentity(
+        string provider,
+        string? connectionString,
+        string? connectionName,
+        string defaultConnectionString)
+    {
+        var normalizedProvider = EfRelationalProviderBinding.Normalize(provider);
+        if (!string.IsNullOrWhiteSpace(connectionString))
+            return $"{normalizedProvider}:connection:{connectionString}";
+        if (!string.IsNullOrWhiteSpace(connectionName))
+            return $"{normalizedProvider}:name:{connectionName}";
+        return $"{normalizedProvider}:default:{defaultConnectionString}";
     }
 }
