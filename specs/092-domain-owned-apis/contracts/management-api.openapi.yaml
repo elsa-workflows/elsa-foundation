@@ -795,7 +795,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/Conflict'
+          $ref: '#/components/responses/PublicationConflict'
 
   /publishing/workflows/{versionId}/publish:
     parameters:
@@ -831,7 +831,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/Conflict'
+          $ref: '#/components/responses/PublicationConflict'
 
   /publishing/workflows/{definitionId}/slots/{slotName}:
     parameters:
@@ -849,6 +849,8 @@ paths:
                 $ref: '#/components/schemas/PublicationSlot'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/PublicationConflict'
 
   /publishing/workflows/{definitionId}/slots/{slotName}/restore:
     parameters:
@@ -873,7 +875,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          $ref: '#/components/responses/Conflict'
+          $ref: '#/components/responses/PublicationConflict'
 
   /publishing/workflows/{definitionId}/policy:
     parameters:
@@ -904,6 +906,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PublicationPolicy'
+        '409':
+          $ref: '#/components/responses/PublicationConflict'
 
   /publishing/workflows/{versionId}/test-runs:
     parameters:
@@ -1347,6 +1351,22 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Problem'
+    PublicationConflict:
+      description: >-
+        A publication lifecycle, trigger authority, or policy revision conflict (issue #1699).
+        errorCode carries the machine-readable PublicationFailureCodes value.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/PublicationProblem'
+    PublicationBadRequest:
+      description: >-
+        The publication policy or request intent could not be resolved (issue #1699). errorCode
+        carries the machine-readable PublicationFailureCodes value.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/PublicationProblem'
     ServiceUnavailable:
       description: Optional operational capability is unavailable
       content:
@@ -1415,6 +1435,48 @@ components:
         details:
           type: object
           additionalProperties: true
+    PublicationProblem:
+      description: >-
+        The Publishing API's problem shape (RFC 7807 fields plus the FastEndpoints-era traceId and
+        errors extensions). errorCode is additive and present only for the coded Publishing failures
+        listed in its enum; every other Publishing problem (404s, uncoded 400s) omits it entirely
+        rather than sending null (issue #1699). See the Publishing API README "Problem codes" section.
+      type: object
+      required: [type, title, status, detail, instance, traceId, errors]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        errorCode:
+          type: string
+          enum:
+            - slot_owner_conflict
+            - slot_revision_conflict
+            - activation_compensation_failed
+            - projection_preparation_failed
+            - projection_activation_failed
+            - publication_activation_failed
+            - trigger_conflict
+            - publication_snapshot_stale
+            - policy_revision_conflict
+            - expected_publication_mismatch
+            - workflow_policy_mismatch
+            - invalid_host_policy
+            - explicit_slot_required
+            - invalid_default_slot
+            - unsupported_action
+            - named_slot_required
+        traceId: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [name, reason]
+            properties:
+              name: { type: string }
+              reason: { type: string }
     DefinitionListState:
       type: string
       enum: [active, deleted, all]

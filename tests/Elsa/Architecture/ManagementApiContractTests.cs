@@ -107,6 +107,7 @@ public class ManagementApiContractTests
         "PublicationIntent",
         "PublicationPolicy",
         "PublicationPreflight",
+        "PublicationProblem",
         "PublicationSlot",
         "PublicationSlotOwner",
         "PublicationSnapshotPreflight",

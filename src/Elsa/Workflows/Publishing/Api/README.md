@@ -130,6 +130,35 @@ a new preflight; `OutcomeUnknown` requires receipt reconciliation before choosin
 - HTTP route tables are derived from active trigger bindings. Runtime HTTP contributes a neutral trigger-index
   observer; Publishing does not reference the HTTP or Scheduling modules.
 
+### Problem codes
+
+A `400` or `409` raised on the preflight, publish, slot restore, slot unpublish, or policy routes carries a
+machine-readable failure code, additive to the module's established problem shape (RFC 7807 fields plus the
+FastEndpoints-era `traceId` and `errors` extensions): a top-level `errorCode` string, positioned after
+`instance`. A problem with no failure code (a `404`, or a plain `400` argument error) omits the member
+entirely rather than sending it as `null`; existing clients that don't look for `errorCode` see no difference
+in the rest of the payload. Every code below is defined once, in `PublicationFailureCodes`, and used verbatim
+at every raise and map site (issue #1699).
+
+| `errorCode`                     | Status | Meaning / what to do                                                                                  |
+|----------------------------------|--------|--------------------------------------------------------------------------------------------------------|
+| `slot_owner_conflict`             | 409    | The target slot is owned by another activation source. Ownership transfer is an explicit operator action; publishing cannot take the slot. |
+| `slot_revision_conflict`          | 409    | The slot's optimistic revision changed between preflight and activation (or between read and unpublish). Re-run preflight against the current slot and retry. |
+| `activation_compensation_failed`  | 409    | Activation failed and its best-effort compensation did not converge. The slot may be in a partially-switched state; check operational diagnostics before retrying. |
+| `projection_preparation_failed`   | 409    | Preparing the serving projection (trigger bindings, recurring schedules) failed before activation. Retry once the underlying failure is resolved. |
+| `projection_activation_failed`    | 409    | Activating the serving projection, or notifying its trigger observers, failed. Retry once the underlying failure is resolved. |
+| `publication_activation_failed`   | 409    | Activation failed for a reason not covered by the codes above. See the response `detail` and server logs. |
+| `trigger_conflict`                | 409    | Preflight found one or more authoritative trigger conflicts with another active publication. Resolve the conflicting triggers, or target a different slot, before retrying. |
+| `publication_snapshot_stale`      | 409    | The supplied preflight/review token is stale, expired, or no longer matches the requested action, slot, or expected publication. Re-run preflight to obtain a current token. |
+| `policy_revision_conflict`        | 409    | The publication policy write lost its optimistic revision race. Re-read the policy and retry with its current revision. |
+| `expected_publication_mismatch`   | 409    | The slot's active publication no longer matches the request's `expectedPublicationId`. Re-read the slot's current publication and retry, or drop the expectation. |
+| `workflow_policy_mismatch`        | 400    | The supplied workflow publication policy is scoped to a different workflow definition. |
+| `invalid_host_policy`             | 400    | A host publication policy cannot be scoped to a workflow definition. |
+| `explicit_slot_required`          | 400    | The workflow's policy requires an explicit publication slot; the request did not supply one. |
+| `invalid_default_slot`            | 400    | The resolved policy's default slot name is missing or blank; configure a default slot name. |
+| `unsupported_action`              | 400    | The requested publication action is not supported. |
+| `named_slot_required`             | 400    | Side-by-side publication requires a meaningful named slot other than the default slot. |
+
 See [the Publishing extension-point catalog](EXTENSION_POINTS.md) for supported replacements and provider work,
 and [the feature quickstart](../../../../../specs/092-domain-owned-apis/quickstart.md) for the `/foo` to `/bar`
 replacement scenario.

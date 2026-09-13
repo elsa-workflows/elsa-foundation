@@ -2,8 +2,11 @@ using Elsa.Api.AspNetCore;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Primitives.Diagnostics;
 using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Exceptions;
 using Elsa.Workflows.Publishing.Api.Models;
+using Elsa.Workflows.Publishing.Handlers;
+using Elsa.Workflows.Publishing.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -95,7 +98,47 @@ internal sealed class WorkflowPublishingFaultRenderer : IEndpointFaultRenderer
             }
         }
 
+        // Not scoped by endpoint metadata: every Publishing failure below carries a code (issue #1699), so it
+        // renders here regardless of which endpoint raised it, ahead of WorkflowPublishingExceptionTranslator,
+        // which handles only the codeless arms (404, generic 400).
+        if (TryClassifyCodedFailure(exception, out var status, out var code))
+        {
+            var problem = WorkflowPublishingLegacyProblems.Build(
+                context, EndpointProblem.General(status, exception.Message), code);
+            await WorkflowPublishingLegacyProblems.WriteAsync(context, problem);
+            return true;
+        }
+
         return false;
+    }
+
+    private static bool TryClassifyCodedFailure(Exception exception, out int status, out string code)
+    {
+        switch (exception)
+        {
+            case PublicationActivationException activation:
+                (status, code) = (StatusCodes.Status409Conflict, activation.Code);
+                return true;
+            case PublicationPreflightConflictException preflight:
+                (status, code) = (StatusCodes.Status409Conflict, preflight.Code);
+                return true;
+            case PublicationSnapshotReviewException review:
+                (status, code) = (StatusCodes.Status409Conflict, review.Code);
+                return true;
+            case PublicationPolicyRevisionConflictException policyRevision:
+                (status, code) = (StatusCodes.Status409Conflict, policyRevision.Code);
+                return true;
+            case PublicationPolicyResolutionException policy:
+                (status, code) = (
+                    policy.Code == PublicationFailureCodes.ExpectedPublicationMismatch
+                        ? StatusCodes.Status409Conflict
+                        : StatusCodes.Status400BadRequest,
+                    policy.Code);
+                return true;
+            default:
+                (status, code) = (0, "");
+                return false;
+        }
     }
 
     private static async Task WriteRuntimePreflightAsync(HttpContext context, RuntimePreflightProblemDetails problem)

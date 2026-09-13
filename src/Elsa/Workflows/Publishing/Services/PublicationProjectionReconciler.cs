@@ -233,7 +233,7 @@ public sealed class PublicationProjectionReconciler(
             {
                 Status = PublicationProjectionIntentStatus.Failed,
                 NextAttemptAt = timeProvider.GetUtcNow().Add(RetryDelay(delivering.AttemptCount)),
-                LastFailure = new PublicationFailure("projection_delivery_failed", SafeMessage(exception))
+                LastFailure = new PublicationFailure(PublicationFailureCodes.ProjectionDeliveryFailed, SafeMessage(exception))
             };
             await intentStore.TryTransitionAsync(failed, PublicationProjectionIntentStatus.Delivering, CancellationToken.None);
             throw;

@@ -245,11 +245,12 @@ public sealed class PublishWorkflowRequestHandler(
 public sealed class PublicationActivationException(PublicationFailure? failure)
     : InvalidOperationException(failure?.Message ?? "Publication activation failed.")
 {
-    public string Code { get; } = failure?.Code ?? "publication_activation_failed";
+    public string Code { get; } = failure?.Code ?? PublicationFailureCodes.PublicationActivationFailed;
 }
 
 public sealed class PublicationPreflightConflictException(IReadOnlyCollection<PublicationTriggerConflict> conflicts)
     : InvalidOperationException("Publication trigger preflight found one or more authoritative conflicts.")
 {
     public IReadOnlyCollection<PublicationTriggerConflict> Conflicts { get; } = conflicts;
+    public string Code => PublicationFailureCodes.TriggerConflict;
 }
