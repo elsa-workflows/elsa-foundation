@@ -124,19 +124,16 @@ public sealed class EfCredentialStore(
                 context.ChangeTracker.Clear();
                 return;
             }
-            catch (DbUpdateConcurrencyException) when (attempt + 1 < MaximumWriteAttempts)
+            catch (DbUpdateConcurrencyException)
             {
                 context.ChangeTracker.Clear();
             }
-            catch (DbUpdateException exception) when (
-                EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception) &&
-                attempt + 1 < MaximumWriteAttempts)
+            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
             {
                 context.ChangeTracker.Clear();
             }
             catch (Exception exception) when (
-                EfRelationalExceptionClassifier.IsTransientWriteConflict(exception) &&
-                attempt + 1 < MaximumWriteAttempts)
+                EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
             {
                 context.ChangeTracker.Clear();
             }
@@ -188,8 +185,7 @@ public sealed class EfCredentialStore(
                 return Conflict();
             }
             catch (Exception exception) when (
-                EfRelationalExceptionClassifier.IsTransientWriteConflict(exception) &&
-                attempt + 1 < MaximumWriteAttempts)
+                EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
             {
                 context.ChangeTracker.Clear();
             }
@@ -260,8 +256,7 @@ public sealed class EfCredentialStore(
                 }
             }
             catch (Exception exception) when (
-                EfRelationalExceptionClassifier.IsTransientWriteConflict(exception) &&
-                attempt + 1 < MaximumWriteAttempts)
+                EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
             {
                 context.ChangeTracker.Clear();
             }

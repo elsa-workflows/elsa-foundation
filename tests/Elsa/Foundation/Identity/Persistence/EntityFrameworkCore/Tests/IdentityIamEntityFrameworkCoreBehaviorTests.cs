@@ -452,10 +452,11 @@ public sealed class IdentityIamEntityFrameworkCoreBehaviorTests
             var applicationExhaustion = new TransientSaveInterceptor(failures: int.MaxValue);
             await using (var context = CreateContext(databasePath, applicationExhaustion))
             {
-                await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() =>
-                    ApplicationStore(context, "acme")
+                await AssertBoundedFailureAsync(
+                    () => ApplicationStore(context, "acme")
                         .SaveAsync(Application("acme", "app-retry-failure", "never-saved"))
-                        .AsTask());
+                        .AsTask(),
+                    "Unable to save the Identity application after bounded concurrency retries.");
                 Assert.Equal(3, applicationExhaustion.Attempts);
                 Assert.Empty(context.ChangeTracker.Entries());
             }
@@ -463,10 +464,11 @@ public sealed class IdentityIamEntityFrameworkCoreBehaviorTests
             var credentialExhaustion = new TransientSaveInterceptor(failures: int.MaxValue);
             await using (var context = CreateContext(databasePath, credentialExhaustion))
             {
-                await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() =>
-                    CredentialStore(context, "acme")
+                await AssertBoundedFailureAsync(
+                    () => CredentialStore(context, "acme")
                         .SaveAsync(Credential("acme", "credential-retry-failure", "never-saved"))
-                        .AsTask());
+                        .AsTask(),
+                    "Unable to save the Identity credential after bounded concurrency retries.");
                 Assert.Equal(3, credentialExhaustion.Attempts);
                 Assert.Empty(context.ChangeTracker.Entries());
             }
@@ -512,10 +514,11 @@ public sealed class IdentityIamEntityFrameworkCoreBehaviorTests
             var applicationExhaustion = new TransientSaveInterceptor(failures: int.MaxValue);
             await using (var context = CreateContext(databasePath, applicationExhaustion))
             {
-                await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() =>
-                    ApplicationStore(context, "acme")
+                await AssertBoundedFailureAsync(
+                    () => ApplicationStore(context, "acme")
                         .SaveWithRevisionAsync(Application("acme", "app-create-retry-failure", "never-saved"), null)
-                        .AsTask());
+                        .AsTask(),
+                    "Unable to create the Identity application after bounded transient retries.");
                 Assert.Equal(3, applicationExhaustion.Attempts);
                 Assert.Empty(context.ChangeTracker.Entries());
             }
@@ -523,10 +526,11 @@ public sealed class IdentityIamEntityFrameworkCoreBehaviorTests
             var credentialExhaustion = new TransientSaveInterceptor(failures: int.MaxValue);
             await using (var context = CreateContext(databasePath, credentialExhaustion))
             {
-                await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() =>
-                    CredentialStore(context, "acme")
+                await AssertBoundedFailureAsync(
+                    () => CredentialStore(context, "acme")
                         .SaveWithRevisionAsync(Credential("acme", "credential-create-retry-failure", "never-saved"), null)
-                        .AsTask());
+                        .AsTask(),
+                    "Unable to create the Identity credential after bounded transient retries.");
                 Assert.Equal(3, credentialExhaustion.Attempts);
                 Assert.Empty(context.ChangeTracker.Entries());
             }
@@ -589,10 +593,11 @@ public sealed class IdentityIamEntityFrameworkCoreBehaviorTests
             var applicationExhaustion = new TransientSaveInterceptor(failures: int.MaxValue);
             await using (var context = CreateContext(databasePath, applicationExhaustion))
             {
-                await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() =>
-                    ApplicationStore(context, "acme")
+                await AssertBoundedFailureAsync(
+                    () => ApplicationStore(context, "acme")
                         .SaveWithRevisionAsync(failedApplication with { DisplayName = "never-saved" }, failedApplicationRevision)
-                        .AsTask());
+                        .AsTask(),
+                    "Unable to update the Identity application after bounded transient retries.");
                 Assert.Equal(3, applicationExhaustion.Attempts);
                 Assert.Empty(context.ChangeTracker.Entries());
             }
@@ -600,10 +605,11 @@ public sealed class IdentityIamEntityFrameworkCoreBehaviorTests
             var credentialExhaustion = new TransientSaveInterceptor(failures: int.MaxValue);
             await using (var context = CreateContext(databasePath, credentialExhaustion))
             {
-                await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() =>
-                    CredentialStore(context, "acme")
+                await AssertBoundedFailureAsync(
+                    () => CredentialStore(context, "acme")
                         .SaveWithRevisionAsync(failedCredential with { HashedSecret = "never-saved" }, failedCredentialRevision)
-                        .AsTask());
+                        .AsTask(),
+                    "Unable to update the Identity credential after bounded transient retries.");
                 Assert.Equal(3, credentialExhaustion.Attempts);
                 Assert.Empty(context.ChangeTracker.Entries());
             }
@@ -893,6 +899,13 @@ public sealed class IdentityIamEntityFrameworkCoreBehaviorTests
         Assert.Equal(
             expected.OrderBy(value => value, StringComparer.Ordinal),
             actual.OrderBy(value => value, StringComparer.Ordinal));
+
+    private static async Task AssertBoundedFailureAsync(Func<Task> operation, string expectedMessage)
+    {
+        var exception = await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(operation);
+        Assert.Equal(expectedMessage, exception.Message);
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
+    }
 
     private static EfApplicationStore ApplicationStore(IdentityIamDbContext context, string tenantId) =>
         new(context, new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope(tenantId))));
