@@ -254,7 +254,7 @@ public sealed class EfBookmarkStateStore(
         row.StimulusHash = state.StimulusHash;
         row.StimulusLookupKey = StimulusLookupKey(state.StimulusType, state.StimulusHash);
         row.StimulusTypeLookupKey = StimulusTypeLookupKey(state.StimulusType);
-        row.PayloadJson = state.Payload?.GetRawText();
+        row.PayloadJson = SerializePayload(state.Payload);
         row.ContentJson = JsonSerializer.Serialize(state, Json);
         row.MetadataJson = JsonSerializer.Serialize(state.Metadata, Json);
         row.SchemaVersion = BookmarkStateEfModule.SchemaVersion;
@@ -279,12 +279,15 @@ public sealed class EfBookmarkStateStore(
 
             var state = JsonSerializer.Deserialize<BookmarkState>(row.ContentJson, Json)
                         ?? throw new JsonException("Bookmark content was null.");
+            var projectedPayload = DeserializePayload(row.PayloadJson);
+            var contentPayloadMatchesProjection = SerializePayload(state.Payload) == row.PayloadJson ||
+                                                  state.Payload is null && projectedPayload is { ValueKind: JsonValueKind.Null };
             var metadata = JsonSerializer.Deserialize<Dictionary<string, string>>(row.MetadataJson, Json)
                            ?? throw new JsonException("Bookmark metadata was null.");
             if (state.BookmarkId != row.BookmarkId || state.WorkflowExecutionId != row.WorkflowExecutionId ||
                 state.ActivityExecutionId != row.ActivityExecutionId || state.ExecutableNodeId != row.ExecutableNodeId ||
                 state.ResumeTargetId != row.ResumeTargetId || state.StimulusType != row.StimulusType || state.StimulusHash != row.StimulusHash ||
-                state.Payload?.GetRawText() != row.PayloadJson ||
+                !contentPayloadMatchesProjection || SerializePayload(projectedPayload) != row.PayloadJson ||
                 JsonSerializer.Serialize(state.Metadata, Json) != row.MetadataJson ||
                 state.CreatedAt.UtcTicks != row.CreatedAtUtcTicks || state.CreatedAt.Offset.TotalMinutes != row.CreatedAtOffsetMinutes ||
                 state.ExpiresAt?.UtcTicks != row.ExpiresAtUtcTicks ||
@@ -294,7 +297,7 @@ public sealed class EfBookmarkStateStore(
             if (row.StimulusLookupKey != StimulusLookupKey(state.StimulusType, state.StimulusHash) ||
                 row.StimulusTypeLookupKey != StimulusTypeLookupKey(state.StimulusType))
                 throw new InvalidDataException("The persisted EF bookmark stimulus projection is corrupt.");
-            return state;
+            return state with { Payload = projectedPayload };
         }
         catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException or OverflowException or FormatException)
         {
@@ -322,6 +325,12 @@ public sealed class EfBookmarkStateStore(
         }
         _ = CreateId("scope", state.WorkflowExecutionId, state.BookmarkId);
     }
+
+    private static string? SerializePayload(JsonElement? payload) =>
+        payload is null ? null : JsonSerializer.Serialize(payload.Value, Json);
+
+    private static JsonElement? DeserializePayload(string? payloadJson) =>
+        payloadJson is null ? null : JsonSerializer.Deserialize<JsonElement>(payloadJson, Json);
 
     private static void ValidateBound(string value, int maximum, string parameterName)
     {

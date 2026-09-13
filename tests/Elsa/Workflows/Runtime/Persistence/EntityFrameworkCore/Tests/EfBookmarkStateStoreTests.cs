@@ -42,6 +42,32 @@ public sealed class EfBookmarkStateStoreTests
     }
 
     [Fact]
+    public async Task Save_canonicalizes_payload_projection_without_losing_explicit_json_null()
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        using var document = JsonDocument.Parse("{ \"path\" : \"/orders\", \"value\" : \"é\" }");
+        var nonCanonical = State("wf-json", "non-canonical", "Event", "hash-json") with
+        {
+            Payload = document.RootElement.Clone()
+        };
+        var explicitNull = State("wf-json", "json-null", "Event", "hash-null") with
+        {
+            Payload = JsonSerializer.SerializeToElement<object?>(null)
+        };
+
+        await fixture.Store.SaveAsync(nonCanonical);
+        await fixture.Store.SaveAsync(explicitNull);
+
+        var roundTrip = await fixture.Store.FindAsync("wf-json", "non-canonical");
+        Assert.Equal("/orders", roundTrip!.Payload!.Value.GetProperty("path").GetString());
+        Assert.Equal("é", roundTrip.Payload.Value.GetProperty("value").GetString());
+        var nullRoundTrip = await fixture.Store.FindAsync("wf-json", "json-null");
+        Assert.True(nullRoundTrip!.Payload.HasValue);
+        Assert.Equal(JsonValueKind.Null, nullRoundTrip.Payload.Value.ValueKind);
+        Assert.Equal("null", (await fixture.Context.Set<BookmarkStateEntity>().SingleAsync(row => row.BookmarkId == "json-null")).PayloadJson);
+    }
+
+    [Fact]
     public async Task Distinct_malformed_utf16_scopes_remain_isolated()
     {
         await using var fixture = await Fixture.CreateAsync("tenant-\uD800");
