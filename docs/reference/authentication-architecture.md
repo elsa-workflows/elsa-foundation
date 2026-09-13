@@ -44,10 +44,9 @@ feature), which defines the contracts both planes speak:
 | `IPermissionCatalog` / `IPermissionEvaluator` / `IPermissionAuthorizationService` | IAM | The permission model: catalog, implication expansion, and canonical policy or request-internal evaluation. |
 | `IUserStore` / `IRoleStore` / `IExternalIdentityStore` / `ITenantMembershipStore` | IAM | User/role/link/tenant persistence. |
 
-Because these contracts are provider-agnostic, Minimal APIs use `RequirePermission(...)`,
-`RequireAnyPermission(...)`, or `RequireAllPermissions(...)`; transitional FastEndpoints bases
-translate their existing `ConfigurePermissions(...)` calls into the same ASP.NET Core policies.
-Both paths reach one Foundation Identity evaluator and resource-handler pipeline.
+Because these contracts are provider-agnostic, first-party routes use `RequirePermission(...)`,
+`RequireAnyPermission(...)`, or `RequireAllPermissions(...)`, which all reach one Foundation Identity evaluator and
+resource-handler pipeline.
 
 The provider plane must put a *trusted normalized principal* onto the request. Normalization strips
 incoming Elsa-internal claims, applies only mapping rules for the current tenant/provider, and then
@@ -160,9 +159,8 @@ mounted (OpenIddict's server is registered with only a custom flow marker,
 `401` (which the Studio client reads as "no token") rather than a `302` redirect to the login page —
 the handler itself refuses to issue a token to an unauthenticated principal.
 
-FastEndpoints remains available for unrelated transitional endpoints during the migration. Those
-endpoints and these Minimal API routes both consume the same normalized-principal and permission
-policy services; the identity protocol owner no longer installs a FastEndpoints claim-type bridge.
+The identity API routes read the same normalized principal as every other first-party route; there is no
+FastEndpoints claim-type bridge.
 
 ### The scheme selector
 
@@ -301,17 +299,24 @@ ConsoleStream SignalR hub via an access-token factory.
 
 ## 7. Security posture
 
-**Everything requires auth by default.** The selector/JwtBearer scheme is the default challenge
-scheme, so an unauthenticated API call is rejected with `401`. A host-chosen `DefaultScheme` always
-wins if you want to override.
+**API routes are secured per route.** No fallback authorization policy is registered, so a route is protected
+only by the security it declares. Each first-party route declares a security disposition as endpoint metadata
+(`ElsaEndpointConventions`, plus Foundation Identity's `RequirePermission(...)`): a public route opts out
+individually with `AllowPublic(category, reason)`, and every other route requires a permission, a named policy, or a
+host credential. In the hosts and API slices they capture, the endpoint-manifest checks in the test suite reject a
+route with no disposition or more than one. When `FoundationIdentityOpenIddict`, or `FoundationIdentityOidc` with
+`IsDefault`, is composed, the selector or OIDC JwtBearer scheme becomes the default challenge scheme, so an
+unauthenticated call to a permission- or policy-protected route gets `401`. A host-chosen `DefaultScheme` always
+wins if you want to override. Host-credential routes, such as the management API and the OTLP receiver, answer
+from their own credential check (an endpoint filter or the handler) instead.
 
-**The `ApiSecurity.AllowAnonymous` kill-switch is Development-only.** Setting it disables endpoint
-security for the remaining FastEndpoints surface in a shell — but this is honored **only when the host
-environment is `Development`**. Outside Development the flag is **ignored** (the shell stays secure) and
-a prominent warning is logged naming the shell and telling you to remove it. This is a locked product
-decision: there is no auth off-switch in production. Transitional FastEndpoints routes enforce the flag
-through `ApiSecurityFastEndpointsConfigurator`; migrated Minimal API routes use their standard ASP.NET Core
-authorization metadata and Foundation Identity policies and are not governed by that configurator.
+**There is no auth off-switch for API routes.** The `ApiSecurity.AllowAnonymous` kill-switch was removed with the
+FastEndpoints surface ([#1405](https://github.com/elsa-workflows/elsa-foundation/pull/1405)), and no setting
+replaces it. An `ApiSecurity` entry left in a shell's feature list names a feature that no longer exists; CShells
+logs a warning and activates the shell without it. Workflow-defined HTTP endpoints are separate: they are anonymous
+unless their `HttpEndpoint` activity sets `Authorize` (optionally with a `Policy`). For those that do, the
+`WorkflowsRuntimeHttp` feature's `AuthorizationHandlerType` setting chooses how the check runs, and pointing it at
+`AllowAnonymousHttpEndpointAuthorizationHandler` lets every such request through.
 
 **Antiforgery on the login form.** The backend login page embeds an antiforgery token (form field
 `__csrf`) and the paired cookie; the `POST /_elsa/identity/login` HTML-form flow validates it before
