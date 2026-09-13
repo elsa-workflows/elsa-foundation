@@ -98,13 +98,13 @@ public sealed class IdentityIamProviderModelTests
         switch (provider)
         {
             case "SqlServer":
-                builder.UseSqlServer("Server=localhost;Database=unused;User ID=unused;Password=Unused123!;TrustServerCertificate=True");
+                builder.UseSqlServer("Server=localhost;Database=unused;Integrated Security=True;TrustServerCertificate=True");
                 break;
             case "PostgreSql":
-                builder.UseNpgsql("Host=localhost;Database=unused;Username=unused;Password=unused");
+                builder.UseNpgsql("Host=localhost;Database=unused;Username=unused");
                 break;
             case "MySql":
-                builder.UseMySQL("Server=localhost;Database=unused;User ID=unused;Password=unused");
+                builder.UseMySQL("Server=localhost;Database=unused;User ID=unused");
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(provider), provider, null);
