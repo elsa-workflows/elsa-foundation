@@ -3,8 +3,9 @@
 Status: active completion evidence for [#1671](https://github.com/elsa-workflows/elsa-foundation/issues/1671).
 
 Snapshot: `main` at `7a952efcf8d53472d7d4e7e3fd7b51d7a808c1c8` (2026-09-12).
-This register covers 55 relevant test/evidence projects (51 snapshot projects plus two merged
-Studio Preferences EF projects and two Structured Logs EF projects delivered by #1696): the original 36 Groundwork/Mongo-named
+This register covers 57 relevant test/evidence projects (51 snapshot projects plus two merged
+Studio Preferences EF projects, two Structured Logs EF projects delivered by #1696, and two
+OpenTelemetry EF projects being implemented under #1697): the original 36 Groundwork/Mongo-named
 projects, eight omitted direct-package consumers, two project-reference-only consumers, two host
 consumers, and three EF-only Secrets destinations. The base Secrets EF test project is one of the
 eight omitted direct-package consumers because it still exercises a dual Groundwork/EF topology.
@@ -22,7 +23,7 @@ default-flip owner explicit without repeating the same text 51 times.
 | Test rows | Dependencies / blockers | Default-flip PR owner |
 |---|---|---|
 | T01-T04, T15-T20, T32-T35, T42, T44, T46 | #1677 worker-ready children after MySQL, transaction and migration spikes; Runtime replacements where named | Owning Activities/Workflows Design, Publishing, Dashboard or import production row; blank pending merge |
-| T05-T08, T39, T54-T55 | #1681 after shared EF foundation, MySQL and migration lifecycle | Diagnostics production/host rows; blank pending merge |
+| T05-T08, T39, T54-T57 | #1681 after shared EF foundation, MySQL and migration lifecycle | Diagnostics production/host rows; blank pending merge |
 | T09-T13, T40 | #1682 after shared EF foundation, MySQL, transaction and migration lifecycle | Identity production/host rows; blank pending merge |
 | T14, T21-T25, T28, T45, T47-T48, T51 | #1670 after the relevant replacements; #1678/#1669 where test-kit or migration behavior is involved | Host/default-flip row or N/A for a pure tool/guard; blank pending merge |
 | T26-T27, T36-T38, T43 | #1672/#1676 after MySQL, transaction and migration spikes | Runtime/distributed Runtime host row; blank pending merge |
@@ -88,6 +89,8 @@ default-flip owner explicit without repeating the same text 51 times.
 | T53 | `tests/Elsa/Studio/Preferences/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests.csproj` | #1680 | Live provider smoke: PostgreSQL/SQL Server/MySQL model binding, representative CRUD, uniqueness and concurrency | PostgreSQL/SQL Server/MySQL; retained EF destination, merged in #1693 | #1693 | N/A |
 | T54 | `tests/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests.csproj` | #1695 | SQLite behavioral contract: append/order/high-water/idempotency, retention, restart, cursor/binding and opt-in DI | SQLite; retained EF destination delivered by #1696 | #1696 | N/A |
 | T55 | `tests/Elsa/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests.csproj` | #1695 | Live provider smoke: PostgreSQL/SQL Server/MySQL model binding plus representative append/read/CAS and rollback or stale-CAS outcome | PostgreSQL/SQL Server/MySQL; Docker-skippable retained EF destination delivered by #1696 | #1696 | N/A |
+| T56 | `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests.csproj` | #1697 | SQLite behavioral contract: all-signal atomic capture, scoped queries/detail, canonical search, explicit replay ledger, trace-summary merge/CAS, retention/recovery, restart and opt-in DI | SQLite; retained EF destination delivered by #1701 | #1701 | N/A |
+| T57 | `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests.csproj` | #1697 | Four-provider model binding plus live PostgreSQL/SQL Server/MySQL representative all-signal CRUD/query/transaction, restart, isolation and concurrent trace-summary merge | PostgreSQL/SQL Server/MySQL; Docker-skippable retained EF destination delivered by #1701 | #1701 | N/A |
 
 ## Correctness hidden inside retiring performance surfaces
 
