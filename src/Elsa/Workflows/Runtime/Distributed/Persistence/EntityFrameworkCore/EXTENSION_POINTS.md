@@ -24,7 +24,10 @@ well-formed strings. An explicit revision is an EF concurrency token. Claims
 use bounded read/insert-or-update/save retries; first claims use the primary-key uniqueness boundary,
 renewals and expired takeovers use revision CAS, and release uses owner/token compare-and-delete.
 Listing filters live rows and applies `Take` in SQL, ordering by UTC expiry ticks and an ordinal
-UTF-16 order key. Missing scope, invalid input, and cancellation are rejected before provider I/O.
+UTF-16 order key encoded as fixed-width big-endian binary data, so database collation cannot alter
+the result. Provider, persisted-state, and exhausted-contention failures cross the adapter boundary
+as `ExecutionPlacementEntityFrameworkPersistenceException`, preserving the infrastructure cause and
+operation identity. Missing scope, invalid input, and cancellation are rejected before provider I/O.
 
 Schema creation is deliberately test-owned (`EnsureCreated`); this slice adds no migration or
 default-flip artifacts.

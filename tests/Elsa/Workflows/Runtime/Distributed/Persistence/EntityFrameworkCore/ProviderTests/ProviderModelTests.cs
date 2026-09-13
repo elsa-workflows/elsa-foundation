@@ -21,6 +21,12 @@ public sealed class ProviderModelTests
         Assert.Equal(ExpectedScopeColumnType(provider), entity.FindProperty(nameof(Entities.ExecutionPlacementLeaseEntity.ScopeKey))!.GetColumnType());
         Assert.NotNull(entity.FindProperty(nameof(Entities.ExecutionPlacementLeaseEntity.ExpiresAtOffsetMinutes)));
         Assert.Null(entity.FindProperty("ExpiresAt"));
+        var orderKey = entity.FindProperty(nameof(Entities.ExecutionPlacementLeaseEntity.WorkflowExecutionIdOrderKey));
+        Assert.NotNull(orderKey);
+        Assert.Equal(typeof(byte[]), orderKey!.ClrType);
+        Assert.Equal(ExecutionPlacementEfModule.WorkflowExecutionIdOrderKeyWidth, orderKey.GetMaxLength());
+        Assert.False(orderKey.IsNullable);
+        Assert.Null(orderKey.GetValueConverter());
         Assert.Contains(ExpectedProviderFragment(provider), context.Database.ProviderName, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(entity.GetIndexes(), index => index.Properties.Select(property => property.Name).SequenceEqual([
             nameof(Entities.ExecutionPlacementLeaseEntity.ScopeKeyHash),

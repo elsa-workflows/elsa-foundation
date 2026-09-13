@@ -7,7 +7,7 @@ public sealed class ExecutionPlacementLeaseEntity
     public string ScopeKey { get; set; } = null!;
     public string ScopeKeyHash { get; set; } = null!;
     public string WorkflowExecutionId { get; set; } = null!;
-    public string WorkflowExecutionIdOrderKey { get; set; } = null!;
+    public byte[] WorkflowExecutionIdOrderKey { get; set; } = null!;
     public string OwnerId { get; set; } = null!;
     public string OwnerIdHash { get; set; } = null!;
     public long PlacementToken { get; set; }

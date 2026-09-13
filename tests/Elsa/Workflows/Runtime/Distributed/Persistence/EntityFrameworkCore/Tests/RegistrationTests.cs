@@ -10,6 +10,8 @@ using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInjection;
 using Groundwork.Sqlite;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -158,6 +160,141 @@ public sealed class RegistrationTests
         Assert.Equal("Sqlite", configured.Provider);
         Assert.Equal("Data Source=original.db", configured.ConnectionString);
         Assert.Equal("Original", configured.ConnectionName);
+    }
+
+    [Theory]
+    [InlineData("Sqlite", typeof(ExecutionPlacementSqliteDbContext))]
+    [InlineData("SqlServer", typeof(ExecutionPlacementSqlServerDbContext))]
+    [InlineData("PostgreSql", typeof(ExecutionPlacementPostgreSqlDbContext))]
+    [InlineData("MySql", typeof(ExecutionPlacementMySqlDbContext))]
+    public void Provider_selection_registers_only_the_selected_context(string provider, Type expectedContext)
+    {
+        var services = new ServiceCollection();
+        services.AddDistributedRuntimeExecutionPlacementEntityFrameworkCore(new()
+        {
+            Provider = provider,
+            ConnectionString = "unused"
+        });
+
+        var selectedContexts = services
+            .Where(descriptor =>
+                typeof(ExecutionPlacementDbContext).IsAssignableFrom(descriptor.ServiceType) &&
+                descriptor.ServiceType != typeof(ExecutionPlacementDbContext))
+            .Select(descriptor => descriptor.ServiceType)
+            .ToArray();
+
+        Assert.Equal([expectedContext], selectedContexts);
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(ExecutionPlacementDbContext));
+    }
+
+    [Fact]
+    public void Connection_resolution_prefers_an_explicit_connection_string()
+    {
+        var options = new DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=explicit.db",
+            ConnectionName = "Named"
+        };
+
+        Assert.Equal(
+            "Data Source=explicit.db",
+            ResolveConnection(options, new Dictionary<string, string?>
+            {
+                [$"ConnectionStrings:{ExecutionPlacementEfModule.DefaultConnectionName}"] = "Data Source=default.db",
+                ["ConnectionStrings:Named"] = "Data Source=named.db"
+            }));
+    }
+
+    [Fact]
+    public void Connection_resolution_uses_the_named_connection()
+    {
+        var options = new DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionName = "Named"
+        };
+
+        Assert.Equal(
+            "Data Source=named.db",
+            ResolveConnection(options, new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:Named"] = "Data Source=named.db"
+            }));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void Missing_or_blank_named_connection_is_rejected(string? configuredValue)
+    {
+        var options = new DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionName = "Missing"
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            ResolveConnection(options, new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:Missing"] = configuredValue
+            }));
+        Assert.Contains("connection 'Missing' was not found", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void Configured_default_is_used_when_connection_name_is_missing_or_blank(string? connectionName)
+    {
+        var options = new DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionName = connectionName
+        };
+
+        Assert.Equal(
+            "Data Source=configured-default.db",
+            ResolveConnection(options, new Dictionary<string, string?>
+            {
+                [$"ConnectionStrings:{ExecutionPlacementEfModule.DefaultConnectionName}"] = "Data Source=configured-default.db"
+            }));
+    }
+
+    [Fact]
+    public void Sqlite_uses_the_module_fallback_without_configuration()
+    {
+        var options = new DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions { Provider = "Sqlite" };
+
+        Assert.Equal(
+            ExecutionPlacementEfModule.DefaultSqliteConnectionString,
+            ResolveConnection(options));
+    }
+
+    [Fact]
+    public void Non_Sqlite_provider_requires_an_explicit_or_configured_connection()
+    {
+        var options = new DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions { Provider = "SqlServer" };
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            ResolveConnection(options));
+        Assert.Contains("requires ConnectionString or ConnectionName", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Unknown_provider_is_rejected_before_service_collection_mutation()
+    {
+        var services = new ServiceCollection();
+        var before = services.ToArray();
+
+        Assert.Throws<ArgumentException>(() => services.AddDistributedRuntimeExecutionPlacementEntityFrameworkCore(new()
+        {
+            Provider = "Unknown",
+            ConnectionString = "unused"
+        }));
+        Assert.Equal(before, services);
     }
 
     [Fact]
@@ -335,6 +472,24 @@ public sealed class RegistrationTests
         .ImplementationInstance is ExecutionPlacementStoreBackend backend
         ? backend.Name
         : throw new InvalidOperationException("The placement backend marker was not registered.");
+
+    private static string ResolveConnection(
+        DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions options,
+        IReadOnlyDictionary<string, string?>? values = null)
+    {
+        var services = new ServiceCollection();
+        if (values is not null)
+        {
+            services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
+                .AddInMemoryCollection(values)
+                .Build());
+        }
+
+        services.AddDistributedRuntimeExecutionPlacementEntityFrameworkCore(options);
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        return scope.ServiceProvider.GetRequiredService<ExecutionPlacementDbContext>().Database.GetConnectionString()!;
+    }
 
     private static string[] GroundworkUnitIds(IServiceCollection services) => services
         .Single(descriptor => descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry))

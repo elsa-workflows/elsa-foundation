@@ -15,7 +15,9 @@ public sealed class ExecutionPlacementLeaseEntityConfiguration : IEntityTypeConf
         builder.Property(row => row.ScopeKey).IsRequired();
         builder.Property(row => row.ScopeKeyHash).HasMaxLength(64).IsRequired();
         builder.Property(row => row.WorkflowExecutionId).HasMaxLength(128).IsRequired();
-        builder.Property(row => row.WorkflowExecutionIdOrderKey).HasMaxLength(512).IsRequired();
+        builder.Property(row => row.WorkflowExecutionIdOrderKey)
+            .HasMaxLength(ExecutionPlacementEfModule.WorkflowExecutionIdOrderKeyWidth)
+            .IsRequired();
         builder.Property(row => row.OwnerId).HasMaxLength(128).IsRequired();
         builder.Property(row => row.OwnerIdHash).HasMaxLength(64).IsRequired();
         builder.Property(row => row.PlacementToken).IsRequired();

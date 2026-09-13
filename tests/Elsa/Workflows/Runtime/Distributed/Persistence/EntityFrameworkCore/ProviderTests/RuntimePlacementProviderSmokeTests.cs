@@ -76,7 +76,22 @@ internal static class RuntimePlacementProviderSmoke
             Assert.Equal(ExecutionPlacementClaimOutcome.Granted, granted.Outcome);
             AssertLease(granted.Lease, await store.FindAsync(workflowId));
             AssertLease(granted.Lease, Assert.Single(await store.ListOwnedAsync(new(claim.OwnerId, Now))));
+
+            var orderingPrefix = $"provider-order-{Guid.NewGuid():N}-";
+            var lowerCaseLease = (await store.TryClaimAsync(
+                new(orderingPrefix + "a", "provider-order-node", Now, Now.AddMinutes(5)),
+                Now)).Lease;
+            var upperCaseLease = (await store.TryClaimAsync(
+                new(orderingPrefix + "A", "provider-order-node", Now, Now.AddMinutes(5)),
+                Now)).Lease;
+            var ordered = await store.ListOwnedAsync(new("provider-order-node", Now, 2));
+            Assert.Collection(ordered,
+                lease => Assert.Equal(upperCaseLease.WorkflowExecutionId, lease.WorkflowExecutionId),
+                lease => Assert.Equal(lowerCaseLease.WorkflowExecutionId, lease.WorkflowExecutionId));
+
             await store.ReleaseAsync(granted.Lease);
+            await store.ReleaseAsync(upperCaseLease);
+            await store.ReleaseAsync(lowerCaseLease);
             Assert.Null(await store.FindAsync(workflowId));
         }
 

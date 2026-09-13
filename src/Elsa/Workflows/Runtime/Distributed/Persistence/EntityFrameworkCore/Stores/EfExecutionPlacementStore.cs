@@ -1,11 +1,12 @@
+using System.Buffers.Binary;
 using System.Data.Common;
 using System.Security.Cryptography;
-using System.Text;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Models;
 using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Stores;
@@ -20,6 +21,8 @@ public sealed class EfExecutionPlacementStore(
 {
     private const int MaxCasAttempts = 8;
 
+    /// <inheritdoc/>
+    /// <exception cref="ExecutionPlacementEntityFrameworkPersistenceException">The EF provider cannot complete the lookup.</exception>
     public async ValueTask<ExecutionPlacementLease?> FindAsync(
         string workflowExecutionId,
         CancellationToken cancellationToken = default)
@@ -37,14 +40,18 @@ public sealed class EfExecutionPlacementStore(
         }
         catch (OperationCanceledException)
         {
+            context.ChangeTracker.Clear();
             throw;
         }
-        catch (Exception exception) when (IsProviderException(exception))
+        catch (Exception exception)
         {
+            context.ChangeTracker.Clear();
             throw NormalizeProviderFailure("finding", workflowExecutionId, exception);
         }
     }
 
+    /// <inheritdoc/>
+    /// <exception cref="ExecutionPlacementEntityFrameworkPersistenceException">The EF provider cannot complete the claim or bounded contention does not settle.</exception>
     public async ValueTask<ExecutionPlacementClaimResult> TryClaimAsync(
         ExecutionPlacementClaim claim,
         DateTimeOffset now,
@@ -57,6 +64,7 @@ public sealed class EfExecutionPlacementStore(
         var scope = RequireScope();
         var id = PlacementIdentity.CreateId(scope, claim.WorkflowExecutionId);
 
+        Exception lastContention = null!;
         for (var attempt = 0; attempt < MaxCasAttempts; attempt++)
         {
             context.ChangeTracker.Clear();
@@ -116,31 +124,30 @@ public sealed class EfExecutionPlacementStore(
             catch (DbUpdateConcurrencyException exception)
             {
                 context.ChangeTracker.Clear();
-                if (attempt == MaxCasAttempts - 1)
-                    throw ContentionFailure("claiming", claim.WorkflowExecutionId, exception);
+                lastContention = exception;
             }
             catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception) || EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
             {
                 context.ChangeTracker.Clear();
-                if (attempt == MaxCasAttempts - 1)
-                    throw ContentionFailure("claiming", claim.WorkflowExecutionId, exception);
+                lastContention = exception;
             }
             catch (DbException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
             {
                 context.ChangeTracker.Clear();
-                if (attempt == MaxCasAttempts - 1)
-                    throw ContentionFailure("claiming", claim.WorkflowExecutionId, exception);
+                lastContention = exception;
             }
-            catch (Exception exception) when (IsProviderException(exception))
+            catch (Exception exception)
             {
                 context.ChangeTracker.Clear();
                 throw NormalizeProviderFailure("claiming", claim.WorkflowExecutionId, exception);
             }
         }
 
-        throw new InvalidOperationException("The placement claim did not settle after bounded compare-and-swap retries.");
+        throw ContentionFailure("claiming", claim.WorkflowExecutionId, lastContention);
     }
 
+    /// <inheritdoc/>
+    /// <exception cref="ExecutionPlacementEntityFrameworkPersistenceException">The EF provider cannot complete the release or bounded contention does not settle.</exception>
     public async ValueTask ReleaseAsync(
         ExecutionPlacementLease lease,
         CancellationToken cancellationToken = default)
@@ -152,6 +159,7 @@ public sealed class EfExecutionPlacementStore(
         var scope = RequireScope();
         var id = PlacementIdentity.CreateId(scope, lease.WorkflowExecutionId);
 
+        Exception lastContention = null!;
         for (var attempt = 0; attempt < MaxCasAttempts; attempt++)
         {
             context.ChangeTracker.Clear();
@@ -176,32 +184,33 @@ public sealed class EfExecutionPlacementStore(
                 context.ChangeTracker.Clear();
                 throw;
             }
-            catch (DbUpdateConcurrencyException)
+            catch (DbUpdateConcurrencyException exception)
             {
                 context.ChangeTracker.Clear();
-                if (attempt == MaxCasAttempts - 1)
-                    return;
+                lastContention = exception;
             }
             catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
             {
                 context.ChangeTracker.Clear();
-                if (attempt == MaxCasAttempts - 1)
-                    return;
+                lastContention = exception;
             }
             catch (DbException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
             {
                 context.ChangeTracker.Clear();
-                if (attempt == MaxCasAttempts - 1)
-                    return;
+                lastContention = exception;
             }
-            catch (Exception exception) when (IsProviderException(exception))
+            catch (Exception exception)
             {
                 context.ChangeTracker.Clear();
                 throw NormalizeProviderFailure("releasing", lease.WorkflowExecutionId, exception);
             }
         }
+
+        throw ContentionFailure("releasing", lease.WorkflowExecutionId, lastContention);
     }
 
+    /// <inheritdoc/>
+    /// <exception cref="ExecutionPlacementEntityFrameworkPersistenceException">The EF provider cannot complete the bounded lookup.</exception>
     public async ValueTask<IReadOnlyList<ExecutionPlacementLease>> ListOwnedAsync(
         ExecutionPlacementLeaseListRequest request,
         CancellationToken cancellationToken = default)
@@ -237,11 +246,13 @@ public sealed class EfExecutionPlacementStore(
         }
         catch (OperationCanceledException)
         {
+            context.ChangeTracker.Clear();
             throw;
         }
-        catch (Exception exception) when (IsProviderException(exception))
+        catch (Exception exception)
         {
-            throw NormalizeProviderFailure("listing", scope, exception);
+            context.ChangeTracker.Clear();
+            throw NormalizeProviderFailure("listing", $"scope:{scopeHash}", exception);
         }
     }
 
@@ -276,7 +287,7 @@ public sealed class EfExecutionPlacementStore(
 
         if (!StringComparer.Ordinal.Equals(row.ScopeKeyHash, PlacementIdentity.CreateHash(scope)) ||
             !StringComparer.Ordinal.Equals(row.OwnerIdHash, PlacementIdentity.CreateHash(row.OwnerId)) ||
-            !StringComparer.Ordinal.Equals(row.WorkflowExecutionIdOrderKey, PlacementIdentity.CreateOrderKey(row.WorkflowExecutionId)))
+            !row.WorkflowExecutionIdOrderKey.AsSpan().SequenceEqual(PlacementIdentity.CreateOrderKey(row.WorkflowExecutionId)))
             throw new InvalidOperationException("The placement row contains inconsistent derived projections.");
 
         _ = ReadExpiresAt(row);
@@ -320,14 +331,17 @@ public sealed class EfExecutionPlacementStore(
         Revision = revision
     };
 
-    private static bool IsProviderException(Exception exception) =>
-        exception is DbException or DbUpdateException or DbUpdateConcurrencyException;
+    private static ExecutionPlacementEntityFrameworkPersistenceException NormalizeProviderFailure(
+        string operation,
+        string identity,
+        Exception inner) =>
+        new(operation, identity, $"The EF execution placement store failed while {operation} placement '{identity}'.", inner);
 
-    private static InvalidOperationException NormalizeProviderFailure(string operation, string identity, Exception inner) =>
-        new($"The EF execution placement store failed while {operation} placement '{identity}'.", inner);
-
-    private static InvalidOperationException ContentionFailure(string operation, string identity, Exception inner) =>
-        new($"The EF execution placement store could not complete {operation} placement '{identity}' after {MaxCasAttempts} bounded compare-and-swap attempts.", inner);
+    private static ExecutionPlacementEntityFrameworkPersistenceException ContentionFailure(
+        string operation,
+        string identity,
+        Exception inner) =>
+        new(operation, identity, $"The EF execution placement store could not complete {operation} placement '{identity}' after {MaxCasAttempts} bounded compare-and-swap attempts.", inner);
 
     private static class PlacementIdentity
     {
@@ -374,12 +388,20 @@ public sealed class EfExecutionPlacementStore(
             }
         }
 
-        public static string CreateOrderKey(string value)
+        public static byte[] CreateOrderKey(string value)
         {
-            var builder = new StringBuilder(value.Length * 4);
-            foreach (var character in value)
-                builder.Append(((int)character).ToString("X4", System.Globalization.CultureInfo.InvariantCulture));
-            return builder.ToString();
+            var result = new byte[ExecutionPlacementEfModule.WorkflowExecutionIdOrderKeyWidth];
+            for (var index = 0; index < value.Length; index++)
+            {
+                BinaryPrimitives.WriteUInt16BigEndian(
+                    result.AsSpan(index * sizeof(char), sizeof(char)),
+                    value[index]);
+            }
+
+            BinaryPrimitives.WriteUInt16BigEndian(
+                result.AsSpan(result.Length - sizeof(ushort), sizeof(ushort)),
+                checked((ushort)value.Length));
+            return result;
         }
     }
 }
