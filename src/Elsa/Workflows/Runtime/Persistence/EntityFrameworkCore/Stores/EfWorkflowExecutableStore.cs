@@ -138,9 +138,10 @@ public sealed class EfWorkflowExecutableStore(
         var scope = RequireScope();
         for (var attempt = 0; attempt < 16; attempt++)
         {
-            var row = await LoadCoordination(scope, artifactId, cancellationToken);
-            if (row is null)
+            var pair = await LoadPairAsync(scope, artifactId, cancellationToken);
+            if (pair is null)
                 return null;
+            var row = pair.Value.Coordination;
             var state = ReadCoordination(row, scope, artifactId, CreateId(scope, artifactId));
             var leases = LiveLeases(state, now);
             if (state.Guard is { } guard && guard.ExpiresAt > now)
@@ -166,9 +167,10 @@ public sealed class EfWorkflowExecutableStore(
         ValidateTransition(lease.ArtifactId, lease.LeaseId, expiresAt, now);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        var row = await LoadCoordination(scope, lease.ArtifactId, cancellationToken);
-        if (row is null)
+        var pair = await LoadPairAsync(scope, lease.ArtifactId, cancellationToken);
+        if (pair is null)
             return false;
+        var row = pair.Value.Coordination;
         var state = ReadCoordination(row, scope, lease.ArtifactId, CreateId(scope, lease.ArtifactId));
         if (state.Guard is { } guard && guard.ExpiresAt > now ||
             !state.Leases.TryGetValue(lease.LeaseId, out var current) ||
@@ -191,9 +193,10 @@ public sealed class EfWorkflowExecutableStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(lease.LeaseId);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        var row = await LoadCoordination(scope, lease.ArtifactId, cancellationToken);
-        if (row is null)
+        var pair = await LoadPairAsync(scope, lease.ArtifactId, cancellationToken);
+        if (pair is null)
             return;
+        var row = pair.Value.Coordination;
         var state = ReadCoordination(row, scope, lease.ArtifactId, CreateId(scope, lease.ArtifactId));
         if (!state.Leases.TryGetValue(lease.LeaseId, out var current) || current.Token != lease.ConcurrencyToken)
             return;
@@ -214,9 +217,10 @@ public sealed class EfWorkflowExecutableStore(
         var scope = RequireScope();
         for (var attempt = 0; attempt < 16; attempt++)
         {
-            var row = await LoadCoordination(scope, artifactId, cancellationToken);
-            if (row is null)
+            var pair = await LoadPairAsync(scope, artifactId, cancellationToken);
+            if (pair is null)
                 return null;
+            var row = pair.Value.Coordination;
             var state = ReadCoordination(row, scope, artifactId, CreateId(scope, artifactId));
             var leases = LiveLeases(state, now);
             if (leases.Count != 0)
@@ -243,9 +247,10 @@ public sealed class EfWorkflowExecutableStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(guard.ConcurrencyToken);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        var row = await LoadCoordination(scope, guard.ArtifactId, cancellationToken);
-        if (row is null)
+        var pair = await LoadPairAsync(scope, guard.ArtifactId, cancellationToken);
+        if (pair is null)
             return false;
+        var row = pair.Value.Coordination;
         var state = ReadCoordination(row, scope, guard.ArtifactId, CreateId(scope, guard.ArtifactId));
         if (state.Guard is not { } current || current.OperationId != guard.OperationId || current.Token != guard.ConcurrencyToken)
             return false;
@@ -367,11 +372,23 @@ public sealed class EfWorkflowExecutableStore(
                  x.ArtifactIdHash == Hash(artifactId) &&
                  x.ArtifactId == artifactId,
             cancellationToken);
-    private async Task<WorkflowExecutableCoordinationEntity?> LoadCoordination(
+    private async Task<(WorkflowExecutableEntity Artifact, WorkflowExecutableCoordinationEntity Coordination)?> LoadPairAsync(
         string scope,
         string artifactId,
-        CancellationToken cancellationToken) =>
-        await FindCoordinationAsync(scope, artifactId, CreateId(scope, artifactId), cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        var id = CreateId(scope, artifactId);
+        var artifact = await FindExecutableAsync(scope, artifactId, id, cancellationToken);
+        var coordination = await FindCoordinationAsync(scope, artifactId, id, cancellationToken);
+        if (artifact is null && coordination is null)
+            return null;
+        if (artifact is null || coordination is null)
+            throw new InvalidDataException($"Workflow executable '{id}' has incomplete persisted state.");
+
+        _ = Read(artifact, scope, artifactId, id);
+        _ = ReadCoordination(coordination, scope, artifactId, id);
+        return (artifact, coordination);
+    }
 
     private async Task<bool> UpdateCoordination(WorkflowExecutableCoordinationEntity row, CoordinationState state, CancellationToken ct)
     {
@@ -505,7 +522,7 @@ public sealed class EfWorkflowExecutableStore(
     {
         if (element.ValueKind == JsonValueKind.Object)
         {
-            var names = new HashSet<string>(StringComparer.Ordinal);
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var property in element.EnumerateObject())
             {
                 if (!names.Add(property.Name))

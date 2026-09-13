@@ -23,6 +23,11 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
             ConnectionString = options.ConnectionString,
             ConnectionName = options.ConnectionName
         };
+        BookmarkStateEfContextRegistration.EnsureCompatible(
+            services,
+            provider,
+            options.ConnectionString,
+            options.ConnectionName);
 
         var existingBackend = BookmarkStateStoreBackend.Find(services);
         existingBackend?.EnsureOwnsRegisteredContract(services);
@@ -111,7 +116,8 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
 
     private static string ResolveConnectionString(IServiceProvider provider, RuntimeBookmarksEntityFrameworkCoreOptions options)
     {
-        if (!string.IsNullOrWhiteSpace(options.ConnectionString)) return options.ConnectionString;
+        if (!string.IsNullOrWhiteSpace(options.ConnectionString))
+            return options.ConnectionString;
         var configuration = provider.GetService<IConfiguration>();
         if (!string.IsNullOrWhiteSpace(options.ConnectionName))
         {
@@ -121,8 +127,10 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
             return namedConnection;
         }
         var fallback = configuration?.GetConnectionString(BookmarkStateEfModule.DefaultConnectionName);
-        if (!string.IsNullOrWhiteSpace(fallback)) return fallback;
-        if (EfRelationalProviderBinding.Normalize(options.Provider) == "sqlite") return BookmarkStateEfModule.DefaultSqliteConnectionString;
+        if (!string.IsNullOrWhiteSpace(fallback))
+            return fallback;
+        if (EfRelationalProviderBinding.Normalize(options.Provider) == "sqlite")
+            return BookmarkStateEfModule.DefaultSqliteConnectionString;
         throw new InvalidOperationException("Runtime bookmarks EF requires ConnectionString or ConnectionName for a non-Sqlite provider.");
     }
 

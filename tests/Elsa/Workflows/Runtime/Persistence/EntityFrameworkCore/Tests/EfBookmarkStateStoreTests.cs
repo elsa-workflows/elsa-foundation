@@ -541,6 +541,66 @@ public sealed class EfBookmarkStateStoreTests
 
     }
 
+    [Fact]
+    public void Combined_runtime_ef_registration_rejects_incompatible_options_in_either_order()
+    {
+        var bookmarks = new RuntimeBookmarksEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=bookmarks.db"
+        };
+        var artifacts = new RuntimeArtifactsEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=artifacts.db"
+        };
+
+        var bookmarksFirst = new ServiceCollection();
+        bookmarksFirst.AddWorkflowRuntime();
+        bookmarksFirst.AddRuntimeBookmarksEntityFrameworkCore(bookmarks);
+        Assert.Throws<InvalidOperationException>(() => bookmarksFirst.AddRuntimeArtifactsEntityFrameworkCore(artifacts));
+
+        var artifactsFirst = new ServiceCollection();
+        artifactsFirst.AddWorkflowRuntime();
+        artifactsFirst.AddRuntimeArtifactsEntityFrameworkCore(artifacts);
+        Assert.Throws<InvalidOperationException>(() => artifactsFirst.AddRuntimeBookmarksEntityFrameworkCore(bookmarks));
+    }
+
+    [Fact]
+    public async Task Combined_runtime_ef_registration_accepts_matching_options_in_either_order()
+    {
+        var bookmarks = new RuntimeBookmarksEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=shared.db"
+        };
+        var artifacts = new RuntimeArtifactsEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=shared.db"
+        };
+
+        foreach (var register in new[] { "bookmarks-first", "artifacts-first" })
+        {
+            var services = new ServiceCollection();
+            services.AddWorkflowRuntime();
+            if (register == "bookmarks-first")
+            {
+                services.AddRuntimeBookmarksEntityFrameworkCore(bookmarks);
+                services.AddRuntimeArtifactsEntityFrameworkCore(artifacts);
+            }
+            else
+            {
+                services.AddRuntimeArtifactsEntityFrameworkCore(artifacts);
+                services.AddRuntimeBookmarksEntityFrameworkCore(bookmarks);
+            }
+
+            await using var provider = services.BuildServiceProvider();
+            using var scope = provider.CreateScope();
+            Assert.IsAssignableFrom<BookmarkStateDbContext>(scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
+        }
+    }
+
     private static async Task<Exception?> Capture(ValueTask<BookmarkState> operation)
     {
         try

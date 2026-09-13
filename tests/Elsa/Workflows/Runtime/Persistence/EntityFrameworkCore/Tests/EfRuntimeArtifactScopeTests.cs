@@ -174,6 +174,38 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Coordination_operations_reject_orphan_and_corrupt_executable_pairs()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var now = DateTimeOffset.UtcNow;
+        await fixture.Executable.SaveAsync(Executable("orphan"));
+        var executable = await fixture.Context.WorkflowExecutables.SingleAsync(x => x.ArtifactId == "orphan");
+        fixture.Context.WorkflowExecutables.Remove(executable);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Executable
+            .TryAcquireRootWriteLeaseAsync("orphan", "lease", now.AddMinutes(5), now).AsTask());
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Executable
+            .TryBeginDeletionAsync("orphan", "operation", now.AddMinutes(5), now).AsTask());
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Executable
+            .RenewRootWriteLeaseAsync(new("orphan", "lease", "token"), now.AddMinutes(5), now).AsTask());
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Executable
+            .ReleaseRootWriteLeaseAsync(new("orphan", "lease", "token")).AsTask());
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Executable
+            .CancelDeletionAsync(new("orphan", "operation", "token")).AsTask());
+
+        await fixture.Executable.SaveAsync(Executable("corrupt-executable"));
+        var corrupt = await fixture.Context.WorkflowExecutables.SingleAsync(x => x.ArtifactId == "corrupt-executable");
+        corrupt.ContentJson = "{";
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Executable
+            .TryAcquireRootWriteLeaseAsync("corrupt-executable", "lease", now.AddMinutes(5), now).AsTask());
+    }
+
+    [Fact]
     public async Task Corrupt_coordination_payloads_fail_closed_as_invalid_data()
     {
         var payloads = new[]
@@ -184,7 +216,8 @@ public sealed class EfRuntimeArtifactScopeTests
             "{\"Leases\":{\"key\":{\"Id\":\"other\",\"Token\":\"token\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"Guard\":null}",
             "{\"Leases\":{\"one\":{\"Id\":\"one\",\"Token\":\"\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"},\"two\":{\"Id\":\"two\",\"Token\":\"\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"Guard\":null}",
             "{\"Leases\":{\"one\":{\"Id\":\"one\",\"Token\":\"token\",\"ExpiresAt\":\"0001-01-01T00:00:00+00:00\"}},\"Guard\":null}",
-            "{\"Leases\":{},\"Guard\":{\"OperationId\":\"\",\"Token\":\"token\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}}"
+            "{\"Leases\":{},\"Guard\":{\"OperationId\":\"\",\"Token\":\"token\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}}",
+            "{\"Leases\":{},\"leases\":{},\"Guard\":null}"
         };
 
         foreach (var payload in payloads)
