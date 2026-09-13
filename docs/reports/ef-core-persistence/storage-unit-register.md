@@ -140,8 +140,8 @@ context and is not an owner of these rows.
 | I03 | `identityApplication` / `identity_applications` | `IApplicationStore` | E-IAM | S1-S3 | | | | Pending |
 | I04 | `identityCredential` / `identity_credentials` | `ICredentialStore` | E-IAM | S1-S3 | | | | Pending |
 | I05 | `identityClaimMapping` / `identity_claim_mappings` | `IClaimMappingStore` | E-IAM | S1-S3 | | | | Pending |
-| I06 | `identityProviderConfiguration` / `identity_provider_configurations` | `IProviderConfigurationStore`; tenant-scoped provider config | E-IAM | S1-S3 | | | | Pending |
-| I07 | `identityGlobalProviderConfiguration` / `identity_global_provider_configurations` | `IProviderConfigurationStore`; global provider config | E-IAM | S1-S3 | | | | Pending |
+| I06 | `identityProviderConfiguration` / `identity_provider_configurations` | `IProviderConfigurationStore`; tenant-scoped provider config | E-IAM | S1-S3 | #1709 | | | Opt-in EF implementation proposed by #1709; Groundwork remains default and default-flip/deletion gates remain pending |
+| I07 | `identityGlobalProviderConfiguration` / `identity_global_provider_configurations` | `IProviderConfigurationStore`; global provider config | E-IAM | S1-S3 | #1709 | | | Opt-in EF implementation proposed by #1709; Groundwork remains default and default-flip/deletion gates remain pending |
 | I08 | `identityUserClaim` / `identity_user_claims` | User-claim relationship operations | E-IAM | S1-S3 | | | | Pending |
 | I09 | `identityRoleClaim` / `identity_role_claims` | Role-claim relationship operations | E-IAM | S1-S3 | | | | Pending |
 | I10 | `identityExternalLogin` / `identity_external_logins` | `IExternalIdentityStore`; login relationship operations | E-IAM | S1-S3 | | | | Pending |
