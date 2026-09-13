@@ -159,8 +159,8 @@ mounted (OpenIddict's server is registered with only a custom flow marker,
 `401` (which the Studio client reads as "no token") rather than a `302` redirect to the login page —
 the handler itself refuses to issue a token to an unauthenticated principal.
 
-These routes consume the same normalized-principal and permission policy services as every other first-party
-route; there is no FastEndpoints claim-type bridge.
+The identity API routes read the same normalized principal as every other first-party route; there is no
+FastEndpoints claim-type bridge.
 
 ### The scheme selector
 
@@ -311,8 +311,9 @@ individually with `AllowPublic(category, reason)`, and every other route require
 host credential. In the hosts and API slices they capture, the endpoint-manifest checks in the test suite reject a
 route with no disposition or more than one. An `ApiSecurity` entry left in a shell's feature list names a feature
 that no longer exists; CShells logs a warning and activates the shell without it. Workflow-defined HTTP endpoints
-are separate: their access check is the `WorkflowsRuntimeHttp` feature's `AuthorizationHandlerType` setting, which a
-host can deliberately point at `AllowAnonymousHttpEndpointAuthorizationHandler`.
+are separate: they are anonymous unless their `HttpEndpoint` activity sets `Authorize` (optionally with a `Policy`).
+For those that do, the `WorkflowsRuntimeHttp` feature's `AuthorizationHandlerType` setting chooses how the check
+runs, and pointing it at `AllowAnonymousHttpEndpointAuthorizationHandler` lets every such request through.
 
 **Antiforgery on the login form.** The backend login page embeds an antiforgery token (form field
 `__csrf`) and the paired cookie; the `POST /_elsa/identity/login` HTML-form flow validates it before

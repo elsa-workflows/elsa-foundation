@@ -132,8 +132,8 @@ is required.
 ### No API kill-switch
 
 The former `ApiSecurity.AllowAnonymous` setting has been removed, and no configuration disables authentication for a
-shell's API routes. Workflow-defined HTTP endpoints have their own authorization handler setting; see
-[Security posture](authentication-architecture.md#7-security-posture).
+shell's API routes. Workflow-defined HTTP endpoints are anonymous unless their `HttpEndpoint` activity sets
+`Authorize`; see [Security posture](authentication-architecture.md#7-security-posture).
 
 ## Same-origin hosting
 
