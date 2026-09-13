@@ -2,7 +2,7 @@ using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
-namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests;
+namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests;
 
 public sealed class ProviderModelTests
 {

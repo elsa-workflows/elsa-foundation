@@ -7,8 +7,8 @@ Records direct project references only.
 ## Summary
 
 - Source projects: 135
-- Test projects: 114
-- Direct project references: 1229
+- Test projects: 115
+- Direct project references: 1230
 
 ## Projects
 
@@ -253,6 +253,7 @@ Records direct project references only.
 | [Elsa.Workflows.Publishing.Persistence.Groundwork.Tests](../../tests/Elsa/Workflows/Publishing/Persistence/Groundwork/Tests/Elsa.Workflows.Publishing.Persistence.Groundwork.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork.Testing<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Workflows.Publishing<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Publishing.Persistence.Groundwork |
 | [Elsa.Workflows.Publishing.Tests](../../tests/Elsa/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Activities.Testing<br>Elsa.Mediator.Core<br>Elsa.Testing<br>Elsa.Workflows.Publishing<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Publishing.Core<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Reconciliation<br>Elsa.Workflows.Runtime.Reconciliation.Core<br>Elsa.Workflows.Runtime.Reconciliation.ExecutionProbe<br>Elsa.Workflows.Runtime.Resumption |
 | [Elsa.Workflows.Runtime.Api.Tests](../../tests/Elsa/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Testing<br>Elsa.Workflows.Runtime.Api |
+| [Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests](../../tests/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore |
 | [Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests](../../tests/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Workflows | - | false | Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
 | [Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests](../../tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
 | [Elsa.Workflows.Runtime.Distributed.Tests](../../tests/Elsa/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Distributed<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
@@ -294,5 +295,5 @@ Records direct project references only.
 | Elsa.Tasks | 3 | 1 |
 | Elsa.Testing | 0 | 1 |
 | Elsa.Workbench | 1 | 1 |
-| Elsa.Workflows | 31 | 21 |
+| Elsa.Workflows | 31 | 22 |
 | Elsa3 | 4 | 1 |

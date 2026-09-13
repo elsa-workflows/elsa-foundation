@@ -709,6 +709,12 @@ public sealed class EfCoreDependencyGuardTests
                 [
                     .. CorePackages(),
                     "Microsoft.EntityFrameworkCore.Sqlite",
+                    "Microsoft.EntityFrameworkCore.Sqlite.Core"
+                ],
+                ["tests/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                [
+                    .. CorePackages(),
+                    "Microsoft.EntityFrameworkCore.Sqlite",
                     "Microsoft.EntityFrameworkCore.Sqlite.Core",
                     "Microsoft.EntityFrameworkCore.SqlServer",
                     "MySql.EntityFrameworkCore",

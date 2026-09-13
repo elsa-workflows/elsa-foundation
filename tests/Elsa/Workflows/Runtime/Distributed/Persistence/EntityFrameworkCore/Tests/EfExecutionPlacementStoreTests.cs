@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
@@ -6,6 +7,7 @@ using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests;
@@ -96,9 +98,10 @@ public sealed class EfExecutionPlacementStoreTests
         await fixture.Store.TryClaimAsync(Claim("node-a", "wf-a", Now, 20), Now);
         await fixture.Store.TryClaimAsync(Claim("node-a", "wf-expired", Now, 1), Now);
         await fixture.Store.TryClaimAsync(Claim("node-b", "wf-other", Now, 20), Now);
-        var leases = await fixture.Store.ListOwnedAsync(new("node-a", Now.AddSeconds(2), 1));
-        var lease = Assert.Single(leases);
-        Assert.Equal("wf-a", lease.WorkflowExecutionId);
+        var leases = await fixture.Store.ListOwnedAsync(new("node-a", Now.AddSeconds(2), 2));
+        Assert.Collection(leases,
+            lease => Assert.Equal("wf-a", lease.WorkflowExecutionId),
+            lease => Assert.Equal("wf-z", lease.WorkflowExecutionId));
     }
 
     [Fact]
@@ -106,10 +109,138 @@ public sealed class EfExecutionPlacementStoreTests
     {
         await using var fixture = await Fixture.CreateAsync(null);
         await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.FindAsync("wf-1").AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.TryClaimAsync(Claim("node-a", "wf-1"), Now).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.ReleaseAsync(new("wf-1", "node-a", 1, Now, Now.AddSeconds(1))).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.ListOwnedAsync(new("node-a", Now)).AsTask());
+
         await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.FindAsync(" ").AsTask());
+        await Assert.ThrowsAsync<ArgumentNullException>(() => fixture.Store.TryClaimAsync(null!, Now).AsTask());
+        await Assert.ThrowsAsync<ArgumentNullException>(() => fixture.Store.ReleaseAsync(null!).AsTask());
+        await Assert.ThrowsAsync<ArgumentNullException>(() => fixture.Store.ListOwnedAsync(null!).AsTask());
+        Assert.Throws<ArgumentException>(() => new ExecutionPlacementClaim(" ", "node-a", Now, Now.AddSeconds(1)));
+        Assert.Throws<ArgumentException>(() => new ExecutionPlacementClaim("wf-1", " ", Now, Now.AddSeconds(1)));
+        Assert.Throws<ArgumentException>(() => new ExecutionPlacementLease(" ", "node-a", 1, Now, Now.AddSeconds(1)));
+        Assert.Throws<ArgumentException>(() => new ExecutionPlacementLease("wf-1", " ", 1, Now, Now.AddSeconds(1)));
+        Assert.Throws<ArgumentException>(() => new ExecutionPlacementLeaseListRequest("", Now));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ExecutionPlacementLeaseListRequest("node-a", Now, 0));
+
+        await using var validFixture = await Fixture.CreateAsync("scope-a");
+        var validClaim = Claim("node-a", "wf-cancel");
+        var validLease = await validFixture.Store.TryClaimAsync(validClaim, Now);
         using var canceled = new CancellationTokenSource();
         canceled.Cancel();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fixture.Store.FindAsync("wf-1", canceled.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => validFixture.Store.FindAsync("wf-1", canceled.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => validFixture.Store.TryClaimAsync(validClaim, Now, canceled.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => validFixture.Store.ReleaseAsync(validLease.Lease, canceled.Token).AsTask());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => validFixture.Store.ListOwnedAsync(new("node-a", Now), canceled.Token).AsTask());
+    }
+
+    [Fact]
+    public async Task Rollback_and_conflicting_write_leave_the_tracker_reusable()
+    {
+        await using var fixture = await Fixture.CreateAsync("scope-a");
+        await using var contender = await fixture.ReopenAsync("scope-a");
+
+        await using (var transaction = await fixture.Context.Database.BeginTransactionAsync())
+        {
+            await fixture.Store.TryClaimAsync(Claim("node-a", "wf-rollback"), Now);
+            await transaction.RollbackAsync();
+        }
+
+        await using var reopened = await fixture.ReopenAsync("scope-a");
+        Assert.Null(await reopened.Store.FindAsync("wf-rollback"));
+
+        var results = await Task.WhenAll(
+            fixture.Store.TryClaimAsync(Claim("node-a", "wf-conflict"), Now).AsTask(),
+            contender.Store.TryClaimAsync(Claim("node-b", "wf-conflict"), Now).AsTask());
+        Assert.Single(results, result => result.Outcome == ExecutionPlacementClaimOutcome.Granted);
+        Assert.Single(results, result => result.Outcome == ExecutionPlacementClaimOutcome.Denied);
+
+        var reusable = results[0].Outcome == ExecutionPlacementClaimOutcome.Denied ? fixture.Store : contender.Store;
+        var subsequent = await reusable.TryClaimAsync(Claim("node-reusable", "wf-after-conflict"), Now);
+        Assert.Equal(ExecutionPlacementClaimOutcome.Granted, subsequent.Outcome);
+    }
+
+    [Fact]
+    public async Task Maximum_length_unicode_identity_and_exact_scope_isolation_are_lossless()
+    {
+        var pathScope = "tenant-a:bc/🧪";
+        await using var fixture = await Fixture.CreateAsync(pathScope);
+        await using var collidingScope = await fixture.ReopenAsync("tenant-ab:c/🧪");
+        var workflowId = new string('x', 126) + "😀";
+        var ownerId = new string('o', 126) + "😀";
+
+        var claimed = await fixture.Store.TryClaimAsync(Claim(ownerId, workflowId), Now);
+        Assert.Equal(ExecutionPlacementClaimOutcome.Granted, claimed.Outcome);
+        AssertLeaseEqual(claimed.Lease, await fixture.Store.FindAsync(workflowId));
+        Assert.Empty(await collidingScope.Store.ListOwnedAsync(new(ownerId, Now)));
+        Assert.Null(await collidingScope.Store.FindAsync(workflowId));
+    }
+
+    [Fact]
+    public async Task Distinct_unpaired_surrogate_scopes_do_not_alias_and_reopen_losslessly()
+    {
+        await using var firstScope = await Fixture.CreateAsync("tenant-\uD800");
+        await using var secondScope = await firstScope.ReopenAsync("tenant-\uD801");
+        var workflowId = "wf-malformed-scope";
+
+        var first = await firstScope.Store.TryClaimAsync(Claim("node-a", workflowId), Now);
+        var second = await secondScope.Store.TryClaimAsync(Claim("node-b", workflowId), Now);
+        Assert.Equal(ExecutionPlacementClaimOutcome.Granted, first.Outcome);
+        Assert.Equal(ExecutionPlacementClaimOutcome.Granted, second.Outcome);
+        Assert.Equal(1, first.Lease.PlacementToken);
+        Assert.Equal(1, second.Lease.PlacementToken);
+
+        await using var reopened = await firstScope.ReopenAsync("tenant-\uD800");
+        AssertLeaseEqual(first.Lease, await reopened.Store.FindAsync(workflowId));
+    }
+
+    [Fact]
+    public async Task Corrupt_derived_projections_fail_closed_and_are_not_silently_dropped_from_listing()
+    {
+        await using var fixture = await Fixture.CreateAsync("scope-a");
+        await fixture.Store.TryClaimAsync(Claim("node-a", "wf-projection"), Now);
+        var row = await fixture.Context.PlacementLeases.SingleAsync();
+        var originalScopeHash = row.ScopeKeyHash;
+        var originalOwnerHash = row.OwnerIdHash;
+        var originalOrderKey = row.WorkflowExecutionIdOrderKey;
+        var originalExpiryTicks = row.ExpiresAtUtcTicks;
+
+        row.ScopeKeyHash = "corrupt";
+        await fixture.Context.SaveChangesAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.FindAsync("wf-projection").AsTask());
+
+        row.ScopeKeyHash = originalScopeHash;
+        row.OwnerIdHash = "corrupt";
+        await fixture.Context.SaveChangesAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.FindAsync("wf-projection").AsTask());
+
+        row.OwnerIdHash = originalOwnerHash;
+        row.WorkflowExecutionIdOrderKey = "corrupt";
+        await fixture.Context.SaveChangesAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.ListOwnedAsync(new("node-a", Now)).AsTask());
+
+        row.WorkflowExecutionIdOrderKey = originalOrderKey;
+        row.ExpiresAtUtcTicks = originalExpiryTicks + 1;
+        await fixture.Context.SaveChangesAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.FindAsync("wf-projection").AsTask());
+    }
+
+    [Fact]
+    public async Task Provider_failure_is_normalized_and_the_same_context_recovers_without_partial_write()
+    {
+        var interceptor = new FailOnceProviderInterceptor();
+        await using var fixture = await Fixture.CreateAsync("scope-a", interceptor);
+        interceptor.Arm();
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            fixture.Store.TryClaimAsync(Claim("node-a", "wf-fails-once"), Now).AsTask());
+        Assert.Contains("failed while claiming placement", failure.Message, StringComparison.Ordinal);
+        Assert.Null(await fixture.Store.FindAsync("wf-fails-once"));
+
+        var recovered = await fixture.Store.TryClaimAsync(Claim("node-a", "wf-recovers"), Now);
+        Assert.Equal(ExecutionPlacementClaimOutcome.Granted, recovered.Outcome);
+        AssertLeaseEqual(recovered.Lease, await fixture.Store.FindAsync("wf-recovers"));
     }
 
     private static ExecutionPlacementClaim Claim(string owner, string id, DateTimeOffset? requestedAt = null, int seconds = 30)
@@ -148,12 +279,17 @@ public sealed class EfExecutionPlacementStoreTests
 
         public EfExecutionPlacementStore Store { get; }
 
-        public static async Task<Fixture> CreateAsync(string? scope)
+        public ExecutionPlacementSqliteDbContext Context => context;
+
+        public static async Task<Fixture> CreateAsync(string? scope, DbCommandInterceptor? interceptor = null)
         {
-            var path = Path.Combine(Path.GetTempPath(), $"elsa-placement-{Guid.NewGuid():N}.db");
+            var path = Path.Join(Path.GetTempPath(), $"elsa-placement-{Guid.NewGuid():N}.db");
             var connection = new SqliteConnection($"Data Source={path}");
             await connection.OpenAsync();
-            var context = new ExecutionPlacementSqliteDbContext(new DbContextOptionsBuilder<ExecutionPlacementSqliteDbContext>().UseSqlite(connection).Options);
+            var options = new DbContextOptionsBuilder<ExecutionPlacementSqliteDbContext>().UseSqlite(connection);
+            if (interceptor is not null)
+                options.AddInterceptors(interceptor);
+            var context = new ExecutionPlacementSqliteDbContext(options.Options);
             await context.Database.EnsureCreatedAsync();
             return new Fixture(connection, context, scope, ownsDatabase: true);
         }
@@ -172,7 +308,7 @@ public sealed class EfExecutionPlacementStoreTests
             await connection.DisposeAsync();
             if (ownsDatabase)
                 foreach (var file in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" })
-                    if (File.Exists(file)) File.Delete(file);
+                    File.Delete(file);
         }
 
         private sealed class Accessor(string? scope) : IPersistenceAccessContextAccessor
@@ -181,5 +317,75 @@ public sealed class EfExecutionPlacementStoreTests
                 ? PersistenceAccessContext.Global
                 : PersistenceAccessContext.Scoped(new PersistenceScope(scope));
         }
+    }
+
+    private sealed class FailOnceProviderInterceptor : DbCommandInterceptor
+    {
+        private int armed;
+        private int fired;
+
+        public void Arm() => Interlocked.Exchange(ref armed, 1);
+
+        public override InterceptionResult<int> NonQueryExecuting(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<int> result) =>
+            ShouldFail(command) ? throw new SyntheticProviderException() : result;
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default) =>
+            ShouldFail(command)
+                ? throw new SyntheticProviderException()
+                : ValueTask.FromResult(result);
+
+        public override InterceptionResult<DbDataReader> ReaderExecuting(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result) =>
+            ShouldFail(command) ? throw new SyntheticProviderException() : result;
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default) =>
+            ShouldFail(command)
+                ? throw new SyntheticProviderException()
+                : ValueTask.FromResult(result);
+
+        public override InterceptionResult<object> ScalarExecuting(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<object> result) =>
+            ShouldFail(command) ? throw new SyntheticProviderException() : result;
+
+        public override ValueTask<InterceptionResult<object>> ScalarExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<object> result,
+            CancellationToken cancellationToken = default) =>
+            ShouldFail(command)
+                ? throw new SyntheticProviderException()
+                : ValueTask.FromResult(result);
+
+        private bool ShouldFail(DbCommand command) =>
+            IsMutation(command.CommandText) &&
+            Volatile.Read(ref armed) == 1 &&
+            Interlocked.Exchange(ref fired, 1) == 0;
+
+        private static bool IsMutation(string commandText)
+        {
+            var sql = commandText.AsSpan().TrimStart();
+            return sql.StartsWith("INSERT", StringComparison.OrdinalIgnoreCase) ||
+                   sql.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase) ||
+                   sql.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private sealed class SyntheticProviderException() : DbException("synthetic provider failure")
+    {
     }
 }

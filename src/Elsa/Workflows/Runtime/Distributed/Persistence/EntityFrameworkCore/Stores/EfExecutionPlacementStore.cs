@@ -33,7 +33,7 @@ public sealed class EfExecutionPlacementStore(
             var row = await context.PlacementLeases.AsNoTracking().SingleOrDefaultAsync(
                 candidate => candidate.Id == id,
                 cancellationToken);
-            return row is null ? null : MapChecked(row, scope, workflowExecutionId, id);
+            return row is null ? null : MapChecked(row, scope, workflowExecutionId);
         }
         catch (OperationCanceledException)
         {
@@ -68,10 +68,9 @@ public sealed class EfExecutionPlacementStore(
                 if (current is not null)
                     EnsureIdentity(current, scope, claim.WorkflowExecutionId, id);
 
-                if (current is not null && current.ExpiresAt <= now && current.ExpiresAtUtcTicks > now.UtcTicks)
-                    throw new InvalidOperationException("The placement row contains inconsistent expiry projections.");
+                var isLive = current is not null && IsLive(current, now);
 
-                if (current is not null && current.ExpiresAtUtcTicks > now.UtcTicks &&
+                if (current is not null && isLive &&
                     !StringComparer.Ordinal.Equals(current.OwnerId, claim.OwnerId))
                 {
                     return new ExecutionPlacementClaimResult(
@@ -81,7 +80,7 @@ public sealed class EfExecutionPlacementStore(
 
                 var outcome = current is not null &&
                               StringComparer.Ordinal.Equals(current.OwnerId, claim.OwnerId) &&
-                              current.ExpiresAtUtcTicks > now.UtcTicks
+                              isLive
                     ? ExecutionPlacementClaimOutcome.Renewed
                     : ExecutionPlacementClaimOutcome.Granted;
                 var lease = new ExecutionPlacementLease(
@@ -183,6 +182,12 @@ public sealed class EfExecutionPlacementStore(
                 if (attempt == MaxCasAttempts - 1)
                     return;
             }
+            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
+            {
+                context.ChangeTracker.Clear();
+                if (attempt == MaxCasAttempts - 1)
+                    return;
+            }
             catch (DbException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
             {
                 context.ChangeTracker.Clear();
@@ -205,6 +210,7 @@ public sealed class EfExecutionPlacementStore(
         DistributedRuntimeIdentityConstraints.Validate(request.OwnerId, nameof(request.OwnerId));
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
+        var encodedScope = PlacementIdentity.EncodeScope(scope);
         var scopeHash = PlacementIdentity.CreateHash(scope);
         var ownerHash = PlacementIdentity.CreateHash(request.OwnerId);
 
@@ -213,6 +219,8 @@ public sealed class EfExecutionPlacementStore(
             var rows = await context.PlacementLeases.AsNoTracking()
                 .Where(row => row.ScopeKeyHash == scopeHash &&
                               row.OwnerIdHash == ownerHash &&
+                              row.ScopeKey == encodedScope &&
+                              row.OwnerId == request.OwnerId &&
                               row.ExpiresAtUtcTicks > request.Now.UtcTicks)
                 .OrderBy(row => row.ExpiresAtUtcTicks)
                 .ThenBy(row => row.WorkflowExecutionIdOrderKey)
@@ -220,10 +228,12 @@ public sealed class EfExecutionPlacementStore(
                 .Take(request.Take)
                 .ToListAsync(cancellationToken);
 
-            return rows
-                .Select(row => MapChecked(row, scope, row.WorkflowExecutionId, row.Id))
-                .Where(lease => StringComparer.Ordinal.Equals(lease.OwnerId, request.OwnerId) && !lease.IsExpired(request.Now))
-                .ToArray();
+            return rows.Select(row =>
+            {
+                var lease = MapChecked(row, scope, expectedOwnerId: request.OwnerId);
+                _ = IsLive(row, request.Now);
+                return lease;
+            }).ToArray();
         }
         catch (OperationCanceledException)
         {
@@ -241,19 +251,43 @@ public sealed class EfExecutionPlacementStore(
     private static ExecutionPlacementLease MapChecked(
         ExecutionPlacementLeaseEntity row,
         string scope,
-        string workflowExecutionId,
-        string id)
+        string? expectedWorkflowExecutionId = null,
+        string? expectedOwnerId = null)
     {
-        EnsureIdentity(row, scope, workflowExecutionId, id);
+        if (expectedWorkflowExecutionId is not null &&
+            !StringComparer.Ordinal.Equals(row.WorkflowExecutionId, expectedWorkflowExecutionId))
+            throw new InvalidOperationException("The placement identity digest maps to a different execution identity.");
+
+        if (expectedOwnerId is not null &&
+            !StringComparer.Ordinal.Equals(row.OwnerId, expectedOwnerId))
+            throw new InvalidOperationException("The placement row belongs to a different owner.");
+
+        var id = PlacementIdentity.CreateId(scope, row.WorkflowExecutionId);
+        EnsureIdentity(row, scope, row.WorkflowExecutionId, id);
         return Map(row);
     }
 
     private static void EnsureIdentity(ExecutionPlacementLeaseEntity row, string scope, string workflowExecutionId, string id)
     {
         if (!StringComparer.Ordinal.Equals(row.Id, id) ||
-            !StringComparer.Ordinal.Equals(row.ScopeKey, scope) ||
+            !StringComparer.Ordinal.Equals(PlacementIdentity.DecodeScope(row.ScopeKey), scope) ||
             !StringComparer.Ordinal.Equals(row.WorkflowExecutionId, workflowExecutionId))
             throw new InvalidOperationException("The placement identity digest maps to a different scope or execution identity.");
+
+        if (!StringComparer.Ordinal.Equals(row.ScopeKeyHash, PlacementIdentity.CreateHash(scope)) ||
+            !StringComparer.Ordinal.Equals(row.OwnerIdHash, PlacementIdentity.CreateHash(row.OwnerId)) ||
+            !StringComparer.Ordinal.Equals(row.WorkflowExecutionIdOrderKey, PlacementIdentity.CreateOrderKey(row.WorkflowExecutionId)) ||
+            row.ExpiresAtUtcTicks != row.ExpiresAt.UtcTicks)
+            throw new InvalidOperationException("The placement row contains inconsistent derived projections.");
+    }
+
+    private static bool IsLive(ExecutionPlacementLeaseEntity row, DateTimeOffset now)
+    {
+        var canonical = row.ExpiresAt > now;
+        var projected = row.ExpiresAtUtcTicks > now.UtcTicks;
+        if (canonical != projected)
+            throw new InvalidOperationException("The placement row contains inconsistent expiry projections.");
+        return canonical;
     }
 
     private static ExecutionPlacementLease Map(ExecutionPlacementLeaseEntity row) =>
@@ -262,7 +296,7 @@ public sealed class EfExecutionPlacementStore(
     private static ExecutionPlacementLeaseEntity ToEntity(ExecutionPlacementLease lease, string scope, string id, long revision) => new()
     {
         Id = id,
-        ScopeKey = scope,
+        ScopeKey = PlacementIdentity.EncodeScope(scope),
         ScopeKeyHash = PlacementIdentity.CreateHash(scope),
         WorkflowExecutionId = lease.WorkflowExecutionId,
         WorkflowExecutionIdOrderKey = PlacementIdentity.CreateOrderKey(lease.WorkflowExecutionId),
@@ -289,8 +323,45 @@ public sealed class EfExecutionPlacementStore(
         public static string CreateId(string scope, string executionId) =>
             CreateHash($"{scope.Length}:{scope}{executionId.Length}:{executionId}");
 
-        public static string CreateHash(string value) =>
-            Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+        public static string CreateHash(string value)
+        {
+            return Convert.ToHexString(SHA256.HashData(EncodeUtf16CodeUnits(value)));
+        }
+
+        public static string EncodeScope(string value)
+            => Convert.ToBase64String(EncodeUtf16CodeUnits(value));
+
+        private static byte[] EncodeUtf16CodeUnits(string value)
+        {
+            var bytes = new byte[checked(value.Length * sizeof(char))];
+            for (var index = 0; index < value.Length; index++)
+            {
+                var codeUnit = value[index];
+                bytes[index * sizeof(char)] = (byte)codeUnit;
+                bytes[index * sizeof(char) + 1] = (byte)(codeUnit >> 8);
+            }
+
+            return bytes;
+        }
+
+        public static string DecodeScope(string encoded)
+        {
+            try
+            {
+                var bytes = Convert.FromBase64String(encoded);
+                if (bytes.Length % sizeof(char) != 0)
+                    throw new FormatException("The encoded scope does not contain complete UTF-16 code units.");
+
+                var chars = new char[bytes.Length / sizeof(char)];
+                for (var index = 0; index < chars.Length; index++)
+                    chars[index] = (char)(bytes[index * sizeof(char)] | bytes[index * sizeof(char) + 1] << 8);
+                return new string(chars);
+            }
+            catch (Exception exception) when (exception is FormatException or ArgumentException)
+            {
+                throw new InvalidOperationException("The placement row contains an invalid encoded scope projection.", exception);
+            }
+        }
 
         public static string CreateOrderKey(string value)
         {

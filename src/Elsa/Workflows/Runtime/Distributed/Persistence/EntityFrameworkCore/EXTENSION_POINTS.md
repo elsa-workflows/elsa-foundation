@@ -15,8 +15,10 @@ only provider column details; provider selection uses the shared reflection bind
 
 ## Persistence semantics
 
-Rows are scoped by a SHA-256 identity digest over length-prefixed scope and execution identity while
-retaining both original UTF-16 identities. An explicit revision is an EF concurrency token. Claims
+Rows are scoped by a SHA-256 identity digest over length-prefixed raw UTF-16 scope and execution
+identity. The scope column is a provider-safe Base64 encoding of its UTF-16 code units, retaining
+even malformed scope values losslessly; execution and owner contracts retain their original
+well-formed strings. An explicit revision is an EF concurrency token. Claims
 use bounded read/insert-or-update/save retries; first claims use the primary-key uniqueness boundary,
 renewals and expired takeovers use revision CAS, and release uses owner/token compare-and-delete.
 Listing filters live rows and applies `Take` in SQL, ordering by UTC expiry ticks and an ordinal

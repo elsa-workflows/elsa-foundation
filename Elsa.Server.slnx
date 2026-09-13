@@ -626,6 +626,7 @@
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/">
     <Project Path="tests/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests.csproj" />
+    <Project Path="tests/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Runtime/Resumption/">
     <Project Path="tests/Elsa/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj" />
