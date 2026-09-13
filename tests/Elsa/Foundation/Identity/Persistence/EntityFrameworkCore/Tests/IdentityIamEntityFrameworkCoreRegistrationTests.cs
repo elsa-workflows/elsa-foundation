@@ -370,8 +370,14 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         using var scope = provider.CreateScope();
         var context = Assert.IsType<IdentityIamSqliteDbContext>(
             scope.ServiceProvider.GetRequiredService<IdentityIamDbContext>());
+        var applicationStore = scope.ServiceProvider.GetRequiredService<EfApplicationStore>();
+        var credentialStore = scope.ServiceProvider.GetRequiredService<EfCredentialStore>();
 
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextAccessor>());
+        Assert.Same(applicationStore, scope.ServiceProvider.GetRequiredService<IApplicationStore>());
+        Assert.Same(applicationStore, scope.ServiceProvider.GetRequiredService<IRevisionAwareApplicationStore>());
+        Assert.Same(credentialStore, scope.ServiceProvider.GetRequiredService<ICredentialStore>());
+        Assert.Same(credentialStore, scope.ServiceProvider.GetRequiredService<IRevisionAwareCredentialStore>());
         Assert.Equal(
             IdentityIamEfModule.HistoryTableName,
             context.GetService<IDbContextOptions>().Extensions

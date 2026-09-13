@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using System.Data.Common;
 using Xunit;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests;
@@ -76,8 +77,9 @@ public sealed class IdentityIamEntityFrameworkCoreBehaviorTests
                 .FindAsync(expected.TenantId, "CREDENTIAL\ud800");
 
             AssertCredential(expected, Assert.IsType<CredentialRecord>(actual));
-            Assert.Equal(expiry.Offset, actual.ExpiresAt!.Value.Offset);
-            Assert.Equal(expiry.Ticks, actual.ExpiresAt.Value.Ticks);
+            var actualExpiresAt = Assert.IsType<DateTimeOffset>(actual.ExpiresAt);
+            Assert.Equal(expiry.Offset, actualExpiresAt.Offset);
+            Assert.Equal(expiry.Ticks, actualExpiresAt.Ticks);
         }
         finally
         {
@@ -423,6 +425,203 @@ public sealed class IdentityIamEntityFrameworkCoreBehaviorTests
         }
     }
 
+    [Fact]
+    public async Task Unconditional_transient_conflicts_retry_with_a_bound_and_leave_no_ghost_rows()
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await EnsureDatabaseAsync(databasePath);
+
+            var applicationRetry = new TransientSaveInterceptor(failures: 1);
+            await using (var context = CreateContext(databasePath, applicationRetry))
+            {
+                await ApplicationStore(context, "acme").SaveAsync(Application("acme", "app-retry", "saved"));
+                Assert.Equal(2, applicationRetry.Attempts);
+                Assert.Empty(context.ChangeTracker.Entries());
+            }
+
+            var credentialRetry = new TransientSaveInterceptor(failures: 1);
+            await using (var context = CreateContext(databasePath, credentialRetry))
+            {
+                await CredentialStore(context, "acme").SaveAsync(Credential("acme", "credential-retry", "saved"));
+                Assert.Equal(2, credentialRetry.Attempts);
+                Assert.Empty(context.ChangeTracker.Entries());
+            }
+
+            var applicationExhaustion = new TransientSaveInterceptor(failures: int.MaxValue);
+            await using (var context = CreateContext(databasePath, applicationExhaustion))
+            {
+                await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() =>
+                    ApplicationStore(context, "acme")
+                        .SaveAsync(Application("acme", "app-retry-failure", "never-saved"))
+                        .AsTask());
+                Assert.Equal(3, applicationExhaustion.Attempts);
+                Assert.Empty(context.ChangeTracker.Entries());
+            }
+
+            var credentialExhaustion = new TransientSaveInterceptor(failures: int.MaxValue);
+            await using (var context = CreateContext(databasePath, credentialExhaustion))
+            {
+                await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() =>
+                    CredentialStore(context, "acme")
+                        .SaveAsync(Credential("acme", "credential-retry-failure", "never-saved"))
+                        .AsTask());
+                Assert.Equal(3, credentialExhaustion.Attempts);
+                Assert.Empty(context.ChangeTracker.Entries());
+            }
+
+            await using var verification = CreateContext(databasePath);
+            Assert.Null(await ApplicationStore(verification, "acme").FindAsync("acme", "app-retry-failure"));
+            Assert.Null(await CredentialStore(verification, "acme").FindAsync("acme", "credential-retry-failure"));
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
+    [Fact]
+    public async Task Create_only_transient_conflicts_retry_with_a_bound_and_leave_no_ghost_rows()
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await EnsureDatabaseAsync(databasePath);
+
+            var applicationRetry = new TransientSaveInterceptor(failures: 1);
+            await using (var context = CreateContext(databasePath, applicationRetry))
+            {
+                var result = await ApplicationStore(context, "acme")
+                    .SaveWithRevisionAsync(Application("acme", "app-create-retry", "saved"), null);
+                Assert.Equal(IamRevisionSaveStatus.Saved, result.Status);
+                Assert.Equal(2, applicationRetry.Attempts);
+                Assert.Empty(context.ChangeTracker.Entries());
+            }
+
+            var credentialRetry = new TransientSaveInterceptor(failures: 1);
+            await using (var context = CreateContext(databasePath, credentialRetry))
+            {
+                var result = await CredentialStore(context, "acme")
+                    .SaveWithRevisionAsync(Credential("acme", "credential-create-retry", "saved"), null);
+                Assert.Equal(IamRevisionSaveStatus.Saved, result.Status);
+                Assert.Equal(2, credentialRetry.Attempts);
+                Assert.Empty(context.ChangeTracker.Entries());
+            }
+
+            var applicationExhaustion = new TransientSaveInterceptor(failures: int.MaxValue);
+            await using (var context = CreateContext(databasePath, applicationExhaustion))
+            {
+                await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() =>
+                    ApplicationStore(context, "acme")
+                        .SaveWithRevisionAsync(Application("acme", "app-create-retry-failure", "never-saved"), null)
+                        .AsTask());
+                Assert.Equal(3, applicationExhaustion.Attempts);
+                Assert.Empty(context.ChangeTracker.Entries());
+            }
+
+            var credentialExhaustion = new TransientSaveInterceptor(failures: int.MaxValue);
+            await using (var context = CreateContext(databasePath, credentialExhaustion))
+            {
+                await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() =>
+                    CredentialStore(context, "acme")
+                        .SaveWithRevisionAsync(Credential("acme", "credential-create-retry-failure", "never-saved"), null)
+                        .AsTask());
+                Assert.Equal(3, credentialExhaustion.Attempts);
+                Assert.Empty(context.ChangeTracker.Entries());
+            }
+
+            await using var verification = CreateContext(databasePath);
+            Assert.Null(await ApplicationStore(verification, "acme").FindAsync("acme", "app-create-retry-failure"));
+            Assert.Null(await CredentialStore(verification, "acme").FindAsync("acme", "credential-create-retry-failure"));
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
+    [Fact]
+    public async Task Cas_transient_conflicts_retry_with_a_bound_and_preserve_committed_rows()
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await EnsureDatabaseAsync(databasePath);
+            var retryApplication = Application("acme", "app-cas-retry", "original");
+            var failedApplication = Application("acme", "app-cas-retry-failure", "original");
+            var retryCredential = Credential("acme", "credential-cas-retry", "original");
+            var failedCredential = Credential("acme", "credential-cas-retry-failure", "original");
+            string retryApplicationRevision;
+            string failedApplicationRevision;
+            string retryCredentialRevision;
+            string failedCredentialRevision;
+            await using (var seed = CreateContext(databasePath))
+            {
+                var applicationStore = ApplicationStore(seed, "acme");
+                var credentialStore = CredentialStore(seed, "acme");
+                retryApplicationRevision = Assert.IsType<string>((await applicationStore.SaveWithRevisionAsync(retryApplication, null)).Revision);
+                failedApplicationRevision = Assert.IsType<string>((await applicationStore.SaveWithRevisionAsync(failedApplication, null)).Revision);
+                retryCredentialRevision = Assert.IsType<string>((await credentialStore.SaveWithRevisionAsync(retryCredential, null)).Revision);
+                failedCredentialRevision = Assert.IsType<string>((await credentialStore.SaveWithRevisionAsync(failedCredential, null)).Revision);
+            }
+
+            var applicationRetry = new TransientSaveInterceptor(failures: 1);
+            await using (var context = CreateContext(databasePath, applicationRetry))
+            {
+                var result = await ApplicationStore(context, "acme")
+                    .SaveWithRevisionAsync(retryApplication with { DisplayName = "updated" }, retryApplicationRevision);
+                Assert.Equal(IamRevisionSaveStatus.Saved, result.Status);
+                Assert.Equal(2, applicationRetry.Attempts);
+                Assert.Empty(context.ChangeTracker.Entries());
+            }
+
+            var credentialRetry = new TransientSaveInterceptor(failures: 1);
+            await using (var context = CreateContext(databasePath, credentialRetry))
+            {
+                var result = await CredentialStore(context, "acme")
+                    .SaveWithRevisionAsync(retryCredential with { HashedSecret = "updated" }, retryCredentialRevision);
+                Assert.Equal(IamRevisionSaveStatus.Saved, result.Status);
+                Assert.Equal(2, credentialRetry.Attempts);
+                Assert.Empty(context.ChangeTracker.Entries());
+            }
+
+            var applicationExhaustion = new TransientSaveInterceptor(failures: int.MaxValue);
+            await using (var context = CreateContext(databasePath, applicationExhaustion))
+            {
+                await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() =>
+                    ApplicationStore(context, "acme")
+                        .SaveWithRevisionAsync(failedApplication with { DisplayName = "never-saved" }, failedApplicationRevision)
+                        .AsTask());
+                Assert.Equal(3, applicationExhaustion.Attempts);
+                Assert.Empty(context.ChangeTracker.Entries());
+            }
+
+            var credentialExhaustion = new TransientSaveInterceptor(failures: int.MaxValue);
+            await using (var context = CreateContext(databasePath, credentialExhaustion))
+            {
+                await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() =>
+                    CredentialStore(context, "acme")
+                        .SaveWithRevisionAsync(failedCredential with { HashedSecret = "never-saved" }, failedCredentialRevision)
+                        .AsTask());
+                Assert.Equal(3, credentialExhaustion.Attempts);
+                Assert.Empty(context.ChangeTracker.Entries());
+            }
+
+            await using var verification = CreateContext(databasePath);
+            var applicationStoreVerification = ApplicationStore(verification, "acme");
+            var credentialStoreVerification = CredentialStore(verification, "acme");
+            Assert.Equal("updated", (await applicationStoreVerification.FindAsync("acme", retryApplication.Id))!.DisplayName);
+            Assert.Equal("original", (await applicationStoreVerification.FindAsync("acme", failedApplication.Id))!.DisplayName);
+            Assert.Equal("updated", (await credentialStoreVerification.FindAsync("acme", retryCredential.Id))!.HashedSecret);
+            Assert.Equal("original", (await credentialStoreVerification.FindAsync("acme", failedCredential.Id))!.HashedSecret);
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
     [Theory]
     [InlineData("application-grants")]
     [InlineData("application-scopes")]
@@ -487,6 +686,52 @@ public sealed class IdentityIamEntityFrameworkCoreBehaviorTests
                 }
             }
 
+            Assert.Empty(context.ChangeTracker.Entries());
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
+    [Theory]
+    [InlineData("application")]
+    [InlineData("application-revision")]
+    [InlineData("credential")]
+    [InlineData("credential-revision")]
+    public async Task Provider_read_failures_are_wrapped_and_leave_no_tracked_state(string operation)
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await EnsureDatabaseAsync(databasePath);
+            await using var context = CreateContext(databasePath, new FailingReadInterceptor());
+            var applicationStore = ApplicationStore(context, "acme");
+            var credentialStore = CredentialStore(context, "acme");
+
+            async Task ReadAsync()
+            {
+                switch (operation)
+                {
+                    case "application":
+                        await applicationStore.FindAsync("acme", "app");
+                        break;
+                    case "application-revision":
+                        await applicationStore.FindWithRevisionAsync("acme", "app");
+                        break;
+                    case "credential":
+                        await credentialStore.FindAsync("acme", "credential");
+                        break;
+                    case "credential-revision":
+                        await credentialStore.FindWithRevisionAsync("acme", "credential");
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(operation), operation, null);
+                }
+            }
+
+            var exception = await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(ReadAsync);
+            Assert.IsType<SqliteException>(exception.InnerException);
             Assert.Empty(context.ChangeTracker.Entries());
         }
         finally
@@ -695,6 +940,33 @@ public sealed class IdentityIamEntityFrameworkCoreBehaviorTests
             cancellationToken.ThrowIfCancellationRequested();
             return ValueTask.FromResult(result);
         }
+    }
+
+    private sealed class TransientSaveInterceptor(int failures) : SaveChangesInterceptor
+    {
+        public int Attempts { get; private set; }
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            Attempts++;
+            if (Attempts <= failures)
+                throw new SqliteException("database is locked", 5);
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    private sealed class FailingReadInterceptor : DbCommandInterceptor
+    {
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<InterceptionResult<DbDataReader>>(
+                new SqliteException("Injected provider read failure.", 1));
     }
 
     private sealed class DeterministicSaveBarrier

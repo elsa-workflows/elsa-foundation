@@ -101,8 +101,9 @@ internal static class IdentityIamProviderSmoke
         Assert.Equal("cas-application", finalApplication!.DisplayName);
         Assert.NotNull(finalCredential);
         Assert.Equal(CredentialStatus.Rotating, finalCredential!.Status);
-        Assert.Equal(expiresAt.Ticks, finalCredential.ExpiresAt!.Value.Ticks);
-        Assert.Equal(expiresAt.Offset, finalCredential.ExpiresAt.Value.Offset);
+        var finalExpiresAt = Assert.IsType<DateTimeOffset>(finalCredential.ExpiresAt);
+        Assert.Equal(expiresAt.Ticks, finalExpiresAt.Ticks);
+        Assert.Equal(expiresAt.Offset, finalExpiresAt.Offset);
     }
 
     private static async Task AssertApplicationReadbackAsync(
@@ -131,8 +132,9 @@ internal static class IdentityIamProviderSmoke
 
         Assert.NotNull(readback);
         Assert.Equal(credential, readback);
-        Assert.Equal(expiresAt.Ticks, readback!.ExpiresAt!.Value.Ticks);
-        Assert.Equal(expiresAt.Offset, readback.ExpiresAt.Value.Offset);
+        var readbackExpiresAt = Assert.IsType<DateTimeOffset>(readback!.ExpiresAt);
+        Assert.Equal(expiresAt.Ticks, readbackExpiresAt.Ticks);
+        Assert.Equal(expiresAt.Offset, readbackExpiresAt.Offset);
     }
 
     private static async Task AssertDeterministicSetsAsync(

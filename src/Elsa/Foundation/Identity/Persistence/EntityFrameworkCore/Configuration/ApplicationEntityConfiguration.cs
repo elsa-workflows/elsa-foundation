@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Configuration;
 
-internal sealed class ApplicationEntityConfiguration : IEntityTypeConfiguration<ApplicationEntity>
+public sealed class ApplicationEntityConfiguration : IEntityTypeConfiguration<ApplicationEntity>
 {
     public void Configure(EntityTypeBuilder<ApplicationEntity> builder)
     {

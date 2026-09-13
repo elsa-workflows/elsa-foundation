@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Configuration;
 
-internal sealed class CredentialEntityConfiguration : IEntityTypeConfiguration<CredentialEntity>
+public sealed class CredentialEntityConfiguration : IEntityTypeConfiguration<CredentialEntity>
 {
     public void Configure(EntityTypeBuilder<CredentialEntity> builder)
     {
