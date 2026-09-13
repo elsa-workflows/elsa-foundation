@@ -82,13 +82,16 @@ hosts should migrate replacements before then.
 - **Kind:** Validator (action-named contributor that returns startup/configuration violations).
 - **Register:** `services.AddScoped<ISecurityDefaultGuard, MySecurityGuard>()`.
 - **Consumed by:** `SecurityDefaultGuardEvaluator`, which returns all violations rather than swallowing failures.
-- **Known implementations:** `SigningKeySecurityDefaultGuard`, `HttpsMetadataSecurityDefaultGuard`, `SecretHashSecurityDefaultGuard` *(intra-domain - default)*.
-- **Not evaluated at startup.** `AddFoundationIdentityAbstractions` registers the evaluator and the three guards,
-  but no first-party host (`Elsa.Workbench`, `Elsa.Foundation.Host`) or shell feature calls the evaluator, so
-  none of these guards runs and a violation does not fail activation. A registered custom guard runs only when
-  the host builds a `SecurityGuardContext` and calls `ISecurityDefaultGuardEvaluator` itself. The protections
-  that actually run are described under "Production key requirements" in
+  **No first-party host (`Elsa.Workbench`, `Elsa.Foundation.Host`) or shell feature calls the evaluator**, although
+  `AddFoundationIdentityAbstractions` registers it and the three guards. So none of these guards runs, and a
+  violation does not fail activation. A host that wants them must build a `SecurityGuardContext` itself (the signing
+  and HTTPS guards read only that context, so `FoundationIdentityOptions.IsDevelopmentOrDemo` and
+  `RequireHttpsMetadata` take effect only if the host copies them in) and call `ISecurityDefaultGuardEvaluator`.
+  Retiring or wiring the seam, and enforcing a minimum RSA key size, is tracked in
+  [#1700](https://github.com/elsa-workflows/elsa-foundation/issues/1700). The checks that do run are under
+  "Production key requirements" in
   [authentication-architecture.md](../../../../../docs/reference/authentication-architecture.md#7-security-posture).
+- **Known implementations:** `SigningKeySecurityDefaultGuard`, `HttpsMetadataSecurityDefaultGuard`, `SecretHashSecurityDefaultGuard` *(intra-domain - default)*.
 
 ## Events
 
