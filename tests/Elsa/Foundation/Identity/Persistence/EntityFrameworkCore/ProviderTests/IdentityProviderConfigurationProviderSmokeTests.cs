@@ -1,11 +1,11 @@
-using System.Data.Common;
-using Elsa.Foundation.Identity.Abstractions.Ownership;
 using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.Abstractions.Ownership;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using System.Data.Common;
 using Xunit;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests;
@@ -38,7 +38,11 @@ internal static class IdentityProviderProviderSmoke
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? $"{provider} is unavailable.");
         var tenant = $"provider-smoke-{provider}-{Guid.NewGuid():N}";
         await using var context = CreateContext(provider, fixture.ConnectionString);
-        await context.Database.EnsureCreatedAsync();
+        await IdentityEfProviderDatabaseProvisioning.EnsureModuleTablesAsync(
+            context,
+            provider,
+            IdentityProviderConfigurationEfModule.TenantTableName,
+            IdentityProviderConfigurationEfModule.GlobalTableName);
         if (provider == "MySql")
             await AssertMySqlTableEncodingAsync(context);
         var access = new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
@@ -97,15 +101,15 @@ internal static class IdentityProviderProviderSmoke
         string provider,
         string connectionString,
         DbCommandInterceptor? interceptor = null) => provider switch
-    {
-        "PostgreSql" => new IdentityProviderConfigurationPostgreSqlDbContext(
-            Configure(new DbContextOptionsBuilder<IdentityProviderConfigurationPostgreSqlDbContext>().UseNpgsql(connectionString), interceptor).Options),
-        "SqlServer" => new IdentityProviderConfigurationSqlServerDbContext(
-            Configure(new DbContextOptionsBuilder<IdentityProviderConfigurationSqlServerDbContext>().UseSqlServer(connectionString), interceptor).Options),
-        "MySql" => new IdentityProviderConfigurationMySqlDbContext(
-            Configure(new DbContextOptionsBuilder<IdentityProviderConfigurationMySqlDbContext>().UseMySQL(connectionString), interceptor).Options),
-        _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, null)
-    };
+        {
+            "PostgreSql" => new IdentityProviderConfigurationPostgreSqlDbContext(
+                Configure(new DbContextOptionsBuilder<IdentityProviderConfigurationPostgreSqlDbContext>().UseNpgsql(connectionString), interceptor).Options),
+            "SqlServer" => new IdentityProviderConfigurationSqlServerDbContext(
+                Configure(new DbContextOptionsBuilder<IdentityProviderConfigurationSqlServerDbContext>().UseSqlServer(connectionString), interceptor).Options),
+            "MySql" => new IdentityProviderConfigurationMySqlDbContext(
+                Configure(new DbContextOptionsBuilder<IdentityProviderConfigurationMySqlDbContext>().UseMySQL(connectionString), interceptor).Options),
+            _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, null)
+        };
 
     private static DbContextOptionsBuilder<TContext> Configure<TContext>(
         DbContextOptionsBuilder<TContext> builder,

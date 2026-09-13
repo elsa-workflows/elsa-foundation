@@ -1,25 +1,27 @@
-# Identity provider-configuration EF Core persistence
+# Identity EF Core persistence
 
-This module is the opt-in EF Core implementation of `IProviderConfigurationStore` and
-`IRevisionAwareProviderConfigurationStore`. It owns only the tenant and global provider-configuration
-units; Groundwork remains the default for every other Identity store until their separate replacement gates
-are complete.
+This module contains opt-in EF Core implementations for provider configurations, applications, and
+credentials. The application and credential feature owns `IApplicationStore`,
+`IRevisionAwareApplicationStore`, `ICredentialStore`, and `IRevisionAwareCredentialStore`; the separate
+provider-configuration feature owns `IProviderConfigurationStore` and
+`IRevisionAwareProviderConfigurationStore`. Groundwork remains the default for every other Identity store
+until its separate replacement gate is complete.
 
 ## Selection and conflicts
 
-Select the `IdentityProviderConfigurationEntityFrameworkCore` shell feature, or call
-`AddIdentityProviderConfigurationEntityFrameworkCore`, with exactly one of SQLite, SQL Server, PostgreSQL,
-or MySQL. The host must reference the matching provider package. Equivalent repeated registrations are
-idempotent; a different provider, connection string, or connection name fails before registrations are
-partially changed. Direct host registrations for either replacement contract conflict with explicit EF
-selection and fail instead of being silently removed or winning by registration order. Startup validation
-also rejects a registration added after the feature. Selection is order-independent when the Groundwork
-Identity feature is also composed: EF replaces only the two provider-configuration contracts and Groundwork
-keeps all unrelated stores.
+Select `IdentityProviderConfigurationEntityFrameworkCore` and/or `IdentityIamEntityFrameworkCore`, or call
+their matching registration extensions, with exactly one of SQLite, SQL Server, PostgreSQL, or MySQL. The
+host must reference the matching provider package. Equivalent repeated registrations are idempotent; a
+different provider, connection string, or connection name fails before registrations are partially changed.
+Direct host registrations for a selected feature's replacement contracts conflict with explicit EF selection
+and fail instead of being silently removed or winning by registration order. Startup validation also rejects
+a registration added after a feature. Selection is order-independent with the Groundwork Identity feature:
+each EF feature replaces only its owned contracts and Groundwork keeps unrelated stores.
 
-The module preserves tenant/global access checks, tenant-first effective fallback, lossless configuration
-round trips, unconditional upsert, and optimistic compare-and-swap revisions. Provider-specific migrations,
-runtime schema initialization, default host selection, and Groundwork deletion are later rollout gates.
+The module preserves tenant/global access checks, tenant-first effective fallback for provider configurations,
+lossless record round trips, unconditional upsert, and optimistic compare-and-swap revisions. Provider-specific
+migrations, runtime schema initialization, default host selection, and Groundwork deletion are later rollout
+gates.
 
 OpenIddict remains in its separate vendor-owned context. This module does not reference, configure, or merge
 `OpenIddictIdentityDbContext`.

@@ -129,7 +129,7 @@ public sealed class EfProviderConfigurationStore(
         try
         {
             var row = await FindGlobalEntityAsync(provider, cancellationToken, requireGlobalAccess: false);
-            return row is null ? null : new IamRevisionedRecord<ProviderConfigurationRecord>(Map(row), IdentityProviderConfigurationRevisionCodec.FromVersion(row.Revision));
+            return row is null ? null : new IamRevisionedRecord<ProviderConfigurationRecord>(Map(row), IdentityEntityFrameworkRevisionCodec.FromVersion(row.Revision));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -155,7 +155,7 @@ public sealed class EfProviderConfigurationStore(
         try
         {
             var row = await FindTenantEntityAsync(tenantId, provider, cancellationToken);
-            return row is null ? null : new IamRevisionedRecord<ProviderConfigurationRecord>(Map(row), IdentityProviderConfigurationRevisionCodec.FromVersion(row.Revision));
+            return row is null ? null : new IamRevisionedRecord<ProviderConfigurationRecord>(Map(row), IdentityEntityFrameworkRevisionCodec.FromVersion(row.Revision));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -177,7 +177,7 @@ public sealed class EfProviderConfigurationStore(
         ArgumentNullException.ThrowIfNull(configuration);
         ValidateConfiguration(configuration);
         var expectedVersion = 0L;
-        if (expectedRevision is not null && !IdentityProviderConfigurationRevisionCodec.TryGetVersion(expectedRevision, out expectedVersion))
+        if (expectedRevision is not null && !IdentityEntityFrameworkRevisionCodec.TryGetVersion(expectedRevision, out expectedVersion))
             return Conflict();
 
         if (expectedRevision is null)
@@ -213,15 +213,15 @@ public sealed class EfProviderConfigurationStore(
                 context.ChangeTracker.Clear();
                 return;
             }
-            catch (DbUpdateConcurrencyException) when (attempt + 1 < MaximumWriteAttempts)
+            catch (DbUpdateConcurrencyException)
             {
                 context.ChangeTracker.Clear();
             }
-            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception) && attempt + 1 < MaximumWriteAttempts)
+            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
             {
                 context.ChangeTracker.Clear();
             }
-            catch (Exception exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception) && attempt + 1 < MaximumWriteAttempts)
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
             {
                 context.ChangeTracker.Clear();
             }
@@ -270,7 +270,7 @@ public sealed class EfProviderConfigurationStore(
                 context.ChangeTracker.Clear();
                 return Conflict();
             }
-            catch (Exception exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception) && attempt + 1 < MaximumWriteAttempts)
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
             {
                 context.ChangeTracker.Clear();
             }
@@ -335,7 +335,7 @@ public sealed class EfProviderConfigurationStore(
                     throw Failure("Unable to classify the provider configuration concurrency conflict.", exception);
                 }
             }
-            catch (Exception exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception) && attempt + 1 < MaximumWriteAttempts)
+            catch (Exception exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
             {
                 context.ChangeTracker.Clear();
             }
@@ -485,7 +485,7 @@ public sealed class EfProviderConfigurationStore(
             IdentityProviderConfigurationSettingsCodec.Deserialize(entity.SettingsJson));
     }
 
-    private static IamRevisionSaveResult Saved(long revision) => new(IamRevisionSaveStatus.Saved, IdentityProviderConfigurationRevisionCodec.FromVersion(revision));
+    private static IamRevisionSaveResult Saved(long revision) => new(IamRevisionSaveStatus.Saved, IdentityEntityFrameworkRevisionCodec.FromVersion(revision));
     private static IamRevisionSaveResult Conflict() => new(IamRevisionSaveStatus.Conflict);
     private static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception) => new(message, exception);
 

@@ -4,7 +4,7 @@ using System.Text;
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 
 /// <summary>Encodes identity text as base64 UTF-16 so unpaired surrogates survive every provider.</summary>
-internal static class IdentityProviderConfigurationUtf16Codec
+internal static class IdentityEntityFrameworkUtf16Codec
 {
     public static string Encode(string value)
     {

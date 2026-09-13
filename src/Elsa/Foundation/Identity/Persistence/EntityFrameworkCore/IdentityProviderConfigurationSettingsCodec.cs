@@ -15,8 +15,8 @@ internal static class IdentityProviderConfigurationSettingsCodec
             .OrderBy(pair => pair.Key, StringComparer.Ordinal)
             .Select(pair => new[]
             {
-                IdentityProviderConfigurationUtf16Codec.Encode(pair.Key),
-                IdentityProviderConfigurationUtf16Codec.Encode(pair.Value)
+                IdentityEntityFrameworkUtf16Codec.Encode(pair.Key),
+                IdentityEntityFrameworkUtf16Codec.Encode(pair.Value)
             })
             .ToArray();
         return JsonSerializer.Serialize(encoded);
@@ -33,8 +33,8 @@ internal static class IdentityProviderConfigurationSettingsCodec
             if (pair is not { Length: 2 } || pair[0] is null || pair[1] is null)
                 throw new FormatException("The persisted Identity provider settings payload is malformed.");
             settings.Add(
-                IdentityProviderConfigurationUtf16Codec.Decode(pair[0]),
-                IdentityProviderConfigurationUtf16Codec.Decode(pair[1]));
+                IdentityEntityFrameworkUtf16Codec.Decode(pair[0]),
+                IdentityEntityFrameworkUtf16Codec.Decode(pair[1]));
         }
 
         return settings;

@@ -1,4 +1,3 @@
-using System.Data.Common;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.Abstractions.Ownership;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
@@ -8,6 +7,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using System.Data.Common;
 using Xunit;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests;
@@ -353,8 +353,11 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreBehaviorTest
             var exhaustRetries = new TransientSaveInterceptor(failures: int.MaxValue);
             await using (var failedContext = CreateContext(databasePath, exhaustRetries))
             {
-                await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() =>
-                    Store(failedContext, "acme").SaveAsync(Configuration("acme", "retry-failure", "never-saved")).AsTask());
+                await AssertBoundedFailureAsync(
+                    () => Store(failedContext, "acme")
+                        .SaveAsync(Configuration("acme", "retry-failure", "never-saved"))
+                        .AsTask(),
+                    "Unable to save the provider configuration after bounded concurrency retries.");
                 Assert.Equal(3, exhaustRetries.Attempts);
                 Assert.Empty(failedContext.ChangeTracker.Entries());
             }
@@ -387,10 +390,11 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreBehaviorTest
             var exhaustRetries = new TransientSaveInterceptor(failures: int.MaxValue);
             await using (var failedContext = CreateContext(databasePath, exhaustRetries))
             {
-                await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() =>
-                    Store(failedContext, "acme")
+                await AssertBoundedFailureAsync(
+                    () => Store(failedContext, "acme")
                         .SaveWithRevisionAsync(Configuration("acme", "create-retry-failure", "never-saved"), expectedRevision: null)
-                        .AsTask());
+                        .AsTask(),
+                    "Unable to create the provider configuration after bounded transient retries.");
                 Assert.Equal(3, exhaustRetries.Attempts);
                 Assert.Empty(failedContext.ChangeTracker.Entries());
             }
@@ -433,10 +437,11 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreBehaviorTest
             var exhaustRetries = new TransientSaveInterceptor(failures: int.MaxValue);
             await using (var failedContext = CreateContext(databasePath, exhaustRetries))
             {
-                await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() =>
-                    Store(failedContext, "acme")
+                await AssertBoundedFailureAsync(
+                    () => Store(failedContext, "acme")
                         .SaveWithRevisionAsync(failureRecord with { Kind = "never-saved" }, failureRevision)
-                        .AsTask());
+                        .AsTask(),
+                    "Unable to update the provider configuration after bounded transient retries.");
                 Assert.Equal(3, exhaustRetries.Attempts);
                 Assert.Empty(failedContext.ChangeTracker.Entries());
             }
@@ -618,6 +623,13 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreBehaviorTest
         Assert.Equal(
             expected.Settings.OrderBy(pair => pair.Key, StringComparer.Ordinal),
             actual.Settings.OrderBy(pair => pair.Key, StringComparer.Ordinal));
+    }
+
+    private static async Task AssertBoundedFailureAsync(Func<Task> operation, string expectedMessage)
+    {
+        var exception = await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(operation);
+        Assert.Equal(expectedMessage, exception.Message);
+        Assert.IsType<InvalidOperationException>(exception.InnerException);
     }
 
     private static EfProviderConfigurationStore Store(IdentityProviderConfigurationDbContext context, string tenantId) =>

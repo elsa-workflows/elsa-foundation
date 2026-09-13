@@ -13,11 +13,11 @@ internal static class ProviderConfigurationEntityConfiguration
         builder.HasKey(record => record.Id);
         builder.Property(record => record.Id).HasMaxLength(64).IsRequired();
         var encodedLength = IdentityProviderConfigurationCanonicalizer.MaximumIdentityLength * 2 * 2;
-        builder.Property(record => record.TenantId).HasMaxLength(encodedLength).HasConversion(value => value == null ? null : IdentityProviderConfigurationUtf16Codec.Encode(value), value => value == null ? null : IdentityProviderConfigurationUtf16Codec.Decode(value)).IsRequired(tenantRequired);
-        builder.Property(record => record.TenantLookupKey).HasMaxLength(encodedLength).HasConversion(value => value == null ? null : IdentityProviderConfigurationUtf16Codec.Encode(value), value => value == null ? null : IdentityProviderConfigurationUtf16Codec.Decode(value)).IsRequired(tenantRequired);
-        builder.Property(record => record.Provider).HasMaxLength(encodedLength).HasConversion(value => IdentityProviderConfigurationUtf16Codec.Encode(value), value => IdentityProviderConfigurationUtf16Codec.Decode(value)).IsRequired();
-        builder.Property(record => record.ProviderLookupKey).HasMaxLength(encodedLength).HasConversion(value => IdentityProviderConfigurationUtf16Codec.Encode(value), value => IdentityProviderConfigurationUtf16Codec.Decode(value)).IsRequired();
-        builder.Property(record => record.Kind).HasConversion(value => IdentityProviderConfigurationUtf16Codec.Encode(value), value => IdentityProviderConfigurationUtf16Codec.Decode(value)).IsRequired();
+        builder.Property(record => record.TenantId).HasMaxLength(encodedLength).HasConversion(value => value == null ? null : IdentityEntityFrameworkUtf16Codec.Encode(value), value => value == null ? null : IdentityEntityFrameworkUtf16Codec.Decode(value)).IsRequired(tenantRequired);
+        builder.Property(record => record.TenantLookupKey).HasMaxLength(encodedLength).HasConversion(value => value == null ? null : IdentityEntityFrameworkUtf16Codec.Encode(value), value => value == null ? null : IdentityEntityFrameworkUtf16Codec.Decode(value)).IsRequired(tenantRequired);
+        builder.Property(record => record.Provider).HasMaxLength(encodedLength).HasConversion(value => IdentityEntityFrameworkUtf16Codec.Encode(value), value => IdentityEntityFrameworkUtf16Codec.Decode(value)).IsRequired();
+        builder.Property(record => record.ProviderLookupKey).HasMaxLength(encodedLength).HasConversion(value => IdentityEntityFrameworkUtf16Codec.Encode(value), value => IdentityEntityFrameworkUtf16Codec.Decode(value)).IsRequired();
+        builder.Property(record => record.Kind).HasConversion(value => IdentityEntityFrameworkUtf16Codec.Encode(value), value => IdentityEntityFrameworkUtf16Codec.Decode(value)).IsRequired();
         builder.Property(record => record.Enabled).IsRequired();
         builder.Property(record => record.IsDefault).IsRequired();
         builder.Property(record => record.PermissionPropagation).IsRequired();

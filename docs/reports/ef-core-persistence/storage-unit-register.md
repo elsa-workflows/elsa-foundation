@@ -137,8 +137,8 @@ context and is not an owner of these rows.
 |---|---|---|---|---|---|---|---|---|
 | I01 | `identityUser` / `identity_users` | `IUserStore`; ASP.NET Identity user adapter | E-IAM | S1-S3 | | | | Pending |
 | I02 | `identityRole` / `identity_roles` | `IRoleStore`; ASP.NET Identity role adapter | E-IAM | S1-S3 | | | | Pending |
-| I03 | `identityApplication` / `identity_applications` | `IApplicationStore` | E-IAM | S1-S3 | | | | Pending |
-| I04 | `identityCredential` / `identity_credentials` | `ICredentialStore` | E-IAM | S1-S3 | | | | Pending |
+| I03 | `identityApplication` / `identity_applications` | `IApplicationStore` | E-IAM | S1-S3 | #1711 | | | Opt-in EF implementation proposed by #1711; Groundwork remains default and default-flip/deletion gates remain pending |
+| I04 | `identityCredential` / `identity_credentials` | `ICredentialStore` | E-IAM | S1-S3 | #1711 | | | Opt-in EF implementation proposed by #1711; Groundwork remains default and default-flip/deletion gates remain pending |
 | I05 | `identityClaimMapping` / `identity_claim_mappings` | `IClaimMappingStore` | E-IAM | S1-S3 | | | | Pending |
 | I06 | `identityProviderConfiguration` / `identity_provider_configurations` | `IProviderConfigurationStore`; tenant-scoped provider config | E-IAM | S1-S3 | #1709 | | | Opt-in EF implementation proposed by #1709; Groundwork remains default and default-flip/deletion gates remain pending |
 | I07 | `identityGlobalProviderConfiguration` / `identity_global_provider_configurations` | `IProviderConfigurationStore`; global provider config | E-IAM | S1-S3 | #1709 | | | Opt-in EF implementation proposed by #1709; Groundwork remains default and default-flip/deletion gates remain pending |
