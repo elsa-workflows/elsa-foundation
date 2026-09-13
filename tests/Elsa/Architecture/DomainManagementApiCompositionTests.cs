@@ -305,7 +305,6 @@ public sealed class DomainManagementApiCompositionTests
                 feature => $"CShells:Shells:default:Features:{feature}",
                 _ => (string?)"false",
                 StringComparer.Ordinal);
-        overrides["CShells:Shells:default:Features:ApiSecurity:AllowAnonymous"] = "true";
         overrides["CShells:Shells:default:Features:DomainManagementTestAuthentication"] = "true";
 
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
