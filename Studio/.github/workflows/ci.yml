@@ -42,6 +42,23 @@ jobs:
         # One package at a time, so the Workflows suite does not compete with the others for the runner's cores.
         run: pnpm --recursive --workspace-concurrency=1 test
 
+      # Fixed seeds catch order-dependent tests deterministically: a PR that introduces one fails on
+      # every run, never at random on a later PR (#512).
+      - name: Unit tests (Workflows, shuffled)
+        working-directory: src/Elsa.Studio.Workflows/Client
+        env:
+          SHUFFLE_SEEDS: "1 11 29"
+        run: |
+          for seed in $SHUFFLE_SEEDS; do
+            echo "::group::Shuffle seed $seed"
+            if ! pnpm exec vitest run --sequence.shuffle --sequence.seed="$seed"; then
+              echo "::endgroup::"
+              echo "::error::Order-dependent test failure on shuffle seed $seed. Reproduce locally with: pnpm --filter @elsa-workflows/studio-workflows exec vitest run --sequence.shuffle --sequence.seed=$seed"
+              exit 1
+            fi
+            echo "::endgroup::"
+          done
+
       - name: Check Workflows bundle budget
         run: pnpm check:bundle:workflows
 

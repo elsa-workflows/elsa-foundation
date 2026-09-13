@@ -23,6 +23,10 @@ const mountedRouteHosts = new Set<() => Promise<void>>();
 // assert `document.body` is empty first, then reset the other global state (API capability cache,
 // stubbed globals, and side-panel/inspector localStorage keys) so later assertions never see a
 // leftover live tree.
+//
+// This must stay the only `afterEach` reachable from files that import this helper. Vitest 2.1.9
+// defaults `sequence.hooks` to "stack", which runs a test file's own `afterEach` before an imported
+// one — an extra per-file hook would then reset globals before the route hosts above are unmounted.
 afterEach(async () => {
   for (const unmount of [...mountedRouteHosts]) await unmount();
   expect(document.body.children, "a test left elements attached to document.body").toHaveLength(0);
