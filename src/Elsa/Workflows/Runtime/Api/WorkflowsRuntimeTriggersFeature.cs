@@ -52,8 +52,7 @@ public sealed class WorkflowsRuntimeTriggersFeature : IShellFeature
 
         // Cross-execution bookmark stimulus index, bridged onto the same bookmark state store the runtime
         // already owns so there is no second index document to keep consistent.
-        services.TryAddScoped<IBookmarkStimulusIndex>(serviceProvider =>
-            (IBookmarkStimulusIndex)serviceProvider.GetRequiredService<IBookmarkStateStore>());
+        BookmarkStateStoreBackend.TryRegisterDefaultStimulusIndex(services);
         services.TryAddScoped<IGlobalBookmarkStimulusLookup, GlobalBookmarkStimulusLookup>();
 
         // Narrow, best-effort start-path dedup for at-least-once delivery (Condition A). Not durable by design.

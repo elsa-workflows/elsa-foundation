@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -46,12 +45,24 @@ public sealed class EfBookmarkStateStore(
             context.ChangeTracker.Clear();
             throw new InvalidOperationException("The bookmark state changed concurrently; retry the operation.", exception);
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (DbUpdateException exception) when (
+            EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception) ||
+            EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
         {
             context.ChangeTracker.Clear();
             throw new InvalidOperationException("The bookmark state changed concurrently; retry the operation.", exception);
         }
+        catch (DbUpdateException exception)
+        {
+            context.ChangeTracker.Clear();
+            throw new InvalidOperationException("EF bookmark-state save failed.", exception);
+        }
         catch (OperationCanceledException)
+        {
+            context.ChangeTracker.Clear();
+            throw;
+        }
+        catch
         {
             context.ChangeTracker.Clear();
             throw;
@@ -81,6 +92,16 @@ public sealed class EfBookmarkStateStore(
             return false;
         }
         catch (OperationCanceledException)
+        {
+            context.ChangeTracker.Clear();
+            throw;
+        }
+        catch (DbUpdateException exception)
+        {
+            context.ChangeTracker.Clear();
+            throw new InvalidOperationException("EF bookmark-state delete failed.", exception);
+        }
+        catch
         {
             context.ChangeTracker.Clear();
             throw;
@@ -125,7 +146,7 @@ public sealed class EfBookmarkStateStore(
         ValidateBound(query.StimulusType, BookmarkStateEfModule.StimulusTypeMaximumLength, nameof(query.StimulusType));
         ValidateBound(query.StimulusHash, BookmarkStateEfModule.StimulusHashMaximumLength, nameof(query.StimulusHash));
         var lookup = StimulusLookupKey(query.StimulusType, query.StimulusHash);
-        var binding = query.StimulusType + "\0" + query.StimulusHash;
+        var binding = StimulusBinding(query.StimulusType, query.StimulusHash);
         var cursor = DecodeCursor(query.ContinuationToken, CursorKind.Stimulus, scope, binding);
         cancellationToken.ThrowIfCancellationRequested();
         return ReadPage(
@@ -184,7 +205,7 @@ public sealed class EfBookmarkStateStore(
             foreach (var item in items)
             {
                 if ((kind == CursorKind.Workflow && !StringComparer.Ordinal.Equals(item.WorkflowExecutionId, binding)) ||
-                    (kind == CursorKind.Stimulus && !StringComparer.Ordinal.Equals(item.StimulusType + "\0" + item.StimulusHash, binding)) ||
+                    (kind == CursorKind.Stimulus && !StringComparer.Ordinal.Equals(StimulusBinding(item.StimulusType, item.StimulusHash), binding)) ||
                     (kind == CursorKind.StimulusType && !StringComparer.Ordinal.Equals(item.StimulusType, binding)))
                     throw new InvalidDataException("The persisted EF bookmark row does not match the requested projection.");
             }
@@ -218,7 +239,7 @@ public sealed class EfBookmarkStateStore(
     private static void CopyToEntity(BookmarkStateEntity row, BookmarkState state, string scope, string id, long revision)
     {
         row.Id = id;
-        row.ScopeKey = scope;
+        row.ScopeKey = EfRelationalIdentity.Encode(scope);
         row.ScopeKeyHash = Hash(scope);
         row.WorkflowExecutionId = state.WorkflowExecutionId;
         row.WorkflowExecutionIdHash = Hash(state.WorkflowExecutionId);
@@ -248,7 +269,7 @@ public sealed class EfBookmarkStateStore(
     {
         try
         {
-            if (row.SchemaVersion != BookmarkStateEfModule.SchemaVersion || row.ScopeKey != scope || row.ScopeKeyHash != Hash(scope) ||
+            if (row.SchemaVersion != BookmarkStateEfModule.SchemaVersion || EfRelationalIdentity.Decode(row.ScopeKey) != scope || row.ScopeKeyHash != Hash(scope) ||
                 row.Id != (expectedId ?? CreateId(scope, row.WorkflowExecutionId, row.BookmarkId)) ||
                 row.WorkflowExecutionIdHash != Hash(row.WorkflowExecutionId) || row.BookmarkIdHash != Hash(row.BookmarkId) ||
                 row.WorkflowExecutionIdOrderKey != OrdinalKey(row.WorkflowExecutionId) || row.BookmarkIdOrderKey != OrdinalKey(row.BookmarkId) ||
@@ -275,7 +296,7 @@ public sealed class EfBookmarkStateStore(
                 throw new InvalidDataException("The persisted EF bookmark stimulus projection is corrupt.");
             return state;
         }
-        catch (Exception exception) when (exception is JsonException or ArgumentException or OverflowException or FormatException)
+        catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException or OverflowException or FormatException)
         {
             throw new InvalidDataException("The persisted EF bookmark payload is not valid current JSON.", exception);
         }
@@ -313,8 +334,10 @@ public sealed class EfBookmarkStateStore(
         Hash($"{scope.Length}:{scope}{workflowExecutionId.Length}:{workflowExecutionId}{bookmarkId.Length}:{bookmarkId}");
 
     private static string StimulusLookupKey(string stimulusType, string stimulusHash) => Hash($"{stimulusType.Length}:{stimulusType}{stimulusHash}");
+    private static string StimulusBinding(string stimulusType, string stimulusHash) =>
+        $"{stimulusType.Length}:{stimulusType}{stimulusHash.Length}:{stimulusHash}";
     private static string StimulusTypeLookupKey(string stimulusType) => Hash(stimulusType);
-    private static string Hash(string value) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+    private static string Hash(string value) => EfRelationalIdentity.Hash(value);
     private static string OrdinalKey(string value)
     {
         // Use fixed-width decimal code-unit blocks. Unlike provider-collated raw

@@ -6,9 +6,9 @@ Records direct project references only.
 
 ## Summary
 
-- Source projects: 135
-- Test projects: 115
-- Direct project references: 1230
+- Source projects: 136
+- Test projects: 117
+- Direct project references: 1237
 
 ## Projects
 
@@ -140,6 +140,7 @@ Records direct project references only.
 | [Elsa.Workflows.Runtime](../../src/Elsa/Workflows/Runtime/Elsa.Workflows.Runtime.csproj) | source | Elsa.Workflows | - | default | Elsa.Activities.Runtime.Core<br>Elsa.Attention.Core<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Http](../../src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | source | Elsa.Workflows | - | default | Elsa.Http.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | source | Elsa.Workflows | - | default | Elsa.Api.AspNetCore<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Primitives<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj) | source | Elsa.Workflows | - | default | Elsa.Persistence.EntityFramework<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Reconciliation.Core](../../src/Elsa/Workflows/Runtime/Reconciliation/Core/Elsa.Workflows.Runtime.Reconciliation.Core.csproj) | source | Elsa.Workflows | - | default | Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Reconciliation](../../src/Elsa/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation.csproj) | source | Elsa.Workflows | - | default | Elsa.Activities.Runtime<br>Elsa.Locking.Core<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Reconciliation.Core |
 | [Elsa.Workflows.Runtime.ReferenceGarbageCollection](../../src/Elsa/Workflows/Runtime/ReferenceGarbageCollection/Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj) | source | Elsa.Workflows | - | default | Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
@@ -220,7 +221,7 @@ Records direct project references only.
 | [Elsa.Persistence.Groundwork.SqlServer.UnifiedHost.Tests](../../tests/Elsa/Persistence/Groundwork/SqlServer/UnifiedHost/Tests/Elsa.Persistence.Groundwork.SqlServer.UnifiedHost.Tests.csproj) | test | Elsa.Persistence | - | default | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Serialization.Core<br>Elsa.Testing<br>Elsa.Workflows.Design.Persistence.Groundwork<br>Elsa.Workflows.Publishing.Persistence.Groundwork<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
 | [Elsa.Persistence.Groundwork.Testing](../../tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj) | test | Elsa.Persistence | - | default | Elsa.Workflows.Runtime.Core |
 | [Elsa.Persistence.Groundwork.UnifiedHost.Tests](../../tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/Elsa.Persistence.Groundwork.UnifiedHost.Tests.csproj) | test | Elsa.Persistence | - | default | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.Persistence.Groundwork<br>Elsa.Diagnostics.StructuredLogs<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Secrets.Persistence.Groundwork<br>Elsa.Serialization.Core<br>Elsa.Serialization.SystemText<br>Elsa.Testing<br>Elsa.Workflows.Dashboard.Persistence.Groundwork.V2<br>Elsa.Workflows.Design.Persistence.Groundwork<br>Elsa.Workflows.Publishing<br>Elsa.Workflows.Publishing.Core<br>Elsa.Workflows.Publishing.Persistence.Groundwork<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
-| [Elsa.Persistence.Groundwork.V2.Runtime.Tests](../../tests/Elsa/Persistence/Groundwork/V2/Runtime/Tests/Elsa.Persistence.Groundwork.V2.Runtime.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Groundwork.Testing<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Persistence.Groundwork.V2.Testing<br>Elsa.Workflows.Runtime |
+| [Elsa.Persistence.Groundwork.V2.Runtime.Tests](../../tests/Elsa/Persistence/Groundwork/V2/Runtime/Tests/Elsa.Persistence.Groundwork.V2.Runtime.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Groundwork.Testing<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Persistence.Groundwork.V2.Testing<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
 | [Elsa.Persistence.Groundwork.V2.Testing](../../tests/Elsa/Persistence/Groundwork/V2/Testing/Elsa.Persistence.Groundwork.V2.Testing.csproj) | test | Elsa.Persistence | - | default | Elsa.Persistence.Groundwork.V2<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Persistence.Groundwork.V2.Tests](../../tests/Elsa/Persistence/Groundwork/V2/Tests/Elsa.Persistence.Groundwork.V2.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Groundwork.Testing<br>Elsa.Persistence.Groundwork.V2 |
 | [Elsa.Primitives.Hosting.Tests](../../tests/Elsa/Primitives/Hosting/Tests/Elsa.Primitives.Hosting.Tests.csproj) | test | Elsa.Primitives | - | default | Elsa.Primitives.Hosting |
@@ -258,6 +259,8 @@ Records direct project references only.
 | [Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests](../../tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
 | [Elsa.Workflows.Runtime.Distributed.Tests](../../tests/Elsa/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Distributed<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
 | [Elsa.Workflows.Runtime.Http.Tests](../../tests/Elsa/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Http.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Http |
+| [Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests](../../tests/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
+| [Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests](../../tests/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
 | [Elsa.Workflows.Runtime.Reconciliation.ExecutionProbe](../../tests/Elsa/Workflows/Runtime/Reconciliation/ExecutionProbe/Elsa.Workflows.Runtime.Reconciliation.ExecutionProbe.csproj) | test | Elsa.Workflows | - | default | Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Activities.Testing<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Reconciliation<br>Elsa.Workflows.Runtime.Reconciliation.Core<br>Elsa.Workflows.Runtime.Resumption |
 | [Elsa.Workflows.Runtime.Reconciliation.Tests](../../tests/Elsa/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Activities.Testing<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Reconciliation<br>Elsa.Workflows.Runtime.Reconciliation.Core |
 | [Elsa.Workflows.Runtime.Resumption.Tests](../../tests/Elsa/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj) | test | Elsa.Workflows | - | default | Elsa.Testing<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Resumption |
@@ -295,5 +298,5 @@ Records direct project references only.
 | Elsa.Tasks | 3 | 1 |
 | Elsa.Testing | 0 | 1 |
 | Elsa.Workbench | 1 | 1 |
-| Elsa.Workflows | 31 | 22 |
+| Elsa.Workflows | 32 | 24 |
 | Elsa3 | 4 | 1 |

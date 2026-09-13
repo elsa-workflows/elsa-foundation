@@ -57,12 +57,20 @@ public static class GroundworkV2RuntimeRegistration
 
         RegisterExecutableStore(services, cacheOptions, target);
         var existingBookmarkBackend = BookmarkStateStoreBackend.Find(services);
-        existingBookmarkBackend?.RemoveOwnedArtifacts(services);
+        if (existingBookmarkBackend is null)
+            BookmarkStateStoreBackend.RemoveDefaultStimulusIndex(services);
+        else
+            existingBookmarkBackend.RemoveOwnedArtifacts(services);
         services.RemoveAll<BookmarkStateStoreBackend>();
         ReplaceScoped<GroundworkV2BookmarkStateStore>(services, Standard<GroundworkV2BookmarkStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IBookmarkStateStore), typeof(IBookmarkStimulusIndex));
         var bookmarkDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IBookmarkStateStore));
-        BookmarkStateStoreBackend.Register(services, new BookmarkStateStoreBackend(BookmarkStateStoreBackend.Groundwork, bookmarkDescriptor));
+        var bookmarkIndexDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IBookmarkStimulusIndex));
+        BookmarkStateStoreBackend.Register(services, new BookmarkStateStoreBackend(
+            BookmarkStateStoreBackend.Groundwork,
+            bookmarkDescriptor,
+            bookmarkIndexDescriptor,
+            RemoveGroundworkBookmarkArtifacts));
         ReplaceScoped<GroundworkV2ExecutableActivityTemplateStore>(services, Standard<GroundworkV2ExecutableActivityTemplateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IExecutableActivityTemplateStore), typeof(IExecutableActivityTemplateReader), typeof(IExecutableActivityTemplateWriter));
         ReplaceScoped<GroundworkV2WorkflowExecutableSourceReferenceStore>(services, Standard<GroundworkV2WorkflowExecutableSourceReferenceStore>(target, static (sessions, access, target) => new(sessions, access, target)),
@@ -264,6 +272,11 @@ public static class GroundworkV2RuntimeRegistration
             if (descriptor.ServiceType == typeof(TContract) && descriptor.IsKeyedService && Equals(descriptor.ServiceKey, key))
                 services.RemoveAt(index);
         }
+    }
+
+    private static void RemoveGroundworkBookmarkArtifacts(IServiceCollection services)
+    {
+        services.RemoveAll<GroundworkV2BookmarkStateStore>();
     }
 }
 

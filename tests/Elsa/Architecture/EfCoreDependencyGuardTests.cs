@@ -126,6 +126,25 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     [Fact]
+    public void Every_admitted_Runtime_bookmarks_project_resolves_only_its_reviewed_EF_closure()
+    {
+        var offenders = Adr0073RuntimeBookmarksEf.ExpectedEfPackagesByProject
+            .SelectMany(project => RestoreConfigurations.SelectMany(configuration =>
+            {
+                var resolved = ReadProjectEfPackages(project.Key, configuration);
+                var unexpected = FindUnexpectedEfPackages(resolved, project.Value)
+                    .Select(package => $"{project.Key} ({configuration}) unexpectedly resolves {package}");
+                var missing = FindUnexpectedEfPackages(project.Value, resolved)
+                    .Select(package => $"{project.Key} ({configuration}) no longer resolves reviewed package {package}");
+                return unexpected.Concat(missing);
+            }))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        Assert.True(offenders.Length == 0, Report("drift from the reviewed Runtime bookmarks EF closure", offenders));
+    }
+
+    [Fact]
     public void Every_admitted_Structured_Logs_project_resolves_only_its_reviewed_EF_closure()
     {
         var offenders = Adr0073StructuredLogsEf.ExpectedEfPackagesByProject
@@ -415,7 +434,8 @@ public sealed class EfCoreDependencyGuardTests
                     Adr0073StructuredLogsEf.IsProjectPath(relativePath) ||
                     Adr0073OpenTelemetryEf.IsProjectPath(relativePath) ||
                     Adr0073IdentityEf.IsProjectPath(relativePath) ||
-                    Adr0073RuntimePlacementEf.IsProjectPath(relativePath)));
+                    Adr0073RuntimePlacementEf.IsProjectPath(relativePath) ||
+                    Adr0073RuntimeBookmarksEf.IsProjectPath(relativePath)));
         }
         return projects;
     }
@@ -554,6 +574,7 @@ public sealed class EfCoreDependencyGuardTests
                Adr0073OpenTelemetryEf.IsSurfacePath(relativePath) ||
                Adr0073IdentityEf.IsSurfacePath(relativePath) ||
                Adr0073RuntimePlacementEf.IsSurfacePath(relativePath) ||
+               Adr0073RuntimeBookmarksEf.IsSurfacePath(relativePath) ||
                OpenIddictPersistenceArchitectureTests.IsWorkbenchVendorEfSource(relativePath);
     }
 
@@ -720,6 +741,52 @@ public sealed class EfCoreDependencyGuardTests
                     "MySql.EntityFrameworkCore",
                     "Npgsql.EntityFrameworkCore.PostgreSQL"
                 ]
+            };
+
+        public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
+
+        public static bool IsSurfacePath(string relativePath) =>
+            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
+
+        public static bool IsProjectPath(string relativePath) =>
+            ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
+
+        private static string[] CorePackages() =>
+        [
+            "Microsoft.EntityFrameworkCore",
+            "Microsoft.EntityFrameworkCore.Abstractions",
+            "Microsoft.EntityFrameworkCore.Analyzers",
+            "Microsoft.EntityFrameworkCore.Relational"
+        ];
+    }
+
+    /// <summary>
+    /// ADR 0073's Runtime R01 bookmark-state admission for issue #1723. The production
+    /// adapter is provider-neutral; provider engines remain in focused test projects.
+    /// </summary>
+    internal static class Adr0073RuntimeBookmarksEf
+    {
+        public static readonly string[] SurfacePathPrefixes =
+        [
+            "src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/",
+            "tests/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/"
+        ];
+
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["tests/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                [
+                    .. CorePackages(),
+                    "Microsoft.EntityFrameworkCore.SqlServer",
+                    "Microsoft.EntityFrameworkCore.Sqlite",
+                    "Microsoft.EntityFrameworkCore.Sqlite.Core",
+                    "MySql.EntityFrameworkCore",
+                    "Npgsql.EntityFrameworkCore.PostgreSQL"
+                ],
+                ["tests/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj"] =
+                [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
             };
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;

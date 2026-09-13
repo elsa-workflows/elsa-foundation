@@ -27,7 +27,7 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
 
         var existingBackend = BookmarkStateStoreBackend.Find(services);
         existingBackend?.EnsureOwnsRegisteredContract(services);
-        if (existingBackend is not null && existingBackend.Name == "entity-framework")
+        if (existingBackend is not null && existingBackend.Name == BookmarkStateStoreBackend.EntityFramework)
         {
             var existingOptions = services
                 .Select(descriptor => descriptor.ImplementationInstance)
@@ -45,15 +45,13 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
             var descriptors = services.Where(descriptor => descriptor.ServiceType == typeof(IBookmarkStateStore)).ToArray();
             if (descriptors.Any(descriptor => descriptor.ImplementationType != typeof(Elsa.Workflows.Runtime.Core.Services.InMemoryBookmarkStateStore)))
                 throw new InvalidOperationException("An explicit IBookmarkStateStore is already registered; EF bookmark persistence refuses to replace it implicitly.");
+            BookmarkStateStoreBackend.RemoveDefaultStimulusIndex(services);
             foreach (var descriptor in descriptors)
                 services.Remove(descriptor);
-            services.RemoveAll<IBookmarkStimulusIndex>();
         }
         else
         {
             existingBackend?.RemoveOwnedArtifacts(services);
-            services.RemoveAll<IBookmarkStateStore>();
-            services.RemoveAll<IBookmarkStimulusIndex>();
         }
 
         services.AddSingleton(configured);
@@ -67,10 +65,15 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
         }
 
         var descriptorState = ServiceDescriptor.Scoped<IBookmarkStateStore>(provider => provider.GetRequiredService<EfBookmarkStateStore>());
+        var descriptorIndex = ServiceDescriptor.Scoped<IBookmarkStimulusIndex>(provider => provider.GetRequiredService<EfBookmarkStateStore>());
         services.Add(descriptorState);
         services.AddScoped<EfBookmarkStateStore>();
-        services.AddScoped<IBookmarkStimulusIndex>(provider => provider.GetRequiredService<EfBookmarkStateStore>());
-        BookmarkStateStoreBackend.Register(services, new BookmarkStateStoreBackend("entity-framework", descriptorState, RemoveEfArtifacts));
+        services.Add(descriptorIndex);
+        BookmarkStateStoreBackend.Register(services, new BookmarkStateStoreBackend(
+            BookmarkStateStoreBackend.EntityFramework,
+            descriptorState,
+            descriptorIndex,
+            RemoveEfArtifacts));
         return services;
     }
 
@@ -104,10 +107,7 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
         services.RemoveAll<BookmarkStatePostgreSqlDbContext>();
         services.RemoveAll<BookmarkStateMySqlDbContext>();
         services.RemoveAll<EfBookmarkStateStore>();
-        services.RemoveAll<IBookmarkStateStore>();
-        services.RemoveAll<IBookmarkStimulusIndex>();
         services.RemoveAll<RuntimeBookmarksEntityFrameworkCoreOptions>();
-        services.RemoveAll<BookmarkStateStoreBackend>();
     }
 }
 
