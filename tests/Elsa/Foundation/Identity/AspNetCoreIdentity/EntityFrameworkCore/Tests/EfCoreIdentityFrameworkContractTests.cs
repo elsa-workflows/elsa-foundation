@@ -822,9 +822,8 @@ public sealed class EfCoreIdentityFrameworkContractTests
         }
         finally
         {
-            foreach (var file in new[] { path, path + "-wal", path + "-shm" })
-                if (File.Exists(file))
-                    File.Delete(file);
+            foreach (var file in new[] { path, path + "-wal", path + "-shm" }.Where(File.Exists))
+                File.Delete(file);
         }
     }
 
@@ -1056,8 +1055,7 @@ internal sealed class EfCoreIdentityScenario : IAsyncDisposable
 
     private static void DeleteDatabase(string path)
     {
-        foreach (var file in new[] { path, path + "-wal", path + "-shm" })
-            if (File.Exists(file))
-                File.Delete(file);
+        foreach (var file in new[] { path, path + "-wal", path + "-shm" }.Where(File.Exists))
+            File.Delete(file);
     }
 }

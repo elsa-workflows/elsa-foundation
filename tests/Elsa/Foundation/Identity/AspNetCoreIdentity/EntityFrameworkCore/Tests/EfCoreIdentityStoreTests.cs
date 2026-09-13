@@ -17,7 +17,7 @@ public sealed class EfCoreIdentityStoreTests
     [Fact]
     public async Task User_and_role_manager_share_authority_rows_and_all_framework_state()
     {
-        var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-identity-{Guid.NewGuid():N}.db");
+        var databasePath = Path.Join(Path.GetTempPath(), $"elsa-identity-{Guid.NewGuid():N}.db");
         try
         {
             var services = new ServiceCollection();

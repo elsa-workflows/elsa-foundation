@@ -659,8 +659,9 @@ public sealed class EfIdentityMutationReceiptCleanupCoordinator
             }
             catch
             {
-                // Do not spin cleanup on every mutation after a provider outage. Preserve the
-                // attempt count for bounded backoff and permit a retry at the next window.
+                // Start a fresh bounded window after a provider outage. Retaining an already-due
+                // attempt count would otherwise retry cleanup on every subsequent mutation.
+                window.Attempts = 0;
                 window.NextRun = now.Add(interval);
                 throw;
             }
