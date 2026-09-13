@@ -28,6 +28,43 @@ public sealed class RegistrationTests
     };
 
     [Fact]
+    public void Placement_store_declares_single_implementation_replacement_semantics()
+    {
+        Assert.True(typeof(IExecutionPlacementStore).IsDefined(
+            typeof(ExecutionPlacementStoreReplacementContractAttribute),
+            inherit: false));
+    }
+
+    [Fact]
+    public void Backend_rejects_a_null_name()
+    {
+        var descriptor = ServiceDescriptor.Scoped<IExecutionPlacementStore, ExplicitStore>();
+
+        Assert.Throws<ArgumentNullException>(() => new ExecutionPlacementStoreBackend(null!, descriptor));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("unknown")]
+    public void Backend_rejects_an_unknown_or_blank_name(string name)
+    {
+        var descriptor = ServiceDescriptor.Scoped<IExecutionPlacementStore, ExplicitStore>();
+
+        Assert.Throws<ArgumentException>(() => new ExecutionPlacementStoreBackend(name, descriptor));
+    }
+
+    [Fact]
+    public void Backend_rejects_a_descriptor_for_another_contract()
+    {
+        var descriptor = ServiceDescriptor.Scoped<ExplicitStore, ExplicitStore>();
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            new ExecutionPlacementStoreBackend(ExecutionPlacementStoreBackend.EntityFramework, descriptor));
+        Assert.Contains(nameof(IExecutionPlacementStore), exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void EF_replaces_only_placement_after_the_distributed_default_is_composed()
     {
         var services = new ServiceCollection();
@@ -139,6 +176,22 @@ public sealed class RegistrationTests
         var exception = Assert.Throws<OptionsValidationException>(() =>
             provider.GetRequiredService<IStartupValidator>().Validate());
         Assert.Contains("no longer exclusively owns", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(ExecutionPlacementStoreBackend.InMemory)]
+    [InlineData(ExecutionPlacementStoreBackend.Groundwork)]
+    [InlineData(ExecutionPlacementStoreBackend.EntityFramework)]
+    public void Startup_validation_rejects_a_backend_marker_removed_after_registration(string backend)
+    {
+        var services = new ServiceCollection();
+        RegisterBackend(services, backend);
+        services.RemoveAll<ExecutionPlacementStoreBackend>();
+
+        using var provider = services.BuildServiceProvider();
+        var exception = Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IStartupValidator>().Validate());
+        Assert.Contains("ownership marker was removed", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
