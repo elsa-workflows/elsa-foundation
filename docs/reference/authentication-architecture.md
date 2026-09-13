@@ -350,21 +350,30 @@ For the exact settings, generation command, and the full **go-live checklist**, 
 
 ## 8. Per-IdP recipes for the Oidc module
 
-The Oidc module binds `OidcAuthenticationOptions` from the `FoundationIdentityOidc` feature. It
-configures the standard ASP.NET Core `OpenIdConnect` handler (`ResponseType = "code"`, `SaveTokens`)
-and a `JwtBearer` handler for API validation. The options it actually exposes:
+The `FoundationIdentityOidc` feature applies its shell settings to `OidcAuthenticationOptions`. The
+module configures the standard ASP.NET Core `OpenIdConnect` handler (`ResponseType = "code"`,
+`SaveTokens`) and a `JwtBearer` handler for API validation. The options, and which of them are
+`shells.json` settings:
 
-| Option | Meaning | Default |
-|---|---|---|
-| `Authority` | The IdP's issuer / discovery authority (`.well-known/openid-configuration` base). | — (required) |
-| `ClientId` | The OAuth client id registered with the IdP; also the JwtBearer audience. | — (required to enable the interactive handler) |
-| `ClientSecret` | Client secret for the confidential code flow. | — |
-| `RequireHttpsMetadata` | Require HTTPS for IdP metadata. Keep `true` in production. | `true` |
-| `AuthenticationScheme` | The interactive OpenIdConnect scheme name. | `Elsa.Identity.Oidc` |
-| `JwtBearerScheme` | The API bearer-validation scheme name. | `Elsa.Identity.Oidc.Jwt` |
-| `ProviderId` / `DisplayName` | Identity of the provider in `bootstrap`/`capabilities`. | `oidc` / `External OIDC` |
-| `ChallengePath` | The challenge redirect path. | `/_elsa/identity/challenge/oidc` |
-| `TenantId` / `Enabled` / `IsDefault` | Tenant scoping, enablement, default-scheme election. | `null` / `true` / `true` |
+| Option | Shell setting | Meaning | Default |
+|---|---|---|---|
+| `Authority` | yes | The IdP's issuer / discovery authority (`.well-known/openid-configuration` base). | — (required) |
+| `ClientId` | yes | The OAuth client id registered with the IdP; also the JwtBearer audience, so a bearer token's `aud` must include it. | — (required to enable the interactive handler) |
+| `ClientSecret` | yes (secret) | Client secret for the confidential code flow. | — |
+| `RequireHttpsMetadata` | yes | Require HTTPS for IdP metadata. Keep `true` in production. | `true` |
+| `IsDefault` | yes | Default-scheme election and the default provider in `bootstrap`. | `true` |
+| `AuthenticationScheme` | no | The interactive OpenIdConnect scheme name. | `Elsa.Identity.Oidc` |
+| `JwtBearerScheme` | no | The API bearer-validation scheme name. | `Elsa.Identity.Oidc.Jwt` |
+| `ProviderId` / `DisplayName` | no | Identity of the provider in `bootstrap`/`capabilities`. | `oidc` / `External OIDC` |
+| `ChallengePath` | no | The challenge redirect path. | `/_elsa/identity/challenge/oidc` |
+| `TenantId` / `Enabled` | no | Tenant scoping, enablement. | `null` / `true` |
+
+A key under `FoundationIdentityOidc` that is not a shell setting is silently ignored, not rejected.
+Code-only options are set through `AddFoundationIdentityOidc(configure)` when a host composes the
+module in code instead of through the feature. Only that delegate is read at registration time, so
+`ClientId` and the two scheme names must come from it (or from the feature's settings): a `ClientId`
+supplied through `services.Configure<OidcAuthenticationOptions>` alone does not register the
+interactive handler.
 
 ### Keycloak
 
@@ -378,7 +387,10 @@ and a `JwtBearer` handler for API validation. The options it actually exposes:
 ```
 
 The realm URL is the authority; discovery resolves at `{Authority}/.well-known/openid-configuration`.
-Map Keycloak realm/client roles to Elsa permissions via the claim-mapping seam (see the gap below).
+Keycloak does not put the client id in an access token's `aud` by default, so add an audience mapper
+for `elsa-server` or bearer validation refuses the token. For a local Keycloak served over plain
+HTTP, set `RequireHttpsMetadata` to `false`. Map Keycloak realm/client roles to Elsa permissions via
+the claim-mapping seam (see the gap below).
 
 ### Microsoft Entra ID
 
