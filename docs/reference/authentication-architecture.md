@@ -306,8 +306,9 @@ individually with `AllowPublic(category, reason)`, and every other route require
 host credential. In the hosts and API slices they capture, the endpoint-manifest checks in the test suite reject a
 route with no disposition or more than one. When `FoundationIdentityOpenIddict`, or `FoundationIdentityOidc` with
 `IsDefault`, is composed, the selector or OIDC JwtBearer scheme becomes the default challenge scheme, so an
-unauthenticated call to a protected route gets `401`. A host-chosen `DefaultScheme` always wins if you want to
-override.
+unauthenticated call to a permission- or policy-protected route gets `401`. A host-chosen `DefaultScheme` always
+wins if you want to override. Host-credential routes, such as the management API, answer from their own endpoint
+filter instead.
 
 **There is no auth off-switch for API routes.** The `ApiSecurity.AllowAnonymous` kill-switch was removed with the
 FastEndpoints surface ([#1405](https://github.com/elsa-workflows/elsa-foundation/pull/1405)), and no setting
