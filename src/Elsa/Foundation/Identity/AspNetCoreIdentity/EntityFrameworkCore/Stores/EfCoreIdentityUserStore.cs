@@ -9,6 +9,8 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using EfIdentityStoreSupport = Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores.IdentityEntityFrameworkAdapterSupport;
+using IdentityEntityFrameworkRevisionCodec = Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores.IdentityEntityFrameworkRevisionSupport;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Stores;
 
@@ -272,7 +274,8 @@ public sealed class EfCoreIdentityUserStore(
             Revision = 1
         }).ToArray();
         EnsureRelationshipMaterializationLimit(additions.Length, "user claim input");
-        if (additions.Length == 0) return;
+        if (additions.Length == 0)
+            return;
         await WriteRelationshipAsync(user, additions, [], cancellationToken);
     }
 
@@ -300,7 +303,8 @@ public sealed class EfCoreIdentityUserStore(
         ArgumentNullException.ThrowIfNull(claims);
         var values = claims.Take(MaximumMaterializedRelationshipEntries + 1).Select(claim => (claim.Type, (string?)claim.Value)).ToArray();
         EnsureRelationshipMaterializationLimit(values.Length, "user claim input");
-        if (values.Length == 0) return;
+        if (values.Length == 0)
+            return;
         await WriteRelationshipAsync(user, [], values, cancellationToken);
     }
 
@@ -416,7 +420,8 @@ public sealed class EfCoreIdentityUserStore(
     {
         EnsureUserScope(user);
         var role = await FindRoleAsync(user.TenantId, roleName, cancellationToken);
-        if (role is null) return;
+        if (role is null)
+            return;
         var result = await relationships.DeleteUserRoleAsync(
             user.TenantId,
             user.Id,
@@ -471,7 +476,8 @@ public sealed class EfCoreIdentityUserStore(
         var tenantId = CurrentTenantId();
         EnsureTenant(tenantId);
         var role = await FindRoleAsync(tenantId, roleName, cancellationToken);
-        if (role is null) return [];
+        if (role is null)
+            return [];
         var roleLookupKey = RoleKey(tenantId, role.RoleId);
         var entities = await EfIdentityStoreSupport.ReadAsync(
             db,
@@ -590,11 +596,11 @@ public sealed class EfCoreIdentityUserStore(
                 ? new UserRecord(user.Id, user.TenantId, user.UserName ?? string.Empty, user.Email, user.DisplayName,
                     UserStatus.Active, ResourceOwnership.Foundation, new HashSet<string>(StringComparer.Ordinal), new HashSet<string>(StringComparer.Ordinal))
                 : ToUserRecord(existing)) with
-            {
-                UserName = user.UserName ?? string.Empty,
-                Email = user.Email,
-                DisplayName = user.DisplayName
-            };
+        {
+            UserName = user.UserName ?? string.Empty,
+            Email = user.Email,
+            DisplayName = user.DisplayName
+        };
         var result = await aggregates.SaveUserAsync(
             record,
             createOnly ? 0 : expectedRevision,
@@ -632,7 +638,8 @@ public sealed class EfCoreIdentityUserStore(
                 throw new InvalidOperationException("The requested user has no valid EF revision stamp.");
             var value = mutate(candidate);
             var result = await SaveFrameworkUserAsync(candidate, expected, false, cancellationToken);
-            if (result.Succeeded) { CopyLockoutState(candidate, user); return value; }
+            if (result.Succeeded)
+            { CopyLockoutState(candidate, user); return value; }
             if (!result.Errors.Any(error => error.Code == nameof(IdentityErrorDescriber.ConcurrencyFailure)))
                 throw new InvalidOperationException("The EF Identity lockout transition failed.");
         }
@@ -691,18 +698,37 @@ public sealed class EfCoreIdentityUserStore(
         entity.NormalizedUserNameKey = string.IsNullOrWhiteSpace(entity.NormalizedUserName) ? null : UserKey(user.TenantId, entity.NormalizedUserName);
         entity.NormalizedEmail = user.NormalizedEmail ?? (string.IsNullOrWhiteSpace(user.Email) ? null : EfIdentityStoreSupport.Normalize(user.Email));
         entity.NormalizedEmailKey = string.IsNullOrWhiteSpace(entity.NormalizedEmail) ? null : UserKey(user.TenantId, entity.NormalizedEmail);
-        entity.EmailConfirmed = user.EmailConfirmed; entity.PasswordHash = user.PasswordHash; entity.SecurityStamp = user.SecurityStamp;
-        entity.ConcurrencyStamp = IdentityEntityFrameworkRevisionCodec.FromUser(user.TenantId, user.Id, entity.Revision); entity.PhoneNumber = user.PhoneNumber; entity.PhoneNumberConfirmed = user.PhoneNumberConfirmed; entity.TwoFactorEnabled = user.TwoFactorEnabled;
-        entity.LockoutEnd = user.LockoutEnd; entity.LockoutEnabled = user.LockoutEnabled; entity.AccessFailedCount = user.AccessFailedCount;
+        entity.EmailConfirmed = user.EmailConfirmed;
+        entity.PasswordHash = user.PasswordHash;
+        entity.SecurityStamp = user.SecurityStamp;
+        entity.ConcurrencyStamp = IdentityEntityFrameworkRevisionCodec.FromUser(user.TenantId, user.Id, entity.Revision);
+        entity.PhoneNumber = user.PhoneNumber;
+        entity.PhoneNumberConfirmed = user.PhoneNumberConfirmed;
+        entity.TwoFactorEnabled = user.TwoFactorEnabled;
+        entity.LockoutEnd = user.LockoutEnd;
+        entity.LockoutEnabled = user.LockoutEnabled;
+        entity.AccessFailedCount = user.AccessFailedCount;
     }
 
     private static AspNetCoreIdentityUser ToFrameworkUser(UserEntity entity) => new()
     {
-        Id = entity.UserId, TenantId = entity.TenantId, UserName = entity.UserName, NormalizedUserName = entity.NormalizedUserName,
-        Email = entity.Email, NormalizedEmail = entity.NormalizedEmail, DisplayName = entity.DisplayName, EmailConfirmed = entity.EmailConfirmed,
-        PasswordHash = entity.PasswordHash, SecurityStamp = entity.SecurityStamp, ConcurrencyStamp = IdentityEntityFrameworkRevisionCodec.FromUser(entity.TenantId, entity.UserId, entity.Revision),
-        PhoneNumber = entity.PhoneNumber, PhoneNumberConfirmed = entity.PhoneNumberConfirmed, TwoFactorEnabled = entity.TwoFactorEnabled,
-        LockoutEnd = entity.LockoutEnd, LockoutEnabled = entity.LockoutEnabled, AccessFailedCount = entity.AccessFailedCount
+        Id = entity.UserId,
+        TenantId = entity.TenantId,
+        UserName = entity.UserName,
+        NormalizedUserName = entity.NormalizedUserName,
+        Email = entity.Email,
+        NormalizedEmail = entity.NormalizedEmail,
+        DisplayName = entity.DisplayName,
+        EmailConfirmed = entity.EmailConfirmed,
+        PasswordHash = entity.PasswordHash,
+        SecurityStamp = entity.SecurityStamp,
+        ConcurrencyStamp = IdentityEntityFrameworkRevisionCodec.FromUser(entity.TenantId, entity.UserId, entity.Revision),
+        PhoneNumber = entity.PhoneNumber,
+        PhoneNumberConfirmed = entity.PhoneNumberConfirmed,
+        TwoFactorEnabled = entity.TwoFactorEnabled,
+        LockoutEnd = entity.LockoutEnd,
+        LockoutEnabled = entity.LockoutEnabled,
+        AccessFailedCount = entity.AccessFailedCount
     };
 
     private static UserRecord ToUserRecord(UserEntity entity) => new(

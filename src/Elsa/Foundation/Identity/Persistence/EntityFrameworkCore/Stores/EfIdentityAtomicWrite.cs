@@ -68,8 +68,10 @@ public sealed class EfIdentityAtomicWrite
         this.receiptLifetime = receiptLifetime ?? DefaultReceiptLifetime;
         cleanup = cleanupCoordinator ?? new EfIdentityMutationReceiptCleanupCoordinator();
         this.accessContextAccessor = accessContextAccessor;
-        if (this.reconciliationTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(reconciliationTimeout));
-        if (this.receiptLifetime <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(receiptLifetime));
+        if (this.reconciliationTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(reconciliationTimeout));
+        if (this.receiptLifetime <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(receiptLifetime));
     }
 
     public async ValueTask<EfIdentityWriteResult> ExecuteAsync(
@@ -299,7 +301,11 @@ public sealed class EfIdentityAtomicWrite
                     .OrderBy(x => x.ExpiresAt)
                     .Take(CleanupBatchSize)
                     .ToListAsync(cancellationToken));
-            foreach (var row in rows) context.MutationReceipts.Remove(row);
+            foreach (var row in rows)
+            {
+                EnsureReceiptSelfIdentity(row);
+                context.MutationReceipts.Remove(row);
+            }
             if (rows.Count != 0)
             {
                 try
@@ -362,16 +368,19 @@ public sealed class EfIdentityAtomicWrite
                 context,
                 "Reading the Identity mutation receipt",
                 () => context.MutationReceipts.AsNoTracking().SingleOrDefaultAsync(x => x.Id == mutation.MutationReceiptId, cancellationToken));
-            if (row is null) return null;
-            if (!string.Equals(row.OperationId, mutation.OperationId, StringComparison.Ordinal) || !string.Equals(row.RequestFingerprint, mutation.RequestFingerprint, StringComparison.Ordinal))
-                throw new InvalidOperationException($"Identity mutation receipt '{mutation.MutationReceiptId}' belongs to a different request fingerprint.");
-            if (row.ExpiresAt > clock.GetUtcNow()) return ToResult(row);
+            if (row is null)
+                return null;
+            EnsureReceiptIdentity(row, mutation);
+            if (row.ExpiresAt > clock.GetUtcNow())
+                return ToResult(row);
 
             var expired = await EfIdentityStoreSupport.ReadAsync(
                 context,
                 "Re-reading the expired Identity mutation receipt",
                 () => context.MutationReceipts.SingleOrDefaultAsync(x => x.Id == row.Id, cancellationToken));
-            if (expired is null) continue;
+            if (expired is null)
+                continue;
+            EnsureReceiptIdentity(expired, mutation);
             context.MutationReceipts.Remove(expired);
             try
             {
@@ -400,6 +409,27 @@ public sealed class EfIdentityAtomicWrite
             }
         }
         throw new IdentityEntityFrameworkUncertainCommitException($"Expired Identity mutation receipt '{mutation.MutationReceiptId}' kept changing during bounded reclamation.", new InvalidOperationException("Receipt reclaim limit exceeded."));
+    }
+
+    private static void EnsureReceiptIdentity(MutationReceiptEntity row, EfIdentityAtomicMutation mutation)
+    {
+        EnsureReceiptSelfIdentity(row);
+        if (!string.Equals(row.Id, mutation.MutationReceiptId, StringComparison.Ordinal) ||
+            !string.Equals(row.OperationId, mutation.OperationId, StringComparison.Ordinal) ||
+            !string.Equals(row.RequestFingerprint, mutation.RequestFingerprint, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Identity mutation receipt '{mutation.MutationReceiptId}' belongs to a different mutation identity.");
+        }
+    }
+
+    private static void EnsureReceiptSelfIdentity(MutationReceiptEntity row)
+    {
+        if (!string.Equals(row.Id, row.MutationReceiptId, StringComparison.Ordinal) ||
+            string.IsNullOrWhiteSpace(row.OperationId) ||
+            string.IsNullOrWhiteSpace(row.RequestFingerprint))
+        {
+            throw new InvalidOperationException($"Identity mutation receipt '{row.Id}' has a corrupt persisted identity.");
+        }
     }
 
     private async Task CleanupIfDueAsync(CancellationToken cancellationToken)
@@ -470,7 +500,8 @@ public sealed class EfIdentityAtomicWrite
             var details = receipt is null ? new AggregateException(exception, rollbackException) : new AggregateException(exception, rollbackException, new InvalidOperationException("A durable receipt was observed while rolling back the failed Identity mutation."));
             throw new IdentityEntityFrameworkUncertainCommitException($"Identity mutation '{mutation.OperationId}' could not safely classify its failed transaction.", details);
         }
-        if (receipt is not null) return receipt;
+        if (receipt is not null)
+            return receipt;
         var failure = rollbackException is null ? exception : new AggregateException(exception, rollbackException);
         if (exception is DbUpdateException or DbUpdateConcurrencyException)
             return ConflictResult(mutation, exception);
@@ -509,7 +540,8 @@ public sealed class EfIdentityAtomicWrite
         }
         if (rollbackException is not null && receipt is not null)
             throw new IdentityEntityFrameworkUncertainCommitException($"Identity mutation '{mutation.OperationId}' had rollback errors despite a durable receipt.", new AggregateException(exception, rollbackException));
-        if (receipt is not null) return receipt;
+        if (receipt is not null)
+            return receipt;
         var failure = rollbackException is null ? exception : new AggregateException(exception, rollbackException);
         throw new IdentityEntityFrameworkUncertainCommitException($"Identity mutation '{mutation.OperationId}' has an uncertain commit outcome because its receipt was not observed within the bounded reconciliation window.", failure);
     }
@@ -525,7 +557,8 @@ public sealed class EfIdentityAtomicWrite
             try
             {
                 var receipt = await ReadActiveReceiptAsync(mutation, timeout.Token);
-                if (receipt is not null) return receipt;
+                if (receipt is not null)
+                    return receipt;
             }
             catch (IdentityEntityFrameworkUncertainCommitException exception) when (!cancellationToken.IsCancellationRequested)
             {
@@ -545,7 +578,8 @@ public sealed class EfIdentityAtomicWrite
                 break;
             }
 
-            try { await Task.Delay(delay, timeout.Token); }
+            try
+            { await Task.Delay(delay, timeout.Token); }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { break; }
             delay = TimeSpan.FromMilliseconds(Math.Min(delay.TotalMilliseconds * 2, 250));
         }

@@ -89,6 +89,133 @@ internal static class EfIdentityStoreSupport
         return result;
     }
 
+    public static void EnsureUserIdentity(UserEntity entity, string tenantId, string userId)
+    {
+        EnsureIdentity(entity.TenantId, tenantId, "user tenant");
+        EnsureIdentity(entity.UserId, userId, "user identifier");
+        EnsureExact(entity.Id, RecordId(tenantId, userId), "user record key");
+        EnsureExact(entity.TenantLookupKey, TenantLookup(tenantId), "user tenant lookup key");
+        EnsureExact(entity.UserIdOrderKey, SortableOrderKey(userId, nameof(userId)), "user order key");
+        EnsureNullableExact(
+            entity.NormalizedUserNameKey,
+            string.IsNullOrWhiteSpace(entity.NormalizedUserName) ? null : Lookup(tenantId, entity.NormalizedUserName),
+            "user-name lookup key");
+        EnsureNullableExact(
+            entity.NormalizedEmailKey,
+            string.IsNullOrWhiteSpace(entity.NormalizedEmail) ? null : Lookup(tenantId, entity.NormalizedEmail),
+            "user-email lookup key");
+    }
+
+    public static void EnsureRoleIdentity(RoleEntity entity, string tenantId, string roleId)
+    {
+        EnsureIdentity(entity.TenantId, tenantId, "role tenant");
+        EnsureIdentity(entity.RoleId, roleId, "role identifier");
+        EnsureExact(entity.Id, RecordId(tenantId, roleId), "role record key");
+        EnsureExact(entity.TenantLookupKey, TenantLookup(tenantId), "role tenant lookup key");
+        EnsureExact(entity.RoleIdOrderKey, SortableOrderKey(roleId, nameof(roleId)), "role order key");
+        EnsureNullableExact(
+            entity.NormalizedNameKey,
+            string.IsNullOrWhiteSpace(entity.NormalizedName) ? null : Lookup(tenantId, entity.NormalizedName),
+            "role-name lookup key");
+    }
+
+    public static void EnsureUserClaimIdentity(UserClaimEntity entity, string tenantId, string userId)
+    {
+        EnsureUserChildIdentity(entity.Id, entity.TenantId, entity.TenantLookupKey, entity.UserId, entity.UserLookupKey, tenantId, userId, CompoundKey(tenantId, userId, entity.ClaimType, entity.ClaimValue), "user claim");
+        EnsureExact(entity.ClaimKey, CompoundKey(tenantId, entity.ClaimType, entity.ClaimValue), "user-claim lookup key");
+    }
+
+    public static void EnsureRoleClaimIdentity(RoleClaimEntity entity, string tenantId, string roleId)
+    {
+        EnsureIdentity(entity.TenantId, tenantId, "role-claim tenant");
+        EnsureIdentity(entity.RoleId, roleId, "role-claim owner");
+        EnsureExact(entity.Id, CompoundKey(tenantId, roleId, entity.ClaimType, entity.ClaimValue), "role-claim record key");
+        EnsureExact(entity.TenantLookupKey, TenantLookup(tenantId), "role-claim tenant lookup key");
+        EnsureExact(entity.RoleLookupKey, Lookup(tenantId, roleId), "role-claim owner lookup key");
+        EnsureExact(entity.ClaimKey, CompoundKey(tenantId, entity.ClaimType, entity.ClaimValue), "role-claim lookup key");
+    }
+
+    public static void EnsureUserRoleIdentity(UserRoleEntity entity, string tenantId, string userId, string roleId)
+    {
+        EnsureUserChildIdentity(entity.Id, entity.TenantId, entity.TenantLookupKey, entity.UserId, entity.UserLookupKey, tenantId, userId, CompoundKey(tenantId, userId, roleId), "user-role link");
+        EnsureIdentity(entity.RoleId, roleId, "user-role role");
+        EnsureExact(entity.RoleLookupKey, Lookup(tenantId, roleId), "user-role role lookup key");
+    }
+
+    public static void EnsureUserTokenIdentity(UserTokenEntity entity, string tenantId, string userId)
+    {
+        EnsureUserChildIdentity(entity.Id, entity.TenantId, entity.TenantLookupKey, entity.UserId, entity.UserLookupKey, tenantId, userId, CompoundKey(tenantId, userId, entity.LoginProvider, entity.Name), "user token");
+        EnsureExact(entity.TokenKey, CompoundKey(tenantId, entity.LoginProvider, entity.Name), "user-token lookup key");
+    }
+
+    public static void EnsureTenantMembershipIdentity(TenantMembershipEntity entity, string tenantId, string userId) =>
+        EnsureUserChildIdentity(entity.Id, entity.TenantId, entity.TenantLookupKey, entity.UserId, entity.UserLookupKey, tenantId, userId, RecordId(tenantId, userId), "tenant membership");
+
+    public static void EnsureExternalIdentity(
+        ExternalIdentityEntity entity,
+        string tenantId,
+        string provider,
+        string providerSubject,
+        string? expectedUserId = null)
+    {
+        EnsureIdentity(entity.TenantId, tenantId, "external-login tenant");
+        EnsureIdentity(entity.Provider, provider, "external-login provider");
+        EnsureIdentity(entity.ProviderSubject, providerSubject, "external-login subject");
+        if (expectedUserId is not null)
+            EnsureIdentity(entity.UserId, expectedUserId, "external-login owner");
+        EnsureExact(entity.Id, CompoundKey(tenantId, provider, providerSubject), "external-login record key");
+        EnsureExact(entity.TenantLookupKey, TenantLookup(tenantId), "external-login tenant lookup key");
+        EnsureExact(entity.ProviderLookupKey, Lookup(tenantId, provider), "external-login provider lookup key");
+        EnsureExact(entity.ProviderSubjectLookupKey, Lookup(tenantId, providerSubject), "external-login subject lookup key");
+        EnsureExact(entity.UserLookupKey, Lookup(tenantId, entity.UserId), "external-login owner lookup key");
+        EnsureExact(entity.ExternalOrderKey, ExternalOrderKey(provider, providerSubject), "external-login order key");
+    }
+
+    public static void EnsureUserNameReservationIdentity(
+        UserNameReservationEntity entity,
+        string tenantId,
+        string normalizedUserName,
+        string? expectedUserId = null)
+    {
+        EnsureReservationOwner(entity.UserId, expectedUserId, "user-name reservation owner");
+        EnsureIdentity(entity.TenantId, tenantId, "user-name reservation tenant");
+        EnsureIdentity(entity.NormalizedUserName, normalizedUserName, "user-name reservation value");
+        var key = Lookup(tenantId, normalizedUserName);
+        EnsureExact(entity.Id, key, "user-name reservation record key");
+        EnsureExact(entity.TenantLookupKey, TenantLookup(tenantId), "user-name reservation tenant lookup key");
+        EnsureExact(entity.NormalizedUserNameKey, key, "user-name reservation lookup key");
+    }
+
+    public static void EnsureEmailReservationIdentity(
+        EmailReservationEntity entity,
+        string tenantId,
+        string normalizedEmail,
+        string? expectedUserId = null)
+    {
+        EnsureReservationOwner(entity.UserId, expectedUserId, "email reservation owner");
+        EnsureIdentity(entity.TenantId, tenantId, "email reservation tenant");
+        EnsureIdentity(entity.NormalizedEmail, normalizedEmail, "email reservation value");
+        var key = Lookup(tenantId, normalizedEmail);
+        EnsureExact(entity.Id, key, "email reservation record key");
+        EnsureExact(entity.TenantLookupKey, TenantLookup(tenantId), "email reservation tenant lookup key");
+        EnsureExact(entity.NormalizedEmailKey, key, "email reservation lookup key");
+    }
+
+    public static void EnsureRoleNameReservationIdentity(
+        RoleNameReservationEntity entity,
+        string tenantId,
+        string normalizedRoleName,
+        string? expectedRoleId = null)
+    {
+        EnsureReservationOwner(entity.RoleId, expectedRoleId, "role-name reservation owner");
+        EnsureIdentity(entity.TenantId, tenantId, "role-name reservation tenant");
+        EnsureIdentity(entity.NormalizedRoleName, normalizedRoleName, "role-name reservation value");
+        var key = Lookup(tenantId, normalizedRoleName);
+        EnsureExact(entity.Id, key, "role-name reservation record key");
+        EnsureExact(entity.TenantLookupKey, TenantLookup(tenantId), "role-name reservation tenant lookup key");
+        EnsureExact(entity.NormalizedRoleNameKey, key, "role-name reservation lookup key");
+    }
+
     public static string CompoundKey(params string?[] values) =>
         IdentityEntityFrameworkKey.FramedRecordId(values.Select(Normalize).ToArray());
 
@@ -216,4 +343,60 @@ internal static class EfIdentityStoreSupport
 
     public static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception) =>
         new(message, exception);
+
+    private static void EnsureUserChildIdentity(
+        string id,
+        string actualTenantId,
+        string tenantLookupKey,
+        string actualUserId,
+        string userLookupKey,
+        string expectedTenantId,
+        string expectedUserId,
+        string expectedId,
+        string kind)
+    {
+        EnsureIdentity(actualTenantId, expectedTenantId, $"{kind} tenant");
+        EnsureIdentity(actualUserId, expectedUserId, $"{kind} owner");
+        EnsureExact(id, expectedId, $"{kind} record key");
+        EnsureExact(tenantLookupKey, TenantLookup(expectedTenantId), $"{kind} tenant lookup key");
+        EnsureExact(userLookupKey, Lookup(expectedTenantId, expectedUserId), $"{kind} owner lookup key");
+    }
+
+    private static void EnsureIdentity(string actual, string expected, string description)
+    {
+        if (!string.Equals(Normalize(actual), Normalize(expected), StringComparison.Ordinal))
+            ThrowCorrupt(description);
+    }
+
+    private static void EnsureReservationOwner(string actual, string? expected, string description)
+    {
+        if (string.IsNullOrWhiteSpace(actual))
+            ThrowCorrupt(description);
+        if (expected is not null)
+            EnsureIdentity(actual, expected, description);
+    }
+
+    private static void EnsureNullableExact(string? actual, string? expected, string description)
+    {
+        if (!string.Equals(actual, expected, StringComparison.Ordinal))
+            ThrowCorrupt(description);
+    }
+
+    private static void EnsureExact(string actual, string expected, string description)
+    {
+        if (!string.Equals(actual, expected, StringComparison.Ordinal))
+            ThrowCorrupt(description);
+    }
+
+    private static void EnsureExact(byte[] actual, byte[] expected, string description)
+    {
+        if (!actual.AsSpan().SequenceEqual(expected))
+            ThrowCorrupt(description);
+    }
+
+    private static void ThrowCorrupt(string description)
+    {
+        var message = $"The persisted Identity {description} is inconsistent with its canonical authority identity.";
+        throw Failure(message, new InvalidDataException(message));
+    }
 }

@@ -436,7 +436,7 @@
   </Folder>
   <Folder Name="/tests/Elsa/Foundation/Identity/AspNetCoreIdentity/" />
   <Folder Name="/tests/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/">
-    <Project Path="tests/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Tests.csproj" />
+    <Project Path="tests/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/">
     <Project Path="tests/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/ProcessProbe/Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.ProcessProbe.csproj" />

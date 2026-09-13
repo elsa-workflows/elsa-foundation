@@ -1107,6 +1107,108 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
         }
     }
 
+    [Theory]
+    [InlineData("MutationReceiptId")]
+    [InlineData("OperationId")]
+    [InlineData("RequestFingerprint")]
+    public async Task Mutation_receipt_identity_corruption_fails_closed_before_domain_staging(string corruptedProperty)
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await using var context = CreateContext(databasePath);
+            await context.Database.EnsureCreatedAsync();
+            var mutation = EfIdentityAtomicMutation.Create("identity-corrupted-receipt", $"request-{corruptedProperty}");
+            var receipt = new MutationReceiptEntity
+            {
+                Id = mutation.MutationReceiptId,
+                MutationReceiptId = mutation.MutationReceiptId,
+                OperationId = mutation.OperationId,
+                RequestFingerprint = mutation.RequestFingerprint,
+                Status = (int)EfIdentityWriteStatus.Updated,
+                Version = 1,
+                Message = "persisted",
+                CreatedAt = DateTimeOffset.UtcNow,
+                ExpiresAt = DateTimeOffset.UtcNow.AddDays(1),
+                Revision = 1
+            };
+            switch (corruptedProperty)
+            {
+                case "MutationReceiptId":
+                    receipt.MutationReceiptId = "corrupt-receipt";
+                    break;
+                case "OperationId":
+                    receipt.OperationId = "corrupt-operation";
+                    break;
+                case "RequestFingerprint":
+                    receipt.RequestFingerprint = "corrupt-fingerprint";
+                    break;
+            }
+            context.MutationReceipts.Add(receipt);
+            await context.SaveChangesAsync();
+            context.ChangeTracker.Clear();
+
+            var staged = false;
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                new EfIdentityAtomicWrite(context).ExecuteAsync(
+                    mutation,
+                    _ =>
+                    {
+                        staged = true;
+                        return Task.FromResult(new EfIdentityWriteResult(EfIdentityWriteStatus.Updated, 2));
+                    }).AsTask());
+
+            Assert.False(staged);
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
+    [Fact]
+    public async Task Expired_receipt_identity_corruption_fails_closed_before_cleanup_or_domain_staging()
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await using var context = CreateContext(databasePath);
+            await context.Database.EnsureCreatedAsync();
+            var mutation = EfIdentityAtomicMutation.Create("expired-corrupted-receipt", "request");
+            context.MutationReceipts.Add(new MutationReceiptEntity
+            {
+                Id = mutation.MutationReceiptId,
+                MutationReceiptId = "corrupt-receipt",
+                OperationId = mutation.OperationId,
+                RequestFingerprint = mutation.RequestFingerprint,
+                Status = (int)EfIdentityWriteStatus.Updated,
+                Version = 1,
+                CreatedAt = DateTimeOffset.UnixEpoch,
+                ExpiresAt = DateTimeOffset.UnixEpoch,
+                Revision = 1
+            });
+            await context.SaveChangesAsync();
+            context.ChangeTracker.Clear();
+
+            var staged = false;
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                new EfIdentityAtomicWrite(context).ExecuteAsync(
+                    mutation,
+                    _ =>
+                    {
+                        staged = true;
+                        return Task.FromResult(new EfIdentityWriteResult(EfIdentityWriteStatus.Updated, 2));
+                    }).AsTask());
+
+            Assert.False(staged);
+            Assert.Equal("corrupt-receipt", (await context.MutationReceipts.AsNoTracking().SingleAsync()).MutationReceiptId);
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
     [Fact]
     public async Task Expired_receipts_are_reclaimed_and_cleanup_deletes_at_most_64_oldest_rows()
     {
@@ -1209,6 +1311,132 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
             Assert.Single(storedClaims);
             Assert.Equal("finance", storedClaims[0].ClaimValue);
             Assert.False(string.IsNullOrEmpty(storedClaims[0].Id));
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
+    [Fact]
+    public async Task Authority_update_fails_closed_when_the_persisted_root_identity_is_corrupt()
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await using var scope = await EfIdentityScope.OpenAsync(databasePath, "tenant-a");
+            var user = User("tenant-a", "corrupt-root-user", "Original", null) with { RoleIds = Set() };
+            await scope.Users.SaveAsync(user);
+            var persisted = await scope.Context.Users.SingleAsync();
+            persisted.TenantLookupKey = "corrupt-tenant-lookup";
+            await scope.Context.SaveChangesAsync();
+            scope.Context.ChangeTracker.Clear();
+            var receiptCount = await scope.Context.MutationReceipts.CountAsync();
+
+            var coordinator = new EfIdentityAuthorityAggregateCoordinator(scope.Context, scope.Access);
+            await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() => coordinator.SaveUserAsync(
+                user with { DisplayName = "Must not persist" },
+                expectedVersion: 1,
+                requireUniqueEmail: false));
+
+            var unchanged = await scope.Context.Users.AsNoTracking().SingleAsync();
+            Assert.Equal("Original Example", unchanged.DisplayName);
+            Assert.Equal("corrupt-tenant-lookup", unchanged.TenantLookupKey);
+            Assert.Equal(1, unchanged.Revision);
+            Assert.Equal(receiptCount, await scope.Context.MutationReceipts.CountAsync());
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
+    [Theory]
+    [InlineData("UserName")]
+    [InlineData("Email")]
+    [InlineData("RoleName")]
+    public async Task Authority_update_fails_closed_when_a_persisted_reservation_identity_is_corrupt(string reservationKind)
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await using var scope = await EfIdentityScope.OpenAsync(databasePath, "tenant-a");
+            var coordinator = new EfIdentityAuthorityAggregateCoordinator(scope.Context, scope.Access);
+            if (reservationKind == "RoleName")
+            {
+                var role = Role("tenant-a", "corrupt-reservation-role", "Reserved Role");
+                await scope.Roles.SaveAsync(role);
+                var reservation = await scope.Context.RoleNameReservations.SingleAsync();
+                reservation.TenantLookupKey = "corrupt-tenant-lookup";
+                await scope.Context.SaveChangesAsync();
+                scope.Context.ChangeTracker.Clear();
+
+                await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() => coordinator.SaveRoleAsync(
+                    role with { Description = "Must not persist" },
+                    expectedVersion: 1));
+                Assert.Equal(1, (await scope.Context.Roles.AsNoTracking().SingleAsync()).Revision);
+                return;
+            }
+
+            var user = User("tenant-a", "corrupt-reservation-user", "Reserved User", "reserved@example.test") with { RoleIds = Set() };
+            await new EfUserStore(scope.Context, scope.Access, emailUniquenessPolicy: IdentityEmailUniquenessPolicy.Unique).SaveAsync(user);
+            if (reservationKind == "UserName")
+                (await scope.Context.UserNameReservations.SingleAsync()).TenantLookupKey = "corrupt-tenant-lookup";
+            else
+                (await scope.Context.EmailReservations.SingleAsync()).TenantLookupKey = "corrupt-tenant-lookup";
+            await scope.Context.SaveChangesAsync();
+            scope.Context.ChangeTracker.Clear();
+
+            await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() => coordinator.SaveUserAsync(
+                user with { DisplayName = "Must not persist" },
+                expectedVersion: 1,
+                requireUniqueEmail: true));
+            Assert.Equal(1, (await scope.Context.Users.AsNoTracking().SingleAsync()).Revision);
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
+    [Fact]
+    public async Task Relationship_update_fails_closed_when_the_persisted_child_identity_is_corrupt()
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await using var scope = await EfIdentityScope.OpenAsync(databasePath, "tenant-a");
+            var user = User("tenant-a", "corrupt-child-user", "Child", null) with { RoleIds = Set() };
+            await scope.Users.SaveAsync(user);
+            var relationships = new EfIdentityAuthorityRelationshipCoordinator(
+                scope.Context, new EfIdentityAtomicWrite(scope.Context), scope.Access);
+            var added = await relationships.AddUserClaimsAsync(
+                user.TenantId,
+                user.Id,
+                expectedUserVersion: 1,
+                [new UserClaimEntity { ClaimType = "department", ClaimValue = "operations" }]);
+            Assert.Equal(EfIdentityWriteStatus.Updated, added.Status);
+
+            var persisted = await scope.Context.UserClaims.SingleAsync();
+            persisted.UserLookupKey = "corrupt-owner-lookup";
+            await scope.Context.SaveChangesAsync();
+            scope.Context.ChangeTracker.Clear();
+            var receiptCount = await scope.Context.MutationReceipts.CountAsync();
+
+            await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() => relationships.ReplaceUserClaimAsync(
+                user.TenantId,
+                user.Id,
+                Assert.IsType<long>(added.Version),
+                oldClaimType: "department",
+                oldClaimValue: "operations",
+                replacement: new UserClaimEntity { ClaimType = "department", ClaimValue = "finance" }));
+
+            var unchangedClaim = await scope.Context.UserClaims.AsNoTracking().SingleAsync();
+            var unchangedUser = await scope.Context.Users.AsNoTracking().SingleAsync();
+            Assert.Equal("operations", unchangedClaim.ClaimValue);
+            Assert.Equal("corrupt-owner-lookup", unchangedClaim.UserLookupKey);
+            Assert.Equal(2, unchangedUser.Revision);
+            Assert.Equal(receiptCount, await scope.Context.MutationReceipts.CountAsync());
         }
         finally
         {
@@ -1530,7 +1758,10 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
 
             var token = new UserTokenEntity
             {
-                TenantId = "caller", UserId = "caller", LoginProvider = "Identity", Name = "RecoveryCodes",
+                TenantId = "caller",
+                UserId = "caller",
+                LoginProvider = "Identity",
+                Name = "RecoveryCodes",
                 Value = "code-a;code-b"
             };
             var saved = await relationships.SaveUserTokenAsync("tenant-a", user.Id, 1, token);
@@ -1628,14 +1859,22 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
 
             var firstExternal = new ExternalIdentityEntity
             {
-                TenantId = "tenant-a", Provider = "google", ProviderSubject = "subject\u001fnext", UserId = firstUser.Id,
-                LinkedAt = DateTimeOffset.UnixEpoch, LastSeenAt = DateTimeOffset.UnixEpoch,
+                TenantId = "tenant-a",
+                Provider = "google",
+                ProviderSubject = "subject\u001fnext",
+                UserId = firstUser.Id,
+                LinkedAt = DateTimeOffset.UnixEpoch,
+                LastSeenAt = DateTimeOffset.UnixEpoch,
                 LinkPolicy = (int)ExternalIdentityLinkPolicy.Auto
             };
             var secondExternal = new ExternalIdentityEntity
             {
-                TenantId = "tenant-a", Provider = "google\u001fsubject", ProviderSubject = "next", UserId = firstUser.Id,
-                LinkedAt = DateTimeOffset.UnixEpoch, LastSeenAt = DateTimeOffset.UnixEpoch,
+                TenantId = "tenant-a",
+                Provider = "google\u001fsubject",
+                ProviderSubject = "next",
+                UserId = firstUser.Id,
+                LinkedAt = DateTimeOffset.UnixEpoch,
+                LastSeenAt = DateTimeOffset.UnixEpoch,
                 LinkPolicy = (int)ExternalIdentityLinkPolicy.Auto
             };
             var externalOne = await relationships.SaveExternalIdentityAsync(
@@ -1650,11 +1889,19 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
 
             var firstToken = new UserTokenEntity
             {
-                TenantId = "tenant-a", UserId = firstUser.Id, LoginProvider = "Identity", Name = "Recovery\u001fA", Value = "one"
+                TenantId = "tenant-a",
+                UserId = firstUser.Id,
+                LoginProvider = "Identity",
+                Name = "Recovery\u001fA",
+                Value = "one"
             };
             var secondToken = new UserTokenEntity
             {
-                TenantId = "tenant-a", UserId = firstUser.Id, LoginProvider = "Identity\u001fRecovery", Name = "A", Value = "two"
+                TenantId = "tenant-a",
+                UserId = firstUser.Id,
+                LoginProvider = "Identity\u001fRecovery",
+                Name = "A",
+                Value = "two"
             };
             var tokenOne = await relationships.SaveUserTokenAsync("tenant-a", firstUser.Id, 4, firstToken);
             var tokenTwo = await relationships.SaveUserTokenAsync("tenant-a", firstUser.Id, 5, secondToken);
@@ -1680,7 +1927,10 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
             var relationships = new EfIdentityAuthorityRelationshipCoordinator(scope.Context, new EfIdentityAtomicWrite(scope.Context), scope.Access);
             var claims = Enumerable.Range(0, 513).Select(index => new UserClaimEntity
             {
-                TenantId = "caller", UserId = "caller", ClaimType = "type", ClaimValue = $"value-{index:D3}"
+                TenantId = "caller",
+                UserId = "caller",
+                ClaimType = "type",
+                ClaimValue = $"value-{index:D3}"
             }).ToArray();
 
             await Assert.ThrowsAnyAsync<InvalidOperationException>(() => relationships.AddUserClaimsAsync(
@@ -1840,42 +2090,84 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
 
     private static ExternalIdentityEntity ExternalEntity(string tenantId, string userId, string provider, string subject) => new()
     {
-        Id = $"{tenantId}\u001f{provider}\u001f{subject}", TenantId = tenantId, TenantLookupKey = tenantId,
-        Provider = provider, ProviderLookupKey = provider, ProviderSubject = subject, ProviderSubjectLookupKey = subject,
-        UserId = userId, UserLookupKey = $"{tenantId}\u001f{userId}", LinkedAt = DateTimeOffset.UnixEpoch,
-        LastSeenAt = DateTimeOffset.UnixEpoch, LinkPolicy = (int)ExternalIdentityLinkPolicy.Auto, Revision = 1
+        Id = $"{tenantId}\u001f{provider}\u001f{subject}",
+        TenantId = tenantId,
+        TenantLookupKey = tenantId,
+        Provider = provider,
+        ProviderLookupKey = provider,
+        ProviderSubject = subject,
+        ProviderSubjectLookupKey = subject,
+        UserId = userId,
+        UserLookupKey = $"{tenantId}\u001f{userId}",
+        LinkedAt = DateTimeOffset.UnixEpoch,
+        LastSeenAt = DateTimeOffset.UnixEpoch,
+        LinkPolicy = (int)ExternalIdentityLinkPolicy.Auto,
+        Revision = 1
     };
 
     private static UserRoleEntity UserRoleEntity(string tenantId, string userId, string roleId, string id) => new()
     {
-        Id = id, TenantId = tenantId, TenantLookupKey = tenantId, UserId = userId,
-        UserLookupKey = $"{tenantId}\u001f{userId}", RoleId = roleId, RoleLookupKey = $"{tenantId}\u001f{roleId}", Revision = 1
+        Id = id,
+        TenantId = tenantId,
+        TenantLookupKey = tenantId,
+        UserId = userId,
+        UserLookupKey = $"{tenantId}\u001f{userId}",
+        RoleId = roleId,
+        RoleLookupKey = $"{tenantId}\u001f{roleId}",
+        Revision = 1
     };
 
     private static UserClaimEntity UserClaimEntity(string tenantId, string userId, string id) => new()
     {
-        Id = id, TenantId = tenantId, TenantLookupKey = tenantId, UserId = userId,
-        UserLookupKey = $"{tenantId}\u001f{userId}", ClaimType = "type", ClaimValue = "value", ClaimKey = $"{tenantId}\u001f{userId}\u001ftype", Revision = 1
+        Id = id,
+        TenantId = tenantId,
+        TenantLookupKey = tenantId,
+        UserId = userId,
+        UserLookupKey = $"{tenantId}\u001f{userId}",
+        ClaimType = "type",
+        ClaimValue = "value",
+        ClaimKey = $"{tenantId}\u001f{userId}\u001ftype",
+        Revision = 1
     };
 
     private static UserTokenEntity UserTokenEntity(string tenantId, string userId, string provider, string name, string value) => new()
     {
-        Id = $"{tenantId}\u001f{userId}\u001f{provider}\u001f{name}", TenantId = tenantId, TenantLookupKey = tenantId,
-        UserId = userId, UserLookupKey = $"{tenantId}\u001f{userId}", LoginProvider = provider, Name = name, Value = value, Revision = 1
+        Id = $"{tenantId}\u001f{userId}\u001f{provider}\u001f{name}",
+        TenantId = tenantId,
+        TenantLookupKey = tenantId,
+        UserId = userId,
+        UserLookupKey = $"{tenantId}\u001f{userId}",
+        LoginProvider = provider,
+        Name = name,
+        Value = value,
+        Revision = 1
     };
 
     private static TenantMembershipEntity TenantMembershipEntity(string tenantId, string userId, string roleId) => new()
     {
-        Id = $"{tenantId}\u001f{userId}", TenantId = tenantId, TenantLookupKey = tenantId, UserId = userId,
-        UserLookupKey = $"{tenantId}\u001f{userId}", Status = (int)TenantMembershipStatus.Active,
-        RoleIdsJson = $"[\"{roleId}\"]", DirectPermissionsJson = "[]", Revision = 1
+        Id = $"{tenantId}\u001f{userId}",
+        TenantId = tenantId,
+        TenantLookupKey = tenantId,
+        UserId = userId,
+        UserLookupKey = $"{tenantId}\u001f{userId}",
+        Status = (int)TenantMembershipStatus.Active,
+        RoleIdsJson = $"[\"{roleId}\"]",
+        DirectPermissionsJson = "[]",
+        Revision = 1
     };
 
     private static MutationReceiptEntity MutationReceiptEntity(string receiptId, string operationId) => new()
     {
-        Id = receiptId, MutationReceiptId = receiptId, OperationId = operationId, RequestFingerprint = "fingerprint",
-        Status = 1, Version = 1, Message = "committed", CreatedAt = DateTimeOffset.UnixEpoch,
-        ExpiresAt = DateTimeOffset.UnixEpoch.AddDays(1), Revision = 1
+        Id = receiptId,
+        MutationReceiptId = receiptId,
+        OperationId = operationId,
+        RequestFingerprint = "fingerprint",
+        Status = 1,
+        Version = 1,
+        Message = "committed",
+        CreatedAt = DateTimeOffset.UnixEpoch,
+        ExpiresAt = DateTimeOffset.UnixEpoch.AddDays(1),
+        Revision = 1
     };
 
     private static void DeleteDatabaseFiles(string databasePath)

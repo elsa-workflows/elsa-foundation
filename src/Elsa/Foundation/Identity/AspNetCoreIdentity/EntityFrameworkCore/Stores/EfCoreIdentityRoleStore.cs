@@ -9,6 +9,8 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using EfIdentityStoreSupport = Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores.IdentityEntityFrameworkAdapterSupport;
+using IdentityEntityFrameworkRevisionCodec = Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores.IdentityEntityFrameworkRevisionSupport;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Stores;
 
@@ -161,9 +163,9 @@ public sealed class EfCoreIdentityRoleStore(
                 ? new RoleRecord(role.Id, tenantId, role.Name ?? string.Empty, null,
                     new HashSet<string>(StringComparer.Ordinal), false)
                 : ToRoleRecord(existing)) with
-            {
-                Name = role.Name ?? string.Empty
-            };
+        {
+            Name = role.Name ?? string.Empty
+        };
         var result = await aggregates.SaveRoleAsync(
             record,
             createOnly ? 0 : expectedRevision,

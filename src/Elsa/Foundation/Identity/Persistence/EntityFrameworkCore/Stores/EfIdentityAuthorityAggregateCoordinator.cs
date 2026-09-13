@@ -42,6 +42,8 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
             {
                 var id = EfIdentityStoreSupport.RecordId(user.TenantId, user.Id);
                 var existing = await context.Users.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+                if (existing is not null)
+                    EfIdentityStoreSupport.EnsureUserIdentity(existing, user.TenantId, user.Id);
                 if (!CanWrite(existing?.Revision, expectedVersion))
                     return existing is null && expectedVersion is > 0 ? NotFound(id) : Conflict(id);
 
@@ -106,6 +108,8 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
             {
                 var id = EfIdentityStoreSupport.RecordId(role.TenantId, role.Id);
                 var existing = await context.Roles.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+                if (existing is not null)
+                    EfIdentityStoreSupport.EnsureRoleIdentity(existing, role.TenantId, role.Id);
                 if (!CanWrite(existing?.Revision, expectedVersion))
                     return existing is null && expectedVersion is > 0 ? NotFound(id) : Conflict(id);
 
@@ -167,7 +171,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 if (user.Revision != expectedVersion)
                     return Conflict(id);
 
-                EnsureOwner(user.TenantId, user.UserId, tenantId, userId, "user authority");
+                EfIdentityStoreSupport.EnsureUserIdentity(user, tenantId, userId);
                 var claimIds = ReadRegistry(user.ClaimIdsJson, "user claims");
                 var loginIds = ReadRegistry(user.LoginIdsJson, "external logins");
                 var roleLinkIds = ReadRegistry(user.RoleLinkIdsJson, "user-role links");
@@ -181,7 +185,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                         await context.UserClaims.SingleOrDefaultAsync(x => x.Id == childId, token),
                         "user claim",
                         childId);
-                    EnsureOwner(claim.TenantId, claim.UserId, tenantId, userId, "user claim");
+                    EfIdentityStoreSupport.EnsureUserClaimIdentity(claim, tenantId, userId);
                     context.UserClaims.Remove(claim);
                 }
 
@@ -191,7 +195,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                         await context.ExternalIdentities.SingleOrDefaultAsync(x => x.Id == childId, token),
                         "external login",
                         childId);
-                    EnsureOwner(login.TenantId, login.UserId, tenantId, userId, "external login");
+                    EfIdentityStoreSupport.EnsureExternalIdentity(login, tenantId, login.Provider, login.ProviderSubject, userId);
                     context.ExternalIdentities.Remove(login);
                 }
 
@@ -201,7 +205,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                         await context.UserTokens.SingleOrDefaultAsync(x => x.Id == childId, token),
                         "user token",
                         childId);
-                    EnsureOwner(tokenRow.TenantId, tokenRow.UserId, tenantId, userId, "user token");
+                    EfIdentityStoreSupport.EnsureUserTokenIdentity(tokenRow, tenantId, userId);
                     context.UserTokens.Remove(tokenRow);
                 }
 
@@ -211,7 +215,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                         await context.TenantMemberships.SingleOrDefaultAsync(x => x.Id == childId, token),
                         "tenant membership",
                         childId);
-                    EnsureOwner(membership.TenantId, membership.UserId, tenantId, userId, "tenant membership");
+                    EfIdentityStoreSupport.EnsureTenantMembershipIdentity(membership, tenantId, userId);
                     context.TenantMemberships.Remove(membership);
                 }
 
@@ -221,7 +225,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                         await context.UserRoles.SingleOrDefaultAsync(x => x.Id == childId, token),
                         "user-role link",
                         childId);
-                    EnsureOwner(link.TenantId, link.UserId, tenantId, userId, "user-role link");
+                    EfIdentityStoreSupport.EnsureUserRoleIdentity(link, tenantId, userId, link.RoleId);
 
                     var role = RequireRegistered(
                         await context.Roles.SingleOrDefaultAsync(
@@ -229,21 +233,20 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                             token),
                         "linked role",
                         link.RoleId);
-                    EnsureOwner(role.TenantId, role.RoleId, tenantId, link.RoleId, "linked role");
+                    EfIdentityStoreSupport.EnsureRoleIdentity(role, tenantId, link.RoleId);
                     role.UserLinkIdsJson = RemoveId(role.UserLinkIdsJson, link.Id);
                     role.Revision = checked(role.Revision + 1);
                     context.UserRoles.Remove(link);
                 }
 
-                var tenant = EfIdentityStoreSupport.TenantLookup(tenantId);
                 if (user.NormalizedUserNameKey is not null)
                 {
                     var name = await context.UserNameReservations.SingleOrDefaultAsync(
-                        x => x.Id == user.NormalizedUserNameKey && x.TenantLookupKey == tenant,
+                        x => x.Id == user.NormalizedUserNameKey,
                         token);
                     if (name is not null)
                     {
-                        EnsureOwner(name.TenantId, name.UserId, tenantId, userId, "user-name reservation");
+                        EfIdentityStoreSupport.EnsureUserNameReservationIdentity(name, tenantId, user.NormalizedUserName!, userId);
                         context.UserNameReservations.Remove(name);
                     }
                 }
@@ -251,11 +254,11 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 if (user.NormalizedEmailKey is not null)
                 {
                     var email = await context.EmailReservations.SingleOrDefaultAsync(
-                        x => x.Id == user.NormalizedEmailKey && x.TenantLookupKey == tenant,
+                        x => x.Id == user.NormalizedEmailKey,
                         token);
                     if (email is not null)
                     {
-                        EnsureOwner(email.TenantId, email.UserId, tenantId, userId, "email reservation");
+                        EfIdentityStoreSupport.EnsureEmailReservationIdentity(email, tenantId, user.NormalizedEmail!, userId);
                         context.EmailReservations.Remove(email);
                     }
                 }
@@ -283,7 +286,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 if (role.Revision != expectedVersion)
                     return Conflict(id);
 
-                EnsureOwner(role.TenantId, role.RoleId, tenantId, roleId, "role authority");
+                EfIdentityStoreSupport.EnsureRoleIdentity(role, tenantId, roleId);
                 var claimIds = ReadRegistry(role.ClaimIdsJson, "role claims");
                 var roleLinkIds = ReadRegistry(role.UserLinkIdsJson, "user-role links");
                 EnsureAggregateRelationshipCapacity(claimIds, roleLinkIds);
@@ -294,7 +297,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                         await context.RoleClaims.SingleOrDefaultAsync(x => x.Id == childId, token),
                         "role claim",
                         childId);
-                    EnsureOwner(claim.TenantId, claim.RoleId, tenantId, roleId, "role claim");
+                    EfIdentityStoreSupport.EnsureRoleClaimIdentity(claim, tenantId, roleId);
                     context.RoleClaims.Remove(claim);
                 }
 
@@ -304,7 +307,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                         await context.UserRoles.SingleOrDefaultAsync(x => x.Id == childId, token),
                         "user-role link",
                         childId);
-                    EnsureOwner(link.TenantId, link.RoleId, tenantId, roleId, "user-role link");
+                    EfIdentityStoreSupport.EnsureUserRoleIdentity(link, tenantId, link.UserId, roleId);
 
                     var user = RequireRegistered(
                         await context.Users.SingleOrDefaultAsync(
@@ -312,22 +315,21 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                             token),
                         "linked user",
                         link.UserId);
-                    EnsureOwner(user.TenantId, user.UserId, tenantId, link.UserId, "linked user");
+                    EfIdentityStoreSupport.EnsureUserIdentity(user, tenantId, link.UserId);
                     user.RoleLinkIdsJson = RemoveId(user.RoleLinkIdsJson, link.Id);
                     user.RoleIdsJson = RemoveEquivalentId(user.RoleIdsJson, link.RoleId);
                     user.Revision = checked(user.Revision + 1);
                     context.UserRoles.Remove(link);
                 }
 
-                var tenant = EfIdentityStoreSupport.TenantLookup(tenantId);
                 if (role.NormalizedNameKey is not null)
                 {
                     var reservation = await context.RoleNameReservations.SingleOrDefaultAsync(
-                        x => x.Id == role.NormalizedNameKey && x.TenantLookupKey == tenant,
+                        x => x.Id == role.NormalizedNameKey,
                         token);
                     if (reservation is not null)
                     {
-                        EnsureOwner(reservation.TenantId, reservation.RoleId, tenantId, roleId, "role-name reservation");
+                        EfIdentityStoreSupport.EnsureRoleNameReservationIdentity(reservation, tenantId, role.NormalizedName!, roleId);
                         context.RoleNameReservations.Remove(reservation);
                     }
                 }
@@ -352,7 +354,11 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
     private async Task<bool> ReserveUserNameAsync(UserNameReservationEntity reservation, string userId, CancellationToken cancellationToken)
     {
         var current = await context.UserNameReservations.SingleOrDefaultAsync(x => x.Id == reservation.Id, cancellationToken);
-        if (current is not null) return Same(current.UserId, userId);
+        if (current is not null)
+        {
+            EfIdentityStoreSupport.EnsureUserNameReservationIdentity(current, reservation.TenantId, reservation.NormalizedUserName);
+            return Same(current.UserId, userId);
+        }
         context.UserNameReservations.Add(reservation);
         return true;
     }
@@ -360,7 +366,11 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
     private async Task<bool> ReserveEmailAsync(EmailReservationEntity reservation, string userId, CancellationToken cancellationToken)
     {
         var current = await context.EmailReservations.SingleOrDefaultAsync(x => x.Id == reservation.Id, cancellationToken);
-        if (current is not null) return Same(current.UserId, userId);
+        if (current is not null)
+        {
+            EfIdentityStoreSupport.EnsureEmailReservationIdentity(current, reservation.TenantId, reservation.NormalizedEmail);
+            return Same(current.UserId, userId);
+        }
         context.EmailReservations.Add(reservation);
         return true;
     }
@@ -368,65 +378,99 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
     private async Task<bool> ReserveRoleNameAsync(RoleNameReservationEntity reservation, string roleId, CancellationToken cancellationToken)
     {
         var current = await context.RoleNameReservations.SingleOrDefaultAsync(x => x.Id == reservation.Id, cancellationToken);
-        if (current is not null) return Same(current.RoleId, roleId);
+        if (current is not null)
+        {
+            EfIdentityStoreSupport.EnsureRoleNameReservationIdentity(current, reservation.TenantId, reservation.NormalizedRoleName);
+            return Same(current.RoleId, roleId);
+        }
         context.RoleNameReservations.Add(reservation);
         return true;
     }
 
     private async Task DeleteUserNameReservationAsync(string? key, string tenantId, string userId, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(key)) return;
+        if (string.IsNullOrEmpty(key))
+            return;
         var current = await context.UserNameReservations.SingleOrDefaultAsync(x => x.Id == key, cancellationToken);
-        if (current is not null && Same(current.UserId, userId) && Same(current.TenantId, tenantId)) context.UserNameReservations.Remove(current);
+        if (current is not null)
+        {
+            EfIdentityStoreSupport.EnsureUserNameReservationIdentity(current, tenantId, current.NormalizedUserName, userId);
+            context.UserNameReservations.Remove(current);
+        }
     }
 
     private async Task DeleteEmailReservationAsync(string? key, string tenantId, string userId, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(key)) return;
+        if (string.IsNullOrEmpty(key))
+            return;
         var current = await context.EmailReservations.SingleOrDefaultAsync(x => x.Id == key, cancellationToken);
-        if (current is not null && Same(current.UserId, userId) && Same(current.TenantId, tenantId)) context.EmailReservations.Remove(current);
+        if (current is not null)
+        {
+            EfIdentityStoreSupport.EnsureEmailReservationIdentity(current, tenantId, current.NormalizedEmail, userId);
+            context.EmailReservations.Remove(current);
+        }
     }
 
     private async Task DeleteRoleNameReservationAsync(string? key, string tenantId, string roleId, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(key)) return;
+        if (string.IsNullOrEmpty(key))
+            return;
         var current = await context.RoleNameReservations.SingleOrDefaultAsync(x => x.Id == key, cancellationToken);
-        if (current is not null && Same(current.RoleId, roleId) && Same(current.TenantId, tenantId)) context.RoleNameReservations.Remove(current);
+        if (current is not null)
+        {
+            EfIdentityStoreSupport.EnsureRoleNameReservationIdentity(current, tenantId, current.NormalizedRoleName, roleId);
+            context.RoleNameReservations.Remove(current);
+        }
     }
 
     private static UserNameReservationEntity? ReservationForUserName(UserEntity user)
     {
-        if (string.IsNullOrWhiteSpace(user.NormalizedUserName)) return null;
+        if (string.IsNullOrWhiteSpace(user.NormalizedUserName))
+            return null;
         var normalized = user.NormalizedUserName;
         return new UserNameReservationEntity
         {
-            Id = user.NormalizedUserNameKey!, TenantId = user.TenantId,
-            TenantLookupKey = EfIdentityStoreSupport.TenantLookup(user.TenantId), NormalizedUserName = normalized,
-            NormalizedUserNameKey = user.NormalizedUserNameKey!, UserId = user.UserId, Revision = 1
+            Id = user.NormalizedUserNameKey!,
+            TenantId = user.TenantId,
+            TenantLookupKey = EfIdentityStoreSupport.TenantLookup(user.TenantId),
+            NormalizedUserName = normalized,
+            NormalizedUserNameKey = user.NormalizedUserNameKey!,
+            UserId = user.UserId,
+            Revision = 1
         };
     }
 
     private static EmailReservationEntity? ReservationForEmail(UserEntity user)
     {
-        if (string.IsNullOrWhiteSpace(user.NormalizedEmail)) return null;
+        if (string.IsNullOrWhiteSpace(user.NormalizedEmail))
+            return null;
         var normalized = user.NormalizedEmail;
         return new EmailReservationEntity
         {
-            Id = user.NormalizedEmailKey!, TenantId = user.TenantId,
-            TenantLookupKey = EfIdentityStoreSupport.TenantLookup(user.TenantId), NormalizedEmail = normalized,
-            NormalizedEmailKey = user.NormalizedEmailKey!, UserId = user.UserId, Revision = 1
+            Id = user.NormalizedEmailKey!,
+            TenantId = user.TenantId,
+            TenantLookupKey = EfIdentityStoreSupport.TenantLookup(user.TenantId),
+            NormalizedEmail = normalized,
+            NormalizedEmailKey = user.NormalizedEmailKey!,
+            UserId = user.UserId,
+            Revision = 1
         };
     }
 
     private static RoleNameReservationEntity? ReservationForRoleName(RoleEntity role)
     {
-        if (string.IsNullOrWhiteSpace(role.NormalizedName)) return null;
+        if (string.IsNullOrWhiteSpace(role.NormalizedName))
+            return null;
         var normalized = role.NormalizedName;
         return new RoleNameReservationEntity
         {
-            Id = role.NormalizedNameKey!, TenantId = role.TenantId,
-            TenantLookupKey = EfIdentityStoreSupport.TenantLookup(role.TenantId), NormalizedRoleName = normalized,
-            NormalizedRoleNameKey = role.NormalizedNameKey!, RoleId = role.RoleId, Revision = 1
+            Id = role.NormalizedNameKey!,
+            TenantId = role.TenantId,
+            TenantLookupKey = EfIdentityStoreSupport.TenantLookup(role.TenantId),
+            NormalizedRoleName = normalized,
+            NormalizedRoleNameKey = role.NormalizedNameKey!,
+            RoleId = role.RoleId,
+            Revision = 1
         };
     }
 
@@ -447,21 +491,35 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
 
     private static void Apply(UserEntity entity, UserRecord user)
     {
-        entity.TenantId = user.TenantId; entity.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(user.TenantId); entity.UserId = user.Id; entity.UserIdOrderKey = EfIdentityStoreSupport.SortableOrderKey(user.Id, nameof(user.Id));
-        entity.UserName = user.UserName; entity.NormalizedUserName = string.IsNullOrWhiteSpace(user.UserName) ? null : EfIdentityStoreSupport.Normalize(user.UserName);
+        entity.TenantId = user.TenantId;
+        entity.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(user.TenantId);
+        entity.UserId = user.Id;
+        entity.UserIdOrderKey = EfIdentityStoreSupport.SortableOrderKey(user.Id, nameof(user.Id));
+        entity.UserName = user.UserName;
+        entity.NormalizedUserName = string.IsNullOrWhiteSpace(user.UserName) ? null : EfIdentityStoreSupport.Normalize(user.UserName);
         entity.NormalizedUserNameKey = string.IsNullOrWhiteSpace(entity.NormalizedUserName) ? null : EfIdentityStoreSupport.Lookup(user.TenantId, entity.NormalizedUserName);
-        entity.Email = user.Email; entity.NormalizedEmail = string.IsNullOrWhiteSpace(user.Email) ? null : EfIdentityStoreSupport.Normalize(user.Email);
+        entity.Email = user.Email;
+        entity.NormalizedEmail = string.IsNullOrWhiteSpace(user.Email) ? null : EfIdentityStoreSupport.Normalize(user.Email);
         entity.NormalizedEmailKey = string.IsNullOrWhiteSpace(entity.NormalizedEmail) ? null : EfIdentityStoreSupport.Lookup(user.TenantId, entity.NormalizedEmail);
-        entity.DisplayName = user.DisplayName; entity.Status = (int)user.Status; entity.Ownership = (int)user.Ownership;
-        entity.RoleIdsJson = EfIdentityStoreSupport.SerializeSet(user.RoleIds); entity.DirectPermissionsJson = EfIdentityStoreSupport.SerializeSet(user.DirectPermissions);
+        entity.DisplayName = user.DisplayName;
+        entity.Status = (int)user.Status;
+        entity.Ownership = (int)user.Ownership;
+        entity.RoleIdsJson = EfIdentityStoreSupport.SerializeSet(user.RoleIds);
+        entity.DirectPermissionsJson = EfIdentityStoreSupport.SerializeSet(user.DirectPermissions);
     }
 
     private static void Apply(RoleEntity entity, RoleRecord role)
     {
-        entity.TenantId = role.TenantId; entity.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(role.TenantId); entity.RoleId = role.Id; entity.RoleIdOrderKey = EfIdentityStoreSupport.SortableOrderKey(role.Id, nameof(role.Id));
-        entity.Name = role.Name; entity.NormalizedName = string.IsNullOrWhiteSpace(role.Name) ? null : EfIdentityStoreSupport.Normalize(role.Name);
+        entity.TenantId = role.TenantId;
+        entity.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(role.TenantId);
+        entity.RoleId = role.Id;
+        entity.RoleIdOrderKey = EfIdentityStoreSupport.SortableOrderKey(role.Id, nameof(role.Id));
+        entity.Name = role.Name;
+        entity.NormalizedName = string.IsNullOrWhiteSpace(role.Name) ? null : EfIdentityStoreSupport.Normalize(role.Name);
         entity.NormalizedNameKey = string.IsNullOrWhiteSpace(entity.NormalizedName) ? null : EfIdentityStoreSupport.Lookup(role.TenantId, entity.NormalizedName);
-        entity.Description = role.Description; entity.PermissionsJson = EfIdentityStoreSupport.SerializeSet(role.Permissions); entity.System = role.System;
+        entity.Description = role.Description;
+        entity.PermissionsJson = EfIdentityStoreSupport.SerializeSet(role.Permissions);
+        entity.System = role.System;
     }
 
     private static IReadOnlyList<string> ReadRegistry(string? json, string owner)
@@ -487,15 +545,6 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
             return entity;
 
         var message = $"Registered identity aggregate child '{kind}/{id}' does not exist.";
-        throw new IdentityEntityFrameworkPersistenceException(message, new InvalidOperationException(message));
-    }
-
-    private static void EnsureOwner(string actualTenant, string actualOwner, string expectedTenant, string expectedOwner, string kind)
-    {
-        if (Same(actualTenant, expectedTenant) && Same(actualOwner, expectedOwner))
-            return;
-
-        var message = $"The registered {kind} belongs to a different Identity authority owner.";
         throw new IdentityEntityFrameworkPersistenceException(message, new InvalidOperationException(message));
     }
 

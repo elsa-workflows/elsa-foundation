@@ -11,6 +11,7 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Seeding;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
@@ -132,7 +133,7 @@ public static class AspNetCoreIdentityEntityFrameworkCoreServiceCollectionExtens
                 isDevelopmentOrDemo,
                 seed is null
                     ? null
-                    : IdentityEntityFrameworkKey.FramedRecordId(
+                    : IdentityEntityFrameworkAdapterSupport.FramedRecordId(
                         seed.UserName,
                         seed.Password,
                         seed.Email,

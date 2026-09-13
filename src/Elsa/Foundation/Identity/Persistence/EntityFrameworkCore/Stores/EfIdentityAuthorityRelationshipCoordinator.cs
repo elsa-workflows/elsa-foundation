@@ -111,8 +111,10 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
         return await ExecuteAsync(tenantId, operation, fingerprint, async token =>
         {
             var user = await LoadUserAsync(tenantId, userId, token);
-            if (user is null) return new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound, null, "Identity user was not found.");
-            if (user.Revision != expectedVersion) return Conflict(user.Id);
+            if (user is null)
+                return new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound, null, "Identity user was not found.");
+            if (user.Revision != expectedVersion)
+                return Conflict(user.Id);
             var beforeCount = RelationshipCount(user);
             var ids = Registry(user, registry);
             foreach (var claim in canonicalClaims)
@@ -122,7 +124,10 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
                 {
                     var existing = await context.UserClaims.SingleOrDefaultAsync(x => x.Id == id, token);
                     if (existing is not null)
+                    {
+                        EfIdentityStoreSupport.EnsureUserClaimIdentity(existing, tenantId, userId);
                         context.UserClaims.Remove(existing);
+                    }
                     ids.Remove(id);
                 }
                 else
@@ -135,6 +140,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
                     }
                     else
                     {
+                        EfIdentityStoreSupport.EnsureUserClaimIdentity(existing, tenantId, userId);
                         // A relationship upsert advances the child revision just as the
                         // provider-neutral mutation batch does, even when its owner revision
                         // is the externally visible CAS boundary.
@@ -155,20 +161,26 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
         ExecuteAsync(tenantId, operation, Fingerprint(operation, tenantId, userId, expectedVersion.ToString(CultureInfo.InvariantCulture), tokenRow.LoginProvider, tokenRow.Name, tokenRow.Value), async token =>
         {
             var user = await LoadUserAsync(tenantId, userId, token);
-            if (user is null) return new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound);
-            if (user.Revision != expectedVersion) return Conflict(user.Id);
+            if (user is null)
+                return new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound);
+            if (user.Revision != expectedVersion)
+                return Conflict(user.Id);
             var id = TokenId(tenantId, userId, tokenRow.LoginProvider, tokenRow.Name);
             var existing = await context.UserTokens.SingleOrDefaultAsync(x => x.Id == id, token);
+            if (existing is not null)
+                EfIdentityStoreSupport.EnsureUserTokenIdentity(existing, tenantId, userId);
             var beforeCount = RelationshipCount(user);
             var ids = Registry(user, UserRegistry.Tokens);
             if (delete)
             {
-                if (existing is not null) context.UserTokens.Remove(existing);
+                if (existing is not null)
+                    context.UserTokens.Remove(existing);
                 ids.Remove(id);
             }
             else
             {
-                Prepare(tokenRow, tenantId, userId); tokenRow.Id = id;
+                Prepare(tokenRow, tenantId, userId);
+                tokenRow.Id = id;
                 if (existing is null)
                     context.UserTokens.Add(tokenRow);
                 else
@@ -178,7 +190,9 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
                 }
                 ids.Add(id);
             }
-            SetRegistry(user, UserRegistry.Tokens, ids); EnsureUserRelationshipCapacity(user, beforeCount); user.Revision = checked(user.Revision + 1);
+            SetRegistry(user, UserRegistry.Tokens, ids);
+            EnsureUserRelationshipCapacity(user, beforeCount);
+            user.Revision = checked(user.Revision + 1);
             return Updated(user.Id, user.Revision);
         }, cancellationToken);
 
@@ -186,25 +200,39 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
         ExecuteAsync(tenantId, "redeem-recovery-code", Fingerprint("redeem-recovery-code", tenantId, userId, expectedVersion.ToString(CultureInfo.InvariantCulture), provider, name, code, Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)), async token =>
         {
             var user = await LoadUserAsync(tenantId, userId, token);
-            if (user is null || user.Revision != expectedVersion) return user is null ? new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound) : Conflict(user.Id);
+            if (user is null || user.Revision != expectedVersion)
+                return user is null ? new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound) : Conflict(user.Id);
             var id = TokenId(tenantId, userId, provider, name);
             var row = await context.UserTokens.SingleOrDefaultAsync(x => x.Id == id, token);
-            if (row is null) return new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound);
+            if (row is null)
+                return new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound);
+            EfIdentityStoreSupport.EnsureUserTokenIdentity(row, tenantId, userId);
             var codes = (row.Value ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
-            if (!codes.Remove(code)) return new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound);
-            row.Value = string.Join(';', codes.Order(StringComparer.Ordinal)); row.Revision = checked(row.Revision + 1); user.Revision = checked(user.Revision + 1);
+            if (!codes.Remove(code))
+                return new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound);
+            row.Value = string.Join(';', codes.Order(StringComparer.Ordinal));
+            row.Revision = checked(row.Revision + 1);
+            user.Revision = checked(user.Revision + 1);
             return Updated(user.Id, user.Revision);
         }, cancellationToken);
 
     private Task<EfIdentityWriteResult> MutateRoleClaimAsync(string operation, string tenantId, string roleId, long expectedVersion, RoleClaimEntity claim, bool delete, CancellationToken cancellationToken) =>
         ExecuteAsync(tenantId, operation, Fingerprint(operation, tenantId, roleId, expectedVersion.ToString(CultureInfo.InvariantCulture), claim.ClaimType, claim.ClaimValue), async token =>
         {
-            var role = await context.Roles.SingleOrDefaultAsync(x => x.Id == EfIdentityStoreSupport.RecordId(tenantId, roleId), token);
-            if (role is null) return new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound);
-            if (role.Revision != expectedVersion) return Conflict(role.Id);
-            var id = ClaimId(tenantId, roleId, claim.ClaimType, claim.ClaimValue); claim.Id = id;
-            var existing = await context.RoleClaims.SingleOrDefaultAsync(x => x.Id == id, token); var beforeCount = RelationshipCount(role); var ids = EfIdentityStoreSupport.DeserializeSet(role.ClaimIdsJson).ToHashSet(StringComparer.Ordinal);
-            if (delete) { if (existing is not null) context.RoleClaims.Remove(existing); ids.Remove(id); }
+            var role = await LoadRoleAsync(tenantId, roleId, token);
+            if (role is null)
+                return new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound);
+            if (role.Revision != expectedVersion)
+                return Conflict(role.Id);
+            var id = ClaimId(tenantId, roleId, claim.ClaimType, claim.ClaimValue);
+            claim.Id = id;
+            var existing = await context.RoleClaims.SingleOrDefaultAsync(x => x.Id == id, token);
+            if (existing is not null)
+                EfIdentityStoreSupport.EnsureRoleClaimIdentity(existing, tenantId, roleId);
+            var beforeCount = RelationshipCount(role);
+            var ids = EfIdentityStoreSupport.DeserializeSet(role.ClaimIdsJson).ToHashSet(StringComparer.Ordinal);
+            if (delete)
+            { if (existing is not null) context.RoleClaims.Remove(existing); ids.Remove(id); }
             else
             {
                 Prepare(claim, tenantId, roleId);
@@ -217,7 +245,10 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
                 }
                 ids.Add(id);
             }
-            role.ClaimIdsJson = EfIdentityStoreSupport.SerializeSet(ids); EnsureRoleRelationshipCapacity(role, beforeCount); role.Revision = checked(role.Revision + 1); return Updated(role.Id, role.Revision);
+            role.ClaimIdsJson = EfIdentityStoreSupport.SerializeSet(ids);
+            EnsureRoleRelationshipCapacity(role, beforeCount);
+            role.Revision = checked(role.Revision + 1);
+            return Updated(role.Id, role.Revision);
         }, cancellationToken);
 
     private Task<EfIdentityWriteResult> ReplaceRoleClaimCoreAsync(
@@ -230,20 +261,29 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
         CancellationToken cancellationToken) =>
         ExecuteAsync(tenantId, "replace-role-claim", Fingerprint("replace-role-claim", tenantId, roleId, expectedVersion.ToString(CultureInfo.InvariantCulture), oldClaimType, oldClaimValue, replacement.ClaimType, replacement.ClaimValue), async token =>
         {
-            var role = await context.Roles.SingleOrDefaultAsync(x => x.Id == EfIdentityStoreSupport.RecordId(tenantId, roleId), token);
-            if (role is null) return new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound);
-            if (role.Revision != expectedVersion) return Conflict(role.Id);
+            var role = await LoadRoleAsync(tenantId, roleId, token);
+            if (role is null)
+                return new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound);
+            if (role.Revision != expectedVersion)
+                return Conflict(role.Id);
 
             var oldId = ClaimId(tenantId, roleId, oldClaimType, oldClaimValue);
             var newId = ClaimId(tenantId, roleId, replacement.ClaimType, replacement.ClaimValue);
             var oldRow = await context.RoleClaims.SingleOrDefaultAsync(x => x.Id == oldId, token);
             var newRow = oldId == newId ? oldRow : await context.RoleClaims.SingleOrDefaultAsync(x => x.Id == newId, token);
-            if (newRow is not null && oldId != newId) return Conflict(newId);
+            if (oldRow is not null)
+                EfIdentityStoreSupport.EnsureRoleClaimIdentity(oldRow, tenantId, roleId);
+            if (newRow is not null && !ReferenceEquals(newRow, oldRow))
+                EfIdentityStoreSupport.EnsureRoleClaimIdentity(newRow, tenantId, roleId);
+            if (newRow is not null && oldId != newId)
+                return Conflict(newId);
             var beforeCount = RelationshipCount(role);
             var ids = EfIdentityStoreSupport.DeserializeSet(role.ClaimIdsJson).ToHashSet(StringComparer.Ordinal);
-            if (oldRow is not null && oldId != newId) context.RoleClaims.Remove(oldRow);
+            if (oldRow is not null && oldId != newId)
+                context.RoleClaims.Remove(oldRow);
             Prepare(replacement, tenantId, roleId);
-            if (newRow is null) { if (oldId == newId) newRow = oldRow; if (newRow is null) context.RoleClaims.Add(replacement); }
+            if (newRow is null)
+            { if (oldId == newId) newRow = oldRow; if (newRow is null) context.RoleClaims.Add(replacement); }
             else
             {
                 Apply(newRow, replacement);
@@ -261,16 +301,27 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
         ExecuteAsync(membership.TenantId, "save-tenant-membership", Fingerprint("save-tenant-membership", membership.TenantId, membership.UserId, membership.Status.ToString(CultureInfo.InvariantCulture), membership.RoleIdsJson, membership.DirectPermissionsJson, expectedVersion?.ToString(CultureInfo.InvariantCulture), enforce.ToString()), async token =>
         {
             var user = await LoadUserAsync(membership.TenantId, membership.UserId, token);
-            if (user is null) return new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound);
-            var id = EfIdentityStoreSupport.RecordId(membership.TenantId, membership.UserId); var existing = await context.TenantMemberships.SingleOrDefaultAsync(x => x.Id == id, token);
+            if (user is null)
+                return new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound);
+            var id = EfIdentityStoreSupport.RecordId(membership.TenantId, membership.UserId);
+            var existing = await context.TenantMemberships.SingleOrDefaultAsync(x => x.Id == id, token);
+            if (existing is not null)
+                EfIdentityStoreSupport.EnsureTenantMembershipIdentity(existing, membership.TenantId, membership.UserId);
             if (enforce && expectedVersion is { } expected &&
                 ((expected == 0 && existing is not null) || (expected > 0 && (existing is null || existing.Revision != expected))))
                 return existing is null ? (expected == 0 ? new EfIdentityWriteResult(EfIdentityWriteStatus.Conflict, Message: "Identity membership already exists.") : new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound)) : Conflict(id);
-            membership.Id = id; Prepare(membership, membership.TenantId, membership.UserId);
-            if (existing is null) { membership.Revision = 1; context.TenantMemberships.Add(membership); } else { membership.Revision = checked(existing.Revision + 1); Apply(existing, membership); existing.Revision = membership.Revision; }
+            membership.Id = id;
+            Prepare(membership, membership.TenantId, membership.UserId);
+            if (existing is null)
+            { membership.Revision = 1; context.TenantMemberships.Add(membership); }
+            else
+            { membership.Revision = checked(existing.Revision + 1); Apply(existing, membership); existing.Revision = membership.Revision; }
             var beforeCount = RelationshipCount(user);
             var ids = Registry(user, UserRegistry.TenantMemberships);
-            ids.Add(id); SetRegistry(user, UserRegistry.TenantMemberships, ids); EnsureUserRelationshipCapacity(user, beforeCount); user.Revision = checked(user.Revision + 1);
+            ids.Add(id);
+            SetRegistry(user, UserRegistry.TenantMemberships, ids);
+            EnsureUserRelationshipCapacity(user, beforeCount);
+            user.Revision = checked(user.Revision + 1);
             return Updated(id, membership.Revision);
         }, cancellationToken);
 
@@ -297,6 +348,8 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
             var id = EfIdentityStoreSupport.CompoundKey(login.TenantId, login.Provider, login.ProviderSubject);
             login.Id = id;
             var existing = await context.ExternalIdentities.SingleOrDefaultAsync(x => x.Id == id, token);
+            if (existing is not null)
+                EfIdentityStoreSupport.EnsureExternalIdentity(existing, login.TenantId, login.Provider, login.ProviderSubject);
             if (existing is not null &&
                 policy == EfExternalLoginOwnershipPolicy.CreateOrSameOwner &&
                 !Same(existing.UserId, login.UserId))
@@ -347,7 +400,8 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
                 {
                     ids.Add(id);
                 }
-                else ids.Remove(id);
+                else
+                    ids.Remove(id);
                 SetRegistry(pair.Value, UserRegistry.Logins, ids);
                 EnsureUserRelationshipCapacity(pair.Value, beforeCount);
                 pair.Value.Revision = checked(pair.Value.Revision + 1);
@@ -361,21 +415,45 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
     private async Task<EfIdentityWriteResult> DeleteExternalIdentityCoreAsync(string tenantId, string userId, string provider, string providerSubject, long expectedVersion, CancellationToken cancellationToken) =>
         await ExecuteAsync(tenantId, "delete-external-login", Fingerprint("delete-external-login", tenantId, userId, provider, providerSubject, expectedVersion.ToString(CultureInfo.InvariantCulture)), async token =>
         {
-            var user = await LoadUserAsync(tenantId, userId, token); if (user is null) return new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound); if (user.Revision != expectedVersion) return Conflict(user.Id);
-            var id = EfIdentityStoreSupport.CompoundKey(tenantId, provider, providerSubject); var login = await context.ExternalIdentities.SingleOrDefaultAsync(x => x.Id == id, token);
-            if (login is not null) { if (!Same(login.UserId, userId)) return Conflict(id); context.ExternalIdentities.Remove(login); }
-            var ids = Registry(user, UserRegistry.Logins); ids.Remove(id); SetRegistry(user, UserRegistry.Logins, ids); user.Revision = checked(user.Revision + 1); return Updated(user.Id, user.Revision);
+            var user = await LoadUserAsync(tenantId, userId, token);
+            if (user is null)
+                return new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound);
+            if (user.Revision != expectedVersion)
+                return Conflict(user.Id);
+            var id = EfIdentityStoreSupport.CompoundKey(tenantId, provider, providerSubject);
+            var login = await context.ExternalIdentities.SingleOrDefaultAsync(x => x.Id == id, token);
+            if (login is not null)
+            {
+                EfIdentityStoreSupport.EnsureExternalIdentity(login, tenantId, provider, providerSubject, userId);
+                context.ExternalIdentities.Remove(login);
+            }
+            var ids = Registry(user, UserRegistry.Logins);
+            ids.Remove(id);
+            SetRegistry(user, UserRegistry.Logins, ids);
+            user.Revision = checked(user.Revision + 1);
+            return Updated(user.Id, user.Revision);
         }, cancellationToken);
 
     private Task<EfIdentityWriteResult> MutateUserRoleAsync(string tenantId, string userId, string roleId, long expectedVersion, UserRoleEntity link, bool delete, CancellationToken cancellationToken) =>
         ExecuteAsync(tenantId, delete ? "delete-user-role" : "add-user-role", Fingerprint(delete ? "delete-user-role" : "add-user-role", tenantId, userId, roleId, expectedVersion.ToString(CultureInfo.InvariantCulture)), async token =>
         {
-            var user = await LoadUserAsync(tenantId, userId, token); var role = await context.Roles.SingleOrDefaultAsync(x => x.Id == EfIdentityStoreSupport.RecordId(tenantId, roleId), token);
-            if (user is null || role is null) return new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound); if (user.Revision != expectedVersion) return Conflict(user.Id);
-            var id = EfIdentityStoreSupport.CompoundKey(tenantId, userId, roleId); var existing = await context.UserRoles.SingleOrDefaultAsync(x => x.Id == id, token);
-            var beforeUserCount = RelationshipCount(user); var beforeRoleCount = RelationshipCount(role); var userIds = Registry(user, UserRegistry.RoleLinks); var roleIds = EfIdentityStoreSupport.DeserializeSet(role.UserLinkIdsJson).ToHashSet(StringComparer.Ordinal); var userRoleIds = EfIdentityStoreSupport.DeserializeSet(user.RoleIdsJson).ToHashSet(StringComparer.Ordinal);
-            var isNew = existing is null;
-            if (delete) { if (existing is not null) context.UserRoles.Remove(existing); userIds.Remove(id); roleIds.Remove(id); userRoleIds.Remove(roleId); }
+            var user = await LoadUserAsync(tenantId, userId, token);
+            var role = await LoadRoleAsync(tenantId, roleId, token);
+            if (user is null || role is null)
+                return new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound);
+            if (user.Revision != expectedVersion)
+                return Conflict(user.Id);
+            var id = EfIdentityStoreSupport.CompoundKey(tenantId, userId, roleId);
+            var existing = await context.UserRoles.SingleOrDefaultAsync(x => x.Id == id, token);
+            if (existing is not null)
+                EfIdentityStoreSupport.EnsureUserRoleIdentity(existing, tenantId, userId, roleId);
+            var beforeUserCount = RelationshipCount(user);
+            var beforeRoleCount = RelationshipCount(role);
+            var userIds = Registry(user, UserRegistry.RoleLinks);
+            var roleIds = EfIdentityStoreSupport.DeserializeSet(role.UserLinkIdsJson).ToHashSet(StringComparer.Ordinal);
+            var userRoleIds = EfIdentityStoreSupport.DeserializeSet(user.RoleIdsJson).ToHashSet(StringComparer.Ordinal);
+            if (delete)
+            { if (existing is not null) context.UserRoles.Remove(existing); userIds.Remove(id); roleIds.Remove(id); userRoleIds.Remove(roleId); }
             else
             {
                 link.Id = id;
@@ -387,13 +465,35 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
                     Apply(existing, link);
                     existing.Revision = link.Revision = checked(existing.Revision + 1);
                 }
-                userIds.Add(id); roleIds.Add(id); userRoleIds.Add(roleId);
+                userIds.Add(id);
+                roleIds.Add(id);
+                userRoleIds.Add(roleId);
             }
-            SetRegistry(user, UserRegistry.RoleLinks, userIds); role.UserLinkIdsJson = EfIdentityStoreSupport.SerializeSet(roleIds); user.RoleIdsJson = EfIdentityStoreSupport.SerializeSet(userRoleIds); EnsureUserRelationshipCapacity(user, beforeUserCount); EnsureRoleRelationshipCapacity(role, beforeRoleCount); user.Revision = checked(user.Revision + 1); role.Revision = checked(role.Revision + 1); return Updated(user.Id, user.Revision);
+            SetRegistry(user, UserRegistry.RoleLinks, userIds);
+            role.UserLinkIdsJson = EfIdentityStoreSupport.SerializeSet(roleIds);
+            user.RoleIdsJson = EfIdentityStoreSupport.SerializeSet(userRoleIds);
+            EnsureUserRelationshipCapacity(user, beforeUserCount);
+            EnsureRoleRelationshipCapacity(role, beforeRoleCount);
+            user.Revision = checked(user.Revision + 1);
+            role.Revision = checked(role.Revision + 1);
+            return Updated(user.Id, user.Revision);
         }, cancellationToken);
 
-    private async Task<UserEntity?> LoadUserAsync(string tenantId, string userId, CancellationToken cancellationToken) =>
-        await context.Users.SingleOrDefaultAsync(x => x.Id == EfIdentityStoreSupport.RecordId(tenantId, userId), cancellationToken);
+    private async Task<UserEntity?> LoadUserAsync(string tenantId, string userId, CancellationToken cancellationToken)
+    {
+        var user = await context.Users.SingleOrDefaultAsync(x => x.Id == EfIdentityStoreSupport.RecordId(tenantId, userId), cancellationToken);
+        if (user is not null)
+            EfIdentityStoreSupport.EnsureUserIdentity(user, tenantId, userId);
+        return user;
+    }
+
+    private async Task<RoleEntity?> LoadRoleAsync(string tenantId, string roleId, CancellationToken cancellationToken)
+    {
+        var role = await context.Roles.SingleOrDefaultAsync(x => x.Id == EfIdentityStoreSupport.RecordId(tenantId, roleId), cancellationToken);
+        if (role is not null)
+            EfIdentityStoreSupport.EnsureRoleIdentity(role, tenantId, roleId);
+        return role;
+    }
 
     private Task<EfIdentityWriteResult> ExecuteAsync(string tenantId, string operation, string fingerprint, Func<CancellationToken, Task<EfIdentityWriteResult>> stage, CancellationToken cancellationToken)
     {
