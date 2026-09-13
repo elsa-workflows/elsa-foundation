@@ -44,10 +44,9 @@ feature), which defines the contracts both planes speak:
 | `IPermissionCatalog` / `IPermissionEvaluator` / `IPermissionAuthorizationService` | IAM | The permission model: catalog, implication expansion, and canonical policy or request-internal evaluation. |
 | `IUserStore` / `IRoleStore` / `IExternalIdentityStore` / `ITenantMembershipStore` | IAM | User/role/link/tenant persistence. |
 
-Because these contracts are provider-agnostic, Minimal APIs use `RequirePermission(...)`,
-`RequireAnyPermission(...)`, or `RequireAllPermissions(...)`; transitional FastEndpoints bases
-translate their existing `ConfigurePermissions(...)` calls into the same ASP.NET Core policies.
-Both paths reach one Foundation Identity evaluator and resource-handler pipeline.
+Because these contracts are provider-agnostic, first-party routes use `RequirePermission(...)`,
+`RequireAnyPermission(...)`, or `RequireAllPermissions(...)`, which all reach one Foundation Identity evaluator and
+resource-handler pipeline.
 
 The provider plane must put a *trusted normalized principal* onto the request. Normalization strips
 incoming Elsa-internal claims, applies only mapping rules for the current tenant/provider, and then
@@ -160,9 +159,8 @@ mounted (OpenIddict's server is registered with only a custom flow marker,
 `401` (which the Studio client reads as "no token") rather than a `302` redirect to the login page —
 the handler itself refuses to issue a token to an unauthenticated principal.
 
-FastEndpoints remains available for unrelated transitional endpoints during the migration. Those
-endpoints and these Minimal API routes both consume the same normalized-principal and permission
-policy services; the identity protocol owner no longer installs a FastEndpoints claim-type bridge.
+These routes consume the same normalized-principal and permission policy services as every other first-party
+route; there is no FastEndpoints claim-type bridge.
 
 ### The scheme selector
 
@@ -305,13 +303,16 @@ ConsoleStream SignalR hub via an access-token factory.
 scheme, so an unauthenticated API call is rejected with `401`. A host-chosen `DefaultScheme` always
 wins if you want to override.
 
-**There is no auth off-switch.** The `ApiSecurity.AllowAnonymous` kill-switch was removed with the FastEndpoints
-surface ([#1405](https://github.com/elsa-workflows/elsa-foundation/pull/1405)), and no setting replaces it. Each
-first-party route declares its own security disposition as endpoint metadata (`ElsaEndpointConventions`): a public
-route opts out individually with `AllowPublic(category, reason)`, and every other route requires a permission, a
-named policy, or a host credential. The endpoint-manifest checks in the test suite reject a route that declares no
-disposition or more than one. An `ApiSecurity` entry left in a shell's feature list names a feature that no longer
-exists; CShells logs a warning and activates the shell without it.
+**There is no auth off-switch for API routes.** The `ApiSecurity.AllowAnonymous` kill-switch was removed with the
+FastEndpoints surface ([#1405](https://github.com/elsa-workflows/elsa-foundation/pull/1405)), and no setting
+replaces it. Each first-party route declares its own security disposition as endpoint metadata
+(`ElsaEndpointConventions`, plus Foundation Identity's `RequirePermission(...)`): a public route opts out
+individually with `AllowPublic(category, reason)`, and every other route requires a permission, a named policy, or a
+host credential. In the hosts and API slices they capture, the endpoint-manifest checks in the test suite reject a
+route with no disposition or more than one. An `ApiSecurity` entry left in a shell's feature list names a feature
+that no longer exists; CShells logs a warning and activates the shell without it. Workflow-defined HTTP endpoints
+are separate: their access check is the `WorkflowsRuntimeHttp` feature's `AuthorizationHandlerType` setting, which a
+host can deliberately point at `AllowAnonymousHttpEndpointAuthorizationHandler`.
 
 **Antiforgery on the login form.** The backend login page embeds an antiforgery token (form field
 `__csrf`) and the paired cookie; the `POST /_elsa/identity/login` HTML-form flow validates it before

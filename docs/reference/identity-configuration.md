@@ -131,8 +131,9 @@ is required.
 
 ### No API kill-switch
 
-The former `ApiSecurity.AllowAnonymous` setting has been removed, and no configuration disables endpoint security
-for a shell. See [Security posture](authentication-architecture.md#7-security-posture).
+The former `ApiSecurity.AllowAnonymous` setting has been removed, and no configuration disables authentication for a
+shell's API routes. Workflow-defined HTTP endpoints have their own authorization handler setting; see
+[Security posture](authentication-architecture.md#7-security-posture).
 
 ## Same-origin hosting
 
@@ -155,7 +156,7 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
 7. Provision real user accounts — either through your own onboarding, or by setting `SeedAdminUserName` with a
    secret `SeedAdminPassword` (the committed dev `admin`/`Password123!` values apply only under `IsDevelopmentOrDemo`).
 8. Remove any leftover `ApiSecurity` entry from shell feature lists: the feature no longer exists, and CShells
-   logs a warning for each unknown feature name.
+   logs a warning listing the unknown feature names.
 9. Host the Studio SPA same-origin, and set `Studio:Auth:Enabled=true`.
 10. **Apply the OpenIddict token-store migrations.** Workbench migrates its host-owned vendor EF schema at
     startup while `AutoMigrate=true`. For multi-instance deployments, set `AutoMigrate=false` and apply the
