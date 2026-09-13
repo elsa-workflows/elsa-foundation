@@ -994,7 +994,7 @@ internal sealed class EfCoreIdentityScenario : IAsyncDisposable
         string? databasePath = null,
         bool ensureSchema = true)
     {
-        var path = databasePath ?? Path.Combine(Path.GetTempPath(), $"elsa-identity-contract-{Guid.NewGuid():N}.db");
+        var path = databasePath ?? Path.Join(Path.GetTempPath(), $"elsa-identity-contract-{Guid.NewGuid():N}.db");
         var services = new ServiceCollection();
         if (addLogging)
             services.AddLogging();
