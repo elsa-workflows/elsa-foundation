@@ -22,7 +22,7 @@ namespace Elsa.Foundation.Identity.Abstractions.Security;
 /// environment cannot even be resolved (no <see cref="IHostEnvironment"/> in scope), the guard refuses rather
 /// than skipping itself — a security guard must never wave a request through because it "couldn't determine
 /// the environment." This mirrors the product decision that there is <b>no insecure escape hatch in
-/// production</b> — the same locked rule the <c>ApiSecurity.AllowAnonymous</c> kill-switch enforces.
+/// production</b>.
 /// </para>
 /// <para>
 /// Registered under both lifecycle hooks, like the seeder: <see cref="IHostedService"/> for plain hosts/tests

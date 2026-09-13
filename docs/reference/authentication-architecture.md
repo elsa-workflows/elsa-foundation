@@ -333,14 +333,15 @@ an RSA key, but the RSA key size is not checked: a 1024-bit key activates and si
 least 2048 bits with the [command in the configuration guide](identity-configuration.md#foundationidentityopeniddict).
 Non-HTTPS provider metadata is refused by ASP.NET Core's own OpenID Connect and JWT bearer handlers while
 `OidcAuthenticationOptions.RequireHttpsMetadata` is `true` (the default). That check runs when a handler's options
-are first built, not at shell activation: `/health/ready` stays green, and the first request that authenticates
-through the OIDC scheme fails with an `InvalidOperationException` saying the metadata address must use HTTPS.
+are first built, not at shell activation: `/health/ready` stays green, and requests that authenticate through the
+OIDC handlers fail with an `InvalidOperationException` saying the metadata address must use HTTPS. When the OIDC
+scheme is the shell's default, or its interactive handler is registered, that is every request.
 **Recommendation: set a distinct
 `EncryptionKey` from `SigningKey` in production** — the encryption key otherwise defaults to a value
 domain-separated from the signing key, and separating them is stronger.
 
-The `ISecurityDefaultGuard` validators are registered but no host evaluates them, so they add no protection at
-startup; see [`ISecurityDefaultGuard`](../../src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md#isecuritydefaultguard).
+The `ISecurityDefaultGuard` validators are registered, but no first-party host or shell feature evaluates them, so
+they add no protection at startup; see [`ISecurityDefaultGuard`](../../src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md#isecuritydefaultguard).
 
 For the exact settings, generation command, and the full **go-live checklist**, see
 [`identity-configuration.md`](identity-configuration.md).

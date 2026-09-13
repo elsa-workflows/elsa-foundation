@@ -146,8 +146,8 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
 4. `FoundationIdentityOpenIddict.EncryptionKey` = a distinct base64/secret value (recommended).
 5. `FoundationIdentityOpenIddict.Issuer` = your stable absolute issuer URI.
 6. If you compose `FoundationIdentityOidc`, leave `OidcAuthenticationOptions.RequireHttpsMetadata` at its default
-   `true` so the upstream IdP's metadata must be HTTPS. The shell feature does not expose it; only a host that calls
-   `AddFoundationIdentityOidc(configure)` can turn it off. Either way, serve the server over **HTTPS** (so the
+   `true` so the upstream IdP's metadata must be HTTPS. The shell feature does not expose it, so only host code can
+   turn it off (for example through `AddFoundationIdentityOidc(configure)`). Either way, serve the server over **HTTPS** (so the
    `SecurePolicy=Always` session cookie is accepted).
 7. Provision real user accounts — either through your own onboarding, or by setting `SeedAdminUserName` with a
    secret `SeedAdminPassword` (the committed dev `admin`/`Password123!` values apply only under `IsDevelopmentOrDemo`).
