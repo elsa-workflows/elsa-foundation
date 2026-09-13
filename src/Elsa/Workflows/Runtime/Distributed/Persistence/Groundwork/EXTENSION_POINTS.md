@@ -18,12 +18,15 @@ When the opt-in EF Core D01 provider is selected, this feature retains Groundwor
 |---|---|---|
 | `WorkflowsRuntimeDistributedGroundworkPersistence` | Server runtime (DependsOn `WorkflowsRuntimeDistributed`) | `WorkflowsRuntimeDistributedGroundworkPersistenceFeature` → `AddGroundworkDistributedRuntimeStores()` |
 
-`AddGroundworkDistributedRuntimeStores()` calls `RemoveAll` for each leaf store contract, then registers the
-Groundwork-backed stores as scoped services. Registration is override-friendly and composition-order-independent
-(the distributed feature registers its in-memory defaults with `TryAddScoped`). The singleton pump and actor provider
-resolve those stores only inside fresh persistence operation scopes. The host selects exactly one public v2 provider
-connection and `AddGroundworkDistributedRuntimeStores()` registers three ordinary scoped storage units. MongoDB must be a writable
-transaction-capable replica set whenever the selected combined host claims checkpoint atomicity.
+`AddGroundworkDistributedRuntimeStores()` always replaces command transport with the scoped Groundwork adapter. For
+placement, it first validates the exact descriptor owned by the backend marker: an EF-owned placement descriptor is
+preserved, while the in-memory or Groundwork-owned descriptor is replaced with the Groundwork adapter. An explicit
+unmarked host placement store is never overwritten implicitly. The distributed feature registers its in-memory
+placement default only when no placement store already exists, so both feature orderings remain deterministic. The
+singleton pump and actor provider resolve these stores only inside fresh persistence operation scopes. The host selects
+exactly one public v2 provider connection and `AddGroundworkDistributedRuntimeStores()` registers three ordinary scoped
+storage units. MongoDB must be a writable transaction-capable replica set whenever the selected combined host claims
+checkpoint atomicity.
 
 ## Persisted storage units
 

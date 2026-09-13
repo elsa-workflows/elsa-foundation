@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore;
     DisplayName = "Workflows Runtime Distributed EF Core Placement Persistence",
     Description = "Opt-in EF Core persistence for distributed execution placement only. It replaces IExecutionPlacementStore, leaves command transport ownership unchanged, does not provision schema, and keeps Groundwork as the default for all other distributed stores.",
     DependsOn = new object[] { "WorkflowsRuntimeDistributed" })]
-public sealed class DistributedRuntimeExecutionPlacementEntityFrameworkCoreFeature : IShellFeature
+public class DistributedRuntimeExecutionPlacementEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(DisplayName = "Provider", Description = "Relational provider: Sqlite, SqlServer, PostgreSql, or MySql. The host references the matching provider package.", Category = "Persistence")]
     public string Provider { get; set; } = "Sqlite";

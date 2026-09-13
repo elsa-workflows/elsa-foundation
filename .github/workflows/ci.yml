@@ -310,6 +310,22 @@ jobs:
           --filter 'FullyQualifiedName~ActivityDraftTestRunProviderMatrixTests'
           -p:WarningsNotAsErrors=NU1603
 
+      # This job is the required hosted native-provider lane. The Runtime EF project normally
+      # remains developer-friendly when Docker is absent; required mode turns any unavailable
+      # PostgreSQL, SQL Server, or MySQL container into a test failure so this evidence cannot
+      # silently degrade into three skips.
+      - name: Restore the Runtime execution-placement EF provider proof
+        run: dotnet restore tests/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj -p:WarningsNotAsErrors=NU1603
+
+      - name: Prove Runtime execution-placement EF on every relational provider
+        env:
+          ELSA_RUNTIME_PLACEMENT_EF_REQUIRE_NATIVE_PROVIDERS: 1
+        run: >-
+          dotnet test
+          tests/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj
+          -c Release --no-restore
+          -p:WarningsNotAsErrors=NU1603
+
   # Phase 4 (#1631): Secrets EF composition is independent of Groundwork Secrets matrix
   # obligations. This job owns the EF-selected path only. Groundwork-default Workbench
   # remains proven by build-and-test plus the Groundwork v2 native provider matrix job.

@@ -29,7 +29,7 @@ public sealed class RuntimePlacementPostgreSqlContainerFixture : IAsyncLifetime
         }
         catch (Exception exception) when (RuntimePlacementContainerSupport.IsUnavailable(exception))
         {
-            SkipReason = RuntimePlacementContainerSupport.SkipReason("PostgreSQL", exception);
+            SkipReason = RuntimePlacementContainerSupport.SkipReasonOrThrow("PostgreSQL", exception);
         }
     }
 
@@ -59,7 +59,7 @@ public sealed class RuntimePlacementSqlServerContainerFixture : IAsyncLifetime
         }
         catch (Exception exception) when (RuntimePlacementContainerSupport.IsUnavailable(exception))
         {
-            SkipReason = RuntimePlacementContainerSupport.SkipReason("SQL Server", exception);
+            SkipReason = RuntimePlacementContainerSupport.SkipReasonOrThrow("SQL Server", exception);
         }
     }
 
@@ -94,7 +94,7 @@ public sealed class RuntimePlacementMySqlContainerFixture : IAsyncLifetime
         }
         catch (Exception exception) when (RuntimePlacementContainerSupport.IsUnavailable(exception))
         {
-            SkipReason = RuntimePlacementContainerSupport.SkipReason("MySQL", exception);
+            SkipReason = RuntimePlacementContainerSupport.SkipReasonOrThrow("MySQL", exception);
         }
     }
 
@@ -107,13 +107,20 @@ public sealed class RuntimePlacementMySqlContainerFixture : IAsyncLifetime
 
 internal static class RuntimePlacementContainerSupport
 {
+    private const string RequireNativeProvidersVariable = "ELSA_RUNTIME_PLACEMENT_EF_REQUIRE_NATIVE_PROVIDERS";
+
     public static bool IsUnavailable(Exception exception) =>
         exception is DockerUnavailableException ||
         exception.GetType().Name.Contains("Docker", StringComparison.OrdinalIgnoreCase) ||
         exception.InnerException is not null && IsUnavailable(exception.InnerException);
 
-    public static string SkipReason(string provider, Exception exception) =>
-        $"Docker/{provider} container unavailable: {exception.Message}";
+    public static string SkipReasonOrThrow(string provider, Exception exception)
+    {
+        var message = $"Docker/{provider} container unavailable: {exception.Message}";
+        if (Environment.GetEnvironmentVariable(RequireNativeProvidersVariable) is "1" or "true")
+            throw new InvalidOperationException($"Required Runtime execution-placement EF provider evidence is unavailable. {message}", exception);
+        return message;
+    }
 }
 
 [CollectionDefinition(RuntimePlacementPostgreSqlContainerFixture.CollectionName)]

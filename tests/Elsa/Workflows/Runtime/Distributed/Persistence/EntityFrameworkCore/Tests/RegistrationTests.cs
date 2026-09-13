@@ -205,6 +205,43 @@ public sealed class RegistrationTests
         }
     }
 
+    [Fact]
+    public async Task Feature_maps_public_settings_and_resolves_every_service_it_registers()
+    {
+        var databasePath = Path.Join(Path.GetTempPath(), $"elsa-placement-feature-{Guid.NewGuid():N}.db");
+        try
+        {
+            var services = new ServiceCollection();
+            services.AddPersistenceCore("feature-scope");
+            var feature = new DistributedRuntimeExecutionPlacementEntityFrameworkCoreFeature
+            {
+                Provider = "Sqlite",
+                ConnectionString = $"Data Source={databasePath}",
+                ConnectionName = "IgnoredBecauseExplicitConnectionWins"
+            };
+
+            feature.ConfigureServices(services);
+
+            await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+            var configured = provider.GetRequiredService<DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions>();
+            await using var scope = provider.CreateAsyncScope();
+            var context = scope.ServiceProvider.GetRequiredService<ExecutionPlacementDbContext>();
+            var store = scope.ServiceProvider.GetRequiredService<IExecutionPlacementStore>();
+
+            Assert.Equal(feature.Provider, configured.Provider);
+            Assert.Equal(feature.ConnectionString, configured.ConnectionString);
+            Assert.Equal(feature.ConnectionName, configured.ConnectionName);
+            Assert.IsType<ExecutionPlacementSqliteDbContext>(context);
+            Assert.IsType<EfExecutionPlacementStore>(store);
+            Assert.Equal("Microsoft.EntityFrameworkCore.Sqlite", context.Database.ProviderName);
+        }
+        finally
+        {
+            foreach (var file in new[] { databasePath, $"{databasePath}-shm", $"{databasePath}-wal" })
+                File.Delete(file);
+        }
+    }
+
     private static string Backend(IServiceCollection services) => services
         .Single(descriptor => descriptor.ImplementationInstance is ExecutionPlacementStoreBackend)
         .ImplementationInstance is ExecutionPlacementStoreBackend backend

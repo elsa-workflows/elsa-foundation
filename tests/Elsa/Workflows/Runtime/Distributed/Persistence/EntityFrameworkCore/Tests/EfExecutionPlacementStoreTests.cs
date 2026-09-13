@@ -59,12 +59,15 @@ public sealed class EfExecutionPlacementStoreTests
     public async Task Concurrent_first_claims_have_exactly_one_authoritative_winner()
     {
         await using var fixture = await Fixture.CreateAsync("scope-a");
-        await using var contender = await fixture.ReopenAsync("scope-a");
+        var rendezvous = new CoordinatedMutationInterceptor();
+        await using var left = await fixture.ReopenAsync("scope-a", rendezvous);
+        await using var right = await fixture.ReopenAsync("scope-a", rendezvous);
 
         var results = await Task.WhenAll(
-            fixture.Store.TryClaimAsync(Claim("node-a", "wf-race"), Now).AsTask(),
-            contender.Store.TryClaimAsync(Claim("node-b", "wf-race"), Now).AsTask());
+            left.Store.TryClaimAsync(Claim("node-a", "wf-race"), Now).AsTask(),
+            right.Store.TryClaimAsync(Claim("node-b", "wf-race"), Now).AsTask());
 
+        Assert.Equal(2, rendezvous.Arrivals);
         Assert.Single(results, result => result.Outcome == ExecutionPlacementClaimOutcome.Granted);
         Assert.Single(results, result => result.Outcome == ExecutionPlacementClaimOutcome.Denied);
         var winner = results.Single(result => result.Outcome == ExecutionPlacementClaimOutcome.Granted).Lease;
@@ -76,13 +79,16 @@ public sealed class EfExecutionPlacementStoreTests
     {
         await using var fixture = await Fixture.CreateAsync("scope-a");
         await fixture.Store.TryClaimAsync(Claim("node-a", "wf-expired", Now, 1), Now);
-        await using var contender = await fixture.ReopenAsync("scope-a");
+        var rendezvous = new CoordinatedMutationInterceptor();
+        await using var left = await fixture.ReopenAsync("scope-a", rendezvous);
+        await using var right = await fixture.ReopenAsync("scope-a", rendezvous);
         var takeoverAt = Now.AddSeconds(2);
 
         var results = await Task.WhenAll(
-            fixture.Store.TryClaimAsync(Claim("node-b", "wf-expired", takeoverAt), takeoverAt).AsTask(),
-            contender.Store.TryClaimAsync(Claim("node-c", "wf-expired", takeoverAt), takeoverAt).AsTask());
+            left.Store.TryClaimAsync(Claim("node-b", "wf-expired", takeoverAt), takeoverAt).AsTask(),
+            right.Store.TryClaimAsync(Claim("node-c", "wf-expired", takeoverAt), takeoverAt).AsTask());
 
+        Assert.Equal(2, rendezvous.Arrivals);
         Assert.Single(results, result => result.Outcome == ExecutionPlacementClaimOutcome.Granted);
         Assert.Single(results, result => result.Outcome == ExecutionPlacementClaimOutcome.Denied);
         var winner = results.Single(result => result.Outcome == ExecutionPlacementClaimOutcome.Granted).Lease;
@@ -309,11 +315,14 @@ public sealed class EfExecutionPlacementStoreTests
             return new Fixture(connection, context, scope, ownsDatabase: true);
         }
 
-        public async Task<Fixture> ReopenAsync(string? nextScope)
+        public async Task<Fixture> ReopenAsync(string? nextScope, DbCommandInterceptor? interceptor = null)
         {
             var next = new SqliteConnection(connection.ConnectionString);
             await next.OpenAsync();
-            var nextContext = new ExecutionPlacementSqliteDbContext(new DbContextOptionsBuilder<ExecutionPlacementSqliteDbContext>().UseSqlite(next).Options);
+            var options = new DbContextOptionsBuilder<ExecutionPlacementSqliteDbContext>().UseSqlite(next);
+            if (interceptor is not null)
+                options.AddInterceptors(interceptor);
+            var nextContext = new ExecutionPlacementSqliteDbContext(options.Options);
             return new Fixture(next, nextContext, nextScope, ownsDatabase: false);
         }
 
@@ -331,6 +340,57 @@ public sealed class EfExecutionPlacementStoreTests
             public PersistenceAccessContext Current => scope is null
                 ? PersistenceAccessContext.Global
                 : PersistenceAccessContext.Scoped(new PersistenceScope(scope));
+        }
+    }
+
+    private sealed class CoordinatedMutationInterceptor : DbCommandInterceptor
+    {
+        private readonly TaskCompletionSource<bool> bothArrived = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int arrivals;
+
+        public int Arrivals => Volatile.Read(ref arrivals);
+
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            await CoordinateAsync(command, cancellationToken);
+            return result;
+        }
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            await CoordinateAsync(command, cancellationToken);
+            return result;
+        }
+
+        public override async ValueTask<InterceptionResult<object>> ScalarExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<object> result,
+            CancellationToken cancellationToken = default)
+        {
+            await CoordinateAsync(command, cancellationToken);
+            return result;
+        }
+
+        private async ValueTask CoordinateAsync(DbCommand command, CancellationToken cancellationToken)
+        {
+            if (!IsMutationCommand(command.CommandText))
+                return;
+
+            var arrival = Interlocked.Increment(ref arrivals);
+            if (arrival > 2)
+                return;
+            if (arrival == 2)
+                bothArrived.TrySetResult(true);
+            await bothArrived.Task.WaitAsync(cancellationToken);
         }
     }
 
@@ -387,20 +447,20 @@ public sealed class EfExecutionPlacementStoreTests
                 : ValueTask.FromResult(result);
 
         private bool ShouldFail(DbCommand command) =>
-            IsMutation(command.CommandText) &&
+            IsMutationCommand(command.CommandText) &&
             Volatile.Read(ref armed) == 1 &&
             Interlocked.Exchange(ref fired, 1) == 0;
-
-        private static bool IsMutation(string commandText)
-        {
-            var sql = commandText.AsSpan().TrimStart();
-            return sql.StartsWith("INSERT", StringComparison.OrdinalIgnoreCase) ||
-                   sql.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase) ||
-                   sql.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase);
-        }
     }
 
     private sealed class SyntheticProviderException() : DbException("synthetic provider failure")
     {
+    }
+
+    private static bool IsMutationCommand(string commandText)
+    {
+        var sql = commandText.AsSpan().TrimStart();
+        return sql.StartsWith("INSERT", StringComparison.OrdinalIgnoreCase) ||
+               sql.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase) ||
+               sql.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase);
     }
 }
