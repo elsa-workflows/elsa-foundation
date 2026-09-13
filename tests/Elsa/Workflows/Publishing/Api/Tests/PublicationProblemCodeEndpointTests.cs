@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
+using static Elsa.Workflows.Publishing.Api.Tests.Support.CodedProblemAssertions;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
@@ -158,25 +159,6 @@ public sealed class PublicationProblemCodeEndpointTests : IAsyncLifetime
 
     private static bool IsSuccess(HttpStatusCode status) =>
         status is HttpStatusCode.OK or HttpStatusCode.Created or HttpStatusCode.Accepted;
-
-    /// <summary>
-    /// Asserts the module's established problem shape end to end: content type, status, the new additive
-    /// <c>errorCode</c> (asserted as a wire literal, since the literal is the contract), and that
-    /// <c>errors[0]</c> still carries the general message under its established key.
-    /// </summary>
-    private static void AssertCodedProblem(HttpResponseMessage response, string raw, HttpStatusCode expectedStatus, string expectedErrorCode)
-    {
-        Assert.True(response.StatusCode == expectedStatus, $"{(int)response.StatusCode}: {raw}");
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-        using var problem = JsonDocument.Parse(raw);
-        var root = problem.RootElement;
-        Assert.Equal(expectedErrorCode, root.GetProperty("errorCode").GetString());
-        Assert.Equal((int)expectedStatus, root.GetProperty("status").GetInt32());
-        Assert.Equal(expectedStatus == HttpStatusCode.Conflict ? "Conflict" : "Bad Request", root.GetProperty("title").GetString());
-        var error = Assert.Single(root.GetProperty("errors").EnumerateArray());
-        Assert.Equal("generalErrors", error.GetProperty("name").GetString());
-        Assert.Equal(root.GetProperty("detail").GetString(), error.GetProperty("reason").GetString());
-    }
 
     private Task<HttpResponseMessage> PostAsync(string route, string body) => PostAsync(_host, route, body);
 

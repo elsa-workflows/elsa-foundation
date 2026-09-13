@@ -792,6 +792,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PublicationPreflight'
+        '400':
+          $ref: '#/components/responses/PublicationBadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -828,6 +830,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Publication'
+        '400':
+          $ref: '#/components/responses/PublicationBadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':

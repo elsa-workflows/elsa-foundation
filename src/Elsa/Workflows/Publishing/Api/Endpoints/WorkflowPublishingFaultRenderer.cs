@@ -37,9 +37,12 @@ internal sealed class WorkflowPublicationProblemEndpointMetadata(bool expression
 }
 
 /// <summary>
-/// Renders the Publishing owner's structured failure families — activity publication rejections,
-/// runtime preflight problems, expression validation and value conversion rejections — scoped by
-/// endpoint metadata so each shape applies exactly where the hand-written handlers applied it.
+/// Renders the Publishing owner's structured failure families. Activity publication rejections,
+/// runtime preflight problems, and expression validation/value conversion rejections come first,
+/// scoped by endpoint metadata so each of those shapes applies exactly where the hand-written
+/// handlers applied it. Coded publishing failures (issue #1699) render last and are deliberately
+/// unscoped: every Publishing endpoint gets the module's established problem shape with an
+/// additive <c>errorCode</c>, whichever endpoint raised the failure.
 /// </summary>
 internal sealed class WorkflowPublishingFaultRenderer : IEndpointFaultRenderer
 {

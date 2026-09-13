@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
+using static Elsa.Workflows.Publishing.Api.Tests.Support.CodedProblemAssertions;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
@@ -145,19 +146,9 @@ public sealed class PublicationSlotOwnerEndpointTests : IAsyncLifetime
         var raw = await response.Content.ReadAsStringAsync();
 
         // The conflict problem a refused activation already produced, now reached before the first write.
-        Assert.True(response.StatusCode == HttpStatusCode.Conflict, $"{(int)response.StatusCode}: {raw}");
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        AssertCodedProblem(response, raw, HttpStatusCode.Conflict, "slot_owner_conflict");
         using var problem = JsonDocument.Parse(raw);
-        var root = problem.RootElement;
-        Assert.Contains(ImportOwner.Describe(), root.GetProperty("detail").GetString(), StringComparison.Ordinal);
-        // #1699: the failure code now reaches the wire, additive to the rest of the shape.
-        Assert.Equal("slot_owner_conflict", root.GetProperty("errorCode").GetString());
-        Assert.Equal("Conflict", root.GetProperty("title").GetString());
-        Assert.Equal(StatusCodes.Status409Conflict, root.GetProperty("status").GetInt32());
-        Assert.Equal("https://www.rfc-editor.org/rfc/rfc7231#section-6.5.8", root.GetProperty("type").GetString());
-        var error = Assert.Single(root.GetProperty("errors").EnumerateArray());
-        Assert.Equal("generalErrors", error.GetProperty("name").GetString());
-        Assert.Equal(root.GetProperty("detail").GetString(), error.GetProperty("reason").GetString());
+        Assert.Contains(ImportOwner.Describe(), problem.RootElement.GetProperty("detail").GetString(), StringComparison.Ordinal);
         Assert.Empty(await _host.Services.GetRequiredService<IWorkflowExecutableStore>().ListAllAsync());
         Assert.Empty(await _host.Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().ListAllAsync());
         Assert.Empty(await _host.Services.GetRequiredService<IPublicationRecordStore>()
