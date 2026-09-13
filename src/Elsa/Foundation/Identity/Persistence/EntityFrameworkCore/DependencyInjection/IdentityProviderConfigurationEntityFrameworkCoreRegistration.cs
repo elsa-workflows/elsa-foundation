@@ -1,6 +1,8 @@
 using Elsa.Foundation.Identity.Abstractions.Iam;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,16 +38,24 @@ public static class IdentityProviderConfigurationEntityFrameworkCoreRegistration
         {
             if (existing is null)
                 throw new InvalidOperationException("Identity provider-configuration EF persistence is already registered with different options.");
+            existingBackend.EnsureOwnsRegisteredContracts(services);
             return services;
         }
         if (existingBackend is not null && !string.Equals(existingBackend.Name, "groundwork", StringComparison.Ordinal))
             ProviderConfigurationStoreBackend.EnsureCompatible(existingBackend.Name, StoreBackendName);
+        if (existingBackend is not null)
+            existingBackend.EnsureOwnsRegisteredContracts(services);
+        else if (services.Any(descriptor => descriptor.ServiceType == typeof(IProviderConfigurationStore) ||
+                                            descriptor.ServiceType == typeof(IRevisionAwareProviderConfigurationStore)))
+            throw new InvalidOperationException("Identity provider-configuration EF persistence conflicts with an unowned host registration.");
+
         services.RemoveAll<ProviderConfigurationStoreBackend>();
-        services.AddSingleton(new ProviderConfigurationStoreBackend(StoreBackendName));
         if (existing is not null)
             return services;
         services.AddSingleton(registration);
 
+        services.AddFoundationIdentityAbstractions();
+        services.AddPersistenceCore();
         services.AddSingleton(options);
         services.RemoveAll<IProviderConfigurationStore>();
         services.RemoveAll<IRevisionAwareProviderConfigurationStore>();
@@ -67,8 +77,15 @@ public static class IdentityProviderConfigurationEntityFrameworkCoreRegistration
         }
 
         services.AddScoped<EfProviderConfigurationStore>();
-        services.AddScoped<IProviderConfigurationStore>(provider => provider.GetRequiredService<EfProviderConfigurationStore>());
-        services.AddScoped<IRevisionAwareProviderConfigurationStore>(provider => provider.GetRequiredService<EfProviderConfigurationStore>());
+        var providerDescriptor = ServiceDescriptor.Scoped<IProviderConfigurationStore>(provider =>
+            provider.GetRequiredService<EfProviderConfigurationStore>());
+        var revisionDescriptor = ServiceDescriptor.Scoped<IRevisionAwareProviderConfigurationStore>(provider =>
+            provider.GetRequiredService<EfProviderConfigurationStore>());
+        services.Add(providerDescriptor);
+        services.Add(revisionDescriptor);
+        services.EnsureReplacementContract<IProviderConfigurationStore, EfProviderConfigurationStore>();
+        services.EnsureReplacementContract<IRevisionAwareProviderConfigurationStore, EfProviderConfigurationStore>();
+        services.AddSingleton(new ProviderConfigurationStoreBackend(StoreBackendName, providerDescriptor, revisionDescriptor));
         return services;
     }
 

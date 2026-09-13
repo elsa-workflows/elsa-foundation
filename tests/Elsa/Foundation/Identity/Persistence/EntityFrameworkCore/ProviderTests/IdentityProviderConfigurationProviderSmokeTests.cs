@@ -41,7 +41,10 @@ internal static class IdentityProviderProviderSmoke
             await AssertMySqlTableEncodingAsync(context);
         var access = new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
         var store = new EfProviderConfigurationStore(context, access);
-        var configuration = Configuration(tenant, provider + "-unicode-😀", "roundtrip");
+        var configuration = Configuration(
+            tenant,
+            provider + "-unicode-😀",
+            string.Concat("roundtrip-", new string('k', 800), "\ud800"));
 
         await store.SaveAsync(configuration);
         var duplicateCreate = await store.SaveWithRevisionAsync(configuration with { Kind = "duplicate" }, expectedRevision: null);
@@ -61,7 +64,7 @@ internal static class IdentityProviderProviderSmoke
         await using (var reopened = CreateContext(provider, fixture.ConnectionString))
         {
             var reopenedStore = new EfProviderConfigurationStore(reopened, access);
-            Assert.Equal("roundtrip", (await reopenedStore.FindForTenantAsync(tenant, configuration.Provider))!.Kind);
+            Assert.Equal(configuration.Kind, (await reopenedStore.FindForTenantAsync(tenant, configuration.Provider))!.Kind);
         }
 
         await using var firstContext = CreateContext(provider, fixture.ConnectionString);

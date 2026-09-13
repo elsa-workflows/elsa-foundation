@@ -208,6 +208,7 @@ public sealed class EfProviderConfigurationStore(
                 }
 
                 await context.SaveChangesAsync(cancellationToken);
+                context.ChangeTracker.Clear();
                 return;
             }
             catch (DbUpdateConcurrencyException) when (attempt + 1 < MaximumWriteAttempts)
@@ -254,6 +255,7 @@ public sealed class EfProviderConfigurationStore(
 
                 context.Add(CreateEntity(configuration, revision: 1));
                 await context.SaveChangesAsync(cancellationToken);
+                context.ChangeTracker.Clear();
                 return Saved(1);
             }
             catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
@@ -310,6 +312,7 @@ public sealed class EfProviderConfigurationStore(
                 Apply(row, configuration);
                 row.Revision = nextRevision;
                 await context.SaveChangesAsync(cancellationToken);
+                context.ChangeTracker.Clear();
                 return Saved(nextRevision);
             }
             catch (DbUpdateConcurrencyException)
@@ -488,7 +491,7 @@ public sealed class EfProviderConfigurationStore(
     {
         IdentityProviderConfigurationCanonicalizer.Validate(configuration.TenantId, nameof(configuration.TenantId));
         IdentityProviderConfigurationCanonicalizer.Validate(configuration.Provider, nameof(configuration.Provider));
-        IdentityProviderConfigurationCanonicalizer.Validate(configuration.Kind, nameof(configuration.Kind));
+        ArgumentNullException.ThrowIfNull(configuration.Kind);
         ArgumentNullException.ThrowIfNull(configuration.Capabilities);
         ArgumentNullException.ThrowIfNull(configuration.Settings);
     }

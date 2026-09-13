@@ -47,7 +47,10 @@ public sealed class IdentityProviderConfigurationProviderModelTests
 
         var designTimeModel = context.GetService<IDesignTimeModel>().Model;
         var lookup = designTimeModel.FindEntityType(typeof(GlobalProviderConfigurationEntity))!.FindProperty(nameof(GlobalProviderConfigurationEntity.ProviderLookupKey));
+        var kind = designTimeModel.FindEntityType(typeof(GlobalProviderConfigurationEntity))!.FindProperty(nameof(GlobalProviderConfigurationEntity.Kind));
         Assert.NotNull(lookup);
+        Assert.NotNull(kind);
+        Assert.Null(kind!.GetMaxLength());
         if (provider == "MySql")
         {
             Assert.Equal(IdentityProviderConfigurationMySqlDbContext.CharacterSet, designTimeModel.FindAnnotation("MySQL:Charset")?.Value);

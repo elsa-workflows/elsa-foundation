@@ -11,8 +11,11 @@ Select the `IdentityProviderConfigurationEntityFrameworkCore` shell feature, or 
 `AddIdentityProviderConfigurationEntityFrameworkCore`, with exactly one of SQLite, SQL Server, PostgreSQL,
 or MySQL. The host must reference the matching provider package. Equivalent repeated registrations are
 idempotent; a different provider, connection string, or connection name fails before registrations are
-partially changed. Selection is order-independent when the Groundwork Identity feature is also composed: EF
-replaces only the two provider-configuration contracts and Groundwork keeps all unrelated stores.
+partially changed. Direct host registrations for either replacement contract conflict with explicit EF
+selection and fail instead of being silently removed or winning by registration order. Startup validation
+also rejects a registration added after the feature. Selection is order-independent when the Groundwork
+Identity feature is also composed: EF replaces only the two provider-configuration contracts and Groundwork
+keeps all unrelated stores.
 
 The module preserves tenant/global access checks, tenant-first effective fallback, lossless configuration
 round trips, unconditional upsert, and optimistic compare-and-swap revisions. Provider-specific migrations,

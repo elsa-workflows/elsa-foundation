@@ -243,6 +243,47 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreBehaviorTest
         }
     }
 
+    [Fact]
+    public async Task A_reused_writer_can_apply_a_revision_observed_after_an_external_update()
+    {
+        var databasePath = TemporaryDatabasePath();
+        try
+        {
+            await EnsureDatabaseAsync(databasePath);
+            var original = Configuration("acme", "reused-writer", "original");
+            await using var reusedContext = CreateContext(databasePath);
+            var reusedWriter = Store(reusedContext, "acme");
+            var created = await reusedWriter.SaveWithRevisionAsync(original, expectedRevision: null);
+            Assert.Equal(IamRevisionSaveStatus.Saved, created.Status);
+            Assert.Empty(reusedContext.ChangeTracker.Entries());
+
+            await using (var externalContext = CreateContext(databasePath))
+            {
+                var externalWriter = Store(externalContext, "acme");
+                var external = await externalWriter.SaveWithRevisionAsync(
+                    original with { Kind = "external" },
+                    Assert.IsType<string>(created.Revision));
+                Assert.Equal(IamRevisionSaveStatus.Saved, external.Status);
+            }
+
+            var observed = Assert.IsType<IamRevisionedRecord<ProviderConfigurationRecord>>(
+                await reusedWriter.FindForTenantWithRevisionAsync("acme", original.Provider));
+            Assert.Equal("external", observed.Record.Kind);
+
+            var saved = await reusedWriter.SaveWithRevisionAsync(
+                original with { Kind = "reused" },
+                observed.Revision);
+
+            Assert.Equal(IamRevisionSaveStatus.Saved, saved.Status);
+            Assert.Equal("reused", (await reusedWriter.FindForTenantAsync("acme", original.Provider))!.Kind);
+            Assert.Empty(reusedContext.ChangeTracker.Entries());
+        }
+        finally
+        {
+            DeleteDatabaseFiles(databasePath);
+        }
+    }
+
     [Theory]
     [InlineData("gw:00000000000000000000")]
     [InlineData("GW:00000000000000000001")]

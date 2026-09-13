@@ -25,10 +25,18 @@ public static class GroundworkIdentityStoresRegistration
             existingProviderConfigurationBackend?.Name,
             "entity-framework",
             StringComparison.Ordinal);
+        var groundworkProviderConfigurationAlreadySelected = string.Equals(
+            existingProviderConfigurationBackend?.Name,
+            "groundwork",
+            StringComparison.Ordinal);
+        if (existingProviderConfigurationBackend is not null)
+            existingProviderConfigurationBackend.EnsureOwnsRegisteredContracts(services);
+        else if (services.Any(descriptor => descriptor.ServiceType is not null &&
+                                            (descriptor.ServiceType == typeof(IProviderConfigurationStore) ||
+                                             descriptor.ServiceType == typeof(IRevisionAwareProviderConfigurationStore))))
+            throw new InvalidOperationException("Groundwork provider-configuration persistence conflicts with an unowned host registration.");
         if (!entityFrameworkProviderConfigurationAlreadySelected)
             ProviderConfigurationStoreBackend.EnsureCompatible(existingProviderConfigurationBackend?.Name, "groundwork");
-        if (existingProviderConfigurationBackend is null)
-            services.AddSingleton(new ProviderConfigurationStoreBackend("groundwork"));
 
         services.AddPersistenceCore();
         foreach (var unit in IdentityV2StorageManifest.CreateUnits())
@@ -46,7 +54,7 @@ public static class GroundworkIdentityStoresRegistration
         services.RemoveAll<IApplicationStore>();
         services.RemoveAll<ICredentialStore>();
         services.RemoveAll<IClaimMappingStore>();
-        if (!entityFrameworkProviderConfigurationAlreadySelected)
+        if (!entityFrameworkProviderConfigurationAlreadySelected && !groundworkProviderConfigurationAlreadySelected)
         {
             services.RemoveAll<IProviderConfigurationStore>();
             services.RemoveAll<IRevisionAwareProviderConfigurationStore>();
@@ -59,11 +67,16 @@ public static class GroundworkIdentityStoresRegistration
         services.AddScoped<IApplicationStore, GroundworkApplicationStore>();
         services.AddScoped<ICredentialStore, GroundworkCredentialStore>();
         services.AddScoped<IClaimMappingStore, GroundworkClaimMappingStore>();
-        if (!entityFrameworkProviderConfigurationAlreadySelected)
+        if (!entityFrameworkProviderConfigurationAlreadySelected && !groundworkProviderConfigurationAlreadySelected)
         {
-            services.AddScoped<GroundworkProviderConfigurationStore>();
-            services.AddScoped<IProviderConfigurationStore>(provider => provider.GetRequiredService<GroundworkProviderConfigurationStore>());
-            services.AddScoped<IRevisionAwareProviderConfigurationStore>(provider => provider.GetRequiredService<GroundworkProviderConfigurationStore>());
+            services.TryAddScoped<GroundworkProviderConfigurationStore>();
+            var providerDescriptor = ServiceDescriptor.Scoped<IProviderConfigurationStore>(provider =>
+                provider.GetRequiredService<GroundworkProviderConfigurationStore>());
+            var revisionDescriptor = ServiceDescriptor.Scoped<IRevisionAwareProviderConfigurationStore>(provider =>
+                provider.GetRequiredService<GroundworkProviderConfigurationStore>());
+            services.Add(providerDescriptor);
+            services.Add(revisionDescriptor);
+            services.AddSingleton(new ProviderConfigurationStoreBackend("groundwork", providerDescriptor, revisionDescriptor));
         }
         services.AddScoped<IExternalIdentityStore, GroundworkExternalIdentityStore>();
         services.AddScoped<ITenantMembershipStore, GroundworkTenantMembershipStore>();
