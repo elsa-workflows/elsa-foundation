@@ -22,6 +22,9 @@
 		<Compile Remove="Groundwork/**/*" />
 		<EmbeddedResource Remove="Groundwork/**/*" />
 		<None Remove="Groundwork/**/*" />
+		<Compile Remove="EntityFrameworkCore/**/*" />
+		<EmbeddedResource Remove="EntityFrameworkCore/**/*" />
+		<None Remove="EntityFrameworkCore/**/*" />
 	</ItemGroup>
 
   <ItemGroup>

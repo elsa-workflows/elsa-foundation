@@ -47,7 +47,7 @@ public sealed class IdentityIamMySqlDbContext(DbContextOptions<IdentityIamMySqlD
     {
         modelBuilder.Model.SetAnnotation(CharacterSetAnnotation, CharacterSet);
         modelBuilder.UseCollation(Collation);
-        modelBuilder.Entity<Entities.ApplicationEntity>().Metadata.SetAnnotation(CollationAnnotation, Collation);
-        modelBuilder.Entity<Entities.CredentialEntity>().Metadata.SetAnnotation(CollationAnnotation, Collation);
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+            entityType.SetAnnotation(CollationAnnotation, Collation);
     }
 }

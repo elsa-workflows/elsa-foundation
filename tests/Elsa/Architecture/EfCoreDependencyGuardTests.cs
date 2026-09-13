@@ -761,21 +761,27 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// ADR 0073's repository-first Identity EF admissions for issues #1708 and #1710.
-    /// The production adapter stays provider-neutral; engines remain in focused test projects.
+    /// ADR 0073's repository-first Identity EF admissions for issues #1708, #1710, and #1712.
+    /// The production repository and ASP.NET Identity adapters stay provider-neutral; engines remain
+    /// in focused test projects.
     /// </summary>
     internal static class Adr0073IdentityEf
     {
         public static readonly string[] SurfacePathPrefixes =
         [
+            "src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/",
             "src/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/",
+            "tests/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/",
             "tests/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/"
         ];
 
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
+                ["src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj"] = CorePackages(),
                 ["src/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["tests/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Tests.csproj"] =
+                [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
                 ["tests/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
                 [
                     .. CorePackages(),

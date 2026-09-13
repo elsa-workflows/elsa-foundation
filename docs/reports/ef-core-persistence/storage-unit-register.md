@@ -135,23 +135,23 @@ context and is not an owner of these rows.
 
 | ID | Groundwork unit / physical name | Domain contract or semantic role | Evidence | Blockers | Replacement PR | Default-flip PR | Deletion PR | Disposition |
 |---|---|---|---|---|---|---|---|---|
-| I01 | `identityUser` / `identity_users` | `IUserStore`; ASP.NET Identity user adapter | E-IAM | S1-S3 | | | | Pending |
-| I02 | `identityRole` / `identity_roles` | `IRoleStore`; ASP.NET Identity role adapter | E-IAM | S1-S3 | | | | Pending |
-| I03 | `identityApplication` / `identity_applications` | `IApplicationStore` | E-IAM | S1-S3 | #1711 | | | Opt-in EF implementation proposed by #1711; Groundwork remains default and default-flip/deletion gates remain pending |
-| I04 | `identityCredential` / `identity_credentials` | `ICredentialStore` | E-IAM | S1-S3 | #1711 | | | Opt-in EF implementation proposed by #1711; Groundwork remains default and default-flip/deletion gates remain pending |
-| I05 | `identityClaimMapping` / `identity_claim_mappings` | `IClaimMappingStore` | E-IAM | S1-S3 | | | | Pending |
-| I06 | `identityProviderConfiguration` / `identity_provider_configurations` | `IProviderConfigurationStore`; tenant-scoped provider config | E-IAM | S1-S3 | #1709 | | | Opt-in EF implementation proposed by #1709; Groundwork remains default and default-flip/deletion gates remain pending |
-| I07 | `identityGlobalProviderConfiguration` / `identity_global_provider_configurations` | `IProviderConfigurationStore`; global provider config | E-IAM | S1-S3 | #1709 | | | Opt-in EF implementation proposed by #1709; Groundwork remains default and default-flip/deletion gates remain pending |
-| I08 | `identityUserClaim` / `identity_user_claims` | User-claim relationship operations | E-IAM | S1-S3 | | | | Pending |
-| I09 | `identityRoleClaim` / `identity_role_claims` | Role-claim relationship operations | E-IAM | S1-S3 | | | | Pending |
-| I10 | `identityExternalLogin` / `identity_external_logins` | `IExternalIdentityStore`; login relationship operations | E-IAM | S1-S3 | | | | Pending |
-| I11 | `identityUserRole` / `identity_user_roles` | User-role relationship operations | E-IAM | S1-S3 | | | | Pending |
-| I12 | `identityUserToken` / `identity_user_tokens` | User-token relationship operations | E-IAM | S1-S3 | | | | Pending |
-| I13 | `identityTenantMembership` / `identity_tenant_memberships` | `ITenantMembershipStore` | E-IAM | S1-S3 | | | | Pending |
-| I14 | `identityUserNameReservation` / `identity_user_name_reservations` | Atomic normalized-user-name reservation | E-IAM | S1-S3 | | | | Pending |
-| I15 | `identityEmailReservation` / `identity_email_reservations` | Atomic normalized-email reservation | E-IAM | S1-S3 | | | | Pending |
-| I16 | `identityRoleNameReservation` / `identity_role_name_reservations` | Atomic normalized-role-name reservation | E-IAM | S1-S3 | | | | Pending |
-| I17 | `identityMutationReceipt` / `identity_mutation_receipts` | Replay-safe mutation receipt and expiry cleanup | E-IAM | S1-S3 | | | | Pending |
+| I01 | `identityUser` / `identity_users` | `IUserStore`; ASP.NET Identity user adapter | E-IAM | S1-S3 | #1715 | | | Opt-in EF implementation proposed by #1715; Groundwork remains default and default-flip/deletion gates remain pending |
+| I02 | `identityRole` / `identity_roles` | `IRoleStore`; ASP.NET Identity role adapter | E-IAM | S1-S3 | #1715 | | | Opt-in EF implementation proposed by #1715; Groundwork remains default and default-flip/deletion gates remain pending |
+| I03 | `identityApplication` / `identity_applications` | `IApplicationStore` | E-IAM | S1-S3 | #1711 | | | Opt-in EF implementation merged in #1711; Groundwork remains default and default-flip/deletion gates remain pending |
+| I04 | `identityCredential` / `identity_credentials` | `ICredentialStore` | E-IAM | S1-S3 | #1711 | | | Opt-in EF implementation merged in #1711; Groundwork remains default and default-flip/deletion gates remain pending |
+| I05 | `identityClaimMapping` / `identity_claim_mappings` | `IClaimMappingStore` | E-IAM | S1-S3 | #1715 | | | Opt-in EF implementation proposed by #1715; Groundwork remains default and default-flip/deletion gates remain pending |
+| I06 | `identityProviderConfiguration` / `identity_provider_configurations` | `IProviderConfigurationStore`; tenant-scoped provider config | E-IAM | S1-S3 | #1709 | | | Opt-in EF implementation merged in #1709; Groundwork remains default and default-flip/deletion gates remain pending |
+| I07 | `identityGlobalProviderConfiguration` / `identity_global_provider_configurations` | `IProviderConfigurationStore`; global provider config | E-IAM | S1-S3 | #1709 | | | Opt-in EF implementation merged in #1709; Groundwork remains default and default-flip/deletion gates remain pending |
+| I08 | `identityUserClaim` / `identity_user_claims` | User-claim relationship operations | E-IAM | S1-S3 | #1715 | | | Opt-in EF implementation proposed by #1715; Groundwork remains default and default-flip/deletion gates remain pending |
+| I09 | `identityRoleClaim` / `identity_role_claims` | Role-claim relationship operations | E-IAM | S1-S3 | #1715 | | | Opt-in EF implementation proposed by #1715; Groundwork remains default and default-flip/deletion gates remain pending |
+| I10 | `identityExternalLogin` / `identity_external_logins` | `IExternalIdentityStore`; login relationship operations | E-IAM | S1-S3 | #1715 | | | Opt-in EF implementation proposed by #1715; Groundwork remains default and default-flip/deletion gates remain pending |
+| I11 | `identityUserRole` / `identity_user_roles` | User-role relationship operations | E-IAM | S1-S3 | #1715 | | | Opt-in EF implementation proposed by #1715; Groundwork remains default and default-flip/deletion gates remain pending |
+| I12 | `identityUserToken` / `identity_user_tokens` | User-token relationship operations | E-IAM | S1-S3 | #1715 | | | Opt-in EF implementation proposed by #1715; Groundwork remains default and default-flip/deletion gates remain pending |
+| I13 | `identityTenantMembership` / `identity_tenant_memberships` | `ITenantMembershipStore` | E-IAM | S1-S3 | #1715 | | | Opt-in EF implementation proposed by #1715; Groundwork remains default and default-flip/deletion gates remain pending |
+| I14 | `identityUserNameReservation` / `identity_user_name_reservations` | Atomic normalized-user-name reservation | E-IAM | S1-S3 | #1715 | | | Opt-in EF implementation proposed by #1715; Groundwork remains default and default-flip/deletion gates remain pending |
+| I15 | `identityEmailReservation` / `identity_email_reservations` | Atomic normalized-email reservation | E-IAM | S1-S3 | #1715 | | | Opt-in EF implementation proposed by #1715; Groundwork remains default and default-flip/deletion gates remain pending |
+| I16 | `identityRoleNameReservation` / `identity_role_name_reservations` | Atomic normalized-role-name reservation | E-IAM | S1-S3 | #1715 | | | Opt-in EF implementation proposed by #1715; Groundwork remains default and default-flip/deletion gates remain pending |
+| I17 | `identityMutationReceipt` / `identity_mutation_receipts` | Replay-safe mutation receipt and expiry cleanup | E-IAM | S1-S3 | #1715 | | | Opt-in EF implementation proposed by #1715; Groundwork remains default and default-flip/deletion gates remain pending |
 
 ## Diagnostics: 9 units
 

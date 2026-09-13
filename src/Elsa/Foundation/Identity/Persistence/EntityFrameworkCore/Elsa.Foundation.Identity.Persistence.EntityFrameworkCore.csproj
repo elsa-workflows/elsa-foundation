@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <Description>
-      Opt-in EF Core persistence for Foundation Identity provider configurations, applications, and credentials. The module
+      Opt-in EF Core persistence for the full Foundation Identity IAM authority, provider configurations, applications, and credentials. The module
       references only provider-neutral EF Core relational abstractions; hosts bring the selected provider.
     </Description>
   </PropertyGroup>
