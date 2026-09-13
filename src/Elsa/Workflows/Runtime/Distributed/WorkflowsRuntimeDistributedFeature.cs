@@ -106,7 +106,9 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
                 sp.GetRequiredService<InMemoryExecutionPlacementState>(),
                 sp.GetRequiredService<IPersistenceAccessContextAccessor>()));
             services.Add(placementDescriptor);
-            services.AddSingleton(new ExecutionPlacementStoreBackend(ExecutionPlacementStoreBackend.InMemory, placementDescriptor));
+            ExecutionPlacementStoreBackend.Register(
+                services,
+                new ExecutionPlacementStoreBackend(ExecutionPlacementStoreBackend.InMemory, placementDescriptor));
         }
         services.TryAddScoped<IExecutionPlacementService, ExecutionPlacementService>();
         services.TryAddSingleton<InMemoryExecutionCommandTransportState>();

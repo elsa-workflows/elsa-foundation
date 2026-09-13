@@ -36,14 +36,18 @@ public sealed class EfExecutionPlacementStore(
             var row = await context.PlacementLeases.AsNoTracking().SingleOrDefaultAsync(
                 candidate => candidate.Id == id,
                 cancellationToken);
-            return row is null ? null : MapChecked(row, scope, workflowExecutionId);
+            if (row is null)
+                return null;
+
+            var lease = MapChecked(row, scope, workflowExecutionId);
+            return row.IsReleased ? null : lease;
         }
         catch (OperationCanceledException)
         {
             context.ChangeTracker.Clear();
             throw;
         }
-        catch (Exception exception)
+        catch (Exception exception) when (IsPersistenceBoundaryFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw NormalizeProviderFailure("finding", workflowExecutionId, exception);
@@ -110,6 +114,7 @@ public sealed class EfExecutionPlacementStore(
                     current.AcquiredAt = lease.AcquiredAt;
                     current.ExpiresAtUtcTicks = lease.ExpiresAt.UtcTicks;
                     current.ExpiresAtOffsetMinutes = checked((int)lease.ExpiresAt.Offset.TotalMinutes);
+                    current.IsReleased = false;
                     current.Revision = checked(current.Revision + 1);
                 }
 
@@ -136,7 +141,7 @@ public sealed class EfExecutionPlacementStore(
                 context.ChangeTracker.Clear();
                 lastContention = exception;
             }
-            catch (Exception exception)
+            catch (Exception exception) when (IsPersistenceBoundaryFailure(exception))
             {
                 context.ChangeTracker.Clear();
                 throw NormalizeProviderFailure("claiming", claim.WorkflowExecutionId, exception);
@@ -171,11 +176,13 @@ public sealed class EfExecutionPlacementStore(
                 if (current is null)
                     return;
                 EnsureIdentity(current, scope, lease.WorkflowExecutionId, id);
-                if (!StringComparer.Ordinal.Equals(current.OwnerId, lease.OwnerId) ||
+                if (current.IsReleased ||
+                    !StringComparer.Ordinal.Equals(current.OwnerId, lease.OwnerId) ||
                     current.PlacementToken != lease.PlacementToken)
                     return;
 
-                context.PlacementLeases.Remove(current);
+                current.IsReleased = true;
+                current.Revision = checked(current.Revision + 1);
                 await context.SaveChangesAsync(cancellationToken);
                 return;
             }
@@ -199,7 +206,7 @@ public sealed class EfExecutionPlacementStore(
                 context.ChangeTracker.Clear();
                 lastContention = exception;
             }
-            catch (Exception exception)
+            catch (Exception exception) when (IsPersistenceBoundaryFailure(exception))
             {
                 context.ChangeTracker.Clear();
                 throw NormalizeProviderFailure("releasing", lease.WorkflowExecutionId, exception);
@@ -230,6 +237,7 @@ public sealed class EfExecutionPlacementStore(
                               row.OwnerIdHash == ownerHash &&
                               row.ScopeKey == encodedScope &&
                               row.OwnerId == request.OwnerId &&
+                              !row.IsReleased &&
                               row.ExpiresAtUtcTicks > request.Now.UtcTicks)
                 .OrderBy(row => row.ExpiresAtUtcTicks)
                 .ThenBy(row => row.WorkflowExecutionIdOrderKey)
@@ -249,7 +257,7 @@ public sealed class EfExecutionPlacementStore(
             context.ChangeTracker.Clear();
             throw;
         }
-        catch (Exception exception)
+        catch (Exception exception) when (IsPersistenceBoundaryFailure(exception))
         {
             context.ChangeTracker.Clear();
             throw NormalizeProviderFailure("listing", $"scope:{scopeHash}", exception);
@@ -294,7 +302,7 @@ public sealed class EfExecutionPlacementStore(
     }
 
     private static bool IsLive(ExecutionPlacementLeaseEntity row, DateTimeOffset now) =>
-        ReadExpiresAt(row) > now;
+        !row.IsReleased && ReadExpiresAt(row) > now;
 
     private static DateTimeOffset ReadExpiresAt(ExecutionPlacementLeaseEntity row)
     {
@@ -328,6 +336,7 @@ public sealed class EfExecutionPlacementStore(
         AcquiredAt = lease.AcquiredAt,
         ExpiresAtUtcTicks = lease.ExpiresAt.UtcTicks,
         ExpiresAtOffsetMinutes = checked((int)lease.ExpiresAt.Offset.TotalMinutes),
+        IsReleased = false,
         Revision = revision
     };
 
@@ -336,6 +345,9 @@ public sealed class EfExecutionPlacementStore(
         string identity,
         Exception inner) =>
         new(operation, identity, $"The EF execution placement store failed while {operation} placement '{identity}'.", inner);
+
+    private static bool IsPersistenceBoundaryFailure(Exception exception) =>
+        exception is DbException or DbUpdateException or InvalidOperationException or ArgumentException or OverflowException;
 
     private static ExecutionPlacementEntityFrameworkPersistenceException ContentionFailure(
         string operation,

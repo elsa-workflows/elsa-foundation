@@ -34,10 +34,12 @@ public static class GroundworkDistributedStoresRegistration
                 provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
                 targetName));
             services.Add(placementDescriptor);
-            services.AddSingleton(new ExecutionPlacementStoreBackend(
-                ExecutionPlacementStoreBackend.Groundwork,
-                placementDescriptor,
-                collection => collection.RemoveGroundworkStorageUnit(DistributedGroundworkStorageManifest.PlacementUnitId)));
+            ExecutionPlacementStoreBackend.Register(
+                services,
+                new ExecutionPlacementStoreBackend(
+                    ExecutionPlacementStoreBackend.Groundwork,
+                    placementDescriptor,
+                    collection => collection.RemoveGroundworkStorageUnit(DistributedGroundworkStorageManifest.PlacementUnitId)));
         }
         services.RemoveAll<IExecutionCommandTransport>();
         services.AddScoped<IExecutionCommandTransport>(provider => new GroundworkExecutionCommandTransport(

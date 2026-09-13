@@ -20,6 +20,7 @@ public sealed class ProviderModelTests
         Assert.NotNull(entity.FindPrimaryKey());
         Assert.Equal(ExpectedScopeColumnType(provider), entity.FindProperty(nameof(Entities.ExecutionPlacementLeaseEntity.ScopeKey))!.GetColumnType());
         Assert.NotNull(entity.FindProperty(nameof(Entities.ExecutionPlacementLeaseEntity.ExpiresAtOffsetMinutes)));
+        Assert.False(entity.FindProperty(nameof(Entities.ExecutionPlacementLeaseEntity.IsReleased))!.IsNullable);
         Assert.Null(entity.FindProperty("ExpiresAt"));
         var orderKey = entity.FindProperty(nameof(Entities.ExecutionPlacementLeaseEntity.WorkflowExecutionIdOrderKey));
         Assert.NotNull(orderKey);
@@ -31,6 +32,7 @@ public sealed class ProviderModelTests
         Assert.Contains(entity.GetIndexes(), index => index.Properties.Select(property => property.Name).SequenceEqual([
             nameof(Entities.ExecutionPlacementLeaseEntity.ScopeKeyHash),
             nameof(Entities.ExecutionPlacementLeaseEntity.OwnerIdHash),
+            nameof(Entities.ExecutionPlacementLeaseEntity.IsReleased),
             nameof(Entities.ExecutionPlacementLeaseEntity.ExpiresAtUtcTicks),
             nameof(Entities.ExecutionPlacementLeaseEntity.WorkflowExecutionIdOrderKey)]));
     }

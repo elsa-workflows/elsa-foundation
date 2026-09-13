@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.Distributed.Contracts;
 
@@ -36,6 +37,26 @@ public sealed class ExecutionPlacementStoreBackend
     }
 
     public string Name { get; }
+
+    /// <summary>
+    /// Registers the selected backend marker and a startup validator that re-checks exclusive
+    /// ownership after all host registrations have been applied.
+    /// </summary>
+    public static void Register(IServiceCollection services, ExecutionPlacementStoreBackend backend)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(backend);
+
+        services.AddSingleton(backend);
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(ExecutionPlacementStoreRegistrationState)))
+            return;
+
+        var state = new ExecutionPlacementStoreRegistrationState(services);
+        services.AddSingleton(state);
+        services.AddSingleton<IValidateOptions<ExecutionPlacementStoreRegistrationOptions>>(
+            new ExecutionPlacementStoreRegistrationValidator(state));
+        services.AddOptions<ExecutionPlacementStoreRegistrationOptions>().ValidateOnStart();
+    }
 
     public static ExecutionPlacementStoreBackend? Find(IServiceCollection services)
     {
@@ -81,5 +102,30 @@ public sealed class ExecutionPlacementStoreBackend
         ArgumentNullException.ThrowIfNull(services);
         EnsureOwnsRegisteredContract(services);
         _removeOwnedArtifacts?.Invoke(services);
+    }
+}
+
+internal sealed record ExecutionPlacementStoreRegistrationState(IServiceCollection Services);
+
+internal sealed class ExecutionPlacementStoreRegistrationOptions;
+
+internal sealed class ExecutionPlacementStoreRegistrationValidator(
+    ExecutionPlacementStoreRegistrationState state) : IValidateOptions<ExecutionPlacementStoreRegistrationOptions>
+{
+    public ValidateOptionsResult Validate(string? name, ExecutionPlacementStoreRegistrationOptions options)
+    {
+        try
+        {
+            var marker = ExecutionPlacementStoreBackend.Find(state.Services);
+            if (marker is null)
+                return ValidateOptionsResult.Fail("The execution placement backend ownership marker was removed after registration.");
+
+            marker.EnsureOwnsRegisteredContract(state.Services);
+            return ValidateOptionsResult.Success;
+        }
+        catch (InvalidOperationException exception)
+        {
+            return ValidateOptionsResult.Fail(exception.Message);
+        }
     }
 }

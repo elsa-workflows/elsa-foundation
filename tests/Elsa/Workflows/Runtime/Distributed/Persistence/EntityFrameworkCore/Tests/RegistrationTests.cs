@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests;
@@ -109,6 +110,35 @@ public sealed class RegistrationTests
 
         Assert.Throws<InvalidOperationException>(() => services.AddDistributedRuntimeExecutionPlacementEntityFrameworkCore(Options));
         Assert.Equal(before, services);
+    }
+
+    [Theory]
+    [InlineData(ExecutionPlacementStoreBackend.InMemory)]
+    [InlineData(ExecutionPlacementStoreBackend.Groundwork)]
+    [InlineData(ExecutionPlacementStoreBackend.EntityFramework)]
+    public void Startup_validation_accepts_each_exclusive_backend(string backend)
+    {
+        var services = new ServiceCollection();
+        RegisterBackend(services, backend);
+
+        using var provider = services.BuildServiceProvider();
+        provider.GetRequiredService<IStartupValidator>().Validate();
+    }
+
+    [Theory]
+    [InlineData(ExecutionPlacementStoreBackend.InMemory)]
+    [InlineData(ExecutionPlacementStoreBackend.Groundwork)]
+    [InlineData(ExecutionPlacementStoreBackend.EntityFramework)]
+    public void Startup_validation_rejects_a_store_added_after_backend_registration(string backend)
+    {
+        var services = new ServiceCollection();
+        RegisterBackend(services, backend);
+        services.AddScoped<IExecutionPlacementStore, ExplicitStore>();
+
+        using var provider = services.BuildServiceProvider();
+        var exception = Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IStartupValidator>().Validate());
+        Assert.Contains("no longer exclusively owns", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -453,6 +483,7 @@ public sealed class RegistrationTests
             }
 
             await using var provider = services.BuildServiceProvider();
+            provider.GetRequiredService<IStartupValidator>().Validate();
             await provider.GetRequiredService<GroundworkStorageSessionSource>().StartAsync(CancellationToken.None);
             var tables = await ReadSqliteTablesAsync(groundworkPath);
 
@@ -472,6 +503,24 @@ public sealed class RegistrationTests
         .ImplementationInstance is ExecutionPlacementStoreBackend backend
         ? backend.Name
         : throw new InvalidOperationException("The placement backend marker was not registered.");
+
+    private static void RegisterBackend(IServiceCollection services, string backend)
+    {
+        switch (backend)
+        {
+            case ExecutionPlacementStoreBackend.InMemory:
+                new WorkflowsRuntimeDistributedFeature().ConfigureServices(services);
+                break;
+            case ExecutionPlacementStoreBackend.Groundwork:
+                services.AddGroundworkDistributedRuntimeStores();
+                break;
+            case ExecutionPlacementStoreBackend.EntityFramework:
+                services.AddDistributedRuntimeExecutionPlacementEntityFrameworkCore(Options);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(backend), backend, null);
+        }
+    }
 
     private static string ResolveConnection(
         DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions options,

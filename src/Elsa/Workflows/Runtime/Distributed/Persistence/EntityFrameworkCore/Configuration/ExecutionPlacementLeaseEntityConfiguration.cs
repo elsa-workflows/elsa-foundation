@@ -28,11 +28,13 @@ public sealed class ExecutionPlacementLeaseEntityConfiguration : IEntityTypeConf
             .IsRequired();
         builder.Property(row => row.ExpiresAtUtcTicks).IsRequired();
         builder.Property(row => row.ExpiresAtOffsetMinutes).IsRequired();
+        builder.Property(row => row.IsReleased).IsRequired();
         builder.Property(row => row.Revision).IsRequired().IsConcurrencyToken();
         builder.HasIndex(row => new
         {
             row.ScopeKeyHash,
             row.OwnerIdHash,
+            row.IsReleased,
             row.ExpiresAtUtcTicks,
             row.WorkflowExecutionIdOrderKey
         });

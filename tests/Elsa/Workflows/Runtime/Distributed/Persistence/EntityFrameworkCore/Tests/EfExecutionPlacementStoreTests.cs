@@ -57,6 +57,38 @@ public sealed class EfExecutionPlacementStoreTests
     }
 
     [Fact]
+    public async Task Release_preserves_the_fence_across_reclaim_and_old_release_cannot_delete_the_successor()
+    {
+        await using var fixture = await Fixture.CreateAsync("scope-a");
+        var first = (await fixture.Store.TryClaimAsync(Claim("node-a", "wf-reclaim"), Now)).Lease;
+
+        await fixture.Store.ReleaseAsync(first);
+        Assert.Null(await fixture.Store.FindAsync(first.WorkflowExecutionId));
+        var released = await fixture.Context.PlacementLeases.AsNoTracking().SingleAsync();
+        Assert.True(released.IsReleased);
+        Assert.Equal(first.PlacementToken, released.PlacementToken);
+        var releasedRevision = released.Revision;
+
+        await fixture.Store.ReleaseAsync(first);
+        var afterRepeatedRelease = await fixture.Context.PlacementLeases.AsNoTracking().SingleAsync();
+        Assert.Equal(releasedRevision, afterRepeatedRelease.Revision);
+
+        var successor = (await fixture.Store.TryClaimAsync(
+            Claim("node-a", first.WorkflowExecutionId, Now.AddSeconds(1)),
+            Now.AddSeconds(1))).Lease;
+        Assert.Equal(first.PlacementToken + 1, successor.PlacementToken);
+
+        await fixture.Store.ReleaseAsync(first);
+        AssertLeaseEqual(successor, await fixture.Store.FindAsync(first.WorkflowExecutionId));
+        var active = await fixture.Context.PlacementLeases.AsNoTracking().SingleAsync();
+        Assert.False(active.IsReleased);
+        Assert.True(active.Revision > releasedRevision);
+
+        await using var reopened = await fixture.ReopenAsync("scope-a");
+        AssertLeaseEqual(successor, await reopened.Store.FindAsync(first.WorkflowExecutionId));
+    }
+
+    [Fact]
     public async Task Concurrent_first_claims_have_exactly_one_authoritative_winner()
     {
         await using var fixture = await Fixture.CreateAsync("scope-a");

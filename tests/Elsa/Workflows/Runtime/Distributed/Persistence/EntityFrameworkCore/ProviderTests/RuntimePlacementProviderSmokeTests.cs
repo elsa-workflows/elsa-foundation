@@ -90,6 +90,14 @@ internal static class RuntimePlacementProviderSmoke
                 lease => Assert.Equal(lowerCaseLease.WorkflowExecutionId, lease.WorkflowExecutionId));
 
             await store.ReleaseAsync(granted.Lease);
+            Assert.Null(await store.FindAsync(workflowId));
+            var reclaimed = (await store.TryClaimAsync(
+                new(workflowId, claim.OwnerId, Now.AddSeconds(1), Now.AddMinutes(6)),
+                Now.AddSeconds(1))).Lease;
+            Assert.Equal(granted.Lease.PlacementToken + 1, reclaimed.PlacementToken);
+            await store.ReleaseAsync(granted.Lease);
+            AssertLease(reclaimed, await store.FindAsync(workflowId));
+            await store.ReleaseAsync(reclaimed);
             await store.ReleaseAsync(upperCaseLease);
             await store.ReleaseAsync(lowerCaseLease);
             Assert.Null(await store.FindAsync(workflowId));

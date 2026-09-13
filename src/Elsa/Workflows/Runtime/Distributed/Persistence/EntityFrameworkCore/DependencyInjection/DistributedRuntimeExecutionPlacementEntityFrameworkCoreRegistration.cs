@@ -77,7 +77,9 @@ public static class DistributedRuntimeExecutionPlacementEntityFrameworkCoreRegis
             provider.GetRequiredService<ExecutionPlacementDbContext>(),
             provider.GetRequiredService<Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextAccessor>()));
         services.Add(placementDescriptor);
-        services.AddSingleton(new ExecutionPlacementStoreBackend(StoreBackendName, placementDescriptor));
+        ExecutionPlacementStoreBackend.Register(
+            services,
+            new ExecutionPlacementStoreBackend(StoreBackendName, placementDescriptor));
         return services;
     }
 

@@ -14,5 +14,6 @@ public sealed class ExecutionPlacementLeaseEntity
     public DateTimeOffset AcquiredAt { get; set; }
     public long ExpiresAtUtcTicks { get; set; }
     public int ExpiresAtOffsetMinutes { get; set; }
+    public bool IsReleased { get; set; }
     public long Revision { get; set; }
 }
