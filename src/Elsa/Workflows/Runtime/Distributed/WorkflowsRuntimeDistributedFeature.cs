@@ -95,10 +95,19 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
         // cluster view. A durable persistence feature replaces the two scoped store contracts.
         services.TryAddSingleton(sp => sp.GetRequiredService<IOptions<ExecutionPlacementOptions>>().Value);
         services.TryAddSingleton<InMemoryExecutionPlacementState>();
-        services.TryAddSingleton(new ExecutionPlacementStoreBackend(ExecutionPlacementStoreBackend.InMemory));
-        services.TryAddScoped<IExecutionPlacementStore>(sp => new InMemoryExecutionPlacementStore(
-            sp.GetRequiredService<InMemoryExecutionPlacementState>(),
-            sp.GetRequiredService<IPersistenceAccessContextAccessor>()));
+        var placementBackend = ExecutionPlacementStoreBackend.Find(services);
+        if (placementBackend is not null)
+        {
+            placementBackend.EnsureOwnsRegisteredContract(services);
+        }
+        else if (!ExecutionPlacementStoreBackend.HasRegisteredContract(services))
+        {
+            var placementDescriptor = ServiceDescriptor.Scoped<IExecutionPlacementStore>(sp => new InMemoryExecutionPlacementStore(
+                sp.GetRequiredService<InMemoryExecutionPlacementState>(),
+                sp.GetRequiredService<IPersistenceAccessContextAccessor>()));
+            services.Add(placementDescriptor);
+            services.AddSingleton(new ExecutionPlacementStoreBackend(ExecutionPlacementStoreBackend.InMemory, placementDescriptor));
+        }
         services.TryAddScoped<IExecutionPlacementService, ExecutionPlacementService>();
         services.TryAddSingleton<InMemoryExecutionCommandTransportState>();
         services.TryAddScoped<IExecutionCommandTransport>(sp => new InMemoryExecutionCommandTransport(

@@ -20,58 +20,63 @@ public static class DistributedRuntimeExecutionPlacementEntityFrameworkCoreRegis
         ArgumentNullException.ThrowIfNull(options);
         var provider = EfRelationalProviderBinding.Normalize(options.Provider);
         _ = EfRelationalProviderBinding.ExpectedProviderName(options.Provider);
+        var configuredOptions = new DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions
+        {
+            Provider = options.Provider,
+            ConnectionString = options.ConnectionString,
+            ConnectionName = options.ConnectionName
+        };
+        var registration = new DistributedRuntimeExecutionPlacementEntityFrameworkCoreRegistrationIdentity(configuredOptions, provider);
 
         var existingRegistration = services
             .Select(descriptor => descriptor.ImplementationInstance)
             .OfType<DistributedRuntimeExecutionPlacementEntityFrameworkCoreRegistrationIdentity>()
             .SingleOrDefault();
+        if (existingRegistration is not null && existingRegistration != registration)
+            throw new InvalidOperationException("Distributed runtime execution placement EF persistence is already registered with different options.");
+
+        var existingBackend = ExecutionPlacementStoreBackend.Find(services);
+        existingBackend?.EnsureOwnsRegisteredContract(services);
+
+        if (ExecutionPlacementStoreBackend.HasRegisteredContract(services) && existingBackend is null)
+            throw new InvalidOperationException("An explicit IExecutionPlacementStore is already registered; EF placement persistence refuses to replace it implicitly.");
         if (existingRegistration is not null)
         {
-            if (!existingRegistration.Matches(options, provider))
-                throw new InvalidOperationException("Distributed runtime execution placement EF persistence is already registered with different options.");
+            if (existingBackend?.Name != StoreBackendName)
+                throw new InvalidOperationException("Distributed runtime execution placement EF persistence registration is incomplete.");
             return services;
         }
+        if (existingBackend?.Name == StoreBackendName)
+            throw new InvalidOperationException("Distributed runtime execution placement EF persistence is already registered with different options.");
 
-        var existingBackend = services
-            .Select(descriptor => descriptor.ImplementationInstance)
-            .OfType<ExecutionPlacementStoreBackend>()
-            .SingleOrDefault();
-        if (existingBackend is not null)
-            ExecutionPlacementStoreBackend.EnsureKnown(existingBackend.Name);
-
-        var placementRegistrations = services
-            .Where(descriptor => descriptor.ServiceType == typeof(IExecutionPlacementStore))
-            .ToArray();
-        if (placementRegistrations.Length > 0 && existingBackend is null)
-            throw new InvalidOperationException("An explicit IExecutionPlacementStore is already registered; EF placement persistence refuses to replace it implicitly.");
-
-        services.AddSingleton(new DistributedRuntimeExecutionPlacementEntityFrameworkCoreRegistrationIdentity(options, provider));
-        services.AddSingleton(options);
+        services.AddSingleton(registration);
+        services.AddSingleton(configuredOptions);
         services.RemoveAll<ExecutionPlacementStoreBackend>();
-        services.AddSingleton(new ExecutionPlacementStoreBackend(StoreBackendName));
         services.RemoveAll<IExecutionPlacementStore>();
 
         switch (provider)
         {
             case "sqlite":
-                AddContext<ExecutionPlacementSqliteDbContext>(services, options, EfRelationalProviderBinding.UseSqlite);
+                AddContext<ExecutionPlacementSqliteDbContext>(services, configuredOptions, EfRelationalProviderBinding.UseSqlite);
                 break;
             case "sqlserver":
-                AddContext<ExecutionPlacementSqlServerDbContext>(services, options, EfRelationalProviderBinding.UseSqlServer);
+                AddContext<ExecutionPlacementSqlServerDbContext>(services, configuredOptions, EfRelationalProviderBinding.UseSqlServer);
                 break;
             case "postgresql":
-                AddContext<ExecutionPlacementPostgreSqlDbContext>(services, options, EfRelationalProviderBinding.UseNpgsql);
+                AddContext<ExecutionPlacementPostgreSqlDbContext>(services, configuredOptions, EfRelationalProviderBinding.UseNpgsql);
                 break;
             case "mysql":
-                AddContext<ExecutionPlacementMySqlDbContext>(services, options, EfRelationalProviderBinding.UseMySql);
+                AddContext<ExecutionPlacementMySqlDbContext>(services, configuredOptions, EfRelationalProviderBinding.UseMySql);
                 break;
             default:
                 throw new ArgumentException($"Unknown distributed runtime execution placement EF provider '{options.Provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.", nameof(options));
         }
 
-        services.AddScoped<IExecutionPlacementStore>(provider => new EfExecutionPlacementStore(
+        var placementDescriptor = ServiceDescriptor.Scoped<IExecutionPlacementStore>(provider => new EfExecutionPlacementStore(
             provider.GetRequiredService<ExecutionPlacementDbContext>(),
             provider.GetRequiredService<Elsa.Workflows.Runtime.Core.Contracts.IPersistenceAccessContextAccessor>()));
+        services.Add(placementDescriptor);
+        services.AddSingleton(new ExecutionPlacementStoreBackend(StoreBackendName, placementDescriptor));
         return services;
     }
 
@@ -136,8 +141,4 @@ public sealed record DistributedRuntimeExecutionPlacementEntityFrameworkCoreRegi
     {
     }
 
-    public bool Matches(DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions options, string provider) =>
-        string.Equals(Provider, provider, StringComparison.Ordinal) &&
-        string.Equals(ConnectionString, options.ConnectionString, StringComparison.Ordinal) &&
-        string.Equals(ConnectionName, options.ConnectionName, StringComparison.Ordinal);
 }

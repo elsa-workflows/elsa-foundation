@@ -14,22 +14,25 @@ public static class GroundworkDistributedStoresRegistration
     public static IServiceCollection AddGroundworkDistributedRuntimeStores(this IServiceCollection services, string? targetName = null)
     {
         ArgumentNullException.ThrowIfNull(services);
+        var existingBackend = ExecutionPlacementStoreBackend.Find(services);
+        if (existingBackend is not null)
+            existingBackend.EnsureOwnsRegisteredContract(services);
+        else if (ExecutionPlacementStoreBackend.HasRegisteredContract(services))
+            throw new InvalidOperationException("An explicit IExecutionPlacementStore is already registered; Groundwork placement persistence refuses to replace it implicitly.");
+
         foreach (var unit in DistributedGroundworkStorageManifest.CreateUnits())
             services.AddGroundworkStorageUnit(unit, targetName);
 
-        var existingBackend = services
-            .Select(descriptor => descriptor.ImplementationInstance)
-            .OfType<ExecutionPlacementStoreBackend>()
-            .SingleOrDefault();
         if (!string.Equals(existingBackend?.Name, ExecutionPlacementStoreBackend.EntityFramework, StringComparison.Ordinal))
         {
             services.RemoveAll<ExecutionPlacementStoreBackend>();
-            services.AddSingleton(new ExecutionPlacementStoreBackend(ExecutionPlacementStoreBackend.Groundwork));
             services.RemoveAll<IExecutionPlacementStore>();
-            services.AddScoped<IExecutionPlacementStore>(provider => new GroundworkExecutionPlacementStore(
+            var placementDescriptor = ServiceDescriptor.Scoped<IExecutionPlacementStore>(provider => new GroundworkExecutionPlacementStore(
                 provider.GetRequiredService<IGroundworkStorageSessionSource>(),
                 provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
                 targetName));
+            services.Add(placementDescriptor);
+            services.AddSingleton(new ExecutionPlacementStoreBackend(ExecutionPlacementStoreBackend.Groundwork, placementDescriptor));
         }
         services.RemoveAll<IExecutionCommandTransport>();
         services.AddScoped<IExecutionCommandTransport>(provider => new GroundworkExecutionCommandTransport(

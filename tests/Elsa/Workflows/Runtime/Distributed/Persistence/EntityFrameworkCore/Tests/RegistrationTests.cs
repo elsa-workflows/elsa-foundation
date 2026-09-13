@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.DependencyInject
 using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests;
@@ -74,6 +75,69 @@ public sealed class RegistrationTests
 
         Assert.Throws<InvalidOperationException>(() => services.AddDistributedRuntimeExecutionPlacementEntityFrameworkCore(Options));
         Assert.Equal(before, services);
+    }
+
+    [Fact]
+    public void Distributed_default_preserves_an_explicit_unmarked_store_and_EF_rejects_it()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IExecutionPlacementStore, ExplicitStore>();
+        var explicitDescriptor = services.Single(descriptor => descriptor.ServiceType == typeof(IExecutionPlacementStore));
+        new WorkflowsRuntimeDistributedFeature().ConfigureServices(services);
+
+        Assert.Same(explicitDescriptor, services.Single(descriptor => descriptor.ServiceType == typeof(IExecutionPlacementStore)));
+        Assert.DoesNotContain(services, descriptor => descriptor.ImplementationInstance is ExecutionPlacementStoreBackend);
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddDistributedRuntimeExecutionPlacementEntityFrameworkCore(Options));
+        Assert.Equal(before, services);
+    }
+
+    [Fact]
+    public void EF_rejects_a_store_replaced_after_the_backend_claimed_ownership()
+    {
+        var services = new ServiceCollection();
+        new WorkflowsRuntimeDistributedFeature().ConfigureServices(services);
+        services.Replace(ServiceDescriptor.Scoped<IExecutionPlacementStore, ExplicitStore>());
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddDistributedRuntimeExecutionPlacementEntityFrameworkCore(Options));
+        Assert.Equal(before, services);
+    }
+
+    [Fact]
+    public void Groundwork_rejects_an_unmarked_store_without_partial_mutation()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IExecutionPlacementStore, ExplicitStore>();
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddGroundworkDistributedRuntimeStores());
+        Assert.Equal(before, services);
+    }
+
+    [Fact]
+    public void EF_snapshots_mutable_registration_options()
+    {
+        var services = new ServiceCollection();
+        var supplied = new DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=original.db",
+            ConnectionName = "Original"
+        };
+
+        services.AddDistributedRuntimeExecutionPlacementEntityFrameworkCore(supplied);
+        supplied.Provider = "SqlServer";
+        supplied.ConnectionString = "Server=changed";
+        supplied.ConnectionName = "Changed";
+
+        var configured = Assert.IsType<DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions>(
+            services.Single(descriptor => descriptor.ServiceType == typeof(DistributedRuntimeExecutionPlacementEntityFrameworkCoreOptions)).ImplementationInstance);
+        Assert.NotSame(supplied, configured);
+        Assert.Equal("Sqlite", configured.Provider);
+        Assert.Equal("Data Source=original.db", configured.ConnectionString);
+        Assert.Equal("Original", configured.ConnectionName);
     }
 
     [Fact]
