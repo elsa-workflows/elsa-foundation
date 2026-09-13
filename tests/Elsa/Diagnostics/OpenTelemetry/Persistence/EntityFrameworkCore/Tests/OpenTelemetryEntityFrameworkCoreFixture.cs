@@ -5,6 +5,7 @@ using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -41,6 +42,19 @@ internal sealed class OpenTelemetryEntityFrameworkCoreFixture : IAsyncDisposable
             ConnectionString = $"Data Source={path}"
         });
 
+        return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+    }
+
+    public static ServiceProvider BuildInterceptingProvider(string path, IInterceptor interceptor)
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<OpenTelemetryDiagnosticsOptions>();
+        services.AddSingleton(EfOpenTelemetryBinding.Default);
+        services.AddDbContext<OpenTelemetrySqliteDbContext>((_, builder) =>
+            builder.UseSqlite($"Data Source={path}").AddInterceptors(interceptor));
+        services.AddScoped<OpenTelemetryDbContext>(provider => provider.GetRequiredService<OpenTelemetrySqliteDbContext>());
+        services.AddScoped<EfOpenTelemetryDbContext>(provider => provider.GetRequiredService<OpenTelemetrySqliteDbContext>());
+        services.AddSingleton<EfOpenTelemetryStore>();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 
@@ -91,6 +105,27 @@ internal sealed class OpenTelemetryEntityFrameworkCoreFixture : IAsyncDisposable
         to.SubscriberChannelCapacity = from.SubscriberChannelCapacity;
         to.MaxQuerySize = from.MaxQuerySize;
         to.ShutdownDrainTimeout = from.ShutdownDrainTimeout;
+    }
+}
+
+internal sealed class TransientTransactionStartInterceptor : DbTransactionInterceptor
+{
+    private int failNextBegin;
+    private int beginAttempts;
+
+    public int BeginAttempts => Volatile.Read(ref beginAttempts);
+    public void FailNextBegin() => Interlocked.Exchange(ref failNextBegin, 1);
+
+    public override ValueTask<InterceptionResult<System.Data.Common.DbTransaction>> TransactionStartingAsync(
+        System.Data.Common.DbConnection connection,
+        TransactionStartingEventData eventData,
+        InterceptionResult<System.Data.Common.DbTransaction> result,
+        CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref beginAttempts);
+        if (Interlocked.Exchange(ref failNextBegin, 0) == 1)
+            throw new Microsoft.Data.Sqlite.SqliteException("Simulated transient transaction-begin failure.", 5, 5);
+        return ValueTask.FromResult(result);
     }
 }
 

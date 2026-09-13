@@ -114,6 +114,32 @@ public sealed class EfOpenTelemetryRetentionTests
     }
 
     [Fact]
+    public async Task Trace_summary_recomputation_preserves_service_membership_before_catalog_retention()
+    {
+        await using var fixture = await CreateFixtureAsync(new OpenTelemetryDiagnosticsOptions
+        {
+            TraceCapacity = 2,
+            ResourceCapacity = 1,
+            MaxQuerySize = 20
+        });
+        var start = TelemetryTestData.Now;
+        var retainedResource = TelemetryTestData.Resource("resource-retained-reference", "orders-retained", start);
+        var newerCatalogResource = TelemetryTestData.Resource("resource-newer-catalog", "orders-newer", start.AddSeconds(2));
+        var first = TelemetryTestData.Trace("trace-shared-retention", retainedResource.Id, start);
+        var unrelated = TelemetryTestData.Trace("trace-unrelated-retention", newerCatalogResource.Id, start.AddSeconds(1));
+        var latest = TelemetryTestData.Trace("trace-shared-retention", retainedResource.Id, start.AddSeconds(2));
+
+        await fixture.Store.WriteAsync(new([retainedResource], [first], [], [], [], []));
+        await fixture.Store.WriteAsync(new([newerCatalogResource], [unrelated, latest], [], [], [], []));
+
+        Assert.Equal([latest.TraceId],
+            (await fixture.Store.QueryTracesAsync(new() { ServiceName = retainedResource.ServiceName, Take = 10 }))
+            .Items.Select(item => item.TraceId));
+        Assert.Equal([newerCatalogResource.Id],
+            (await fixture.Store.QueryResourcesAsync(new() { Take = 10 })).Items.Select(item => item.Id));
+    }
+
+    [Fact]
     public async Task Zero_trace_retention_removes_raw_history_and_its_summary()
     {
         await using var fixture = await CreateFixtureAsync(new OpenTelemetryDiagnosticsOptions

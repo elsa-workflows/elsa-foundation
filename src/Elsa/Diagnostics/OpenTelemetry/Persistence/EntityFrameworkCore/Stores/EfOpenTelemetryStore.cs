@@ -7,6 +7,7 @@ using Elsa.Diagnostics.Persistence.Draining;
 using Elsa.Diagnostics.Persistence.Observability;
 using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using System.Data;
@@ -374,9 +375,10 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
                 cancellationToken.ThrowIfCancellationRequested();
                 await using var scope = scopeFactory.CreateAsyncScope();
                 var db = scope.ServiceProvider.GetRequiredService<OpenTelemetryDbContext>();
-                await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+                IDbContextTransaction? transaction = null;
                 try
                 {
+                    transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
                     var pending = new List<(DiagnosticsDrainBatchId BatchId, OpenTelemetryBatch Batch, string Fingerprint)>();
                     foreach (var (item, index) in items.Select((item, index) => (item, index)))
                     {
@@ -422,8 +424,14 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
                 catch (Exception exception) when (attempt < MaxSummaryRetry && IsRetryableWriteConflict(exception))
                 {
                     retryFailure = exception;
-                    await transaction.RollbackAsync(cancellationToken);
+                    if (transaction is not null)
+                        await transaction.RollbackAsync(cancellationToken);
                     await Task.Delay(RetryDelay * attempt + TimeSpan.FromMilliseconds(Random.Shared.Next(1, 16)), cancellationToken);
+                }
+                finally
+                {
+                    if (transaction is not null)
+                        await transaction.DisposeAsync();
                 }
             }
 
@@ -474,6 +482,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
             // marked Deleted in this change tracker.
             await db.SaveChangesAsync(cancellationToken);
             var deleted = affected.Deleted;
+            await RecomputeSummariesAsync(db, affected.Keys, cancellationToken);
             deleted += await TrimSpansAsync(db, spanCapacity, cancellationToken);
             deleted += await TrimPointsAsync(db, cancellationToken);
             deleted += await TrimLogsAsync(db, cancellationToken);
@@ -483,7 +492,6 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
             var oldLedger = await db.CaptureLedger.Where(x => x.ScopeKey == binding.ScopeKey && x.IssuedAtTicks <= cutoff).ToListAsync(cancellationToken);
             db.CaptureLedger.RemoveRange(oldLedger);
             deleted += oldLedger.Count;
-            await RecomputeSummariesAsync(db, affected.Keys, cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
             return deleted;

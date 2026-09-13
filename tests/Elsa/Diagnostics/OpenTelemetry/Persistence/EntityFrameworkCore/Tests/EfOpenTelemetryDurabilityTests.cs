@@ -2,6 +2,7 @@ using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Exceptions;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
+using Elsa.Diagnostics.OpenTelemetry.Extensions;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Entities;
@@ -210,6 +211,7 @@ public sealed class EfOpenTelemetryDurabilityTests
     {
         var services = new ServiceCollection();
         services.AddSingleton(new object());
+        services.AddOpenTelemetryDiagnosticsServices();
         services.AddOpenTelemetryEntityFrameworkCore(new OpenTelemetryEntityFrameworkCoreOptions
         {
             Provider = "Sqlite",
@@ -221,11 +223,83 @@ public sealed class EfOpenTelemetryDurabilityTests
             ConnectionString = "Data Source=:memory:"
         });
 
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IOpenTelemetryStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfOpenTelemetryStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(OpenTelemetryEntityFrameworkCoreOptions));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IDiagnosticsPersistenceDrain));
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         Assert.IsType<EfOpenTelemetryStore>(provider.GetRequiredService<IOpenTelemetryStore>());
         Assert.Same(provider.GetRequiredService<IOpenTelemetryStore>(), provider.GetRequiredService<EfOpenTelemetryStore>());
         Assert.NotNull(provider.GetRequiredService<object>());
         Assert.NotNull(provider.GetRequiredService<IOpenTelemetrySourceRegistry>());
+    }
+
+    [Fact]
+    public void Registration_rejects_conflicting_repeated_EF_options()
+    {
+        var services = new ServiceCollection();
+        services.AddOpenTelemetryEntityFrameworkCore(new OpenTelemetryEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=first.db"
+        });
+        var descriptorCount = services.Count;
+
+        Assert.Throws<InvalidOperationException>(() => services.AddOpenTelemetryEntityFrameworkCore(new OpenTelemetryEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=second.db"
+        }));
+        Assert.Equal(descriptorCount, services.Count);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Registration_rejects_custom_store_regardless_of_default_feature_order(bool customBeforeDefault)
+    {
+        var services = new ServiceCollection();
+        if (customBeforeDefault)
+            services.AddSingleton<IOpenTelemetryStore>(_ => null!);
+        services.AddOpenTelemetryDiagnosticsServices();
+        if (!customBeforeDefault)
+            services.AddSingleton<IOpenTelemetryStore>(_ => null!);
+        var originalStores = services.Where(descriptor => descriptor.ServiceType == typeof(IOpenTelemetryStore)).ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddOpenTelemetryEntityFrameworkCore(new OpenTelemetryEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        }));
+        Assert.Equal(originalStores, services.Where(descriptor => descriptor.ServiceType == typeof(IOpenTelemetryStore)));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(EfOpenTelemetryStore));
+    }
+
+    [Fact]
+    public async Task Transient_transaction_begin_failure_is_retried_within_the_durable_write()
+    {
+        var directory = Path.Join(Path.GetTempPath(), "elsa-otel-transaction-retry-" + Guid.NewGuid().ToString("N"));
+        var path = Path.Join(directory, "opentelemetry.db");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var interceptor = new TransientTransactionStartInterceptor();
+            await using var provider = OpenTelemetryEntityFrameworkCoreFixture.BuildInterceptingProvider(path, interceptor);
+            await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(provider);
+            var beginAttemptsBeforeWrite = interceptor.BeginAttempts;
+            interceptor.FailNextBegin();
+            var store = provider.GetRequiredService<EfOpenTelemetryStore>();
+
+            await store.WriteAsync(DiagnosticsDrainBatchId.New(), TelemetryTestData.Batch("transaction-begin-retry"));
+
+            Assert.Equal(beginAttemptsBeforeWrite + 2, interceptor.BeginAttempts);
+            Assert.NotNull(await store.GetTraceAsync("transaction-begin-retry"));
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
     }
 
     [Fact]
