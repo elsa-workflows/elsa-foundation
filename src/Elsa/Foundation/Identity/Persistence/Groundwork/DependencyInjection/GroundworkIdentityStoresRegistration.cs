@@ -17,6 +17,14 @@ public static class GroundworkIdentityStoresRegistration
 {
     public static IServiceCollection AddGroundworkIdentityStores(this IServiceCollection services)
     {
+        var existingProviderConfigurationBackend = services
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<ProviderConfigurationStoreBackend>()
+            .FirstOrDefault();
+        ProviderConfigurationStoreBackend.EnsureCompatible(existingProviderConfigurationBackend?.Name, "groundwork");
+        if (existingProviderConfigurationBackend is null)
+            services.AddSingleton(new ProviderConfigurationStoreBackend("groundwork"));
+
         services.AddPersistenceCore();
         foreach (var unit in IdentityV2StorageManifest.CreateUnits())
             services.AddGroundworkStorageUnit(unit);
