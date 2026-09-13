@@ -129,12 +129,10 @@ The backend-served login page (`GET /_elsa/identity/login`) embeds an antiforger
 cookie; the login `POST` validates it for the HTML-form flow. JSON API callers are unaffected. No configuration
 is required.
 
-### The API kill-switch
+### No API kill-switch
 
-`ApiSecurity.AllowAnonymous` disables endpoint security for a shell. **It is honored only in the `Development`
-environment** (locked product decision — there is no auth off-switch in production). Outside `Development` the
-flag is ignored, the shell stays secure, and a prominent warning is logged. Do not rely on it for anything but
-local development or tests.
+The former `ApiSecurity.AllowAnonymous` setting has been removed, and no configuration disables endpoint security
+for a shell. See [Security posture](authentication-architecture.md#7-security-posture).
 
 ## Same-origin hosting
 
@@ -156,8 +154,8 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
    server over **HTTPS** (so the `SecurePolicy=Always` session cookie is accepted).
 7. Provision real user accounts — either through your own onboarding, or by setting `SeedAdminUserName` with a
    secret `SeedAdminPassword` (the committed dev `admin`/`Password123!` values apply only under `IsDevelopmentOrDemo`).
-8. Ensure `ApiSecurity.AllowAnonymous` is **not** set on any shell (it is ignored outside `Development`, but
-   remove it to avoid the startup warning).
+8. Remove any leftover `ApiSecurity` entry from shell feature lists: the feature no longer exists, and CShells
+   logs a warning for each unknown feature name.
 9. Host the Studio SPA same-origin, and set `Studio:Auth:Enabled=true`.
 10. **Apply the OpenIddict token-store migrations.** Workbench migrates its host-owned vendor EF schema at
     startup while `AutoMigrate=true`. For multi-instance deployments, set `AutoMigrate=false` and apply the
