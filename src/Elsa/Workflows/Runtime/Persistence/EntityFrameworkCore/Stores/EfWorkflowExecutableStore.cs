@@ -31,8 +31,8 @@ public sealed class EfWorkflowExecutableStore(
             {
                 var artifactId = item.Identity.ArtifactId;
                 var id = CreateId(scope, artifactId);
-                var artifact = await context.WorkflowExecutables.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
-                var coordination = await context.WorkflowExecutableCoordinations.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+                var artifact = await context.WorkflowExecutables.SingleOrDefaultAsync(x => x.Id == id && x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) && x.ArtifactIdHash == Hash(artifactId) && x.ArtifactId == artifactId, cancellationToken);
+                var coordination = await context.WorkflowExecutableCoordinations.SingleOrDefaultAsync(x => x.Id == id && x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) && x.ArtifactIdHash == Hash(artifactId) && x.ArtifactId == artifactId, cancellationToken);
                 if (artifact is null && coordination is null)
                 {
                     var json = RuntimeArtifactJson.Serialize(item);
@@ -124,7 +124,7 @@ public sealed class EfWorkflowExecutableStore(
     private string RequireScope()
     {
         var current = accessContextAccessor.Current;
-        if (current.AccessPolicy != PersistenceAccessPolicy.Ordinary || current.Scope is null || current.AcrossScopes)
+        if (current.Scope is null || current.AcrossScopes)
             throw new InvalidOperationException("EF workflow executable persistence requires one explicit persistence scope.");
         return current.Scope.Value;
     }

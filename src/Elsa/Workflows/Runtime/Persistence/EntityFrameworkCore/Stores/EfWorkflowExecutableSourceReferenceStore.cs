@@ -16,7 +16,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         Validate(reference);
         var scope = ScopeForWrite(reference);
         var id = CreateId(scope, reference.SourceReferenceId);
-        var existing = await context.WorkflowExecutableSourceReferences.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+        var existing = await context.WorkflowExecutableSourceReferences.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) && x.SourceReferenceId == reference.SourceReferenceId, cancellationToken);
         if (existing is not null)
         {
             _ = Read(existing, scope, reference.SourceReferenceId);
@@ -75,7 +75,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceReferenceId);
         var scope = RequireScope();
-        var row = await context.WorkflowExecutableSourceReferences.SingleOrDefaultAsync(x => x.Id == CreateId(scope, sourceReferenceId), cancellationToken);
+        var row = await context.WorkflowExecutableSourceReferences.SingleOrDefaultAsync(x => x.Id == CreateId(scope, sourceReferenceId) && x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) && x.SourceReferenceId == sourceReferenceId, cancellationToken);
         if (row is null)
             return false;
         var current = Read(row, scope, sourceReferenceId);
@@ -98,7 +98,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         if (!valid)
             return false;
         var scope = RequireScope();
-        var row = await context.WorkflowExecutableSourceReferences.SingleOrDefaultAsync(x => x.Id == CreateId(scope, expected.SourceReferenceId), cancellationToken);
+        var row = await context.WorkflowExecutableSourceReferences.SingleOrDefaultAsync(x => x.Id == CreateId(scope, expected.SourceReferenceId) && x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) && x.SourceReferenceId == expected.SourceReferenceId, cancellationToken);
         if (row is null)
             return false;
         var current = Read(row, scope, expected.SourceReferenceId);
@@ -114,7 +114,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceReferenceId);
         var scope = RequireScope();
-        var row = await context.WorkflowExecutableSourceReferences.SingleOrDefaultAsync(x => x.Id == CreateId(scope, sourceReferenceId), cancellationToken);
+        var row = await context.WorkflowExecutableSourceReferences.SingleOrDefaultAsync(x => x.Id == CreateId(scope, sourceReferenceId) && x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) && x.SourceReferenceId == sourceReferenceId, cancellationToken);
         if (row is null)
             return false;
         _ = Read(row, scope, sourceReferenceId);
@@ -150,7 +150,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
     private string RequireScope()
     {
         var current = access.Current;
-        if (current.AccessPolicy != PersistenceAccessPolicy.Ordinary || current.Scope is null || current.AcrossScopes)
+        if (current.Scope is null || current.AcrossScopes)
             throw new InvalidOperationException("EF workflow executable source-reference persistence requires one explicit persistence scope.");
         return current.Scope.Value;
     }

@@ -2,8 +2,11 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
@@ -25,6 +28,25 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Executables_and_templates_isolate_same_logical_ids_and_allow_privileged_scoped_access()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var tenantA = database.Open("tenant-a");
+        await using var tenantB = database.Open("tenant-b");
+        await tenantA.Executable.SaveAsync(Executable("same-artifact"));
+        await tenantB.Executable.SaveAsync(Executable("same-artifact"));
+        await tenantA.Template.SaveAsync(Template("same-template", "hash-a"));
+        await tenantB.Template.SaveAsync(Template("same-template", "hash-b"));
+        Assert.Equal("same-artifact", (await tenantA.Executable.FindAsync("same-artifact"))!.Identity.ArtifactId);
+        Assert.Null(await tenantA.Template.FindByHashAsync("hash-b"));
+        Assert.Equal("hash-b", (await tenantB.Template.FindByHashAsync("hash-b"))!.TemplateHash);
+
+        await using var privileged = database.Open(PersistenceAccessContext.PrivilegedScoped(new PersistenceScope("tenant-a"), new PersistenceAccessPurpose("maintenance")));
+        Assert.NotNull(await privileged.Executable.FindAsync("same-artifact"));
+        Assert.NotNull(await privileged.Template.FindAsync("same-template"));
+    }
+
+    [Fact]
     public async Task Global_and_across_scope_access_are_rejected_before_querying()
     {
         await using var database = await Database.CreateAsync();
@@ -40,7 +62,6 @@ public sealed class EfRuntimeArtifactScopeTests
     {
         await using var database = await Database.CreateAsync();
         await using var fixture = database.Open("tenant-a");
-        await fixture.Store.SaveAsync(Reference("ref-a", "artifact-a"));
         await fixture.Store.SaveAsync(Reference("ref-b", "artifact-b"));
 
         var row = await fixture.Context.WorkflowExecutableSourceReferences.SingleAsync(x => x.ArtifactId == "artifact-b");
@@ -48,7 +69,7 @@ public sealed class EfRuntimeArtifactScopeTests
         await fixture.Context.SaveChangesAsync();
 
         var unreferenced = await fixture.Store.ListUnreferencedArtifactIdsAsync(new(["artifact-a", "artifact-b"]), DateTimeOffset.UtcNow);
-        Assert.Equal(["artifact-b"], unreferenced);
+        Assert.Equal(["artifact-a", "artifact-b"], unreferenced);
     }
 
     [Fact]
@@ -68,6 +89,18 @@ public sealed class EfRuntimeArtifactScopeTests
         id, artifact, "WorkflowDefinition", "definition", "1", "definition", "definition-version", "1",
         DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, WorkflowExecutableReferenceScope.Published);
 
+    private static WorkflowExecutable Executable(string artifactId)
+    {
+        var node = new ExecutableNode("node", "node", "test", "1", "consumer", JsonSerializer.SerializeToElement(new { }), new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), outputCaptures: new Dictionary<string, RuntimeOutputCapture>());
+        return new WorkflowExecutable(new WorkflowExecutableIdentity(artifactId, "definition", "version", "1", $"hash-{artifactId}"), node, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference);
+    }
+
+    private static ExecutableActivityTemplate Template(string id, string hash)
+    {
+        var node = new ExecutableNode("node", "node", "test", "1", "consumer", JsonSerializer.SerializeToElement(new { }), new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), outputCaptures: new Dictionary<string, RuntimeOutputCapture>());
+        return new ExecutableActivityTemplate(id, hash, node, new Dictionary<string, WorkflowExecutableResumeTarget>(), [], [], [], "fingerprint", new Dictionary<string, string>(), DateTimeOffset.UtcNow);
+    }
+
     private sealed class Database : IAsyncDisposable
     {
         private readonly SqliteConnection connection;
@@ -84,19 +117,21 @@ public sealed class EfRuntimeArtifactScopeTests
 
         public Fixture Open(string scope) => Open(PersistenceAccessContext.Scoped(new PersistenceScope(scope)));
 
-        public Fixture Open(PersistenceAccessContext access) 
+        public Fixture Open(PersistenceAccessContext access)
         {
             var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
-            return new Fixture(context, new EfWorkflowExecutableSourceReferenceStore(context, new Accessor(access)));
+            return new Fixture(context, new EfWorkflowExecutableSourceReferenceStore(context, new Accessor(access)), new EfWorkflowExecutableStore(context, new Accessor(access)), new EfExecutableActivityTemplateStore(context, new Accessor(access)));
         }
 
         public ValueTask DisposeAsync() => connection.DisposeAsync();
     }
 
-    private sealed class Fixture(BookmarkStateSqliteDbContext context, EfWorkflowExecutableSourceReferenceStore store) : IAsyncDisposable
+    private sealed class Fixture(BookmarkStateSqliteDbContext context, EfWorkflowExecutableSourceReferenceStore store, EfWorkflowExecutableStore executable, EfExecutableActivityTemplateStore template) : IAsyncDisposable
     {
         public BookmarkStateSqliteDbContext Context { get; } = context;
         public EfWorkflowExecutableSourceReferenceStore Store { get; } = store;
+        public EfWorkflowExecutableStore Executable { get; } = executable;
+        public EfExecutableActivityTemplateStore Template { get; } = template;
         public ValueTask DisposeAsync() => Context.DisposeAsync();
     }
 

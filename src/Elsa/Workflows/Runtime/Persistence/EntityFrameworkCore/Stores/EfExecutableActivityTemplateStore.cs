@@ -23,8 +23,8 @@ public sealed class EfExecutableActivityTemplateStore(
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         try
         {
-            var current = await context.ExecutableActivityTemplates.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
-            var claim = await context.ExecutableActivityTemplateHashClaims.SingleOrDefaultAsync(x => x.Id == claimId, cancellationToken);
+            var current = await context.ExecutableActivityTemplates.SingleOrDefaultAsync(x => x.Id == id && x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) && x.TemplateIdHash == Hash(template.TemplateId) && x.TemplateId == template.TemplateId, cancellationToken);
+            var claim = await context.ExecutableActivityTemplateHashClaims.SingleOrDefaultAsync(x => x.Id == claimId && x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) && x.TemplateHashHash == Hash(template.TemplateHash) && x.TemplateHash == template.TemplateHash, cancellationToken);
             if (current is not null)
             {
                 var existing = Read(current, scope, template.TemplateId, id);
@@ -71,7 +71,7 @@ public sealed class EfExecutableActivityTemplateStore(
             return null;
         var c = ReadClaim(claim, scope, templateHash, claimId);
         var id = CreateId(scope, c.TemplateId);
-        var row = await context.ExecutableActivityTemplates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken) ?? throw new InvalidDataException("Executable activity template hash claim points to a missing template.");
+        var row = await context.ExecutableActivityTemplates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) && x.TemplateIdHash == Hash(c.TemplateId) && x.TemplateId == c.TemplateId, cancellationToken) ?? throw new InvalidDataException("Executable activity template hash claim points to a missing template.");
         return Read(row, scope, c.TemplateId, id);
     }
 
@@ -94,12 +94,12 @@ public sealed class EfExecutableActivityTemplateStore(
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         var id = CreateId(scope, templateId);
-        var row = await context.ExecutableActivityTemplates.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+        var row = await context.ExecutableActivityTemplates.SingleOrDefaultAsync(x => x.Id == id && x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) && x.TemplateIdHash == Hash(templateId) && x.TemplateId == templateId, cancellationToken);
         if (row is null)
             return false;
         var template = Read(row, scope, templateId, id);
         var claimId = HashClaimId(scope, template.TemplateHash);
-        var claim = await context.ExecutableActivityTemplateHashClaims.SingleOrDefaultAsync(x => x.Id == claimId, cancellationToken) ?? throw new InvalidDataException("Executable activity template has no hash claim.");
+        var claim = await context.ExecutableActivityTemplateHashClaims.SingleOrDefaultAsync(x => x.Id == claimId && x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) && x.TemplateHashHash == Hash(template.TemplateHash) && x.TemplateHash == template.TemplateHash, cancellationToken) ?? throw new InvalidDataException("Executable activity template has no hash claim.");
         EnsureClaim(claim, scope, template.TemplateHash, templateId, claimId);
         context.RemoveRange(row, claim);
         await context.SaveChangesAsync(cancellationToken);
@@ -109,7 +109,7 @@ public sealed class EfExecutableActivityTemplateStore(
     private string RequireScope()
     {
         var current = accessContextAccessor.Current;
-        if (current.AccessPolicy != PersistenceAccessPolicy.Ordinary || current.Scope is null || current.AcrossScopes)
+        if (current.Scope is null || current.AcrossScopes)
             throw new InvalidOperationException("EF executable activity template persistence requires one explicit persistence scope.");
         return current.Scope.Value;
     }
