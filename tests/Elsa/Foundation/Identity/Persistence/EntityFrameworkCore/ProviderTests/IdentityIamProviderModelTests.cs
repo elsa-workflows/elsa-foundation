@@ -95,6 +95,8 @@ public sealed class IdentityIamProviderModelTests
         string provider)
         where TContext : IdentityIamDbContext
     {
+        // These options are parsed to build models but never opened. Keep them passwordless so
+        // offline provider checks do not introduce credential-shaped test data.
         switch (provider)
         {
             case "SqlServer":
