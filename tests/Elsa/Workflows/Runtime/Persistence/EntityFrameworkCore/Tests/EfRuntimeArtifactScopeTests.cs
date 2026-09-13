@@ -85,6 +85,126 @@ public sealed class EfRuntimeArtifactScopeTests
         Assert.Equal(["artifact-missing"], unreferenced);
     }
 
+    [Fact]
+    public async Task Executable_save_is_idempotent_and_batch_failure_rolls_back_new_rows()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+
+        await fixture.Executable.SaveAsync(Executable("same-artifact"));
+        await fixture.Executable.SaveAsync(Executable("same-artifact"));
+        Assert.NotNull(await fixture.Executable.FindAsync("same-artifact"));
+
+        await fixture.Executable.SaveAsync(Executable("incomplete"));
+        var coordination = await fixture.Context.WorkflowExecutableCoordinations
+            .SingleAsync(x => x.ArtifactId == "incomplete");
+        fixture.Context.WorkflowExecutableCoordinations.Remove(coordination);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Executable.SaveBatchAsync(
+            [Executable("new-artifact"), Executable("incomplete")]).AsTask());
+        Assert.Null(await fixture.Executable.FindAsync("new-artifact"));
+    }
+
+    [Fact]
+    public async Task Ordinary_and_guarded_deletes_remove_the_pair_and_reject_stale_guards()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await using var other = database.Open("tenant-a");
+        var now = DateTimeOffset.UtcNow;
+
+        await fixture.Executable.SaveAsync(Executable("ordinary"));
+        Assert.True(await fixture.Executable.DeleteAsync("ordinary"));
+        Assert.Null(await fixture.Executable.FindAsync("ordinary"));
+
+        await fixture.Executable.SaveAsync(Executable("guarded"));
+        var guard = await fixture.Executable.TryBeginDeletionAsync("guarded", "operation", now.AddMinutes(5), now);
+        Assert.NotNull(guard);
+
+        var row = await other.Context.WorkflowExecutableCoordinations.SingleAsync(x => x.ArtifactId == "guarded");
+        row.ContentJson = "{\"Leases\":{},\"Guard\":null}";
+        row.Revision++;
+        await other.Context.SaveChangesAsync();
+        Assert.False(await fixture.Executable.DeleteAsync(guard!, now));
+        Assert.NotNull(await fixture.Executable.FindAsync("guarded"));
+    }
+
+    [Fact]
+    public async Task Leases_and_guards_are_mutually_exclusive_and_expired_state_recovers()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Executable.SaveAsync(Executable("coordination"));
+        var now = DateTimeOffset.UtcNow;
+
+        var lease = await fixture.Executable.TryAcquireRootWriteLeaseAsync("coordination", "lease", now.AddMinutes(1), now);
+        Assert.NotNull(lease);
+        Assert.Null(await fixture.Executable.TryBeginDeletionAsync("coordination", "operation", now.AddMinutes(5), now));
+        await fixture.Executable.ReleaseRootWriteLeaseAsync(lease!);
+
+        var guard = await fixture.Executable.TryBeginDeletionAsync("coordination", "operation", now.AddMinutes(1), now);
+        Assert.NotNull(guard);
+        Assert.Null(await fixture.Executable.TryAcquireRootWriteLeaseAsync("coordination", "other", now.AddMinutes(5), now));
+
+        var recovered = await fixture.Executable.TryAcquireRootWriteLeaseAsync("coordination", "other", now.AddMinutes(5), now.AddMinutes(2));
+        Assert.NotNull(recovered);
+        Assert.False(await fixture.Executable.RenewRootWriteLeaseAsync(lease!, now.AddMinutes(6), now.AddMinutes(2)));
+    }
+
+    [Fact]
+    public async Task Optimistic_coordination_conflict_clears_tracker_and_reloads_before_retry()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await using var other = database.Open("tenant-a");
+        await fixture.Executable.SaveAsync(Executable("conflict"));
+        var now = DateTimeOffset.UtcNow;
+        var first = await fixture.Executable.TryAcquireRootWriteLeaseAsync("conflict", "first", now.AddMinutes(5), now);
+        Assert.NotNull(first);
+
+        var row = await other.Context.WorkflowExecutableCoordinations.SingleAsync(x => x.ArtifactId == "conflict");
+        row.ContentJson = "{\"Leases\":{},\"Guard\":null}";
+        row.Revision++;
+        await other.Context.SaveChangesAsync();
+
+        var second = await fixture.Executable.TryAcquireRootWriteLeaseAsync("conflict", "second", now.AddMinutes(5), now);
+        Assert.NotNull(second);
+    }
+
+    [Fact]
+    public async Task Corrupt_coordination_payloads_fail_closed_as_invalid_data()
+    {
+        var payloads = new[]
+        {
+            "null",
+            "{",
+            "{\"Leases\":null,\"Guard\":null}",
+            "{\"Leases\":{\"key\":{\"Id\":\"other\",\"Token\":\"token\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"Guard\":null}",
+            "{\"Leases\":{\"one\":{\"Id\":\"one\",\"Token\":\"\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"},\"two\":{\"Id\":\"two\",\"Token\":\"\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"Guard\":null}",
+            "{\"Leases\":{\"one\":{\"Id\":\"one\",\"Token\":\"token\",\"ExpiresAt\":\"0001-01-01T00:00:00+00:00\"}},\"Guard\":null}",
+            "{\"Leases\":{},\"Guard\":{\"OperationId\":\"\",\"Token\":\"token\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}}"
+        };
+
+        foreach (var payload in payloads)
+        {
+            await using var database = await Database.CreateAsync();
+            await using var fixture = database.Open("tenant-a");
+            await fixture.Executable.SaveAsync(Executable("corrupt"));
+            var row = await fixture.Context.WorkflowExecutableCoordinations.SingleAsync(x => x.ArtifactId == "corrupt");
+            row.ContentJson = payload;
+            await fixture.Context.SaveChangesAsync();
+            fixture.Context.ChangeTracker.Clear();
+
+            var exception = await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Executable
+                .TryBeginDeletionAsync("corrupt", "operation", DateTimeOffset.UtcNow.AddMinutes(5), DateTimeOffset.UtcNow)
+                .AsTask());
+            Assert.IsNotType<JsonException>(exception);
+            Assert.IsNotType<NullReferenceException>(exception);
+        }
+    }
+
     private static WorkflowExecutableSourceReference Reference(string id, string artifact) => new(
         id, artifact, "WorkflowDefinition", "definition", "1", "definition", "definition-version", "1",
         DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, WorkflowExecutableReferenceScope.Published);
