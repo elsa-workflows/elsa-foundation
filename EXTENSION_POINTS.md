@@ -149,6 +149,7 @@ not automatic constitution violations.
 | Workflows runtime (canonical domain catalog: Core contracts, composition root, engine implementations, trigger publication, recurring schedules) | [`src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md) |
 | Workflows runtime API — executable inspection and diagnostics services | [`src/Elsa/Workflows/Runtime/Api/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Api/EXTENSION_POINTS.md) |
 | Workflows runtime distributed Groundwork persistence | [`src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/EXTENSION_POINTS.md) |
+| Workflows runtime distributed EF Core placement persistence | [`src/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Workflows runtime — HTTP endpoint behaviour | [`src/Elsa/Workflows/Runtime/Http/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Http/EXTENSION_POINTS.md) |
 | Workflows runtime — durable resumption (sweep service, recurring pump, feature gating) | [`src/Elsa/Workflows/Runtime/Resumption/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Resumption/EXTENSION_POINTS.md) |
 

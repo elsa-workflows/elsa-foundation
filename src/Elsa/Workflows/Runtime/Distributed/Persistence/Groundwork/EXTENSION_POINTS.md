@@ -9,6 +9,9 @@ nodes through one host-selected provider connection. The store contracts themsel
 [`Runtime EXTENSION_POINTS`](../../../EXTENSION_POINTS.md); this feature is a concrete,
 overridable persistence provider for them.
 
+When the opt-in EF Core D01 provider is selected, this feature retains Groundwork ownership of
+`IExecutionCommandTransport` and leaves EF ownership of `IExecutionPlacementStore` intact.
+
 ## Provider selection — host composition
 
 | Shell feature | Scope | Registration |

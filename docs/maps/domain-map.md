@@ -6,10 +6,10 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 
 ## Summary
 
-- Source projects: 134
-- Test projects: 113
+- Source projects: 135
+- Test projects: 114
 - Domains: 28
-- Direct cross-domain references: 727
+- Direct cross-domain references: 728
 
 ## Domains
 
@@ -41,7 +41,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Tasks | 3 | 1 | contract<br>feature/implementation<br>helper<br>test |
 | Elsa.Testing | 0 | 1 | test |
 | Elsa.Workbench | 1 | 1 | host<br>test |
-| Elsa.Workflows | 30 | 20 | contract<br>feature/implementation<br>test |
+| Elsa.Workflows | 31 | 21 | contract<br>feature/implementation<br>test |
 | Elsa3 | 4 | 1 | feature/implementation<br>test |
 
 ## Projects
@@ -169,6 +169,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Workflows.Runtime.Api](../../src/Elsa/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj) | source | Elsa.Workflows | Runtime.Api | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Api.Capabilities<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Mediator.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Core](../../src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj) | source | Elsa.Workflows | Runtime.Core | contract | Elsa.Activities.Runtime.Core<br>Elsa.Expressions.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core |
 | [Elsa.Workflows.Runtime.Distributed](../../src/Elsa/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed.csproj) | source | Elsa.Workflows | Runtime.Distributed | feature/implementation | Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore](../../src/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj) | source | Elsa.Workflows | Runtime.Distributed.Persistence.EntityFrameworkCore | feature/implementation | Elsa.Persistence.EntityFramework<br>Elsa.Workflows.Runtime.Distributed |
 | [Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork](../../src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj) | source | Elsa.Workflows | Runtime.Distributed.Persistence.Groundwork | feature/implementation | Elsa.Persistence.Groundwork.V2<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Distributed |
 | [Elsa.Workflows.Runtime](../../src/Elsa/Workflows/Runtime/Elsa.Workflows.Runtime.csproj) | source | Elsa.Workflows | Runtime | feature/implementation | Elsa.Activities.Runtime.Core<br>Elsa.Attention.Core<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Http](../../src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | source | Elsa.Workflows | Runtime.Http | feature/implementation | Elsa.Http.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime.Core |
@@ -286,6 +287,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Workflows.Publishing.Persistence.Groundwork.Tests](../../tests/Elsa/Workflows/Publishing/Persistence/Groundwork/Tests/Elsa.Workflows.Publishing.Persistence.Groundwork.Tests.csproj) | test | Elsa.Workflows | Publishing.Persistence.Groundwork.Tests | test | Elsa.Persistence.Groundwork.Testing<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Workflows.Publishing<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Publishing.Persistence.Groundwork |
 | [Elsa.Workflows.Publishing.Tests](../../tests/Elsa/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj) | test | Elsa.Workflows | Publishing.Tests | test | Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Activities.Testing<br>Elsa.Mediator.Core<br>Elsa.Testing<br>Elsa.Workflows.Publishing<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Publishing.Core<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Reconciliation<br>Elsa.Workflows.Runtime.Reconciliation.Core<br>Elsa.Workflows.Runtime.Reconciliation.ExecutionProbe<br>Elsa.Workflows.Runtime.Resumption |
 | [Elsa.Workflows.Runtime.Api.Tests](../../tests/Elsa/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj) | test | Elsa.Workflows | Runtime.Api.Tests | test | Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Testing<br>Elsa.Workflows.Runtime.Api |
+| [Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests](../../tests/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Workflows | Runtime.Distributed.Persistence.EntityFrameworkCore.Tests | test | Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
 | [Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests](../../tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests.csproj) | test | Elsa.Workflows | Runtime.Distributed.Persistence.Groundwork.Tests | test | Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
 | [Elsa.Workflows.Runtime.Distributed.Tests](../../tests/Elsa/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj) | test | Elsa.Workflows | Runtime.Distributed.Tests | test | Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Persistence.Groundwork.V2<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Distributed<br>Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork |
 | [Elsa.Workflows.Runtime.Http.Tests](../../tests/Elsa/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj) | test | Elsa.Workflows | Runtime.Http.Tests | test | Elsa.Http.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Http |
@@ -974,6 +976,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Workflows.Runtime.Core](../../src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj) | Elsa.Workflows | [Elsa.Serialization.Core](../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj) | Elsa.Serialization |
 | [Elsa.Workflows.Runtime.Distributed](../../src/Elsa/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed.csproj) | Elsa.Workflows | [Elsa.Tasks.Core](../../src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj) | Elsa.Tasks |
 | [Elsa.Workflows.Runtime.Distributed](../../src/Elsa/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed.csproj) | Elsa.Workflows | [Elsa.Tasks.Schedules](../../src/Elsa/Tasks/Schedules/Elsa.Tasks.Schedules.csproj) | Elsa.Tasks |
+| [Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore](../../src/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj) | Elsa.Workflows | [Elsa.Persistence.EntityFramework](../../src/Elsa/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
 | [Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork](../../src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj) | Elsa.Workflows | [Elsa.Persistence.Groundwork.V2](../../src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj) | Elsa.Persistence |
 | [Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests](../../tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests.csproj) | Elsa.Workflows | [Elsa.Persistence.Groundwork.Testing](../../tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj) | Elsa.Persistence |
 | [Elsa.Workflows.Runtime.Distributed.Tests](../../tests/Elsa/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj) | Elsa.Workflows | [Elsa.Activities.DispatchWorkflow.Runtime](../../src/Elsa/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj) | Elsa.Activities |

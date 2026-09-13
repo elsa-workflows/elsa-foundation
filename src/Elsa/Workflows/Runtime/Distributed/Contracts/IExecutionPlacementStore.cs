@@ -10,8 +10,8 @@ namespace Elsa.Workflows.Runtime.Distributed.Contracts;
 /// </summary>
 /// <remarks>
 /// Placement is routing, not correctness — see <see cref="ExecutionPlacementLease"/>. A default in-memory
-/// implementation ships for single-process composition and the two-node test harness. The opt-in Groundwork persistence
-/// feature supplies a durable implementation behind this contract without touching Runtime.Core.
+/// implementation ships for single-process composition and the two-node test harness. The opt-in Groundwork or
+/// EF Core placement persistence features supply durable implementations behind this contract without touching Runtime.Core.
 /// </remarks>
 public interface IExecutionPlacementStore
 {

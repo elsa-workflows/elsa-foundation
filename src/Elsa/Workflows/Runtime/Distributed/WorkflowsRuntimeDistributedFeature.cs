@@ -95,6 +95,7 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
         // cluster view. A durable persistence feature replaces the two scoped store contracts.
         services.TryAddSingleton(sp => sp.GetRequiredService<IOptions<ExecutionPlacementOptions>>().Value);
         services.TryAddSingleton<InMemoryExecutionPlacementState>();
+        services.TryAddSingleton(new ExecutionPlacementStoreBackend(ExecutionPlacementStoreBackend.InMemory));
         services.TryAddScoped<IExecutionPlacementStore>(sp => new InMemoryExecutionPlacementStore(
             sp.GetRequiredService<InMemoryExecutionPlacementState>(),
             sp.GetRequiredService<IPersistenceAccessContextAccessor>()));

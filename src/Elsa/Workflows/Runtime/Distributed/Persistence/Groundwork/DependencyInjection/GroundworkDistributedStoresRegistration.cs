@@ -17,11 +17,20 @@ public static class GroundworkDistributedStoresRegistration
         foreach (var unit in DistributedGroundworkStorageManifest.CreateUnits())
             services.AddGroundworkStorageUnit(unit, targetName);
 
-        services.RemoveAll<IExecutionPlacementStore>();
-        services.AddScoped<IExecutionPlacementStore>(provider => new GroundworkExecutionPlacementStore(
-            provider.GetRequiredService<IGroundworkStorageSessionSource>(),
-            provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
-            targetName));
+        var existingBackend = services
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<ExecutionPlacementStoreBackend>()
+            .SingleOrDefault();
+        if (!string.Equals(existingBackend?.Name, ExecutionPlacementStoreBackend.EntityFramework, StringComparison.Ordinal))
+        {
+            services.RemoveAll<ExecutionPlacementStoreBackend>();
+            services.AddSingleton(new ExecutionPlacementStoreBackend(ExecutionPlacementStoreBackend.Groundwork));
+            services.RemoveAll<IExecutionPlacementStore>();
+            services.AddScoped<IExecutionPlacementStore>(provider => new GroundworkExecutionPlacementStore(
+                provider.GetRequiredService<IGroundworkStorageSessionSource>(),
+                provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
+                targetName));
+        }
         services.RemoveAll<IExecutionCommandTransport>();
         services.AddScoped<IExecutionCommandTransport>(provider => new GroundworkExecutionCommandTransport(
             provider.GetRequiredService<IGroundworkStorageSessionSource>(),
