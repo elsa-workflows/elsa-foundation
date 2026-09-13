@@ -84,6 +84,32 @@ public sealed class EfOpenTelemetryRetentionTests
     }
 
     [Fact]
+    public async Task Instrument_retention_uses_the_stable_batch_issuance_time()
+    {
+        var now = TelemetryTestData.Now.AddMinutes(30);
+        await using var fixture = new OpenTelemetryEntityFrameworkCoreFixture();
+        await fixture.InitializeAsync(new OpenTelemetryDiagnosticsOptions
+        {
+            MetricInstrumentCapacity = 1,
+            MaxQuerySize = 10
+        }, new FixedTimeProvider(now));
+        var newer = TelemetryTestData.Instrument("instrument-z", "resource-z", "requests-z");
+        var older = TelemetryTestData.Instrument("instrument-a", "resource-a", "requests-a");
+        var newerIssuedAt = now.AddMinutes(-1);
+
+        await fixture.EfStore.WriteAsync(
+            new DiagnosticsDrainBatchId(Guid.NewGuid(), newerIssuedAt),
+            new([], [], [], [newer], [], []));
+        await fixture.EfStore.WriteAsync(
+            new DiagnosticsDrainBatchId(Guid.NewGuid(), now.AddMinutes(-2)),
+            new([], [], [], [older], [], []));
+        await fixture.EfStore.ApplyPendingRetentionAsync();
+
+        var retained = await fixture.WithDbAsync(db => db.Instruments.Select(x => new { x.Id, x.LastSeenTicks }).SingleAsync());
+        Assert.Equal((newer.Id, newerIssuedAt.UtcTicks), (retained.Id, retained.LastSeenTicks));
+    }
+
+    [Fact]
     public async Task Trace_retention_recomputes_a_partially_retained_summary()
     {
         await using var fixture = await CreateFixtureAsync(new OpenTelemetryDiagnosticsOptions
@@ -159,5 +185,10 @@ public sealed class EfOpenTelemetryRetentionTests
         var fixture = new OpenTelemetryEntityFrameworkCoreFixture();
         await fixture.InitializeAsync(options);
         return fixture;
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 }

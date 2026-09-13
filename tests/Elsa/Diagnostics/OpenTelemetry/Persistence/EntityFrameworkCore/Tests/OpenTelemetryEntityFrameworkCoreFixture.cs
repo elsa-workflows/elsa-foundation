@@ -21,20 +21,22 @@ internal sealed class OpenTelemetryEntityFrameworkCoreFixture : IAsyncDisposable
     public EfOpenTelemetryStore EfStore => provider!.GetRequiredService<EfOpenTelemetryStore>();
     public IOpenTelemetrySourceRegistry SourceRegistry => provider!.GetRequiredService<IOpenTelemetrySourceRegistry>();
 
-    public async Task InitializeAsync(OpenTelemetryDiagnosticsOptions? diagnostics = null)
+    public async Task InitializeAsync(OpenTelemetryDiagnosticsOptions? diagnostics = null, TimeProvider? timeProvider = null)
     {
         Directory.CreateDirectory(directory);
-        provider = BuildProvider(DatabasePath, diagnostics);
+        provider = BuildProvider(DatabasePath, diagnostics, timeProvider);
         await EnsureCreatedAsync(provider);
         EfStore.Start();
     }
 
-    public static ServiceProvider BuildProvider(string path, OpenTelemetryDiagnosticsOptions? diagnostics = null)
+    public static ServiceProvider BuildProvider(string path, OpenTelemetryDiagnosticsOptions? diagnostics = null, TimeProvider? timeProvider = null)
     {
         var services = new ServiceCollection();
         services.AddOptions<OpenTelemetryDiagnosticsOptions>();
         if (diagnostics is not null)
             services.Configure<OpenTelemetryDiagnosticsOptions>(options => Copy(diagnostics, options));
+        if (timeProvider is not null)
+            services.AddSingleton(timeProvider);
 
         services.AddOpenTelemetryEntityFrameworkCore(new OpenTelemetryEntityFrameworkCoreOptions
         {

@@ -403,7 +403,10 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
                     }
 
                     var merged = MergeBatches(pending.Select(x => x.Batch));
-                    await UpsertCatalogAsync(db, merged, cancellationToken);
+                    var instrumentObservations = pending
+                        .SelectMany(item => item.Batch.Instruments.Select(instrument => (Instrument: instrument, LastSeen: item.BatchId.IssuedAt)))
+                        .ToArray();
+                    await UpsertCatalogAsync(db, merged, instrumentObservations, cancellationToken);
                     var services = await ResolveServicesAsync(db, merged, cancellationToken);
                     await AppendSignalsAsync(db, merged, services, cancellationToken);
                     await MergeSummariesAsync(db, merged, services, cancellationToken);
@@ -466,7 +469,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     private async ValueTask<DiagnosticsDrainCommit<bool>> CommitBatchAsync(DiagnosticsDrainBatch<OpenTelemetryBatch> batch, CancellationToken cancellationToken)
     {
         await CommitDurablyAsync(batch.Id, batch.Items.Single(), cancellationToken);
-        return new DiagnosticsDrainCommit<bool>([true], 0);
+        return new DiagnosticsDrainCommit<bool>([true], batch.Items.Count);
     }
 
     private async Task<int> ApplyRetentionCoreAsync(CancellationToken cancellationToken)
@@ -543,7 +546,11 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
         return rows.Count;
     }
 
-    private async Task UpsertCatalogAsync(OpenTelemetryDbContext db, OpenTelemetryBatch batch, CancellationToken ct)
+    private async Task UpsertCatalogAsync(
+        OpenTelemetryDbContext db,
+        OpenTelemetryBatch batch,
+        IReadOnlyList<(MetricInstrument Instrument, DateTimeOffset LastSeen)> instrumentObservations,
+        CancellationToken ct)
     {
         foreach (var item in batch.Resources
                      .Select(resource => (Resource: resource, Key: OpenTelemetrySearchKeys.ResourceId(resource.Id)))
@@ -557,13 +564,13 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
             else
                 Copy(projection, row);
         }
-        foreach (var item in batch.Instruments
-                     .Select(instrument => (Instrument: instrument, Key: OpenTelemetrySearchKeys.SummaryElement(instrument.Id)))
+        foreach (var item in instrumentObservations
+                     .Select(observation => (observation.Instrument, observation.LastSeen, Key: OpenTelemetrySearchKeys.SummaryElement(observation.Instrument.Id)))
                      .GroupBy(x => x.Key, StringComparer.Ordinal)
                      .Select(group => group.Last()))
         {
             var row = await db.Instruments.SingleOrDefaultAsync(x => x.ScopeKey == binding.ScopeKey && x.IdSearchKey == item.Key, ct);
-            var projection = ToInstrumentEntity(item.Instrument);
+            var projection = ToInstrumentEntity(item.Instrument, item.LastSeen);
             if (row is null)
                 db.Instruments.Add(projection);
             else
@@ -871,7 +878,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
             _ = OpenTelemetrySearchKeys.SummaryElement(value);
     }
     private OpenTelemetrySpanEntity ToSpanEntity(TelemetrySpan x, long sequence) => new() { ScopeKey = binding.ScopeKey, Sequence = sequence, Id = x.Id, IdSearchKey = OpenTelemetrySearchKeys.SignalId(x.Id), IdOrderKey = OpenTelemetrySearchKeys.OrderKey(x.Id), TraceId = x.TraceId, TraceIdSearchKey = OpenTelemetrySearchKeys.TraceId(x.TraceId), TraceKey = OpenTelemetrySearchKeys.TraceKey(x.TraceId), SpanId = x.SpanId, SpanIdSearchKey = OpenTelemetrySearchKeys.SpanId(x.SpanId), SpanIdOrderKey = OpenTelemetrySearchKeys.OrderKey(x.SpanId), ResourceId = x.ResourceId, ResourceIdSearchKey = OpenTelemetrySearchKeys.ResourceId(x.ResourceId), Name = x.Name, NameSearchKey = OpenTelemetrySearchKeys.RequiredKey(x.Name, nameof(x.Name)), Status = (int)x.Status, StartTimeTicks = x.StartTime.UtcTicks, StartTimeOffsetMinutes = Offset(x.StartTime), EndTimeTicks = x.EndTime.UtcTicks, EndTimeOffsetMinutes = Offset(x.EndTime), PayloadJson = Serialize(x) };
-    private OpenTelemetryMetricInstrumentEntity ToInstrumentEntity(MetricInstrument x) => new() { ScopeKey = binding.ScopeKey, Id = x.Id, IdSearchKey = OpenTelemetrySearchKeys.SummaryElement(x.Id), IdOrderKey = OpenTelemetrySearchKeys.OrderKey(x.Id), ResourceId = x.ResourceId, ResourceIdSearchKey = OpenTelemetrySearchKeys.ResourceId(x.ResourceId), Name = x.Name, NameSearchKey = OpenTelemetrySearchKeys.RequiredKey(x.Name, nameof(x.Name)), LastSeenTicks = timeProvider.GetUtcNow().UtcTicks, LastSeenOffsetMinutes = 0, PayloadJson = Serialize(x) };
+    private OpenTelemetryMetricInstrumentEntity ToInstrumentEntity(MetricInstrument x, DateTimeOffset lastSeen) => new() { ScopeKey = binding.ScopeKey, Id = x.Id, IdSearchKey = OpenTelemetrySearchKeys.SummaryElement(x.Id), IdOrderKey = OpenTelemetrySearchKeys.OrderKey(x.Id), ResourceId = x.ResourceId, ResourceIdSearchKey = OpenTelemetrySearchKeys.ResourceId(x.ResourceId), Name = x.Name, NameSearchKey = OpenTelemetrySearchKeys.RequiredKey(x.Name, nameof(x.Name)), LastSeenTicks = lastSeen.UtcTicks, LastSeenOffsetMinutes = Offset(lastSeen), PayloadJson = Serialize(x) };
     private OpenTelemetryMetricPointEntity ToMetricPointEntity(MetricPoint x, long sequence, string? service) => new() { ScopeKey = binding.ScopeKey, Sequence = sequence, Id = x.Id, IdSearchKey = OpenTelemetrySearchKeys.SignalId(x.Id), IdOrderKey = OpenTelemetrySearchKeys.OrderKey(x.Id), InstrumentId = x.InstrumentId, InstrumentIdSearchKey = OpenTelemetrySearchKeys.InstrumentId(x.InstrumentId), InstrumentName = x.InstrumentName, InstrumentNameSearchKey = OpenTelemetrySearchKeys.RequiredKey(x.InstrumentName, nameof(x.InstrumentName)), ResourceId = x.ResourceId, ResourceIdSearchKey = OpenTelemetrySearchKeys.ResourceId(x.ResourceId), ServiceName = service, ServiceNameKey = service is null ? null : OpenTelemetrySearchKeys.Hash(OpenTelemetrySearchKeys.ServiceName(service)), TimestampTicks = x.Timestamp.UtcTicks, TimestampOffsetMinutes = Offset(x.Timestamp), PayloadJson = Serialize(x) };
     private OpenTelemetryLogEntity ToLogEntity(OtlpLogRecord x, long sequence, string? service) => new() { ScopeKey = binding.ScopeKey, Sequence = sequence, Id = x.Id, IdSearchKey = OpenTelemetrySearchKeys.SignalId(x.Id), IdOrderKey = OpenTelemetrySearchKeys.OrderKey(x.Id), ResourceId = x.ResourceId, ResourceIdSearchKey = OpenTelemetrySearchKeys.ResourceId(x.ResourceId), ServiceName = service, ServiceNameKey = service is null ? null : OpenTelemetrySearchKeys.Hash(OpenTelemetrySearchKeys.ServiceName(service)), TraceId = x.TraceId, TraceIdSearchKey = x.TraceId is null ? null : OpenTelemetrySearchKeys.TraceId(x.TraceId), SpanId = x.SpanId, SpanIdSearchKey = x.SpanId is null ? null : OpenTelemetrySearchKeys.LogSpanId(x.SpanId), SeverityText = x.SeverityText, SeveritySearchKey = OpenTelemetrySearchKeys.RequiredKey(x.SeverityText, nameof(x.SeverityText)), SeverityNumber = x.SeverityNumber, Body = x.Body, BodySearchKey = OpenTelemetrySearchKeys.RequiredKey(x.Body, nameof(x.Body)), TimestampTicks = x.Timestamp.UtcTicks, TimestampOffsetMinutes = Offset(x.Timestamp), PayloadJson = Serialize(x) };
 
