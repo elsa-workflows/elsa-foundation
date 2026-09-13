@@ -130,6 +130,10 @@ mount nothing at all, Studio toggles land on the container's writable layer: the
 > currently-enabled features is rejected with HTTP 400 naming the omitted features: include every
 > enabled feature — with `enabled: false` to disable it — rather than only the one you're toggling.
 > (Images published before this guard silently wiped every omitted feature from the file instead.)
+> Send the `revision` from a fresh `GET modularity/features`: it is keyed per server process, so one
+> read before a restart, or from another replica, is rejected with HTTP 409. To keep revisions valid
+> across restarts and replicas, give every replica the same random `RevisionKey` in the
+> `ModularityApi` feature's settings.
 
 ## Deploying workflow definitions from files
 

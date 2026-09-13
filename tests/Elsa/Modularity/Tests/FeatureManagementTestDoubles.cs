@@ -36,7 +36,7 @@ internal sealed class FakeShellStore(IEqualityComparer<string>? featureIdCompare
         return Task.FromResult(Snapshot());
     }
 
-    // Hashed like JsonShellFeatureConfigurationStore's revision, so the raw configuration never reaches the catalog.
+    // Hashed, so the raw configuration never reaches the catalog. Unkeyed is fine for a double; the real store keys it.
     private ShellFeatureConfigurationSnapshot Snapshot()
     {
         var content = string.Join('|', Features.OrderBy(x => x.Key).Select(x => $"{x.Key}:{x.Value.GetRawText()}"));

@@ -25,12 +25,20 @@ public class ModularityApiFeature : IWebShellFeature
 {
     public string ShellsJsonPath { get; set; } = "shells.json";
 
+    /// <summary>Key for the feature catalog revision; see <see cref="FeatureManagementOptions.RevisionKey"/>.</summary>
+    [ManifestSetting(
+        DisplayName = "Revision key",
+        Description = "Random value of at least 32 bytes that keys the feature catalog revision. Share it across every instance that applies against the same shells.json. When omitted, each process generates its own, so a revision read before a restart or from another instance is rejected as a conflict.",
+        Secret = true)]
+    public string? RevisionKey { get; set; }
+
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddElsaEndpoints();
         services.AddModularityApi(options =>
         {
             options.ShellsJsonPath = ShellsJsonPath;
+            options.RevisionKey = RevisionKey;
         });
         services.AddDynamicEndpointApiExplorerRefresh();
         // The owner's failure services are keyed so hosts composing several modules keep each
