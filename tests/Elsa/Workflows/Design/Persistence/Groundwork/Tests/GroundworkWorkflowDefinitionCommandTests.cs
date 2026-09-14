@@ -403,6 +403,22 @@ public class GroundworkWorkflowDefinitionCommandTests
     }
 
     [Fact]
+    public async Task Direct_atomic_interface_rejects_a_supplied_result_that_differs_from_the_staged_value()
+    {
+        IDesignAtomicWriter writer = AtomicWrite();
+        var supplied = GroundworkDesignAtomicWriteMaterial.Create(
+            "test.operation.v1.result", "1", "supplied");
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => writer.ExecuteAsync(
+            NextKey(),
+            "test.operation.v1",
+            new { Value = 1 },
+            [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind],
+            (_, _) => Task.FromResult(DesignAtomicWriteStage<string>.Accepted(
+                "staged", supplied.Fingerprint, supplied.Json))));
+    }
+
+    [Fact]
     public async Task Materialize_definition_and_version_replay_without_restaging_and_conflict_on_changed_material()
     {
         var definitionCommand = new GroundworkMaterializeWorkflowDefinitionCommand(AtomicWrite(), _clock, _accessContext);

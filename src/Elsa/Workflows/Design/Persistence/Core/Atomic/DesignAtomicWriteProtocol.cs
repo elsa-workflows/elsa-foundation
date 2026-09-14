@@ -74,6 +74,8 @@ public static class DesignAtomicWriteProtocol
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
+                if (!lane.ShouldReconcileAfterCommitFailure(exception))
+                    throw;
                 if (lane.DisposeBeforeReconcile is not null)
                 {
                     await lane.DisposeBeforeReconcile(scope);

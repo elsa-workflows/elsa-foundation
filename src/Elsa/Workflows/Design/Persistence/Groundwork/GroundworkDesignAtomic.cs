@@ -137,8 +137,16 @@ public sealed class GroundworkDesignAtomicWrite(
                 if (!staged.IsAccepted)
                     return GroundworkDesignAtomicWriteStageResult.Rejected();
                 ArgumentNullException.ThrowIfNull(staged.Value);
-                if (!string.IsNullOrWhiteSpace(staged.ResultFingerprint) && !string.IsNullOrWhiteSpace(staged.ResultJson))
-                    return GroundworkDesignAtomicWriteStageResult.Accepted(staged.ResultFingerprint, staged.ResultJson);
+                if ((staged.ResultFingerprint is null) != (staged.ResultJson is null))
+                    throw new InvalidDataException("An accepted design operation must provide both result fingerprint and result payload.");
+                if (staged.ResultFingerprint is not null)
+                {
+                    var suppliedValue = GroundworkDesignAtomicWriteMaterial.Deserialize<T>(
+                        staged.ResultFingerprint, staged.ResultJson!, $"{operationKind}.result", "1", MarkerOptions);
+                    if (!ResultValuesEquivalent(staged.Value, suppliedValue))
+                        throw new InvalidDataException("The accepted design-operation result must match its staged value.");
+                    return GroundworkDesignAtomicWriteStageResult.Accepted(staged.ResultFingerprint, staged.ResultJson!);
+                }
                 var authoritative = GroundworkDesignAtomicWriteMaterial.Create(
                     $"{operationKind}.result", "1", staged.Value, MarkerOptions);
                 return GroundworkDesignAtomicWriteStageResult.Accepted(authoritative.Fingerprint, authoritative.Json);
@@ -160,6 +168,13 @@ public sealed class GroundworkDesignAtomicWrite(
                 $"{operationKind}.result", "1", MarkerOptions)
             : default;
         return new DesignAtomicWriteResult<T>(status, value, result.AuthoritativeResultFingerprint, result.AuthoritativeResultJson);
+    }
+
+    private static bool ResultValuesEquivalent<T>(T left, T right)
+    {
+        var leftJson = JsonSerializer.SerializeToElement(left, MarkerOptions);
+        var rightJson = JsonSerializer.SerializeToElement(right, MarkerOptions);
+        return JsonElement.DeepEquals(leftJson, rightJson);
     }
 
     // Compatibility overloads keep the existing Groundwork conformance harness source-compatible;
@@ -230,6 +245,7 @@ public sealed class GroundworkDesignAtomicWrite(
             ClassifyMarkerRace = exception => exception is GroundworkDesignOperationMarkerRaceException,
             ClassifyUncertainCommit = exception => exception is GroundworkDesignUncertainCommitException,
             OnUncertainCommit = (exception, token) => ReconcileAsync(markerId, request, token),
+            ShouldReconcileAfterCommitFailure = exception => exception is not GroundworkDesignWriteProviderException,
             DisposeBeforeReconcile = unitOfWork =>
             {
                 unitOfWork.Dispose();

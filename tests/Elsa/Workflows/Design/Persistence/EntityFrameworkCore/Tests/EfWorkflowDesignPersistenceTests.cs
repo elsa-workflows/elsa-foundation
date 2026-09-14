@@ -143,6 +143,38 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Replay_and_conflict_are_resolved_before_before_attempt_work()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        IDesignAtomicWriter writer = new EfDesignAtomicWriter(db, access);
+        var key = new DesignOperationKey("preflight-order");
+        await writer.ExecuteAsync(key, "test.op", new { Value = 1 }, ["test"],
+            (_, _) => Task.FromResult(DesignAtomicWriteStage<int>.Accepted(1)));
+        var beforeAttemptCalls = 0;
+
+        var replay = await writer.ExecuteAsync<int>(key, "test.op", new { Value = 1 }, ["test"],
+            (_, _) => throw new InvalidOperationException("stage must not run"),
+            _ =>
+            {
+                beforeAttemptCalls++;
+                return Task.CompletedTask;
+            });
+        var conflict = await writer.ExecuteAsync<int>(key, "test.op", new { Value = 2 }, ["test"],
+            (_, _) => throw new InvalidOperationException("stage must not run"),
+            _ =>
+            {
+                beforeAttemptCalls++;
+                return Task.CompletedTask;
+            });
+
+        Assert.Equal(DesignAtomicWriteStatus.Replayed, replay.Status);
+        Assert.Equal(DesignAtomicWriteStatus.Conflict, conflict.Status);
+        Assert.Equal(0, beforeAttemptCalls);
+    }
+
+    [Fact]
     public async Task Ef_rejects_authoritative_result_that_differs_from_staged_value()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();

@@ -61,15 +61,14 @@ public sealed class EfDesignAtomicWriter(
         ArgumentNullException.ThrowIfNull(stage);
         var tenantId = access.Current.Scope?.Value
                        ?? throw new InvalidOperationException("Workflow design mutations require an explicit persistence scope.");
-        if (attempt == 0 && beforeAttempt is not null)
-            await beforeAttempt(cancellationToken);
-
         var requestFingerprint = EfDesignSupport.Fingerprint(operationKind, request);
         var existing = await db.Operations.AsNoTracking().SingleOrDefaultAsync(
             x => x.TenantId == tenantId && x.OperationKind == operationKind && x.OperationKey == key.Value,
             cancellationToken);
         if (existing is not null)
             return ResolveExisting<T>(existing, operationKind, requestFingerprint, DesignAtomicWriteStatus.Replayed);
+        if (attempt == 0 && beforeAttempt is not null)
+            await beforeAttempt(cancellationToken);
 
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         DesignAtomicWriteStage<T> staged;
