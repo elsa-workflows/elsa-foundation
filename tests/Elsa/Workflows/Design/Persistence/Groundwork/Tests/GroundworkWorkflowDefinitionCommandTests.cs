@@ -1166,21 +1166,18 @@ public class GroundworkWorkflowDefinitionCommandTests
         IDesignAtomicWriter inner,
         Action onStageEntered) : IDesignAtomicWriter
     {
-        public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
-            GroundworkDesignAtomicWriteRequest request,
-            Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
+        public Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(
+            DesignOperationKey operationKey,
+            string operationKind,
+            object requestMaterial,
+            IReadOnlyCollection<string> mutatedUnits,
+            Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage,
+            Func<CancellationToken, Task>? beforeAttempt = null,
             CancellationToken cancellationToken = default) =>
-            inner.ExecuteAsync(request, Observe(stage), cancellationToken);
+            inner.ExecuteAsync(operationKey, operationKind, requestMaterial, mutatedUnits, Observe(stage), beforeAttempt, cancellationToken);
 
-        public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(
-            GroundworkDesignAtomicWriteRequest request,
-            Func<CancellationToken, Task>? beforeAttempt,
-            Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage,
-            CancellationToken cancellationToken = default) =>
-            inner.ExecuteAsync(request, beforeAttempt, Observe(stage), cancellationToken);
-
-        private Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> Observe(
-            Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage) =>
+        private Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> Observe<T>(
+            Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage) =>
             (context, cancellationToken) =>
             {
                 onStageEntered();

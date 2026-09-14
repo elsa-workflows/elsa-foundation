@@ -43,7 +43,7 @@ table before adding the Groundwork implementations, preserving the one-active-pr
 
 | Contract | Default implementation |
 |---|---|
-| `IDesignAtomicWriter` | `GroundworkDesignAtomicWrite` |
+| `Elsa.Workflows.Design.Persistence.Core.Contracts.IDesignAtomicWriter` | `GroundworkDesignAtomicWrite` |
 | `IDraftOriginator` | `DraftOriginator` |
 
 These feature-owned replacement seams use `TryAddScoped`, so a host can register one
@@ -52,7 +52,7 @@ specializes after its base registration must use
 `services.Replace(ServiceDescriptor.Scoped<IContract, Implementation>())`; direct `AddScoped`
 would create an invalid duplicate replacement registration. Both pre-composition preservation and
 post-composition replacement are covered by registration tests.
-`IDesignAtomicWriter` owns replay-safe multi-document mutation, durable operation markers, and
+The Core `IDesignAtomicWriter` owns replay-safe multi-document mutation, durable operation markers, and
 uncertain-commit reconciliation for both workflow and activity design commands.
 
 `IDraftOriginator` is the provider-feature replacement seam used by the Groundwork create and
@@ -90,7 +90,7 @@ keyword strings or `DateTime` (`ValueKind`); there are no numeric projected memb
 
 ## Design atomic writer and shared operation document
 
-`IDesignAtomicWriter` (defined in `Elsa.Persistence.Groundwork.Querying`, default
+`IDesignAtomicWriter` (defined in `Elsa.Workflows.Design.Persistence.Core.Contracts`, default
 `GroundworkDesignAtomicWrite`) owns replay-safe multi-document mutation: durable operation markers,
 staged writes, and uncertain-commit reconciliation for both workflow- and activity-design commands.
 Its durable ledger is the shared `designOperation` document declared by

@@ -187,8 +187,7 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
 
     private sealed class PriorDesignAtomicWriter : IDesignAtomicWriter
     {
-        public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(GroundworkDesignAtomicWriteRequest request, Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<GroundworkDesignAtomicWriteResult> ExecuteAsync(GroundworkDesignAtomicWriteRequest request, Func<CancellationToken, Task>? beforeAttempt, Func<GroundworkDesignAtomicWriteContext, CancellationToken, Task<GroundworkDesignAtomicWriteStageResult>> stage, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(DesignOperationKey operationKey, string operationKind, object requestMaterial, IReadOnlyCollection<string> mutatedUnits, Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage, Func<CancellationToken, Task>? beforeAttempt = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class StubEventPublisher : IInlineEventPublisher, IDeferredEventPublisher

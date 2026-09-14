@@ -9,10 +9,80 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 /// </summary>
 public interface IDesignAtomicWriter
 {
-    Task<T> ExecuteAsync<T>(
+    Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(
+        DesignOperationKey operationKey,
+        string operationKind,
+        object requestMaterial,
+        IReadOnlyCollection<string> mutatedUnits,
+        Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage,
+        Func<CancellationToken, Task>? beforeAttempt = null,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IDesignAtomicWriteContext
+{
+}
+
+public enum DesignAtomicWriteStatus
+{
+    Committed,
+    Reconciled,
+    Replayed,
+    Conflict,
+    Rejected
+}
+
+public sealed record DesignAtomicWriteStage<T>(
+    bool IsAccepted,
+    T? Value,
+    string? ResultFingerprint = null,
+    string? ResultJson = null)
+{
+    public static DesignAtomicWriteStage<T> Accepted(T value) => new(true, value);
+    public static DesignAtomicWriteStage<T> Accepted(T value, string resultFingerprint, string resultJson) =>
+        new(true, value, resultFingerprint, resultJson);
+    public static DesignAtomicWriteStage<T> Rejected() => new(false, default);
+}
+
+public sealed record DesignAtomicWriteResult<T>(
+    DesignAtomicWriteStatus Status,
+    T? Value,
+    string? ResultFingerprint = null,
+    string? ResultJson = null)
+{
+    public bool ShouldPublishPostCommitOutcome =>
+        Status is DesignAtomicWriteStatus.Committed or DesignAtomicWriteStatus.Reconciled;
+}
+
+public static class DesignAtomicWriterExtensions
+{
+    public static async Task<T> ExecuteAsync<T>(
+        this IDesignAtomicWriter writer,
         DesignOperationKey operationKey,
         string operationKind,
         object requestMaterial,
         Func<CancellationToken, Task<T>> stage,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(stage);
+        var result = await writer.ExecuteAsync(
+            operationKey,
+            operationKind,
+            requestMaterial,
+            [],
+            async (_, token) => DesignAtomicWriteStage<T>.Accepted(await stage(token)),
+            cancellationToken: cancellationToken);
+
+        return result.Status switch
+        {
+            DesignAtomicWriteStatus.Committed or DesignAtomicWriteStatus.Reconciled or DesignAtomicWriteStatus.Replayed
+                => result.Value!,
+            DesignAtomicWriteStatus.Conflict
+                => throw new InvalidOperationException($"Design operation '{operationKind}/{operationKey.Value}' conflicts with an earlier request."),
+            DesignAtomicWriteStatus.Rejected
+                => throw new InvalidOperationException($"Design operation '{operationKind}/{operationKey.Value}' was rejected."),
+            _ => throw new ArgumentOutOfRangeException(nameof(result.Status))
+        };
+    }
 }

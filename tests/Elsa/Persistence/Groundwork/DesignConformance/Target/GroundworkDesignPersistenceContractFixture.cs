@@ -15,6 +15,7 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Design.Validations;
@@ -28,16 +29,13 @@ using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-// The design lane and the v1 querying lane still declare same-named atomic-write types. The design lane is
-// the one under test here.
-using IDesignAtomicWriter = Elsa.Workflows.Design.Persistence.Groundwork.IDesignAtomicWriter;
 using GroundworkDesignAtomicWriteRequest = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignAtomicWriteRequest;
 using GroundworkDesignOperationIdentity = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignOperationIdentity;
 using GroundworkDocumentWriter = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDocumentWriter;
 using GroundworkDesignAtomicWriteResult = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignAtomicWriteResult;
 using GroundworkDesignAtomicWriteStageResult = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignAtomicWriteStageResult;
 using GroundworkDesignSaveRequest = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignSaveRequest;
-using GroundworkDesignAtomicWriteStatus = Elsa.Workflows.Design.Persistence.Groundwork.GroundworkDesignAtomicWriteStatus;
+using GroundworkDesignAtomicWriteStatus = Elsa.Workflows.Design.Persistence.Core.Contracts.DesignAtomicWriteStatus;
 
 namespace Elsa.Persistence.Groundwork.DesignConformance.Target;
 
@@ -164,7 +162,7 @@ public abstract class GroundworkDesignPersistenceContractFixture : IDesignPersis
         cancellationToken.ThrowIfCancellationRequested();
 
         using var scope = CreateScope(request.StorageScope);
-        var atomicWrite = scope.ServiceProvider.GetRequiredService<IDesignAtomicWriter>();
+        var atomicWrite = scope.ServiceProvider.GetRequiredService<GroundworkDesignAtomicWrite>();
         var identities = AtomicityDocumentIdentities.Create(request.StorageScope, request.OperationKey.Value);
         using var operationCancellation = _atomicityFaults.BeginOperation(cancellationToken);
         var atomicRequest = new GroundworkDesignAtomicWriteRequest(
