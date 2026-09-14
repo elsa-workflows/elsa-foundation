@@ -32,7 +32,26 @@ public sealed class SecretsEfMigrationHostedService(
         await using var scope = scopes.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<SecretsDbContext>();
         var expected = EfRelationalProviderBinding.ExpectedProviderName(options.Provider);
-        await EfDatabaseMigrator.ApplyAsync(context, expected, options.MigratePolicy, cancellationToken);
+        await ApplyDatabasePolicyAsync(context, expected, options.MigratePolicy, cancellationToken);
         await SecretsProjectionContract.EnsureCurrentAsync(context, cancellationToken);
+    }
+
+    private static Task ApplyDatabasePolicyAsync(
+        SecretsDbContext context,
+        string expectedProviderName,
+        EfMigratePolicy policy,
+        CancellationToken cancellationToken)
+    {
+        if (!string.Equals(expectedProviderName, EfProviderNames.MySql, StringComparison.Ordinal))
+            return EfDatabaseMigrator.ApplyAsync(context, expectedProviderName, policy, cancellationToken);
+
+        EfProviderGuard.Ensure(context, expectedProviderName);
+
+        return policy switch
+        {
+            EfMigratePolicy.AutoMigrate => context.Database.EnsureCreatedAsync(cancellationToken),
+            EfMigratePolicy.Validate => Task.CompletedTask,
+            _ => throw new ArgumentOutOfRangeException(nameof(policy), policy, "Unknown EF migrate policy.")
+        };
     }
 }

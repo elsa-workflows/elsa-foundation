@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Xunit;
 
 namespace Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests;
@@ -46,6 +47,39 @@ public sealed class MySqlEfSecretRepositoryTests(MySqlContainerFixture fixture)
         using var scope = provider.CreateScope();
         Assert.IsType<SecretsMySqlDbContext>(scope.ServiceProvider.GetRequiredService<SecretsDbContext>());
         Assert.IsType<EfSecretRepository>(scope.ServiceProvider.GetRequiredService<ISecretRepository>());
+    }
+
+    [SkippableFact]
+    public async Task AutoMigrate_provisions_the_MySQL_schema_for_the_host_lifecycle()
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
+        var connectionString = await fixture.CreateIsolatedDatabaseAsync();
+        await using var provider = CreateProvider(connectionString, EfMigratePolicy.AutoMigrate);
+        var lifecycle = provider.GetRequiredService<SecretsEfMigrationHostedService>();
+
+        await lifecycle.StartAsync(CancellationToken.None);
+
+        await using var scope = provider.CreateAsyncScope();
+        var repository = scope.ServiceProvider.GetRequiredService<ISecretRepository>();
+        Assert.True(await repository.TryAddAsync(Secret("tenant-a", "boot.provisioned", "ready")));
+        Assert.Equal("ready", (await repository.FindAsync("tenant-a", "boot.provisioned"))!.LatestActiveVersion!.Payload.Value);
+    }
+
+    [SkippableFact]
+    public async Task Validate_accepts_a_MySQL_schema_created_by_AutoMigrate()
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
+        var connectionString = await fixture.CreateIsolatedDatabaseAsync();
+
+        await using (var applyProvider = CreateProvider(connectionString, EfMigratePolicy.AutoMigrate))
+        {
+            var lifecycle = applyProvider.GetRequiredService<SecretsEfMigrationHostedService>();
+            await lifecycle.InitializeAsync(CancellationToken.None);
+        }
+
+        await using var validateProvider = CreateProvider(connectionString, EfMigratePolicy.Validate);
+        var validateLifecycle = validateProvider.GetRequiredService<SecretsEfMigrationHostedService>();
+        await validateLifecycle.StartAsync(CancellationToken.None);
     }
 
     [SkippableFact]
@@ -97,6 +131,19 @@ public sealed class MySqlEfSecretRepositoryTests(MySqlContainerFixture fixture)
         new(new DbContextOptionsBuilder<SecretsMySqlDbContext>()
             .UseMySQL(connectionString)
             .Options);
+
+    private static ServiceProvider CreateProvider(string connectionString, EfMigratePolicy migratePolicy)
+    {
+        var services = new ServiceCollection()
+            .AddSecretsEntityFrameworkCore(new SecretsEntityFrameworkCoreOptions
+            {
+                Provider = "MySql",
+                ConnectionString = connectionString,
+                MigratePolicy = migratePolicy
+            });
+
+        return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+    }
 
     private static Secret Secret(string tenant, string name, string value, string? scope = null) => new()
     {
