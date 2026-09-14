@@ -3,7 +3,7 @@
 Status: active completion evidence for [#1671](https://github.com/elsa-workflows/elsa-foundation/issues/1671).
 
 Snapshot: `main` at `7a952efcf8d53472d7d4e7e3fd7b51d7a808c1c8` (2026-09-12).
-This register covers 60 relevant test/evidence projects (51 snapshot projects plus two merged
+This register covers 61 relevant test/evidence projects (51 snapshot projects plus two merged
 Studio Preferences EF projects, two Structured Logs EF projects delivered by #1696, and two
 OpenTelemetry EF projects delivered by #1701, plus the two Identity EF behavioral/provider projects and the
 ASP.NET Identity EF adapter project being implemented under #1712): the original 36 Groundwork/Mongo-named
@@ -65,6 +65,7 @@ default-flip owner explicit without repeating the same text 51 times.
 | T28 | `tests/Elsa/Persistence/Groundwork/V2/Tests/Elsa.Persistence.Groundwork.V2.Tests.csproj` | #1670 / #1678 | Manifest, provider connections, storage access audit and release boundary | Port neutral evidence; rewrite final no-Groundwork guard; retire Mongo | | |
 | T29 | `tests/Elsa/Secrets/Persistence/Groundwork/V2/ProviderMatrix/Tests/Elsa.Secrets.Persistence.Groundwork.V2.ProviderMatrix.Tests.csproj` | #1679 | Secrets CRUD/revision/query/tenant/restart matrix | Relational + retire Mongo; add MySQL | | |
 | T30 | `tests/Elsa/Secrets/Persistence/Groundwork/V2/Tests/Elsa.Secrets.Persistence.Groundwork.V2.Tests.csproj` | #1679 | Secret repository and registration contracts | SQLite; replace with EF evidence | | |
+| T65 | `tests/Elsa/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests.csproj` | #1726 | Production MySQL context model, provider binding, repository CRUD/query, rollback, and optimistic concurrency | MySQL Testcontainers; focused proof delivered in #1726; migrations and full lifecycle remain pending | #1726 | |
 | T31 | `tests/Elsa/Studio/Preferences/Persistence/Groundwork/Tests/Elsa.Studio.Preferences.Persistence.Groundwork.Tests.csproj` | #1680 | Preference scope/read/write/concurrency | SQLite; port to EF and add relational providers | | |
 | T32 | `tests/Elsa/Workflows/Dashboard/Persistence/Groundwork/V2/Tests/Elsa.Workflows.Dashboard.Persistence.Groundwork.V2.Tests.csproj` | #1677 child | Portfolio and run-health bounded projections | SQLite; port to EF | | |
 | T33 | `tests/Elsa/Workflows/Design/Persistence/Groundwork/Tests/Elsa.Workflows.Design.Persistence.Groundwork.Tests.csproj` | #1677 child | Definition/version/draft/layout/list projection, commands, registration and schema | SQLite; port to EF | | |

@@ -39,9 +39,12 @@ public static class SecretsEntityFrameworkCoreRegistration
             case "postgresql":
                 AddContext<SecretsPostgreSqlDbContext>(services, options, historyTable, migrationsAssembly, EfRelationalProviderBinding.UseNpgsql);
                 break;
+            case "mysql":
+                AddContext<SecretsMySqlDbContext>(services, options, historyTable, migrationsAssembly, EfRelationalProviderBinding.UseMySql);
+                break;
             default:
                 throw new ArgumentException(
-                    $"Unknown Secrets EF provider '{options.Provider}'. Expected Sqlite, SqlServer, or PostgreSql.",
+                    $"Unknown Secrets EF provider '{options.Provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.",
                     nameof(options));
         }
 

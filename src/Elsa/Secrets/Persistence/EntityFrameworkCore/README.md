@@ -25,7 +25,7 @@ records evidence and dispositions for that gate. ADR 0073 and the active
 decision and program scope; the point-in-time ledger cannot override them.
 
 The module package references `Microsoft.EntityFrameworkCore` and
-`Microsoft.EntityFrameworkCore.Relational` only. Sqlite / SqlServer / Npgsql engines live
+`Microsoft.EntityFrameworkCore.Relational` only. Sqlite / SqlServer / Npgsql / MySQL engines live
 in the host or in `Tooling/` (design-time).
 
 ## Enable
@@ -33,8 +33,12 @@ in the host or in `Tooling/` (design-time).
 CShells feature `SecretsEntityFrameworkCore`. The host must reference this module (Workbench
 already does, via `WithHostAssemblies()`) and exactly one EF provider package. Workbench
 already references `Microsoft.EntityFrameworkCore.Sqlite` for OpenIddict, so Sqlite Secrets
-EF works without another provider package. SqlServer / PostgreSql require the host to add
-that engine.
+EF works without another provider package. SqlServer / PostgreSql / MySql require the host to
+add that engine.
+
+The MySQL context and provider selection are production-owned, but MySQL migration artifacts and
+full lifecycle proof remain deferred to the migration work unit. The focused MySQL model and
+repository proof is under `tests/Elsa/Secrets/Persistence/EntityFrameworkCore/MySql/Tests`.
 
 **Current default remains Groundwork pending the governed flip.** In `shells.json` (or the docker compose overlay), replace
 `SecretsGroundworkPersistence` with `SecretsEntityFrameworkCore`. Do not leave both keys
@@ -83,7 +87,9 @@ OCC is an explicit `ConcurrencyToken` stamped on save — **not** cross-provider
 stored as UTC ticks (`INTEGER`) so active-only expiry comparisons translate.
 
 Derived contexts: `SecretsSqliteDbContext`, `SecretsSqlServerDbContext`,
-`SecretsPostgreSqlDbContext`. Each has its own `Migrations/` folder and `ModelSnapshot`.
+`SecretsPostgreSqlDbContext`, and `SecretsMySqlDbContext`. The SQLite, SQL Server, and PostgreSQL
+contexts each have their own `Migrations/` folder and `ModelSnapshot`; MySQL production migrations
+are intentionally not included in this slice.
 History table: `__EFMigrationsHistory_ElsaSecrets`.
 
 ### Persisted text projections

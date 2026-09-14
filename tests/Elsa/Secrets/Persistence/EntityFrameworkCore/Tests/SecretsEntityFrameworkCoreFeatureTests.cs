@@ -57,6 +57,7 @@ public sealed class SecretsEntityFrameworkCoreFeatureTests
     }
 
     [Theory]
+    [InlineData("MySql", typeof(SecretsMySqlDbContext))]
     [InlineData("SqlServer", typeof(SecretsSqlServerDbContext))]
     [InlineData("PostgreSql", typeof(SecretsPostgreSqlDbContext))]
     public void Feature_binds_the_derived_context_for_the_selected_provider(string provider, Type contextType)
