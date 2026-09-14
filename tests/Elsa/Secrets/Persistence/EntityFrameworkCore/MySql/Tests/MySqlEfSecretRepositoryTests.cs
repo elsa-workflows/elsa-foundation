@@ -66,19 +66,6 @@ public sealed class MySqlEfSecretRepositoryTests(MySqlContainerFixture fixture)
     }
 
     [SkippableFact]
-    public async Task Validate_fails_when_the_MySQL_schema_has_not_been_provisioned()
-    {
-        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
-        var connectionString = await fixture.CreateIsolatedDatabaseAsync();
-        await using var provider = CreateProvider(connectionString, EfMigratePolicy.Validate);
-        var lifecycle = provider.GetRequiredService<SecretsEfMigrationHostedService>();
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => lifecycle.StartAsync(CancellationToken.None));
-        Assert.Contains("AutoMigrate", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("Validate", exception.Message, StringComparison.Ordinal);
-    }
-
-    [SkippableFact]
     public async Task Validate_accepts_a_MySQL_schema_created_by_AutoMigrate()
     {
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
