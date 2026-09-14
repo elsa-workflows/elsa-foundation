@@ -95,6 +95,15 @@ public sealed class DraftOriginator(
                     input = await resolveInput(token)
                         ?? throw new InvalidOperationException("Draft origination input resolver returned null.");
                     ArgumentException.ThrowIfNullOrWhiteSpace(input.WorkflowDefinitionId);
+                    if (storage.Read(
+                            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+                            input.WorkflowDefinitionId) is { } definitionEntry)
+                    {
+                        // Preserve the existing draft-origination contract for callers that
+                        // intentionally create an unbound draft, while canonicalizing the
+                        // relationship whenever its definition is available.
+                        input = input with { WorkflowDefinitionId = storage.MapDefinition(definitionEntry).Id };
+                    }
                     accessContextAccessor.Current.EnsureTenantScope(input.TenantId);
                     draft = new WorkflowDefinitionDraft
                     {

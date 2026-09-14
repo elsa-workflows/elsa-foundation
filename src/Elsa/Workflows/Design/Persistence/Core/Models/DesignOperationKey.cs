@@ -6,6 +6,8 @@ namespace Elsa.Workflows.Design.Persistence.Core.Models;
 /// </summary>
 public sealed record DesignOperationKey
 {
+    public const int MaximumLength = 256;
+
     public DesignOperationKey(string value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value);
@@ -14,6 +16,16 @@ public sealed record DesignOperationKey
 
     /// <summary>The caller-supplied opaque identity. Elsa does not normalize or derive this value.</summary>
     public string Value { get; }
+
+    public static void Validate(DesignOperationKey key, string operationKind)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentException.ThrowIfNullOrWhiteSpace(operationKind);
+        if (operationKind.Length > MaximumLength)
+            throw new ArgumentException($"The design operation kind cannot exceed {MaximumLength} characters.", nameof(operationKind));
+        if (key.Value.Length > MaximumLength)
+            throw new ArgumentException($"The design operation key cannot exceed {MaximumLength} characters.", nameof(key));
+    }
 
     /// <summary>
     /// Resolves an operation key from an optional caller-supplied value, generating a fresh random key when the

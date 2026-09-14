@@ -17,8 +17,6 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 
 internal static class EfDesignSupport
 {
-    public const int OperationIdentityMaximumLength = 256;
-
     public static async Task<T> ReadAsync<T>(string operation, Func<Task<T>> read)
     {
         try
@@ -32,43 +30,10 @@ internal static class EfDesignSupport
     }
 
     public static void ValidateOperationIdentity(DesignOperationKey key, string operationKind)
-    {
-        if (operationKind.Length > OperationIdentityMaximumLength)
-            throw new ArgumentException($"The design operation kind cannot exceed {OperationIdentityMaximumLength} characters.", nameof(operationKind));
-        if (key.Value.Length > OperationIdentityMaximumLength)
-            throw new ArgumentException($"The design operation key cannot exceed {OperationIdentityMaximumLength} characters.", nameof(key));
-    }
+        => DesignOperationKey.Validate(key, operationKind);
 
     public static string SearchKey(string value)
-    {
-        ArgumentNullException.ThrowIfNull(value);
-        var builder = new StringBuilder(value.Length * WorkflowDefinitionLimits.SearchKeyExpansionFactor);
-        for (var index = 0; index < value.Length;)
-        {
-            var scalar = (int)value[index];
-            if (char.IsHighSurrogate((char)scalar))
-            {
-                if (index + 1 >= value.Length || !char.IsLowSurrogate(value[index + 1]))
-                    throw new ArgumentException("Unicode ordinal-ignore-case values must be well-formed UTF-16.", nameof(value));
-                scalar = char.ConvertToUtf32((char)scalar, value[index + 1]);
-                index += 2;
-            }
-            else
-            {
-                if (char.IsLowSurrogate((char)scalar))
-                    throw new ArgumentException("Unicode ordinal-ignore-case values must be well-formed UTF-16.", nameof(value));
-                index++;
-            }
-
-            // Groundwork uses simple, one-scalar Unicode casing. String casing can expand a
-            // scalar on some runtimes, which would not match its provider-neutral identity.
-            var upperScalar = scalar <= char.MaxValue
-                ? char.ToUpperInvariant((char)scalar)
-                : System.Text.Rune.ToUpperInvariant(new System.Text.Rune(scalar)).Value;
-            builder.Append('|').Append(upperScalar.ToString("X6", System.Globalization.CultureInfo.InvariantCulture));
-        }
-        return builder.ToString();
-    }
+        => WorkflowDefinitionIdentity.Fold(value);
 
     public static void SetDefinitionSearchKeys(DbContext context, WorkflowDefinition definition)
     {

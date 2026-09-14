@@ -75,7 +75,7 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
             unit,
             storage.In(unit, WorkflowsDesignStorageManifest.DraftDefinitionIdField, ids.Cast<object?>()),
             [
-                storage.Order(unit, WorkflowsDesignStorageManifest.DraftDefinitionIdField),
+                storage.Order(unit, WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField),
                 storage.Order(unit, WorkflowsDesignStorageManifest.DraftLastModifiedAtField, descending: true),
                 storage.Order(unit, WorkflowsDesignStorageManifest.DraftCreatedAtField, descending: true),
                 storage.Order(unit, WorkflowsDesignStorageManifest.DraftIdField, descending: true)

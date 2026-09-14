@@ -100,22 +100,22 @@ public sealed class WorkflowsDesignStorageManifestTests
     {
         var versions = WorkflowsDesignStorageManifest.Require(WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind);
         AssertIndex(versions, WorkflowsDesignStorageManifest.VersionByDefinitionIndex,
-            [WorkflowsDesignStorageManifest.VersionDefinitionIdField, WorkflowsDesignStorageManifest.VersionSemVerSortKeyField, WorkflowsDesignStorageManifest.VersionIdField], unique: true);
+            [WorkflowsDesignStorageManifest.VersionDefinitionIdLookupHashField, WorkflowsDesignStorageManifest.VersionSemVerSortKeyField, WorkflowsDesignStorageManifest.VersionIdField], unique: true);
         AssertIndex(versions, WorkflowsDesignStorageManifest.LatestVersionByDefinitionIndex,
-            [WorkflowsDesignStorageManifest.VersionDefinitionIdField, WorkflowsDesignStorageManifest.VersionSemVerSortKeyField, WorkflowsDesignStorageManifest.VersionIdField], unique: false);
+            [WorkflowsDesignStorageManifest.VersionDefinitionIdLookupHashField, WorkflowsDesignStorageManifest.VersionSemVerSortKeyField, WorkflowsDesignStorageManifest.VersionIdField], unique: false);
         var drafts = WorkflowsDesignStorageManifest.Require(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind);
         AssertIndex(drafts, WorkflowsDesignStorageManifest.DraftByDefinitionIndex,
-            [WorkflowsDesignStorageManifest.DraftDefinitionIdField, WorkflowsDesignStorageManifest.DraftLastModifiedAtField, WorkflowsDesignStorageManifest.DraftCreatedAtField, WorkflowsDesignStorageManifest.DraftIdField], unique: true);
+            [WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField, WorkflowsDesignStorageManifest.DraftLastModifiedAtField, WorkflowsDesignStorageManifest.DraftCreatedAtField, WorkflowsDesignStorageManifest.DraftIdField], unique: true);
         Assert.Equal(
             [
-                WorkflowsDesignStorageManifest.VersionDefinitionIdField,
+                WorkflowsDesignStorageManifest.VersionDefinitionIdLookupHashField,
                 WorkflowsDesignStorageManifest.VersionSemVerSortKeyField,
                 WorkflowsDesignStorageManifest.VersionIdField
             ],
             versions.Indexes.Single(index => index.Name == WorkflowsDesignStorageManifest.VersionByDefinitionIndex).Columns.Select(column => column.Column));
         Assert.Equal(
             [
-                WorkflowsDesignStorageManifest.DraftDefinitionIdField,
+                WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField,
                 WorkflowsDesignStorageManifest.DraftLastModifiedAtField,
                 WorkflowsDesignStorageManifest.DraftCreatedAtField,
                 WorkflowsDesignStorageManifest.DraftIdField
@@ -160,9 +160,9 @@ public sealed class WorkflowsDesignStorageManifestTests
         var index = versions.Indexes.Single(candidate => candidate.Name == WorkflowsDesignStorageManifest.VersionByDefinitionAndSortKeyIndex);
         Assert.True(index.IsUnique);
         Assert.Equal(
-            [WorkflowsDesignStorageManifest.VersionDefinitionIdField, WorkflowsDesignStorageManifest.VersionSemVerSortKeyField],
+            [WorkflowsDesignStorageManifest.VersionDefinitionIdLookupHashField, WorkflowsDesignStorageManifest.VersionSemVerSortKeyField],
             index.Columns.Select(column => column.Column));
-        Assert.Equal(WorkflowsDesignStorageManifest.VersionDefinitionIdField, index.Columns[0].Column);
+        Assert.Equal(WorkflowsDesignStorageManifest.VersionDefinitionIdLookupHashField, index.Columns[0].Column);
         Assert.Equal(WorkflowsDesignStorageManifest.VersionSemVerSortKeyField, index.Columns[1].Column);
         Assert.True(versions.Indexes.Single(candidate => candidate.Name == WorkflowsDesignStorageManifest.VersionByDefinitionIndex).IsUnique);
         Assert.False(versions.Indexes.Single(candidate => candidate.Name == WorkflowsDesignStorageManifest.LatestVersionByDefinitionIndex).IsUnique);

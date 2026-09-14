@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
@@ -40,10 +42,10 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
         AssertBatchQuery(
             raw.Queries.Single(query => query.IndexName == WorkflowsDesignStorageManifest.DraftByDefinitionIndex),
             WorkflowsDesignStorageManifest.DraftByDefinitionIndex,
-            WorkflowsDesignStorageManifest.DraftDefinitionIdField,
+            WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField,
             ["definition-1", "definition-2"],
             [
-                WorkflowsDesignStorageManifest.DraftDefinitionIdField,
+                WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField,
                 WorkflowsDesignStorageManifest.DraftLastModifiedAtField,
                 WorkflowsDesignStorageManifest.DraftCreatedAtField,
                 WorkflowsDesignStorageManifest.DraftIdField
@@ -51,10 +53,10 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
         AssertBatchQuery(
             raw.Queries.Single(query => query.IndexName == WorkflowsDesignStorageManifest.VersionByDefinitionIndex),
             WorkflowsDesignStorageManifest.VersionByDefinitionIndex,
-            WorkflowsDesignStorageManifest.VersionDefinitionIdField,
+            WorkflowsDesignStorageManifest.VersionDefinitionIdLookupHashField,
             ["definition-1", "definition-2"],
             [
-                WorkflowsDesignStorageManifest.VersionDefinitionIdField,
+                WorkflowsDesignStorageManifest.VersionDefinitionIdLookupHashField,
                 WorkflowsDesignStorageManifest.VersionSemVerSortKeyField,
                 WorkflowsDesignStorageManifest.VersionIdField
             ]);
@@ -74,7 +76,7 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
             .ListByDefinitionIdsAsync(requested);
         Assert.Equal(450, rows.Count);
         Assert.Equal(requested.Distinct(StringComparer.Ordinal), rows.Select(row => row.WorkflowDefinitionId));
-        Assert.Equal(6, raw.Queries.Count);
+        Assert.Equal(58, raw.Queries.Count);
         Assert.All(raw.Queries, query => Assert.Contains(
             query.IndexName,
             new[] { WorkflowsDesignStorageManifest.DraftByDefinitionIndex, WorkflowsDesignStorageManifest.VersionByDefinitionIndex }));
@@ -88,10 +90,16 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
                 .Where(query => query.IndexName == index)
                 .Select(query => Assert.IsType<Predicate.In>(query.Request.Where).Values.Select(value => value.Value?.ToString() ?? string.Empty).ToArray())
                 .ToArray();
-            Assert.Equal(3, batches.Length);
-            Assert.Equal([200, 200, 50], batches.Select(batch => batch.Length));
-            Assert.Equal("definition-000", batches.SelectMany(batch => batch).Order(StringComparer.Ordinal).First());
-            Assert.Equal("definition-449", batches.SelectMany(batch => batch).Order(StringComparer.Ordinal).Last());
+            Assert.Equal(29, batches.Length);
+            Assert.All(batches.Take(28), batch => Assert.Equal(16, batch.Length));
+            Assert.Equal(2, batches[^1].Length);
+            var expected = requested.Distinct(StringComparer.Ordinal)
+                .Select(LookupHash)
+                .Chunk(16)
+                .Select(batch => batch.Order(StringComparer.Ordinal).ToArray())
+                .SelectMany(batch => batch)
+                .ToArray();
+            Assert.Equal(expected, batches.SelectMany(batch => batch));
         }
     }
 
@@ -131,7 +139,12 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
         Assert.Equal(index, query.IndexName);
         var predicate = Assert.IsType<Predicate.In>(query.Request.Where);
         Assert.Equal(predicateColumn, predicate.Column.Name);
-        Assert.Equal(values, predicate.Values.Select(value => value.Value?.ToString() ?? string.Empty).ToArray());
+        Assert.Equal(
+            values.Select(LookupHash).Order(StringComparer.Ordinal),
+            predicate.Values.Select(value => value.Value?.ToString() ?? string.Empty));
         Assert.Equal(order, query.Request.Order.Select(term => term.Column.Name));
     }
+
+    private static string LookupHash(string value) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(QuerySearchKeys.Encode(value, QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase)))).ToLowerInvariant();
 }

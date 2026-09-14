@@ -37,6 +37,7 @@ internal static class DesignEntityConfigurations
         b.Property(x => x.Id).HasMaxLength(128);
         b.Property(x => x.TenantId).HasMaxLength(128);
         b.Property(x => x.DefinitionId).HasMaxLength(128);
+        b.Property<string>("DefinitionIdLookupHash").HasMaxLength(64).IsRequired();
         b.Property(x => x.Version).HasMaxLength(128);
         b.Property(x => x.SemVerSortKey).HasMaxLength(128);
         b.Property(x => x.StateSource);
@@ -44,7 +45,7 @@ internal static class DesignEntityConfigurations
         b.Property(x => x.DefinitionId).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
         b.Property(x => x.SourceDraftId).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
         b.Property(x => x.StateSource).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
-        b.HasIndex(x => new { x.TenantId, x.DefinitionId, x.SemVerSortKey }).IsUnique();
+        b.HasIndex("TenantId", "DefinitionIdLookupHash", nameof(WorkflowDefinitionVersion.SemVerSortKey)).IsUnique();
         b.HasOne(x => x.Definition).WithMany().HasForeignKey("TenantId", "DefinitionId").OnDelete(DeleteBehavior.Cascade);
         b.Property(x => x.LastModifiedAt).IsConcurrencyToken();
         b.Ignore(x => x.State);
@@ -58,9 +59,10 @@ internal static class DesignEntityConfigurations
         b.Property(x => x.Id).HasMaxLength(128);
         b.Property(x => x.TenantId).HasMaxLength(128);
         b.Property(x => x.WorkflowDefinitionId).HasMaxLength(128);
+        b.Property<string>("WorkflowDefinitionIdLookupHash").HasMaxLength(64).IsRequired();
         b.Property(x => x.SourceVersionId).HasMaxLength(128);
         b.Property(x => x.StateSource);
-        b.HasIndex(x => new { x.TenantId, x.WorkflowDefinitionId, x.LastModifiedAt, x.Id });
+        b.HasIndex("TenantId", "WorkflowDefinitionIdLookupHash", nameof(WorkflowDefinitionDraft.LastModifiedAt), nameof(WorkflowDefinitionDraft.Id));
         b.HasOne(x => x.WorkflowDefinition).WithMany().HasForeignKey("TenantId", "WorkflowDefinitionId").OnDelete(DeleteBehavior.Cascade);
         // Draft updates are explicitly last-writer-wins; stale writers must not be rejected by EF.
         b.Ignore(x => x.State);

@@ -81,10 +81,10 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
                     throw new WorkflowDefinitionNotSoftDeletedException(definitionId);
 
                 foreach (var guard in guards)
-                    await guard.EnsureCanDeleteAsync(definitionId, token);
+                    await guard.EnsureCanDeleteAsync(definition.Id, token);
 
                 var resolvedDeletes = new List<GroundworkDesignDeleteRequest>();
-                var drafts = await draftStore.ListByWorkflowDefinitionIdAsync(definitionId, token);
+                var drafts = await draftStore.ListByWorkflowDefinitionIdAsync(definition.Id, token);
                 foreach (var draft in drafts)
                     accessContextAccessor.Current.EnsureTenantScope(draft.TenantId);
                 if (drafts.Count > 0)
@@ -102,7 +102,7 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
                     }
                 }
 
-                var versions = await versionStore.ListByDefinitionAsync(definitionId, token);
+                var versions = await versionStore.ListByDefinitionAsync(definition.Id, token);
                 foreach (var version in versions)
                 {
                     accessContextAccessor.Current.EnsureTenantScope(version.TenantId);
@@ -134,16 +134,16 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
 
                 var currentDefinition = storage.Read(
                     WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
-                    definitionId) ?? throw EntityNotFoundException.ForEntity(
+                    definition.Id) ?? throw EntityNotFoundException.ForEntity(
                         typeof(WorkflowDefinition), definitionId);
                 resolvedDeletes.Add(new GroundworkDesignDeleteRequest(
                     WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
-                    definitionId,
+                    definition.Id,
                     storage.Version(currentDefinition) ?? throw new InvalidDataException(
                         $"Definition '{definitionId}' did not return a provider version.")));
                 deletes = resolvedDeletes;
                 resolvedResult = new PermanentDeleteResult(
-                    definitionId,
+                    definition.Id,
                     versions.Count,
                     drafts.Count,
                     definition.DeletedAt.Value,

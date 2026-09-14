@@ -11,21 +11,22 @@ public sealed class EfWorkflowDefinitionListProjectionStore(WorkflowsDesignDbCon
     public async Task<IReadOnlyList<WorkflowDefinitionListProjection>> ListByDefinitionIdsAsync(IReadOnlyCollection<string> ids, CancellationToken cancellationToken = default)
     {
         var distinct = ids.Distinct(StringComparer.Ordinal).ToArray(); if (distinct.Length == 0) return [];
+        var folded = distinct.Select(id => EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(id))).ToArray();
         var drafts = new List<WorkflowDefinitionDraft>();
         var versions = new List<WorkflowDefinitionVersion>();
-        foreach (var batch in distinct.Chunk(200))
+        foreach (var batch in folded.Chunk(200))
         {
             cancellationToken.ThrowIfCancellationRequested();
             drafts.AddRange(await EfDesignSupport.ReadAsync("reading workflow draft projections", () => EfDesignSupport.InScope(db.Drafts.AsNoTracking(), access, x => x.TenantId)
-                .Where(x => batch.Contains(x.WorkflowDefinitionId))
+                .Where(x => batch.Contains(EF.Property<string>(x, "WorkflowDefinitionIdLookupHash")))
                 .ToListAsync(cancellationToken)));
             versions.AddRange(await EfDesignSupport.ReadAsync("reading workflow version projections", () => EfDesignSupport.InScope(db.Versions.AsNoTracking(), access, x => x.TenantId)
-                .Where(x => batch.Contains(x.DefinitionId))
+                .Where(x => batch.Contains(EF.Property<string>(x, "DefinitionIdLookupHash")))
                 .ToListAsync(cancellationToken)));
         }
 
         var latestDrafts = drafts
-            .GroupBy(x => x.WorkflowDefinitionId, StringComparer.Ordinal)
+            .GroupBy(x => EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(x.WorkflowDefinitionId)), StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
                 group => group.OrderByDescending(x => x.LastModifiedAt)
@@ -34,7 +35,7 @@ public sealed class EfWorkflowDefinitionListProjectionStore(WorkflowsDesignDbCon
                     .First(),
                 StringComparer.Ordinal);
         var definitionVersions = versions
-            .GroupBy(x => x.DefinitionId, StringComparer.Ordinal)
+            .GroupBy(x => EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(x.DefinitionId)), StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
                 group => group.OrderByDescending(x => x.SemVerSortKey, StringComparer.Ordinal)
@@ -44,8 +45,9 @@ public sealed class EfWorkflowDefinitionListProjectionStore(WorkflowsDesignDbCon
 
         return distinct.Select(id =>
         {
-            latestDrafts.TryGetValue(id, out var draft);
-            definitionVersions.TryGetValue(id, out var rows);
+            var key = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(id));
+            latestDrafts.TryGetValue(key, out var draft);
+            definitionVersions.TryGetValue(key, out var rows);
             var latest = rows?.FirstOrDefault();
             return new WorkflowDefinitionListProjection(id, draft?.Id, latest?.Id, latest?.Version, rows?.Length ?? 0);
         }).ToArray();

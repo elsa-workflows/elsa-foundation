@@ -57,6 +57,7 @@ public static class WorkflowsDesignStorageManifest
 
     public const string VersionIdField = "versionId";
     public const string VersionDefinitionIdField = "definitionId";
+    public const string VersionDefinitionIdLookupHashField = "definitionIdLookupHash";
     public const string VersionField = "version";
     public const string ConcurrencyTokenField = "rowVersion";
     public const string VersionSemVerSortKeyField = "semVerSortKey";
@@ -64,6 +65,7 @@ public static class WorkflowsDesignStorageManifest
 
     public const string DraftIdField = "draftId";
     public const string DraftDefinitionIdField = "definitionId";
+    public const string DraftDefinitionIdLookupHashField = "definitionIdLookupHash";
     public const string DraftSourceVersionField = "sourceVersionId";
     public const string DraftLastModifiedAtField = "lastModifiedAt";
     public const string DraftCreatedAtField = "createdAt";
@@ -152,6 +154,7 @@ public static class WorkflowsDesignStorageManifest
             .String(TenantIdField, IdentityMaximumLength)
             .String(VersionIdField, IdentityMaximumLength, column => column.Required())
             .String(VersionDefinitionIdField, IdentityMaximumLength, column => column.Required())
+            .String(VersionDefinitionIdLookupHashField, DefinitionIdLookupHashMaximumLength, column => column.Required())
             .String(VersionField, IdentityMaximumLength, column => column.Required())
             .String(VersionSemVerSortKeyField, IdentityMaximumLength, column => column.Required())
             .String(VersionSourceDraftField, IdentityMaximumLength)
@@ -159,9 +162,9 @@ public static class WorkflowsDesignStorageManifest
             .Timestamp("lastModifiedAt", column => column.Required())
             .Key(IdField)
             .OptimisticConcurrency(ConcurrencyTokenField)
-            .UniqueIndex(VersionByDefinitionIndex, index => index.Ascending(VersionDefinitionIdField).Ascending(VersionSemVerSortKeyField).Ascending(VersionIdField))
-            .UniqueIndex(VersionByDefinitionAndSortKeyIndex, VersionDefinitionIdField, VersionSemVerSortKeyField)
-            .Index(LatestVersionByDefinitionIndex, index => index.Ascending(VersionDefinitionIdField).Descending(VersionSemVerSortKeyField).Descending(VersionIdField))
+            .UniqueIndex(VersionByDefinitionIndex, index => index.Ascending(VersionDefinitionIdLookupHashField).Ascending(VersionSemVerSortKeyField).Ascending(VersionIdField))
+            .UniqueIndex(VersionByDefinitionAndSortKeyIndex, VersionDefinitionIdLookupHashField, VersionSemVerSortKeyField)
+            .Index(LatestVersionByDefinitionIndex, index => index.Ascending(VersionDefinitionIdLookupHashField).Descending(VersionSemVerSortKeyField).Descending(VersionIdField))
             .Scoped()
             .Build();
 
@@ -173,12 +176,13 @@ public static class WorkflowsDesignStorageManifest
             .String(TenantIdField, IdentityMaximumLength)
             .String(DraftIdField, IdentityMaximumLength, column => column.Required())
             .String(DraftDefinitionIdField, IdentityMaximumLength, column => column.Required())
+            .String(DraftDefinitionIdLookupHashField, DefinitionIdLookupHashMaximumLength, column => column.Required())
             .String(DraftSourceVersionField, IdentityMaximumLength)
             .Timestamp(DraftLastModifiedAtField, column => column.Required())
             .Timestamp(DraftCreatedAtField, column => column.Required())
             .Key(IdField)
             .OptimisticConcurrency(ConcurrencyTokenField)
-            .UniqueIndex(DraftByDefinitionIndex, index => index.Ascending(DraftDefinitionIdField).Descending(DraftLastModifiedAtField).Descending(DraftCreatedAtField).Descending(DraftIdField))
+            .UniqueIndex(DraftByDefinitionIndex, index => index.Ascending(DraftDefinitionIdLookupHashField).Descending(DraftLastModifiedAtField).Descending(DraftCreatedAtField).Descending(DraftIdField))
             .Scoped()
             .Build();
 

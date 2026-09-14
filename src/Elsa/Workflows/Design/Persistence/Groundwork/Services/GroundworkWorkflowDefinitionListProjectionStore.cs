@@ -32,7 +32,9 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore(
 
         var draftRows = new List<GroundworkDesignEntry>();
         var versionRows = new List<GroundworkDesignEntry>();
-        foreach (var batch in ids.Chunk(200))
+        // Groundwork normalizes an IN predicate into an OR expression. Keep each
+        // provider request within the query normalizer's 16-disjunct budget.
+        foreach (var batch in ids.Chunk(16))
         {
             cancellationToken.ThrowIfCancellationRequested();
             draftRows.AddRange(storage.Query(
@@ -42,7 +44,7 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore(
                     WorkflowsDesignStorageManifest.DraftDefinitionIdField,
                     batch.Cast<object?>()),
                 [
-                    storage.Order(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, WorkflowsDesignStorageManifest.DraftDefinitionIdField),
+                    storage.Order(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField),
                     storage.Order(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, WorkflowsDesignStorageManifest.DraftLastModifiedAtField, descending: true),
                     storage.Order(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, WorkflowsDesignStorageManifest.DraftCreatedAtField, descending: true),
                     storage.Order(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, WorkflowsDesignStorageManifest.DraftIdField, descending: true)
@@ -56,7 +58,7 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore(
                     WorkflowsDesignStorageManifest.VersionDefinitionIdField,
                     batch.Cast<object?>()),
                 [
-                    storage.Order(WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind, WorkflowsDesignStorageManifest.VersionDefinitionIdField),
+                    storage.Order(WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind, WorkflowsDesignStorageManifest.VersionDefinitionIdLookupHashField),
                     storage.Order(WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind, WorkflowsDesignStorageManifest.VersionSemVerSortKeyField),
                     storage.Order(WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind, WorkflowsDesignStorageManifest.VersionIdField)
                 ],

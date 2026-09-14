@@ -45,6 +45,17 @@ public sealed class GroundworkWorkflowDefinitionVersionStoreTests
     }
 
     [Fact]
+    public async Task Definition_id_relationship_queries_use_the_folded_identity()
+    {
+        var fixture = Seeded([Version("v1", "Definition-1", "1.0.0")]);
+        using (fixture.Raw)
+        {
+            var result = await fixture.Versions.FindLatestVersionAsync("definition-1");
+            Assert.Equal("v1", result?.Id);
+        }
+    }
+
+    [Fact]
     public void Stored_document_omits_persistence_artifacts()
     {
         var fixture = Seeded([Version("v1", "def1", "1.0.0")]);
@@ -135,7 +146,7 @@ public sealed class GroundworkWorkflowDefinitionVersionStoreTests
             Assert.Equal(WorkflowsDesignStorageManifest.VersionByDefinitionIndex, list.IndexName);
             Assert.Equal(
                 [
-                    WorkflowsDesignStorageManifest.VersionDefinitionIdField,
+                    WorkflowsDesignStorageManifest.VersionDefinitionIdLookupHashField,
                     WorkflowsDesignStorageManifest.VersionSemVerSortKeyField,
                     WorkflowsDesignStorageManifest.VersionIdField
                 ],

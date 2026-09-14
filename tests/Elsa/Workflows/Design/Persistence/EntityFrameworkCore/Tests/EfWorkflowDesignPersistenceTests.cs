@@ -158,6 +158,32 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Operation_identity_at_the_shared_bound_is_accepted_for_key_and_kind()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        var writer = new EfDesignAtomicWriter(db, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+        var result = await writer.ExecuteAsync(
+            new DesignOperationKey(new string('k', DesignOperationKey.MaximumLength)),
+            new string('o', DesignOperationKey.MaximumLength), new { Value = 1 }, ["test"],
+            _ => Task.FromResult(new { Id = "staged" }));
+        Assert.Equal("staged", result.Id);
+        Assert.Single(await db.Operations.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Operation_kind_over_bound_is_rejected_without_truncation()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        var writer = new EfDesignAtomicWriter(db, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+        await Assert.ThrowsAsync<ArgumentException>(() => writer.ExecuteAsync(
+            new DesignOperationKey("bounded-key"), new string('o', DesignOperationKey.MaximumLength + 1), new { Value = 1 }, ["test"],
+            _ => Task.FromResult(new { Id = "never-staged" })));
+        Assert.Empty(await db.Operations.ToListAsync());
+    }
+
+    [Fact]
     public async Task Provider_read_failures_are_normalized_at_the_public_boundary()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();

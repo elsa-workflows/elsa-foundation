@@ -51,6 +51,12 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
         foreach (var entry in ChangeTracker.Entries<WorkflowDefinition>()
                      .Where(entry => entry.State is EntityState.Added or EntityState.Modified))
             Stores.EfDesignSupport.SetDefinitionSearchKeys(this, entry.Entity);
+        foreach (var entry in ChangeTracker.Entries<WorkflowDefinitionVersion>()
+                     .Where(entry => entry.State is EntityState.Added or EntityState.Modified))
+            Entry(entry.Entity).Property<string>("DefinitionIdLookupHash").CurrentValue = Stores.EfDesignSupport.LookupHash(Stores.EfDesignSupport.SearchKey(entry.Entity.DefinitionId));
+        foreach (var entry in ChangeTracker.Entries<WorkflowDefinitionDraft>()
+                     .Where(entry => entry.State is EntityState.Added or EntityState.Modified))
+            Entry(entry.Entity).Property<string>("WorkflowDefinitionIdLookupHash").CurrentValue = Stores.EfDesignSupport.LookupHash(Stores.EfDesignSupport.SearchKey(entry.Entity.WorkflowDefinitionId));
     }
 
     protected static void ConfigureDateTime(ModelBuilder modelBuilder, string columnType)

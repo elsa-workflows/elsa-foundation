@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -56,8 +58,8 @@ public sealed class GroundworkWorkflowDefinitionDraftStoreTests
                 ],
                 query.Request.Order.Select(term => term.Column.Name));
             var predicate = Assert.IsType<Predicate.Equal>(query.Request.Where);
-            Assert.Equal(WorkflowsDesignStorageManifest.DraftDefinitionIdField, predicate.Column.Name);
-            Assert.Equal("def1", predicate.Value.Value);
+            Assert.Equal(WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField, predicate.Column.Name);
+            Assert.Equal(LookupHash("def1"), predicate.Value.Value);
         }
     }
 
@@ -79,15 +81,15 @@ public sealed class GroundworkWorkflowDefinitionDraftStoreTests
             Assert.Equal(WorkflowsDesignStorageManifest.DraftByDefinitionIndex, query.IndexName);
             Assert.Equal(
                 [
-                    WorkflowsDesignStorageManifest.DraftDefinitionIdField,
+                    WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField,
                     WorkflowsDesignStorageManifest.DraftLastModifiedAtField,
                     WorkflowsDesignStorageManifest.DraftCreatedAtField,
                     WorkflowsDesignStorageManifest.DraftIdField
                 ],
                 query.Request.Order.Select(term => term.Column.Name));
             var predicate = Assert.IsType<Predicate.Equal>(query.Request.Where);
-            Assert.Equal(WorkflowsDesignStorageManifest.DraftDefinitionIdField, predicate.Column.Name);
-            Assert.Equal("def1", predicate.Value.Value);
+            Assert.Equal(WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField, predicate.Column.Name);
+            Assert.Equal(LookupHash("def1"), predicate.Value.Value);
         }
     }
 
@@ -160,4 +162,7 @@ public sealed class GroundworkWorkflowDefinitionDraftStoreTests
             Assert.DoesNotContain("workflowDefinition\"", json);
         }
     }
+
+    private static string LookupHash(string value) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(QuerySearchKeys.Encode(value, QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase)))).ToLowerInvariant();
 }

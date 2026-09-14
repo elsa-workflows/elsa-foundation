@@ -85,7 +85,7 @@ public sealed class GroundworkWorkflowDefinitionVersionStore : IWorkflowDefiniti
             unit,
             storage.Equal(unit, WorkflowsDesignStorageManifest.VersionDefinitionIdField, definitionId),
             [
-                storage.Order(unit, WorkflowsDesignStorageManifest.VersionDefinitionIdField),
+                storage.Order(unit, WorkflowsDesignStorageManifest.VersionDefinitionIdLookupHashField),
                 storage.Order(unit, WorkflowsDesignStorageManifest.VersionSemVerSortKeyField),
                 storage.Order(unit, WorkflowsDesignStorageManifest.VersionIdField)
             ],

@@ -10,6 +10,7 @@ using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Primitives.Entities;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Groundwork.Kernel;
 using Groundwork.Query.Model;
 using Groundwork.Store;
@@ -77,7 +78,7 @@ public sealed class GroundworkDesignStorage(
     {
         if (IsCaseInsensitiveField(unitId, field) && value is string text)
         {
-            if (IsDefinitionIdField(field))
+            if (IsDefinitionUnit(unitId) && IsDefinitionIdField(field))
             {
                 var lookupColumn = DefinitionIdLookupHashColumn(unitId);
                 return new Predicate.Equal(
@@ -100,6 +101,11 @@ public sealed class GroundworkDesignStorage(
                 ]);
             }
 
+            if (IsDefinitionIdField(field))
+            {
+                var lookupColumn = DefinitionRelationshipLookupHashColumn(unitId);
+                return new Predicate.Equal(lookupColumn, QueryConstant.Of(lookupColumn, DefinitionIdLookupHash(text)));
+            }
             var searchColumn = SearchColumn(unitId, field);
             var policy = SearchPolicy(unitId, field);
             var lower = QueryConstant.Of(searchColumn, QuerySearchKeys.Encode(text, policy));
@@ -270,9 +276,7 @@ public sealed class GroundworkDesignStorage(
     }
 
     internal static bool SameDefinitionIdentity(string value, string other) =>
-        StringComparer.Ordinal.Equals(
-            QuerySearchKeys.Encode(value, QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase),
-            QuerySearchKeys.Encode(other, QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase));
+        WorkflowDefinitionIdentity.Equals(value, other);
 
     private static void EnsureDefinitionIdentity(GroundworkDesignEntry entry, string requestedId)
     {
@@ -601,6 +605,8 @@ public sealed class GroundworkDesignStorage(
             case WorkflowDefinitionVersion version:
                 values[WorkflowsDesignStorageManifest.VersionIdField] = version.Id;
                 values[WorkflowsDesignStorageManifest.VersionDefinitionIdField] = version.DefinitionId;
+                values[WorkflowsDesignStorageManifest.VersionDefinitionIdLookupHashField] =
+                    DefinitionIdLookupHash(version.DefinitionId);
                 values[WorkflowsDesignStorageManifest.VersionField] = version.Version;
                 values[WorkflowsDesignStorageManifest.VersionSemVerSortKeyField] = version.SemVerSortKey;
                 values[WorkflowsDesignStorageManifest.VersionSourceDraftField] = version.SourceDraftId;
@@ -608,6 +614,8 @@ public sealed class GroundworkDesignStorage(
             case WorkflowDefinitionDraft draft:
                 values[WorkflowsDesignStorageManifest.DraftIdField] = draft.Id;
                 values[WorkflowsDesignStorageManifest.DraftDefinitionIdField] = draft.WorkflowDefinitionId;
+                values[WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField] =
+                    DefinitionIdLookupHash(draft.WorkflowDefinitionId);
                 values[WorkflowsDesignStorageManifest.DraftSourceVersionField] = draft.SourceVersionId;
                 values[WorkflowsDesignStorageManifest.DraftLastModifiedAtField] = draft.LastModifiedAt;
                 values[WorkflowsDesignStorageManifest.DraftCreatedAtField] = draft.CreatedAt;
@@ -887,10 +895,17 @@ public sealed class GroundworkDesignStorage(
     }
 
     private static bool IsCaseInsensitiveField(string unitId, string name) =>
-        StringComparer.Ordinal.Equals(unitId, WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind) &&
+        (IsDefinitionUnit(unitId) ||
+         StringComparer.Ordinal.Equals(unitId, WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind) &&
+         StringComparer.Ordinal.Equals(name, WorkflowsDesignStorageManifest.VersionDefinitionIdField) ||
+         StringComparer.Ordinal.Equals(unitId, WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind) &&
+         StringComparer.Ordinal.Equals(name, WorkflowsDesignStorageManifest.DraftDefinitionIdField)) &&
         (IsDefinitionIdField(name) ||
          StringComparer.Ordinal.Equals(name, WorkflowsDesignStorageManifest.DefinitionNameField) ||
          StringComparer.Ordinal.Equals(name, WorkflowsDesignStorageManifest.DefinitionDescriptionField));
+
+    private static bool IsDefinitionUnit(string unitId) =>
+        StringComparer.Ordinal.Equals(unitId, WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind);
 
     private static bool IsDefinitionIdField(string name) =>
         StringComparer.Ordinal.Equals(name, WorkflowsDesignStorageManifest.IdField) ||
@@ -904,8 +919,10 @@ public sealed class GroundworkDesignStorage(
     {
         var unit = Unit(unitId);
         var table = new TableId(unit.Name);
-        if (IsDefinitionIdField(field))
+        if (IsDefinitionUnit(unitId) && IsDefinitionIdField(field))
             return Column(unit, table, WorkflowsDesignStorageManifest.DefinitionIdSearchKeyField);
+        if (IsDefinitionIdField(field))
+            return Column(unit, table, SearchKeyProjection.ColumnName(field));
 
         var source = unit.Columns.Single(column => StringComparer.Ordinal.Equals(column.Name, field));
         return new ColumnRef(
@@ -919,6 +936,11 @@ public sealed class GroundworkDesignStorage(
 
     private ColumnRef DefinitionIdLookupHashColumn(string unitId) =>
         Column(unitId, WorkflowsDesignStorageManifest.DefinitionIdLookupHashField);
+
+    private ColumnRef DefinitionRelationshipLookupHashColumn(string unitId) =>
+        Column(unitId, StringComparer.Ordinal.Equals(unitId, WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind)
+            ? WorkflowsDesignStorageManifest.VersionDefinitionIdLookupHashField
+            : WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField);
 
     private ColumnRef DefinitionTextLookupHashColumn(string unitId, string field) =>
         Column(unitId, field switch

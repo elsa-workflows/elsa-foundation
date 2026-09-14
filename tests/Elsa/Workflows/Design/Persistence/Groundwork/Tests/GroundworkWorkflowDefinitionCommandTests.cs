@@ -442,6 +442,32 @@ public class GroundworkWorkflowDefinitionCommandTests
     }
 
     [Fact]
+    public async Task Direct_atomic_interface_accepts_the_shared_256_character_bound()
+    {
+        var result = await AtomicWrite().ExecuteAsync(
+            new DesignOperationKey(new string('k', DesignOperationKey.MaximumLength)),
+            new string('o', DesignOperationKey.MaximumLength), new { Value = 1 },
+            [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind],
+            (_, _) => Task.FromResult(DesignAtomicWriteStage<string>.Accepted("staged")));
+
+        Assert.Equal(DesignAtomicWriteStatus.Committed, result.Status);
+    }
+
+    [Fact]
+    public async Task Direct_atomic_interface_rejects_a_257_character_key_or_kind()
+    {
+        var writer = AtomicWrite();
+        await Assert.ThrowsAsync<ArgumentException>(() => writer.ExecuteAsync(
+            new DesignOperationKey(new string('k', DesignOperationKey.MaximumLength + 1)), "test.operation.v1", new { Value = 1 },
+            [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind],
+            (_, _) => Task.FromResult(DesignAtomicWriteStage<string>.Accepted("never-staged"))));
+        await Assert.ThrowsAsync<ArgumentException>(() => writer.ExecuteAsync(
+            new DesignOperationKey("bounded-key"), new string('o', DesignOperationKey.MaximumLength + 1), new { Value = 1 },
+            [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind],
+            (_, _) => Task.FromResult(DesignAtomicWriteStage<string>.Accepted("never-staged"))));
+    }
+
+    [Fact]
     public async Task Direct_atomic_interface_rejects_a_supplied_result_that_differs_from_the_staged_value()
     {
         IDesignAtomicWriter writer = AtomicWrite();

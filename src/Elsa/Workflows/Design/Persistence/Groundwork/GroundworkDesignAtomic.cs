@@ -121,7 +121,7 @@ public sealed class GroundworkDesignAtomicWrite(
         IDesignAtomicWriteResultCodec<T>? resultCodec = null)
     {
         ArgumentNullException.ThrowIfNull(operationKey);
-        ArgumentException.ThrowIfNullOrWhiteSpace(operationKind);
+        DesignOperationKey.Validate(operationKey, operationKind);
         ArgumentNullException.ThrowIfNull(requestMaterial);
         ArgumentNullException.ThrowIfNull(stage);
         var codec = resultCodec ?? new GroundworkDesignAtomicWriteResultCodec<T>(MarkerOptions);
@@ -398,8 +398,7 @@ public sealed class GroundworkDesignAtomicWrite(
     private static void Validate(GroundworkDesignAtomicWriteRequest request)
     {
         ArgumentNullException.ThrowIfNull(request.Operation);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.Operation.OperationKind);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.Operation.OperationKey);
+        DesignOperationKey.Validate(new DesignOperationKey(request.Operation.OperationKey), request.Operation.OperationKind);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.RequestFingerprint);
         ArgumentNullException.ThrowIfNull(request.MutatedUnits);
         if (request.MutatedUnits.Count == 0 || request.MutatedUnits.Any(string.IsNullOrWhiteSpace))
