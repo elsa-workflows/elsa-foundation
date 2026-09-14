@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -24,17 +25,26 @@ internal static class EfDesignSupport
 
     public static void EnsureTenant(IPersistenceAccessContextAccessor access, string? tenant) => access.Current.EnsureTenantScope(tenant);
 
-    public static WorkflowDefinitionState ReadState(IPayloadSerializer serializer, string? source)
+    public static WorkflowDefinitionState ReadState(IPayloadSerializer serializer, string? source, string operation = "workflow.state.read")
     {
         if (string.IsNullOrWhiteSpace(source))
-            throw new InvalidDataException("Workflow design state source is missing.");
+            throw new DesignPersistenceException(DesignPersistenceDomain.Workflow, DesignPersistenceFailureKind.Serialization, operation, "workflow state", new InvalidDataException("Workflow design state source is missing."));
         try { return serializer.Deserialize<WorkflowDefinitionState>(source); }
-        catch (Exception ex) when (ex is JsonException or InvalidOperationException or NotSupportedException)
-        { throw new InvalidDataException("Workflow design state source is corrupt.", ex); }
+        catch (DesignPersistenceException) { throw; }
+        catch (Exception ex) when (IsSerializationFailure(ex))
+        { throw new DesignPersistenceException(DesignPersistenceDomain.Workflow, DesignPersistenceFailureKind.Serialization, operation, "workflow state", ex); }
     }
 
-    public static string WriteState(IPayloadSerializer serializer, WorkflowDefinitionState state) =>
-        serializer.Serialize(state);
+    public static string WriteState(IPayloadSerializer serializer, WorkflowDefinitionState state, string operation = "workflow.state.write")
+    {
+        try { return serializer.Serialize(state); }
+        catch (DesignPersistenceException) { throw; }
+        catch (Exception ex) when (IsSerializationFailure(ex))
+        { throw new DesignPersistenceException(DesignPersistenceDomain.Workflow, DesignPersistenceFailureKind.Serialization, operation, "workflow state", ex); }
+    }
+
+    private static bool IsSerializationFailure(Exception exception) =>
+        exception is not (OperationCanceledException or OutOfMemoryException or StackOverflowException or AccessViolationException);
 
     public static string Json<T>(T value) => JsonSerializer.Serialize(value, JsonSerializerOptions.Web);
     public static T ReadJson<T>(string value) => JsonSerializer.Deserialize<T>(value, JsonSerializerOptions.Web) ?? throw new InvalidDataException("Workflow design JSON is empty.");

@@ -64,14 +64,27 @@ public sealed class EfDesignAtomicWriter(
         ArgumentNullException.ThrowIfNull(stage);
         var tenantId = access.Current.Scope?.Value
                        ?? throw new InvalidOperationException("Workflow design mutations require an explicit persistence scope.");
-        var requestFingerprint = EfDesignSupport.Fingerprint(operationKind, request);
-        var legacyRequestFingerprint = EfDesignSupport.LegacyFingerprint(operationKind, request);
+        string requestFingerprint;
+        string legacyRequestFingerprint;
+        try
+        {
+            requestFingerprint = EfDesignSupport.Fingerprint(operationKind, request);
+            legacyRequestFingerprint = EfDesignSupport.LegacyFingerprint(operationKind, request);
+        }
+        catch (DesignPersistenceException) { throw; }
+        catch (Exception exception) when (IsSerializationFailure(exception))
+        {
+            throw SerializationFailure(operationKind, exception);
+        }
         var existing = await db.Operations.AsNoTracking().SingleOrDefaultAsync(
             x => x.TenantId == tenantId && x.OperationKind == operationKind && x.OperationKey == key.Value,
             cancellationToken);
         if (existing is not null)
             return ResolveExisting(existing, operationKind, requestFingerprint, legacyRequestFingerprint, DesignAtomicWriteStatus.Replayed, resultCodec);
-        if (attempt == 0 && beforeAttempt is not null)
+        // Attempt setup is deliberately rerun after every transient write conflict. Providers can
+        // invalidate locks, snapshots, and other preflight observations while a transaction is
+        // being retried; reusing the first attempt's setup would silently weaken those guarantees.
+        if (beforeAttempt is not null)
             await beforeAttempt(cancellationToken);
 
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
@@ -94,16 +107,19 @@ public sealed class EfDesignAtomicWriter(
         }
 
         var value = staged.Value!;
-        var resultJson = staged.ResultJson ?? EfDesignSupport.Json(value);
-        var resultFingerprint = staged.ResultFingerprint ?? EfDesignSupport.Fingerprint(operationKind + ".result", value);
+        string resultJson;
+        string resultFingerprint;
         try
         {
+            resultJson = staged.ResultJson ?? EfDesignSupport.Json(value);
+            resultFingerprint = staged.ResultFingerprint ?? EfDesignSupport.Fingerprint(operationKind + ".result", value);
             ValidateAuthoritativeResult(staged, value, operationKind, resultJson, resultFingerprint, resultCodec);
         }
-        catch
+        catch (DesignPersistenceException) { db.ChangeTracker.Clear(); throw; }
+        catch (Exception exception) when (IsSerializationFailure(exception))
         {
             db.ChangeTracker.Clear();
-            throw;
+            throw SerializationFailure(operationKind, exception);
         }
         db.Operations.Add(new DesignOperationEntity
         {
@@ -136,12 +152,12 @@ public sealed class EfDesignAtomicWriter(
             try { await transaction.RollbackAsync(CancellationToken.None); } catch { }
             db.ChangeTracker.Clear();
             if (attempt >= 3)
-                throw;
-            await Task.Delay(TimeSpan.FromMilliseconds(25 * (attempt + 1)), cancellationToken);
+                throw ProviderFailure(operationKind, exception);
             await transaction.DisposeAsync();
+            await Task.Delay(TimeSpan.FromMilliseconds(25 * (attempt + 1)), cancellationToken);
             return await ExecuteAttemptAsync(key, operationKind, request, stage, beforeAttempt, cancellationToken, resultCodec, attempt + 1);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException exception)
         {
             try { await transaction.RollbackAsync(CancellationToken.None); } catch { }
             db.ChangeTracker.Clear();
@@ -150,7 +166,7 @@ public sealed class EfDesignAtomicWriter(
                 cancellationToken);
             if (winner is not null)
                 return ResolveExisting(winner, operationKind, requestFingerprint, legacyRequestFingerprint, DesignAtomicWriteStatus.Reconciled, resultCodec);
-            throw;
+            throw ProviderFailure(operationKind, exception);
         }
         catch
         {
@@ -218,7 +234,7 @@ public sealed class EfDesignAtomicWriter(
         var value = DeserializeResult(resultCodec, existing.ResultJson);
         if (!EfDesignSupport.IsResultFingerprintValid(operationKind + ".result", existing.ResultFingerprint, existing.ResultJson)
             && !StringComparer.Ordinal.Equals(existing.ResultFingerprint, EfDesignSupport.Fingerprint(operationKind + ".result", value)))
-            throw new InvalidDataException("The authoritative design-operation result fingerprint does not match its payload.");
+            throw SerializationFailure(operationKind, new InvalidDataException("The authoritative design-operation result fingerprint does not match its payload."));
         return new DesignAtomicWriteResult<T>(matchingStatus, value, existing.ResultFingerprint, existing.ResultJson);
     }
 
@@ -231,13 +247,13 @@ public sealed class EfDesignAtomicWriter(
         IDesignAtomicWriteResultCodec<T> resultCodec)
     {
         if ((staged.ResultFingerprint is null) != (staged.ResultJson is null))
-            throw new InvalidDataException("An accepted design operation must provide both result fingerprint and result payload.");
+            throw SerializationFailure(operationKind, new InvalidDataException("An accepted design operation must provide both result fingerprint and result payload."));
         var suppliedValue = DeserializeResult(resultCodec, resultJson);
         if (!EfDesignSupport.IsResultFingerprintValid(operationKind + ".result", resultFingerprint, resultJson)
             && !StringComparer.Ordinal.Equals(resultFingerprint, EfDesignSupport.Fingerprint(operationKind + ".result", suppliedValue)))
-            throw new InvalidDataException("The accepted design-operation result fingerprint does not match its payload.");
+            throw SerializationFailure(operationKind, new InvalidDataException("The accepted design-operation result fingerprint does not match its payload."));
         if (!resultCodec.Equivalent(value, suppliedValue))
-            throw new InvalidDataException("The accepted design-operation result must match its staged value.");
+            throw SerializationFailure(operationKind, new InvalidDataException("The accepted design-operation result must match its staged value."));
     }
 
     private static T DeserializeResult<T>(IDesignAtomicWriteResultCodec<T> resultCodec, string json)
@@ -246,15 +262,24 @@ public sealed class EfDesignAtomicWriter(
         {
             return resultCodec.Deserialize(json);
         }
-        catch (InvalidDataException)
+        catch (InvalidDataException exception)
         {
-            throw;
+            throw SerializationFailure("design-operation.result", exception);
         }
-        catch (Exception exception) when (exception is JsonException or InvalidOperationException or NotSupportedException)
+        catch (Exception exception) when (IsSerializationFailure(exception))
         {
-            throw new InvalidDataException("The authoritative design-operation result could not be deserialized.", exception);
+            throw SerializationFailure("design-operation.result", exception);
         }
     }
+
+    private static bool IsSerializationFailure(Exception exception) =>
+        exception is not (OperationCanceledException or OutOfMemoryException or StackOverflowException or AccessViolationException);
+
+    private static DesignPersistenceException ProviderFailure(string operation, Exception exception) =>
+        new(DesignPersistenceDomain.Workflow, DesignPersistenceFailureKind.Provider, operation, null, exception.InnerException ?? exception);
+
+    private static DesignPersistenceException SerializationFailure(string operation, Exception exception) =>
+        new(DesignPersistenceDomain.Workflow, DesignPersistenceFailureKind.Serialization, operation, "design operation", exception);
 
     private sealed class DefaultResultCodec<T> : IDesignAtomicWriteResultCodec<T>
     {

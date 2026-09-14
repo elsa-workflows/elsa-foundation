@@ -22,6 +22,8 @@ public static class GroundworkWorkflowsDesignStoreRegistration
         string? targetName = null)
     {
         ArgumentNullException.ThrowIfNull(services);
+        var existingBackend = DesignPersistenceBackend.Find(services);
+        existingBackend?.RemoveOwnedDescriptors(services);
         services.AddPersistenceCore();
         services.AddGroundworkStorageLane<WorkflowsDesignGroundworkStorageManifestSource>(targetName);
         foreach (var unit in WorkflowsDesignStorageManifest.CreateUnits())
@@ -63,6 +65,9 @@ public static class GroundworkWorkflowsDesignStoreRegistration
         services.TryAddScoped<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
         services.TryAddScoped<IWorkflowDefinitionVersionFactory, WorkflowDefinitionVersionFactory>();
         services.TryAddScoped<IWorkflowDefinitionDraftFactory, WorkflowDefinitionDraftFactory>();
+        DesignPersistenceBackend.Register(services, new DesignPersistenceBackend(
+            DesignPersistenceBackend.Groundwork,
+            services.Where(IsOwnedDescriptor).ToArray()));
         return services;
     }
 
@@ -73,4 +78,48 @@ public static class GroundworkWorkflowsDesignStoreRegistration
         services.RemoveAll<TService>();
         services.AddScoped<TService, TImplementation>();
     }
+
+    private static bool IsOwnedDescriptor(ServiceDescriptor descriptor) =>
+        OwnedServiceTypes.Contains(descriptor.ServiceType) &&
+        (descriptor.ServiceType != typeof(IDesignAtomicWriter) || descriptor.ImplementationType == typeof(GroundworkDesignAtomicWrite));
+
+    private static readonly Type[] OwnedServiceTypes =
+    [
+        typeof(GroundworkDesignStorage),
+        typeof(IDesignAtomicWriter),
+        typeof(IWorkflowDefinitionStore),
+        typeof(IWorkflowDefinitionVersionStore),
+        typeof(IWorkflowDefinitionDraftStore),
+        typeof(IWorkflowDefinitionListProjectionStore),
+        typeof(IWorkflowDefinitionVersionLayoutStore),
+        typeof(IAddWorkflowDefinitionCommand),
+        typeof(IMaterializeWorkflowDefinitionCommand),
+        typeof(IAddWorkflowDefinitionVersionCommand),
+        typeof(IMaterializeWorkflowDefinitionVersionCommand),
+        typeof(ISaveWorkflowDefinitionCommand),
+        typeof(IDeleteWorkflowDefinitionPermanentlyCommand),
+        typeof(ICreateDraftCommand),
+        typeof(IUpdateDraftCommand),
+        typeof(IDiscardDraftCommand),
+        typeof(IPromoteDraftToVersionCommand),
+        typeof(ISubmitWorkflowDefinitionCommand),
+        typeof(ICloneDraftFromVersionCommand),
+        typeof(GroundworkWorkflowDefinitionStore),
+        typeof(GroundworkWorkflowDefinitionVersionStore),
+        typeof(GroundworkWorkflowDefinitionDraftStore),
+        typeof(GroundworkWorkflowDefinitionListProjectionStore),
+        typeof(GroundworkWorkflowDefinitionVersionLayoutStore),
+        typeof(GroundworkAddWorkflowDefinitionCommand),
+        typeof(GroundworkMaterializeWorkflowDefinitionCommand),
+        typeof(GroundworkAddWorkflowDefinitionVersionCommand),
+        typeof(GroundworkMaterializeWorkflowDefinitionVersionCommand),
+        typeof(GroundworkSaveWorkflowDefinitionCommand),
+        typeof(GroundworkDeleteWorkflowDefinitionPermanentlyCommand),
+        typeof(GroundworkCreateDraftCommand),
+        typeof(GroundworkUpdateDraftCommand),
+        typeof(GroundworkDiscardDraftCommand),
+        typeof(GroundworkPromoteDraftToVersionCommand),
+        typeof(GroundworkSubmitWorkflowDefinitionCommand),
+        typeof(GroundworkCloneDraftFromVersionCommand)
+    ];
 }

@@ -13,6 +13,7 @@ using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Commands;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.DependencyInjection;
@@ -24,12 +25,50 @@ using Elsa.Locking.Core;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests;
 
 public sealed class EfWorkflowDesignPersistenceTests
 {
+    [Fact]
+    public void Ef_registration_resolves_owned_surfaces_and_preserves_custom_atomic_writer()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IPersistenceAccessContextAccessor>(new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+        services.AddSingleton<IPayloadSerializer, TestSerializer>();
+        services.AddSingleton<IIdentityGenerator, TestIdentity>();
+        services.AddSingleton<IActivityStructureService, EmptyActivityStructureService>();
+        services.AddScoped<IDesignAtomicWriter, CustomDesignAtomicWriter>();
+        services.AddWorkflowsDesignEntityFrameworkCore(new WorkflowsDesignEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        });
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        var serviceProvider = scope.ServiceProvider;
+
+        Assert.IsType<CustomDesignAtomicWriter>(serviceProvider.GetRequiredService<IDesignAtomicWriter>());
+        _ = serviceProvider.GetRequiredService<WorkflowsDesignDbContext>();
+        _ = serviceProvider.GetRequiredService<WorkflowsDesignSqliteDbContext>();
+        foreach (var serviceType in new[]
+                 {
+                     typeof(EfWorkflowDefinitionStore), typeof(EfWorkflowDefinitionVersionStore), typeof(EfWorkflowDefinitionDraftStore),
+                     typeof(EfWorkflowDefinitionVersionLayoutStore), typeof(EfWorkflowDefinitionListProjectionStore),
+                     typeof(IWorkflowDefinitionStore), typeof(IWorkflowDefinitionVersionStore), typeof(IWorkflowDefinitionDraftStore),
+                     typeof(IWorkflowDefinitionVersionLayoutStore), typeof(IWorkflowDefinitionListProjectionStore),
+                     typeof(IAddWorkflowDefinitionCommand), typeof(IAddWorkflowDefinitionVersionCommand), typeof(ICreateDraftCommand),
+                     typeof(ICloneDraftFromVersionCommand), typeof(IDeleteWorkflowDefinitionPermanentlyCommand), typeof(IDiscardDraftCommand),
+                     typeof(IMaterializeWorkflowDefinitionCommand), typeof(IMaterializeWorkflowDefinitionVersionCommand),
+                     typeof(IPromoteDraftToVersionCommand), typeof(ISaveWorkflowDefinitionCommand), typeof(ISubmitWorkflowDefinitionCommand),
+                     typeof(IUpdateDraftCommand)
+                 })
+            Assert.NotNull(serviceProvider.GetRequiredService(serviceType));
+    }
+
     [Fact]
     public async Task Definitions_drafts_layouts_and_versions_survive_reopen_and_preserve_scope()
     {
@@ -151,7 +190,8 @@ public sealed class EfWorkflowDesignPersistenceTests
         var scopedWriter = new EfDesignAtomicWriter(db, access: scoped);
         await scopedWriter.ExecuteAsync(new DesignOperationKey("corrupt"), "test.op", new { Value = 1 }, ["test"], _ => Task.FromResult(new { Id = "x" }));
         var marker = await db.Operations.SingleAsync(x => x.OperationKey == "corrupt"); marker.ResultJson = "{\"Id\":\"tampered\"}"; await db.SaveChangesAsync();
-        await Assert.ThrowsAsync<InvalidDataException>(() => scopedWriter.ExecuteAsync(new DesignOperationKey("corrupt"), "test.op", new { Value = 1 }, ["test"], _ => Task.FromResult(new { Id = "unused" })));
+        var corrupt = await Assert.ThrowsAsync<DesignPersistenceException>(() => scopedWriter.ExecuteAsync(new DesignOperationKey("corrupt"), "test.op", new { Value = 1 }, ["test"], _ => Task.FromResult(new { Id = "unused" })));
+        Assert.Equal(DesignPersistenceFailureKind.Serialization, corrupt.FailureKind);
     }
 
     [Fact]
@@ -433,10 +473,11 @@ public sealed class EfWorkflowDesignPersistenceTests
         var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
         var writer = new EfDesignAtomicWriter(db, access);
         var suppliedJson = JsonSerializer.Serialize(new ResultValue("supplied"));
-        await Assert.ThrowsAsync<InvalidDataException>(() => writer.ExecuteAsync(
+        var invalid = await Assert.ThrowsAsync<DesignPersistenceException>(() => writer.ExecuteAsync(
             new DesignOperationKey("mismatch"), "test.op", new { Value = 1 }, ["test"],
             (_, _) => Task.FromResult(DesignAtomicWriteStage<ResultValue>.Accepted(
                 new ResultValue("staged"), "sha256:invalid", suppliedJson))));
+        Assert.Equal(DesignPersistenceFailureKind.Serialization, invalid.FailureKind);
         Assert.Empty(await db.Operations.ToListAsync());
     }
 
@@ -496,6 +537,38 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Ef_retries_transient_writes_after_rerunning_attempt_setup()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        var interceptor = new TransientSaveInterceptor();
+        var options = new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>()
+            .UseSqlite(connection).AddInterceptors(interceptor).Options;
+        await using var db = new WorkflowsDesignSqliteDbContext(options); await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        IDesignAtomicWriter writer = new EfDesignAtomicWriter(db, access);
+        var beforeAttemptCalls = 0;
+        var stageCalls = 0;
+        interceptor.FailNextSave = true;
+
+        var result = await writer.ExecuteAsync(
+            new DesignOperationKey("transient-retry"), "test.op", new { Value = 1 }, ["test"],
+            (_, _) =>
+            {
+                stageCalls++;
+                return Task.FromResult(DesignAtomicWriteStage<int>.Accepted(1));
+            },
+            _ =>
+            {
+                beforeAttemptCalls++;
+                return Task.CompletedTask;
+            });
+
+        Assert.Equal(DesignAtomicWriteStatus.Committed, result.Status);
+        Assert.Equal(2, beforeAttemptCalls);
+        Assert.Equal(2, stageCalls);
+    }
+
+    [Fact]
     public async Task Shared_protocol_rolls_back_when_commit_is_rejected()
     {
         var scope = new ProtocolScope();
@@ -534,6 +607,10 @@ public sealed class EfWorkflowDesignPersistenceTests
     private static WorkflowsDesignSqliteDbContext Create(SqliteConnection connection) => new(new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>().UseSqlite(connection).Options);
     private static WorkflowDefinitionState State() => new([], null, [], [], null);
     private sealed class TestIdentity : IIdentityGenerator { private int n; public string Generate() => $"generated-{Interlocked.Increment(ref n)}"; }
+    private sealed class CustomDesignAtomicWriter : IDesignAtomicWriter
+    {
+        public Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(DesignOperationKey operationKey, string operationKind, object requestMaterial, IReadOnlyCollection<string> mutatedUnits, Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage, Func<CancellationToken, Task>? beforeAttempt = null, CancellationToken cancellationToken = default, IDesignAtomicWriteResultCodec<T>? resultCodec = null) => throw new NotSupportedException();
+    }
     private sealed class TestLockProvider : IDistributedLockProvider
     {
         public IDistributedSynchronizationHandle AcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
@@ -625,6 +702,23 @@ public sealed class EfWorkflowDesignPersistenceTests
                 return Task.CompletedTask;
             FailNextCommit = false;
             return Task.FromException(new InvalidOperationException("commit acknowledgement lost"));
+        }
+    }
+
+    private sealed class TransientSaveInterceptor : SaveChangesInterceptor
+    {
+        private int failNextSave;
+        public bool FailNextSave { set => Interlocked.Exchange(ref failNextSave, value ? 1 : 0); }
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Exchange(ref failNextSave, 0) == 1)
+                return ValueTask.FromException<InterceptionResult<int>>(
+                    new DbUpdateException("simulated transient write conflict", new SqliteException("database is locked", 5, 5)));
+            return ValueTask.FromResult(result);
         }
     }
     private sealed class TestSerializer(JsonSerializerOptions? serializerOptions = null) : IPayloadSerializer

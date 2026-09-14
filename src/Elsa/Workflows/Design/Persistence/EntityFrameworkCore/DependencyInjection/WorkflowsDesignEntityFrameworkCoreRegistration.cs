@@ -16,24 +16,13 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
     {
         ArgumentNullException.ThrowIfNull(services); ArgumentNullException.ThrowIfNull(options);
         var provider = EfRelationalProviderBinding.Normalize(options.Provider);
-        services.RemoveAll<WorkflowsDesignEntityFrameworkCoreOptions>();
+        var existingBackend = DesignPersistenceBackend.Find(services);
+        if (existingBackend is not null)
+            existingBackend.RemoveOwnedDescriptors(services);
+        else if (HasOwnedSurfaceRegistration(services))
+            throw new InvalidOperationException("An explicit workflow-design persistence registration is already present; EF Core refuses to replace it implicitly.");
+        var registrationStart = services.Count;
         services.AddSingleton(options);
-        services.RemoveAll<WorkflowsDesignDbContext>();
-        services.RemoveAll<WorkflowsDesignSqliteDbContext>(); services.RemoveAll<WorkflowsDesignSqlServerDbContext>();
-        services.RemoveAll<WorkflowsDesignPostgreSqlDbContext>(); services.RemoveAll<WorkflowsDesignMySqlDbContext>();
-        services.RemoveAll<IDesignAtomicWriter>();
-        services.RemoveAll<IWorkflowDefinitionStore>(); services.RemoveAll<IWorkflowDefinitionVersionStore>();
-        services.RemoveAll<IWorkflowDefinitionDraftStore>(); services.RemoveAll<IWorkflowDefinitionVersionLayoutStore>();
-        services.RemoveAll<IWorkflowDefinitionListProjectionStore>();
-        services.RemoveAll<EfWorkflowDefinitionStore>(); services.RemoveAll<EfWorkflowDefinitionVersionStore>();
-        services.RemoveAll<EfWorkflowDefinitionDraftStore>(); services.RemoveAll<EfWorkflowDefinitionVersionLayoutStore>();
-        services.RemoveAll<EfWorkflowDefinitionListProjectionStore>();
-        services.RemoveAll<IAddWorkflowDefinitionCommand>(); services.RemoveAll<IAddWorkflowDefinitionVersionCommand>();
-        services.RemoveAll<ICreateDraftCommand>(); services.RemoveAll<ICloneDraftFromVersionCommand>();
-        services.RemoveAll<IDeleteWorkflowDefinitionPermanentlyCommand>(); services.RemoveAll<IDiscardDraftCommand>();
-        services.RemoveAll<IMaterializeWorkflowDefinitionCommand>(); services.RemoveAll<IMaterializeWorkflowDefinitionVersionCommand>();
-        services.RemoveAll<IPromoteDraftToVersionCommand>(); services.RemoveAll<ISaveWorkflowDefinitionCommand>();
-        services.RemoveAll<ISubmitWorkflowDefinitionCommand>(); services.RemoveAll<IUpdateDraftCommand>();
         switch (provider)
         {
             case "sqlite": AddContext<WorkflowsDesignSqliteDbContext>(services, options, EfRelationalProviderBinding.UseSqlite); break;
@@ -42,7 +31,7 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
             case "mysql": AddContext<WorkflowsDesignMySqlDbContext>(services, options, EfRelationalProviderBinding.UseMySql); break;
             default: throw new ArgumentException($"Unknown Workflows Design EF provider '{options.Provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.", nameof(options));
         }
-        services.AddScoped<IDesignAtomicWriter, EfDesignAtomicWriter>();
+        services.TryAddScoped<IDesignAtomicWriter, EfDesignAtomicWriter>();
         services.AddScoped<EfWorkflowDefinitionStore>(); services.AddScoped<IWorkflowDefinitionStore>(sp => sp.GetRequiredService<EfWorkflowDefinitionStore>());
         services.AddScoped<EfWorkflowDefinitionVersionStore>(); services.AddScoped<IWorkflowDefinitionVersionStore>(sp => sp.GetRequiredService<EfWorkflowDefinitionVersionStore>());
         services.AddScoped<EfWorkflowDefinitionDraftStore>(); services.AddScoped<IWorkflowDefinitionDraftStore>(sp => sp.GetRequiredService<EfWorkflowDefinitionDraftStore>());
@@ -54,6 +43,12 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         services.AddScoped<IDeleteWorkflowDefinitionPermanentlyCommand, EfDeleteWorkflowDefinitionPermanentlyCommand>(); services.AddScoped<IDiscardDraftCommand, EfDiscardDraftCommand>();
         services.AddScoped<IMaterializeWorkflowDefinitionCommand, EfMaterializeWorkflowDefinitionCommand>(); services.AddScoped<IMaterializeWorkflowDefinitionVersionCommand, EfMaterializeWorkflowDefinitionVersionCommand>();
         services.AddScoped<IPromoteDraftToVersionCommand, EfPromoteDraftToVersionCommand>(); services.AddScoped<ISaveWorkflowDefinitionCommand, EfSaveWorkflowDefinitionCommand>(); services.AddScoped<ISubmitWorkflowDefinitionCommand, EfSubmitWorkflowDefinitionCommand>(); services.AddScoped<IUpdateDraftCommand, EfUpdateDraftCommand>();
+        // Capture the exact descriptors emitted by this registration, including the provider's
+        // closed DbContextOptions descriptor. Tracking by service type would leave stale provider
+        // options behind when an application intentionally switches EF providers.
+        DesignPersistenceBackend.Register(services, new DesignPersistenceBackend(
+            DesignPersistenceBackend.EntityFramework,
+            services.Skip(registrationStart).ToArray()));
         return services;
     }
 
@@ -69,6 +64,46 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         if (!string.IsNullOrWhiteSpace(options.ConnectionName)) return configuration?.GetConnectionString(options.ConnectionName) ?? throw new InvalidOperationException($"Workflows Design EF connection '{options.ConnectionName}' was not found in ConnectionStrings.");
         return configuration?.GetConnectionString(WorkflowsDesignEfModule.DefaultConnectionName) ?? (EfRelationalProviderBinding.Normalize(options.Provider) == "sqlite" ? WorkflowsDesignEfModule.DefaultSqliteConnectionString : throw new InvalidOperationException("Workflows Design EF requires ConnectionString or ConnectionName for a non-Sqlite provider."));
     }
+
+    private static bool HasOwnedSurfaceRegistration(IServiceCollection services) => services.Any(descriptor =>
+        OwnedServiceTypes.Contains(descriptor.ServiceType) && descriptor.ServiceType != typeof(IDesignAtomicWriter));
+
+    private static readonly Type[] OwnedServiceTypes =
+    [
+        typeof(WorkflowsDesignEntityFrameworkCoreOptions),
+        typeof(WorkflowsDesignDbContext),
+        typeof(DbContextOptions<WorkflowsDesignSqliteDbContext>),
+        typeof(DbContextOptions<WorkflowsDesignSqlServerDbContext>),
+        typeof(DbContextOptions<WorkflowsDesignPostgreSqlDbContext>),
+        typeof(DbContextOptions<WorkflowsDesignMySqlDbContext>),
+        typeof(WorkflowsDesignSqliteDbContext),
+        typeof(WorkflowsDesignSqlServerDbContext),
+        typeof(WorkflowsDesignPostgreSqlDbContext),
+        typeof(WorkflowsDesignMySqlDbContext),
+        typeof(IDesignAtomicWriter),
+        typeof(EfWorkflowDefinitionStore),
+        typeof(EfWorkflowDefinitionVersionStore),
+        typeof(EfWorkflowDefinitionDraftStore),
+        typeof(EfWorkflowDefinitionVersionLayoutStore),
+        typeof(EfWorkflowDefinitionListProjectionStore),
+        typeof(IWorkflowDefinitionStore),
+        typeof(IWorkflowDefinitionVersionStore),
+        typeof(IWorkflowDefinitionDraftStore),
+        typeof(IWorkflowDefinitionVersionLayoutStore),
+        typeof(IWorkflowDefinitionListProjectionStore),
+        typeof(IAddWorkflowDefinitionCommand),
+        typeof(IAddWorkflowDefinitionVersionCommand),
+        typeof(ICreateDraftCommand),
+        typeof(ICloneDraftFromVersionCommand),
+        typeof(IDeleteWorkflowDefinitionPermanentlyCommand),
+        typeof(IDiscardDraftCommand),
+        typeof(IMaterializeWorkflowDefinitionCommand),
+        typeof(IMaterializeWorkflowDefinitionVersionCommand),
+        typeof(IPromoteDraftToVersionCommand),
+        typeof(ISaveWorkflowDefinitionCommand),
+        typeof(ISubmitWorkflowDefinitionCommand),
+        typeof(IUpdateDraftCommand)
+    ];
 }
 
 public sealed class WorkflowsDesignEntityFrameworkCoreOptions
