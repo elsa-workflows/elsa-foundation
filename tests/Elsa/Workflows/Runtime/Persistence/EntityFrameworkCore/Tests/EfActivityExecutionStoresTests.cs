@@ -200,6 +200,41 @@ public sealed class EfActivityExecutionStoresTests
     }
 
     [Fact]
+    public async Task Hierarchy_store_rejects_missing_parent_during_depth_resolution()
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-missing-parent", "root", 1, "root", null, true));
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-missing-parent", "child", 2, "root", "missing-parent"));
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Hierarchy.ReadPageAsync(new ActivityExecutionHierarchyQuery(
+            "wf-missing-parent", "root", null, 1, new HashSet<ActivityExecutionHierarchyInclude>(), "profile", "tenant:tenant-a")).AsTask());
+    }
+
+    [Fact]
+    public async Task Hierarchy_store_rejects_parent_from_a_different_execution_scope_during_depth_resolution()
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-foreign-parent", "root", 1, "root", null, true));
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-foreign-parent", "foreign-parent", 2, "foreign-root", null));
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-foreign-parent", "child", 3, "root", "foreign-parent"));
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Hierarchy.ReadPageAsync(new ActivityExecutionHierarchyQuery(
+            "wf-foreign-parent", "root", null, 1, new HashSet<ActivityExecutionHierarchyInclude>(), "profile", "tenant:tenant-a")).AsTask());
+    }
+
+    [Fact]
+    public async Task Hierarchy_store_rejects_ancestor_chain_that_does_not_reach_requested_root()
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-orphan-chain", "root", 1, "root", null, true));
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-orphan-chain", "orphan", 2, "root", null));
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-orphan-chain", "child", 3, "root", "orphan"));
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Hierarchy.ReadPageAsync(new ActivityExecutionHierarchyQuery(
+            "wf-orphan-chain", "root", null, 1, new HashSet<ActivityExecutionHierarchyInclude>(), "profile", "tenant:tenant-a")).AsTask());
+    }
+
+    [Fact]
     public async Task Hierarchy_store_rejects_cursor_binding_and_provider_continuation_mismatch()
     {
         await using var fixture = await Fixture.CreateAsync("tenant-a");

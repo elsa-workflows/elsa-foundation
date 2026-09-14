@@ -111,7 +111,7 @@ public sealed class EfActivityExecutionHierarchyStore(
         foreach (var record in records)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            items.Add(await ProjectItemAsync(record, query.RootActivityExecutionId, query.Include, watermark, cache, depths, cancellationToken));
+            items.Add(await ProjectItemAsync(record, query.RootActivityExecutionId, rootRecord.ExecutionScopeId, scope, query.Include, watermark, cache, depths, cancellationToken));
         }
         var last = records.LastOrDefault();
         var next = hasMore && last is not null
@@ -230,10 +230,11 @@ public sealed class EfActivityExecutionHierarchyStore(
         return records;
     }
 
-    private async ValueTask<ActivityExecutionHierarchyItem> ProjectItemAsync(ActivityExecutionHierarchyRecord record, string rootActivityExecutionId, IReadOnlySet<ActivityExecutionHierarchyInclude> include, long watermark,
+    private async ValueTask<ActivityExecutionHierarchyItem> ProjectItemAsync(ActivityExecutionHierarchyRecord record, string rootActivityExecutionId, string rootExecutionScopeId, string persistenceScope,
+        IReadOnlySet<ActivityExecutionHierarchyInclude> include, long watermark,
         IDictionary<string, ActivityExecutionHierarchyRecord> cache, IDictionary<string, int> depths, CancellationToken cancellationToken)
     {
-        var depth = await ResolveDepthAsync(record, rootActivityExecutionId, cache, depths, cancellationToken);
+        var depth = await ResolveDepthAsync(record, rootActivityExecutionId, rootExecutionScopeId, persistenceScope, cache, depths, cancellationToken);
         var boundary = await BuildBoundary(record, watermark, ActivityExecutionEfSupport.RequireScope(accessContextAccessor), cancellationToken);
         return record.Item with
         {
@@ -246,7 +247,8 @@ public sealed class EfActivityExecutionHierarchyStore(
         };
     }
 
-    private async ValueTask<int> ResolveDepthAsync(ActivityExecutionHierarchyRecord record, string rootActivityExecutionId, IDictionary<string, ActivityExecutionHierarchyRecord> cache,
+    private async ValueTask<int> ResolveDepthAsync(ActivityExecutionHierarchyRecord record, string rootActivityExecutionId, string rootExecutionScopeId, string persistenceScope,
+        IDictionary<string, ActivityExecutionHierarchyRecord> cache,
         IDictionary<string, int> depths, CancellationToken cancellationToken)
     {
         if (depths.TryGetValue(record.ActivityExecutionId, out var known))
@@ -257,11 +259,19 @@ public sealed class EfActivityExecutionHierarchyStore(
         var baseDepth = 0;
         while (true)
         {
+            if (!StringComparer.Ordinal.Equals(current.ExecutionScopeId, rootExecutionScopeId))
+                throw new InvalidDataException("Committed activity execution hierarchy contains an ancestor from another execution scope.");
             if (!seen.Add(current.ActivityExecutionId))
                 throw new InvalidDataException("Committed activity execution hierarchy contains a parent cycle.");
             path.Add(current.ActivityExecutionId);
             var parentId = current.ParentActivityExecutionId;
-            if (parentId is null || StringComparer.Ordinal.Equals(parentId, rootActivityExecutionId))
+            if (parentId is null)
+            {
+                if (!StringComparer.Ordinal.Equals(current.ActivityExecutionId, rootActivityExecutionId))
+                    throw new InvalidDataException("Committed activity execution hierarchy ancestor chain did not reach the requested root.");
+                break;
+            }
+            if (StringComparer.Ordinal.Equals(parentId, rootActivityExecutionId))
                 break;
             if (depths.TryGetValue(parentId, out baseDepth))
                 break;
@@ -269,12 +279,14 @@ public sealed class EfActivityExecutionHierarchyStore(
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var parentRow = await context.ActivityExecutionHierarchies.AsNoTracking().SingleOrDefaultAsync(candidate =>
-                    candidate.Id == ActivityExecutionEfSupport.CreateId("hierarchy", ActivityExecutionEfSupport.RequireScope(accessContextAccessor), current.WorkflowExecutionId, parentId), cancellationToken);
+                    candidate.Id == ActivityExecutionEfSupport.CreateId("hierarchy", persistenceScope, current.WorkflowExecutionId, parentId), cancellationToken);
                 if (parentRow is null)
-                    break;
-                parent = ReadChecked(parentRow, ActivityExecutionEfSupport.RequireScope(accessContextAccessor), current.WorkflowExecutionId, parentId);
+                    throw new InvalidDataException("Committed activity execution hierarchy contains a missing parent.");
+                parent = ReadChecked(parentRow, persistenceScope, current.WorkflowExecutionId, parentId);
                 cache[parentId] = parent;
             }
+            if (!StringComparer.Ordinal.Equals(parent.ExecutionScopeId, rootExecutionScopeId))
+                throw new InvalidDataException("Committed activity execution hierarchy contains an ancestor from another execution scope.");
             current = parent;
         }
         for (var index = path.Count - 1; index >= 0; index--)
