@@ -162,9 +162,13 @@ public sealed class EfActivityExecutionHierarchyStore(
                               row.ExecutionScopeIdHash == ActivityExecutionEfSupport.Hash(record.ActivityExecutionId) &&
                               !row.IsScopeRoot && row.ExecutionSequence <= watermark);
             if (lastSequence is not null)
-                source = source.Where(row => row.ExecutionSequence > lastSequence.Value ||
-                                             row.ExecutionSequence == lastSequence.Value &&
-                                             row.ActivityExecutionIdOrderKey.CompareTo(lastOrderKey!) > 0);
+            {
+                var sequence = lastSequence.Value;
+                var orderKey = lastOrderKey!;
+                source = source.Where(row => row.ExecutionSequence > sequence ||
+                                             row.ExecutionSequence == sequence &&
+                                             row.ActivityExecutionIdOrderKey.CompareTo(orderKey) > 0);
+            }
             var rows = await source.OrderBy(row => row.ExecutionSequence).ThenBy(row => row.ActivityExecutionIdOrderKey)
                 .Take(ActivityExecutionHierarchyPager.MaximumLimit).ToArrayAsync(cancellationToken);
             EnsureProviderPageProgress(rows, ActivityExecutionHierarchyPager.MaximumLimit);
@@ -207,16 +211,19 @@ public sealed class EfActivityExecutionHierarchyStore(
             var source = context.ActivityExecutionHierarchies.AsNoTracking()
                 .Where(row => row.ScopeKeyHash == ActivityExecutionEfSupport.Hash(scope) && row.WorkflowExecutionIdHash == ActivityExecutionEfSupport.Hash(workflowExecutionId));
             if (lastSequence is not null)
-                source = source.Where(row => row.ExecutionSequence < lastSequence.Value ||
-                                             row.ExecutionSequence == lastSequence.Value &&
-                                             row.ActivityExecutionIdOrderKey.CompareTo(lastOrderKey!) < 0);
+            {
+                var sequence = lastSequence.Value;
+                var orderKey = lastOrderKey!;
+                source = source.Where(row => row.ExecutionSequence < sequence ||
+                                             row.ExecutionSequence == sequence &&
+                                             row.ActivityExecutionIdOrderKey.CompareTo(orderKey) < 0);
+            }
             var rows = await source.OrderByDescending(row => row.ExecutionSequence).ThenByDescending(row => row.ActivityExecutionIdOrderKey)
                 .Take(ActivityExecutionHierarchyPager.MaximumLimit).ToArrayAsync(cancellationToken);
             if (rows.Length == 0)
                 break;
-            foreach (var row in rows)
+            foreach (var current in rows.Select(row => ReadChecked(row, scope, workflowExecutionId, null)))
             {
-                var current = ReadChecked(row, scope, workflowExecutionId, null);
                 if (lastSequence is not null && Compare(current, lastSequence.Value, lastActivityId!) >= 0)
                     throw new InvalidDataException("The activity execution hierarchy workflow page did not advance.");
                 records.Add(current);

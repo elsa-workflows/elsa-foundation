@@ -100,10 +100,8 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
             var services = new ServiceCollection();
             configure(services);
 
-            var backend = Assert.Single(services, descriptor => descriptor.ImplementationInstance is RuntimeActivityExecutionStoreBackend)
-                .ImplementationInstance as RuntimeActivityExecutionStoreBackend;
-            Assert.NotNull(backend);
-            Assert.Equal(RuntimeActivityExecutionStoreBackend.EntityFramework, backend!.Name);
+            var backend = Assert.IsType<RuntimeActivityExecutionStoreBackend>(Assert.Single(services, descriptor => descriptor.ImplementationInstance is RuntimeActivityExecutionStoreBackend).ImplementationInstance);
+            Assert.Equal(RuntimeActivityExecutionStoreBackend.EntityFramework, backend.Name);
             backend.EnsureOwnsRegisteredContracts(services);
             Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(InMemoryActivityExecutionInspectionStore));
             Assert.DoesNotContain(services, descriptor => descriptor.ImplementationType == typeof(InMemoryActivityExecutionInspectionStore));
