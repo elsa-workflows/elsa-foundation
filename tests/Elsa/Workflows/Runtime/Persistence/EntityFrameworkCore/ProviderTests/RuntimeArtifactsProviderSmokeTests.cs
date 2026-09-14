@@ -150,11 +150,20 @@ internal static class RuntimeArtifactsProviderSmoke
             await operation;
             return null;
         }
-        catch (Exception exception)
+        catch (Exception exception) when (IsCatchable(exception))
         {
             return exception;
         }
     }
+
+    private static bool IsCatchable(Exception exception) =>
+        exception is not (OutOfMemoryException or
+            StackOverflowException or
+            AccessViolationException or
+            AppDomainUnloadedException or
+            BadImageFormatException or
+            CannotUnloadAppDomainException or
+            InvalidProgramException);
 
     private sealed class FixedAccessor : IPersistenceAccessContextAccessor
     {

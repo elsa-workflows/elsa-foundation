@@ -632,22 +632,30 @@ public sealed class EfRuntimeArtifactScopeTests
         public Fixture Open(PersistenceAccessContext access, IInterceptor? interceptor = null)
         {
             var fixtureConnection = new SqliteConnection(connectionString);
-            fixtureConnection.Open();
-            var options = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(fixtureConnection);
-            if (interceptor is not null)
-                options.AddInterceptors(interceptor);
-            var context = new BookmarkStateSqliteDbContext(options.Options);
-            var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions
+            try
             {
-                SigningKey = "ef-runtime-test-recovery-signing-key-32-bytes",
-                AllowEphemeralDevelopmentKey = false
-            }));
-            return new Fixture(
-                context,
-                new EfWorkflowExecutableSourceReferenceStore(context, new Accessor(access), codec),
-                new EfWorkflowExecutableStore(context, new Accessor(access)),
-                new EfExecutableActivityTemplateStore(context, new Accessor(access), codec),
-                fixtureConnection);
+                fixtureConnection.Open();
+                var options = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(fixtureConnection);
+                if (interceptor is not null)
+                    options.AddInterceptors(interceptor);
+                var context = new BookmarkStateSqliteDbContext(options.Options);
+                var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions
+                {
+                    SigningKey = "ef-runtime-test-recovery-signing-key-32-bytes",
+                    AllowEphemeralDevelopmentKey = false
+                }));
+                return new Fixture(
+                    context,
+                    new EfWorkflowExecutableSourceReferenceStore(context, new Accessor(access), codec),
+                    new EfWorkflowExecutableStore(context, new Accessor(access)),
+                    new EfExecutableActivityTemplateStore(context, new Accessor(access), codec),
+                    fixtureConnection);
+            }
+            catch
+            {
+                fixtureConnection.Dispose();
+                throw;
+            }
         }
 
         public ValueTask DisposeAsync() => connection.DisposeAsync();

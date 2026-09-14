@@ -102,18 +102,13 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         if (all?.LiveOnly == true)
             query = query.Where(x => !x.IsRetired && x.ExpiresAtUtcTicks > all.Now!.Value.UtcTicks);
         if (cursor is not null)
-        {
-            if (acrossScopes)
-            {
-                query = query.Where(x =>
+            query = acrossScopes
+                ? query.Where(x =>
                     x.ScopeKeyOrderKey.CompareTo(cursor.ScopeKeyOrderKey) > 0 ||
                     x.ScopeKeyOrderKey == cursor.ScopeKeyOrderKey &&
                     (x.SourceReferenceIdOrderKey.CompareTo(cursor.Key) > 0 ||
-                     x.SourceReferenceIdOrderKey == cursor.Key && x.Id.CompareTo(cursor.Id) > 0));
-            }
-            else
-                query = query.Where(x => x.SourceReferenceIdOrderKey.CompareTo(cursor.Key) > 0);
-        }
+                     x.SourceReferenceIdOrderKey == cursor.Key && x.Id.CompareTo(cursor.Id) > 0))
+                : query.Where(x => x.SourceReferenceIdOrderKey.CompareTo(cursor.Key) > 0);
         var ordered = acrossScopes
             ? query.OrderBy(x => x.ScopeKeyOrderKey).ThenBy(x => x.SourceReferenceIdOrderKey).ThenBy(x => x.Id)
             : query.OrderBy(x => x.SourceReferenceIdOrderKey).ThenBy(x => x.Id);
