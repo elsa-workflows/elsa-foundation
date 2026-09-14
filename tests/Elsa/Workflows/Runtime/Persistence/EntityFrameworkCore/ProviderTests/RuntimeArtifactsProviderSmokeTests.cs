@@ -83,6 +83,20 @@ internal static class RuntimeArtifactsProviderSmoke
             Assert.Equal("reference-a", Assert.Single(page.Items).SourceReferenceId);
             Assert.Null(page.NextContinuationToken);
 
+            var secondScope = scope + "-second";
+            var secondSource = new EfWorkflowExecutableSourceReferenceStore(context, new FixedAccessor(secondScope), codec);
+            await secondSource.SaveAsync(Reference("reference-b", "artifact-b", "definition-version-a"));
+            var across = new EfWorkflowExecutableSourceReferenceStore(
+                context,
+                new FixedAccessor(PersistenceAccessContext.PrivilegedAcrossScopes(new PersistenceAccessPurpose("provider-smoke-export"))),
+                codec);
+            var firstAcrossPage = await across.ListByDefinitionVersionPageAsync(new("definition-version-a", 1));
+            var secondAcrossPage = await across.ListByDefinitionVersionPageAsync(new("definition-version-a", 1, firstAcrossPage.NextContinuationToken));
+            Assert.Single(firstAcrossPage.Items);
+            Assert.Single(secondAcrossPage.Items);
+            Assert.Null(secondAcrossPage.NextContinuationToken);
+            Assert.Equal(["reference-a", "reference-b"], new[] { firstAcrossPage.Items[0].SourceReferenceId, secondAcrossPage.Items[0].SourceReferenceId }.Order(StringComparer.Ordinal));
+
             await executable.SaveAsync(Executable("rollback-existing"));
             var coordination = await context.WorkflowExecutableCoordinations.SingleAsync(x => x.ArtifactId == "rollback-existing");
             context.WorkflowExecutableCoordinations.Remove(coordination);
@@ -133,8 +147,10 @@ internal static class RuntimeArtifactsProviderSmoke
         }
     }
 
-    private sealed class FixedAccessor(string scope) : IPersistenceAccessContextAccessor
+    private sealed class FixedAccessor : IPersistenceAccessContextAccessor
     {
-        public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(scope));
+        public FixedAccessor(string scope) : this(PersistenceAccessContext.Scoped(new PersistenceScope(scope))) { }
+        public FixedAccessor(PersistenceAccessContext current) => Current = current;
+        public PersistenceAccessContext Current { get; }
     }
 }

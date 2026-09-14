@@ -144,6 +144,8 @@ public sealed class EfExecutableActivityTemplateStore(
         var initialClaim = await FindClaimRowAsync(fullIdentity, cancellationToken)
                            ?? throw new InvalidDataException("Executable activity template has no hash claim.");
         EnsureOwnedClaim(initialClaim, fullIdentity);
+        if (initialClaim.IncarnationId != initialRow.IncarnationId)
+            throw new InvalidDataException("Executable activity template and its hash claim have mismatched incarnation identities.");
         var expectedIncarnationId = initialRow.IncarnationId;
         for (var attempt = 0; attempt < MaximumDeleteAttempts; attempt++)
         {
@@ -151,11 +153,13 @@ public sealed class EfExecutableActivityTemplateStore(
             var row = await FindRowByIdAsync(identity, cancellationToken);
             if (row is null)
                 return false;
+            if (row.IncarnationId != expectedIncarnationId)
+                return false;
             var template = Read(row, identity);
             var claim = await FindClaimRowAsync(fullIdentity, cancellationToken)
                         ?? throw new InvalidDataException("Executable activity template has no hash claim.");
             EnsureOwnedClaim(claim, fullIdentity);
-            if (row.IncarnationId != expectedIncarnationId || claim.IncarnationId != expectedIncarnationId)
+            if (claim.IncarnationId != expectedIncarnationId)
                 return false;
             try
             {

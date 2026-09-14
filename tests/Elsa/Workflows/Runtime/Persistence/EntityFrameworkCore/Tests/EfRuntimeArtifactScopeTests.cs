@@ -112,6 +112,29 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Cleanup_does_not_delete_a_successor_recreated_after_selection()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var seed = database.Open("tenant-a");
+        var expired = Reference("cleanup-recreated-ref", "artifact-a") with { ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1) };
+        await seed.Store.SaveAsync(expired);
+        await seed.DisposeAsync();
+
+        await using var current = database.Open("tenant-a");
+        var interleaving = new RecreateAfterClaimReadInterceptor(async () =>
+        {
+            Assert.True(await current.Store.DeleteAsync(expired.SourceReferenceId));
+            await current.Store.SaveAsync(expired with { ExpiresAt = DateTimeOffset.UtcNow.AddHours(1) });
+        }, triggerAfterReaders: 1);
+        await using var stale = database.Open("tenant-a", interleaving);
+
+        var deleted = await stale.Store.DeleteExpiredOrRetiredAsync(new(1), DateTimeOffset.UtcNow);
+
+        Assert.Empty(deleted);
+        Assert.NotNull(await current.Store.FindAsync(expired.SourceReferenceId));
+    }
+
+    [Fact]
     public async Task Template_save_uses_content_comparison_and_authenticated_bound_cursor()
     {
         await using var database = await Database.CreateAsync();
@@ -228,19 +251,48 @@ public sealed class EfRuntimeArtifactScopeTests
     public async Task Source_reference_stale_conditional_update_cannot_touch_a_recreated_successor()
     {
         await using var database = await Database.CreateAsync();
-        await using var fixture = database.Open("tenant-a");
+        await using var seed = database.Open("tenant-a");
         var original = Reference("recreated-ref", "artifact-a");
-        await fixture.Store.SaveAsync(original);
+        await seed.Store.SaveAsync(original);
+        await seed.DisposeAsync();
+
+        await using var current = database.Open("tenant-a");
+        var interleaving = new RecreateBeforeSaveInterceptor(async () =>
+        {
+            Assert.True(await current.Store.DeleteAsync(original.SourceReferenceId));
+            await current.Store.SaveAsync(original);
+        });
+        await using var fixture = database.Open("tenant-a", interleaving);
         var stale = await fixture.Store.FindAsync(original.SourceReferenceId);
-        Assert.NotNull(stale?.ConcurrencyToken);
 
-        Assert.True(await fixture.Store.DeleteAsync(original.SourceReferenceId));
-        await fixture.Store.SaveAsync(original);
-        var successor = await fixture.Store.FindAsync(original.SourceReferenceId);
-        Assert.NotEqual(stale!.ConcurrencyToken, successor!.ConcurrencyToken);
+        var result = await fixture.Store.TryRetireAsync(stale!, stale!.Retire(DateTimeOffset.UtcNow, "stale"));
 
-        Assert.False(await fixture.Store.TryRetireAsync(stale, stale.Retire(DateTimeOffset.UtcNow, "stale")));
+        Assert.False(result);
         Assert.Null((await fixture.Store.FindAsync(original.SourceReferenceId))!.DeletedAt);
+    }
+
+    [Fact]
+    public async Task Source_reference_stale_conditional_restore_cannot_touch_a_recreated_successor()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var seed = database.Open("tenant-a");
+        var retired = Reference("recreated-retired-ref", "artifact-a").Retire(DateTimeOffset.UtcNow, "retired");
+        await seed.Store.SaveAsync(retired);
+        await seed.DisposeAsync();
+
+        await using var current = database.Open("tenant-a");
+        var interleaving = new RecreateBeforeSaveInterceptor(async () =>
+        {
+            Assert.True(await current.Store.DeleteAsync(retired.SourceReferenceId));
+            await current.Store.SaveAsync(retired with { DeletedAt = null, DeletedReason = null });
+        });
+        await using var fixture = database.Open("tenant-a", interleaving);
+        var stale = await fixture.Store.FindAsync(retired.SourceReferenceId);
+
+        var result = await fixture.Store.TryRestoreAsync(stale!, stale! with { DeletedAt = null, DeletedReason = null });
+
+        Assert.False(result);
+        Assert.Null((await fixture.Store.FindAsync(retired.SourceReferenceId))!.DeletedAt);
     }
 
     [Fact]
@@ -277,6 +329,26 @@ public sealed class EfRuntimeArtifactScopeTests
 
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => stale.Context.SaveChangesAsync());
         Assert.NotNull(await current.Template.FindAsync("recreated-template"));
+    }
+
+    [Fact]
+    public async Task Template_delete_returns_false_when_same_id_is_recreated_with_a_different_hash()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var seed = database.Open("tenant-a");
+        await seed.Template.SaveAsync(Template("recreated-template-different-hash", "old-hash"));
+        await seed.DisposeAsync();
+
+        await using var current = database.Open("tenant-a");
+        var interleaving = new RecreateAfterClaimReadInterceptor(async () =>
+        {
+            Assert.True(await current.Template.DeleteAsync("recreated-template-different-hash"));
+            await current.Template.SaveAsync(Template("recreated-template-different-hash", "new-hash"));
+        });
+        await using var stale = database.Open("tenant-a", interleaving);
+
+        Assert.False(await stale.Template.DeleteAsync("recreated-template-different-hash"));
+        Assert.Equal("new-hash", (await current.Template.FindAsync("recreated-template-different-hash"))!.TemplateHash);
     }
 
     [Fact]
@@ -470,22 +542,30 @@ public sealed class EfRuntimeArtifactScopeTests
     private sealed class Database : IAsyncDisposable
     {
         private readonly SqliteConnection connection;
-        private Database(SqliteConnection connection) => this.connection = connection;
+        private readonly string connectionString;
+        private Database(SqliteConnection connection, string connectionString)
+        {
+            this.connection = connection;
+            this.connectionString = connectionString;
+        }
 
         public static async Task<Database> CreateAsync()
         {
-            var connection = new SqliteConnection("Data Source=:memory:");
+            var connectionString = $"Data Source=runtime-artifacts-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+            var connection = new SqliteConnection(connectionString);
             await connection.OpenAsync();
             await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
             await context.Database.EnsureCreatedAsync();
-            return new Database(connection);
+            return new Database(connection, connectionString);
         }
 
-        public Fixture Open(string scope, ReaderCommandInterceptor? interceptor = null) => Open(PersistenceAccessContext.Scoped(new PersistenceScope(scope)), interceptor);
+        public Fixture Open(string scope, IInterceptor? interceptor = null) => Open(PersistenceAccessContext.Scoped(new PersistenceScope(scope)), interceptor);
 
-        public Fixture Open(PersistenceAccessContext access, ReaderCommandInterceptor? interceptor = null)
+        public Fixture Open(PersistenceAccessContext access, IInterceptor? interceptor = null)
         {
-            var options = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection);
+            var fixtureConnection = new SqliteConnection(connectionString);
+            fixtureConnection.Open();
+            var options = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(fixtureConnection);
             if (interceptor is not null)
                 options.AddInterceptors(interceptor);
             var context = new BookmarkStateSqliteDbContext(options.Options);
@@ -498,19 +578,24 @@ public sealed class EfRuntimeArtifactScopeTests
                 context,
                 new EfWorkflowExecutableSourceReferenceStore(context, new Accessor(access), codec),
                 new EfWorkflowExecutableStore(context, new Accessor(access)),
-                new EfExecutableActivityTemplateStore(context, new Accessor(access), codec));
+                new EfExecutableActivityTemplateStore(context, new Accessor(access), codec),
+                fixtureConnection);
         }
 
         public ValueTask DisposeAsync() => connection.DisposeAsync();
     }
 
-    private sealed class Fixture(BookmarkStateSqliteDbContext context, EfWorkflowExecutableSourceReferenceStore store, EfWorkflowExecutableStore executable, EfExecutableActivityTemplateStore template) : IAsyncDisposable
+    private sealed class Fixture(BookmarkStateSqliteDbContext context, EfWorkflowExecutableSourceReferenceStore store, EfWorkflowExecutableStore executable, EfExecutableActivityTemplateStore template, SqliteConnection connection) : IAsyncDisposable
     {
         public BookmarkStateSqliteDbContext Context { get; } = context;
         public EfWorkflowExecutableSourceReferenceStore Store { get; } = store;
         public EfWorkflowExecutableStore Executable { get; } = executable;
         public EfExecutableActivityTemplateStore Template { get; } = template;
-        public ValueTask DisposeAsync() => Context.DisposeAsync();
+        public async ValueTask DisposeAsync()
+        {
+            await Context.DisposeAsync();
+            await connection.DisposeAsync();
+        }
     }
 
     private sealed class Accessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
@@ -539,6 +624,48 @@ public sealed class EfRuntimeArtifactScopeTests
         {
             Commands.Add(command.CommandText);
             return ValueTask.FromResult(result);
+        }
+    }
+
+    private sealed class RecreateBeforeSaveInterceptor(Func<Task> recreate) : SaveChangesInterceptor
+    {
+        private int invoked;
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Exchange(ref invoked, 1) == 0)
+                await recreate();
+            return result;
+        }
+    }
+
+    private sealed class RecreateAfterClaimReadInterceptor(Func<Task> recreate, int triggerAfterReaders = 2) : DbCommandInterceptor
+    {
+        private int readerCount;
+
+        public override ValueTask<DbDataReader> ReaderExecutedAsync(
+            DbCommand command,
+            CommandExecutedEventData eventData,
+            DbDataReader result,
+            CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref readerCount);
+            return ValueTask.FromResult(result);
+        }
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Volatile.Read(ref readerCount) == triggerAfterReaders &&
+                Interlocked.CompareExchange(ref readerCount, triggerAfterReaders + 1, triggerAfterReaders) == triggerAfterReaders)
+                await recreate();
+            return result;
         }
     }
 }

@@ -69,6 +69,7 @@ public sealed class WorkflowExecutableSourceReferenceEntity
     public string DefinitionIdHash { get; set; } = null!;
     public string ScopeKey { get; set; } = null!;
     public string ScopeKeyHash { get; set; } = null!;
+    public string ScopeKeyOrderKey { get; set; } = null!;
     public string Scope { get; set; } = null!;
     public bool IsRetired { get; set; }
     public long ExpiresAtUtcTicks { get; set; }

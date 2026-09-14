@@ -106,8 +106,8 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             if (acrossScopes)
             {
                 query = query.Where(x =>
-                    x.ScopeKey.CompareTo(cursor.ScopeKey) > 0 ||
-                    x.ScopeKey == cursor.ScopeKey &&
+                    x.ScopeKeyOrderKey.CompareTo(cursor.ScopeKeyOrderKey) > 0 ||
+                    x.ScopeKeyOrderKey == cursor.ScopeKeyOrderKey &&
                     (x.SourceReferenceIdOrderKey.CompareTo(cursor.Key) > 0 ||
                      x.SourceReferenceIdOrderKey == cursor.Key && x.Id.CompareTo(cursor.Id) > 0));
             }
@@ -115,7 +115,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
                 query = query.Where(x => x.SourceReferenceIdOrderKey.CompareTo(cursor.Key) > 0);
         }
         var ordered = acrossScopes
-            ? query.OrderBy(x => x.ScopeKey).ThenBy(x => x.SourceReferenceIdOrderKey).ThenBy(x => x.Id)
+            ? query.OrderBy(x => x.ScopeKeyOrderKey).ThenBy(x => x.SourceReferenceIdOrderKey).ThenBy(x => x.Id)
             : query.OrderBy(x => x.SourceReferenceIdOrderKey).ThenBy(x => x.Id);
         var rows = await ordered.Take(request.Limit + 1).ToArrayAsync(cancellationToken);
         var hasMore = rows.Length > request.Limit;
@@ -123,7 +123,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             rows = rows[..request.Limit];
         var items = rows.Select(x => Read(x, acrossScopes ? EfRelationalIdentity.Decode(x.ScopeKey) : scope!, x.SourceReferenceId)).ToArray();
         var next = hasMore
-            ? EncodeCursor(binding, rows[^1].ScopeKey, rows[^1].SourceReferenceIdOrderKey, rows[^1].Id)
+            ? EncodeCursor(binding, rows[^1].ScopeKeyOrderKey, rows[^1].SourceReferenceIdOrderKey, rows[^1].Id)
             : null;
         return new RuntimeStorePage<WorkflowExecutableSourceReference>(request, items, next);
     }
@@ -173,7 +173,6 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         Validate(expected);
         Validate(replacement);
         var valid = WorkflowExecutableSourceReferenceComparer.SameIdentity(expected, replacement) &&
-                    !string.IsNullOrWhiteSpace(expected.ConcurrencyToken) &&
                     (restore
                         ? expected.DeletedAt is not null && replacement.DeletedAt is null
                         : expected.DeletedAt is null && replacement.DeletedAt is not null);
@@ -190,14 +189,12 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         if (row is null)
             return false;
         var current = Read(row, scope, expected.SourceReferenceId);
-        if (row.IncarnationId != expected.ConcurrencyToken || !WorkflowExecutableSourceReferenceComparer.SameSnapshot(current, expected))
+        if (!WorkflowExecutableSourceReferenceComparer.SameSnapshot(current, expected))
             return false;
         Copy(row, replacement, scope);
-        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         try
         {
             await context.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
             return true;
         }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
@@ -241,10 +238,36 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         foreach (var row in rows)
         {
             var current = Read(row, scope, row.SourceReferenceId);
-            if (await DeleteAsync(current.SourceReferenceId, cancellationToken))
+            if (await TryDeleteCapturedAsync(current.SourceReferenceId, row.IncarnationId, row.Revision, cancellationToken))
                 deleted.Add(current.SourceReferenceId);
         }
         return deleted;
+    }
+
+    private async ValueTask<bool> TryDeleteCapturedAsync(string sourceReferenceId, string expectedIncarnationId, long expectedRevision, CancellationToken cancellationToken)
+    {
+        var scope = RequireScope();
+        context.ChangeTracker.Clear();
+        var row = await context.WorkflowExecutableSourceReferences.SingleOrDefaultAsync(x =>
+            x.Id == CreateId(scope, sourceReferenceId) &&
+            x.ScopeKeyHash == Hash(scope) &&
+            x.ScopeKey == Encode(scope) &&
+            x.SourceReferenceIdHash == Hash(sourceReferenceId) &&
+            x.SourceReferenceId == sourceReferenceId,
+            cancellationToken);
+        if (row is null || row.IncarnationId != expectedIncarnationId || row.Revision != expectedRevision)
+            return false;
+        _ = Read(row, scope, sourceReferenceId);
+        context.Remove(row);
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return true;
+        }
+        catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
+        catch { context.ChangeTracker.Clear(); throw; }
     }
 
     public async ValueTask<IReadOnlyCollection<string>> ListUnreferencedArtifactIdsAsync(WorkflowExecutableArtifactCandidateBatch candidates, DateTimeOffset now, CancellationToken cancellationToken = default)
@@ -314,6 +337,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         row.DefinitionIdHash = Hash(value.DefinitionId);
         row.ScopeKey = Encode(scope);
         row.ScopeKeyHash = Hash(scope);
+        row.ScopeKeyOrderKey = OrderKey(scope);
         row.Scope = value.Scope.ToString();
         row.IsRetired = value.DeletedAt is not null;
         row.ExpiresAtUtcTicks = (value.ExpiresAt ?? DateTimeOffset.MaxValue).UtcTicks;
@@ -335,6 +359,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
                 row.SourceReferenceIdOrderKey != OrderKey(expectedId) ||
                 row.ScopeKey != Encode(expectedScope) ||
                 row.ScopeKeyHash != Hash(expectedScope) ||
+                row.ScopeKeyOrderKey != OrderKey(expectedScope) ||
                 row.ArtifactIdHash != Hash(row.ArtifactId) ||
                 row.DefinitionIdHash != Hash(row.DefinitionId) ||
                 row.DefinitionVersionIdHash != Hash(row.DefinitionVersionId) ||
@@ -358,7 +383,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
                 row.ExpiresAtUtcTicks != (value.ExpiresAt ?? DateTimeOffset.MaxValue).UtcTicks ||
                 row.IsRetired != (value.DeletedAt is not null))
                 throw new InvalidDataException("The persisted workflow executable source reference projection is corrupt.");
-            return value with { ConcurrencyToken = row.IncarnationId };
+            return value;
         }
         catch (Exception exception) when (exception is JsonException or InvalidOperationException or ArgumentException or NotSupportedException or FormatException or OverflowException)
         {
@@ -431,7 +456,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         try
         {
             var cursor = RuntimeArtifactJson.Deserialize<Cursor>(Encoding.UTF8.GetString(continuationCodec.Decode(ContinuationPurpose, token)));
-            if (cursor.Version != 1 || cursor.Binding != binding || string.IsNullOrWhiteSpace(cursor.ScopeKey) || string.IsNullOrWhiteSpace(cursor.Key) || string.IsNullOrWhiteSpace(cursor.Id))
+            if (cursor.Version != 1 || cursor.Binding != binding || string.IsNullOrWhiteSpace(cursor.ScopeKeyOrderKey) || string.IsNullOrWhiteSpace(cursor.Key) || string.IsNullOrWhiteSpace(cursor.Id))
                 throw new FormatException();
             return cursor;
         }
@@ -440,5 +465,5 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
     }
 
     private enum Route { All, Artifact, DefinitionVersion }
-    private sealed record Cursor(int Version, string Binding, string ScopeKey, string Key, string Id);
+    private sealed record Cursor(int Version, string Binding, string ScopeKeyOrderKey, string Key, string Id);
 }
