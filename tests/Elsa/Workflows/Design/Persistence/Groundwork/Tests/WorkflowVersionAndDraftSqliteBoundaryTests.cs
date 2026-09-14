@@ -1,6 +1,7 @@
 using Groundwork.Kernel;
 using Groundwork.Kernel.Schema;
 using Groundwork.Sqlite;
+using System.Linq;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
@@ -10,7 +11,9 @@ public sealed class WorkflowVersionAndDraftSqliteBoundaryTests
     [Fact]
     public void Version_projection_uses_a_new_versioned_table_for_the_clean_schema_boundary()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"elsa-workflow-version-v2-boundary-{Guid.NewGuid():N}.db");
+        var path = Path.Join(
+            Path.GetTempPath(),
+            Path.GetFileName($"elsa-workflow-version-v2-boundary-{Guid.NewGuid():N}.db"));
         try
         {
             using var connection = new SqliteProviderFactory().Create($"Data Source={path};Pooling=False");
@@ -68,16 +71,17 @@ public sealed class WorkflowVersionAndDraftSqliteBoundaryTests
         }
         finally
         {
-            foreach (var file in new[] { path, $"{path}-shm", $"{path}-wal" })
-                if (File.Exists(file))
-                    File.Delete(file);
+            foreach (var file in new[] { path, $"{path}-shm", $"{path}-wal" }.Where(File.Exists))
+                File.Delete(file);
         }
     }
 
     [Fact]
     public void Draft_projection_uses_a_new_versioned_table_for_the_clean_schema_boundary()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"elsa-workflow-draft-v2-boundary-{Guid.NewGuid():N}.db");
+        var path = Path.Join(
+            Path.GetTempPath(),
+            Path.GetFileName($"elsa-workflow-draft-v2-boundary-{Guid.NewGuid():N}.db"));
         try
         {
             using var connection = new SqliteProviderFactory().Create($"Data Source={path};Pooling=False");
@@ -116,9 +120,8 @@ public sealed class WorkflowVersionAndDraftSqliteBoundaryTests
         }
         finally
         {
-            foreach (var file in new[] { path, $"{path}-shm", $"{path}-wal" })
-                if (File.Exists(file))
-                    File.Delete(file);
+            foreach (var file in new[] { path, $"{path}-shm", $"{path}-wal" }.Where(File.Exists))
+                File.Delete(file);
         }
     }
 }

@@ -3,6 +3,7 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Commands;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,6 +26,10 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         }
         else if (HasOwnedSurfaceRegistration(services))
             throw new InvalidOperationException("An explicit workflow-design persistence registration is already present; EF Core refuses to replace it implicitly.");
+        // Persistence core is shared infrastructure, not an EF-owned descriptor. Register it
+        // before capturing this backend so a later backend replacement cannot remove the default
+        // access-context accessor (and a caller's TryAdd custom accessor still wins).
+        services.AddPersistenceCore();
         var registrationStart = services.Count;
         services.AddSingleton(options);
         switch (provider)

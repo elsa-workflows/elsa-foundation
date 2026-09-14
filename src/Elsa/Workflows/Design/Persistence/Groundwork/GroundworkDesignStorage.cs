@@ -278,15 +278,50 @@ public sealed class GroundworkDesignStorage(
     internal static bool SameDefinitionIdentity(string value, string other) =>
         WorkflowDefinitionIdentity.Equals(value, other);
 
-    private static void EnsureDefinitionIdentity(GroundworkDesignEntry entry, string requestedId)
+    internal static void EnsureDefinitionIdentity(string requestedId, string? actualId, string operation)
     {
-        if (!entry.Entry.Values.Values.TryGetValue(WorkflowsDesignStorageManifest.DefinitionIdField, out var value) ||
-            value is not string actualId ||
-            !SameDefinitionIdentity(actualId, requestedId))
+        try
+        {
+            if (actualId is not null && WorkflowDefinitionIdentity.Equals(actualId, requestedId))
+                return;
+        }
+        catch (ArgumentException exception)
         {
             throw new GroundworkQueryReadinessException(
-                $"Workflow-definition point read for '{requestedId}' returned a row with a non-matching definition identity.");
+                $"The {operation} returned a row with a corrupt workflow-definition identity: {exception.Message}");
         }
+
+        throw new GroundworkQueryReadinessException(
+            $"The {operation} returned a row whose workflow-definition identity does not match the requested identity.");
+    }
+
+    internal static void EnsureDefinitionIdentityInSet(
+        IEnumerable<string> requestedIds,
+        string? actualId,
+        string operation)
+    {
+        try
+        {
+            if (actualId is not null && requestedIds.Any(requestedId => WorkflowDefinitionIdentity.Equals(actualId, requestedId)))
+                return;
+        }
+        catch (ArgumentException exception)
+        {
+            throw new GroundworkQueryReadinessException(
+                $"The {operation} returned a row with a corrupt workflow-definition identity: {exception.Message}");
+        }
+
+        throw new GroundworkQueryReadinessException(
+            $"The {operation} returned a row whose workflow-definition identity does not match the requested identities.");
+    }
+
+    private static void EnsureDefinitionIdentity(GroundworkDesignEntry entry, string requestedId)
+    {
+        var actualId = entry.Entry.Values.Values.TryGetValue(WorkflowsDesignStorageManifest.DefinitionIdField, out var value) &&
+                       value is string identity
+            ? identity
+            : null;
+        EnsureDefinitionIdentity(requestedId, actualId, "workflow-definition point read");
     }
 
     public IReadOnlyList<GroundworkDesignEntry> Query(

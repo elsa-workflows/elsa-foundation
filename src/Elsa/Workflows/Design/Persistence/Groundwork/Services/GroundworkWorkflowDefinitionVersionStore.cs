@@ -72,7 +72,13 @@ public sealed class GroundworkWorkflowDefinitionVersionStore : IWorkflowDefiniti
             ],
             WorkflowsDesignStorageManifest.LatestVersionByDefinitionIndex,
             cancellationToken: cancellationToken);
-        return rows.Select(row => storage.MapVersion(row, json)).FirstOrDefault();
+        var versions = rows.Select(row => storage.MapVersion(row, json)).ToArray();
+        foreach (var version in versions)
+            GroundworkDesignStorage.EnsureDefinitionIdentity(
+                definitionId,
+                version.DefinitionId,
+                "workflow version relationship lookup");
+        return versions.FirstOrDefault();
     }
 
     public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(
@@ -91,21 +97,34 @@ public sealed class GroundworkWorkflowDefinitionVersionStore : IWorkflowDefiniti
             ],
             WorkflowsDesignStorageManifest.VersionByDefinitionIndex,
             cancellationToken: cancellationToken);
-        return Task.FromResult<IReadOnlyList<WorkflowDefinitionVersion>>(
-            rows.Select(row => storage.MapVersion(row, json)).ToArray());
+        var versions = rows.Select(row => storage.MapVersion(row, json)).ToArray();
+        foreach (var version in versions)
+            GroundworkDesignStorage.EnsureDefinitionIdentity(
+                definitionId,
+                version.DefinitionId,
+                "workflow version relationship lookup");
+        return Task.FromResult<IReadOnlyList<WorkflowDefinitionVersion>>(versions);
     }
 
     public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var unit = WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind;
-        return Task.FromResult(storage.Any(
+        var rows = storage.Query(
             unit,
             new Predicate.And([
                 storage.Equal(unit, WorkflowsDesignStorageManifest.VersionDefinitionIdField, definitionId),
                 storage.Equal(unit, WorkflowsDesignStorageManifest.VersionSemVerSortKeyField, semVerSortKey)
             ]),
+            [storage.Order(unit, WorkflowsDesignStorageManifest.VersionIdField)],
             WorkflowsDesignStorageManifest.VersionByDefinitionAndSortKeyIndex,
-            cancellationToken: cancellationToken));
+            cancellationToken: cancellationToken);
+        var versions = rows.Select(row => storage.MapVersion(row, json)).ToArray();
+        foreach (var version in versions)
+            GroundworkDesignStorage.EnsureDefinitionIdentity(
+                definitionId,
+                version.DefinitionId,
+                "workflow version relationship lookup");
+        return Task.FromResult(versions.Length > 0);
     }
 }

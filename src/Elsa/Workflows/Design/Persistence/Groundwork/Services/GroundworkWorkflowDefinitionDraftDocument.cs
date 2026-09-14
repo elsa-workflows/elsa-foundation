@@ -54,7 +54,10 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
             ],
             WorkflowsDesignStorageManifest.DraftByDefinitionIndex,
             cancellationToken: cancellationToken);
-        return Task.FromResult(rows.Select(Deserialize).FirstOrDefault());
+        var documents = rows
+            .Select(row => Deserialize(row, [workflowDefinitionId]))
+            .ToArray();
+        return Task.FromResult<GroundworkWorkflowDefinitionDraftDocument?>(documents.FirstOrDefault());
     }
 
     public Task<IReadOnlyList<GroundworkWorkflowDefinitionDraftDocument>> ListByWorkflowDefinitionIdAsync(
@@ -83,7 +86,7 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
             WorkflowsDesignStorageManifest.DraftByDefinitionIndex,
             cancellationToken: cancellationToken);
         return Task.FromResult<IReadOnlyList<GroundworkWorkflowDefinitionDraftDocument>>(
-            rows.Select(Deserialize).ToArray());
+            rows.Select(row => Deserialize(row, ids)).ToArray());
     }
 
     public GroundworkDesignSaveRequest ToSaveRequest(
@@ -107,10 +110,17 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
     public GroundworkDesignDeleteRequest ToDeleteRequest(string draftId, long? expectedVersion = null) =>
         new(unit, draftId, expectedVersion);
 
-    private GroundworkWorkflowDefinitionDraftDocument Deserialize(GroundworkDesignEntry entry)
+    private GroundworkWorkflowDefinitionDraftDocument Deserialize(
+        GroundworkDesignEntry entry,
+        IReadOnlyCollection<string>? expectedWorkflowDefinitionIds = null)
     {
         var document = GroundworkDesignStorage.DeserializeDocument<WorkflowDefinitionDraft>(entry.Entry, jsonOptions);
         accessContextAccessor.Current.EnsureTenantScope(document.Entity.TenantId);
+        if (expectedWorkflowDefinitionIds is not null)
+            GroundworkDesignStorage.EnsureDefinitionIdentityInSet(
+                expectedWorkflowDefinitionIds,
+                document.Entity.WorkflowDefinitionId,
+                "workflow draft relationship lookup");
         return new GroundworkWorkflowDefinitionDraftDocument(
             document.Collection,
             document.Entity,

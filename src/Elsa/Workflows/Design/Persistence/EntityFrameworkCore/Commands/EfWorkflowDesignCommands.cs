@@ -119,13 +119,15 @@ public sealed class EfCreateDraftCommand(WorkflowsDesignDbContext db, IPersisten
             Db.DraftLayouts.Add(sibling);
             return DesignAtomicWriteStage<string>.Accepted(draft.Id);
         }, cancellationToken: ct);
+        var result = RequireOutcome(outcome, "workflow.draft.create.v1", key);
         if (outcome.ShouldPublishPostCommitOutcome && deferredEvents is not null)
         {
-            var persisted = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId).SingleAsync(x => x.Id == outcome.Value, ct);
+            var persistedEntity = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId).SingleAsync(x => x.Id == result, ct);
+            var persisted = EfDesignSupport.MapDraft(serializer, persistedEntity);
             await deferredEvents.Publish(new DraftCreated(persisted.Id, persisted.WorkflowDefinitionId, persisted.SourceVersionId), CancellationToken.None);
             await deferredEvents.Publish(new DraftValidated(persisted, errors), CancellationToken.None);
         }
-        return RequireOutcome(outcome, "workflow.draft.create.v1", key);
+        return result;
     }
 }
 
@@ -162,7 +164,8 @@ public sealed class EfCloneDraftFromVersionCommand(WorkflowsDesignDbContext db, 
             result = RequireOutcome(outcome, "workflow.draft.clone-from-version.v1", key);
             if (outcome.ShouldPublishPostCommitOutcome && deferredEvents is not null)
             {
-                var persisted = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId).SingleAsync(x => x.Id == result, ct);
+                var persistedEntity = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId).SingleAsync(x => x.Id == result, ct);
+                var persisted = EfDesignSupport.MapDraft(serializer, persistedEntity);
                 await deferredEvents.Publish(new DraftCreated(result, persisted.WorkflowDefinitionId, persisted.SourceVersionId), CancellationToken.None);
                 await deferredEvents.Publish(new DraftValidated(persisted, errors), CancellationToken.None);
             }
@@ -226,7 +229,7 @@ public sealed class EfAddWorkflowDefinitionVersionCommand(WorkflowsDesignDbConte
             allocatedVersion = WorkflowVersionNumbering.NextMajor(latest?.Version);
             onVersionAllocated?.Invoke(allocatedVersion);
         }, cancellationToken: ct);
-        return outcome.Value!;
+        return RequireOutcome(outcome, "workflow.version.add.v1", key);
     }
 }
 
@@ -276,8 +279,9 @@ public sealed class EfUpdateDraftCommand(WorkflowsDesignDbContext db, IPersisten
         RequireOutcome(outcome, "workflow.draft.replace.v1", key);
         if (outcome.ShouldPublishPostCommitOutcome && deferredEvents is not null)
         {
-            var row = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId).SingleAsync(x => x.Id == request.DraftId, ct);
-            await deferredEvents.Publish(new DraftValidated(row, errors), CancellationToken.None);
+            var persistedEntity = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId).SingleAsync(x => x.Id == request.DraftId, ct);
+            var persisted = EfDesignSupport.MapDraft(serializer, persistedEntity);
+            await deferredEvents.Publish(new DraftValidated(persisted, errors), CancellationToken.None);
         }
     }
 }
@@ -495,7 +499,7 @@ public sealed class EfSubmitWorkflowDefinitionCommand(WorkflowsDesignDbContext d
                 return Task.CompletedTask;
             },
             cancellationToken: ct);
-        return result.Value!;
+        return RequireOutcome(result, "workflow.definition.submit.v1", key);
     }
 }
 

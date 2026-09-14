@@ -71,6 +71,33 @@ public sealed class GroundworkWorkflowDefinitionDraftStoreTests
     }
 
     [Fact]
+    public async Task Relationship_hash_candidates_are_residual_validated_before_draft_reads()
+    {
+        using var raw = new DesignGroundworkTestPersistence { RecordQueries = true };
+        var draft = Draft("d1", "actual-definition");
+        var options = GroundworkDesignDocumentSerialization.Create(Payloads);
+        var values = GroundworkDesignStorage.Values(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+            draft,
+            options,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection);
+        var row = values.Values.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        row[WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField] = LookupHash("requested-definition");
+        raw.InsertRaw(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+            new StorageValues(row));
+        var store = new GroundworkWorkflowDefinitionDraftStore(
+            new GroundworkDesignStorage(raw, DesignGroundworkTestAccess.DefaultAccessContextAccessor),
+            Payloads,
+            DesignGroundworkTestAccess.DefaultAccessContextAccessor);
+
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            store.FindByWorkflowDefinitionIdAsync("requested-definition"));
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            store.ListByWorkflowDefinitionIdAsync("requested-definition"));
+    }
+
+    [Fact]
     public async Task ListByWorkflowDefinitionId_uses_the_declared_bounded_route()
     {
         var (store, raw) = Seeded((Draft("d1", "def1"), null, null), (Draft("d2", "def2"), null, null));

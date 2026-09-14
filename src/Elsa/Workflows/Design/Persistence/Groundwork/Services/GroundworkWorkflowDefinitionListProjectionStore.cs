@@ -69,8 +69,16 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore(
                 cancellationToken: cancellationToken));
         }
 
-        var drafts = draftRows
+        var draftDocuments = draftRows
             .Select(row => GroundworkDesignStorage.DeserializeDocument<WorkflowDefinitionDraft>(row.Entry, json))
+            .ToArray();
+        foreach (var document in draftDocuments)
+            GroundworkDesignStorage.EnsureDefinitionIdentityInSet(
+                ids,
+                document.Entity.WorkflowDefinitionId,
+                "workflow draft projection lookup");
+
+        var drafts = draftDocuments
             .GroupBy(document => WorkflowDefinitionIdentity.Fold(document.Entity.WorkflowDefinitionId), StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
@@ -79,8 +87,16 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStore(
                     .ThenByDescending(x => x.Entity.Id, StringComparer.Ordinal)
                     .First().Entity,
                 StringComparer.Ordinal);
-        var versions = versionRows
+        var versionEntities = versionRows
             .Select(row => GroundworkDesignStorage.Deserialize<WorkflowDefinitionVersion>(row.Entry, json))
+            .ToArray();
+        foreach (var version in versionEntities)
+            GroundworkDesignStorage.EnsureDefinitionIdentityInSet(
+                ids,
+                version.DefinitionId,
+                "workflow version projection lookup");
+
+        var versions = versionEntities
             .GroupBy(version => WorkflowDefinitionIdentity.Fold(version.DefinitionId), StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,

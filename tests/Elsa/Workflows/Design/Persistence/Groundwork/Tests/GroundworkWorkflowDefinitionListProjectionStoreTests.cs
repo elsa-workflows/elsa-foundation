@@ -2,8 +2,10 @@ using System.Security.Cryptography;
 using System.Text;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Groundwork.Query.Model;
+using Groundwork.Store;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
@@ -135,6 +137,58 @@ public sealed class GroundworkWorkflowDefinitionListProjectionStoreTests
         Assert.Equal("draft", row.DraftId);
         Assert.Equal("version", row.LatestVersionId);
         Assert.Equal(1, row.VersionCount);
+    }
+
+    [Fact]
+    public async Task List_projection_rejects_a_stale_draft_relationship_hash()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        var draft = Draft("draft", "actual-definition", 1);
+        var options = GroundworkDesignDocumentSerialization.Create(new FakePayloadSerializer());
+        var values = GroundworkDesignStorage.Values(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+            draft,
+            options,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection);
+        var row = values.Values.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        row[WorkflowsDesignStorageManifest.DraftDefinitionIdLookupHashField] = LookupHash("requested-definition");
+        raw.InsertRaw(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
+            new StorageValues(row));
+
+        var store = new GroundworkWorkflowDefinitionListProjectionStore(
+            raw,
+            new FakePayloadSerializer(),
+            DesignGroundworkTestAccess.DefaultAccessContextAccessor);
+
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            store.ListByDefinitionIdsAsync(["requested-definition"]));
+    }
+
+    [Fact]
+    public async Task List_projection_rejects_a_stale_version_relationship_hash()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        var version = Version("version", "actual-definition", "1.0.0");
+        var options = GroundworkDesignDocumentSerialization.Create(new FakePayloadSerializer());
+        var values = GroundworkDesignStorage.Values(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
+            version,
+            options,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection);
+        var row = values.Values.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        row[WorkflowsDesignStorageManifest.VersionDefinitionIdLookupHashField] = LookupHash("requested-definition");
+        raw.InsertRaw(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
+            new StorageValues(row));
+
+        var store = new GroundworkWorkflowDefinitionListProjectionStore(
+            raw,
+            new FakePayloadSerializer(),
+            DesignGroundworkTestAccess.DefaultAccessContextAccessor);
+
+        await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() =>
+            store.ListByDefinitionIdsAsync(["requested-definition"]));
     }
 
     private static WorkflowDefinitionDraft Draft(string id, string definitionId, int day) => new()

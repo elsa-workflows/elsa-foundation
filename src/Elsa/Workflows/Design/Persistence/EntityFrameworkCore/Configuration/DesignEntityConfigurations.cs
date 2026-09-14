@@ -63,6 +63,7 @@ internal static class DesignEntityConfigurations
         b.Property(x => x.WorkflowDefinitionId).HasMaxLength(128);
         b.Property<string>("WorkflowDefinitionIdLookupHash").HasMaxLength(64).IsRequired();
         b.Property(x => x.SourceVersionId).HasMaxLength(128);
+        b.Property(x => x.SourceVersionId).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
         b.Property(x => x.StateSource);
         b.HasIndex("TenantId", "WorkflowDefinitionIdLookupHash", nameof(WorkflowDefinitionDraft.LastModifiedAt), nameof(WorkflowDefinitionDraft.Id));
         b.HasOne(x => x.WorkflowDefinition).WithMany().HasForeignKey("TenantId", "WorkflowDefinitionId").OnDelete(DeleteBehavior.Cascade);
