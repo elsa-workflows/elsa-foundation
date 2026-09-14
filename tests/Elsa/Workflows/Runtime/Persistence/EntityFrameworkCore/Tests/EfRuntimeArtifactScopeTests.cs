@@ -417,6 +417,28 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Executable_overlong_persisted_artifact_hash_fails_closed_on_find_list_and_idempotent_save()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Executable.SaveAsync(Executable("artifact-hash-overlong"));
+
+        var row = await fixture.Context.WorkflowExecutables.SingleAsync(x => x.ArtifactId == "artifact-hash-overlong");
+        var oversizedHash = new string('h', RuntimeArtifactEfModule.HashMaximumLength + 1);
+        var payload = JsonNode.Parse(row.ContentJson)!.AsObject();
+        payload["identity"]!.AsObject()["artifactHash"] = oversizedHash;
+        row.ArtifactHash = oversizedHash;
+        row.ContentJson = payload.ToJsonString();
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Executable.FindAsync("artifact-hash-overlong").AsTask());
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Executable.ListPageAsync(new RuntimeStorePageRequest(10)).AsTask());
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Executable.SaveAsync(Executable("artifact-hash-overlong")).AsTask());
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+    }
+
+    [Fact]
     public async Task Ordinary_and_guarded_deletes_remove_the_pair_and_reject_stale_guards()
     {
         await using var database = await Database.CreateAsync();

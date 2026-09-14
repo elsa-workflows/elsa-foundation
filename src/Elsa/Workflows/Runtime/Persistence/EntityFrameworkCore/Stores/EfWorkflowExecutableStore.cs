@@ -483,12 +483,14 @@ public sealed class EfWorkflowExecutableStore(
         if (row.Id != id || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
             row.ArtifactId != expected || row.ArtifactIdHash != Hash(expected) ||
             string.IsNullOrWhiteSpace(row.ArtifactHash) ||
+            row.ArtifactHash.Length > RuntimeArtifactEfModule.HashMaximumLength ||
             row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion || row.ArtifactIdOrderKey != OrderKey(expected) ||
             string.IsNullOrWhiteSpace(row.IncarnationId))
             throw new InvalidDataException("The persisted workflow executable row is corrupt.");
         try
         {
             var x = RuntimeArtifactJson.Deserialize<WorkflowExecutable>(row.ContentJson);
+            Validate(x);
             if (x.Identity.ArtifactId != expected || x.Identity.ArtifactHash != row.ArtifactHash)
                 throw new InvalidDataException("The persisted workflow executable identity is corrupt.");
             return x;

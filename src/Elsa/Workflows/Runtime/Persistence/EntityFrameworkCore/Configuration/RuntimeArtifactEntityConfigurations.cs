@@ -70,7 +70,7 @@ public sealed class ExecutableActivityTemplateHashClaimEntityConfiguration : IEn
         b.Property(x => x.Id).HasMaxLength(64).IsRequired();
         b.Property(x => x.ScopeKey).IsRequired();
         b.Property(x => x.ScopeKeyHash).HasMaxLength(64).IsRequired();
-        b.Property(x => x.TemplateHash).HasMaxLength(450).IsRequired();
+        b.Property(x => x.TemplateHash).HasMaxLength(RuntimeArtifactEfModule.HashMaximumLength).IsRequired();
         b.Property(x => x.TemplateHashHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.TemplateId).HasMaxLength(128).IsRequired();
         b.Property(x => x.ContentJson).IsRequired();
