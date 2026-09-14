@@ -347,6 +347,7 @@ public sealed class EfWorkflowDesignPersistenceTests
                 [DesignAtomicWriteStatus.Committed, DesignAtomicWriteStatus.Replayed],
                 new[] { firstWriter.LastStatus, secondWriter.LastStatus }.OrderBy(status => status).ToArray());
             Assert.True(firstWriter.BarrierPassed && secondWriter.BarrierPassed);
+            Assert.True(firstWriter.StageInvocationCount > 0 && secondWriter.StageInvocationCount > 0);
             Assert.Equal(1, await firstDb.Operations.AsNoTracking().CountAsync());
             var events = firstEvents.Events.Concat(secondEvents.Events).ToArray();
             Assert.Single(events.OfType<DraftCreated>());
@@ -1543,16 +1544,28 @@ public sealed class EfWorkflowDesignPersistenceTests
     private sealed class PreTransactionBarrierAtomicWriter(IDesignAtomicWriter inner, Barrier barrier) : IDesignAtomicWriter
     {
         private int barrierEntered;
+        private int stageInvocationCount;
         public DesignAtomicWriteStatus? LastStatus { get; private set; }
         public bool BarrierPassed { get; private set; }
+        public int StageInvocationCount => Volatile.Read(ref stageInvocationCount);
 
         public async Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(DesignOperationKey operationKey, string operationKind, object requestMaterial, IReadOnlyCollection<string> mutatedUnits, Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage, Func<CancellationToken, Task>? beforeAttempt = null, CancellationToken cancellationToken = default, IDesignAtomicWriteResultCodec<T>? resultCodec = null)
         {
-            if (beforeAttempt is not null)
-                await beforeAttempt(cancellationToken);
-            if (!Synchronize())
-                throw new TimeoutException("The deterministic atomic-write overlap barrier did not complete.");
-            var result = await inner.ExecuteAsync(operationKey, operationKind, requestMaterial, mutatedUnits, stage, beforeAttempt: null, cancellationToken: cancellationToken, resultCodec: resultCodec);
+            async Task ComposedBeforeAttempt(CancellationToken token)
+            {
+                if (beforeAttempt is not null)
+                    await beforeAttempt(token);
+                if (!Synchronize())
+                    throw new TimeoutException("The deterministic atomic-write overlap barrier did not complete.");
+            }
+
+            async Task<DesignAtomicWriteStage<T>> RecordedStage(IDesignAtomicWriteContext context, CancellationToken token)
+            {
+                Interlocked.Increment(ref stageInvocationCount);
+                return await stage(context, token);
+            }
+
+            var result = await inner.ExecuteAsync(operationKey, operationKind, requestMaterial, mutatedUnits, RecordedStage, ComposedBeforeAttempt, cancellationToken, resultCodec);
             LastStatus = result.Status;
             return result;
         }
