@@ -65,7 +65,8 @@ public sealed class EfWorkflowExecutableStore(
                 return;
             }
 
-            await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+            await using var transaction = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
+                context, "saving", scope, () => context.Database.BeginTransactionAsync(cancellationToken));
             foreach (var (item, id) in pending)
             {
                 var incarnationId = NewIncarnationId();
@@ -144,15 +145,19 @@ public sealed class EfWorkflowExecutableStore(
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         var id = CreateId(scope, artifactId);
-        var row = await context.WorkflowExecutables
-            .AsNoTracking()
-            .SingleOrDefaultAsync(
-                x => x.Id == id &&
-                     x.ScopeKeyHash == Hash(scope) &&
-                     x.ScopeKey == Encode(scope) &&
-                     x.ArtifactIdHash == Hash(artifactId) &&
-                     x.ArtifactId == artifactId,
-                cancellationToken);
+        var row = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
+            context,
+            "finding",
+            artifactId,
+            () => context.WorkflowExecutables
+                .AsNoTracking()
+                .SingleOrDefaultAsync(
+                    x => x.Id == id &&
+                         x.ScopeKeyHash == Hash(scope) &&
+                         x.ScopeKey == Encode(scope) &&
+                         x.ArtifactIdHash == Hash(artifactId) &&
+                         x.ArtifactId == artifactId,
+                    cancellationToken));
         return row is null ? null : Read(row, scope, artifactId, id);
     }
 
@@ -165,13 +170,17 @@ public sealed class EfWorkflowExecutableStore(
         var cursor = Decode(request.ContinuationToken, scope);
         var scopeHash = Hash(scope);
         var encodedScope = Encode(scope);
-        var rows = await context.WorkflowExecutables
-            .AsNoTracking()
-            .Where(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == encodedScope &&
-                        (cursor == null || x.ArtifactIdOrderKey.CompareTo(cursor) > 0))
-            .OrderBy(x => x.ArtifactIdOrderKey)
-            .Take(request.Limit + 1)
-            .ToArrayAsync(cancellationToken);
+        var rows = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
+            context,
+            "listing",
+            scope,
+            () => context.WorkflowExecutables
+                .AsNoTracking()
+                .Where(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == encodedScope &&
+                            (cursor == null || x.ArtifactIdOrderKey.CompareTo(cursor) > 0))
+                .OrderBy(x => x.ArtifactIdOrderKey)
+                .Take(request.Limit + 1)
+                .ToArrayAsync(cancellationToken));
         var more = rows.Length > request.Limit;
         if (more)
             rows = rows[..request.Limit];
@@ -379,7 +388,8 @@ public sealed class EfWorkflowExecutableStore(
         for (var attempt = 0; attempt < 32; attempt++)
         {
             context.ChangeTracker.Clear();
-            await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+            await using var transaction = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
+                context, "deleting", artifactId, () => context.Database.BeginTransactionAsync(cancellationToken));
 
             try
             {
@@ -465,26 +475,34 @@ public sealed class EfWorkflowExecutableStore(
         string artifactId,
         string id,
         CancellationToken cancellationToken) =>
-        await context.WorkflowExecutables.SingleOrDefaultAsync(
-            x => x.Id == id &&
-                 x.ScopeKeyHash == Hash(scope) &&
-                 x.ScopeKey == Encode(scope) &&
-                 x.ArtifactIdHash == Hash(artifactId) &&
-                 x.ArtifactId == artifactId,
-            cancellationToken);
+        await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
+            context,
+            "reading",
+            artifactId,
+            () => context.WorkflowExecutables.SingleOrDefaultAsync(
+                x => x.Id == id &&
+                     x.ScopeKeyHash == Hash(scope) &&
+                     x.ScopeKey == Encode(scope) &&
+                     x.ArtifactIdHash == Hash(artifactId) &&
+                     x.ArtifactId == artifactId,
+                cancellationToken));
 
     private async Task<WorkflowExecutableCoordinationEntity?> FindCoordinationAsync(
         string scope,
         string artifactId,
         string id,
         CancellationToken cancellationToken) =>
-        await context.WorkflowExecutableCoordinations.SingleOrDefaultAsync(
-            x => x.Id == id &&
-                 x.ScopeKeyHash == Hash(scope) &&
-                 x.ScopeKey == Encode(scope) &&
-                 x.ArtifactIdHash == Hash(artifactId) &&
-                 x.ArtifactId == artifactId,
-            cancellationToken);
+        await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
+            context,
+            "reading",
+            artifactId,
+            () => context.WorkflowExecutableCoordinations.SingleOrDefaultAsync(
+                x => x.Id == id &&
+                     x.ScopeKeyHash == Hash(scope) &&
+                     x.ScopeKey == Encode(scope) &&
+                     x.ArtifactIdHash == Hash(artifactId) &&
+                     x.ArtifactId == artifactId,
+                cancellationToken));
     private async Task<(WorkflowExecutableEntity Artifact, WorkflowExecutableCoordinationEntity Coordination)?> LoadPairAsync(
         string scope,
         string artifactId,
@@ -518,6 +536,11 @@ public sealed class EfWorkflowExecutableStore(
         {
             context.ChangeTracker.Clear();
             return false;
+        }
+        catch (Exception exception) when (IsProviderFailure(exception))
+        {
+            context.ChangeTracker.Clear();
+            throw NormalizeProviderFailure("updating coordination", row.ArtifactId, exception);
         }
         catch
         {
@@ -725,6 +748,10 @@ public sealed class EfWorkflowExecutableStore(
         string identity,
         Exception inner) =>
         new(operation, identity, $"The EF runtime artifact store failed while {operation} workflow executable '{identity}'.", inner);
+
+    private static bool IsProviderFailure(Exception exception) =>
+        exception is not (InvalidDataException or OperationCanceledException) &&
+        exception is (DbException or DbUpdateException or InvalidOperationException);
 
     private static string Encode(string x, string scope) =>
         Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{Hash(scope)}:{x}"));

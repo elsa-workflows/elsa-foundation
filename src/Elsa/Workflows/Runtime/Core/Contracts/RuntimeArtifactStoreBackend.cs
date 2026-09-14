@@ -9,6 +9,16 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </remarks>
 public sealed class RuntimeArtifactStoreBackend
 {
+    private static readonly Type[] ArtifactContractTypes =
+    [
+        typeof(IWorkflowExecutableStore),
+        typeof(IExecutableActivityTemplateStore),
+        typeof(IExecutableActivityTemplateReader),
+        typeof(IExecutableActivityTemplateWriter),
+        typeof(IWorkflowExecutableSourceReferenceStore),
+        typeof(IWorkflowExecutableSourceReferenceReader),
+        typeof(IWorkflowExecutableSourceReferenceWriter)
+    ];
     public const string InMemory = "in-memory";
     public const string Groundwork = "groundwork";
     public const string EntityFramework = "entity-framework";
@@ -55,14 +65,31 @@ public sealed class RuntimeArtifactStoreBackend
                 throw new InvalidOperationException($"Runtime artifact backend '{Name}' no longer owns one of its registrations.");
         }
 
-        var ownedContractTypes = descriptors.Select(descriptor => descriptor.ServiceType).Distinct().ToArray();
-        foreach (var contractType in ownedContractTypes)
+        foreach (var descriptor in services.Where(IsArtifactSurfaceRegistration))
         {
-            var registrations = services.Where(descriptor => descriptor.ServiceType == contractType).ToArray();
-            if (registrations.Any(registration => !descriptors.Contains(registration)))
-                throw new InvalidOperationException($"Runtime artifact backend '{Name}' no longer exclusively owns {contractType.Name}.");
+            if (!descriptors.Contains(descriptor))
+                throw new InvalidOperationException($"Runtime artifact backend '{Name}' no longer exclusively owns the runtime artifact registration for {descriptor.ServiceType.Name}.");
         }
     }
+
+    public static IReadOnlyCollection<ServiceDescriptor> CaptureArtifactSurfaceRegistrations(IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        return services.Where(IsArtifactSurfaceRegistration).ToArray();
+    }
+
+    /// <summary>Rejects host registrations that no selected runtime-artifact backend can safely replace.</summary>
+    public static void EnsureNoUnownedArtifactRegistrations(IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        if (services.Any(IsArtifactSurfaceRegistration))
+            throw new InvalidOperationException("An explicit runtime artifact store registration is already present; the selected backend refuses to replace it implicitly.");
+    }
+
+    private static bool IsArtifactSurfaceRegistration(ServiceDescriptor descriptor) =>
+        ArtifactContractTypes.Any(contract =>
+            contract.IsAssignableFrom(descriptor.ServiceType) ||
+            descriptor.ImplementationType is { } implementationType && contract.IsAssignableFrom(implementationType));
 
     public void RemoveOwnedArtifacts(IServiceCollection services)
     {

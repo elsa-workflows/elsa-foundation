@@ -85,6 +85,35 @@ public sealed class EfRuntimeArtifactRegistrationTests
     }
 
     [Fact]
+    public void Artifact_registration_rejects_unowned_reader_writer_and_concrete_registrations()
+    {
+        var custom = new CustomTemplateStore();
+        var services = new ServiceCollection();
+        services.AddSingleton<IExecutableActivityTemplateReader>(custom);
+        services.AddSingleton<IExecutableActivityTemplateWriter>(custom);
+        services.AddSingleton<CustomTemplateStore>(custom);
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(new()));
+        Assert.Equal(before, services);
+    }
+
+    [Fact]
+    public void Artifact_registration_restores_all_descriptors_when_context_validation_fails()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddScoped<BookmarkStateSqliteDbContext>(_ => throw new NotSupportedException());
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(new()));
+
+        Assert.Equal(before, services);
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<InMemoryWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
+    }
+
+    [Fact]
     public void Artifact_registration_rejects_an_unowned_provider_context()
     {
         var services = new ServiceCollection();
@@ -126,6 +155,23 @@ public sealed class EfRuntimeArtifactRegistrationTests
                 ConnectionString = options.ConnectionString,
                 ConnectionName = "other"
             }));
+    }
+
+    [Fact]
+    public void Equivalent_registration_rejects_post_registration_surface_contamination()
+    {
+        var options = new RuntimeArtifactsEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=runtime-artifacts.db"
+        };
+        var services = new ServiceCollection();
+        services.AddRuntimeArtifactsEntityFrameworkCore(options);
+        services.AddSingleton<IExecutableActivityTemplateReader>(new CustomTemplateStore());
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(options));
+        Assert.Equal(before, services);
     }
 
     [Fact]
@@ -192,5 +238,21 @@ public sealed class EfRuntimeArtifactRegistrationTests
             WasConfigured = true;
             base.ConfigureServices(services);
         }
+    }
+
+    private sealed class CustomTemplateStore : IExecutableActivityTemplateStore
+    {
+        public ValueTask<ExecutableActivityTemplate?> FindAsync(string templateId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ExecutableActivityTemplate?>(null);
+
+        public ValueTask<ExecutableActivityTemplate?> FindByHashAsync(string templateHash, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ExecutableActivityTemplate?>(null);
+
+        public ValueTask<RuntimeStorePage<ExecutableActivityTemplate>> ListPageAsync(RuntimeStorePageRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<RuntimeStorePage<ExecutableActivityTemplate>>(new NotSupportedException());
+
+        public ValueTask SaveAsync(ExecutableActivityTemplate template, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+
+        public ValueTask<bool> DeleteAsync(string templateId, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
     }
 }

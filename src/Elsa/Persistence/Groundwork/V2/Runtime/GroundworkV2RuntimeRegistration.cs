@@ -299,37 +299,29 @@ public static class GroundworkV2RuntimeRegistration
         var existing = RuntimeArtifactStoreBackend.Find(services);
         if (existing is not null)
         {
+            existing.EnsureOwnsRegisteredContracts(services);
             existing.RemoveOwnedArtifacts(services);
             return;
         }
 
-        if (services.Any(descriptor => descriptor.ServiceType == typeof(IWorkflowExecutableStore) ||
-                                      descriptor.ServiceType == typeof(IExecutableActivityTemplateStore) ||
-                                      descriptor.ServiceType == typeof(IWorkflowExecutableSourceReferenceStore)))
-            throw new InvalidOperationException("An explicit runtime artifact store registration is already present; Groundwork refuses to replace it implicitly.");
+        RuntimeArtifactStoreBackend.EnsureNoUnownedArtifactRegistrations(services);
     }
 
     private static void RegisterArtifactBackend(IServiceCollection services)
     {
-        var contracts = new[]
+        var infrastructureTypes = new[]
         {
-            typeof(GroundworkV2WorkflowExecutableStore),
-            typeof(CachingWorkflowExecutableStore),
-            typeof(InvalidatingWorkflowExecutableStore),
+            typeof(WorkflowExecutableCacheOptions),
             typeof(WorkflowExecutableCache),
             typeof(GroundworkV2WorkflowExecutableCacheLoader),
-            typeof(WorkflowExecutableCacheOptions),
-            typeof(IWorkflowExecutableStore),
-            typeof(IExecutableActivityTemplateStore),
-            typeof(IExecutableActivityTemplateReader),
-            typeof(IExecutableActivityTemplateWriter),
-            typeof(IWorkflowExecutableSourceReferenceStore),
-            typeof(IWorkflowExecutableSourceReferenceReader),
-            typeof(IWorkflowExecutableSourceReferenceWriter)
+            typeof(CachingWorkflowExecutableStore),
+            typeof(InvalidatingWorkflowExecutableStore)
         };
         RuntimeArtifactStoreBackend.Register(services, new RuntimeArtifactStoreBackend(
             RuntimeArtifactStoreBackend.Groundwork,
-            services.Where(descriptor => contracts.Contains(descriptor.ServiceType)).ToArray()));
+            RuntimeArtifactStoreBackend.CaptureArtifactSurfaceRegistrations(services)
+                .Concat(services.Where(descriptor => infrastructureTypes.Contains(descriptor.ServiceType)))
+                .ToArray()));
     }
 }
 

@@ -467,6 +467,27 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Provider_read_failures_are_normalized_for_every_artifact_reader()
+    {
+        await using var database = await Database.CreateAsync();
+        await using (var seed = database.Open("tenant-a"))
+        {
+            await seed.Executable.SaveAsync(Executable("read-failure"));
+            await seed.Template.SaveAsync(Template("read-failure", "read-failure-hash"));
+            await seed.Store.SaveAsync(Reference("read-failure", "read-failure-artifact"));
+        }
+
+        await using var failing = database.Open("tenant-a", new ThrowingReadInterceptor());
+        await Assert.ThrowsAsync<RuntimeArtifactEntityFrameworkPersistenceException>(() => failing.Executable.FindAsync("read-failure").AsTask());
+        await Assert.ThrowsAsync<RuntimeArtifactEntityFrameworkPersistenceException>(() => failing.Executable.ListPageAsync(new RuntimeStorePageRequest(1)).AsTask());
+        await Assert.ThrowsAsync<RuntimeArtifactEntityFrameworkPersistenceException>(() => failing.Template.FindAsync("read-failure").AsTask());
+        await Assert.ThrowsAsync<RuntimeArtifactEntityFrameworkPersistenceException>(() => failing.Template.FindByHashAsync("read-failure-hash").AsTask());
+        await Assert.ThrowsAsync<RuntimeArtifactEntityFrameworkPersistenceException>(() => failing.Template.ListPageAsync(new RuntimeStorePageRequest(1)).AsTask());
+        await Assert.ThrowsAsync<RuntimeArtifactEntityFrameworkPersistenceException>(() => failing.Store.FindAsync("read-failure").AsTask());
+        await Assert.ThrowsAsync<RuntimeArtifactEntityFrameworkPersistenceException>(() => failing.Store.ListPageAsync(new WorkflowExecutableSourceReferencePageQuery(limit: 1)).AsTask());
+    }
+
+    [Fact]
     public async Task Release_root_write_lease_reloads_after_contention_and_preserves_newer_leases()
     {
         await using var database = await Database.CreateAsync();
@@ -823,6 +844,22 @@ public sealed class EfRuntimeArtifactScopeTests
             Commands.Add(command.CommandText);
             return ValueTask.FromResult(result);
         }
+    }
+
+    private sealed class ThrowingReadInterceptor : DbCommandInterceptor
+    {
+        public override InterceptionResult<DbDataReader> ReaderExecuting(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result) =>
+            throw new SqliteException("provider read failure", 1, 1);
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<InterceptionResult<DbDataReader>>(new SqliteException("provider read failure", 1, 1));
     }
 
     private sealed class ThrowingSaveInterceptor : SaveChangesInterceptor

@@ -35,7 +35,8 @@ public sealed class EfExecutableActivityTemplateStore(
             context.ChangeTracker.Clear();
             try
             {
-                await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+                await using var transaction = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
+                    context, "saving", template.TemplateId, () => context.Database.BeginTransactionAsync(cancellationToken));
                 var current = await FindRowByIdAsync(identity, cancellationToken);
                 var claim = await FindClaimRowAsync(identity, cancellationToken);
                 var byHash = await FindRowsByHashAsync(identity, cancellationToken);
@@ -132,7 +133,11 @@ public sealed class EfExecutableActivityTemplateStore(
         var query = context.ExecutableActivityTemplates.AsNoTracking().Where(x => x.ScopeKeyHash == Hash(scope) && x.ScopeKey == scopeKey);
         if (cursor is not null)
             query = query.Where(x => x.TemplateIdOrderKey.CompareTo(cursor.Key) > 0);
-        var rows = await query.OrderBy(x => x.TemplateIdOrderKey).Take(request.Limit + 1).ToArrayAsync(cancellationToken);
+        var rows = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
+            context,
+            "listing",
+            scope,
+            () => query.OrderBy(x => x.TemplateIdOrderKey).Take(request.Limit + 1).ToArrayAsync(cancellationToken));
         var hasMore = rows.Length > request.Limit;
         if (hasMore)
             rows = rows[..request.Limit];
@@ -187,7 +192,8 @@ public sealed class EfExecutableActivityTemplateStore(
             }
             try
             {
-                await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+                await using var transaction = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
+                    context, "deleting", templateId, () => context.Database.BeginTransactionAsync(cancellationToken));
                 context.Remove(row);
                 context.Remove(claim);
                 await context.SaveChangesAsync(cancellationToken);
@@ -239,28 +245,40 @@ public sealed class EfExecutableActivityTemplateStore(
     {
         if (identity.TemplateId is null)
             throw new ArgumentException("A template id is required for this lookup.");
-        return await context.ExecutableActivityTemplates.AsNoTracking().SingleOrDefaultAsync(x =>
-            x.Id == CreateId(identity.Scope, identity.TemplateId) && x.ScopeKeyHash == Hash(identity.Scope) && x.ScopeKey == Encode(identity.Scope) &&
-            x.TemplateIdHash == Hash(identity.TemplateId) && x.TemplateId == identity.TemplateId, cancellationToken);
+        return await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
+            context,
+            "finding",
+            identity.TemplateId,
+            () => context.ExecutableActivityTemplates.AsNoTracking().SingleOrDefaultAsync(x =>
+                x.Id == CreateId(identity.Scope, identity.TemplateId) && x.ScopeKeyHash == Hash(identity.Scope) && x.ScopeKey == Encode(identity.Scope) &&
+                x.TemplateIdHash == Hash(identity.TemplateId) && x.TemplateId == identity.TemplateId, cancellationToken));
     }
 
     private async Task<ExecutableActivityTemplateHashClaimEntity?> FindClaimRowAsync(TemplateIdentity identity, CancellationToken cancellationToken)
     {
         if (identity.TemplateHash is null)
             throw new ArgumentException("A template hash is required for this lookup.");
-        return await context.ExecutableActivityTemplateHashClaims.AsNoTracking().SingleOrDefaultAsync(x =>
-            x.Id == HashClaimId(identity.Scope, identity.TemplateHash) && x.ScopeKeyHash == Hash(identity.Scope) && x.ScopeKey == Encode(identity.Scope) &&
-            x.TemplateHashHash == Hash(identity.TemplateHash) && x.TemplateHash == identity.TemplateHash, cancellationToken);
+        return await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
+            context,
+            "finding",
+            identity.TemplateHash,
+            () => context.ExecutableActivityTemplateHashClaims.AsNoTracking().SingleOrDefaultAsync(x =>
+                x.Id == HashClaimId(identity.Scope, identity.TemplateHash) && x.ScopeKeyHash == Hash(identity.Scope) && x.ScopeKey == Encode(identity.Scope) &&
+                x.TemplateHashHash == Hash(identity.TemplateHash) && x.TemplateHash == identity.TemplateHash, cancellationToken));
     }
 
     private async Task<IReadOnlyList<ExecutableActivityTemplateEntity>> FindRowsByHashAsync(TemplateIdentity identity, CancellationToken cancellationToken)
     {
         if (identity.TemplateHash is null)
             throw new ArgumentException("A template hash is required for this lookup.");
-        return await context.ExecutableActivityTemplates.AsNoTracking().Where(x =>
-            x.ScopeKeyHash == Hash(identity.Scope) && x.ScopeKey == Encode(identity.Scope) &&
-            x.TemplateHash == identity.TemplateHash)
-            .OrderBy(x => x.TemplateId).Take(2).ToArrayAsync(cancellationToken);
+        return await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
+            context,
+            "finding",
+            identity.TemplateHash,
+            () => context.ExecutableActivityTemplates.AsNoTracking().Where(x =>
+                x.ScopeKeyHash == Hash(identity.Scope) && x.ScopeKey == Encode(identity.Scope) &&
+                x.TemplateHash == identity.TemplateHash)
+                .OrderBy(x => x.TemplateId).Take(2).ToArrayAsync(cancellationToken));
     }
 
     private string RequireScope()
