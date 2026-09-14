@@ -311,7 +311,7 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
-    public async Task Concurrent_unique_marker_race_publishes_only_the_committed_draft_events()
+    public async Task Concurrent_unique_marker_race_reports_winner_and_replayed_loser_and_publishes_once()
     {
         var path = Path.Join(Path.GetTempPath(), $"elsa-workflow-design-race-{Guid.NewGuid():N}.db");
         try
@@ -333,13 +333,20 @@ public sealed class EfWorkflowDesignPersistenceTests
             await using var secondDb = Create(secondConnection);
             var firstEvents = new CapturingDeferredEventPublisher();
             var secondEvents = new CapturingDeferredEventPublisher();
-            var first = new EfCreateDraftCommand(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), new EfDesignAtomicWriter(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), new TestIdentity(), new TestSerializer(), new TestLockProvider(), deferredEvents: firstEvents);
-            var second = new EfCreateDraftCommand(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), new EfDesignAtomicWriter(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), new TestIdentity(), new TestSerializer(), new TestLockProvider(), deferredEvents: secondEvents);
+            var barrier = new Barrier(2);
+            var firstWriter = new BarrierAtomicWriter(new EfDesignAtomicWriter(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), barrier);
+            var secondWriter = new BarrierAtomicWriter(new EfDesignAtomicWriter(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), barrier);
+            var first = new EfCreateDraftCommand(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), firstWriter, new TestIdentity(), new TestSerializer(), new TestLockProvider(), deferredEvents: firstEvents);
+            var second = new EfCreateDraftCommand(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), secondWriter, new TestIdentity(), new TestSerializer(), new TestLockProvider(), deferredEvents: secondEvents);
 
             await Task.WhenAll(
                 first.Execute(new DesignOperationKey("same-marker-race"), "definition"),
                 second.Execute(new DesignOperationKey("same-marker-race"), "definition"));
 
+            Assert.Equal(
+                [DesignAtomicWriteStatus.Committed, DesignAtomicWriteStatus.Replayed],
+                new[] { firstWriter.LastStatus, secondWriter.LastStatus }.OrderBy(status => status).ToArray());
+            Assert.Equal(1, await firstDb.Operations.AsNoTracking().CountAsync());
             var events = firstEvents.Events.Concat(secondEvents.Events).ToArray();
             Assert.Single(events.OfType<DraftCreated>());
             Assert.Single(events.OfType<DraftValidated>());
@@ -348,6 +355,64 @@ public sealed class EfWorkflowDesignPersistenceTests
         {
             if (File.Exists(path))
                 File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Concurrent_add_version_unique_identity_is_reported_as_a_version_conflict()
+    {
+        var path = Path.Join(Path.GetTempPath(), $"elsa-workflow-design-version-race-{Guid.NewGuid():N}.db");
+        try
+        {
+            await using (var setupConnection = new SqliteConnection($"Data Source={path};Default Timeout=30"))
+            {
+                await setupConnection.OpenAsync();
+                await using var setup = Create(setupConnection);
+                await setup.Database.EnsureCreatedAsync();
+                setup.Definitions.Add(new WorkflowDefinition { Id = "definition", TenantId = "tenant-a", Name = "Definition" });
+                await setup.SaveChangesAsync();
+            }
+
+            await using var firstConnection = new SqliteConnection($"Data Source={path};Default Timeout=30");
+            await using var secondConnection = new SqliteConnection($"Data Source={path};Default Timeout=30");
+            await firstConnection.OpenAsync();
+            await secondConnection.OpenAsync();
+            await using var firstDb = Create(firstConnection);
+            await using var secondDb = Create(secondConnection);
+            var coordinator = new ConcurrentUniqueFailureCoordinator();
+            var firstWriter = new ConcurrentUniqueFailureWriter(new EfDesignAtomicWriter(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), coordinator);
+            var secondWriter = new ConcurrentUniqueFailureWriter(new EfDesignAtomicWriter(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), coordinator);
+            var first = new EfAddWorkflowDefinitionVersionCommand(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), firstWriter, new TestSerializer(), new TestIdentity("first"), new TestLockProvider());
+            var second = new EfAddWorkflowDefinitionVersionCommand(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), secondWriter, new TestSerializer(), new TestIdentity("second"), new TestLockProvider());
+
+            var firstTask = first.Execute(new DesignOperationKey("version-race-a"), "definition", State());
+            var secondTask = second.Execute(new DesignOperationKey("version-race-b"), "definition", State());
+            var results = await Task.WhenAll(
+                CaptureAsync(firstTask),
+                CaptureAsync(secondTask));
+
+            Assert.Single(results.OfType<WorkflowDefinitionVersionAdded>());
+            var conflict = Assert.Single(results.OfType<WorkflowDefinitionVersionConflictException>());
+            Assert.Equal("definition", conflict.DefinitionId);
+            Assert.Equal("automatic", conflict.Version);
+            Assert.Single(await firstDb.Versions.AsNoTracking().ToListAsync());
+        }
+        finally
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+
+        static async Task<object> CaptureAsync<T>(Task<T> task)
+        {
+            try
+            {
+                return await task;
+            }
+            catch (Exception exception)
+            {
+                return exception;
+            }
         }
     }
 
@@ -1251,7 +1316,7 @@ public sealed class EfWorkflowDesignPersistenceTests
 
     private static WorkflowsDesignSqliteDbContext Create(SqliteConnection connection) => new(new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>().UseSqlite(connection).Options);
     private static WorkflowDefinitionState State() => new([], null, [], [], null);
-    private sealed class TestIdentity : IIdentityGenerator { private int n; public string Generate() => $"generated-{Interlocked.Increment(ref n)}"; }
+    private sealed class TestIdentity(string prefix = "generated") : IIdentityGenerator { private int n; public string Generate() => $"{prefix}-{Interlocked.Increment(ref n)}"; }
     private sealed class CustomDesignAtomicWriter : IDesignAtomicWriter
     {
         public Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(DesignOperationKey operationKey, string operationKind, object requestMaterial, IReadOnlyCollection<string> mutatedUnits, Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage, Func<CancellationToken, Task>? beforeAttempt = null, CancellationToken cancellationToken = default, IDesignAtomicWriteResultCodec<T>? resultCodec = null) => throw new NotSupportedException();
@@ -1470,6 +1535,40 @@ public sealed class EfWorkflowDesignPersistenceTests
         public Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(DesignOperationKey operationKey, string operationKind, object requestMaterial, IReadOnlyCollection<string> mutatedUnits, Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage, Func<CancellationToken, Task>? beforeAttempt = null, CancellationToken cancellationToken = default, IDesignAtomicWriteResultCodec<T>? resultCodec = null)
         {
             MutatedUnits = mutatedUnits.ToArray();
+            return inner.ExecuteAsync(operationKey, operationKind, requestMaterial, mutatedUnits, stage, beforeAttempt, cancellationToken, resultCodec);
+        }
+    }
+    private sealed class BarrierAtomicWriter(IDesignAtomicWriter inner, Barrier barrier) : IDesignAtomicWriter
+    {
+        private int barrierEntered;
+        public DesignAtomicWriteStatus? LastStatus { get; private set; }
+
+        public async Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(DesignOperationKey operationKey, string operationKind, object requestMaterial, IReadOnlyCollection<string> mutatedUnits, Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage, Func<CancellationToken, Task>? beforeAttempt = null, CancellationToken cancellationToken = default, IDesignAtomicWriteResultCodec<T>? resultCodec = null)
+        {
+            var result = await inner.ExecuteAsync(operationKey, operationKind, requestMaterial, mutatedUnits, async (context, token) =>
+            {
+                var staged = await stage(context, token);
+                if (Interlocked.Exchange(ref barrierEntered, 1) == 0)
+                    barrier.SignalAndWait(TimeSpan.FromSeconds(10));
+                return staged;
+            }, beforeAttempt, cancellationToken, resultCodec);
+            LastStatus = result.Status;
+            return result;
+        }
+    }
+    private sealed class ConcurrentUniqueFailureCoordinator
+    {
+        public Barrier Barrier { get; } = new(2);
+        private int loserSelected;
+        public bool IsLoser() => Interlocked.Exchange(ref loserSelected, 1) == 0;
+    }
+    private sealed class ConcurrentUniqueFailureWriter(IDesignAtomicWriter inner, ConcurrentUniqueFailureCoordinator coordinator) : IDesignAtomicWriter
+    {
+        public Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(DesignOperationKey operationKey, string operationKind, object requestMaterial, IReadOnlyCollection<string> mutatedUnits, Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage, Func<CancellationToken, Task>? beforeAttempt = null, CancellationToken cancellationToken = default, IDesignAtomicWriteResultCodec<T>? resultCodec = null)
+        {
+            coordinator.Barrier.SignalAndWait(TimeSpan.FromSeconds(10));
+            if (coordinator.IsLoser())
+                return Task.FromException<DesignAtomicWriteResult<T>>(new DesignPersistenceException(DesignPersistenceDomain.Workflow, DesignPersistenceFailureKind.Provider, operationKind, null, new SqliteException("UNIQUE constraint failed: workflow definition version identity", 19, 2067)));
             return inner.ExecuteAsync(operationKey, operationKind, requestMaterial, mutatedUnits, stage, beforeAttempt, cancellationToken, resultCodec);
         }
     }

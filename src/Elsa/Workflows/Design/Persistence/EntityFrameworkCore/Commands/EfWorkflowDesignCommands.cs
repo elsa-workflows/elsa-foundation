@@ -181,9 +181,46 @@ public sealed class EfAddWorkflowDefinitionVersionCommand(WorkflowsDesignDbConte
         ArgumentException.ThrowIfNullOrWhiteSpace(definitionId); ArgumentNullException.ThrowIfNull(state); Serializer = serializer;
         if (lockProvider is null) throw new InvalidOperationException("Workflow version allocation requires a distributed lock provider.");
         await using var handle = await lockProvider.AcquireLockAsync(WorkflowDesignPersistenceLockKeys.DefinitionKey(definitionId), null, ct);
-        return await ExecuteCore(key, definitionId, state, ct);
+        string? attemptedVersion = null;
+        try
+        {
+            return await ExecuteCore(key, definitionId, state, ct, version => attemptedVersion = version);
+        }
+        catch (DesignPersistenceException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        {
+            throw new WorkflowDefinitionVersionConflictException(definitionId, attemptedVersion ?? "automatic");
+        }
+        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        {
+            throw new WorkflowDefinitionVersionConflictException(definitionId, attemptedVersion ?? "automatic");
+        }
     }
-    private Task<WorkflowDefinitionVersionAdded> ExecuteCore(DesignOperationKey key, string definitionId, WorkflowDefinitionState state, CancellationToken ct) { var stateJson = EfDesignSupport.WriteState(serializer, state, "workflow.version.add.v1"); return Atomic.ExecuteAsync(key, "workflow.version.add.v1", new AddWorkflowDefinitionVersionRequestMaterial(definitionId, stateJson), [DesignPersistenceUnitNames.Versions], async token => { var definitionKey = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(definitionId)); var definition = await Scoped(Db.Definitions.AsNoTracking(), x => x.TenantId).SingleOrDefaultAsync(x => EF.Property<string>(x, "IdLookupHash") == definitionKey, token) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), definitionId); var actualDefinitionId = definition.Id; var actualDefinitionKey = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(actualDefinitionId)); var latest = await Scoped(Db.Versions.AsNoTracking(), x => x.TenantId).Where(x => EF.Property<string>(x, "DefinitionIdLookupHash") == actualDefinitionKey).OrderByDescending(x => x.SemVerSortKey).FirstOrDefaultAsync(token); var version = WorkflowVersionNumbering.NextMajor(latest?.Version); var row = new WorkflowDefinitionVersion(actualDefinitionId, version) { Id = identities.Generate(), TenantId = definition.TenantId, StateSource = stateJson, State = state, CreatedAt = Now, LastModifiedAt = Now }; Db.Versions.Add(row); return new WorkflowDefinitionVersionAdded(actualDefinitionId, row.Id, version); }, ct); }
+    private async Task<WorkflowDefinitionVersionAdded> ExecuteCore(DesignOperationKey key, string definitionId, WorkflowDefinitionState state, CancellationToken ct, Action<string>? onVersionAllocated = null)
+    {
+        var stateJson = EfDesignSupport.WriteState(serializer, state, "workflow.version.add.v1");
+        string? allocatedVersion = null;
+        var outcome = await Atomic.ExecuteAsync(key, "workflow.version.add.v1", new AddWorkflowDefinitionVersionRequestMaterial(definitionId, stateJson), [DesignPersistenceUnitNames.Versions], async (_, token) =>
+        {
+            var definitionKey = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(definitionId));
+            var definition = await Scoped(Db.Definitions.AsNoTracking(), x => x.TenantId).SingleOrDefaultAsync(x => EF.Property<string>(x, "IdLookupHash") == definitionKey, token) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), definitionId);
+            var actualDefinitionId = definition.Id;
+            var version = allocatedVersion ?? throw new InvalidOperationException("Workflow version allocation did not complete before staging.");
+            var row = new WorkflowDefinitionVersion(actualDefinitionId, version) { Id = identities.Generate(), TenantId = definition.TenantId, StateSource = stateJson, State = state, CreatedAt = Now, LastModifiedAt = Now };
+            Db.Versions.Add(row);
+            return DesignAtomicWriteStage<WorkflowDefinitionVersionAdded>.Accepted(new WorkflowDefinitionVersionAdded(actualDefinitionId, row.Id, version));
+        }, beforeAttempt: async token =>
+        {
+            if (allocatedVersion is not null)
+                return;
+            var definitionKey = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(definitionId));
+            var definition = await Scoped(Db.Definitions.AsNoTracking(), x => x.TenantId).SingleOrDefaultAsync(x => EF.Property<string>(x, "IdLookupHash") == definitionKey, token) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), definitionId);
+            var actualDefinitionKey = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(definition.Id));
+            var latest = await Scoped(Db.Versions.AsNoTracking(), x => x.TenantId).Where(x => EF.Property<string>(x, "DefinitionIdLookupHash") == actualDefinitionKey).OrderByDescending(x => x.SemVerSortKey).FirstOrDefaultAsync(token);
+            allocatedVersion = WorkflowVersionNumbering.NextMajor(latest?.Version);
+            onVersionAllocated?.Invoke(allocatedVersion);
+        }, cancellationToken: ct);
+        return outcome.Value!;
+    }
 }
 
 public sealed class EfMaterializeWorkflowDefinitionVersionCommand(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access, IDesignAtomicWriter atomic, IPayloadSerializer serializer) : EfDesignCommand(db, access, atomic), IMaterializeWorkflowDefinitionVersionCommand
