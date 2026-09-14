@@ -38,6 +38,9 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
             if (existingBackend is not null && existingBackend.Name == BookmarkStateStoreBackend.EntityFramework)
             {
                 existingBackend.EnsureOwnsRegisteredAuxiliaryContracts(services);
+                var siblingArtifactsBackend = RuntimeArtifactStoreBackend.Find(services);
+                if (siblingArtifactsBackend?.Name == RuntimeArtifactStoreBackend.EntityFramework)
+                    siblingArtifactsBackend.EnsureOwnsRegisteredContracts(services);
                 var existingOptions = services
                     .Select(descriptor => descriptor.ImplementationInstance)
                     .OfType<RuntimeBookmarksEntityFrameworkCoreOptions>()
@@ -52,7 +55,7 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
                     provider,
                     "Runtime bookmarks",
                     existingBackend.Owns,
-                    RuntimeArtifactStoreBackend.Find(services) is { Name: RuntimeArtifactStoreBackend.EntityFramework } siblingArtifactsBackend
+                    siblingArtifactsBackend?.Name == RuntimeArtifactStoreBackend.EntityFramework
                         ? siblingArtifactsBackend.Owns
                         : null);
                 return services;
@@ -60,6 +63,8 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
 
             var artifactsBackend = RuntimeArtifactStoreBackend.Find(services);
             var artifactsOwnContext = artifactsBackend?.Name == RuntimeArtifactStoreBackend.EntityFramework;
+            if (artifactsOwnContext)
+                artifactsBackend!.EnsureOwnsRegisteredContracts(services);
             BookmarkStateEfContextRegistration.EnsureContextIsAvailable(
                 services,
                 provider,

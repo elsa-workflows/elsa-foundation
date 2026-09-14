@@ -859,6 +859,47 @@ public sealed class EfBookmarkStateStoreTests
     }
 
     [Theory]
+    [InlineData("bookmarks-first", "one")]
+    [InlineData("bookmarks-first", "all")]
+    [InlineData("artifacts-first", "one")]
+    [InlineData("artifacts-first", "all")]
+    public void Sibling_registration_rejects_missing_shared_context_descriptors_atomically(string first, string removal)
+    {
+        var bookmarks = new RuntimeBookmarksEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=shared.db"
+        };
+        var artifacts = new RuntimeArtifactsEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=shared.db"
+        };
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        if (first == "bookmarks-first")
+            services.AddRuntimeBookmarksEntityFrameworkCore(bookmarks);
+        else
+            services.AddRuntimeArtifactsEntityFrameworkCore(artifacts);
+
+        var contextDescriptors = services.Where(IsSharedContextDescriptor).ToArray();
+        Assert.NotEmpty(contextDescriptors);
+        if (removal == "one")
+            services.Remove(contextDescriptors[0]);
+        else
+            foreach (var descriptor in contextDescriptors)
+                services.Remove(descriptor);
+        var before = services.ToArray();
+
+        if (first == "bookmarks-first")
+            Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(artifacts));
+        else
+            Assert.Throws<InvalidOperationException>(() => services.AddRuntimeBookmarksEntityFrameworkCore(bookmarks));
+
+        Assert.Equal(before, services);
+    }
+
+    [Theory]
     [InlineData("bookmarks-first")]
     [InlineData("artifacts-first")]
     public void Combined_runtime_ef_registration_rejects_post_registration_context_contamination(string first)
@@ -882,6 +923,11 @@ public sealed class EfBookmarkStateStoreTests
         Assert.Contains("registration already exists", exception.Message, StringComparison.Ordinal);
         Assert.Equal(before, services);
     }
+
+    private static bool IsSharedContextDescriptor(ServiceDescriptor descriptor) =>
+        descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext) ||
+        descriptor.ServiceType == typeof(BookmarkStateDbContext) ||
+        descriptor.ServiceType == typeof(DbContextOptions<BookmarkStateSqliteDbContext>);
 
     private static async Task<Exception?> Capture(ValueTask<BookmarkState> operation)
     {

@@ -28,6 +28,9 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                 registeredBackend?.EnsureOwnsRegisteredContracts(services);
                 if (registeredBackend?.Name != RuntimeArtifactStoreBackend.EntityFramework)
                     throw new InvalidOperationException("Runtime artifacts EF persistence cannot reuse an unowned or differently owned registration.");
+                var siblingBookmarksBackendForRepeat = BookmarkStateStoreBackend.Find(services);
+                if (siblingBookmarksBackendForRepeat?.Name == BookmarkStateStoreBackend.EntityFramework)
+                    siblingBookmarksBackendForRepeat.EnsureOwnsRegisteredContract(services);
                 var existing = services.Select(x => x.ImplementationInstance).OfType<RuntimeArtifactsEntityFrameworkCoreOptions>().SingleOrDefault();
                 if (existing is null ||
                     !string.Equals(EfRelationalProviderBinding.Normalize(existing.Provider), EfRelationalProviderBinding.Normalize(options.Provider), StringComparison.Ordinal) ||
@@ -50,6 +53,9 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                 existingBackend.EnsureOwnsRegisteredContracts(services);
             else
                 RuntimeArtifactStoreBackend.EnsureNoUnownedArtifactRegistrations(services);
+            var existingBookmarksBackend = BookmarkStateStoreBackend.Find(services);
+            if (existingBookmarksBackend?.Name == BookmarkStateStoreBackend.EntityFramework)
+                existingBookmarksBackend.EnsureOwnsRegisteredContract(services);
             BookmarkStateEfContextRegistration.EnsureCompatible(
                 services,
                 provider,
@@ -65,7 +71,7 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
             var optionsStart = services.Count;
             services.AddSingleton(configured);
             var ownedInfrastructure = new List<ServiceDescriptor> { services[optionsStart] };
-            var bookmarksBackend = BookmarkStateStoreBackend.Find(services);
+            var bookmarksBackend = existingBookmarksBackend;
             var bookmarksOwnContext = bookmarksBackend?.Name == BookmarkStateStoreBackend.EntityFramework;
             BookmarkStateEfContextRegistration.EnsureContextIsAvailable(
                 services,
