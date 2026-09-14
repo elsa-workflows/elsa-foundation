@@ -37,7 +37,7 @@ public class SecretsEntityFrameworkCoreFeature : IShellFeature
 
     [ManifestSetting(
         DisplayName = "Migrate policy",
-        Description = "AutoMigrate provisions the schema on feature enable and CShells reload (compiled migrations for Sqlite/SqlServer/PostgreSql; EnsureCreated for MySql until provider-specific migrations ship). Validate fails when migrations are pending or the required schema is absent.",
+        Description = "AutoMigrate runs Database.MigrateAsync (EF 9 lock) on feature enable and CShells reload. Validate fails when migrations are pending.",
         Category = "Persistence")]
     public EfMigratePolicy MigratePolicy { get; set; } = EfMigratePolicy.AutoMigrate;
 
