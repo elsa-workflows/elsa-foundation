@@ -632,6 +632,7 @@ public sealed class EfRuntimeArtifactScopeTests
         public Fixture Open(PersistenceAccessContext access, IInterceptor? interceptor = null)
         {
             var fixtureConnection = new SqliteConnection(connectionString);
+            var ownershipTransferred = false;
             try
             {
                 fixtureConnection.Open();
@@ -644,17 +645,19 @@ public sealed class EfRuntimeArtifactScopeTests
                     SigningKey = "ef-runtime-test-recovery-signing-key-32-bytes",
                     AllowEphemeralDevelopmentKey = false
                 }));
-                return new Fixture(
+                var fixture = new Fixture(
                     context,
                     new EfWorkflowExecutableSourceReferenceStore(context, new Accessor(access), codec),
                     new EfWorkflowExecutableStore(context, new Accessor(access)),
                     new EfExecutableActivityTemplateStore(context, new Accessor(access), codec),
                     fixtureConnection);
+                ownershipTransferred = true;
+                return fixture;
             }
-            catch
+            finally
             {
-                fixtureConnection.Dispose();
-                throw;
+                if (!ownershipTransferred)
+                    fixtureConnection.Dispose();
             }
         }
 

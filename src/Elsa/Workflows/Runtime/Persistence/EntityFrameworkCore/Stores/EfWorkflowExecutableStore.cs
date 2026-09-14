@@ -4,7 +4,6 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
-using System.Data.Common;
 using System.Text.Json;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -367,23 +366,20 @@ public sealed class EfWorkflowExecutableStore(
         {
             await transaction.RollbackAsync(CancellationToken.None);
         }
-        catch (DbUpdateException)
+        catch (Exception exception) when (IsCatchable(exception))
         {
-            // Preserve the operation's original exception.
-        }
-        catch (DbException)
-        {
-            // Preserve the operation's original exception.
-        }
-        catch (InvalidOperationException)
-        {
-            // Preserve the operation's original exception.
-        }
-        catch (OperationCanceledException)
-        {
-            // Rollback uses CancellationToken.None, but a provider may still report cancellation.
+            // Best-effort cleanup must not mask the operation's original exception.
         }
     }
+
+    private static bool IsCatchable(Exception exception) =>
+        exception is not (OutOfMemoryException or
+            StackOverflowException or
+            AccessViolationException or
+            AppDomainUnloadedException or
+            BadImageFormatException or
+            CannotUnloadAppDomainException or
+            InvalidProgramException);
 
     private async Task<WorkflowExecutableEntity?> FindExecutableAsync(
         string scope,
