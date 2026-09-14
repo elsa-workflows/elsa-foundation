@@ -60,6 +60,7 @@ public sealed class EfDesignAtomicWriter(
     {
         ArgumentNullException.ThrowIfNull(key);
         ArgumentException.ThrowIfNullOrWhiteSpace(operationKind);
+        EfDesignSupport.ValidateOperationIdentity(key, operationKind);
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(stage);
         var tenantId = access.Current.Scope?.Value
@@ -76,9 +77,9 @@ public sealed class EfDesignAtomicWriter(
         {
             throw SerializationFailure(operationKind, exception);
         }
-        var existing = await db.Operations.AsNoTracking().SingleOrDefaultAsync(
+        var existing = await EfDesignSupport.ReadAsync("reading design operation marker", () => db.Operations.AsNoTracking().SingleOrDefaultAsync(
             x => x.TenantId == tenantId && x.OperationKind == operationKind && x.OperationKey == key.Value,
-            cancellationToken);
+            cancellationToken));
         if (existing is not null)
             return ResolveExisting(existing, operationKind, requestFingerprint, legacyRequestFingerprint, DesignAtomicWriteStatus.Replayed, resultCodec);
         // Attempt setup is deliberately rerun after every transient write conflict. Providers can
@@ -87,11 +88,11 @@ public sealed class EfDesignAtomicWriter(
         if (beforeAttempt is not null)
             await beforeAttempt(cancellationToken);
 
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await EfDesignSupport.ReadAsync("starting design operation transaction", () => db.Database.BeginTransactionAsync(cancellationToken));
         DesignAtomicWriteStage<T> staged;
         try
         {
-            staged = await stage(EmptyContext.Instance, cancellationToken);
+            staged = await EfDesignSupport.ReadAsync("staging design operation", () => stage(EmptyContext.Instance, cancellationToken));
         }
         catch
         {
@@ -161,9 +162,9 @@ public sealed class EfDesignAtomicWriter(
         {
             try { await transaction.RollbackAsync(CancellationToken.None); } catch { }
             db.ChangeTracker.Clear();
-            var winner = await db.Operations.AsNoTracking().SingleOrDefaultAsync(
+            var winner = await EfDesignSupport.ReadAsync("reading design operation winner", () => db.Operations.AsNoTracking().SingleOrDefaultAsync(
                 x => x.TenantId == tenantId && x.OperationKind == operationKind && x.OperationKey == key.Value,
-                cancellationToken);
+                cancellationToken));
             if (winner is not null)
                 return ResolveExisting(winner, operationKind, requestFingerprint, legacyRequestFingerprint, DesignAtomicWriteStatus.Reconciled, resultCodec);
             throw ProviderFailure(operationKind, exception);
@@ -191,12 +192,13 @@ public sealed class EfDesignAtomicWriter(
             db.ChangeTracker.Clear();
             try
             {
-                var winner = await db.Operations.AsNoTracking().SingleOrDefaultAsync(
+                var winner = await EfDesignSupport.ReadAsync("reconciling design operation marker", () => db.Operations.AsNoTracking().SingleOrDefaultAsync(
                     x => x.TenantId == tenantId && x.OperationKind == operationKind && x.OperationKey == operationKey,
-                    timeoutSource.Token);
+                    timeoutSource.Token));
                 if (winner is not null)
                     return ResolveExisting(winner, operationKind, requestFingerprint, legacyRequestFingerprint, DesignAtomicWriteStatus.Reconciled, resultCodec);
             }
+            catch (DesignPersistenceException) { throw; }
             catch (Exception exception) when (exception is InvalidDataException or JsonException)
             {
                 throw;

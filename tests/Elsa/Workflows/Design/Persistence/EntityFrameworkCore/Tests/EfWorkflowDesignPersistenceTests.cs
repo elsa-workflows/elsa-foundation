@@ -17,6 +17,7 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Commands;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -32,6 +33,69 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests;
 
 public sealed class EfWorkflowDesignPersistenceTests
 {
+    [Fact]
+    public async Task Definition_search_uses_provider_neutral_unicode_ordinal_ignore_case_keys()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var writer = new EfDesignAtomicWriter(db, access); var serializer = new TestSerializer(); var identities = new TestIdentity();
+        var command = new EfAddWorkflowDefinitionCommand(db, access, writer, serializer, identities);
+        await command.Execute(new DesignOperationKey("unicode-cafe"),
+            new WorkflowDefinition { Id = "cafe", TenantId = "tenant-a", Name = "Café" },
+            new WorkflowDefinitionDraft { Id = "cafe-draft", TenantId = "tenant-a", WorkflowDefinitionId = "cafe", State = State() });
+        await command.Execute(new DesignOperationKey("unicode-deseret"),
+            new WorkflowDefinition { Id = "deseret", TenantId = "tenant-a", Name = "𐐀" },
+            new WorkflowDefinitionDraft { Id = "deseret-draft", TenantId = "tenant-a", WorkflowDefinitionId = "deseret", State = State() });
+        await command.Execute(new DesignOperationKey("unicode-sharp-s"),
+            new WorkflowDefinition { Id = "sharp-s", TenantId = "tenant-a", Name = "Straße" },
+            new WorkflowDefinitionDraft { Id = "sharp-s-draft", TenantId = "tenant-a", WorkflowDefinitionId = "sharp-s", State = State() });
+
+        var store = new EfWorkflowDefinitionStore(db, access);
+        var persistedKeys = await db.Definitions.AsNoTracking().Select(x => new { x.Name, Key = EF.Property<string?>(x, "NameSearchKey") }).ToListAsync();
+        Assert.Equal("|010400", persistedKeys.Single(x => x.Name == "𐐀").Key);
+        Assert.Equal("cafe", Assert.Single(await store.ListAsync(new WorkflowDefinitionFilter { SearchTerm = "CAFÉ" })).Id);
+        Assert.Equal("deseret", Assert.Single(await store.ListAsync(new WorkflowDefinitionFilter { SearchTerm = "𐐨" })).Id);
+        Assert.Equal("sharp-s", Assert.Single(await store.ListAsync(new WorkflowDefinitionFilter { SearchTerm = "STRAßE" })).Id);
+        Assert.Empty(await store.ListAsync(new WorkflowDefinitionFilter { SearchTerm = "STRAẞE" }));
+    }
+
+    [Fact]
+    public void Sqlite_model_uses_portable_unbounded_text_and_groundwork_operation_bounds()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:"); connection.Open();
+        using var db = Create(connection);
+        var operation = db.Model.FindEntityType(typeof(DesignOperationEntity))!;
+        Assert.Equal(256, operation.FindProperty(nameof(DesignOperationEntity.OperationKind))!.GetMaxLength());
+        Assert.Equal(256, operation.FindProperty(nameof(DesignOperationEntity.OperationKey))!.GetMaxLength());
+        Assert.Equal("TEXT", operation.FindProperty(nameof(DesignOperationEntity.ResultJson))!.GetColumnType());
+        Assert.Equal("TEXT", db.Model.FindEntityType(typeof(WorkflowDefinitionVersion))!.FindProperty(nameof(WorkflowDefinitionVersion.StateSource))!.GetColumnType());
+    }
+
+    [Fact]
+    public async Task Operation_identity_over_bound_is_rejected_without_truncation()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var writer = new EfDesignAtomicWriter(db, access);
+        await Assert.ThrowsAsync<ArgumentException>(() => writer.ExecuteAsync(
+            new DesignOperationKey(new string('k', 257)), "test.op", new { Value = 1 }, ["test"],
+            _ => Task.FromResult(new { Id = "never-staged" })));
+        Assert.Empty(await db.Operations.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Provider_read_failures_are_normalized_at_the_public_boundary()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        await connection.CloseAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var failure = await Assert.ThrowsAsync<DesignPersistenceException>(() => new EfWorkflowDefinitionStore(db, access).FindByIdAsync("missing"));
+        Assert.Equal(DesignPersistenceFailureKind.Provider, failure.FailureKind);
+    }
+
     [Fact]
     public void Ef_registration_resolves_owned_surfaces_and_preserves_custom_atomic_writer()
     {

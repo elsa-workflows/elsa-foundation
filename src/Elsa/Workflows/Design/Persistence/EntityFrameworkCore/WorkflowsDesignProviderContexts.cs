@@ -6,23 +6,23 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 public sealed class WorkflowsDesignSqliteDbContext(DbContextOptions<WorkflowsDesignSqliteDbContext> options) : WorkflowsDesignDbContext(options)
 {
     public const string ExpectedProviderName = EfProviderNames.Sqlite;
-    protected override void ConfigureProvider(ModelBuilder modelBuilder) => ConfigureDateTime(modelBuilder, "TEXT");
+    protected override void ConfigureProvider(ModelBuilder modelBuilder) { ConfigureDateTime(modelBuilder, "TEXT"); ConfigureText(modelBuilder, "TEXT"); }
 }
 
 public sealed class WorkflowsDesignSqlServerDbContext(DbContextOptions<WorkflowsDesignSqlServerDbContext> options) : WorkflowsDesignDbContext(options)
 {
     public const string ExpectedProviderName = EfProviderNames.SqlServer;
-    protected override void ConfigureProvider(ModelBuilder modelBuilder) => ConfigureDateTime(modelBuilder, "datetimeoffset");
+    protected override void ConfigureProvider(ModelBuilder modelBuilder) { ConfigureDateTime(modelBuilder, "datetimeoffset"); ConfigureText(modelBuilder, "nvarchar(max)"); }
 }
 
 public sealed class WorkflowsDesignPostgreSqlDbContext(DbContextOptions<WorkflowsDesignPostgreSqlDbContext> options) : WorkflowsDesignDbContext(options)
 {
     public const string ExpectedProviderName = EfProviderNames.PostgreSql;
-    protected override void ConfigureProvider(ModelBuilder modelBuilder) => ConfigureDateTime(modelBuilder, "timestamp with time zone");
+    protected override void ConfigureProvider(ModelBuilder modelBuilder) { ConfigureDateTime(modelBuilder, "timestamp with time zone"); ConfigureText(modelBuilder, "text"); }
 }
 
 public sealed class WorkflowsDesignMySqlDbContext(DbContextOptions<WorkflowsDesignMySqlDbContext> options) : WorkflowsDesignDbContext(options)
 {
     public const string ExpectedProviderName = EfProviderNames.MySql;
-    protected override void ConfigureProvider(ModelBuilder modelBuilder) { ConfigureDateTime(modelBuilder, "datetime(6)"); ConfigureLongText(modelBuilder); }
+    protected override void ConfigureProvider(ModelBuilder modelBuilder) { ConfigureDateTime(modelBuilder, "datetime(6)"); ConfigureText(modelBuilder, "longtext"); }
 }

@@ -1,8 +1,10 @@
 using System.Security.Cryptography;
+using System.Data.Common;
 using System.Text;
 using System.Text.Json;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -14,6 +16,66 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 
 internal static class EfDesignSupport
 {
+    public const int OperationIdentityMaximumLength = 256;
+
+    public static async Task<T> ReadAsync<T>(string operation, Func<Task<T>> read)
+    {
+        try
+        {
+            return await read();
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (DesignPersistenceException) { throw; }
+        catch (DbUpdateException exception) { throw ProviderFailure(operation, exception); }
+        catch (DbException exception) { throw ProviderFailure(operation, exception); }
+    }
+
+    public static void ValidateOperationIdentity(DesignOperationKey key, string operationKind)
+    {
+        if (operationKind.Length > OperationIdentityMaximumLength)
+            throw new ArgumentException($"The design operation kind cannot exceed {OperationIdentityMaximumLength} characters.", nameof(operationKind));
+        if (key.Value.Length > OperationIdentityMaximumLength)
+            throw new ArgumentException($"The design operation key cannot exceed {OperationIdentityMaximumLength} characters.", nameof(key));
+    }
+
+    public static string SearchKey(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var builder = new StringBuilder(value.Length * 7);
+        for (var index = 0; index < value.Length;)
+        {
+            var scalar = (int)value[index];
+            if (char.IsHighSurrogate((char)scalar))
+            {
+                if (index + 1 >= value.Length || !char.IsLowSurrogate(value[index + 1]))
+                    throw new ArgumentException("Unicode ordinal-ignore-case values must be well-formed UTF-16.", nameof(value));
+                scalar = char.ConvertToUtf32((char)scalar, value[index + 1]);
+                index += 2;
+            }
+            else
+            {
+                if (char.IsLowSurrogate((char)scalar))
+                    throw new ArgumentException("Unicode ordinal-ignore-case values must be well-formed UTF-16.", nameof(value));
+                index++;
+            }
+
+            var upper = char.ConvertFromUtf32(scalar).ToUpperInvariant();
+            var upperScalar = char.ConvertToUtf32(upper, 0);
+            builder.Append('|').Append(upperScalar.ToString("X6", System.Globalization.CultureInfo.InvariantCulture));
+        }
+        return builder.ToString();
+    }
+
+    public static void SetDefinitionSearchKeys(DbContext context, WorkflowDefinition definition)
+    {
+        context.Entry(definition).Property<string?>("IdSearchKey").CurrentValue = SearchKey(definition.Id);
+        context.Entry(definition).Property<string?>("NameSearchKey").CurrentValue = SearchKey(definition.Name);
+        context.Entry(definition).Property<string?>("DescriptionSearchKey").CurrentValue = definition.Description is null ? null : SearchKey(definition.Description);
+    }
+
+    private static DesignPersistenceException ProviderFailure(string operation, Exception exception) =>
+        new(DesignPersistenceDomain.Workflow, DesignPersistenceFailureKind.Provider, operation, null, exception.InnerException ?? exception);
+
     public static IQueryable<T> InScope<T>(IQueryable<T> query, IPersistenceAccessContextAccessor access, Func<T, string?> tenant) where T : class
     {
         if (access.Current.Scope is { } scope)
@@ -160,11 +222,19 @@ internal static class EfDesignSupport
         return row;
     }
 
-    public static IReadOnlyCollection<DesignMetadataRecord> ReadLayout(string? json) =>
-        string.IsNullOrWhiteSpace(json) ? [] : ReadJson<DesignMetadataRecord[]>(json);
+    public static IReadOnlyCollection<DesignMetadataRecord> ReadLayout(string? json) => ReadJsonCollection<DesignMetadataRecord>(json, "workflow layout");
 
-    public static IReadOnlyCollection<ActivityPresentationRecord> ReadPresentation(string? json) =>
-        string.IsNullOrWhiteSpace(json) ? [] : ReadJson<ActivityPresentationRecord[]>(json);
+    public static IReadOnlyCollection<ActivityPresentationRecord> ReadPresentation(string? json) => ReadJsonCollection<ActivityPresentationRecord>(json, "workflow activity presentation");
+
+    private static IReadOnlyCollection<T> ReadJsonCollection<T>(string? json, string identity)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return [];
+        try { return ReadJson<T[]>(json); }
+        catch (DesignPersistenceException) { throw; }
+        catch (Exception exception) when (IsSerializationFailure(exception))
+        { throw new DesignPersistenceException(DesignPersistenceDomain.Workflow, DesignPersistenceFailureKind.Serialization, "workflow.layout.read", identity, exception); }
+    }
 
     public static void SetLayout(DbContext context, object row, IReadOnlyCollection<DesignMetadataRecord> records, IReadOnlyCollection<ActivityPresentationRecord>? presentation = null)
     {

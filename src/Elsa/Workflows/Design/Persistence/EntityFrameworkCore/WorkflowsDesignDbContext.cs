@@ -40,4 +40,11 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
         foreach (var property in entityType.GetProperties().Where(x => x.Name is "StateSource" or "RecordsJson" or "ActivityPresentationJson" or "ResultJson"))
             property.SetColumnType("longtext");
     }
+
+    protected static void ConfigureText(ModelBuilder modelBuilder, string columnType)
+    {
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        foreach (var property in entityType.GetProperties().Where(x => x.Name is "StateSource" or "RecordsJson" or "ActivityPresentationJson" or "ResultJson"))
+            property.SetColumnType(columnType);
+    }
 }

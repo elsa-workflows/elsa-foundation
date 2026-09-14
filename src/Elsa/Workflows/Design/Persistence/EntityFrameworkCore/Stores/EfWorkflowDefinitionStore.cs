@@ -11,7 +11,7 @@ public sealed class EfWorkflowDefinitionStore(WorkflowsDesignDbContext db, IPers
 {
     private IQueryable<WorkflowDefinition> Query() => EfDesignSupport.InScope(db.Definitions.AsNoTracking(), access, x => x.TenantId);
     public async Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => await FindByIdAsync(id, cancellationToken) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), id);
-    public Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) => Query().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+    public Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) => EfDesignSupport.ReadAsync("reading workflow definition", () => Query().SingleOrDefaultAsync(x => x.Id == id, cancellationToken));
     public async Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
@@ -25,10 +25,13 @@ public sealed class EfWorkflowDefinitionStore(WorkflowsDesignDbContext db, IPers
         if (filter.Description is not null) query = query.Where(x => x.Description == filter.Description);
         if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
         {
-            var term = filter.SearchTerm.Trim().ToLower();
-            query = query.Where(x => x.Id.ToLower().Contains(term) || x.Name.ToLower().Contains(term) || (x.Description != null && x.Description.ToLower().Contains(term)));
+            var term = EfDesignSupport.SearchKey(filter.SearchTerm.Trim());
+            query = query.Where(x =>
+                EF.Property<string?>(x, "IdSearchKey")!.Contains(term) ||
+                EF.Property<string?>(x, "NameSearchKey")!.Contains(term) ||
+                (EF.Property<string?>(x, "DescriptionSearchKey") != null && EF.Property<string?>(x, "DescriptionSearchKey")!.Contains(term)));
         }
-        var values = await query.OrderBy(x => x.Id).ThenBy(x => x.TenantId).Take(1001).ToListAsync(cancellationToken);
+        var values = await EfDesignSupport.ReadAsync("listing workflow definitions", () => query.OrderBy(x => x.Id).ThenBy(x => x.TenantId).Take(1001).ToListAsync(cancellationToken));
         if (values.Count > 1000)
             throw new InvalidOperationException("Workflow definition query exceeded the bounded result limit of 1000; add exact filters.");
         return values;

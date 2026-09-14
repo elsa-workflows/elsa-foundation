@@ -16,12 +16,12 @@ public sealed class EfWorkflowDefinitionListProjectionStore(WorkflowsDesignDbCon
         foreach (var batch in distinct.Chunk(200))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            drafts.AddRange(await EfDesignSupport.InScope(db.Drafts.AsNoTracking(), access, x => x.TenantId)
+            drafts.AddRange(await EfDesignSupport.ReadAsync("reading workflow draft projections", () => EfDesignSupport.InScope(db.Drafts.AsNoTracking(), access, x => x.TenantId)
                 .Where(x => batch.Contains(x.WorkflowDefinitionId))
-                .ToListAsync(cancellationToken));
-            versions.AddRange(await EfDesignSupport.InScope(db.Versions.AsNoTracking(), access, x => x.TenantId)
+                .ToListAsync(cancellationToken)));
+            versions.AddRange(await EfDesignSupport.ReadAsync("reading workflow version projections", () => EfDesignSupport.InScope(db.Versions.AsNoTracking(), access, x => x.TenantId)
                 .Where(x => batch.Contains(x.DefinitionId))
-                .ToListAsync(cancellationToken));
+                .ToListAsync(cancellationToken)));
         }
 
         var latestDrafts = drafts

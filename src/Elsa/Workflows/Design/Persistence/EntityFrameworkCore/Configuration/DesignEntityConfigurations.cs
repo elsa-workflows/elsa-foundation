@@ -16,6 +16,12 @@ internal static class DesignEntityConfigurations
         b.Property(x => x.TenantId).HasMaxLength(128);
         b.Property(x => x.Name).HasMaxLength(128);
         b.Property(x => x.Description).HasMaxLength(4000);
+        // Persisted folded keys keep ordinal-ignore-case search provider-neutral while the
+        // logical entity remains a domain type. They are nullable for compatibility with rows
+        // created before this opt-in model started maintaining the projection.
+        b.Property<string?>("IdSearchKey").HasMaxLength(896);
+        b.Property<string?>("NameSearchKey").HasMaxLength(1792);
+        b.Property<string?>("DescriptionSearchKey").HasMaxLength(1792);
         b.HasIndex(x => new { x.TenantId, x.Name, x.Id });
         b.HasIndex(x => new { x.TenantId, x.Id });
         b.Property(x => x.LastModifiedAt).IsConcurrencyToken();
@@ -31,7 +37,7 @@ internal static class DesignEntityConfigurations
         b.Property(x => x.DefinitionId).HasMaxLength(128);
         b.Property(x => x.Version).HasMaxLength(128);
         b.Property(x => x.SemVerSortKey).HasMaxLength(128);
-        b.Property(x => x.StateSource).HasColumnType("TEXT");
+        b.Property(x => x.StateSource);
         b.Property(x => x.Version).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
         b.Property(x => x.DefinitionId).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
         b.Property(x => x.SourceDraftId).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
@@ -51,7 +57,7 @@ internal static class DesignEntityConfigurations
         b.Property(x => x.TenantId).HasMaxLength(128);
         b.Property(x => x.WorkflowDefinitionId).HasMaxLength(128);
         b.Property(x => x.SourceVersionId).HasMaxLength(128);
-        b.Property(x => x.StateSource).HasColumnType("TEXT");
+        b.Property(x => x.StateSource);
         b.HasIndex(x => new { x.TenantId, x.WorkflowDefinitionId, x.LastModifiedAt, x.Id });
         b.HasOne(x => x.WorkflowDefinition).WithMany().HasForeignKey("TenantId", "WorkflowDefinitionId").OnDelete(DeleteBehavior.Cascade);
         // Draft updates are explicitly last-writer-wins; stale writers must not be rejected by EF.
@@ -66,8 +72,8 @@ internal static class DesignEntityConfigurations
         b.Property(x => x.Id).HasMaxLength(128);
         b.Property(x => x.TenantId).HasMaxLength(128);
         b.Property(x => x.WorkflowDefinitionDraftId).HasMaxLength(128);
-        b.Property<string>("RecordsJson").HasColumnType("TEXT");
-        b.Property<string>("ActivityPresentationJson").HasColumnType("TEXT");
+        b.Property<string>("RecordsJson");
+        b.Property<string>("ActivityPresentationJson");
         b.HasIndex(x => new { x.TenantId, x.WorkflowDefinitionDraftId }).IsUnique();
         b.HasOne(x => x.WorkflowDefinitionDraft).WithOne().HasForeignKey<WorkflowDefinitionDraftLayout>("TenantId", "WorkflowDefinitionDraftId").OnDelete(DeleteBehavior.Cascade);
         b.Ignore(x => x.Records);
@@ -83,8 +89,8 @@ internal static class DesignEntityConfigurations
         b.Property(x => x.Id).HasMaxLength(128);
         b.Property(x => x.TenantId).HasMaxLength(128);
         b.Property(x => x.WorkflowDefinitionVersionId).HasMaxLength(128);
-        b.Property<string>("RecordsJson").HasColumnType("TEXT");
-        b.Property<string>("ActivityPresentationJson").HasColumnType("TEXT");
+        b.Property<string>("RecordsJson");
+        b.Property<string>("ActivityPresentationJson");
         b.HasIndex(x => new { x.TenantId, x.WorkflowDefinitionVersionId }).IsUnique();
         b.HasOne(x => x.WorkflowDefinitionVersion).WithOne().HasForeignKey<WorkflowDefinitionVersionLayout>("TenantId", "WorkflowDefinitionVersionId").OnDelete(DeleteBehavior.Cascade);
         b.Ignore(x => x.Records);
@@ -98,11 +104,11 @@ internal static class DesignEntityConfigurations
         b.ToTable(WorkflowsDesignEfModule.OperationTable);
         b.HasKey(x => x.RowNumber);
         b.Property(x => x.TenantId).HasMaxLength(128);
-        b.Property(x => x.OperationKind).HasMaxLength(200);
-        b.Property(x => x.OperationKey).HasMaxLength(512);
+        b.Property(x => x.OperationKind).HasMaxLength(256);
+        b.Property(x => x.OperationKey).HasMaxLength(256);
         b.Property(x => x.RequestFingerprint).HasMaxLength(128);
         b.Property(x => x.ResultFingerprint).HasMaxLength(128);
-        b.Property(x => x.ResultJson).HasColumnType("TEXT");
+        b.Property(x => x.ResultJson);
         b.HasIndex(x => new { x.TenantId, x.OperationKind, x.OperationKey }).IsUnique();
     }
 }
