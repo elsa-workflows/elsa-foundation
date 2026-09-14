@@ -32,7 +32,7 @@ public sealed class WorkflowExecutableCoordinationEntityConfiguration : IEntityT
         b.Property(x => x.Id).HasMaxLength(64).IsRequired();
         b.Property(x => x.ScopeKey).IsRequired();
         b.Property(x => x.ScopeKeyHash).HasMaxLength(64).IsRequired();
-        b.Property(x => x.ArtifactId).HasMaxLength(128).IsRequired();
+        b.Property(x => x.ArtifactId).HasMaxLength(RuntimeArtifactEfModule.IdentityProjectionMaximumLength).IsRequired();
         b.Property(x => x.ArtifactIdHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.ContentJson).IsRequired();
         b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();

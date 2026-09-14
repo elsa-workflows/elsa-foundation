@@ -82,6 +82,9 @@ internal static class RuntimeArtifactsProviderSmoke
             Assert.Equal(
                 new[] { "artifact-a", "artifact-b" },
                 new[] { firstExecutablePage.Items[0].Identity.ArtifactId, secondExecutablePage.Items[0].Identity.ArtifactId }.Order(StringComparer.Ordinal));
+            var maximumWidthArtifactId = new string('x', RuntimeArtifactEfModule.IdentityMaximumLength);
+            await executable.SaveAsync(Executable(maximumWidthArtifactId));
+            Assert.NotNull(await executable.FindAsync(maximumWidthArtifactId));
             await template.SaveAsync(Template("template-a", "template-hash-a"));
             Assert.NotNull(await template.FindByHashAsync("template-hash-a"));
             await source.SaveAsync(Reference("reference-a", "artifact-a", "definition-version-a"));
