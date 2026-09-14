@@ -13,7 +13,7 @@ public sealed class SecretsMySqlDesignTimeFactory : IDesignTimeDbContextFactory<
         builder.UseMySQL(
             SecretsDesignTimeConnection.Resolve(
                 SecretsDesignTimeConnection.MySqlVariable,
-                "Server=localhost;Port=3306;Database=elsa_secrets_design;User ID=root;******;AllowPublicKeyRetrieval=True;SslMode=Disabled"),
+                "Server=localhost;Port=3306;Database=elsa_secrets_design;User ID=root;Password=root;AllowPublicKeyRetrieval=True;SslMode=Disabled"),
             mySql => mySql
                 .MigrationsAssembly(typeof(SecretsMySqlDbContext).Assembly.GetName().Name)
                 .MigrationsHistoryTable(EfMigrationsHistory.TableName(SecretsEfModule.HistoryModuleName)));
