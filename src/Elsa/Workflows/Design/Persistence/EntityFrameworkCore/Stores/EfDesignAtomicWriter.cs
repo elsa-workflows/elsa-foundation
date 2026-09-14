@@ -175,6 +175,13 @@ public sealed class EfDesignAtomicWriter(
                 return await ReconcileAfterCommitAsync<T>(
                     tenantId, operationKind, key.Value, requestFingerprint, legacyRequestFingerprint, exception, resultCodec);
             }
+            transactionDisposed = true;
+            await CleanupAsync(
+                transaction,
+                null,
+                operationKind,
+                rollback: false,
+                preserveAuthoritativeOutcome: true);
             return new DesignAtomicWriteResult<T>(DesignAtomicWriteStatus.Committed, value, resultFingerprint, resultJson);
         }
         catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
@@ -215,7 +222,12 @@ public sealed class EfDesignAtomicWriter(
         }
     }
 
-    private static async Task CleanupAsync(IDbContextTransaction transaction, Exception? primary, string operationKind, bool rollback)
+    private static async Task CleanupAsync(
+        IDbContextTransaction transaction,
+        Exception? primary,
+        string operationKind,
+        bool rollback,
+        bool preserveAuthoritativeOutcome = false)
     {
         var cleanupFailures = new List<Exception>();
         if (rollback)
@@ -242,14 +254,18 @@ public sealed class EfDesignAtomicWriter(
         if (cleanupFailures.Count == 0)
             return;
 
-        if (primary is null)
+        if (primary is null && !preserveAuthoritativeOutcome)
             ExceptionDispatchInfo.Capture(cleanupFailures.Count == 1 ? cleanupFailures[0] : new AggregateException(cleanupFailures)).Throw();
 
-        // Cleanup is diagnostic only once the operation already has an authoritative failure.
-        // In particular, provider cancellation during rollback/disposal must not mask it.
-        foreach (var (failure, index) in cleanupFailures.Select((failure, index) => (failure, index)))
-        foreach (var exception in ExceptionChain(primary))
-            exception.Data[$"Elsa.Design.Atomic.CleanupFailure.{operationKind}.{index}"] = failure;
+        // Cleanup is diagnostic once the operation already has an authoritative failure or the
+        // provider has acknowledged the commit. In particular, provider cancellation during
+        // rollback/disposal must not mask the primary outcome.
+        if (primary is not null)
+        {
+            foreach (var (failure, index) in cleanupFailures.Select((failure, index) => (failure, index)))
+            foreach (var exception in ExceptionChain(primary))
+                exception.Data[$"Elsa.Design.Atomic.CleanupFailure.{operationKind}.{index}"] = failure;
+        }
         Trace.TraceWarning("Workflow design transaction cleanup failed for {0}: {1}", operationKind, string.Join("; ", cleanupFailures.Select(failure => failure.Message)));
     }
 

@@ -56,8 +56,11 @@ internal static class WorkflowsDesignNativeProviderSmoke
         Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker/native provider is unavailable.");
         var tenant = $"provider-tenant-{Guid.NewGuid():N}";
         var definitionId = $"provider-definition-{Guid.NewGuid():N}";
+        var trailingDefinitionId = definitionId + " ";
         var versionId = $"provider-version-{Guid.NewGuid():N}";
+        var trailingVersionId = versionId + "-trailing";
         var draftId = $"provider-draft-{Guid.NewGuid():N}";
+        var trailingDraftId = draftId + "-trailing";
         var access = new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
 
         await using (var context = createContext(fixture.ConnectionString))
@@ -69,27 +72,52 @@ internal static class WorkflowsDesignNativeProviderSmoke
             Assert.Equal(WorkflowsDesignEfModule.DraftTable, context.Model.FindEntityType(typeof(WorkflowDefinitionDraft))!.GetTableName());
 
             // W01: definition CRUD/query through the provider store.
-            context.Definitions.Add(new WorkflowDefinition { Id = definitionId, TenantId = tenant, Name = "Native provider definition" });
+            context.Definitions.AddRange(
+                new WorkflowDefinition
+                {
+                    Id = definitionId, TenantId = tenant, Name = "Native provider definition",
+                    Description = "Native provider description"
+                },
+                new WorkflowDefinition
+                {
+                    Id = trailingDefinitionId, TenantId = tenant, Name = "Native provider definition ",
+                    Description = "Native provider description "
+                });
             await context.SaveChangesAsync();
             var definitions = new EfWorkflowDefinitionStore(context, access);
             Assert.Equal(definitionId, (await definitions.FindByIdAsync(definitionId))!.Id);
-            Assert.Single(await definitions.ListAsync(new() { Name = "Native provider definition" }));
+            Assert.Equal(trailingDefinitionId, (await definitions.FindByIdAsync(trailingDefinitionId))!.Id);
+            Assert.Equal(definitionId, Assert.Single(await definitions.ListAsync(new() { Name = "Native provider definition" })).Id);
+            Assert.Equal(trailingDefinitionId, Assert.Single(await definitions.ListAsync(new() { Names = ["Native provider definition "] })).Id);
+            Assert.Equal(definitionId, Assert.Single(await definitions.ListAsync(new() { Description = "Native provider description" })).Id);
 
             // W02: immutable version and ordered latest-version query.
-            context.Versions.Add(new WorkflowDefinitionVersion(definitionId, "1.0.0", "{}")
-            {
-                Id = versionId, TenantId = tenant, CreatedAt = Now, LastModifiedAt = Now
-            });
+            context.Versions.AddRange(
+                new WorkflowDefinitionVersion(definitionId, "1.0.0", "{}")
+                {
+                    Id = versionId, TenantId = tenant, CreatedAt = Now, LastModifiedAt = Now
+                },
+                new WorkflowDefinitionVersion(trailingDefinitionId, "1.0.0", "{}")
+                {
+                    Id = trailingVersionId, TenantId = tenant, CreatedAt = Now, LastModifiedAt = Now
+                });
             await context.SaveChangesAsync();
             var versions = new EfWorkflowDefinitionVersionStore(context, new NativeProviderSerializer(), definitions, access);
             Assert.Equal(versionId, (await versions.FindLatestVersionAsync(definitionId))!.Id);
+            Assert.Equal(trailingVersionId, (await versions.FindLatestVersionAsync(trailingDefinitionId))!.Id);
 
             // W03: mutable draft read and W04: version-layout read.
-            context.Drafts.Add(new WorkflowDefinitionDraft
-            {
-                Id = draftId, TenantId = tenant, WorkflowDefinitionId = definitionId, StateSource = "{}",
-                CreatedAt = Now, LastModifiedAt = Now
-            });
+            context.Drafts.AddRange(
+                new WorkflowDefinitionDraft
+                {
+                    Id = draftId, TenantId = tenant, WorkflowDefinitionId = definitionId, StateSource = "{}",
+                    CreatedAt = Now, LastModifiedAt = Now
+                },
+                new WorkflowDefinitionDraft
+                {
+                    Id = trailingDraftId, TenantId = tenant, WorkflowDefinitionId = trailingDefinitionId, StateSource = "{}",
+                    CreatedAt = Now, LastModifiedAt = Now
+                });
             var layout = new WorkflowDefinitionVersionLayout
             {
                 Id = $"provider-layout-{Guid.NewGuid():N}", TenantId = tenant, WorkflowDefinitionVersionId = versionId,
@@ -99,6 +127,7 @@ internal static class WorkflowsDesignNativeProviderSmoke
             await context.SaveChangesAsync();
             var drafts = new EfWorkflowDefinitionDraftStore(context, new NativeProviderSerializer(), access);
             Assert.Equal(draftId, (await drafts.FindByWorkflowDefinitionIdAsync(definitionId))!.Id);
+            Assert.Equal(trailingDraftId, (await drafts.FindByWorkflowDefinitionIdAsync(trailingDefinitionId))!.Id);
             Assert.NotNull(await new EfWorkflowDefinitionVersionLayoutStore(context, access).FindByVersionIdAsync(versionId));
 
             // W05: the operation ledger commits atomically with its staged mutation and replays.

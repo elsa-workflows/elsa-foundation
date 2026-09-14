@@ -57,6 +57,7 @@ public sealed class EfWorkflowDefinitionStore(WorkflowsDesignDbContext db, IPers
             .OrderBy(x => x.Id).ThenBy(x => x.TenantId).ToListAsync(cancellationToken));
         if (!exactRoute && !string.IsNullOrWhiteSpace(filter.SearchTerm) && values.Count > 10_000)
             throw new InvalidOperationException("Workflow definition search exceeded the bounded result limit of 10000.");
+        IEnumerable<WorkflowDefinition> validated = values;
         if (filter.Id is not null)
         {
             foreach (var candidate in values)
@@ -67,6 +68,15 @@ public sealed class EfWorkflowDefinitionStore(WorkflowsDesignDbContext db, IPers
             foreach (var candidate in values)
                 EfDesignSupport.EnsureDefinitionIdentityInSet(filter.Ids, candidate.Id, "workflow definition lookup");
         }
-        return values;
+        if (filter.Name is not null)
+            validated = validated.Where(value => StringComparer.Ordinal.Equals(value.Name, filter.Name));
+        if (filter.Names is not null)
+            validated = validated.Where(value => filter.Names.Contains(value.Name, StringComparer.Ordinal));
+        if (filter.Description is not null)
+            validated = validated.Where(value => StringComparer.Ordinal.Equals(value.Description, filter.Description));
+        return validated
+            .OrderBy(value => value.Id, StringComparer.Ordinal)
+            .ThenBy(value => value.TenantId, StringComparer.Ordinal)
+            .ToArray();
     }
 }

@@ -272,7 +272,7 @@ public sealed class EfUpdateDraftCommand(WorkflowsDesignDbContext db, IPersisten
             errors = inlineEvents is null ? [] : (await inlineEvents.DeriveValidationErrorsAsync(row, token)).ToArray();
             row.LastModifiedAt = Now;
             var layout = await Scoped(Db.DraftLayouts, x => x.TenantId).SingleOrDefaultAsync(x => x.WorkflowDefinitionDraftId == request.DraftId, token);
-            if (layout is null) { layout = WorkflowDefinitionDraftLayout.CreateFor(new SequentialIdentityGenerator(), request.DraftId, request.Layout, request.ActivityPresentation); layout.TenantId = row.TenantId; Db.DraftLayouts.Add(layout); }
+            if (layout is null) { layout = WorkflowDefinitionDraftLayout.CreateFor(new SequentialIdentityGenerator(), request.DraftId, request.Layout, request.ActivityPresentation); layout.TenantId = row.TenantId; EfDesignSupport.Stamp(layout, Now); EfDesignSupport.SetLayout(Db, layout, request.Layout, request.ActivityPresentation); Db.DraftLayouts.Add(layout); }
             else { EfDesignSupport.SetLayout(Db, layout, request.Layout, request.ActivityPresentation); layout.LastModifiedAt = Now; }
             return DesignAtomicWriteStage<bool>.Accepted(true);
         }, cancellationToken: ct);
@@ -381,6 +381,8 @@ public sealed class EfPromoteDraftToVersionCommand(WorkflowsDesignDbContext db, 
                         Id = identities.Generate(),
                         TenantId = draft.TenantId,
                         WorkflowDefinitionVersionId = row.Id,
+                        CreatedAt = Now,
+                        LastModifiedAt = Now,
                         Records = draftLayout is null ? [] : EfDesignSupport.ReadLayout(Db.Entry(draftLayout).Property<string>("RecordsJson").CurrentValue),
                         ActivityPresentation = draftLayout is null ? [] : EfDesignSupport.ReadPresentation(Db.Entry(draftLayout).Property<string>("ActivityPresentationJson").CurrentValue)
                     };

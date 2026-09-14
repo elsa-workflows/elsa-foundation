@@ -55,8 +55,9 @@ public static class DesignAtomicWriteProtocol
         where TMarker : class
         where TResult : class
     {
-        using var scopeLifetime = new ScopeLifetime<TScope>(lane.BeginScope());
+        var scopeLifetime = new ScopeLifetime<TScope>(lane.BeginScope());
         var scope = scopeLifetime.Value;
+        Exception? primaryException = null;
         try
         {
             var staged = await stage(scope, cancellationToken);
@@ -81,7 +82,10 @@ public static class DesignAtomicWriteProtocol
                 if (!lane.ShouldReconcileAfterCommitFailure(exception))
                     throw;
                 if (lane.DisposeBeforeReconcile is not null)
-                    await scopeLifetime.DisposeBeforeReconcileAsync(lane.DisposeBeforeReconcile);
+                    await scopeLifetime.DisposeBeforeReconcileAsync(
+                        lane.DisposeBeforeReconcile,
+                        exception,
+                        lane.MarkerId);
                 var reconciled = await lane.TryReconcileAfterCommit(exception, cancellationToken);
                 if (reconciled is not null)
                     return reconciled;
@@ -96,19 +100,26 @@ public static class DesignAtomicWriteProtocol
         }
         catch (Exception exception) when (lane.ClassifyMarkerRace(exception))
         {
+            primaryException = exception;
             if (!scopeLifetime.IsDisposed)
                 TryRollback(lane, scope);
             throw;
         }
         catch (Exception exception) when (lane.ClassifyUncertainCommit(exception))
         {
+            primaryException = exception;
             throw;
         }
-        catch
+        catch (Exception exception)
         {
+            primaryException = exception;
             if (!scopeLifetime.IsDisposed)
                 TryRollback(lane, scope);
             throw;
+        }
+        finally
+        {
+            scopeLifetime.DisposePreservingOutcome(primaryException, lane.MarkerId);
         }
     }
 
@@ -153,7 +164,7 @@ public static class DesignAtomicWriteProtocol
         }
     }
 
-    private sealed class ScopeLifetime<TScope>(TScope value) : IDisposable
+    private sealed class ScopeLifetime<TScope>(TScope value)
         where TScope : IDisposable
     {
         private int disposed;
@@ -161,17 +172,57 @@ public static class DesignAtomicWriteProtocol
         public TScope Value { get; } = value;
         public bool IsDisposed => Volatile.Read(ref disposed) != 0;
 
-        public async Task DisposeBeforeReconcileAsync(Func<TScope, Task> disposeBeforeReconcile)
+        public async Task DisposeBeforeReconcileAsync(
+            Func<TScope, Task> disposeBeforeReconcile,
+            Exception primaryException,
+            string markerId)
         {
             if (Interlocked.Exchange(ref disposed, 1) != 0)
                 return;
-            await disposeBeforeReconcile(Value);
+            try
+            {
+                await disposeBeforeReconcile(Value);
+            }
+            catch (Exception exception) when (IsNonFatalCleanupFailure(exception))
+            {
+                RecordCleanupFailure(primaryException, exception, markerId, "pre-reconcile scope disposal");
+            }
         }
 
-        public void Dispose()
+        public void DisposePreservingOutcome(Exception? primaryException, string markerId)
         {
-            if (Interlocked.Exchange(ref disposed, 1) == 0)
+            if (Interlocked.Exchange(ref disposed, 1) != 0)
+                return;
+            try
+            {
                 Value.Dispose();
+            }
+            catch (Exception exception) when (IsNonFatalCleanupFailure(exception))
+            {
+                if (primaryException is { } primary)
+                    primary.Data[$"Elsa.Design.Atomic.ScopeCleanupFailure.{markerId}"] = exception;
+                Trace.TraceWarning(
+                    "Workflow design atomic scope disposal failed for marker '{0}': {1}",
+                    markerId,
+                    exception);
+            }
         }
     }
+
+    private static void RecordCleanupFailure(
+        Exception primaryException,
+        Exception cleanupException,
+        string markerId,
+        string phase)
+    {
+        primaryException.Data[$"Elsa.Design.Atomic.ScopeCleanupFailure.{markerId}.{phase}"] = cleanupException;
+        Trace.TraceWarning(
+            "Workflow design atomic {0} failed for marker '{1}': {2}",
+            phase,
+            markerId,
+            cleanupException);
+    }
+
+    private static bool IsNonFatalCleanupFailure(Exception exception) =>
+        exception is not (OutOfMemoryException or StackOverflowException or AccessViolationException);
 }

@@ -66,7 +66,11 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         // options behind when an application intentionally switches EF providers.
         DesignPersistenceBackend.Register(services, new DesignPersistenceBackend(
             DesignPersistenceBackend.EntityFramework,
-            services.Skip(registrationStart).ToArray()));
+            services.Skip(registrationStart)
+                // Startup tasks are additive host services. The validator is idempotent, but the
+                // selected persistence backend must never claim exclusive ownership of the type.
+                .Where(descriptor => descriptor.ServiceType != typeof(IStartupTask))
+                .ToArray()));
         return services;
     }
 

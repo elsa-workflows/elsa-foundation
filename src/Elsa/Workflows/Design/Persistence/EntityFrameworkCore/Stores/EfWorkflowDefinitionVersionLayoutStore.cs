@@ -13,6 +13,6 @@ public sealed class EfWorkflowDefinitionVersionLayoutStore(WorkflowsDesignDbCont
         if (row is null) return null;
         var records = EfDesignSupport.ReadLayout(db.Entry(row).Property<string>("RecordsJson").CurrentValue);
         var presentation = EfDesignSupport.ReadPresentation(db.Entry(row).Property<string>("ActivityPresentationJson").CurrentValue);
-        return new WorkflowDefinitionVersionLayout { Id = row.Id, TenantId = row.TenantId, WorkflowDefinitionVersionId = row.WorkflowDefinitionVersionId, Records = records, ActivityPresentation = presentation };
+        return new WorkflowDefinitionVersionLayout { Id = row.Id, TenantId = row.TenantId, WorkflowDefinitionVersionId = row.WorkflowDefinitionVersionId, CreatedAt = row.CreatedAt, LastModifiedAt = row.LastModifiedAt, Records = records, ActivityPresentation = presentation };
     }
 }
