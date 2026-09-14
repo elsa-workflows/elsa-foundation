@@ -1,4 +1,5 @@
 using Groundwork.Kernel;
+using Elsa.Workflows.Design.Persistence.Core.Constants;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork;
 
@@ -17,13 +18,13 @@ public static class WorkflowsDesignStorageManifest
     // pre-GA baseline so Groundwork never attempts to add a required, non-canonical projection
     // column or retain the removed wide indexes in place.
     public const int DefinitionStorageSchemaVersion = 2;
-    public const int IdentityMaximumLength = 128;
-    public const int TextMaximumLength = 256;
+    public const int IdentityMaximumLength = WorkflowDefinitionLimits.IdentityMaximumLength;
+    public const int TextMaximumLength = WorkflowDefinitionLimits.TextMaximumLength;
     public const int SchemaVersionMaximumLength = 32;
     // The provider-independent Unicode ordinal-ignore-case key uses six hexadecimal characters
     // plus a boundary marker per UTF-16 code unit. It is retained for substring matching, but is
     // deliberately not indexed: its maximum width is larger than the strict portable index cap.
-    public const int DefinitionIdSearchKeyMaximumLength = IdentityMaximumLength * 7;
+    public const int DefinitionIdSearchKeyMaximumLength = WorkflowDefinitionLimits.IdentitySearchKeyMaximumLength;
     public const int DefinitionIdLookupHashMaximumLength = 64;
     public const int DefinitionTextLookupHashMaximumLength = 64;
 

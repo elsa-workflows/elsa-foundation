@@ -27,6 +27,32 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
 
     protected abstract void ConfigureProvider(ModelBuilder modelBuilder);
 
+    protected static void ConfigureOrdinalCollation(ModelBuilder modelBuilder, string collation)
+    {
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        foreach (var property in entityType.GetProperties().Where(property => property.ClrType == typeof(string)))
+            property.SetCollation(collation);
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        PrepareDefinitionKeys();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        PrepareDefinitionKeys();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void PrepareDefinitionKeys()
+    {
+        foreach (var entry in ChangeTracker.Entries<WorkflowDefinition>()
+                     .Where(entry => entry.State is EntityState.Added or EntityState.Modified))
+            Stores.EfDesignSupport.SetDefinitionSearchKeys(this, entry.Entity);
+    }
+
     protected static void ConfigureDateTime(ModelBuilder modelBuilder, string columnType)
     {
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())

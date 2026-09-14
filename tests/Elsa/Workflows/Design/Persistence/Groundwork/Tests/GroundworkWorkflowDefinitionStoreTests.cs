@@ -137,6 +137,25 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
     }
 
     [Fact]
+    public async Task Exact_name_and_description_filters_are_ordinal_residuals()
+    {
+        var (store, raw) = Seeded(
+            new WorkflowDefinition { Id = "name-upper", Name = "Order", Description = "Handles orders" },
+            new WorkflowDefinition { Id = "name-lower", Name = "order", Description = "handles orders" });
+        using (raw)
+        {
+            Assert.Equal(["name-upper"], (await store.ListAsync(new WorkflowDefinitionFilter
+            {
+                Name = "Order"
+            })).Select(definition => definition.Id));
+            Assert.Equal(["name-lower"], (await store.ListAsync(new WorkflowDefinitionFilter
+            {
+                Description = "handles orders"
+            })).Select(definition => definition.Id));
+        }
+    }
+
+    [Fact]
     public async Task Exact_name_filter_remains_complete_beyond_the_search_term_bound()
     {
         var definitions = Enumerable.Range(0, GroundworkDesignStorage.SearchTermProbeLimit)

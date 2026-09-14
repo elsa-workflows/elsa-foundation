@@ -34,6 +34,78 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests;
 public sealed class EfWorkflowDesignPersistenceTests
 {
     [Fact]
+    public async Task Definition_ids_follow_groundwork_identity_folding_and_tenants_remain_ordinal()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        db.Definitions.AddRange(
+            new WorkflowDefinition { Id = "Alpha", TenantId = "TenantA", Name = "first" },
+            new WorkflowDefinition { Id = "Alpha", TenantId = "tenanta", Name = "second" });
+        await db.SaveChangesAsync();
+
+        var tenantA = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("TenantA")));
+        var tenanta = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenanta")));
+        Assert.Equal("first", (await new EfWorkflowDefinitionStore(db, tenantA).FindByIdAsync("aLPHA"))!.Name);
+        Assert.Equal("second", (await new EfWorkflowDefinitionStore(db, tenanta).FindByIdAsync("ALPHA"))!.Name);
+        Assert.Equal(2, await db.Definitions.CountAsync());
+
+        db.Definitions.Add(new WorkflowDefinition { Id = "alpha", TenantId = "TenantA", Name = "duplicate" });
+        await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task Exact_name_query_is_not_subject_to_the_free_text_candidate_cap()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        db.Definitions.AddRange(Enumerable.Range(0, 1_001).Select(index => new WorkflowDefinition
+        {
+            Id = $"exact-{index:D4}", TenantId = "tenant-a", Name = "same-name"
+        }));
+        await db.SaveChangesAsync();
+
+        var store = new EfWorkflowDefinitionStore(db, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+        Assert.Equal(1_001, (await store.ListAsync(new WorkflowDefinitionFilter { Name = "same-name" })).Count);
+    }
+
+    [Fact]
+    public async Task Search_term_preserves_leading_and_trailing_spaces()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        db.Definitions.AddRange(
+            new WorkflowDefinition { Id = "with-spaces", TenantId = "tenant-a", Name = "  Order  " },
+            new WorkflowDefinition { Id = "without-spaces", TenantId = "tenant-a", Name = "Order" });
+        await db.SaveChangesAsync();
+
+        var store = new EfWorkflowDefinitionStore(db, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+        Assert.Equal(["with-spaces"], (await store.ListAsync(new WorkflowDefinitionFilter { SearchTerm = " Order " })).Select(x => x.Id));
+    }
+
+    [Fact]
+    public async Task Definition_text_bounds_are_rejected_without_truncation_and_search_keys_fit()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        db.Definitions.Add(new WorkflowDefinition
+        {
+            Id = new string('i', 128), TenantId = "tenant-a", Name = new string('n', 256), Description = new string('d', 256)
+        });
+        await db.SaveChangesAsync();
+        var keys = await db.Definitions.AsNoTracking().Select(x => new
+        {
+            Id = EF.Property<string>(x, "IdSearchKey"),
+            Hash = EF.Property<string>(x, "IdLookupHash")
+        }).SingleAsync();
+        Assert.Equal(WorkflowDefinitionLimits.IdentitySearchKeyMaximumLength, keys.Id.Length);
+        Assert.Equal(64, keys.Hash.Length);
+
+        db.Definitions.Add(new WorkflowDefinition { Id = "too-long", TenantId = "tenant-a", Name = new string('x', 257) });
+        await Assert.ThrowsAsync<ArgumentException>(() => db.SaveChangesAsync());
+        Assert.Equal(1, await db.Definitions.CountAsync());
+    }
+
+    [Fact]
     public async Task Definition_search_uses_provider_neutral_unicode_ordinal_ignore_case_keys()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();

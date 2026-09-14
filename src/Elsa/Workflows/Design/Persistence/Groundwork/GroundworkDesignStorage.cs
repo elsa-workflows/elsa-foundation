@@ -5,6 +5,7 @@ using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
+using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Primitives.Entities;
 using Elsa.Workflows.Design.Core.Models;
@@ -579,6 +580,7 @@ public sealed class GroundworkDesignStorage(
         switch (entity)
         {
             case WorkflowDefinition definition:
+                WorkflowDefinitionLimits.Validate(definition);
                 values[WorkflowsDesignStorageManifest.DefinitionIdField] = definition.Id;
                 values[WorkflowsDesignStorageManifest.DefinitionIdSearchKeyField] =
                     QuerySearchKeys.Encode(definition.Id, DefinitionIdSearchPolicy);
@@ -911,7 +913,7 @@ public sealed class GroundworkDesignStorage(
             SearchKeyProjection.ColumnName(field),
             QueryType.String,
             isNullable: source.IsNullable,
-            maxLength: source.MaxLength is int maxLength ? maxLength * 7 : null,
+            maxLength: source.MaxLength is int maxLength ? maxLength * WorkflowDefinitionLimits.SearchKeyExpansionFactor : null,
             stringComparison: QueryStringComparisonPolicy.Ordinal);
     }
 

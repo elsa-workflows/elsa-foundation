@@ -1,4 +1,5 @@
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -12,18 +13,19 @@ internal static class DesignEntityConfigurations
         b.ToTable(WorkflowsDesignEfModule.DefinitionTable);
         b.HasKey(x => new { x.TenantId, x.Id });
         b.Ignore(x => x.RowNumber);
-        b.Property(x => x.Id).HasMaxLength(128);
-        b.Property(x => x.TenantId).HasMaxLength(128);
-        b.Property(x => x.Name).HasMaxLength(128);
-        b.Property(x => x.Description).HasMaxLength(4000);
+        b.Property(x => x.Id).HasMaxLength(WorkflowDefinitionLimits.IdentityMaximumLength);
+        b.Property(x => x.TenantId).HasMaxLength(WorkflowDefinitionLimits.IdentityMaximumLength);
+        b.Property(x => x.Name).HasMaxLength(WorkflowDefinitionLimits.TextMaximumLength);
+        b.Property(x => x.Description).HasMaxLength(WorkflowDefinitionLimits.TextMaximumLength);
         // Persisted folded keys keep ordinal-ignore-case search provider-neutral while the
-        // logical entity remains a domain type. They are nullable for compatibility with rows
-        // created before this opt-in model started maintaining the projection.
-        b.Property<string?>("IdSearchKey").HasMaxLength(896);
-        b.Property<string?>("NameSearchKey").HasMaxLength(1792);
-        b.Property<string?>("DescriptionSearchKey").HasMaxLength(1792);
+        // logical entity remains a domain type. They are part of the definition storage contract.
+        b.Property<string>("IdSearchKey").HasMaxLength(WorkflowDefinitionLimits.IdentitySearchKeyMaximumLength).IsRequired();
+        b.Property<string>("IdLookupHash").HasMaxLength(64).IsRequired();
+        b.Property<string?>("NameSearchKey").HasMaxLength(WorkflowDefinitionLimits.TextSearchKeyMaximumLength);
+        b.Property<string?>("DescriptionSearchKey").HasMaxLength(WorkflowDefinitionLimits.TextSearchKeyMaximumLength);
         b.HasIndex(x => new { x.TenantId, x.Name, x.Id });
         b.HasIndex(x => new { x.TenantId, x.Id });
+        b.HasIndex("TenantId", "IdLookupHash").IsUnique();
         b.Property(x => x.LastModifiedAt).IsConcurrencyToken();
     }
 

@@ -5,6 +5,7 @@ using System.Text.Json;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -41,7 +42,7 @@ internal static class EfDesignSupport
     public static string SearchKey(string value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        var builder = new StringBuilder(value.Length * 7);
+        var builder = new StringBuilder(value.Length * WorkflowDefinitionLimits.SearchKeyExpansionFactor);
         for (var index = 0; index < value.Length;)
         {
             var scalar = (int)value[index];
@@ -59,8 +60,11 @@ internal static class EfDesignSupport
                 index++;
             }
 
-            var upper = char.ConvertFromUtf32(scalar).ToUpperInvariant();
-            var upperScalar = char.ConvertToUtf32(upper, 0);
+            // Groundwork uses simple, one-scalar Unicode casing. String casing can expand a
+            // scalar on some runtimes, which would not match its provider-neutral identity.
+            var upperScalar = scalar <= char.MaxValue
+                ? char.ToUpperInvariant((char)scalar)
+                : System.Text.Rune.ToUpperInvariant(new System.Text.Rune(scalar)).Value;
             builder.Append('|').Append(upperScalar.ToString("X6", System.Globalization.CultureInfo.InvariantCulture));
         }
         return builder.ToString();
@@ -68,10 +72,15 @@ internal static class EfDesignSupport
 
     public static void SetDefinitionSearchKeys(DbContext context, WorkflowDefinition definition)
     {
+        WorkflowDefinitionLimits.Validate(definition);
         context.Entry(definition).Property<string?>("IdSearchKey").CurrentValue = SearchKey(definition.Id);
+        context.Entry(definition).Property<string>("IdLookupHash").CurrentValue = LookupHash(SearchKey(definition.Id));
         context.Entry(definition).Property<string?>("NameSearchKey").CurrentValue = SearchKey(definition.Name);
         context.Entry(definition).Property<string?>("DescriptionSearchKey").CurrentValue = definition.Description is null ? null : SearchKey(definition.Description);
     }
+
+    public static string LookupHash(string value) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
 
     private static DesignPersistenceException ProviderFailure(string operation, Exception exception) =>
         new(DesignPersistenceDomain.Workflow, DesignPersistenceFailureKind.Provider, operation, null, exception.InnerException ?? exception);
