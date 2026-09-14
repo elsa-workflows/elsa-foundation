@@ -18,7 +18,7 @@ public class SecretsEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(
         DisplayName = "Provider",
-        Description = "Relational provider for the derived Secrets DbContext: Sqlite, SqlServer, PostgreSql, or MySql. The host must reference that provider package.",
+        Description = "Relational provider for the derived Secrets DbContext: Sqlite, SqlServer, PostgreSql, or MySql. MySql targets Oracle MySQL 8.0+ through MySql.EntityFrameworkCore; MariaDB is out of scope. The host must reference that provider package.",
         Category = "Persistence")]
     public string Provider { get; set; } = "Sqlite";
 

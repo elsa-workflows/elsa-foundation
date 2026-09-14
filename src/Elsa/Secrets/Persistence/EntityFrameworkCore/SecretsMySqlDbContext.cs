@@ -6,6 +6,7 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore;
 /// <summary>
 /// Secrets model bound to Oracle's MySQL EF Core provider. The provider package remains a host
 /// dependency; this context only records the provider annotations consumed by that package.
+/// The selected binary collation targets Oracle MySQL 8.0+ and is not a MariaDB contract.
 /// </summary>
 public sealed class SecretsMySqlDbContext(DbContextOptions<SecretsMySqlDbContext> options)
     : SecretsDbContext(options)

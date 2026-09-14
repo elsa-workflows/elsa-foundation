@@ -2,6 +2,7 @@
 
 This executable project lets `dotnet ef` see Sqlite, SqlServer, PostgreSql, and MySql providers plus
 `Microsoft.EntityFrameworkCore.Design`, and hosts the operator-only projection reindex command.
+Its MySQL path targets Oracle MySQL 8.0+ through `MySql.EntityFrameworkCore`; MariaDB is out of scope.
 It is **not** a Nuplane runtime package.
 
 Generated migrations live in the **module** assembly

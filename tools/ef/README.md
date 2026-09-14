@@ -61,7 +61,8 @@ Apply connections:
 - SqlServer: `ELSA_SECRETS_EF_SQLSERVER`. Required for `apply --sqlserver`. Under
   `--all` / default, skipped when unset unless `ELSA_SECRETS_EF_REQUIRE_ALL=1`.
 - PostgreSql: `ELSA_SECRETS_EF_POSTGRESQL` (same explicit-vs-all rule).
-- MySql: `ELSA_SECRETS_EF_MYSQL` (same explicit-vs-all rule).
+- MySql: `ELSA_SECRETS_EF_MYSQL` (same explicit-vs-all rule). This path targets Oracle MySQL 8.0+
+  through `MySql.EntityFrameworkCore`; MariaDB is out of scope.
 
 `ELSA_SECRETS_EF_CONFIGURATION` selects the MSBuild configuration used for the one tooling build
 and every EF call; it defaults to `Release`. The script builds the tooling project once, then

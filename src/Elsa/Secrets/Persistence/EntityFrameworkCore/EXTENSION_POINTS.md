@@ -16,7 +16,7 @@ feature. EF-selected proof is `tests/Elsa/Secrets/Persistence/EntityFrameworkCor
 
 ## Shell feature
 
-- **`SecretsEntityFrameworkCoreFeature`**: host-selected provider (`Sqlite` / `SqlServer` / `PostgreSql`), connection string or named connection, and `EfMigratePolicy`. The host must reference the matching EF provider engine; this package does not. Enable this feature **or** `SecretsGroundworkPersistence`, never both.
+- **`SecretsEntityFrameworkCoreFeature`**: host-selected provider (`Sqlite` / `SqlServer` / `PostgreSql` / Oracle MySQL 8.0+), connection string or named connection, and `EfMigratePolicy`. The host must reference the matching EF provider engine; this package does not. Enable this feature **or** `SecretsGroundworkPersistence`, never both.
 
 ## Lifecycle
 

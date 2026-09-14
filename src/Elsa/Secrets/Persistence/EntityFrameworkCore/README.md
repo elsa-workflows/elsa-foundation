@@ -88,7 +88,8 @@ stored as UTC ticks (`INTEGER`) so active-only expiry comparisons translate.
 
 Derived contexts: `SecretsSqliteDbContext`, `SecretsSqlServerDbContext`,
 `SecretsPostgreSqlDbContext`, and `SecretsMySqlDbContext`. Each context has its own
-`Migrations/` folder and `ModelSnapshot`.
+`Migrations/` folder and `ModelSnapshot`. The MySQL artifacts target Oracle MySQL 8.0+
+(`utf8mb4_0900_bin`); MariaDB is out of scope for this slice.
 History table: `__EFMigrationsHistory_ElsaSecrets`.
 
 ### Persisted text projections
