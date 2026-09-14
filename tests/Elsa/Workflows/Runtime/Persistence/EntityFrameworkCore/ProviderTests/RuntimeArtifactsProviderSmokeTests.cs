@@ -93,6 +93,21 @@ internal static class RuntimeArtifactsProviderSmoke
             await source.SaveAsync(Reference("reference-a", "artifact-a", "definition-version-a"));
             Assert.NotNull(await source.FindAsync("reference-a"));
 
+            var maxValueNow = DateTimeOffset.MaxValue;
+            await source.SaveAsync(Reference("permanent-expiry", "permanent-expiry-artifact", "definition-version-expiry"));
+            await source.SaveAsync(Reference("explicit-max-expiry", "explicit-max-expiry-artifact", "definition-version-expiry") with { ExpiresAt = maxValueNow });
+            var liveAtMaxValue = await source.ListPageAsync(new WorkflowExecutableSourceReferencePageQuery(liveOnly: true, now: maxValueNow, limit: 10));
+            Assert.Contains(liveAtMaxValue.Items, item => item.SourceReferenceId == "permanent-expiry");
+            Assert.DoesNotContain(liveAtMaxValue.Items, item => item.SourceReferenceId == "explicit-max-expiry");
+            var unreferencedAtMaxValue = await source.ListUnreferencedArtifactIdsAsync(
+                new WorkflowExecutableArtifactCandidateBatch(["permanent-expiry-artifact", "explicit-max-expiry-artifact"]),
+                maxValueNow);
+            Assert.Equal(["explicit-max-expiry-artifact"], unreferencedAtMaxValue);
+            var deletedAtMaxValue = await source.DeleteExpiredOrRetiredAsync(new WorkflowExecutableSourceReferenceCleanupBatch(10), maxValueNow);
+            Assert.Contains("explicit-max-expiry", deletedAtMaxValue);
+            Assert.NotNull(await source.FindAsync("permanent-expiry"));
+            Assert.Null(await source.FindAsync("explicit-max-expiry"));
+
             var page = await source.ListByDefinitionVersionPageAsync(
                 new WorkflowExecutableSourceReferenceDefinitionVersionPageQuery("definition-version-a", 1));
             Assert.Equal("reference-a", Assert.Single(page.Items).SourceReferenceId);

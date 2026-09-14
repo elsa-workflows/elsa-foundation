@@ -120,7 +120,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         if (all?.Scope is { } sourceScope)
             query = query.Where(x => x.Scope == sourceScope.ToString());
         if (all?.LiveOnly == true)
-            query = query.Where(x => !x.IsRetired && x.ExpiresAtUtcTicks > all.Now!.Value.UtcTicks);
+            query = query.Where(x => !x.IsRetired && (x.ExpiresAtUtcTicks == null || x.ExpiresAtUtcTicks > all.Now!.Value.UtcTicks));
         if (cursor is not null)
             query = acrossScopes
                 ? query.Where(x =>
@@ -302,7 +302,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         var scope = RequireScope();
         try
         {
-            var query = context.WorkflowExecutableSourceReferences.Where(x => x.ExpiresAtUtcTicks <= now.UtcTicks || x.IsRetired);
+            var query = context.WorkflowExecutableSourceReferences.Where(x => (x.ExpiresAtUtcTicks != null && x.ExpiresAtUtcTicks <= now.UtcTicks) || x.IsRetired);
             query = query.Where(x => x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope));
             var rows = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
                 context,
@@ -397,7 +397,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
                         x.ScopeKeyHash == scopeHash &&
                         x.ScopeKey == scopeKey &&
                         !x.IsRetired &&
-                        x.ExpiresAtUtcTicks > now.UtcTicks &&
+                        (x.ExpiresAtUtcTicks == null || x.ExpiresAtUtcTicks > now.UtcTicks) &&
                         x.ArtifactIdHash == candidateHash &&
                         x.ArtifactId == Encode(candidate))
                     .OrderBy(x => x.SourceReferenceIdOrderKey)
@@ -449,7 +449,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         row.ScopeKeyOrderKey = ScopeOrderKey(scope);
         row.Scope = value.Scope.ToString();
         row.IsRetired = value.DeletedAt is not null;
-        row.ExpiresAtUtcTicks = (value.ExpiresAt ?? DateTimeOffset.MaxValue).UtcTicks;
+        row.ExpiresAtUtcTicks = value.ExpiresAt?.UtcTicks;
         row.ContentJson = SerializeEnvelope(value);
         row.SchemaVersion = RuntimeArtifactEfModule.SchemaVersion;
         if (row.Revision <= 0)
@@ -489,7 +489,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
                 value.DefinitionId != Decode(row.DefinitionId) ||
                 value.DefinitionVersionId != Decode(row.DefinitionVersionId) ||
                 value.Scope.ToString() != row.Scope ||
-                row.ExpiresAtUtcTicks != (value.ExpiresAt ?? DateTimeOffset.MaxValue).UtcTicks ||
+                row.ExpiresAtUtcTicks != value.ExpiresAt?.UtcTicks ||
                 row.IsRetired != (value.DeletedAt is not null))
                 throw new InvalidDataException("The persisted workflow executable source reference projection is corrupt.");
             return value;

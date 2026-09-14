@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -144,6 +145,53 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Permanent_and_explicit_max_expiry_references_remain_distinct_at_max_value()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var now = DateTimeOffset.MaxValue;
+        var permanent = Reference("permanent-reference", "permanent-artifact");
+        var explicitMax = Reference("explicit-max-reference", "explicit-max-artifact") with { ExpiresAt = now };
+
+        await fixture.Store.SaveAsync(permanent);
+        await fixture.Store.SaveAsync(explicitMax);
+
+        var live = await fixture.Store.ListPageAsync(new(null, true, now, 10));
+        Assert.Equal(["permanent-reference"], live.Items.Select(x => x.SourceReferenceId));
+
+        var unreferenced = await fixture.Store.ListUnreferencedArtifactIdsAsync(
+            new(["permanent-artifact", "explicit-max-artifact"]),
+            now);
+        Assert.Equal(["explicit-max-artifact"], unreferenced);
+
+        var deleted = await fixture.Store.DeleteExpiredOrRetiredAsync(new(10), now);
+        Assert.Equal(["explicit-max-reference"], deleted);
+        Assert.NotNull(await fixture.Store.FindAsync("permanent-reference"));
+        Assert.Null(await fixture.Store.FindAsync("explicit-max-reference"));
+    }
+
+    [Fact]
+    public async Task Source_reference_expiry_projection_is_nullable_and_indexed()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var entity = fixture.Context.Model.FindEntityType(typeof(WorkflowExecutableSourceReferenceEntity))!;
+        var expiry = entity.FindProperty(nameof(WorkflowExecutableSourceReferenceEntity.ExpiresAtUtcTicks))!;
+
+        Assert.Equal(typeof(long?), expiry.ClrType);
+        Assert.True(expiry.IsNullable);
+        Assert.Equal("INTEGER", expiry.GetColumnType());
+        Assert.Contains(
+            entity.GetIndexes(),
+            index => index.Properties.Select(property => property.Name).SequenceEqual(
+                [
+                    nameof(WorkflowExecutableSourceReferenceEntity.ScopeKeyHash),
+                    nameof(WorkflowExecutableSourceReferenceEntity.IsRetired),
+                    nameof(WorkflowExecutableSourceReferenceEntity.ExpiresAtUtcTicks)
+                ]));
+    }
+
+    [Fact]
     public async Task Unreferenced_lookup_uses_exact_bounded_existence_queries_per_candidate()
     {
         await using var database = await Database.CreateAsync();
@@ -230,6 +278,42 @@ public sealed class EfRuntimeArtifactScopeTests
         await fixture.Context.SaveChangesAsync();
         fixture.Context.ChangeTracker.Clear();
         await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Template.FindAsync("template-a").AsTask());
+    }
+
+    [Fact]
+    public async Task Template_idempotent_save_rejects_mismatched_existing_incarnations()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var template = Template("template-incarnation", "template-incarnation-hash");
+        await fixture.Template.SaveAsync(template);
+
+        var claim = await fixture.Context.ExecutableActivityTemplateHashClaims.SingleAsync();
+        claim.IncarnationId = "different-incarnation";
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Template.SaveAsync(template).AsTask());
+    }
+
+    [Fact]
+    public async Task Template_create_reconciliation_rejects_a_mismatched_winner_pair()
+    {
+        await using var database = await Database.CreateAsync();
+        var template = Template("template-reconciliation", "template-reconciliation-hash");
+        await using var winner = database.Open("tenant-a");
+        await winner.Template.SaveAsync(template);
+        var claim = await winner.Context.ExecutableActivityTemplateHashClaims.SingleAsync();
+        claim.IncarnationId = "different-incarnation";
+        await winner.Context.SaveChangesAsync();
+        winner.Context.ChangeTracker.Clear();
+
+        await using var contender = database.Open(
+            "tenant-a",
+            new HideTemplateLookupInterceptor(9),
+            new AlwaysUniqueTemplateSaveInterceptor());
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => contender.Template.SaveAsync(template).AsTask());
     }
 
     [Fact]
@@ -618,6 +702,48 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Root_write_lease_reacquisition_returns_the_latest_fencing_token_after_aba()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var first = database.Open("tenant-a");
+        await first.Executable.SaveAsync(Executable("lease-aba"));
+        var now = DateTimeOffset.UtcNow;
+        var original = await first.Executable.TryAcquireRootWriteLeaseAsync("lease-aba", "lease", now.AddHours(1), now);
+        Assert.NotNull(original);
+
+        await using var second = database.Open("tenant-a");
+        await second.Executable.ReleaseRootWriteLeaseAsync(original!);
+        var replacement = await second.Executable.TryAcquireRootWriteLeaseAsync("lease-aba", "lease", now.AddHours(2), now);
+        Assert.NotNull(replacement);
+        Assert.NotEqual(original.ConcurrencyToken, replacement!.ConcurrencyToken);
+
+        var reacquired = await first.Executable.TryAcquireRootWriteLeaseAsync("lease-aba", "lease", now.AddHours(3), now);
+
+        Assert.Equal(replacement.ConcurrencyToken, reacquired!.ConcurrencyToken);
+    }
+
+    [Fact]
+    public async Task Deletion_guard_reacquisition_returns_the_latest_fencing_token_after_aba()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var first = database.Open("tenant-a");
+        await first.Executable.SaveAsync(Executable("guard-aba"));
+        var now = DateTimeOffset.UtcNow;
+        var original = await first.Executable.TryBeginDeletionAsync("guard-aba", "delete", now.AddHours(1), now);
+        Assert.NotNull(original);
+
+        await using var second = database.Open("tenant-a");
+        Assert.True(await second.Executable.CancelDeletionAsync(original!));
+        var replacement = await second.Executable.TryBeginDeletionAsync("guard-aba", "delete", now.AddHours(2), now);
+        Assert.NotNull(replacement);
+        Assert.NotEqual(original.ConcurrencyToken, replacement!.ConcurrencyToken);
+
+        var reacquired = await first.Executable.TryBeginDeletionAsync("guard-aba", "delete", now.AddHours(3), now);
+
+        Assert.Equal(replacement.ConcurrencyToken, reacquired!.ConcurrencyToken);
+    }
+
+    [Fact]
     public async Task Release_root_write_lease_reloads_after_contention_and_preserves_newer_leases()
     {
         await using var database = await Database.CreateAsync();
@@ -943,9 +1069,9 @@ public sealed class EfRuntimeArtifactScopeTests
             return new Database(connection, connectionString, databasePath);
         }
 
-        public Fixture Open(string scope, IInterceptor? interceptor = null) => Open(PersistenceAccessContext.Scoped(new PersistenceScope(scope)), interceptor);
+        public Fixture Open(string scope, params IInterceptor[] interceptors) => Open(PersistenceAccessContext.Scoped(new PersistenceScope(scope)), interceptors);
 
-        public Fixture Open(PersistenceAccessContext access, IInterceptor? interceptor = null)
+        public Fixture Open(PersistenceAccessContext access, params IInterceptor[] interceptors)
         {
             var fixtureConnection = new SqliteConnection(connectionString);
             var ownershipTransferred = false;
@@ -953,7 +1079,7 @@ public sealed class EfRuntimeArtifactScopeTests
             {
                 fixtureConnection.Open();
                 var options = new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(fixtureConnection);
-                if (interceptor is not null)
+                foreach (var interceptor in interceptors)
                     options.AddInterceptors(interceptor);
                 var context = new BookmarkStateSqliteDbContext(options.Options);
                 var codec = new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions
@@ -1121,5 +1247,38 @@ public sealed class EfRuntimeArtifactScopeTests
                 await recreate();
             return result;
         }
+    }
+
+    private sealed class HideTemplateLookupInterceptor(int lookupCount) : DbCommandInterceptor
+    {
+        private int remaining = lookupCount;
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Decrement(ref remaining) >= 0)
+            {
+                foreach (DbParameter parameter in command.Parameters)
+                {
+                    if (parameter.Value is string)
+                        parameter.Value = "__hidden__";
+                }
+            }
+
+            return result;
+        }
+    }
+
+    private sealed class AlwaysUniqueTemplateSaveInterceptor : SaveChangesInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<InterceptionResult<int>>(
+                new DbUpdateException("template create conflict", new SqliteException("template create conflict", 19, 2067)));
     }
 }

@@ -44,8 +44,7 @@ public sealed class EfExecutableActivityTemplateStore(
                 {
                     var existing = Read(current, identity);
                     EnsureOwnedClaim(claim, identity);
-                    if (claim!.IncarnationId != current.IncarnationId)
-                        throw new InvalidDataException("Executable activity template and its hash claim have mismatched incarnation identities.");
+                    EnsureMatchingIncarnation(current, claim!);
                     EnsureSameIdentityAndContent(existing, template);
                     await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
                         context, "saving", template.TemplateId, () => transaction.CommitAsync(cancellationToken));
@@ -121,8 +120,7 @@ public sealed class EfExecutableActivityTemplateStore(
         var templateIdentity = identity with { TemplateId = readClaim.TemplateId };
         var row = await FindRowByIdAsync(templateIdentity, cancellationToken)
                   ?? throw new InvalidDataException("Executable activity template hash claim points to a missing template.");
-        if (row.IncarnationId != claim.IncarnationId)
-            throw new InvalidDataException("Executable activity template and its hash claim have mismatched incarnation identities.");
+        EnsureMatchingIncarnation(row, claim);
         EnsureRowHash(row, identity.TemplateHash);
         return Read(row, templateIdentity);
     }
@@ -238,13 +236,15 @@ public sealed class EfExecutableActivityTemplateStore(
 
     private async ValueTask ReconcileCreateAsync(ExecutableActivityTemplate template, TemplateIdentity identity, Exception cause, CancellationToken cancellationToken)
     {
-        var winner = await FindAsync(template.TemplateId, cancellationToken);
-        if (winner is not null)
+        var winnerRow = await FindRowByIdAsync(identity, cancellationToken);
+        if (winnerRow is not null)
         {
-            EnsureSameIdentityAndContent(winner, template);
             var claim = await FindClaimRowAsync(identity, cancellationToken)
                         ?? throw new InvalidDataException("Executable activity template winner has no hash claim.");
             EnsureOwnedClaim(claim, identity);
+            EnsureMatchingIncarnation(winnerRow, claim);
+            var winner = Read(winnerRow, identity);
+            EnsureSameIdentityAndContent(winner, template);
             return;
         }
         var claimRow = await FindClaimRowAsync(identity, cancellationToken);
@@ -364,6 +364,12 @@ public sealed class EfExecutableActivityTemplateStore(
             throw new InvalidDataException("Executable activity template has no hash claim.");
         if (identity.TemplateHash is null || ReadClaim(row, identity).TemplateId != identity.TemplateId)
             throw new InvalidOperationException($"Executable activity template hash '{identity.TemplateHash}' is owned by another template.");
+    }
+
+    private static void EnsureMatchingIncarnation(ExecutableActivityTemplateEntity template, ExecutableActivityTemplateHashClaimEntity claim)
+    {
+        if (!StringComparer.Ordinal.Equals(template.IncarnationId, claim.IncarnationId))
+            throw new InvalidDataException("Executable activity template and its hash claim have mismatched incarnation identities.");
     }
 
     private static void EnsureRowHash(ExecutableActivityTemplateEntity row, string? expectedHash)

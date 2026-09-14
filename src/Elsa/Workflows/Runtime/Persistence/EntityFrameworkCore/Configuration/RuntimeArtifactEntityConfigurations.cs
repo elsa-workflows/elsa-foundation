@@ -102,6 +102,7 @@ public sealed class WorkflowExecutableSourceReferenceEntityConfiguration : IEnti
         b.Property(x => x.ScopeKeyHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.ScopeKeyOrderKey).IsRequired();
         b.Property(x => x.Scope).HasMaxLength(RuntimeArtifactEfModule.ScopeMaximumLength).IsRequired();
+        b.Property(x => x.ExpiresAtUtcTicks).IsRequired(false);
         b.Property(x => x.ContentJson).IsRequired();
         b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();
         b.Property(x => x.Revision).IsConcurrencyToken().IsRequired();

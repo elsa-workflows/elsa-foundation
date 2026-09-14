@@ -226,6 +226,7 @@ public sealed class EfWorkflowExecutableStore(
         var scope = RequireScope();
         for (var attempt = 0; attempt < 16; attempt++)
         {
+            context.ChangeTracker.Clear();
             var pair = await LoadPairAsync(scope, artifactId, cancellationToken);
             if (pair is null)
                 return null;
@@ -336,6 +337,7 @@ public sealed class EfWorkflowExecutableStore(
         var scope = RequireScope();
         for (var attempt = 0; attempt < 16; attempt++)
         {
+            context.ChangeTracker.Clear();
             var pair = await LoadPairAsync(scope, artifactId, cancellationToken);
             if (pair is null)
                 return null;
