@@ -21,7 +21,6 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 | Contract | Layer | Default impl | Override when |
 |---|---|---|---|
 | `IWorkflowDefinitionLookup` | Core — `Elsa.Workflows.Design.Core` | `WorkflowDefinitionLookup` (`.Persistence.Core`) | You want a different read strategy (caching, projection store) while keeping the write path. |
-| `IWorkflowDesignContextFactory` | Core — `Elsa.Workflows.Design.Core` | *(persistence-supplied)* | You need a custom ambient design context (multi-tenant scoping, alternate graph source). |
 | Command interfaces (`IUpdateDraftCommand` + 5 lifecycle) | Core — `Elsa.Workflows.Design.Persistence.Core` | Groundwork command impls (`.Persistence.Groundwork`) | You want different mutation/lifecycle behaviour while keeping the built-in `IWorkflowDefinitionLookup`. |
 | `IDraftStateDiffEngine` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `DraftStateDiffEngine` (`.Persistence.Core`) | You want to change which mutation events are emitted or the match-key semantics. |
 
@@ -29,10 +28,6 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 - **Signature:** `GetDefinition(id)`, `ListDefinitions(searchTerm?)`, `GetVersion(versionId)`, `FindLatestVersion(definitionId)`, `ListVersions(definitionId)` — all `Task`-returning reads.
 - **Default impl:** `WorkflowDefinitionLookup` (`Elsa.Workflows.Design.Persistence.Core`), backed by the named `IWorkflowDefinitionVersionStore` + `IWorkflowDefinitionStore` read ports.
 - **Override:** `services.Replace(ServiceDescriptor.Scoped<IWorkflowDefinitionLookup, MyLookup>())`. Or override one of the underlying named read ports (see [`Elsa.Workflows.Design.Persistence.Groundwork/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Persistence.Groundwork/EXTENSION_POINTS.md)) — two granularities of the same *override* axis.
-
-### `IWorkflowDesignContextFactory` *(Core — `Elsa.Workflows.Design.Core`)*
-- **Signature:** `ValueTask<IWorkflowDesignContext> Create(CancellationToken ct)`
-- **Override:** `services.Replace(...)` when you need a custom ambient context.
 
 ### Commands — `IUpdateDraftCommand` + 5 lifecycle *(Core — `Elsa.Workflows.Design.Persistence.Core`)*
 Full detail in the persistence catalog: [`Elsa.Workflows.Design.Persistence.Groundwork/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Persistence.Groundwork/EXTENSION_POINTS.md).
@@ -44,7 +39,7 @@ Summary: `IUpdateDraftCommand`, `ICreateDraftCommand`, `ICloneDraftFromVersionCo
 - **Default impl:** `DraftStateDiffEngine`. Override to change emission / matching.
 
 ### Domain-model abstractions
-`IWorkflowDefinition`, `IWorkflowDefinitionVersion`, `IWorkflowDefinitionDraft`, `IWorkflowDefinitionLayout`, `IWorkflowGraph`, `IWorkflowDesignContext` are read-model abstractions (framework §2.1). A custom persistence provider realises them; application code does not replace them piecemeal.
+`IWorkflowDefinition`, `IWorkflowDefinitionVersion`, `IWorkflowDefinitionDraft`, `IWorkflowDefinitionLayout`, `IWorkflowGraph` are read-model abstractions (framework §2.1). A custom persistence provider realises them; application code does not replace them piecemeal.
 
 ---
 
