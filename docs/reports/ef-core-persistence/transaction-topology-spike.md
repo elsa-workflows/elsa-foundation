@@ -1,7 +1,10 @@
 # EF Core transaction topology spike (#1674)
 
-Status: bounded test-only evidence on `codex/ef-transaction-topology`, based on
-`origin/main` at `d15bd735df5df101d5e8f546a653b65c70881c2f` (2026-09-14).
+Status: bounded test-only evidence on `codex/ef-transaction-topology`, rebased
+onto `origin/main` at `4d5347241f59d45706667dfd25306c5f754b04a7`
+(2026-09-14). The rebase-validation head before the documentation-only
+provenance correction was `943674d278239bb02b3b0620f09a2027e5885945`;
+the live PR head is the authoritative exact candidate identity.
 
 This spike proves the mechanics needed before Runtime, Design, and Publishing
 contexts are multiplied. It intentionally contains no production transaction
@@ -36,6 +39,12 @@ never started concurrently by this project. MySQL uses the pinned
 `mysql:8.4.11` digest from the feasibility spike.
 
 ## A01-A13 acceptance mapping
+
+The SQLite statements below are verified on the exact rebased candidate head.
+The PostgreSQL, SQL Server, and MySQL statements are evidence from pre-rebase
+head `d173d6d01251a51125f824c0acb27989ee3feef0`; the native-provider test paths
+are unchanged by the rebase, but those three suites were not rerun on
+the rebased candidate and are not exact-head evidence.
 
 | Row | Evidence and disposition |
 | --- | --- |
@@ -81,7 +90,9 @@ contracts. No default flip or Groundwork deletion is implied here.
 
 ## Local verification
 
-Commands run serially:
+Commands run serially across the development and final-rebase validation
+passes (the native commands were last run on the pre-rebase head identified
+above):
 
 ```text
 dotnet build tests/Elsa/Persistence/EntityFrameworkCore/TransactionTopology/Tests/Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests.csproj --configuration Release --nologo --no-restore
@@ -91,10 +102,12 @@ dotnet test tests/Elsa/Persistence/EntityFrameworkCore/TransactionTopology/Tests
 dotnet test tests/Elsa/Persistence/EntityFrameworkCore/TransactionTopology/Tests/Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests.csproj --configuration Release --no-build --no-restore --filter FullyQualifiedName~MySqlTopologyTests --logger 'console;verbosity=minimal'
 ```
 
-Results: build passed with 0 warnings/0 errors; SQLite 13/13 passed;
-PostgreSQL 1/1 passed; SQL Server 1/1 passed; MySQL 1/1 passed. No hosted CI,
-benchmark, timing measurement, migration command, or performance check was
-run.
+Exact rebased-head results: SQLite 13/13 passed, maps and solution filters were
+fresh, and the diff check was clean. Pre-rebase results on the unchanged native
+test paths: build passed with 0 warnings/0 errors; PostgreSQL 1/1 passed; SQL
+Server 1/1 passed; MySQL 1/1 passed. The native results were not rerun on the
+rebased head. No hosted CI, benchmark, timing measurement, migration command,
+or performance check was run.
 
 `dotnet run --project tools/maps/Elsa.Maps.Generator -- all` followed by
 `-- check` passed after staging all six genuinely changed map/findings files.
