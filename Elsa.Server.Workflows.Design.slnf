@@ -43,6 +43,7 @@
       "src/Elsa/Locking/Core/Elsa.Locking.Core.csproj",
       "src/Elsa/Mediator/Core/Elsa.Mediator.Core.csproj",
       "src/Elsa/Mediator/Elsa.Mediator.csproj",
+      "src/Elsa/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
       "src/Elsa/Persistence/Groundwork/V2/Elsa.Persistence.Groundwork.V2.csproj",
       "src/Elsa/Pipelines/Core/Elsa.Pipelines.Core.csproj",
       "src/Elsa/Primitives/Hosting/Elsa.Primitives.Hosting.csproj",
@@ -57,8 +58,8 @@
       "src/Elsa/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj",
       "src/Elsa/Workflows/Design/JavaScript/Elsa.Workflows.Design.JavaScript.csproj",
       "src/Elsa/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj",
-      "src/Elsa/Workflows/Design/Persistence/Groundwork/Elsa.Workflows.Design.Persistence.Groundwork.csproj",
       "src/Elsa/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj",
+      "src/Elsa/Workflows/Design/Persistence/Groundwork/Elsa.Workflows.Design.Persistence.Groundwork.csproj",
       "src/Elsa/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj",
       "src/Elsa/Workflows/Design/Reconciliation/Git/Elsa.Workflows.Design.Reconciliation.Git.csproj",
       "src/Elsa/Workflows/Design/Reconciliation/Json/Elsa.Workflows.Design.Reconciliation.Json.csproj",
@@ -85,8 +86,8 @@
       "tests/Elsa/Testing/Elsa.Testing.csproj",
       "tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj",
       "tests/Elsa/Workflows/Design/CodeGeneration/Tests/Elsa.Workflows.Design.CodeGeneration.Tests.csproj",
-      "tests/Elsa/Workflows/Design/Persistence/Groundwork/Tests/Elsa.Workflows.Design.Persistence.Groundwork.Tests.csproj",
       "tests/Elsa/Workflows/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.csproj",
+      "tests/Elsa/Workflows/Design/Persistence/Groundwork/Tests/Elsa.Workflows.Design.Persistence.Groundwork.Tests.csproj",
       "tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj"
     ]
   }
