@@ -121,6 +121,21 @@ internal static class EfDesignSupport
 
     public static string OperationKey(string operationKind, string operationKey) => operationKind + "\u001f" + operationKey;
 
+    public static DesignLayoutMaterial[] LayoutMaterial(IReadOnlyCollection<DesignMetadataRecord> records) =>
+        records.Select(record => new DesignLayoutMaterial(
+            record.NodeId,
+            record.X,
+            record.Y,
+            record.Width,
+            record.Height,
+            record.AdditionalProperties?.GetRawText())).ToArray();
+
+    public static DesignActivityPresentationMaterial[] PresentationMaterial(IReadOnlyCollection<ActivityPresentationRecord> records) =>
+        records.Select(record => new DesignActivityPresentationMaterial(
+            record.NodeId,
+            record.DisplayName,
+            record.Description)).ToArray();
+
     public static WorkflowDefinition MapDefinition(WorkflowDefinition row) => row;
 
     public static WorkflowDefinitionVersion MapVersion(IPayloadSerializer serializer, WorkflowDefinitionVersion row)
@@ -147,3 +162,16 @@ internal static class EfDesignSupport
         context.Entry(row).Property("ActivityPresentationJson").CurrentValue = Json((presentation ?? []).ToArray());
     }
 }
+
+internal sealed record DesignLayoutMaterial(
+    string NodeId,
+    double X,
+    double Y,
+    double? Width,
+    double? Height,
+    string? AdditionalPropertiesJson);
+
+internal sealed record DesignActivityPresentationMaterial(
+    string NodeId,
+    string? DisplayName,
+    string? Description);

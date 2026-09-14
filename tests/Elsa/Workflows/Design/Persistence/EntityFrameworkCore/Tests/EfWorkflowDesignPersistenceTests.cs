@@ -294,6 +294,71 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Operation_request_material_matches_groundwork_for_layout_and_promotion()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        var accessor = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var serializer = new TestSerializer(new JsonSerializerOptions { PropertyNamingPolicy = null });
+        var identities = new TestIdentity();
+        var writer = new EfDesignAtomicWriter(db, accessor);
+        var state = State();
+        var definition = new WorkflowDefinition
+        {
+            Id = "definition-parity",
+            TenantId = "tenant-a",
+            Name = "Parity",
+            Description = "Description",
+            DeletedAt = DateTimeOffset.UnixEpoch,
+            DeletedReason = "source",
+            IsSourceOwned = true
+        };
+        var draft = new WorkflowDefinitionDraft
+        {
+            Id = "draft-parity",
+            TenantId = "tenant-a",
+            WorkflowDefinitionId = definition.Id,
+            SourceVersionId = "source-version",
+            State = state
+        };
+        var layout = new DesignMetadataRecord("root", 1, 2, 3, 4);
+        var presentation = new ActivityPresentationRecord("root", "Root", "Description");
+
+        await new EfAddWorkflowDefinitionCommand(db, accessor, writer, serializer, identities)
+            .Execute(new DesignOperationKey("parity-create"), definition, draft, [layout], [presentation]);
+
+        var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var expectedCreateJson = JsonSerializer.Serialize(new
+        {
+            name = definition.Name,
+            description = definition.Description,
+            deletedAt = definition.DeletedAt,
+            deletedReason = definition.DeletedReason,
+            isSourceOwned = definition.IsSourceOwned,
+            sourceVersionId = draft.SourceVersionId,
+            stateJson = serializer.Serialize(state),
+            layout = new[] { new { nodeId = "root", x = 1d, y = 2d, width = 3d, height = 4d, additionalPropertiesJson = (string?)null } },
+            activityPresentation = new[] { new { nodeId = "root", displayName = "Root", description = "Description" } }
+        }, json);
+        var createMarker = await db.Operations.SingleAsync(x => x.OperationKey == "parity-create");
+        Assert.Equal(GroundworkFingerprint("workflow.definition.create.v1", expectedCreateJson), createMarker.RequestFingerprint);
+
+        var versionStore = new EfWorkflowDefinitionVersionStore(db, serializer, new EfWorkflowDefinitionStore(db, accessor), accessor);
+        await new EfPromoteDraftToVersionCommand(db, accessor, writer, serializer, identities, versionStore, new TestLockProvider())
+            .Execute(new DesignOperationKey("parity-promote"), draft.Id, "1.0.0");
+        var expectedPromotionJson = JsonSerializer.Serialize(new
+        {
+            draftId = draft.Id,
+            assignmentMode = "exact",
+            requestedVersion = "1.0.0"
+        }, json);
+        var promotionMarker = await db.Operations.SingleAsync(x => x.OperationKey == "parity-promote");
+        Assert.Equal(GroundworkFingerprint("workflow.draft.promote.v1", expectedPromotionJson), promotionMarker.RequestFingerprint);
+    }
+
+    [Fact]
     public async Task Failed_stage_does_not_leak_tracked_rows_into_the_next_operation()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
@@ -506,9 +571,37 @@ public sealed class EfWorkflowDesignPersistenceTests
 
     private static string GroundworkFingerprint(string operationKind, string json)
     {
+        using var document = JsonDocument.Parse(json);
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+            WriteCanonical(writer, document.RootElement);
+        var canonical = Encoding.UTF8.GetString(stream.ToArray());
         var identity = "elsa-design-material:v1";
-        var material = $"{Encoding.UTF8.GetByteCount(identity)}:{identity}{Encoding.UTF8.GetByteCount(operationKind)}:{operationKind}1:1{Encoding.UTF8.GetByteCount(json)}:{json}";
+        var material = $"{Encoding.UTF8.GetByteCount(identity)}:{identity}{Encoding.UTF8.GetByteCount(operationKind)}:{operationKind}1:1{Encoding.UTF8.GetByteCount(canonical)}:{canonical}";
         return $"sha256:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(material)))}";
+    }
+
+    private static void WriteCanonical(Utf8JsonWriter writer, JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            writer.WriteStartObject();
+            foreach (var property in element.EnumerateObject().OrderBy(property => property.Name, StringComparer.Ordinal))
+            {
+                writer.WritePropertyName(property.Name);
+                WriteCanonical(writer, property.Value);
+            }
+            writer.WriteEndObject();
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            writer.WriteStartArray();
+            foreach (var item in element.EnumerateArray())
+                WriteCanonical(writer, item);
+            writer.WriteEndArray();
+        }
+        else
+            element.WriteTo(writer);
     }
     private sealed class ProtocolScope : IDisposable { public bool Disposed { get; private set; } public void Dispose() => Disposed = true; }
     private sealed class ProtocolMarker { }
