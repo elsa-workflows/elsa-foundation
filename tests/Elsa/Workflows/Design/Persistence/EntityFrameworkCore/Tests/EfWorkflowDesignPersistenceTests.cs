@@ -1357,6 +1357,48 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Shared_protocol_callback_disposal_failure_preserves_exception_and_disposes_once()
+    {
+        var scope = new ProtocolScope();
+        var primary = new InvalidOperationException("commit acknowledgement lost");
+        var callbackException = new InvalidOperationException("dispose before reconcile failed");
+        var rollbackCount = 0;
+        var lane = new DesignAtomicWriteLane<ProtocolScope, ProtocolMarker, ProtocolStage, ProtocolResult>
+        {
+            MarkerId = "reconcile-before-read-failure",
+            LoadMarker = _ => Task.FromResult<ProtocolMarker?>(null),
+            BeginScope = () => scope,
+            SaveMarker = (_, _, _) => Task.CompletedTask,
+            Commit = (_, _) => Task.FromException<DesignAtomicCommitDisposition>(primary),
+            Rollback = _ => rollbackCount++,
+            ClassifyMarkerRace = _ => false,
+            ClassifyUncertainCommit = _ => false,
+            OnUncertainCommit = (_, _) => throw new InvalidOperationException(),
+            DisposeBeforeReconcile = value =>
+            {
+                value.Dispose();
+                return Task.FromException(callbackException);
+            },
+            TryReconcileAfterCommit = (_, _) => Task.FromResult<ProtocolResult?>(new ProtocolResult("reconciled")),
+            Delay = (_, _) => Task.CompletedTask,
+            IsAccepted = stage => stage.Accepted,
+            OnCommitted = _ => new ProtocolResult("committed"),
+            OnReplay = _ => new ProtocolResult("replayed"),
+            OnRejected = () => new ProtocolResult("rejected")
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => DesignAtomicWriteProtocol.ExecuteAsync(
+            lane,
+            (_, _) => Task.FromResult(new ProtocolStage(true)),
+            null,
+            CancellationToken.None));
+
+        Assert.Same(callbackException, exception);
+        Assert.Equal(1, scope.DisposeCount);
+        Assert.Equal(0, rollbackCount);
+    }
+
+    [Fact]
     public async Task Shared_protocol_logs_rollback_failure_without_masking_primary_exception()
     {
         var scope = new ProtocolScope();

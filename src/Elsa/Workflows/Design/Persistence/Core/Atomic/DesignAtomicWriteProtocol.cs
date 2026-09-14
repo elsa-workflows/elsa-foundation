@@ -163,10 +163,9 @@ public static class DesignAtomicWriteProtocol
 
         public async Task DisposeBeforeReconcileAsync(Func<TScope, Task> disposeBeforeReconcile)
         {
-            if (IsDisposed)
+            if (Interlocked.Exchange(ref disposed, 1) != 0)
                 return;
             await disposeBeforeReconcile(Value);
-            Volatile.Write(ref disposed, 1);
         }
 
         public void Dispose()
