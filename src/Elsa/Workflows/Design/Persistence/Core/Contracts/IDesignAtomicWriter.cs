@@ -61,16 +61,20 @@ public static class DesignAtomicWriterExtensions
         DesignOperationKey operationKey,
         string operationKind,
         object requestMaterial,
+        IReadOnlyCollection<string> mutatedUnits,
         Func<CancellationToken, Task<T>> stage,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(mutatedUnits);
+        if (mutatedUnits.Count == 0 || mutatedUnits.Any(string.IsNullOrWhiteSpace))
+            throw new ArgumentException("A design operation must declare at least one mutated unit.", nameof(mutatedUnits));
         ArgumentNullException.ThrowIfNull(stage);
         var result = await writer.ExecuteAsync(
             operationKey,
             operationKind,
             requestMaterial,
-            [],
+            mutatedUnits,
             async (_, token) => DesignAtomicWriteStage<T>.Accepted(await stage(token)),
             cancellationToken: cancellationToken);
 

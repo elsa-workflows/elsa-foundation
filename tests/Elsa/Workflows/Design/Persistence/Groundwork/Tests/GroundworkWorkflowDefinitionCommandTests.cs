@@ -370,6 +370,39 @@ public class GroundworkWorkflowDefinitionCommandTests
     }
 
     [Fact]
+    public async Task Direct_atomic_interface_reports_conflict_without_rerunning_stage()
+    {
+        var writer = AtomicWrite();
+        var key = NextKey();
+        var stageCalls = 0;
+        var first = await writer.ExecuteAsync(
+            key,
+            "test.operation.v1",
+            new { Value = 1 },
+            [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind],
+            (_, _) =>
+            {
+                stageCalls++;
+                return Task.FromResult(DesignAtomicWriteStage<string>.Accepted("winner"));
+            });
+
+        var conflict = await writer.ExecuteAsync(
+            key,
+            "test.operation.v1",
+            new { Value = 2 },
+            [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind],
+            (_, _) =>
+            {
+                stageCalls++;
+                return Task.FromResult(DesignAtomicWriteStage<string>.Accepted("loser"));
+            });
+
+        Assert.Equal(DesignAtomicWriteStatus.Committed, first.Status);
+        Assert.Equal(DesignAtomicWriteStatus.Conflict, conflict.Status);
+        Assert.Equal(1, stageCalls);
+    }
+
+    [Fact]
     public async Task Materialize_definition_and_version_replay_without_restaging_and_conflict_on_changed_material()
     {
         var definitionCommand = new GroundworkMaterializeWorkflowDefinitionCommand(AtomicWrite(), _clock, _accessContext);

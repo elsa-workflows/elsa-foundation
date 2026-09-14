@@ -1,7 +1,11 @@
+using System.Data.Common;
 using System.Text.Json;
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Atomic;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
@@ -14,6 +18,7 @@ using Elsa.Serialization.Core;
 using Elsa.Locking.Core;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests;
@@ -46,7 +51,7 @@ public sealed class EfWorkflowDesignPersistenceTests
     public async Task Operation_key_replays_and_conflicting_request_is_rejected()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync(); await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
-        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))); var writer = new EfDesignAtomicWriter(db, access); var key = new DesignOperationKey("same"); var first = await writer.ExecuteAsync(key, "test.op", new { Value = 1 }, _ => Task.FromResult(new { Id = "winner" })); var replay = await writer.ExecuteAsync(key, "test.op", new { Value = 1 }, _ => Task.FromResult(new { Id = "loser" })); Assert.Equal(first.Id, replay.Id); await Assert.ThrowsAsync<InvalidOperationException>(() => writer.ExecuteAsync(key, "test.op", new { Value = 2 }, _ => Task.FromResult(new { Id = "conflict" })));
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))); var writer = new EfDesignAtomicWriter(db, access); var key = new DesignOperationKey("same"); var first = await writer.ExecuteAsync(key, "test.op", new { Value = 1 }, ["test"], _ => Task.FromResult(new { Id = "winner" })); var replay = await writer.ExecuteAsync(key, "test.op", new { Value = 1 }, ["test"], _ => Task.FromResult(new { Id = "loser" })); Assert.Equal(first.Id, replay.Id); await Assert.ThrowsAsync<InvalidOperationException>(() => writer.ExecuteAsync(key, "test.op", new { Value = 2 }, ["test"], _ => Task.FromResult(new { Id = "conflict" })));
     }
 
     [Fact]
@@ -59,8 +64,8 @@ public sealed class EfWorkflowDesignPersistenceTests
         var serializer = new TestSerializer(); var identities = new TestIdentity();
         var first = new EfDesignAtomicWriter(db, access: a);
         var second = new EfDesignAtomicWriter(db, access: b);
-        await first.ExecuteAsync(new DesignOperationKey("same"), "test.op", new { Value = 1 }, _ => Task.FromResult(new { Id = "a" }));
-        var replay = await second.ExecuteAsync(new DesignOperationKey("same"), "test.op", new { Value = 1 }, _ => Task.FromResult(new { Id = "b" }));
+        await first.ExecuteAsync(new DesignOperationKey("same"), "test.op", new { Value = 1 }, ["test"], _ => Task.FromResult(new { Id = "a" }));
+        var replay = await second.ExecuteAsync(new DesignOperationKey("same"), "test.op", new { Value = 1 }, ["test"], _ => Task.FromResult(new { Id = "b" }));
         Assert.Equal("b", replay.Id);
         var addA = new EfAddWorkflowDefinitionCommand(db, a, first, serializer, identities);
         var addB = new EfAddWorkflowDefinitionCommand(db, b, second, serializer, identities);
@@ -77,13 +82,13 @@ public sealed class EfWorkflowDesignPersistenceTests
         await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
         var global = new TestAccessor(PersistenceAccessContext.Global);
         var writer = new EfDesignAtomicWriter(db, access: global);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.ExecuteAsync(new DesignOperationKey("global"), "test.op", new { Value = 1 }, _ => Task.FromResult(new { Id = "x" })));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.ExecuteAsync(new DesignOperationKey("global"), "test.op", new { Value = 1 }, ["test"], _ => Task.FromResult(new { Id = "x" })));
 
         var scoped = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
         var scopedWriter = new EfDesignAtomicWriter(db, access: scoped);
-        await scopedWriter.ExecuteAsync(new DesignOperationKey("corrupt"), "test.op", new { Value = 1 }, _ => Task.FromResult(new { Id = "x" }));
+        await scopedWriter.ExecuteAsync(new DesignOperationKey("corrupt"), "test.op", new { Value = 1 }, ["test"], _ => Task.FromResult(new { Id = "x" }));
         var marker = await db.Operations.SingleAsync(x => x.OperationKey == "corrupt"); marker.ResultJson = "{\"Id\":\"tampered\"}"; await db.SaveChangesAsync();
-        await Assert.ThrowsAsync<InvalidDataException>(() => scopedWriter.ExecuteAsync(new DesignOperationKey("corrupt"), "test.op", new { Value = 1 }, _ => Task.FromResult(new { Id = "unused" })));
+        await Assert.ThrowsAsync<InvalidDataException>(() => scopedWriter.ExecuteAsync(new DesignOperationKey("corrupt"), "test.op", new { Value = 1 }, ["test"], _ => Task.FromResult(new { Id = "unused" })));
     }
 
     [Fact]
@@ -109,15 +114,110 @@ public sealed class EfWorkflowDesignPersistenceTests
         await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
         var accessor = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
         var writer = new EfDesignAtomicWriter(db, accessor);
-        await Assert.ThrowsAsync<InvalidDataException>(() => writer.ExecuteAsync<object>(new DesignOperationKey("failed"), "test.op", new { Value = 1 }, _ =>
+        await Assert.ThrowsAsync<InvalidDataException>(() => writer.ExecuteAsync<object>(new DesignOperationKey("failed"), "test.op", new { Value = 1 }, ["test"], _ =>
         {
             db.Definitions.Add(new WorkflowDefinition { Id = "leaked", TenantId = "tenant-a", Name = "Should not persist" });
             throw new InvalidDataException("stage failed");
         }));
         Assert.Empty(db.ChangeTracker.Entries());
-        await writer.ExecuteAsync(new DesignOperationKey("next"), "test.op", new { Value = 2 }, _ => Task.FromResult(new { Id = "next" }));
+        await writer.ExecuteAsync(new DesignOperationKey("next"), "test.op", new { Value = 2 }, ["test"], _ => Task.FromResult(new { Id = "next" }));
         Assert.Null(await db.Definitions.SingleOrDefaultAsync(x => x.Id == "leaked"));
     }
+
+    [Fact]
+    public async Task Direct_atomic_interface_returns_conflict_and_rejects_empty_mutation_units()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        IDesignAtomicWriter writer = new EfDesignAtomicWriter(db, access);
+        var key = new DesignOperationKey("direct");
+        await writer.ExecuteAsync(key, "test.op", new { Value = 1 }, ["test"],
+            (_, _) => Task.FromResult(DesignAtomicWriteStage<int>.Accepted(1)));
+        var conflict = await writer.ExecuteAsync(key, "test.op", new { Value = 2 }, ["test"],
+            (_, _) => Task.FromResult(DesignAtomicWriteStage<int>.Accepted(2)));
+        Assert.Equal(DesignAtomicWriteStatus.Conflict, conflict.Status);
+        await Assert.ThrowsAsync<ArgumentException>(() => writer.ExecuteAsync(
+            new DesignOperationKey("empty"), "test.op", new { Value = 1 }, [],
+            (_, _) => Task.FromResult(DesignAtomicWriteStage<int>.Accepted(1))));
+    }
+
+    [Fact]
+    public async Task Ef_rejects_authoritative_result_that_differs_from_staged_value()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var writer = new EfDesignAtomicWriter(db, access);
+        var suppliedJson = JsonSerializer.Serialize(new ResultValue("supplied"));
+        await Assert.ThrowsAsync<InvalidDataException>(() => writer.ExecuteAsync(
+            new DesignOperationKey("mismatch"), "test.op", new { Value = 1 }, ["test"],
+            (_, _) => Task.FromResult(DesignAtomicWriteStage<ResultValue>.Accepted(
+                new ResultValue("staged"), "sha256:invalid", suppliedJson))));
+        Assert.Empty(await db.Operations.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Ef_reconciles_a_commit_acknowledgement_failure_without_rerunning_stage()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        var interceptor = new AcknowledgementLostInterceptor();
+        var options = new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>()
+            .UseSqlite(connection).AddInterceptors(interceptor).Options;
+        await using var db = new WorkflowsDesignSqliteDbContext(options); await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        IDesignAtomicWriter writer = new EfDesignAtomicWriter(db, access, reconciliationTimeout: TimeSpan.FromMilliseconds(250));
+        var stageCalls = 0;
+        interceptor.FailNextCommit = true;
+
+        var result = await writer.ExecuteAsync(
+            new DesignOperationKey("ack-lost"), "test.op", new { Value = 1 }, ["test"],
+            (_, _) =>
+            {
+                stageCalls++;
+                return Task.FromResult(DesignAtomicWriteStage<ResultValue>.Accepted(new ResultValue("durable")));
+            });
+
+        Assert.Equal(DesignAtomicWriteStatus.Reconciled, result.Status);
+        Assert.Equal(1, stageCalls);
+        Assert.Single(await db.Operations.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Shared_protocol_rolls_back_when_commit_is_rejected()
+    {
+        var scope = new ProtocolScope();
+        var rollbackCount = 0;
+        var lane = new DesignAtomicWriteLane<ProtocolScope, ProtocolMarker, ProtocolStage, ProtocolResult>
+        {
+            MarkerId = "marker",
+            LoadMarker = _ => Task.FromResult<ProtocolMarker?>(null),
+            BeginScope = () => scope,
+            SaveMarker = (_, _, _) => Task.CompletedTask,
+            Commit = (_, _) => Task.FromResult(DesignAtomicCommitDisposition.Rejected),
+            Rollback = _ => rollbackCount++,
+            ClassifyMarkerRace = _ => false,
+            ClassifyUncertainCommit = _ => false,
+            OnUncertainCommit = (_, _) => throw new InvalidOperationException(),
+            TryReconcileAfterCommit = (_, _) => Task.FromResult<ProtocolResult?>(null),
+            Delay = (_, _) => Task.CompletedTask,
+            IsAccepted = stage => stage.Accepted,
+            OnCommitted = _ => new ProtocolResult("committed"),
+            OnReplay = _ => new ProtocolResult("replayed"),
+            OnRejected = () => new ProtocolResult("rejected")
+        };
+
+        var result = await DesignAtomicWriteProtocol.ExecuteAsync(
+            lane,
+            (_, _) => Task.FromResult(new ProtocolStage(true)),
+            null,
+            CancellationToken.None);
+
+        Assert.Equal("rejected", result.Status);
+        Assert.Equal(1, rollbackCount);
+        Assert.True(scope.Disposed);
+    }
+
 
     private static WorkflowsDesignSqliteDbContext Create(SqliteConnection connection) => new(new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>().UseSqlite(connection).Options);
     private static WorkflowDefinitionState State() => new([], null, [], [], null);
@@ -131,6 +231,31 @@ public sealed class EfWorkflowDesignPersistenceTests
         private sealed class Handle : IDistributedSynchronizationHandle { public CancellationToken HandleLostToken => CancellationToken.None; public void Dispose() { } public ValueTask DisposeAsync() => ValueTask.CompletedTask; }
     }
     private sealed class TestAccessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current => current; }
+    private sealed record ResultValue(string Value);
+    private sealed class ProtocolScope : IDisposable { public bool Disposed { get; private set; } public void Dispose() => Disposed = true; }
+    private sealed class ProtocolMarker { }
+    private sealed record ProtocolStage(bool Accepted);
+    private sealed record ProtocolResult(string Status);
+    private sealed class AcknowledgementLostInterceptor : DbTransactionInterceptor
+    {
+        public bool FailNextCommit { get; set; }
+
+        public override void TransactionCommitted(DbTransaction transaction, TransactionEndEventData eventData)
+        {
+            if (!FailNextCommit)
+                return;
+            FailNextCommit = false;
+            throw new InvalidOperationException("commit acknowledgement lost");
+        }
+
+        public override Task TransactionCommittedAsync(DbTransaction transaction, TransactionEndEventData eventData, CancellationToken cancellationToken = default)
+        {
+            if (!FailNextCommit)
+                return Task.CompletedTask;
+            FailNextCommit = false;
+            return Task.FromException(new InvalidOperationException("commit acknowledgement lost"));
+        }
+    }
     private sealed class TestSerializer : IPayloadSerializer
     {
         public string Serialize(object payload) => JsonSerializer.Serialize(payload);

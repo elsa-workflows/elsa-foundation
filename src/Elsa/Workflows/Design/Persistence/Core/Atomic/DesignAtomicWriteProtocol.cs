@@ -51,7 +51,8 @@ public static class DesignAtomicWriteProtocol
         where TMarker : class
         where TResult : class
     {
-        using var scope = lane.BeginScope();
+        var scope = lane.BeginScope();
+        var scopeDisposed = false;
         try
         {
             var staged = await stage(scope, cancellationToken);
@@ -73,18 +74,27 @@ public static class DesignAtomicWriteProtocol
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
+                if (lane.DisposeBeforeReconcile is not null)
+                {
+                    await lane.DisposeBeforeReconcile(scope);
+                    scopeDisposed = true;
+                }
                 var reconciled = await lane.TryReconcileAfterCommit(exception, cancellationToken);
                 if (reconciled is not null)
                     return reconciled;
                 throw;
             }
-            return disposition == DesignAtomicCommitDisposition.Rejected
-                ? lane.OnRejected()
-                : lane.OnCommitted(staged);
+            if (disposition == DesignAtomicCommitDisposition.Rejected)
+            {
+                TryRollback(lane, scope);
+                return lane.OnRejected();
+            }
+            return lane.OnCommitted(staged);
         }
         catch (Exception exception) when (lane.ClassifyMarkerRace(exception))
         {
-            TryRollback(lane, scope);
+            if (!scopeDisposed)
+                TryRollback(lane, scope);
             throw;
         }
         catch (Exception exception) when (lane.ClassifyUncertainCommit(exception))
@@ -93,8 +103,14 @@ public static class DesignAtomicWriteProtocol
         }
         catch
         {
-            TryRollback(lane, scope);
+            if (!scopeDisposed)
+                TryRollback(lane, scope);
             throw;
+        }
+        finally
+        {
+            if (!scopeDisposed)
+                scope.Dispose();
         }
     }
 

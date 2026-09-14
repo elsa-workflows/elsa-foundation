@@ -230,7 +230,12 @@ public sealed class GroundworkDesignAtomicWrite(
             ClassifyMarkerRace = exception => exception is GroundworkDesignOperationMarkerRaceException,
             ClassifyUncertainCommit = exception => exception is GroundworkDesignUncertainCommitException,
             OnUncertainCommit = (exception, token) => ReconcileAsync(markerId, request, token),
-            TryReconcileAfterCommit = (_, _) => Task.FromResult<GroundworkDesignAtomicWriteResult?>(null),
+            DisposeBeforeReconcile = unitOfWork =>
+            {
+                unitOfWork.Dispose();
+                return Task.CompletedTask;
+            },
+            TryReconcileAfterCommit = (exception, token) => ReconcileAfterCommitAsync(markerId, request, exception, token),
             Delay = (attempt, token) => Task.Delay(MarkerRaceBackoffStep * attempt, clock, token),
             IsAccepted = staged => staged.IsAccepted,
             OnCommitted = staged => GroundworkDesignAtomicWriteResult.Committed(staged.AuthoritativeResultFingerprint!, staged.AuthoritativeResultJson!),
@@ -245,17 +250,46 @@ public sealed class GroundworkDesignAtomicWrite(
     private async Task<GroundworkDesignAtomicWriteResult> ReconcileAsync(string markerId, GroundworkDesignAtomicWriteRequest request, CancellationToken cancellationToken)
     {
         using var reconciliation = new CancellationTokenSource(timeout);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, reconciliation.Token);
         var backoff = MarkerRaceBackoffStep;
         while (true)
         {
-            var winner = ReadMarker(markerId);
-            if (winner is not null)
-                return Resolve(winner, request, DesignAtomicWriteStatus.Reconciled);
-            try { await Task.Delay(backoff, clock, linked.Token); }
-            catch (OperationCanceledException) when (reconciliation.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
-            { throw new GroundworkDesignUncertainCommitException($"Design operation marker '{markerId}' did not become visible within the reconciliation timeout."); }
+            try
+            {
+                var winner = ReadMarker(markerId);
+                if (winner is not null)
+                    return Resolve(winner, request, DesignAtomicWriteStatus.Reconciled);
+            }
+            catch (GroundworkDesignCorruptMarkerException)
+            {
+                throw;
+            }
+            catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException or AccessViolationException))
+            {
+                // Continue until the bounded recovery window classifies the outcome.
+                _ = exception;
+            }
+            try { await Task.Delay(backoff, clock, reconciliation.Token); }
+            catch (OperationCanceledException) when (reconciliation.IsCancellationRequested)
+            { throw new DesignAtomicWriteUnknownOutcomeException($"Design operation marker '{markerId}' did not become visible within the reconciliation timeout."); }
             backoff = TimeSpan.FromMilliseconds(Math.Min(backoff.TotalMilliseconds * 2, 250));
+        }
+    }
+
+    private async Task<GroundworkDesignAtomicWriteResult?> ReconcileAfterCommitAsync(
+        string markerId,
+        GroundworkDesignAtomicWriteRequest request,
+        Exception exception,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await ReconcileAsync(markerId, request, cancellationToken);
+        }
+        catch (DesignAtomicWriteUnknownOutcomeException)
+        {
+            throw new DesignAtomicWriteUnknownOutcomeException(
+                $"The Groundwork commit acknowledgement for design operation '{markerId}' has an unknown outcome after bounded recovery.",
+                exception);
         }
     }
 

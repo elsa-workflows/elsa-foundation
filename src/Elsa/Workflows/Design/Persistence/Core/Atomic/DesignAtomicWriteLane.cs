@@ -16,6 +16,7 @@ public sealed class DesignAtomicWriteLane<TScope, TMarker, TStage, TResult>
     public required Func<Exception, bool> ClassifyUncertainCommit { get; init; }
     public required Func<Exception, CancellationToken, Task<TResult>> OnUncertainCommit { get; init; }
     public required Func<Exception, CancellationToken, Task<TResult?>> TryReconcileAfterCommit { get; init; }
+    public Func<TScope, Task>? DisposeBeforeReconcile { get; init; }
     public required Func<int, CancellationToken, Task> Delay { get; init; }
     public required Func<TStage, bool> IsAccepted { get; init; }
     public required Func<TStage, TResult> OnCommitted { get; init; }
