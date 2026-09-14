@@ -334,18 +334,19 @@ public sealed class EfWorkflowDesignPersistenceTests
             var firstEvents = new CapturingDeferredEventPublisher();
             var secondEvents = new CapturingDeferredEventPublisher();
             var barrier = new Barrier(2);
-            var firstWriter = new BarrierAtomicWriter(new EfDesignAtomicWriter(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), barrier);
-            var secondWriter = new BarrierAtomicWriter(new EfDesignAtomicWriter(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), barrier);
-            var first = new EfCreateDraftCommand(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), firstWriter, new TestIdentity(), new TestSerializer(), new TestLockProvider(), deferredEvents: firstEvents);
-            var second = new EfCreateDraftCommand(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), secondWriter, new TestIdentity(), new TestSerializer(), new TestLockProvider(), deferredEvents: secondEvents);
+            var firstWriter = new PreTransactionBarrierAtomicWriter(new EfDesignAtomicWriter(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), barrier);
+            var secondWriter = new PreTransactionBarrierAtomicWriter(new EfDesignAtomicWriter(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), barrier);
+            var first = new EfCreateDraftCommand(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), firstWriter, new TestIdentity("first"), new TestSerializer(), new TestLockProvider(), deferredEvents: firstEvents);
+            var second = new EfCreateDraftCommand(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), secondWriter, new TestIdentity("second"), new TestSerializer(), new TestLockProvider(), deferredEvents: secondEvents);
 
             await Task.WhenAll(
-                first.Execute(new DesignOperationKey("same-marker-race"), "definition"),
-                second.Execute(new DesignOperationKey("same-marker-race"), "definition"));
+                Task.Run(() => first.Execute(new DesignOperationKey("same-marker-race"), "definition")),
+                Task.Run(() => second.Execute(new DesignOperationKey("same-marker-race"), "definition")));
 
             Assert.Equal(
                 [DesignAtomicWriteStatus.Committed, DesignAtomicWriteStatus.Replayed],
                 new[] { firstWriter.LastStatus, secondWriter.LastStatus }.OrderBy(status => status).ToArray());
+            Assert.True(firstWriter.BarrierPassed && secondWriter.BarrierPassed);
             Assert.Equal(1, await firstDb.Operations.AsNoTracking().CountAsync());
             var events = firstEvents.Events.Concat(secondEvents.Events).ToArray();
             Assert.Single(events.OfType<DraftCreated>());
@@ -379,14 +380,14 @@ public sealed class EfWorkflowDesignPersistenceTests
             await secondConnection.OpenAsync();
             await using var firstDb = Create(firstConnection);
             await using var secondDb = Create(secondConnection);
-            var coordinator = new ConcurrentUniqueFailureCoordinator();
-            var firstWriter = new ConcurrentUniqueFailureWriter(new EfDesignAtomicWriter(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), coordinator);
-            var secondWriter = new ConcurrentUniqueFailureWriter(new EfDesignAtomicWriter(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), coordinator);
+            var barrier = new Barrier(2);
+            var firstWriter = new PreTransactionBarrierAtomicWriter(new EfDesignAtomicWriter(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), barrier);
+            var secondWriter = new PreTransactionBarrierAtomicWriter(new EfDesignAtomicWriter(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), barrier);
             var first = new EfAddWorkflowDefinitionVersionCommand(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), firstWriter, new TestSerializer(), new TestIdentity("first"), new TestLockProvider());
             var second = new EfAddWorkflowDefinitionVersionCommand(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), secondWriter, new TestSerializer(), new TestIdentity("second"), new TestLockProvider());
 
-            var firstTask = first.Execute(new DesignOperationKey("version-race-a"), "definition", State());
-            var secondTask = second.Execute(new DesignOperationKey("version-race-b"), "definition", State());
+            var firstTask = Task.Run(() => first.Execute(new DesignOperationKey("version-race-a"), "definition", State()));
+            var secondTask = Task.Run(() => second.Execute(new DesignOperationKey("version-race-b"), "definition", State()));
             var results = await Task.WhenAll(
                 CaptureAsync(firstTask),
                 CaptureAsync(secondTask));
@@ -394,7 +395,8 @@ public sealed class EfWorkflowDesignPersistenceTests
             Assert.Single(results.OfType<WorkflowDefinitionVersionAdded>());
             var conflict = Assert.Single(results.OfType<WorkflowDefinitionVersionConflictException>());
             Assert.Equal("definition", conflict.DefinitionId);
-            Assert.Equal("automatic", conflict.Version);
+            Assert.Equal("1.0.0", conflict.Version);
+            Assert.True(firstWriter.BarrierPassed && secondWriter.BarrierPassed);
             Assert.Single(await firstDb.Versions.AsNoTracking().ToListAsync());
         }
         finally
@@ -407,7 +409,7 @@ public sealed class EfWorkflowDesignPersistenceTests
         {
             try
             {
-                return await task;
+                return (object?)await task ?? throw new InvalidOperationException("The concurrent version operation returned no result.");
             }
             catch (Exception exception)
             {
@@ -1538,38 +1540,29 @@ public sealed class EfWorkflowDesignPersistenceTests
             return inner.ExecuteAsync(operationKey, operationKind, requestMaterial, mutatedUnits, stage, beforeAttempt, cancellationToken, resultCodec);
         }
     }
-    private sealed class BarrierAtomicWriter(IDesignAtomicWriter inner, Barrier barrier) : IDesignAtomicWriter
+    private sealed class PreTransactionBarrierAtomicWriter(IDesignAtomicWriter inner, Barrier barrier) : IDesignAtomicWriter
     {
         private int barrierEntered;
         public DesignAtomicWriteStatus? LastStatus { get; private set; }
+        public bool BarrierPassed { get; private set; }
 
         public async Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(DesignOperationKey operationKey, string operationKind, object requestMaterial, IReadOnlyCollection<string> mutatedUnits, Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage, Func<CancellationToken, Task>? beforeAttempt = null, CancellationToken cancellationToken = default, IDesignAtomicWriteResultCodec<T>? resultCodec = null)
         {
-            var result = await inner.ExecuteAsync(operationKey, operationKind, requestMaterial, mutatedUnits, async (context, token) =>
-            {
-                var staged = await stage(context, token);
-                if (Interlocked.Exchange(ref barrierEntered, 1) == 0)
-                    barrier.SignalAndWait(TimeSpan.FromSeconds(10));
-                return staged;
-            }, beforeAttempt, cancellationToken, resultCodec);
+            if (beforeAttempt is not null)
+                await beforeAttempt(cancellationToken);
+            if (!Synchronize())
+                throw new TimeoutException("The deterministic atomic-write overlap barrier did not complete.");
+            var result = await inner.ExecuteAsync(operationKey, operationKind, requestMaterial, mutatedUnits, stage, beforeAttempt: null, cancellationToken: cancellationToken, resultCodec: resultCodec);
             LastStatus = result.Status;
             return result;
         }
-    }
-    private sealed class ConcurrentUniqueFailureCoordinator
-    {
-        public Barrier Barrier { get; } = new(2);
-        private int loserSelected;
-        public bool IsLoser() => Interlocked.Exchange(ref loserSelected, 1) == 0;
-    }
-    private sealed class ConcurrentUniqueFailureWriter(IDesignAtomicWriter inner, ConcurrentUniqueFailureCoordinator coordinator) : IDesignAtomicWriter
-    {
-        public Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(DesignOperationKey operationKey, string operationKind, object requestMaterial, IReadOnlyCollection<string> mutatedUnits, Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage, Func<CancellationToken, Task>? beforeAttempt = null, CancellationToken cancellationToken = default, IDesignAtomicWriteResultCodec<T>? resultCodec = null)
+
+        private bool Synchronize()
         {
-            coordinator.Barrier.SignalAndWait(TimeSpan.FromSeconds(10));
-            if (coordinator.IsLoser())
-                return Task.FromException<DesignAtomicWriteResult<T>>(new DesignPersistenceException(DesignPersistenceDomain.Workflow, DesignPersistenceFailureKind.Provider, operationKind, null, new SqliteException("UNIQUE constraint failed: workflow definition version identity", 19, 2067)));
-            return inner.ExecuteAsync(operationKey, operationKind, requestMaterial, mutatedUnits, stage, beforeAttempt, cancellationToken, resultCodec);
+            if (Interlocked.Exchange(ref barrierEntered, 1) != 0)
+                return true;
+            BarrierPassed = barrier.SignalAndWait(TimeSpan.FromSeconds(10));
+            return BarrierPassed;
         }
     }
     private sealed class ThrowingAtomicWriter(Exception exception) : IDesignAtomicWriter
