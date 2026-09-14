@@ -62,7 +62,7 @@ public sealed class EfActivityExecutionStoresTests
     [Fact]
     public async Task Activity_execution_rows_survive_an_independent_file_backed_sqlite_restart()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"elsa-runtime-{Guid.NewGuid():N}.db");
+        var path = Path.Join(Path.GetTempPath(), $"elsa-runtime-{Guid.NewGuid():N}.db");
         const string scope = "tenant-restart";
         const string workflow = "wf-restart";
         try
@@ -110,7 +110,7 @@ public sealed class EfActivityExecutionStoresTests
     [Fact]
     public async Task Two_context_create_races_normalize_conflicts_through_each_activity_execution_store()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"elsa-runtime-race-{Guid.NewGuid():N}.db");
+        var path = Path.Join(Path.GetTempPath(), $"elsa-runtime-race-{Guid.NewGuid():N}.db");
         const string scope = "tenant-race";
         try
         {
@@ -141,7 +141,7 @@ public sealed class EfActivityExecutionStoresTests
     [Fact]
     public async Task Provider_read_and_write_failures_normalize_through_each_activity_execution_store()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"elsa-runtime-provider-{Guid.NewGuid():N}.db");
+        var path = Path.Join(Path.GetTempPath(), $"elsa-runtime-provider-{Guid.NewGuid():N}.db");
         const string scope = "tenant-provider";
         try
         {
@@ -682,7 +682,7 @@ public sealed class EfActivityExecutionStoresTests
             await operation();
             return null;
         }
-        catch (Exception exception)
+        catch (RuntimeActivityExecutionEntityFrameworkPersistenceException exception)
         {
             return exception;
         }
