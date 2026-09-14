@@ -815,6 +815,49 @@ public sealed class EfBookmarkStateStoreTests
         Assert.IsType<CustomRegistration>(restoredScope.ServiceProvider.GetRequiredService<CustomRegistration>());
     }
 
+    [Fact]
+    public async Task Shared_context_resolves_after_bookmark_withdrawal_and_bookmark_ef_can_be_readded()
+    {
+        var options = new RuntimeBookmarksEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        };
+        var artifactOptions = new RuntimeArtifactsEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        };
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddRuntimeBookmarksEntityFrameworkCore(options);
+        services.AddRuntimeArtifactsEntityFrameworkCore(artifactOptions);
+        var customRegistration = ServiceDescriptor.Singleton(new CustomRegistration());
+        ((IServiceCollection)services).Add(customRegistration);
+
+        var bookmarkBackend = BookmarkStateStoreBackend.Find(services);
+        Assert.NotNull(bookmarkBackend);
+        bookmarkBackend!.RemoveOwnedArtifacts(services);
+
+        Assert.Contains(services, descriptor => ReferenceEquals(descriptor, customRegistration));
+        Assert.Equal(RuntimeArtifactStoreBackend.EntityFramework, RuntimeArtifactStoreBackend.Find(services)!.Name);
+        await using (var provider = services.BuildServiceProvider())
+        using (var scope = provider.CreateScope())
+        {
+            Assert.IsType<EfWorkflowExecutableStore>(scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>());
+            Assert.IsType<BookmarkStateSqliteDbContext>(scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
+        }
+
+        services.AddRuntimeBookmarksEntityFrameworkCore(options);
+
+        await using var restoredProvider = services.BuildServiceProvider();
+        using var restoredScope = restoredProvider.CreateScope();
+        Assert.IsType<EfWorkflowExecutableStore>(restoredScope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>());
+        Assert.IsType<EfBookmarkStateStore>(restoredScope.ServiceProvider.GetRequiredService<IBookmarkStateStore>());
+        Assert.IsType<BookmarkStateSqliteDbContext>(restoredScope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
+        Assert.IsType<CustomRegistration>(restoredScope.ServiceProvider.GetRequiredService<CustomRegistration>());
+    }
+
     [Theory]
     [InlineData("bookmarks-first")]
     [InlineData("artifacts-first")]

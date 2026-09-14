@@ -72,7 +72,10 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                 provider,
                 bookmarksOwnContext ? bookmarksBackend!.Owns : null,
                 "Runtime artifacts");
-            if (!bookmarksOwnContext)
+            if (bookmarksOwnContext)
+                ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider)
+                    .Where(bookmarksBackend!.Owns));
+            else
                 switch (provider)
                 {
                     case "sqlite": ownedInfrastructure.AddRange(AddContext<BookmarkStateSqliteDbContext>(services, configured, EfRelationalProviderBinding.UseSqlite)); break;
