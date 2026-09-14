@@ -807,6 +807,35 @@ public class GroundworkWorkflowDefinitionCommandTests
     }
 
     [Fact]
+    public async Task PromoteDraft_releases_attempt_locks_before_marker_race_retry()
+    {
+        var draftId = await CreateCommand().Execute(
+            NextKey(),
+            "definition-marker-race",
+            EmptyState(),
+            cancellationToken: CancellationToken.None);
+        var racedStore = new MarkerRaceOnceDocumentStore(_store);
+        var locks = new DisposalRecordingLockProvider();
+        var storage = Storage(racedStore);
+        var promote = new GroundworkPromoteDraftToVersionCommand(
+            locks,
+            storage,
+            new GroundworkDesignAtomicWrite(storage),
+            Payloads,
+            _events,
+            VersionStore(racedStore),
+            _identities,
+            _clock,
+            _accessContext);
+
+        var versionId = await promote.Execute(NextKey(), draftId, CancellationToken.None);
+
+        Assert.NotNull(await VersionStore().FindByIdAsync(versionId));
+        Assert.Equal(4, locks.AcquireCount);
+        Assert.Equal(locks.AcquireCount, locks.DisposeCount);
+    }
+
+    [Fact]
     public async Task PromoteDraft_rejects_an_unknown_draft_as_not_found()
     {
         var exception = await Assert.ThrowsAsync<EntityNotFoundException>(() =>
@@ -1441,6 +1470,56 @@ public class GroundworkWorkflowDefinitionCommandTests
                     owner.DisposeCount++;
             }
             public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
+        }
+    }
+
+    private sealed class MarkerRaceOnceDocumentStore(
+        IGroundworkStorageSessionSource inner)
+        : IGroundworkStorageSessionSource, IGroundworkStorageCapabilitySource
+    {
+        private int raceInjected;
+
+        public IStorageSession Open(
+            string unitId,
+            StorageAccess access,
+            string? targetName = null) => inner.Open(unitId, access, targetName);
+
+        public IUnitOfWork BeginUnitOfWork(
+            StorageAccess access,
+            BatchWriteOptions options,
+            IReadOnlyList<string> unitIds,
+            string? targetName = null) =>
+            new MarkerRaceOnceUnitOfWork(
+                inner.BeginUnitOfWork(access, options, unitIds, targetName),
+                this);
+
+        public StorageUnit Unit(string unitId, string? targetName = null) => inner.Unit(unitId, targetName);
+
+        public IReadOnlyList<CapabilityDescriptor> Capabilities(string? targetName = null) =>
+            ((IGroundworkStorageCapabilitySource)inner).Capabilities(targetName);
+
+        private bool ShouldInjectRace() => Interlocked.Exchange(ref raceInjected, 1) == 0;
+
+        private sealed class MarkerRaceOnceUnitOfWork(
+            IUnitOfWork inner,
+            MarkerRaceOnceDocumentStore owner) : IUnitOfWork
+        {
+            public IStorageSession OpenSession(StorageUnit unit) => inner.OpenSession(unit);
+            public void Stage(RowWrite write) => inner.Stage(write);
+
+            public BatchWriteSummary Commit() => inner.Commit();
+
+            public BatchWriteReport CommitWithOutcomes()
+            {
+                if (owner.ShouldInjectRace())
+                    throw new GroundworkDesignOperationMarkerRaceException();
+                return inner.CommitWithOutcomes();
+            }
+
+            public ValueTask<BatchWriteReport> CommitWithOutcomesAsync(CancellationToken cancellationToken = default) => inner.CommitWithOutcomesAsync(cancellationToken);
+            public ValueTask<BatchWriteSummary> CommitAsync(CancellationToken cancellationToken = default) => inner.CommitAsync(cancellationToken);
+            public void Rollback() => inner.Rollback();
+            public void Dispose() => inner.Dispose();
         }
     }
 

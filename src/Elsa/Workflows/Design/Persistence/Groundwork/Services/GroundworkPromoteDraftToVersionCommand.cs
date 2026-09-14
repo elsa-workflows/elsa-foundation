@@ -91,6 +91,16 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
                 {
                     // Marker replay must win before source reads and locks: a successfully promoted
                     // draft may later be discarded while its authoritative version remains valid.
+                    if (definitionLock is not null)
+                    {
+                        await definitionLock.DisposeAsync();
+                        definitionLock = null;
+                    }
+                    if (draftLock is not null)
+                    {
+                        await draftLock.DisposeAsync();
+                        draftLock = null;
+                    }
                     draftLock = await lockProvider.AcquireLockAsync(draftLockKey, null, token);
                     var document = await documents.FindByIdAsync(draftId, token)
                                    ?? throw EntityNotFoundException.ForEntity(
