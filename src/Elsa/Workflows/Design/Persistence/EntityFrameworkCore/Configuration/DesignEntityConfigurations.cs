@@ -140,9 +140,14 @@ internal static class DesignEntityConfigurations
         b.Property(x => x.TenantId).HasMaxLength(128);
         b.Property(x => x.OperationKind).HasMaxLength(256);
         b.Property(x => x.OperationKey).HasMaxLength(256);
+        b.Property(x => x.OperationKindLookupHash).HasMaxLength(64).IsRequired();
+        b.Property(x => x.OperationKeyLookupHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.RequestFingerprint).HasMaxLength(128);
         b.Property(x => x.ResultFingerprint).HasMaxLength(128);
         b.Property(x => x.ResultJson);
-        b.HasIndex(x => new { x.TenantId, x.OperationKind, x.OperationKey }).IsUnique();
+        // SQL Server ignores trailing spaces in string equality and unique indexes, even under
+        // binary collations. Hashes over the exact UTF-8 values own identity; raw values remain
+        // available for diagnostics and residual ordinal validation after a hash match.
+        b.HasIndex(x => new { x.TenantId, x.OperationKindLookupHash, x.OperationKeyLookupHash }).IsUnique();
     }
 }

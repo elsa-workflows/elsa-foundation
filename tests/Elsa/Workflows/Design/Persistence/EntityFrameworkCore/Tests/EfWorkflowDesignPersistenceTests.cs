@@ -928,6 +928,60 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Operation_identity_preserves_trailing_spaces_in_kind_and_key()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var writer = new EfDesignAtomicWriter(db, access);
+
+        var kind = "test.trailing-kind";
+        var key = new DesignOperationKey("test-trailing-key");
+        var kindTrailing = await writer.ExecuteAsync(
+            key,
+            kind,
+            new { Value = "kind" },
+            ["test"],
+            _ => Task.FromResult("kind-result"));
+        var kindWithTrailingSpace = await writer.ExecuteAsync(
+            key,
+            kind + " ",
+            new { Value = "kind-trailing" },
+            ["test"],
+            _ => Task.FromResult("kind-trailing-result"));
+        var keyWithTrailingSpace = await writer.ExecuteAsync(
+            new DesignOperationKey(key.Value + " "),
+            kind,
+            new { Value = "key-trailing" },
+            ["test"],
+            _ => Task.FromResult("key-trailing-result"));
+
+        Assert.Equal("kind-result", kindTrailing);
+        Assert.Equal("kind-trailing-result", kindWithTrailingSpace);
+        Assert.Equal("key-trailing-result", keyWithTrailingSpace);
+        Assert.Equal(kindTrailing, await writer.ExecuteAsync(key, kind, new { Value = "kind" }, ["test"], _ => Task.FromResult("wrong")));
+        Assert.Equal(kindWithTrailingSpace, await writer.ExecuteAsync(key, kind + " ", new { Value = "kind-trailing" }, ["test"], _ => Task.FromResult("wrong")));
+        Assert.Equal(keyWithTrailingSpace, await writer.ExecuteAsync(new DesignOperationKey(key.Value + " "), kind, new { Value = "key-trailing" }, ["test"], _ => Task.FromResult("wrong")));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => writer.ExecuteAsync(key, kind, new { Value = "different" }, ["test"], _ => Task.FromResult("conflict")));
+
+        var markers = await db.Operations.AsNoTracking().ToListAsync();
+        Assert.Equal(3, markers.Count);
+        Assert.Contains(markers, marker => marker.OperationKind == kind && marker.OperationKey == key.Value);
+        Assert.Contains(markers, marker => marker.OperationKind == kind + " " && marker.OperationKey == key.Value);
+        Assert.Contains(markers, marker => marker.OperationKind == kind && marker.OperationKey == key.Value + " ");
+        Assert.All(markers, marker =>
+        {
+            Assert.Equal(ExactLookupHash(marker.OperationKind), marker.OperationKindLookupHash);
+            Assert.Equal(ExactLookupHash(marker.OperationKey), marker.OperationKeyLookupHash);
+        });
+
+        static string ExactLookupHash(string value) =>
+            Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+    }
+
+    [Fact]
     public async Task Operation_fingerprint_is_canonical_across_request_property_order()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync(); await using var db = Create(connection); await db.Database.EnsureCreatedAsync();

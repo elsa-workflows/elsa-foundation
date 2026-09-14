@@ -83,10 +83,15 @@ public sealed class EfDesignAtomicWriter(
             throw SerializationFailure(operationKind, exception);
         }
         var existing = await EfDesignSupport.ReadAsync("reading design operation marker", () => db.Operations.AsNoTracking().SingleOrDefaultAsync(
-            x => x.TenantId == tenantId && x.OperationKind == operationKind && x.OperationKey == key.Value,
+            x => x.TenantId == tenantId &&
+                 x.OperationKindLookupHash == EfDesignSupport.LookupHash(operationKind) &&
+                 x.OperationKeyLookupHash == EfDesignSupport.LookupHash(key.Value),
             cancellationToken));
         if (existing is not null)
+        {
+            ValidateMarkerIdentity(existing, operationKind, key.Value);
             return ResolveExisting(existing, operationKind, requestFingerprint, legacyRequestFingerprint, DesignAtomicWriteStatus.Replayed, resultCodec);
+        }
         // Attempt setup is deliberately rerun after every transient write conflict. Providers can
         // invalidate locks, snapshots, and other preflight observations while a transaction is
         // being retried; reusing the first attempt's setup would silently weaken those guarantees.
@@ -157,6 +162,8 @@ public sealed class EfDesignAtomicWriter(
             TenantId = tenantId,
             OperationKind = operationKind,
             OperationKey = key.Value,
+            OperationKindLookupHash = EfDesignSupport.LookupHash(operationKind),
+            OperationKeyLookupHash = EfDesignSupport.LookupHash(key.Value),
             RequestFingerprint = requestFingerprint,
             ResultFingerprint = resultFingerprint,
             ResultJson = resultJson,
@@ -202,12 +209,17 @@ public sealed class EfDesignAtomicWriter(
             await CleanupAsync(transaction, exception, operationKind, rollback: true);
             db.ChangeTracker.Clear();
             var winner = await EfDesignSupport.ReadAsync("reading design operation winner", () => db.Operations.AsNoTracking().SingleOrDefaultAsync(
-                x => x.TenantId == tenantId && x.OperationKind == operationKind && x.OperationKey == key.Value,
+                x => x.TenantId == tenantId &&
+                     x.OperationKindLookupHash == EfDesignSupport.LookupHash(operationKind) &&
+                     x.OperationKeyLookupHash == EfDesignSupport.LookupHash(key.Value),
                 cancellationToken));
             if (winner is not null)
+            {
+                ValidateMarkerIdentity(winner, operationKind, key.Value);
                 // The local stage lost the marker race. The concurrent winner owns publication;
                 // classify this caller as a replay so it cannot emit duplicate post-commit events.
                 return ResolveExisting(winner, operationKind, requestFingerprint, legacyRequestFingerprint, DesignAtomicWriteStatus.Replayed, resultCodec);
+            }
             throw ProviderFailure(operationKind, exception);
         }
         catch (Exception exception)
@@ -296,10 +308,15 @@ public sealed class EfDesignAtomicWriter(
             try
             {
                 var winner = await EfDesignSupport.ReadAsync("reconciling design operation marker", () => db.Operations.AsNoTracking().SingleOrDefaultAsync(
-                    x => x.TenantId == tenantId && x.OperationKind == operationKind && x.OperationKey == operationKey,
+                    x => x.TenantId == tenantId &&
+                         x.OperationKindLookupHash == EfDesignSupport.LookupHash(operationKind) &&
+                         x.OperationKeyLookupHash == EfDesignSupport.LookupHash(operationKey),
                     timeoutSource.Token));
                 if (winner is not null)
+                {
+                    ValidateMarkerIdentity(winner, operationKind, operationKey);
                     return ResolveExisting(winner, operationKind, requestFingerprint, legacyRequestFingerprint, DesignAtomicWriteStatus.Reconciled, resultCodec);
+                }
             }
             catch (OperationCanceledException) when (timeoutSource.IsCancellationRequested)
             {
@@ -354,6 +371,17 @@ public sealed class EfDesignAtomicWriter(
             && !StringComparer.Ordinal.Equals(existing.ResultFingerprint, EfDesignSupport.Fingerprint(operationKind + ".result", value)))
             throw SerializationFailure(operationKind, new InvalidDataException("The authoritative design-operation result fingerprint does not match its payload."));
         return new DesignAtomicWriteResult<T>(matchingStatus, value, existing.ResultFingerprint, existing.ResultJson);
+    }
+
+    private static void ValidateMarkerIdentity(DesignOperationEntity marker, string operationKind, string operationKey)
+    {
+        if (StringComparer.Ordinal.Equals(marker.OperationKind, operationKind) &&
+            StringComparer.Ordinal.Equals(marker.OperationKey, operationKey))
+            return;
+
+        throw SerializationFailure(
+            operationKind,
+            new InvalidDataException("The authoritative design-operation marker identity does not match its lookup hash."));
     }
 
     private static void ValidateAuthoritativeResult<T>(

@@ -142,6 +142,18 @@ internal static class WorkflowsDesignNativeProviderSmoke
             });
             Assert.Equal($"{definitionId}-operation", operationId);
             Assert.Equal(operationId, await writer.ExecuteAsync(operationKey, "provider.design.smoke.v1", new { definitionId }, ["definitions"], _ => Task.FromResult(operationId)));
+
+            // The operation identity must remain exact on SQL Server, whose string equality and
+            // unique indexes ignore trailing spaces even under a binary collation.
+            var exactKind = "provider.trailing-kind";
+            var exactKey = new DesignOperationKey("provider-trailing-key");
+            Assert.Equal("kind", await writer.ExecuteAsync(exactKey, exactKind, new { Value = "kind" }, ["operations"], _ => Task.FromResult("kind")));
+            Assert.Equal("kind-trailing", await writer.ExecuteAsync(exactKey, exactKind + " ", new { Value = "kind-trailing" }, ["operations"], _ => Task.FromResult("kind-trailing")));
+            Assert.Equal("key-trailing", await writer.ExecuteAsync(new DesignOperationKey(exactKey.Value + " "), exactKind, new { Value = "key-trailing" }, ["operations"], _ => Task.FromResult("key-trailing")));
+            var operationMarkers = await context.Operations.AsNoTracking().ToListAsync();
+            Assert.Contains(operationMarkers, marker => StringComparer.Ordinal.Equals(marker.OperationKind, exactKind) && StringComparer.Ordinal.Equals(marker.OperationKey, exactKey.Value));
+            Assert.Contains(operationMarkers, marker => StringComparer.Ordinal.Equals(marker.OperationKind, exactKind + " ") && StringComparer.Ordinal.Equals(marker.OperationKey, exactKey.Value));
+            Assert.Contains(operationMarkers, marker => StringComparer.Ordinal.Equals(marker.OperationKind, exactKind) && StringComparer.Ordinal.Equals(marker.OperationKey, exactKey.Value + " "));
         }
 
         var rollbackId = $"provider-rollback-{Guid.NewGuid():N}";

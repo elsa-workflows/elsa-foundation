@@ -93,6 +93,9 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
             ValidateOptionalIdentity(entry.Entity.TenantId, nameof(DesignOperationEntity.TenantId));
             ValidateBounded(entry.Entity.OperationKind, DesignOperationKey.MaximumLength, nameof(DesignOperationEntity.OperationKind));
             ValidateBounded(entry.Entity.OperationKey, DesignOperationKey.MaximumLength, nameof(DesignOperationEntity.OperationKey));
+            DesignOperationKey.Validate(new DesignOperationKey(entry.Entity.OperationKey), entry.Entity.OperationKind);
+            entry.Entity.OperationKindLookupHash = Stores.EfDesignSupport.LookupHash(entry.Entity.OperationKind);
+            entry.Entity.OperationKeyLookupHash = Stores.EfDesignSupport.LookupHash(entry.Entity.OperationKey);
             ValidateBounded(entry.Entity.RequestFingerprint, 128, nameof(DesignOperationEntity.RequestFingerprint));
             ValidateBounded(entry.Entity.ResultFingerprint, 128, nameof(DesignOperationEntity.ResultFingerprint));
         }
