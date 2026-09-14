@@ -259,6 +259,19 @@ public sealed class EfBookmarkStateStoreTests
     }
 
     [Fact]
+    public async Task Delete_returns_false_for_a_wrapped_transient_write_conflict()
+    {
+        await using var database = await FileDatabase.CreateAsync();
+        await using (var seed = database.Open())
+            await seed.Store.SaveAsync(State("wf", "delete-transient", "Event", "hash"));
+
+        await using var deleting = database.Open(new ThrowingTransientDeleteInterceptor());
+
+        Assert.False(await deleting.Store.DeleteAsync("wf", "delete-transient"));
+        Assert.Empty(deleting.Context.ChangeTracker.Entries());
+    }
+
+    [Fact]
     public async Task Concurrent_creates_and_updates_have_one_deterministic_loser()
     {
         await using var database = await FileDatabase.CreateAsync();
@@ -678,6 +691,17 @@ public sealed class EfBookmarkStateStoreTests
             InterceptionResult<int> result,
             CancellationToken cancellationToken = default) =>
             throw new DbUpdateException("provider save failure");
+    }
+
+    private sealed class ThrowingTransientDeleteInterceptor : SaveChangesInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default) =>
+            throw new DbUpdateException(
+                "wrapped provider delete failure",
+                new SqliteException("database is locked", 5, 5));
     }
 
     private sealed class ThrowingReaderInterceptor : DbCommandInterceptor

@@ -108,6 +108,11 @@ public sealed class EfBookmarkStateStore(
             context.ChangeTracker.Clear();
             throw;
         }
+        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
+        {
+            context.ChangeTracker.Clear();
+            return false;
+        }
         catch (DbUpdateException exception)
         {
             context.ChangeTracker.Clear();
