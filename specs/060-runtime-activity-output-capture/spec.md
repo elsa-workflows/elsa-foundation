@@ -4,7 +4,8 @@
 
 **Feature Branch**: `codex/runtime-activity-output-capture`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #62, #63 (restatused 2026-09-10 from git evidence)
 **Input**: Continue Runtime Execution Seam Slice 6 after runtime value binding contracts. Activity invocation must publish successful outputs by `ActivityExecutionId` and capture declared durable values without introducing a durable raw output store or Design-owned dependencies.
 
 ## Scenarios & Tests

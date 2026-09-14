@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
@@ -326,7 +327,7 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
             new BookmarkResumeResolver(),
             agentProvider,
             new FixedRuntimeExecutionIdGenerator(),
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
     private BookmarkStimulusLookupRequest NewLookupRequest() =>
         new("wfexec-1", "delivery-status", "sha256:delivery-status:order-123", _now);
@@ -465,10 +466,5 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
         public string NewWorkflowExecutionCommandEnvelopeId() => "envelope-1";
 
         public string NewActivityExecutionId() => "actexec-new";
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

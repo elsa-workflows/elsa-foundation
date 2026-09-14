@@ -562,7 +562,7 @@ public sealed class GroundworkReusableActivityImportCommand(
         return StringComparer.Ordinal.Compare(current.SemVerSortKey, next.SemVerSortKey);
     }
 
-    private JsonSerializerOptions ActivityVersionJson() => GroundworkActivitiesDesignDocumentSerialization.Create(payloadSerializer);
+    private JsonSerializerOptions ActivityVersionJson() => GroundworkActivitiesDesignDocumentSerialization.Get(payloadSerializer);
 
     private JsonSerializerOptions WorkflowVersionJson() => GroundworkDesignDocumentSerialization.Create(payloadSerializer);
 

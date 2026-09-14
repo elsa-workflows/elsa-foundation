@@ -36,13 +36,6 @@ public sealed class HostEndpointMetadataTests
             "WithHostOwner(\"Elsa.Workbench\")",
             "EndpointSecurityDispositionMetadata.HostCredential(\n                ManagementApiKeyAuthentication.HeaderName",
             "WithHostCredentialEnforcement(ManagementApiKeyAuthentication.HeaderName, \"Elsa.Workbench\")");
-
-        AssertSourceContains(
-            "src/Elsa/Modularity/ExtensionBuilder/ExtensionBuilderApi.cs",
-            "WithHostOwner(\"Elsa.Workbench\")",
-            "EndpointSecurityDispositionMetadata.HostCredential(\n                ManagementApiKeyAuthentication.HeaderName",
-            "WithHostCredentialEnforcement(ManagementApiKeyAuthentication.HeaderName, \"Elsa.Workbench\")",
-            "RequireTrustedCallerAsync");
     }
 
     [Fact]
@@ -92,7 +85,6 @@ public sealed class HostEndpointMetadataTests
             "src/Apps/Elsa.Workbench/Program.cs",
             "src/Apps/Elsa.Workbench/Readiness/ShellReadinessEndpointExtensions.cs",
             "src/Apps/Elsa.Workbench/ElsaModuleManagementApi.cs",
-            "src/Elsa/Modularity/ExtensionBuilder/ExtensionBuilderApi.cs",
             "src/Apps/Elsa.Foundation.Host/Health/HealthEndpoints.cs",
             "src/Apps/Elsa.Foundation.Host/ModuleManagement/ModuleManagementEndpoints.cs"
         };

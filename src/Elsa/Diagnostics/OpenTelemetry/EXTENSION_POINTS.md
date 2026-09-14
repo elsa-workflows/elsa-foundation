@@ -73,6 +73,25 @@ Data-pipeline contracts live in `Elsa.Diagnostics.OpenTelemetry.Core`; the HTTP-
 - **`MapOpenTelemetryOtlpReceiver()`** maps exactly `POST {base}/traces`, `metrics`, and `logs` on any ASP.NET Core `IEndpointRouteBuilder`. Shell composition uses this same owner mapper; do not map the collector routes a second time in one route table.
 - The **SSE `stream` endpoint** is a separate transport surface; the wire JSON/SSE shape is owned by `OpenTelemetryStreamItemSerializer` + `OpenTelemetrySseFormatter` (see [`README.md`](README.md)).
 
+## Persistence
+
+### EF Core OpenTelemetry persistence (opt-in, issue #1697)
+
+`Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore` provides the repository-first,
+opt-in implementation of `IOpenTelemetryStore` for traces, spans, metric points, logs, resources,
+instruments, the capture ledger, and trace summaries. The production adapter depends only on EF
+Core relational APIs and the provider-neutral diagnostics contracts; SQLite supplies comprehensive
+behavioral proof, while SQL Server, PostgreSQL, and MySQL remain test-only provider bindings.
+
+The adapter persists module-owned canonical Unicode search and ordering projections and normalized
+trace-summary membership rows, so identity, filtering, and deterministic ordering do not depend on
+database collation or provider-specific JSON operators. Capture records, catalog changes, summary
+updates, and replay ledger state commit atomically. `IOpenTelemetryLiveFeed` remains the independent
+in-process SSE fan-out and is not persisted by this adapter.
+
+Groundwork remains the default until the later migration, rollout, default-flip, and deletion gates.
+Migration artifacts and generalized migration tooling are deliberately outside #1697.
+
 ## Deferred
 
 - **gRPC ingestion** — kept behind `OpenTelemetryDiagnosticsOptions.EnableGrpc` (default `false`); no gRPC route is mapped. The binding is host-specific.

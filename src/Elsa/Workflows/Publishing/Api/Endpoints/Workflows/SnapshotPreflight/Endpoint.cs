@@ -53,9 +53,10 @@ public sealed class Endpoint(
         return new PublicationSnapshotPreflightView(
             issued.PreflightToken, issued.CandidateHash, resolved.WorkflowDefinitionId, VersionId: null,
             resolved.SlotName, PublicationContract.ToView(resolved.Action), PublicationContract.ToView(resolved.PolicySource),
-            resolved.PolicyRevision, plan.Result.CanActivate,
+            resolved.PolicyRevision, plan.CanActivate,
             plan.CandidateClaims.Select(PublicationTriggerClaimView.From).ToArray(),
             plan.Result.Changes.Select(PublicationTriggerChangeView.From).ToArray(),
-            plan.Result.Conflicts.Select(PublicationTriggerConflictView.From).ToArray());
+            plan.Result.Conflicts.Select(PublicationTriggerConflictView.From).ToArray(),
+            PublicationSlotOwnerView.From(plan.TargetSlotOwner));
     }
 }

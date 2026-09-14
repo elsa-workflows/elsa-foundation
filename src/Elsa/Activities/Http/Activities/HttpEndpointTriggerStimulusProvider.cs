@@ -7,8 +7,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Activities.Http.Activities;
 
 /// <summary>
-/// The <see cref="IActivityTriggerStimulusProvider"/> for the <see cref="HttpEndpoint"/> start trigger (W16, on
-/// the W7 seam). It recognizes published <see cref="HttpEndpoint"/> nodes and derives their stimulus identity
+/// The <see cref="IActivityTriggerStimulusProvider"/> for the <see cref="HttpEndpoint"/> start trigger (on
+/// the trigger-stimulus seam). It recognizes published <see cref="HttpEndpoint"/> nodes and derives their stimulus identity
 /// from the authored <see cref="HttpEndpoint.Path"/> and <see cref="HttpEndpoint.SupportedMethods"/> literals, so
 /// the trigger extractor can index one binding per <c>(template, method)</c> at publish time over the pinned
 /// artifact.

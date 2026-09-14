@@ -1,10 +1,16 @@
 # Groundwork Persistence Readiness
 
-Status: completed.
+Status: completed and superseded; historical record only.
 
 Area: provider-neutral persistence framework / Elsa validation bridge.
 
 Steward(s): Joey plus active architects/agents.
+
+> **Current policy:** [ADR 0073](../adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
+> makes EF Core the only first-party persistence implementation family, removes MongoDB, and
+> retires every performance measurement, timing, budget, and gate. No work should be scheduled from
+> the historical Groundwork scope, objectives, or roadmap below. The active owner is
+> [EF Core Persistence](ef-core-persistence.md).
 
 ## Purpose
 
@@ -12,7 +18,7 @@ Create a focused coordination bucket for extracting the Persistence vNext idea i
 
 This bucket keeps generic Groundwork framework work separate from Elsa-specific persistence migrations and from workflow runtime hot-path decisions.
 
-## In Scope
+## Historical Scope (superseded)
 
 - Groundwork product boundary, package map, and extraction readiness.
 - Provider-neutral storage manifests, storage units, workload classification, provider capability reports, materialization plans, and schema history.
@@ -23,7 +29,7 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 - Physicalization and performance evaluation.
 - Runtime-store go/no-go evaluation where Groundwork may or may not be appropriate.
 
-## Out Of Scope
+## Historical Exclusions
 
 - Moving Groundwork to a standalone repository before Elsa validation proves the boundary.
 - Treating workflow runtime hot paths as automatic Groundwork migrations.
@@ -31,7 +37,7 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 - Adding Elsa domain concepts to generic Groundwork packages.
 - Replacing existing Elsa persistence paths without an opt-in migration plan.
 
-## Completed Objectives
+## Historical Completed Objectives
 
 1. Complete [Groundwork Persistence Foundation](../../specs/012-groundwork-persistence-foundation/plan.md) as the G0 product-definition slice.
 2. Complete [Groundwork Core Manifest And Planner Kernel](../../specs/013-groundwork-core-manifest-planner/plan.md) as the G1 implementation slice.
@@ -47,7 +53,8 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 
 ## Linked Surfaces
 
-- [Zero-EF Persistence successor goal](zero-ef-persistence.md)
+- [EF Core Persistence current replacement goal](ef-core-persistence.md)
+- [Zero-EF Persistence historical successor goal](zero-ef-persistence.md)
 - [Groundwork Persistence Foundation spec](../../specs/012-groundwork-persistence-foundation/spec.md)
 - [Groundwork Persistence Foundation plan](../../specs/012-groundwork-persistence-foundation/plan.md)
 - [Groundwork boundary contract](../../specs/012-groundwork-persistence-foundation/contracts/groundwork-boundary.md)
@@ -75,9 +82,14 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 - [Runtime Execution Seam](runtime-execution-seam.md)
 - [Workspace Split Readiness](workspace-split-readiness.md)
 
-## Current Roadmap Notes
+## Historical Roadmap Notes (superseded)
 
-- Historical status update: Groundwork now lives in its own repository and Elsa consumes the unified `0.0.1-preview.72` package family. The successor [Zero-EF Persistence](zero-ef-persistence.md) bucket owns current adoption, provider evidence, performance verdicts, host switching, and EF removal; this completed bucket is no longer an active implementation queue.
+- Historical status update: Groundwork moved to its own repository and Elsa consumed the unified
+  `0.0.1-preview.72` package family. The former
+  [Zero-EF Persistence](zero-ef-persistence.md) successor owned adoption, provider evidence,
+  performance verdicts, host switching, and EF removal at that time. Current replacement ownership
+  belongs to [EF Core Persistence](ef-core-persistence.md); this completed bucket is not an active
+  implementation queue.
 
 - G0 defines the product and planning boundary only.
 - G1 adds generic Groundwork core/planner packages and tests before any Elsa store migration.

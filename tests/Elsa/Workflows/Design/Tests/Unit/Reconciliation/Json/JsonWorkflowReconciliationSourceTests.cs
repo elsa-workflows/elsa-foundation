@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Elsa.Testing;
 
 namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation.Json;
 
@@ -128,7 +129,7 @@ public sealed class JsonWorkflowReconciliationSourceTests
         // An omitted definitionId mints a fresh random id per restart → duplicate definitions. The
         // import proceeds, but the source must surface the footgun (spec 147 edge case).
         var reader = new StubReader { ["only.json"] = [Model(null!, "1.0.0") with { Name = "anon" }] };
-        var logger = new CapturingLogger<JsonWorkflowReconciliationSource>();
+        var logger = new RecordingLogger<JsonWorkflowReconciliationSource>();
         var source = new JsonWorkflowReconciliationSource(reader, Opts(new() { SourceId = "s", FilePath = "only.json" }), logger);
 
         var result = (await source.Read(CancellationToken.None)).ToArray();
@@ -204,17 +205,6 @@ public sealed class JsonWorkflowReconciliationSourceTests
 
     private static JsonWorkflowReconciliationSource NewSource(IJsonWorkflowCatalogReader reader, JsonWorkflowReconciliationOptions options) =>
         new(reader, Opts(options), NullLogger<JsonWorkflowReconciliationSource>.Instance);
-
-    private sealed class CapturingLogger<T> : ILogger<T>
-    {
-        public List<(LogLevel Level, string Message)> Entries { get; } = new();
-        public IDisposable BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
-        public bool IsEnabled(LogLevel logLevel) => true;
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-            => Entries.Add((logLevel, formatter(state, exception)));
-
-        private sealed class NullScope : IDisposable { public static readonly NullScope Instance = new(); public void Dispose() { } }
-    }
 
     private sealed class StubReader : IJsonWorkflowCatalogReader
     {

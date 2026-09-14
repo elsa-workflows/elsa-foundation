@@ -57,7 +57,7 @@ public sealed class RuntimeSchedulerPipelineSelector : IRuntimeSchedulerPipeline
 
         try
         {
-            // RT-11: reuse the single per-work-item parse instead of deserializing the payload again here.
+            // Reuse the single per-work-item parse instead of deserializing the payload again here.
             return RuntimeCompleteActivityPayloadMemo.Deserialize(workItem)?.CompletionKind == SchedulerCompletionKind.ParentCompletionEvaluation;
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)

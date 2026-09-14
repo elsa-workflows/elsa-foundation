@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Scheduling.Options;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Scheduling.Tests;
@@ -33,7 +34,7 @@ public sealed class RecurringTriggerPumpOwnerScopingTests
             _startDispatcher,
             new NoResumeDispatcher(),
             new InMemoryStimulusStartDeduplicator(),
-            new FixedTimeProvider(Now));
+            new FakeTimeProvider(Now));
         var options = Microsoft.Extensions.Options.Options.Create(new RecurringTriggerPumpOptions
         {
             SweepInterval = TimeSpan.FromSeconds(10),
@@ -46,7 +47,7 @@ public sealed class RecurringTriggerPumpOwnerScopingTests
             router,
             new RecurringScheduleCalculator(),
             options,
-            new FixedTimeProvider(Now),
+            new FakeTimeProvider(Now),
             NullLogger<RecurringTriggerPumpTask>.Instance);
     }
 
@@ -159,11 +160,6 @@ public sealed class RecurringTriggerPumpOwnerScopingTests
         CreatedAt: Now,
         ActivationId: activationId,
         SlotId: slotId);
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 
     private sealed class RecordingStartDispatcher : IWorkflowStartDispatcher
     {

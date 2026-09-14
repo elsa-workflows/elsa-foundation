@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
@@ -308,7 +309,7 @@ public sealed class RuntimeScheduleActivityStateTests
     }
 
     private WorkflowScheduleActivitySchedulerWorkHandler NewHandler() =>
-        new(_executableStore, _activityStateStore, _schedulerWorkQueue, checkpointCommitter: null, inspectionAccumulator: null, timeProvider: new FixedTimeProvider(_now));
+        new(_executableStore, _activityStateStore, _schedulerWorkQueue, checkpointCommitter: null, inspectionAccumulator: null, timeProvider: new FakeTimeProvider(_now));
 
     private WorkflowScheduleActivitySchedulerWorkHandler NewCheckpointingHandler(InMemoryRuntimeCheckpointCommitStore checkpointWriter) =>
         new(
@@ -319,7 +320,7 @@ public sealed class RuntimeScheduleActivityStateTests
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
                 checkpointWriter, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
     private static ActivityExecutionState NewScheduledState() =>
         new(
@@ -431,9 +432,4 @@ public sealed class RuntimeScheduleActivityStateTests
 
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 }

@@ -42,7 +42,7 @@ Revalidate every parent-program finding against the replacement implementation m
 
 ## Deliverables
 
-- `docs/reports/dispatch-workflow-674-parent-audit.md`
+- `docs/reports/archive/dispatch-workflow-674-parent-audit.md`
 - Verified crash-safe final-failure/redrive/resume behavior and regression tests
 - Race-safe lifecycle, retention, and TestRun cleanup behavior and regression tests
 - Contract-correct safe Runtime API inspection/redrive behavior

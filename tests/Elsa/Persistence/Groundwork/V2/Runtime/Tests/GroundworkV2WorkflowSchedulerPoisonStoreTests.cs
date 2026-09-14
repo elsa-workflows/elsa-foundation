@@ -395,22 +395,6 @@ public sealed class GroundworkV2WorkflowSchedulerPoisonStoreTests
             new RecordingSession(connection.OpenSession(unit, access), Requests);
         public IUnitOfWork BeginUnitOfWork(StorageAccess access, BatchWriteOptions options, IReadOnlyList<string> unitIds, string? targetName = null) => throw new NotSupportedException();
         public StorageUnit Unit(string unitId, string? targetName = null) => unit;
-
-        private sealed class RecordingSession(IStorageSession inner, ICollection<QueryRequest> requests) : SynchronousStorageSessionTestDouble, IStorageSession, IConcurrencyStorageSession
-        {
-            public StorageUnit Unit => inner.Unit;
-            public StorageAccess Access => inner.Access;
-            public StoredEntry? Read(StorageKey key) => inner.Read(key);
-            public QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null) { requests.Add(request); return inner.Query(request, options); }
-            public AggregationResult Aggregate(AggregationQuery query) => inner.Aggregate(query);
-            public WriteOutcome Insert(StorageValues values, WriteOptions? options = null) => inner.Insert(values, options);
-            public WriteOutcome Update(StorageValues values, WriteOptions? options = null) => inner.Update(values, options);
-            public WriteOutcome Upsert(StorageValues values, WriteOptions? options = null) => inner.Upsert(values, options);
-            public WriteOutcome Delete(StorageKey key, WriteOptions? options = null) => inner.Delete(key, options);
-            public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) => inner.Append(operationId, values);
-            public WriteOutcome ConditionalUpsert(StorageValues values, WriteOptions? options = null) =>
-                ((IConcurrencyStorageSession)inner).ConditionalUpsert(values, options);
-        }
     }
 
     private sealed class InterleavingSession(StorageUnit unit) : SynchronousStorageSessionTestDouble, IStorageSession, IConcurrencyStorageSession

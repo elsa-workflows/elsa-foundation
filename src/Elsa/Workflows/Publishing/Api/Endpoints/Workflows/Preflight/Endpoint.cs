@@ -56,8 +56,9 @@ public sealed class Endpoint(
             PublicationContract.ToView(resolved.Action),
             PublicationContract.ToView(resolved.PolicySource),
             resolved.PolicyRevision,
-            plan.Result.CanActivate,
+            plan.CanActivate,
             plan.Result.Changes.Select(PublicationTriggerChangeView.From).ToArray(),
-            plan.Result.Conflicts.Select(PublicationTriggerConflictView.From).ToArray());
+            plan.Result.Conflicts.Select(PublicationTriggerConflictView.From).ToArray(),
+            PublicationSlotOwnerView.From(plan.TargetSlotOwner));
     }
 }

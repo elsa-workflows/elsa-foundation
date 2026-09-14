@@ -2,13 +2,22 @@
 
 Date: 2026-07-12.
 
-Status: completed research for [issue #631](https://github.com/elsa-workflows/elsa-foundation/issues/631). This report inventories the implementation boundary; it does not freeze production-store APIs or implement stores.
+Status: historical technical input from the superseded Groundwork direction, completed for
+[issue #631](https://github.com/elsa-workflows/elsa-foundation/issues/631). This report inventories
+framework contracts; it does not freeze production-store APIs or dictate current implementation.
+The active replacement owner is
+[EF Core Persistence issue #1682](https://github.com/elsa-workflows/elsa-foundation/issues/1682).
 
-Program goal: [Zero-EF Persistence](../program-goals/zero-ef-persistence.md).
+Historical program goal: [Zero-EF Persistence](../program-goals/zero-ef-persistence.md).
 
-Decision: [ADR 0042](../adr/0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md).
+Historical decision: [ADR 0042](../adr/0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md),
+superseded by [ADR 0073](../adr/0073-ef-core-is-the-only-first-party-persistence-family.md).
 
-## Executive Finding
+## Historical Executive Finding (2026-07-12)
+
+The feasibility conclusion and five gaps below describe the former Groundwork replacement direction.
+They are not an implementation recommendation for #1682. Only the time-bounded framework contract
+inventory remains input to its EF design; OpenIddict keeps its separate vendor EF boundary.
 
 Replacing both EF integrations is feasible without adding Groundwork to Elsa's core identity contracts. The concrete packages can implement the framework-facing store interfaces over Groundwork documents while Elsa's `IUserStore`, `IRoleStore`, `IExternalIdentityStore`, and `ITenantMembershipStore` remain provider-neutral.
 
@@ -32,11 +41,20 @@ The inventory was verified against the repository at this report's date and thes
 - the local official OpenIddict 7.5.0 assemblies/XML documentation and the package's concrete EF models/stores;
 - the current Groundwork `main` document, query, index, concurrency, tenancy, and unit-of-work contracts.
 
-The current host activates `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore` and `FoundationIdentityOpenIddict` in [shells.json](../../src/Apps/Elsa.Server/shells.json). Production configuration points both at SQLite in [shells.Production.json](../../src/Apps/Elsa.Server/shells.Production.json). The host references the EF Identity project directly, while the OpenIddict project contains EF packages and its EF context/migrations itself.
+At the evidence date, the then-current Elsa.Server host activated
+`FoundationIdentityAspNetCoreIdentityEntityFrameworkCore` and `FoundationIdentityOpenIddict` in
+`src/Apps/Elsa.Server/shells.json`; its production configuration pointed both at SQLite in
+`src/Apps/Elsa.Server/shells.Production.json`. Those historical host files no longer exist. The
+current host composition lives in [Elsa.Workbench shells.json](../../src/Apps/Elsa.Workbench/shells.json)
+and [shells.Production.json](../../src/Apps/Elsa.Workbench/shells.Production.json).
 
-## Current Composition And Registration Seams
+## Historical Composition And Registration Seams (2026-07-12)
 
-### Existing Groundwork IAM Persistence
+Implementation-state statements and Groundwork recommendations in this and subsequent proposal
+sections are fixed at the evidence date. They are not current implementation guidance; #1682 owns
+the EF replacement, while the Workbench OpenIddict vendor boundary remains separate.
+
+### Historical Groundwork IAM Persistence
 
 Elsa already ships `IdentityGroundworkPersistenceFeature` in `Elsa.Foundation.Identity.Persistence.Groundwork`. It registers `GroundworkUserStore`, `GroundworkRoleStore`, `GroundworkExternalIdentityStore`, and `GroundworkTenantMembershipStore` for Elsa's four provider-neutral IAM abstractions and declares its own `IdentityStorageManifest` over `UserRecord`, `RoleRecord`, external-identity, and tenant-membership documents.
 
@@ -53,7 +71,7 @@ Because this product is greenfield, no data bridge from the legacy Groundwork IA
 
 ### ASP.NET Core Identity
 
-`AddFoundationAspNetCoreIdentityEntityFrameworkCore` currently:
+At the 2026-07-12 evidence cut, `AddFoundationAspNetCoreIdentityEntityFrameworkCore`:
 
 1. registers the provider-neutral Elsa identity services;
 2. registers `ApplicationIdentityDbContext`;
@@ -62,9 +80,13 @@ Because this product is greenfield, no data bridge from the legacy Groundwork IA
 5. replaces Elsa's four in-memory IAM stores with EF adapters over the same context;
 6. registers the configured admin seeder under both `IHostedService` and CShells `IShellInitializer`.
 
-The Groundwork replacement should preserve the provider-neutral feature, cookie scheme, managers, principal factory, sign-in service, safety guard, and lifecycle hooks. It replaces only the EF feature/package, store registrations, migration bootstrapping, and EF IAM adapters.
+Historical recommendation (superseded): the proposed Groundwork replacement would have preserved
+the provider-neutral feature, cookie scheme, managers, principal factory, sign-in service, safety
+guard, and lifecycle hooks while replacing the EF feature/package, store registrations, migration
+bootstrapping, and EF IAM adapters. Current replacement work belongs to #1682 and keeps EF Core as
+the first-party implementation family.
 
-Recommended seam:
+Historical recommended seam (superseded; not current guidance):
 
 ```text
 FoundationIdentityAspNetCoreIdentity
@@ -77,11 +99,14 @@ FoundationIdentityAspNetCoreIdentity
         -> provider-neutral admin seeder
 ```
 
-The seeder must stop resolving an EF `DbContext`; schema readiness belongs to Groundwork's startup/CLI policy. Its configured-credential validation, role/user idempotency, permission catalog expansion, `*` grant, secret-safe logging, and dual lifecycle registration remain unchanged.
+The historical proposal would also have moved schema readiness to Groundwork's startup/CLI policy.
+The configured-credential validation, role/user idempotency, permission catalog expansion, `*`
+grant, secret-safe logging, and lifecycle requirements remain useful contract inventory for #1682;
+the proposed Groundwork implementation does not.
 
-### OpenIddict
+### OpenIddict (historical replacement proposal; superseded)
 
-`AddFoundationIdentityOpenIddict` currently:
+At the 2026-07-12 evidence cut, `AddFoundationIdentityOpenIddict`:
 
 1. registers `OpenIddictIdentityDbContext` with in-memory EF for development/demo or SQLite otherwise;
 2. calls `AddOpenIddict().AddCore(core => core.UseEntityFrameworkCore()...)`;
@@ -90,9 +115,13 @@ The seeder must stop resolving an EF `DbContext`; schema readiness belongs to Gr
 5. registers `OpenIddictTokenService` over `IOpenIddictTokenManager`;
 6. registers an EF store initializer under both lifecycle hooks.
 
-The Groundwork seam should keep server, validation, scheme selection, key/lifetime configuration, and `OpenIddictTokenService` unchanged. Replace `UseEntityFrameworkCore`, the `DbContext`, EF initializer, EF migrations, and EF package references with OpenIddict core store/resolver registrations backed by Groundwork and the shared Groundwork schema lifecycle.
+The former proposal would have kept server, validation, scheme selection, key/lifetime
+configuration, and `OpenIddictTokenService` while replacing OpenIddict's EF store. ADR 0073 rejects
+that replacement: OpenIddict remains on its separate vendor-owned EF Core context, store,
+migrations, and package boundary. #1682 may use this section's framework contract inventory, but it
+must not replace or merge the OpenIddict persistence boundary.
 
-## ASP.NET Core Identity Store Inventory
+## Framework Contract Inventory: ASP.NET Core Identity (2026-07-12)
 
 The .NET 10 EF `UserStore` currently registered by `AddEntityFrameworkStores` advertises every interface below. The first column distinguishes direct framework-manager use from storage shapes Elsa's separate IAM adapters currently exercise. Those IAM adapters access the shared EF sets directly; that does not make an otherwise optional framework interface mandatory.
 
@@ -176,7 +205,7 @@ Identity normalization remains framework-owned: `ILookupNormalizer` produces nor
 
 Groundwork's expected-version compare-and-swap model fits this. The adapter should keep the Groundwork envelope version as the authoritative compare-and-swap value and project a stable opaque representation into `ConcurrencyStamp`; it must not do an unconditional upsert. Multi-record changes to claims, roles, logins, and tokens use one unit of work.
 
-## OpenIddict 7.5 Store Inventory
+## Framework Contract Inventory: OpenIddict 7.5 (2026-07-12)
 
 `UseEntityFrameworkCore` registers all four core store families even though Elsa's current first-party token service directly exercises only tokens. A replacement registered with OpenIddict core must either implement all four contracts or deliberately register a reduced custom resolver set and prove that unused manager paths fail at startup with a clear capability error. The safe compatibility target is all four.
 
@@ -261,7 +290,7 @@ EF currently uses nullable application and authorization foreign keys without de
 
 Prune and revoke are scale-bearing server operations. Fetching all token/authorization documents and filtering in memory is forbidden. They require server-side date/range predicates and bulk mutation/delete support, with deterministic counts and cancellation.
 
-## Groundwork Fit And Upstream Gaps
+## Historical Groundwork Fit And Upstream Gaps
 
 ### Natural Document Fit
 
@@ -291,7 +320,7 @@ Groundwork already provides the important base mechanics:
 
 The `IQueryable` overloads are the only fundamental contract mismatch. They are extension points for consumers to supply arbitrary projections, not operations Elsa currently invokes. The recommended first release implements every named OpenIddict operation server-side, deliberately rejects generic query delegates with a documented capability error, and does not advertise a general-purpose OpenIddict store until a bounded translator exists. This keeps the agreed no-general-`IQueryable` rule intact.
 
-## Required Four-Provider Conformance
+## Historical Proposed Four-Provider Conformance
 
 Run the same black-box suite against SQLite, SQL Server, PostgreSQL, and MongoDB. MongoDB tests that require multi-document transactions must use a replica set or sharded deployment.
 
@@ -332,7 +361,7 @@ Run the same black-box suite against SQLite, SQL Server, PostgreSQL, and MongoDB
 4. Issue access/refresh tokens through `ITokenService`, call a bearer-protected endpoint, rotate the refresh token, prove replay rejection, revoke both token kinds, and prove immediate rejection.
 5. Repeat restart tests against durable provider containers and verify state, schema history, and indexes survive.
 
-## Package And Host Changes For The Implementation Slice
+## Historical Proposed Package And Host Changes
 
 Add concrete packages with no Groundwork references from core contracts, for example:
 
@@ -351,7 +380,7 @@ Then:
 8. let Groundwork's host naming policy select physical names while feature packages provide stable logical storage-unit ids and defaults;
 9. keep ASP.NET Core Identity/OpenIddict types and packages entirely in concrete foundation packages; Elsa identity abstractions remain unchanged.
 
-## Dependency-Ordered Follow-Up Work
+## Historical Dependency-Ordered Follow-Up Work
 
 1. Groundwork compound/typed/multi-value indexes and range queries.
 2. Groundwork storage-boundary tenancy and privileged sessions.
@@ -367,16 +396,16 @@ The production-store slices must not begin by copying the current EF schema mech
 
 ## Source Pointers
 
-- [Identity EF registration](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Extensions/AspNetCoreIdentityEntityFrameworkCoreServiceCollectionExtensions.cs)
+- Historical Identity EF registration (removed path): `src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Extensions/AspNetCoreIdentityEntityFrameworkCoreServiceCollectionExtensions.cs`
 - [Existing Groundwork IAM persistence feature](../../src/Elsa/Foundation/Identity/Persistence/Groundwork/IdentityGroundworkPersistenceFeature.cs)
 - [Existing Groundwork IAM storage manifest](../../src/Elsa/Foundation/Identity/Persistence/Groundwork/IdentityStorageManifest.cs)
 - [Identity framework registration](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Extensions/AspNetCoreIdentityServiceCollectionExtensions.cs)
 - [Identity model](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Models/AspNetCoreIdentityUser.cs)
-- [Identity EF model](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/ApplicationIdentityDbContext.cs)
-- [Identity seeder](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Seeding/IdentitySeeder.cs)
+- Historical Identity EF model (removed path): `src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/ApplicationIdentityDbContext.cs`
+- Historical Identity seeder (removed path): `src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Seeding/IdentitySeeder.cs`
 - [Identity sign-in flow](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Services/AspNetCoreIdentitySignInService.cs)
 - [OpenIddict registration](../../src/Elsa/Foundation/Identity/OpenIddict/Extensions/OpenIddictIdentityServiceCollectionExtensions.cs)
-- [OpenIddict token flow](../../src/Elsa/Foundation/Identity/OpenIddict/OpenIddictTokenService.cs)
+- [OpenIddict token flow](../../src/Elsa/Foundation/Identity/OpenIddict/Behavior/OpenIddictTokenService.cs)
 - [Workbench-owned OpenIddict vendor EF model](../../src/Apps/Elsa.Workbench/OpenIddict/OpenIddictIdentityDbContext.cs)
 - [Identity tests](../../tests/Elsa/Foundation/Identity/Tests/AspNetCoreIdentity)
 - [OpenIddict tests](../../tests/Elsa/Foundation/Identity/Tests/OpenIddict)

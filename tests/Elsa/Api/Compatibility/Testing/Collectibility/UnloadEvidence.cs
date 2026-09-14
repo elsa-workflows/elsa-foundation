@@ -16,6 +16,7 @@ public sealed class UnloadEvidence
         WeakReference loadContext,
         WeakReference assembly,
         WeakReference endpointType,
+        IReadOnlyList<WeakReference> observedTypes,
         bool collected,
         int collectionAttempts,
         string? diagnostic)
@@ -25,6 +26,7 @@ public sealed class UnloadEvidence
         LoadContext = loadContext;
         Assembly = assembly;
         EndpointType = endpointType;
+        ObservedTypes = observedTypes;
         Collected = collected;
         CollectionAttempts = collectionAttempts;
         Diagnostic = diagnostic;
@@ -40,6 +42,9 @@ public sealed class UnloadEvidence
     public WeakReference Assembly { get; }
 
     public WeakReference EndpointType { get; }
+
+    /// <summary>Weak references to any further collectible types the cycle observed; all must die for a clean collection.</summary>
+    public IReadOnlyList<WeakReference> ObservedTypes { get; }
 
     public bool Collected { get; }
 
@@ -66,11 +71,13 @@ public sealed class UnloadEvidence
         WeakReference loadContext,
         WeakReference assembly,
         WeakReference endpointType,
-        int maxAttempts = DefaultMaxCollectionAttempts)
+        int maxAttempts = DefaultMaxCollectionAttempts,
+        IReadOnlyList<WeakReference>? observedTypes = null)
     {
         ArgumentNullException.ThrowIfNull(loadContext);
         ArgumentNullException.ThrowIfNull(assembly);
         ArgumentNullException.ThrowIfNull(endpointType);
+        observedTypes ??= [];
         if (maxAttempts is < 1 or > MaximumCollectionAttempts)
             throw new ArgumentOutOfRangeException(nameof(maxAttempts), maxAttempts,
                 $"Collection attempts must be between 1 and {MaximumCollectionAttempts}.");
@@ -80,7 +87,7 @@ public sealed class UnloadEvidence
         for (; attempts < maxAttempts; attempts++)
         {
             ForceCollection();
-            if (!loadContext.IsAlive && !assembly.IsAlive && !endpointType.IsAlive)
+            if (!loadContext.IsAlive && !assembly.IsAlive && !endpointType.IsAlive && observedTypes.All(type => !type.IsAlive))
             {
                 collected = true;
                 attempts++;
@@ -96,6 +103,7 @@ public sealed class UnloadEvidence
             loadContext,
             assembly,
             endpointType,
+            observedTypes,
             collected,
             attempts,
             diagnostic);

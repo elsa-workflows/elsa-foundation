@@ -6,7 +6,8 @@
 
 **Feature Branch**: `codex/runtime-workflow-start-checkpoint`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #40, #41 (restatused 2026-09-10 from git evidence)
 **Input**: Continue the Runtime Execution Seam implementation after terminal workflow completion. Start-node scheduling must happen after a named `WorkflowStarted` checkpoint commits, not directly from the start command handler.
 
 ## Scenarios & Tests

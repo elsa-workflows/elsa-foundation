@@ -17,7 +17,7 @@
 
 **Purpose**: Freeze the baseline and prepare exact test/report locations.
 
-- [x] T001 Record the current-main 43.500964 s activation and 0.610067 s first-success evidence, environment, and stale-snapshot failure in `docs/reports/shell-activation-performance-2026-07.md`
+- [x] T001 Record the current-main 43.500964 s activation and 0.610067 s first-success evidence, environment, and stale-snapshot failure in `docs/reports/archive/shell-activation-performance-2026-07.md`
 - [x] T002 Remove the duplicate `Elsa.Workflows.Runtime.Http` import warning in `src/Apps/Elsa.Server/Program.cs` so measured Release builds remain warning-free
 
 ---
@@ -124,7 +124,7 @@
 - [x] T031 [US4] Make the touched feature inheritable and expose/document `SkipSchemaInspectionWhenPlanUnchanged` in `src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkRuntimePersistenceShellFeature.cs` and reference server shell configuration
 - [x] T032 [US4] Run the Groundwork SQLite, Groundwork recovery, Activities HTTP integration, shell lifecycle/isolation, and Architecture regression commands recorded in `specs/091-lazy-shell-activation/quickstart.md`
 - [x] T033 [US4] Build the Release server with no new warnings and run the 20-boot optimized lane plus the existing 200-request warm lane using `tools/performance/measure-server-cold-start.sh` and `tools/performance/measure-http-workflow.sh`
-- [x] T034 [US4] Record uncontaminated raw report provenance, before/after p50/p95, phase attribution, budgets, operator knobs, rollback, and residual costs in `docs/reports/shell-activation-performance-2026-07.md`
+- [x] T034 [US4] Record uncontaminated raw report provenance, before/after p50/p95, phase attribution, budgets, operator knobs, rollback, and residual costs in `docs/reports/archive/shell-activation-performance-2026-07.md`
 
 **Checkpoint**: The measured dominant activation phase is reduced and the client-visible first/warm behavior satisfies the declared budgets.
 

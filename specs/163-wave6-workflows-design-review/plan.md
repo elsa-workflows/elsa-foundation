@@ -72,7 +72,7 @@ tests/Elsa/Workflows/Design/Api/Tests/Support/
 tests/Elsa/Workflows/Design/Api/Tests/WorkflowDesignApiBeforeBaselineTests.cs
 tests/Elsa/Workflows/Design/Api/Tests/WorkflowsDesignApiContractTests.cs
 tests/Elsa/Architecture/
-docs/reports/workflows-design-api-migration-2026-08.md
+docs/reports/archive/workflows-design-api-migration-2026-08.md
 docs/adr/0068-first-party-rest-apis-use-aspnet-core-minimal-apis.md
 ```
 

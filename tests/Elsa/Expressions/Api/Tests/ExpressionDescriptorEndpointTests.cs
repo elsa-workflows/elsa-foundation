@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Elsa.Testing;
 
 namespace Elsa.Expressions.Api.Tests;
 
@@ -125,13 +126,6 @@ public sealed class ExpressionDescriptorEndpointTests
 
     private static void AssertProperties(Type type, params string[] names) =>
         Assert.All(names, name => Assert.NotNull(type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance)));
-
-    private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
-    {
-        public IServiceProvider ServiceProvider { get; } = serviceProvider;
-        public ICollection<EndpointDataSource> DataSources { get; } = [];
-        public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
-    }
 
     private sealed class StubExpressionDescriptorRegistry(IEnumerable<IExpressionDescriptor> descriptors) : IExpressionDescriptorRegistry
     {

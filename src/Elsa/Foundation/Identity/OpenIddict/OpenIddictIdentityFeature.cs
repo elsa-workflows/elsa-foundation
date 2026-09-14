@@ -21,7 +21,7 @@ public sealed class OpenIddictIdentityFeature : IShellFeature
     [ManifestSetting(DisplayName = "Issuer", Description = "Logical issuer URI written into first-party access tokens.", Category = "Identity")]
     public string? Issuer { get; set; }
 
-    [ManifestSetting(DisplayName = "Signing key", Description = "Key material used to derive the token signing key. Required outside development/demo.", Category = "Security", Secret = true)]
+    [ManifestSetting(DisplayName = "Signing key", Description = "Base64-encoded PKCS#8 RSA private key that signs access tokens. Required outside development/demo; without a usable key the shell fails activation.", Category = "Security", Secret = true)]
     public string? SigningKey { get; set; }
 
     [ManifestSetting(DisplayName = "Encryption key", Description = "Key material used to derive OpenIddict's encryption key. Defaults to a key derived from the signing key.", Category = "Security", Secret = true)]

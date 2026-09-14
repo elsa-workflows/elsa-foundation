@@ -14,6 +14,7 @@ using Groundwork.Store;
 using System.Text.Json;
 using Xunit;
 using Xunit.Sdk;
+using Elsa.Persistence.Groundwork.V2.Testing;
 
 namespace Elsa.Persistence.Groundwork.V2.Runtime.Tests;
 
@@ -375,7 +376,8 @@ public sealed class GroundworkV2ExecutableActivityTemplateStoreTests
         IGroundworkStorageCapabilitySource
     {
         public int OpenCount { get; private set; }
-        public QueryRequest? LastQuery { get; private set; }
+        public List<QueryRequest> Queries { get; } = [];
+        public QueryRequest? LastQuery => Queries.Count == 0 ? null : Queries[^1];
         public BatchWriteOptions? LastUnitOfWorkOptions { get; private set; }
         public IReadOnlyList<string>? LastUnitOfWorkLogicalIds { get; private set; }
 
@@ -384,7 +386,7 @@ public sealed class GroundworkV2ExecutableActivityTemplateStoreTests
         public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null)
         {
             OpenCount++;
-            return new RecordingSession(connection.OpenSession(Resolve(unitId), access), request => LastQuery = request);
+            return new RecordingSession(connection.OpenSession(Resolve(unitId), access), Queries);
         }
 
         public IUnitOfWork BeginUnitOfWork(
@@ -436,31 +438,5 @@ public sealed class GroundworkV2ExecutableActivityTemplateStoreTests
         }
 
         public StorageUnit Unit(string unitId, string? targetName = null) => inner.Unit(unitId, targetName);
-    }
-
-    private sealed class RecordingSession(IStorageSession inner, Action<QueryRequest> recordQuery) : SynchronousStorageSessionTestDouble, IStorageSession
-    {
-        public StorageUnit Unit => inner.Unit;
-        public StorageAccess Access => inner.Access;
-
-        public StoredEntry? Read(StorageKey key) => inner.Read(key);
-
-        public QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null)
-        {
-            recordQuery(request);
-            return inner.Query(request, options);
-        }
-
-        public WriteOutcome Insert(StorageValues values, WriteOptions? options = null) => inner.Insert(values, options);
-        public WriteOutcome Update(StorageValues values, WriteOptions? options = null) => inner.Update(values, options);
-        public WriteOutcome Upsert(StorageValues values, WriteOptions? options = null) => inner.Upsert(values, options);
-        public WriteOutcome Delete(StorageKey key, WriteOptions? options = null) => inner.Delete(key, options);
-        public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) => inner.Append(operationId, values);
-        public AggregationResult Aggregate(AggregationQuery query) => inner.Aggregate(query);
-    }
-
-    private sealed class TestAccessContextAccessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
-    {
-        public PersistenceAccessContext Current { get; } = current;
     }
 }

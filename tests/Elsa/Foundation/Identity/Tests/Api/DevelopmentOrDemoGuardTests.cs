@@ -33,7 +33,7 @@ public sealed class DevelopmentOrDemoGuardTests
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
 
-        // The message must name the setting and how to fix it (mirrors the SecurityDefaultGuard/kill-switch style).
+        // The message must name the setting and how to fix it.
         Assert.Contains("GroundworkIdentitySeeder", exception.Message, StringComparison.Ordinal);
         Assert.Contains("Development", exception.Message, StringComparison.Ordinal);
 

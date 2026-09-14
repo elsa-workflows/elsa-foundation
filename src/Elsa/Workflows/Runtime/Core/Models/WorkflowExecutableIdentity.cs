@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <see cref="ArtifactVersion"/>) because it doubles as the runtime pinned-snapshot carrier threaded through
 /// dispatch, scheduling, checkpointing and persisted <c>WorkflowExecutionState</c>. Re-shaping that carrier to
 /// resolve provenance through the reference at dispatch time is the dispatch-semantics work owned by the
-/// reference-driven-dispatch slice (W3); this slice only removes the redundant embedded source-reference object,
+/// reference-driven-dispatch slice; this slice only removes the redundant embedded source-reference object,
 /// which the standalone <see cref="WorkflowExecutableSourceReference"/> entity now owns.
 /// </remarks>
 public sealed record WorkflowExecutableIdentity(

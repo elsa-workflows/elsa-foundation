@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-checkpoint-commit-dispatch`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #36, #37 (restatused 2026-09-10 from git evidence)
 **Input**: Continue deterministic activity completion propagation after checkpoint scheduler work exists.
 
 ## Scenarios & Tests

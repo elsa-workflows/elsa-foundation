@@ -27,7 +27,6 @@
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
     <ProjectReference Include="..\..\src\Elsa\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" PrivateAssets="all" />
-    <ProjectReference Include="..\..\src\Elsa\Activities\Design\Reconciliation\Core\Elsa.Activities.Design.Reconciliation.Core.csproj" PrivateAssets="all" />
     <ProjectReference Include="..\..\src\Elsa\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" PrivateAssets="all" />
     <ProjectReference Include="..\..\src\Elsa\Primitives\Primitives\Elsa.Primitives.csproj" PrivateAssets="all" />
   </ItemGroup>

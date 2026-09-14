@@ -17,28 +17,19 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// activation-projection units in one evidenced atomic unit of work. Serving queries are bounded provider
 /// queries over the declared projections; this adapter has no v1 document-store or migration path.
 /// </remarks>
-public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTriggerScheduleStore
+public sealed class GroundworkV2RecurringTriggerScheduleStore : GroundworkV2RuntimeStoreBase, IRecurringTriggerScheduleStore
 {
     private const string ProjectionKind = "recurringSchedules";
 
-    private readonly IGroundworkStorageSessionSource sessions;
-    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
-    private readonly string? targetName;
-    private readonly StorageUnit scheduleUnit;
     private readonly StorageUnit projectionStateUnit;
 
     public GroundworkV2RecurringTriggerScheduleStore(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,
         string? targetName = null)
+        : base(sessions, accessContextAccessor, targetName, "recurring-trigger schedule", ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleDocumentKind)
     {
-        ArgumentNullException.ThrowIfNull(sessions);
-        ArgumentNullException.ThrowIfNull(accessContextAccessor);
-        this.sessions = sessions;
-        this.accessContextAccessor = accessContextAccessor;
-        this.targetName = targetName;
-        scheduleUnit = sessions.Unit(ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleDocumentKind, targetName);
-        projectionStateUnit = sessions.Unit(ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind, targetName);
+        projectionStateUnit = UnitFor(ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind);
     }
 
     public ValueTask<RecurringTriggerSchedule> SaveAsync(
@@ -48,7 +39,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         GroundworkV2RecurringTriggerScheduleStorageConventions.Validate(schedule);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var session = OpenScheduleSession();
+        var session = Open();
         var key = GroundworkRuntimeRowStore.Key(
             GroundworkV2RecurringTriggerScheduleStorageConventions.PhysicalId(schedule.ScheduleId));
         var values = GroundworkV2RecurringTriggerScheduleStorageConventions.Values(schedule);
@@ -108,7 +99,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
 
         foreach (var activationId in activationIds)
         {
-            var state = ReadProjectionState(OpenProjectionStateSession(), activationId);
+            var state = ReadProjectionState(OpenScoped(projectionStateUnit), activationId);
             if (state is null)
                 continue;
 
@@ -135,11 +126,11 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
     {
         ValidateActivation(activationId, schedules);
         cancellationToken.ThrowIfCancellationRequested();
-        _ = Access;
+        _ = ScopedAccess;
         RequireAtomicCommit();
 
         using var unitOfWork = BeginUnitOfWork();
-        var scheduleSession = unitOfWork.OpenSession(scheduleUnit);
+        var scheduleSession = unitOfWork.OpenSession(Unit);
         var stateSession = unitOfWork.OpenSession(projectionStateUnit);
         var existingState = ReadProjectionState(stateSession, activationId);
         var existingRows = ListAllByActivation(scheduleSession, activationId, cancellationToken);
@@ -165,7 +156,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
             if (desiredById.TryGetValue(existing.Schedule.ScheduleId, out var desired))
                 StageUpsert(unitOfWork, desired, existing.Version);
             else
-                StageDelete(unitOfWork, scheduleUnit, existing.Schedule.ScheduleId, existing.Version);
+                StageDelete(unitOfWork, Unit, existing.Schedule.ScheduleId, existing.Version);
         }
 
         foreach (var schedule in prepared.Where(schedule => !existingById.ContainsKey(schedule.ScheduleId)))
@@ -186,8 +177,8 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
             // acknowledgement arrived. Reconcile only exact convergence; never hide a different winner.
             try
             {
-                var stateAfter = ReadProjectionState(OpenProjectionStateSession(), activationId);
-                var rowsAfter = ListAllByActivation(OpenScheduleSession(), activationId, cancellationToken);
+                var stateAfter = ReadProjectionState(OpenScoped(projectionStateUnit), activationId);
+                var rowsAfter = ListAllByActivation(Open(), activationId, cancellationToken);
                 if (stateAfter is { State.IsActive: false } &&
                     ProjectionMatches(stateAfter.Value.State, rowsAfter) &&
                     ProjectionsEqual(rowsAfter, prepared))
@@ -211,7 +202,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         ArgumentNullException.ThrowIfNull(query);
         ValidateActivationId(query.ActivationId);
         cancellationToken.ThrowIfCancellationRequested();
-        var table = new TableId(scheduleUnit.Name);
+        var table = new TableId(Unit.Name);
         var activation = Column(table, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleActivationIdField);
         var scheduleId = Column(table, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIdField);
         var result = QueryWithBoundCursor(new QueryRequest(
@@ -220,7 +211,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
             [new OrderTerm(scheduleId, OrderDirection.Ascending, NullOrder.Last)],
             Projection.All,
             PagingFor(query.Limit, query.ContinuationToken)),
-            scheduleUnit.CreateQueryRenderOptions(ElsaRuntimeV2StorageManifest.RecurringScheduleByActivationAndScheduleIdIndex),
+            Unit.CreateQueryRenderOptions(ElsaRuntimeV2StorageManifest.RecurringScheduleByActivationAndScheduleIdIndex),
             query.ContinuationToken);
         return ValueTask.FromResult(Page(query, result));
     }
@@ -231,7 +222,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
     {
         ArgumentNullException.ThrowIfNull(query);
         cancellationToken.ThrowIfCancellationRequested();
-        var table = new TableId(scheduleUnit.Name);
+        var table = new TableId(Unit.Name);
         var artifact = Column(table, ElsaRuntimeV2StorageManifest.ArtifactIdField);
         var scheduleId = Column(table, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIdField);
         var result = QueryWithBoundCursor(new QueryRequest(
@@ -240,7 +231,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
             [new OrderTerm(scheduleId, OrderDirection.Ascending, NullOrder.Last)],
             Projection.All,
             PagingFor(query.Limit, query.ContinuationToken)),
-            scheduleUnit.CreateQueryRenderOptions(ElsaRuntimeV2StorageManifest.RecurringScheduleByArtifactAndScheduleIdIndex),
+            Unit.CreateQueryRenderOptions(ElsaRuntimeV2StorageManifest.RecurringScheduleByArtifactAndScheduleIdIndex),
             query.ContinuationToken);
         return ValueTask.FromResult(Page(query, result));
     }
@@ -252,7 +243,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         ValidateActivationId(activationId);
         cancellationToken.ThrowIfCancellationRequested();
         return ValueTask.FromResult<IReadOnlyCollection<RecurringTriggerSchedule>>(
-            ListAllByActivation(OpenScheduleSession(), activationId, cancellationToken)
+            ListAllByActivation(Open(), activationId, cancellationToken)
                 .Select(row => row.Schedule)
                 .ToArray());
     }
@@ -266,11 +257,11 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         if (replacedActivationId is not null)
             ValidateActivationId(replacedActivationId);
         cancellationToken.ThrowIfCancellationRequested();
-        _ = Access;
+        _ = ScopedAccess;
         RequireAtomicCommit();
 
         using var unitOfWork = BeginUnitOfWork();
-        var scheduleSession = unitOfWork.OpenSession(scheduleUnit);
+        var scheduleSession = unitOfWork.OpenSession(Unit);
         var stateSession = unitOfWork.OpenSession(projectionStateUnit);
         var candidate = ReadProjectionState(stateSession, activationId)
             ?? throw new InvalidOperationException(
@@ -352,16 +343,16 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
     {
         ValidateActivationId(activationId);
         cancellationToken.ThrowIfCancellationRequested();
-        _ = Access;
+        _ = ScopedAccess;
         RequireAtomicCommit();
 
         using var unitOfWork = BeginUnitOfWork();
-        var scheduleSession = unitOfWork.OpenSession(scheduleUnit);
+        var scheduleSession = unitOfWork.OpenSession(Unit);
         var stateSession = unitOfWork.OpenSession(projectionStateUnit);
         var rows = ListAllByActivation(scheduleSession, activationId, cancellationToken);
         var state = ReadProjectionState(stateSession, activationId);
         foreach (var row in rows)
-            StageDelete(unitOfWork, scheduleUnit, row.Schedule.ScheduleId, row.Version);
+            StageDelete(unitOfWork, Unit, row.Schedule.ScheduleId, row.Version);
         if (state is not null)
         {
             if (state.Value.State.IsActive)
@@ -385,11 +376,11 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         RuntimeStorePageRequest.ValidateLimit(limit, nameof(limit));
         cancellationToken.ThrowIfCancellationRequested();
 
-        var table = new TableId(scheduleUnit.Name);
+        var table = new TableId(Unit.Name);
         var active = Column(table, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIsActiveField);
         var nextOccurrence = Column(table, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleNextOccurrenceField);
         var scheduleId = Column(table, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIdField);
-        var result = OpenScheduleSession().Query(new QueryRequest(
+        var result = Open().Query(new QueryRequest(
             table,
             new Predicate.And([
                 Equal(active, true),
@@ -401,7 +392,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
             ],
             Projection.All,
             Paging.Keyset(limit)),
-            scheduleUnit.CreateQueryRenderOptions(ElsaRuntimeV2StorageManifest.RecurringScheduleByActiveNextOccurrenceAndScheduleIdIndex));
+            Unit.CreateQueryRenderOptions(ElsaRuntimeV2StorageManifest.RecurringScheduleByActiveNextOccurrenceAndScheduleIdIndex));
 
         if (result.Rows.Count == 0 && result.NextContinuationToken is not null)
         {
@@ -425,7 +416,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
     {
         GroundworkV2RecurringTriggerScheduleStorageConventions.ValidateScheduleId(scheduleId);
         cancellationToken.ThrowIfCancellationRequested();
-        var entry = OpenScheduleSession().Read(
+        var entry = Open().Read(
             GroundworkRuntimeRowStore.Key(
                 GroundworkV2RecurringTriggerScheduleStorageConventions.PhysicalId(scheduleId)));
         if (entry is null)
@@ -444,7 +435,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
     {
         GroundworkV2RecurringTriggerScheduleStorageConventions.ValidateScheduleId(scheduleId);
         cancellationToken.ThrowIfCancellationRequested();
-        var session = OpenScheduleSession();
+        var session = Open();
         var key = GroundworkRuntimeRowStore.Key(
             GroundworkV2RecurringTriggerScheduleStorageConventions.PhysicalId(scheduleId));
         var entry = session.Read(key);
@@ -478,14 +469,14 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         cancellationToken.ThrowIfCancellationRequested();
-        _ = Access;
+        _ = ScopedAccess;
         RequireAtomicCommit();
 
         using var unitOfWork = BeginUnitOfWork();
-        var scheduleSession = unitOfWork.OpenSession(scheduleUnit);
+        var scheduleSession = unitOfWork.OpenSession(Unit);
         var stateSession = unitOfWork.OpenSession(projectionStateUnit);
         var rows = ListAll(scheduleSession, Equal(
-            Column(new TableId(scheduleUnit.Name), ElsaRuntimeV2StorageManifest.ArtifactIdField),
+            Column(new TableId(Unit.Name), ElsaRuntimeV2StorageManifest.ArtifactIdField),
             artifactId), cancellationToken);
         var activationRows = rows
             .Where(row => row.Schedule.ActivationId is not null)
@@ -527,7 +518,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         }
 
         foreach (var row in rows)
-            StageDelete(unitOfWork, scheduleUnit, row.Schedule.ScheduleId, row.Version);
+            StageDelete(unitOfWork, Unit, row.Schedule.ScheduleId, row.Version);
         foreach (var (activationId, state) in statesToDelete)
         {
             unitOfWork.Stage(RowWrite.Delete(
@@ -545,7 +536,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
     {
         GroundworkV2RecurringTriggerScheduleStorageConventions.ValidateScheduleId(scheduleId);
         cancellationToken.ThrowIfCancellationRequested();
-        var session = OpenScheduleSession();
+        var session = Open();
         var key = GroundworkRuntimeRowStore.Key(
             GroundworkV2RecurringTriggerScheduleStorageConventions.PhysicalId(scheduleId));
         var entry = session.Read(key);
@@ -556,7 +547,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         EnsureIdentity(schedule, scheduleId);
         if (schedule.ActivationId is not null)
         {
-            var state = ReadProjectionState(OpenProjectionStateSession(), schedule.ActivationId);
+            var state = ReadProjectionState(OpenScoped(projectionStateUnit), schedule.ActivationId);
             if (state is { State.IsActive: false })
             {
                 throw new InvalidOperationException(
@@ -604,7 +595,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
     {
         try
         {
-            return OpenScheduleSession().Query(request, options);
+            return Open().Query(request, options);
         }
         catch (Exception exception) when (
             cursor is not null &&
@@ -626,7 +617,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         ListAll(
             session,
             Equal(
-                Column(new TableId(scheduleUnit.Name), ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleActivationIdField),
+                Column(new TableId(Unit.Name), ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleActivationIdField),
                 activationId),
             cancellationToken);
 
@@ -635,7 +626,7 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         Predicate predicate,
         CancellationToken cancellationToken)
     {
-        var table = new TableId(scheduleUnit.Name);
+        var table = new TableId(Unit.Name);
         var scheduleId = Column(table, ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleIdField);
         var rows = new List<StoredSchedule>();
         var seenContinuations = new HashSet<string>(StringComparer.Ordinal);
@@ -951,13 +942,13 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         RecurringTriggerSchedule schedule,
         long expectedVersion) =>
         unitOfWork.Stage(RowWrite.Upsert(
-            scheduleUnit,
+            Unit,
             GroundworkV2RecurringTriggerScheduleStorageConventions.Values(schedule),
             WriteOptions.IfVersion(expectedVersion)));
 
     private void StageInsert(IUnitOfWork unitOfWork, RecurringTriggerSchedule schedule) =>
         unitOfWork.Stage(RowWrite.Insert(
-            scheduleUnit,
+            Unit,
             GroundworkV2RecurringTriggerScheduleStorageConventions.Values(schedule),
             WriteOptions.CreateOnly));
 
@@ -1087,55 +1078,19 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         return state;
     }
 
-    private IStorageSession OpenScheduleSession() => sessions.Open(
-        scheduleUnit.Id.Value,
-        Access,
-        targetName);
-
-    private IStorageSession OpenProjectionStateSession() => sessions.Open(
-        projectionStateUnit.Id.Value,
-        Access,
-        targetName);
-
-    private IUnitOfWork BeginUnitOfWork() => sessions.BeginUnitOfWork(
-        Access,
-        BatchWriteOptions.Exact,
-        [
+    private IUnitOfWork BeginUnitOfWork() => BeginAtomicUnitOfWork([
             ElsaRuntimeV2StorageManifest.RecurringTriggerScheduleDocumentKind,
             ElsaRuntimeV2StorageManifest.PublicationProjectionStateDocumentKind
-        ],
-        targetName);
-
-    private StorageAccess Access
-    {
-        get
-        {
-            var context = accessContextAccessor.Current ??
-                          throw new InvalidOperationException(
-                              "Recurring-trigger schedule persistence access context is missing.");
-            if (context.Scope is null || context.AcrossScopes)
-            {
-                throw new InvalidOperationException(
-                    "Groundwork recurring-trigger schedules require one explicit persistence scope; " +
-                    "global and across-scope access are refused.");
-            }
-
-            return StorageAccess.Scoped(new StorageScope(context.Scope.Value));
-        }
-    }
+        ]);
 
     private void RequireAtomicCommit()
     {
-        if (sessions is not IGroundworkStorageCapabilitySource capabilitySource ||
-            !capabilitySource.Capabilities(targetName).Any(capability =>
-                capability.Id.Equals(WellKnownCapabilities.AtomicCommit)))
-        {
+        if (!HasAtomicCommit)
             throw new NotSupportedException(
                 "Groundwork recurring-schedule activation changes require the provider's evidenced atomic-commit capability.");
-        }
     }
 
-    private static WriteOutcome UpdateExisting(
+    private WriteOutcome UpdateExisting(
         IStorageSession session,
         StorageValues values,
         StoredEntry existing,
@@ -1146,20 +1101,6 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
         var revision = existing.Version ?? throw new InvalidDataException(
             $"Groundwork recurring-trigger schedule '{schedule.ScheduleId}' did not expose an optimistic revision.");
         return ConditionalUpsert(session, values, revision);
-    }
-
-    private static WriteOutcome ConditionalUpsert(
-        IStorageSession session,
-        StorageValues values,
-        long revision)
-    {
-        if (session is not IConcurrencyStorageSession concurrency)
-        {
-            throw new NotSupportedException(
-                "The selected Groundwork provider does not advertise optimistic recurring-trigger schedule concurrency.");
-        }
-
-        return concurrency.ConditionalUpsert(values, WriteOptions.IfVersion(revision));
     }
 
     private static void EnsureIdentity(RecurringTriggerSchedule schedule, string scheduleId)
@@ -1263,49 +1204,14 @@ public sealed class GroundworkV2RecurringTriggerScheduleStore : IRecurringTrigge
                 $"Groundwork recurring-schedule projection state is missing required string field '{field}'.")
         };
 
-    private ColumnRef Column(TableId table, string name) => Column(scheduleUnit, table, name);
-
     private ColumnRef ProjectionStateColumn(TableId table, string name) =>
         Column(projectionStateUnit, table, name);
-
-    private static ColumnRef Column(StorageUnit unit, TableId table, string name)
-    {
-        var definition = unit.Columns.SingleOrDefault(column =>
-            StringComparer.Ordinal.Equals(column.Name, name))
-            ?? throw new InvalidOperationException(
-                $"Groundwork unit '{unit.Id.Value}' does not declare recurring-trigger query column '{name}'.");
-        var type = definition.Type switch
-        {
-            PortableType.String => QueryType.String,
-            PortableType.DateTimeOffset => QueryType.DateTimeOffset,
-            PortableType.Int32 => QueryType.Int32,
-            PortableType.Int64 => QueryType.Int64,
-            PortableType.Boolean => QueryType.Boolean,
-            _ => throw new InvalidOperationException(
-                $"Groundwork recurring-trigger schedule query column '{name}' has unsupported type '{definition.Type}'.")
-        };
-        return new ColumnRef(table, name, type, definition.IsNullable, definition.MaxLength);
-    }
-
-    private static Predicate Equal(ColumnRef column, object? value) =>
-        new Predicate.Equal(column, QueryConstant.Of(column, value));
 
     private static Predicate Due(ColumnRef column, DateTimeOffset value) =>
         new Predicate.Range(column, null, Bound.Inclusive(QueryConstant.Of(column, value)));
 
-    private static Paging PagingFor(int limit, string? continuationToken) =>
-        continuationToken is null
-            ? Paging.Keyset(limit)
-            : Paging.Continuation(continuationToken, limit);
-
     private static string ProjectionStateId(string activationId) =>
         $"{ProjectionKind}:{activationId.Length}:{activationId}";
-
-    private static bool IsSaved(WriteOutcomeStatus status) =>
-        status is WriteOutcomeStatus.Inserted or
-        WriteOutcomeStatus.Updated or
-        WriteOutcomeStatus.Upserted or
-        WriteOutcomeStatus.Replayed;
 
     private static async ValueTask CommitAsync(IUnitOfWork unitOfWork, CancellationToken cancellationToken)
     {

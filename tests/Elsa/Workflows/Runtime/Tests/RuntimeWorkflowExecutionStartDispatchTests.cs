@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
@@ -23,7 +24,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
             _references,
             _agentProvider,
             new IncrementingRuntimeExecutionIdGenerator(),
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
     }
 
     [Theory]
@@ -710,7 +711,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
             _references,
             _agentProvider,
             new IncrementingRuntimeExecutionIdGenerator(),
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             partitionAccessor: null,
             startPolicy: policy);
 
@@ -833,10 +834,5 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
             Contexts.Add(context);
             return ValueTask.FromResult(decision);
         }
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

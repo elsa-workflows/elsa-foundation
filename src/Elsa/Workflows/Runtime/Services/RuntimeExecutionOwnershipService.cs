@@ -8,7 +8,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Services;
 
 /// <summary>
-/// Default execution ownership service (single-writer fencing, RT-2). Backs ownership with the operational state store:
+/// Default execution ownership service (single-writer fencing). Backs ownership with the operational state store:
 /// each workflow execution has a single ownership record whose metadata carries the highest fencing token ever issued
 /// for it. Acquisition issues a strictly greater token; release clears the live lease/heartbeat while preserving that
 /// counter so tokens are never reused; the checkpoint-commit funnel calls <see cref="EnsureCurrentAsync"/> to fence

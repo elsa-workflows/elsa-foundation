@@ -5,7 +5,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Activities.Primitives.Activities;
 
 /// <summary>
-/// Derives the stimulus identity of a named-event trigger (W7, E3-1). It maps an event name to the opaque
+/// Derives the stimulus identity of a named-event trigger. It maps an event name to the opaque
 /// <c>(StimulusType, StimulusHash)</c> routing pair the engine already uses — it does NOT invent a second
 /// routing key. Both the publish-time trigger extractor and the caller that raises an event stimulus derive the
 /// hash the same way here, so a published <see cref="Event"/> trigger and an incoming stimulus for the same

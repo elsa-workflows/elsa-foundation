@@ -37,8 +37,8 @@
 - [x] T019 [US4] Add waited TestRun completion/fault/cancellation, run-kind inspection, and published-child selection tests under `tests/Elsa/Activities/DispatchWorkflow/Tests/`
 - [x] T020 [US4] Add an integrated two-node DispatchWorkflow acceptance test in `tests/Elsa/Workflows/Runtime/Distributed/Tests/`
 - [x] T021 [US4] Correct `specs/101-dispatch-delivery-recovery/tasks.md`, `specs/102-dispatch-test-run-scope/tasks.md`, and `specs/103-dispatch-distributed-execution/tasks.md` so every checked claim names existing evidence
-- [x] T022 [US4] Record the pre-existing generated-map freshness exception in `docs/reports/dispatch-workflow-674-parent-audit.md` without changing generated snapshots or running map generators
-- [x] T023 [US4] Update `docs/reports/dispatch-workflow-674-parent-audit.md` with final verified evidence
+- [x] T022 [US4] Record the pre-existing generated-map freshness exception in `docs/reports/archive/dispatch-workflow-674-parent-audit.md` without changing generated snapshots or running map generators
+- [x] T023 [US4] Update `docs/reports/archive/dispatch-workflow-674-parent-audit.md` with final verified evidence
 
 ## Phase 6: Verification, review, and delivery
 

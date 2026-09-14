@@ -31,7 +31,7 @@
 
 ## Phase 6: Polish and gates
 
-- [x] T015 Update owner READMEs/reports and reconcile acceptance criteria in `docs/reports/wave-1-minimal-api-migration-2026-08.md`.
+- [x] T015 Update owner READMEs/reports and reconcile acceptance criteria in `docs/reports/archive/wave-1-minimal-api-migration-2026-08.md`.
 - [x] T016 Run focused tests, architecture gates, full build, maps freshness, and final diff/self-review.
 
 ## Dependencies

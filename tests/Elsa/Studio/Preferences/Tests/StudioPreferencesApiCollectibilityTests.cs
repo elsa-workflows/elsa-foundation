@@ -1,7 +1,7 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Elsa.Api.Compatibility.Testing.Collectibility;
-using Elsa.Studio.Preferences.Tests.Support;
+using Elsa.Studio.Preferences.Api;
 using Xunit;
 
 namespace Elsa.Studio.Preferences.Tests;
@@ -17,24 +17,25 @@ public sealed class StudioPreferencesApiCollectibilityTests
 {
     private const int ReleaseCollectionAttempts = 24;
 
-    [Fact]
-    public void Repeated_production_route_references_keep_the_context_alive_until_released()
+    private static readonly CollectibleModule Module = new()
     {
-        for (var cycle = 0; cycle < 10; cycle++)
-            VerifyRetainReleaseCycle(RetentionStage.Route);
-    }
+        FeatureType = typeof(StudioPreferencesApiFeature),
+        AssemblyNamePrefix = "Elsa.Studio.Preferences.Collectible"
+    };
 
-    [Fact]
-    public void Repeated_production_service_provider_references_keep_the_context_alive_until_released()
+    [Theory]
+    [InlineData(RetentionStage.Route, "route")]
+    [InlineData(RetentionStage.Services, "DI/services")]
+    public void Repeated_production_references_keep_the_context_alive_until_released(RetentionStage stage, string classification)
     {
         for (var cycle = 0; cycle < 10; cycle++)
-            VerifyRetainReleaseCycle(RetentionStage.Services);
+            VerifyRetainReleaseCycle(stage, classification);
     }
 
     [Fact]
     public void Collection_evidence_contains_no_strong_collectible_type_handles()
     {
-        using var cycle = StudioPreferencesCollectibleFixture.Create(RetentionStage.Route);
+        using var cycle = Create(RetentionStage.Route);
         cycle.ReleaseRetention();
 
         var evidence = cycle.VerifyCollection(ReleaseCollectionAttempts);
@@ -50,20 +51,20 @@ public sealed class StudioPreferencesApiCollectibilityTests
         Assert.DoesNotContain(typeof(Assembly), evidenceFieldTypes);
     }
 
+    private static CollectibleModuleCycle<int> Create(RetentionStage stage) =>
+        CollectibleModuleFixture.Create(Module, stage, host => host.Endpoints.Count);
+
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void VerifyRetainReleaseCycle(RetentionStage stage)
+    private static void VerifyRetainReleaseCycle(RetentionStage stage, string classification)
     {
-        using var cycle = StudioPreferencesCollectibleFixture.Create(stage);
+        using var cycle = Create(stage);
         if (stage == RetentionStage.Route)
-            Assert.True(cycle.RouteCount >= 2);
+            Assert.True(cycle.Observation >= 2, "The production Studio Preferences mapper must publish its endpoints.");
 
         var retained = cycle.VerifyCollection();
         Assert.False(retained.Collected);
         Assert.Equal(stage, retained.Stage);
-        Assert.Contains(
-            stage == RetentionStage.Route ? "route" : "DI/services",
-            retained.Diagnostic,
-            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(classification, retained.Diagnostic, StringComparison.OrdinalIgnoreCase);
 
         cycle.ReleaseRetention();
         var released = cycle.VerifyCollection(ReleaseCollectionAttempts);

@@ -28,6 +28,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Activities.DispatchWorkflow.Tests;
 
@@ -50,7 +51,7 @@ public sealed class DispatchWorkflowDesignTests
         await references.SaveAsync(Source("ambiguous-b", "ambiguous", "ambiguous-b-artifact"));
         await references.SaveAsync(Source("test-ref", "test-run", "test-artifact", WorkflowExecutableReferenceScope.TestRun));
         await references.SaveAsync(Source("retired-ref", "retired", "retired-artifact") with { DeletedAt = Now.AddMinutes(-1) });
-        var provider = new WorkflowDefinitionOptionsProvider(definitions, references, new FixedTimeProvider(Now));
+        var provider = new WorkflowDefinitionOptionsProvider(definitions, references, new FakeTimeProvider(Now));
 
         var options = await provider.GetOptionsAsync(null!);
 
@@ -72,7 +73,7 @@ public sealed class DispatchWorkflowDesignTests
         var source = Source("published-source", "child-definition", executable.Identity.ArtifactId);
         await executables.SaveAsync(executable);
         await references.SaveAsync(source);
-        var sourceProvider = new DispatchPinSource(references, executables, InputValidator(), new FixedTimeProvider(Now));
+        var sourceProvider = new DispatchPinSource(references, executables, InputValidator(), new FakeTimeProvider(Now));
 
         var context = Context(node);
         var compileContribution = await sourceProvider.GetContributionAsync(
@@ -170,7 +171,7 @@ public sealed class DispatchWorkflowDesignTests
         services.AddSingleton<IWorkflowExecutableInputValidator, WorkflowExecutableInputValidator>();
         services.AddSingleton<IWorkflowExecutableStore>(executableStore);
         services.AddSingleton<IWorkflowExecutableSourceReferenceStore>(sourceStore);
-        services.AddSingleton<TimeProvider>(new FixedTimeProvider(Now));
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
         new EventsFeature().ConfigureServices(services);
         // spec 145: the executable compiler + the ExecutableCompilationCollecting handler moved to the
         // endpoint-free WorkflowsPublishing engine feature, which the Api feature pulls in via DependsOn at
@@ -214,7 +215,7 @@ public sealed class DispatchWorkflowDesignTests
         var references = new InMemoryWorkflowExecutableSourceReferenceStore();
         await references.SaveAsync(Source("source-a", "child-definition", "artifact-a"));
         await references.SaveAsync(Source("source-b", "child-definition", "artifact-b"));
-        var sourceProvider = new DispatchPinSource(references, executables, InputValidator(), new FixedTimeProvider(Now));
+        var sourceProvider = new DispatchPinSource(references, executables, InputValidator(), new FakeTimeProvider(Now));
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await sourceProvider.GetMetadataAsync(Context(node)));
@@ -228,7 +229,7 @@ public sealed class DispatchWorkflowDesignTests
         var node = DispatchNode("dispatch-node", "child-definition");
         var executables = new InMemoryWorkflowExecutableStore();
         var references = new InMemoryWorkflowExecutableSourceReferenceStore();
-        var pinSource = new DispatchPinSource(references, executables, InputValidator(), new FixedTimeProvider(Now));
+        var pinSource = new DispatchPinSource(references, executables, InputValidator(), new FakeTimeProvider(Now));
 
         var missing = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await pinSource.GetContributionAsync(CompilationContext(node)));
@@ -268,7 +269,7 @@ public sealed class DispatchWorkflowDesignTests
         await executables.SaveAsync(testRunChild);
         await references.SaveAsync(publishedSource);
         await references.SaveAsync(testRunSource);
-        var pinSource = new DispatchPinSource(references, executables, InputValidator(), new FixedTimeProvider(Now));
+        var pinSource = new DispatchPinSource(references, executables, InputValidator(), new FakeTimeProvider(Now));
         var context = Context(node) with
         {
             Request = new WorkflowExecutableCompileRequest(
@@ -300,7 +301,7 @@ public sealed class DispatchWorkflowDesignTests
             references,
             new InMemoryWorkflowExecutableStore(),
             InputValidator(),
-            new FixedTimeProvider(Now));
+            new FakeTimeProvider(Now));
         var missing = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await missingSource.GetContributionAsync(CompilationContext(node)));
         Assert.Contains("missing executable 'expected-artifact'", missing.Message, StringComparison.Ordinal);
@@ -310,7 +311,7 @@ public sealed class DispatchWorkflowDesignTests
             references,
             new FindOnlyExecutableStore(wrongExecutable),
             InputValidator(),
-            new FixedTimeProvider(Now));
+            new FakeTimeProvider(Now));
         var inconsistent = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await inconsistentSource.GetContributionAsync(CompilationContext(node)));
         Assert.Contains("inconsistent executable/source identity", inconsistent.Message, StringComparison.Ordinal);
@@ -327,7 +328,7 @@ public sealed class DispatchWorkflowDesignTests
         await references.SaveAsync(Source("source-a", "child-definition", executable.Identity.ArtifactId));
         await references.SaveAsync(Source("source-b", "child-definition", executable.Identity.ArtifactId));
 
-        var contribution = await new DispatchPinSource(references, executables, InputValidator(), new FixedTimeProvider(Now))
+        var contribution = await new DispatchPinSource(references, executables, InputValidator(), new FakeTimeProvider(Now))
             .GetContributionAsync(CompilationContext(node));
 
         Assert.Single(contribution.Dependencies);
@@ -344,7 +345,7 @@ public sealed class DispatchWorkflowDesignTests
         await executables.SaveAsync(oldExecutable);
         await executables.SaveAsync(newExecutable);
         await references.SaveAsync(Source("child-v1-source", "child-definition", oldExecutable.Identity.ArtifactId));
-        var pinSource = new DispatchPinSource(references, executables, InputValidator(), new FixedTimeProvider(Now));
+        var pinSource = new DispatchPinSource(references, executables, InputValidator(), new FakeTimeProvider(Now));
 
         var first = await pinSource.GetContributionAsync(CompilationContext(node));
 
@@ -370,7 +371,7 @@ public sealed class DispatchWorkflowDesignTests
             "child-definition",
             legacy.Identity.ArtifactId,
             tenantId: "tenant-b"));
-        var pinSource = new DispatchPinSource(references, executables, InputValidator(), new FixedTimeProvider(Now));
+        var pinSource = new DispatchPinSource(references, executables, InputValidator(), new FakeTimeProvider(Now));
 
         var inaccessible = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await pinSource.GetContributionAsync(CompilationContext(node, tenantId: "tenant-a")));
@@ -665,7 +666,7 @@ public sealed class DispatchWorkflowDesignTests
             "child-definition",
             executable.Identity.ArtifactId,
             tenantId: referenceTenant));
-        return await new DispatchPinSource(references, executables, InputValidator(), new FixedTimeProvider(Now))
+        return await new DispatchPinSource(references, executables, InputValidator(), new FakeTimeProvider(Now))
             .GetContributionAsync(CompilationContext(node, publicationTenant));
     }
 
@@ -792,11 +793,6 @@ public sealed class DispatchWorkflowDesignTests
 
         public Task<IReadOnlyList<ActivityDefinitionVersion>> ListAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<ActivityDefinitionVersion>>([version]);
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private sealed class EmptyActivityPublicationStore : IActivityDefinitionVersionPublicationStore

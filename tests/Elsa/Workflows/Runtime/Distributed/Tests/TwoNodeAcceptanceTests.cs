@@ -436,13 +436,13 @@ public abstract class TwoNodeAcceptanceTests
             persistence.SourceReferenceStore,
             provider,
             new FixedRuntimeExecutionIdGenerator("unused-retained-id"),
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             partitionAccessor: null,
             startPolicy: new AllowWorkflowExecutableStartPolicy(),
             workflowDispatchStore: persistence.DispatchStore,
             workflowExecutionStateStore: persistence.WorkflowExecutionStore);
 
-        return new ChildStartExecutor(startDispatcher, persistence.DispatchStore, new FixedTimeProvider(_now.AddSeconds(1)));
+        return new ChildStartExecutor(startDispatcher, persistence.DispatchStore, new FakeTimeProvider(_now.AddSeconds(1)));
     }
 
     private async ValueTask CommitChildInFreshPersistenceAsync(
@@ -641,11 +641,6 @@ public abstract class TwoNodeAcceptanceTests
             WorkflowExecutableReferenceScope.Published,
             ActivationId: "publication-distributed",
             SlotId: "production");
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 
     private sealed class FixedRuntimeExecutionIdGenerator(string workflowExecutionId) : IRuntimeExecutionIdGenerator
     {

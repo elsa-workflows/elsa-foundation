@@ -579,20 +579,6 @@ public sealed class WorkflowExecutableCompilerGoldenTests
         return services.BuildServiceProvider().GetRequiredService<IActivityStructureService>();
     }
 
-    private sealed class FakeVersionStore(WorkflowDefinitionVersion version) : IWorkflowDefinitionVersionStore
-    {
-        public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) =>
-            version.Id == versionId
-                ? Task.FromResult(version)
-                : throw new ArgumentException($"Workflow definition version with id '{versionId}' does not exist");
-
-        public Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    }
-
     /// <summary>
     /// Decorates an <see cref="IActivityStructureService"/> and counts <c>ProjectChildren</c> calls per node id,
     /// so the traverse-once fix (single projection per node) can be asserted.

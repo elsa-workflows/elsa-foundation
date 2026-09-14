@@ -1,6 +1,7 @@
 using CShells.Features;
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
@@ -136,9 +137,26 @@ public sealed class GroundworkV2RuntimeRegistrationTests
         var exception = Assert.Throws<InvalidOperationException>(() =>
             provider.GetRequiredService<IRuntimeRecoveryContinuationCodec>());
 
-        Assert.Equal(
+        Assert.StartsWith(
             "Runtime recovery continuation signing key must be configured for durable recovery paging.",
             exception.Message);
+        Assert.Contains(nameof(GroundworkWorkflowRuntimeFeature.RecoveryContinuationSigningKey), exception.Message);
+    }
+
+    // Recovery paging is only exercised by the background resumption sweep, so a missing key would otherwise
+    // surface as a repeating sweep failure. The startup task moves that failure to shell activation.
+    [Fact]
+    public void Groundwork_registration_validates_the_recovery_protector_once_during_startup()
+    {
+        var services = new ServiceCollection();
+
+        services.AddGroundworkV2RuntimeStores();
+        services.AddGroundworkV2RuntimeStores();
+
+        Assert.Single(
+            services,
+            descriptor => descriptor.ServiceType == typeof(IStartupTask) &&
+                          descriptor.ImplementationType == typeof(ValidateRuntimeRecoveryContinuationCodecStartupTask));
     }
 
     [Fact]

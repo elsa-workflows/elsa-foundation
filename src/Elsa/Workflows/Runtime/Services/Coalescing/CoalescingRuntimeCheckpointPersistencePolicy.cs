@@ -5,7 +5,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
 
 /// <summary>
-/// Burst-coalescing checkpoint persistence policy (E3-6, RT-10). Non-suspending intra-drain checkpoints are folded
+/// Burst-coalescing checkpoint persistence policy. Non-suspending intra-drain checkpoints are folded
 /// into one atomic commit at quiescence; every durability-critical boundary flushes immediately so its semantics are
 /// never coalesced away. This is the selectable, opt-in alternative to <see cref="ImmediateRuntimeCheckpointPersistencePolicy"/>;
 /// the default runtime keeps the Immediate policy, so enabling coalescing is a deliberate durability/throughput trade.

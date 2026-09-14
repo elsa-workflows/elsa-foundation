@@ -37,8 +37,8 @@ The constitutions remain the quality-gate layer. This bucket exists to keep rema
 
 - [Framework constitution](../../.specify/memory/constitution-framework.md)
 - [Elsa constitution](../../.specify/memory/constitution.md)
-- [Constitution draft history](../reports/constitution-draft-history.md)
-- [Constitution amendment index](../reports/constitution-amendment-index.md)
+- [Constitution draft history](../reports/archive/constitution-draft-history.md)
+- Constitution amendment index — retired 2026-09-10 (`git log --all -- docs/reports/constitution-amendment-index.md`)
 - [Knowledge inventory](../reports/knowledge-inventory.md)
 - [Unfinished work](../reports/unfinished-work.md)
 - [Skills catalog](../skills/catalog.md)

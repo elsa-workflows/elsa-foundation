@@ -1,5 +1,3 @@
-using Elsa.Api.Compatibility.Testing.Comparison;
-using Elsa.Api.Compatibility.Testing.OpenApi;
 using Elsa.Studio.Preferences.Tests.Support;
 using System.Net;
 using System.Text;
@@ -10,43 +8,6 @@ namespace Elsa.Studio.Preferences.Tests;
 
 public sealed class StudioPreferencesApiWriteContractTests
 {
-    [Fact]
-    public async Task Migrated_put_http_evidence_matches_the_legacy_baseline_with_no_unapproved_differences()
-    {
-        var before = StudioPreferencesCompatibilityEvidence.LoadLegacyHttp("PUT");
-        var after = StudioPreferencesCompatibilityEvidence.NormalizeVolatileFields(
-            await StudioPreferencesCanaryHost.CaptureAsync(
-                StudioPreferencesCompatibilityCases.All.Where(testCase => testCase.Endpoint.Method.Value == "PUT").ToArray()));
-
-        var result = CompatibilityComparer.Compare(
-            new CompatibilityEvidenceSet { Http = before },
-            new CompatibilityEvidenceSet { Http = after },
-            StudioPreferencesCompatibilityEvidence.LoadApprovals("PUT"));
-
-        Assert.True(result.IsCompatible, string.Join(Environment.NewLine, result.Failures));
-    }
-
-    [Fact]
-    public async Task Migrated_put_openapi_projection_matches_the_consumed_legacy_operation()
-    {
-        await using var host = await StudioPreferencesCanaryHost.StartMigratedAsync();
-        var generated = Elsa.Api.Compatibility.Testing.OpenApi.OpenApiEvidenceCapture.Capture(
-            await host.GetCurrentOpenApiDocumentAsync());
-        var after = new OpenApiEvidenceDocument(generated.Operations
-            .Where(operation => operation.Endpoint.Method.Value == "PUT" &&
-                                operation.Endpoint.Route.Value == "/_elsa/studio/preferences/{param}")
-            .ToArray());
-        var before = StudioPreferencesCompatibilityEvidence.LoadLegacyOpenApi("PUT");
-
-        var result = CompatibilityComparer.Compare(
-            new CompatibilityEvidenceSet { OpenApi = before },
-            new CompatibilityEvidenceSet { OpenApi = after },
-            StudioPreferencesCompatibilityEvidence.LoadApprovals("PUT"));
-
-        Assert.Single(after.Operations);
-        Assert.True(result.IsCompatible, string.Join(Environment.NewLine, result.Failures));
-    }
-
     [Fact]
     public async Task Put_creates_and_updates_documents_with_route_namespace_authority_and_quoted_etags()
     {

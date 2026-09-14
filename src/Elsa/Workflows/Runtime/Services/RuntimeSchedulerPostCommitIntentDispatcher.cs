@@ -30,7 +30,7 @@ public sealed class RuntimeSchedulerPostCommitIntentDispatcher(
         await schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
     }
 
-    // WU-3 / spec 109 (ADR 0031 follow-up (a)): the in-process-hop fast path. When a live drain owns this exact
+    // spec 109 (ADR 0031 follow-up (a)): the in-process-hop fast path. When a live drain owns this exact
     // execution's delivery AND the checkpoint committer published the continuation onto that drain's carrier, take the
     // already-materialized work item and skip the JSON round-trip. The durable intent payload stays authoritative: any
     // absence (fast path off, coalescing overlay, sweep/recovery with no live-drain scope, a different execution's

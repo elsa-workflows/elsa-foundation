@@ -21,7 +21,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="..\..\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
-    <ProjectReference Include="..\..\Activities\Design\Reconciliation\Core\Elsa.Activities.Design.Reconciliation.Core.csproj" />
     <ProjectReference Include="..\..\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\Mediator\Core\Elsa.Mediator.Core.csproj" />
@@ -33,7 +32,7 @@
       publish-on-reconcile subscriber can react to the Design-side reconcile completion event. Same allowed
       bridge direction as the Activities reconciliation Core reference above; Design never references back.
     -->
-    <ProjectReference Include="..\Design\Reconciliation\Core\Elsa.Workflows.Design.Reconciliation.Core.csproj" />
+    <ProjectReference Include="..\Design\Core\Elsa.Workflows.Design.Core.csproj" />
     <ProjectReference Include="..\Design\Validations\Elsa.Workflows.Design.Validations.csproj" />
     <ProjectReference Include="..\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\Runtime\Elsa.Workflows.Runtime.csproj" />

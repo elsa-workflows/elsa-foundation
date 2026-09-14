@@ -4,7 +4,8 @@
 
 **Created**: 2026-08-15
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: #1361 (restatused 2026-09-10 from git evidence)
 
 **Input**: User description: "Migrate the complete Secrets REST API as the representative CRUD and security proof while preserving its HTTP, OpenAPI, tenant-isolation, authorization, disclosure, coexistence, and unloadability contracts."
 

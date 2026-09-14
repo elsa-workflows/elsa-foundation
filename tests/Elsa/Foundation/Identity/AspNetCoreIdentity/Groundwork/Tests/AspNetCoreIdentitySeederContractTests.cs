@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Reflection;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Iam;
@@ -17,6 +16,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ElsaRoleStore = Elsa.Foundation.Identity.Abstractions.Iam.IRoleStore;
 using ElsaUserStore = Elsa.Foundation.Identity.Abstractions.Iam.IUserStore;
+using Elsa.Testing;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.Tests;
 
@@ -392,31 +392,14 @@ public sealed class AspNetCoreIdentitySeederContractTests
 
     private sealed class CapturingLoggerProvider : ILoggerProvider
     {
-        private readonly ConcurrentQueue<string> _messages = new();
+        private readonly RecordingLogger _logger = new();
 
-        public IReadOnlyCollection<string> Messages => _messages.ToArray();
+        public IReadOnlyCollection<string> Messages => _logger.Entries.Select(entry => entry.Message).ToArray();
 
-        public ILogger CreateLogger(string categoryName) => new CapturingLogger(_messages);
+        public ILogger CreateLogger(string categoryName) => _logger;
 
         public void Dispose()
         {
-        }
-
-        private sealed class CapturingLogger(ConcurrentQueue<string> messages) : ILogger
-        {
-            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-            public bool IsEnabled(LogLevel logLevel) => true;
-
-            public void Log<TState>(
-                LogLevel logLevel,
-                EventId eventId,
-                TState state,
-                Exception? exception,
-                Func<TState, Exception?, string> formatter)
-            {
-                messages.Enqueue(formatter(state, exception));
-            }
         }
     }
 }

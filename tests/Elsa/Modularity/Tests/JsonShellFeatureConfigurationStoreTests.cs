@@ -1,4 +1,7 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using CShells;
 using Elsa.Modularity.Api.Options;
 using Elsa.Modularity.Api.Services;
@@ -14,6 +17,7 @@ namespace Elsa.Modularity.Tests;
 
 public sealed class JsonShellFeatureConfigurationStoreTests : IAsyncDisposable
 {
+    private const string SharedRevisionKey = "revision-key-shared-by-every-instance";
     private readonly string _directory = Path.Combine(Path.GetTempPath(), $"elsa-modularity-{Guid.NewGuid():N}");
     private readonly string _shellsPath;
 
@@ -113,6 +117,55 @@ public sealed class JsonShellFeatureConfigurationStoreTests : IAsyncDisposable
         Assert.Contains("Features", error.Message);
     }
 
+    [Fact]
+    public async Task ChangingASecretValueChangesTheRevision()
+    {
+        await WriteDefaultFeaturesAsync(WithSeedAdminPassword("hunter2"));
+        var before = await CreateStore().LoadAsync();
+
+        await WriteDefaultFeaturesAsync(WithSeedAdminPassword("hunter3"));
+
+        Assert.NotEqual(before.Revision, (await CreateStore().LoadAsync()).Revision);
+        await Assert.ThrowsAsync<FeatureCatalogRevisionConflictException>(() => CreateStore().SaveAsync(before.Revision, []));
+    }
+
+    [Fact]
+    public async Task RevisionIsStableAcrossLoadsAndStoreInstances()
+    {
+        var store = CreateStore();
+        var revision = (await store.LoadAsync()).Revision;
+
+        Assert.Equal(revision, (await store.LoadAsync()).Revision);
+        Assert.Equal(revision, (await CreateStore().LoadAsync()).Revision);
+    }
+
+    [Fact]
+    public async Task InstancesSharingARevisionKeyAcceptEachOthersRevision()
+    {
+        var revision = (await CreateStore(revisionKey: SharedRevisionKey).LoadAsync()).Revision;
+
+        Assert.Equal(revision, (await CreateStore(revisionKey: SharedRevisionKey).LoadAsync()).Revision);
+        Assert.NotEqual(revision, (await CreateStore().LoadAsync()).Revision);
+        await CreateStore(revisionKey: SharedRevisionKey).SaveAsync(revision, []);
+    }
+
+    [Fact]
+    public async Task RevisionCannotBeRecomputedFromTheConfigurationWithoutTheKey()
+    {
+        await WriteDefaultFeaturesAsync(WithSeedAdminPassword("hunter2"));
+        // Everything a catalog reader can rebuild, here with the secret guessed right.
+        var features = await ReadDefaultFeaturesSectionAsync();
+
+        var withProcessKey = await CreateStore().LoadAsync();
+        var withSharedKey = await CreateStore(revisionKey: SharedRevisionKey).LoadAsync();
+
+        var unkeyed = Convert.ToHexStringLower(SHA256.HashData(features));
+        Assert.NotEqual(unkeyed, withProcessKey.Revision);
+        Assert.NotEqual(unkeyed, withSharedKey.Revision);
+        // The same input reproduces the revision once the key is known, so the key is the only thing the guess lacks.
+        Assert.Equal(Convert.ToHexStringLower(HMACSHA256.HashData(Encoding.UTF8.GetBytes(SharedRevisionKey), features)), withSharedKey.Revision);
+    }
+
     public ValueTask DisposeAsync()
     {
         if (Directory.Exists(_directory))
@@ -121,14 +174,29 @@ public sealed class JsonShellFeatureConfigurationStoreTests : IAsyncDisposable
         return ValueTask.CompletedTask;
     }
 
-    private JsonShellFeatureConfigurationStore CreateStore(string shellId = "default") =>
+    private JsonShellFeatureConfigurationStore CreateStore(string shellId = "default", string? revisionKey = null) =>
         new(
             new FakeEnvironment(_directory),
             new ShellSettings(new ShellId(shellId)),
             Options.Create(new FeatureManagementOptions
             {
-                ShellsJsonPath = _shellsPath
+                ShellsJsonPath = _shellsPath,
+                RevisionKey = revisionKey
             }));
+
+    private static string WithSeedAdminPassword(string password) =>
+        $$$"""{"FoundationIdentityAspNetCoreIdentityGroundwork":{"SeedAdminPassword":"{{{password}}}"},"ModularityApi":{}}""";
+
+    private Task WriteDefaultFeaturesAsync(string features) =>
+        File.WriteAllTextAsync(_shellsPath, """{"CShells":{"Shells":{"default":{"Features":""" + features + "}}}}");
+
+    // The features section as the store reads it: parsed, then written indented with web defaults.
+    private async Task<byte[]> ReadDefaultFeaturesSectionAsync()
+    {
+        var document = JsonNode.Parse(await File.ReadAllTextAsync(_shellsPath))!;
+        var features = document["CShells"]!["Shells"]!["default"]!["Features"]!;
+        return Encoding.UTF8.GetBytes(features.ToJsonString(new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }));
+    }
 
     private static JsonElement Json(string json) =>
         JsonDocument.Parse(json).RootElement.Clone();

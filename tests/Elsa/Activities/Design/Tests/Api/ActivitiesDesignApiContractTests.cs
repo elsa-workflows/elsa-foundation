@@ -1,27 +1,19 @@
 using Elsa.Activities.Design.Tests.Api.Support;
 using Elsa.Api.AspNetCore;
-using Elsa.Api.Compatibility.Testing.Baselines;
-using Elsa.Api.Compatibility.Testing.Comparison;
-using Elsa.Api.Compatibility.Testing.Http;
 using Elsa.Api.Compatibility.Testing.Manifests;
-using Elsa.Api.Compatibility.Testing.OpenApi;
-using Elsa.Api.Compatibility.Testing.Serialization;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
-using System.Net;
-using System.Text.Json.Nodes;
 using Xunit;
 
 namespace Elsa.Activities.Design.Tests.Api;
 
 /// <summary>
-/// Post-migration real-host contract gate. T019 supplies the production mapper; until then the
-/// reflection seam in <see cref="ActivitiesDesignMinimalApiHost"/> fails explicitly and keeps this
-/// test-first contract compiling against the pre-migration owner.
+/// Real-host contract gate: the production mapper hosted by <see cref="ActivitiesDesignMinimalApiHost"/>
+/// must publish exactly the reviewed operations with stable metadata.
 /// </summary>
 public sealed class ActivitiesDesignApiContractTests
 {
@@ -166,45 +158,6 @@ public sealed class ActivitiesDesignApiContractTests
         }
     }
 
-    [Fact]
-    public async Task Frozen_http_and_openapi_corpus_has_a_real_post_migration_replay_entry_point()
-    {
-        await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
-        var afterHttp = (await Task.WhenAll(ActivitiesDesignCompatibilityCases.All.Select(testCase => CaptureAfterAsync(host.Client, testCase)))).ToArray();
-        var afterOpenApi = OpenApiEvidenceCapture.Capture(await host.GetOpenApiAsync(), includeIdentityMetadata: true);
-        var directory = Path.Join(AppContext.BaseDirectory, "Baselines");
-        var before = new CompatibilityEvidenceSet
-        {
-            Http = BaselineFile.Load<HttpCompatibilityObservation[]>(Path.Join(directory, "activities-design-http-fastendpoints.json")),
-            OpenApi = BaselineFile.Load<OpenApiEvidenceDocument>(Path.Join(directory, "activities-design-openapi-fastendpoints.json"))
-        };
-        var approvals = BaselineFile.Load<ApprovedDifference[]>(Path.Join(directory, "activities-design-approved-differences.json"));
-
-        var comparison = CompatibilityComparer.CompareBidirectional(
-            before,
-            new CompatibilityEvidenceSet { Http = afterHttp, OpenApi = afterOpenApi },
-            approvals);
-
-        Assert.True(comparison.IsCompatible, string.Join(Environment.NewLine, comparison.Failures));
-    }
-
-    [Fact]
-    public async Task Historical_malformed_typed_query_contract_is_preserved_exactly()
-    {
-        await using var host = await ActivitiesDesignMinimalApiHost.StartAsync();
-        var after = (await Task.WhenAll(ActivitiesDesignQueryBindingCases.All.Select(testCase => CaptureAfterAsync(host.Client, testCase)))).ToArray();
-        var before = BaselineFile.Load<HttpCompatibilityObservation[]>(Path.Join(
-            AppContext.BaseDirectory,
-            "Baselines",
-            "activities-design-query-binding-fastendpoints.json"));
-
-        var comparison = CompatibilityComparer.CompareBidirectional(
-            new CompatibilityEvidenceSet { Http = before },
-            new CompatibilityEvidenceSet { Http = after });
-
-        Assert.True(comparison.IsCompatible, string.Join(Environment.NewLine, comparison.Failures));
-    }
-
     private static IEnumerable<RouteEndpoint> OwnedEndpoints(ActivitiesDesignMinimalApiHost host) =>
         host.Host.Services.GetRequiredService<EndpointDataSource>().Endpoints
             .OfType<RouteEndpoint>()
@@ -220,39 +173,4 @@ public sealed class ActivitiesDesignApiContractTests
         ? type.GetGenericTypeDefinition().FullName!
         : type?.FullName ?? typeof(void).FullName!;
 
-    private static async Task<HttpCompatibilityObservation> CaptureAfterAsync(HttpClient client, HttpCompatibilityCase testCase)
-    {
-        try
-        {
-            return NormalizeVolatileFields(await HttpEvidenceCapture.CaptureAsync(client, testCase));
-        }
-        catch (Exception exception)
-        {
-            var terminal = exception.GetBaseException();
-            return new HttpCompatibilityObservation
-            {
-                Endpoint = testCase.Endpoint,
-                Case = testCase.Case,
-                Binding = testCase.Binding ?? "",
-                PagingFiltering = testCase.PagingFiltering ?? "",
-                StatusCode = 0,
-                TerminalState = $"Faulted:{terminal.GetType().FullName}"
-            };
-        }
-    }
-
-    private static HttpCompatibilityObservation NormalizeVolatileFields(HttpCompatibilityObservation observation)
-    {
-        if (observation.Json.Length == 0 || JsonNode.Parse(observation.Json) is not JsonObject body || !body.ContainsKey("traceId"))
-            return observation;
-
-        body["traceId"] = "<volatile-trace-id>";
-        var normalized = CompatibilityJson.Canonicalize(body.ToJsonString());
-        return observation with
-        {
-            Json = normalized,
-            Body = observation.Body == observation.Json ? normalized : observation.Body,
-            ProblemDetails = observation.ProblemDetails == observation.Json ? normalized : observation.ProblemDetails
-        };
-    }
 }

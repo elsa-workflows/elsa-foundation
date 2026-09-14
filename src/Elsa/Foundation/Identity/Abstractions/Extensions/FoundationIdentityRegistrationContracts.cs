@@ -98,7 +98,7 @@ internal sealed class FoundationIdentityRegistrationValidator(FoundationIdentity
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
 
-    private static bool DescriptorMatches(
+    internal static bool DescriptorMatches(
         ServiceDescriptor? descriptor,
         FoundationIdentityReplacementRegistration? marker)
     {

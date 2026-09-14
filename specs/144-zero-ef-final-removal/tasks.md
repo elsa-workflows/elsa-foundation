@@ -1,6 +1,9 @@
 # Tasks: Zero-EF Final Removal
 
-> **Execution scope — 2026-09-07:** Read [the current governing scope](spec.md#current-governing-scope--2026-09-07) before using this historical checklist. Vendor-host OpenIddict EF is retained. Broad validation/performance tasks are handed to #646 and are not implementation prerequisites or completed checks. Preserve existing receipts and unchecked state; do not check deferred tasks merely to close the implementation program. #1484, #1489 and #1490 track the current removal/restatement/guard sequence.
+> **Historical checklist — superseded 2026-09-12.** Read the
+> [historical governing scope](spec.md#historical-governing-scope--superseded-2026-09-12) only for
+> provenance. Do not schedule, execute, or check tasks from this file. ADR 0073 and Program #1665
+> own the opposite all-EF replacement direction and retire all performance work.
 
 **Input**: Design documents from `specs/144-zero-ef-final-removal/`
 

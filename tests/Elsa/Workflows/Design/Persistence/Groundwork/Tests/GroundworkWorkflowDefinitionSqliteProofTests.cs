@@ -326,10 +326,10 @@ public sealed class GroundworkWorkflowDefinitionSqliteProofTests
     {
         private readonly IReadOnlyDictionary<string, StorageUnit> units =
             WorkflowsDesignStorageManifest.CreateUnits().ToDictionary(unit => unit.Id.Value, StringComparer.Ordinal);
-        public List<RecordedQuery> Queries { get; } = [];
+        public List<(QueryRequest Request, QueryRenderOptions? Options)> Queries { get; } = [];
 
         public IStorageSession Open(string unitId, StorageAccess access, string? targetName = null) =>
-            new RecordingSession(connection.OpenSession(Unit(unitId, targetName), access), Queries);
+            new RecordingSession(connection.OpenSession(Unit(unitId, targetName), access)) { RenderedQueries = Queries };
 
         public IUnitOfWork BeginUnitOfWork(
             StorageAccess access,
@@ -340,25 +340,5 @@ public sealed class GroundworkWorkflowDefinitionSqliteProofTests
         public StorageUnit Unit(string unitId, string? targetName = null) => units[unitId];
 
         public IReadOnlyList<CapabilityDescriptor> Capabilities(string? targetName = null) => connection.Capabilities;
-
-        public sealed record RecordedQuery(QueryRequest Request, QueryRenderOptions? Options);
-
-        private sealed class RecordingSession(IStorageSession inner, ICollection<RecordedQuery> queries) : SynchronousStorageSessionTestDouble, IStorageSession
-        {
-            public StorageUnit Unit => inner.Unit;
-            public StorageAccess Access => inner.Access;
-            public StoredEntry? Read(StorageKey key) => inner.Read(key);
-            public QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null)
-            {
-                queries.Add(new RecordedQuery(request, options));
-                return inner.Query(request, options);
-            }
-            public AggregationResult Aggregate(AggregationQuery query) => inner.Aggregate(query);
-            public WriteOutcome Insert(StorageValues values, WriteOptions? options = null) => inner.Insert(values, options);
-            public WriteOutcome Update(StorageValues values, WriteOptions? options = null) => inner.Update(values, options);
-            public WriteOutcome Upsert(StorageValues values, WriteOptions? options = null) => inner.Upsert(values, options);
-            public WriteOutcome Delete(StorageKey key, WriteOptions? options = null) => inner.Delete(key, options);
-            public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) => inner.Append(operationId, values);
-        }
     }
 }

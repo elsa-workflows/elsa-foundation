@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Resumption.Tests;
@@ -148,7 +149,7 @@ public sealed class WorkflowsRuntimeResumptionFeatureTests
     {
         var events = new List<string>();
         var services = new ServiceCollection();
-        services.AddSingleton<TimeProvider>(new FixedTimeProvider(ObservedAt));
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider(ObservedAt));
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.AddSingleton<IPersistenceScopeSource>(new TestPersistenceScopeSource("tenant-a", "tenant-b"));
         new WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
@@ -281,11 +282,6 @@ public sealed class WorkflowsRuntimeResumptionFeatureTests
             events.Add($"cleanup:{persistenceScope}:{observedAt:O}");
             return ValueTask.FromResult(0);
         }
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private static string CurrentScope(IServiceProvider serviceProvider) => serviceProvider

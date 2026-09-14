@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
@@ -164,7 +165,7 @@ public sealed class WorkflowStartLineageTests
             sourceStore,
             actorProvider,
             new FixedIdGenerator(),
-            new FixedTimeProvider(Now),
+            new FakeTimeProvider(Now),
             partitionAccessor: null);
         var authority = new WorkflowExecutionAuthoritySnapshot(
             systemIdentity: "parent-1",
@@ -230,12 +231,12 @@ public sealed class WorkflowStartLineageTests
             executableStore,
             queue,
             new FixedIdGenerator(),
-            new FixedTimeProvider(Now));
+            new FakeTimeProvider(Now));
         var checkpointHandler = new WorkflowCheckpointSchedulerWorkHandler(
             activityStore,
             new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), checkpointStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             inspectionAccumulator: null,
-            timeProvider: new FixedTimeProvider(Now),
+            timeProvider: new FakeTimeProvider(Now),
             workflowExecutionStateStore: workflowStore,
             workflowExecutableStore: executableStore);
         var authority = new WorkflowExecutionAuthoritySnapshot("parent-1", "initiator-1");
@@ -400,10 +401,5 @@ public sealed class WorkflowStartLineageTests
         public string NewWorkflowExecutionCommandId() => "command-1";
         public string NewWorkflowExecutionCommandEnvelopeId() => "envelope-1";
         public string NewActivityExecutionId() => "activity-execution-root";
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

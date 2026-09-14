@@ -1,0 +1,60 @@
+# Spec 094 coverage-ledger bookkeeping and benchmark-evidence gates.
+#
+# These suites validate project-management artifacts (the coverage ledger under
+# specs/094-harden-groundwork-stores, its evidence attachments, and the store-performance
+# harness receipts), not product behaviour. They used to run inside the PR gate as part of
+# tests/Elsa/Architecture; they now live under tools/ledger and run on demand. Trigger this
+# workflow when the ledger or the benchmark harness changes. Retire it when spec 094 closes.
+name: Groundwork ledger
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: Commit the ledger transition guard compares against (empty skips the transition guard)
+        required: false
+        default: ""
+
+jobs:
+  ledger:
+    name: Coverage ledger and benchmark evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # GroundworkCoverageLedgerTransitionTests skips itself on an empty baseline but treats an
+      # unresolvable one as a hard finding, so validate the ref before exporting it.
+      - name: Resolve the coverage-ledger baseline commit
+        env:
+          BASELINE_INPUT: ${{ github.event.inputs.baseline_ref }}
+        run: |
+          base="$BASELINE_INPUT"
+          if [ -n "$base" ] && ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            echo "::notice::Coverage-ledger baseline $base is not reachable in this checkout; the transition guard will skip."
+            base=""
+          fi
+          echo "GROUNDWORK_LEDGER_BASE_REF=$base" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Validate the coverage ledger
+        run: dotnet test tools/ledger/Elsa.Groundwork.Ledger.Tests/Elsa.Groundwork.Ledger.Tests.csproj -c Release -p:WarningsNotAsErrors=NU1603
+
+      - name: Validate the store-performance harness
+        run: |
+          dotnet test tools/ledger/StorePerformance/Benchmarks/Tests/Elsa.Groundwork.StorePerformance.Benchmarks.Tests.csproj -c Release -p:WarningsNotAsErrors=NU1603
+          dotnet test tools/ledger/StorePerformance/AdapterHost/Tests/Elsa.Groundwork.StorePerformance.AdapterHost.Tests.csproj -c Release -p:WarningsNotAsErrors=NU1603

@@ -1,4 +1,4 @@
-﻿using Elsa.Expressions.JavaScript.Primitives.Constants;
+﻿using Elsa.Expressions.JavaScript.Rendering.Core.Constants;
 using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
 using Elsa.Expressions.JavaScript.Rendering.Core.Models;
 using Elsa.Expressions.JavaScript.Rendering.Core.Options;

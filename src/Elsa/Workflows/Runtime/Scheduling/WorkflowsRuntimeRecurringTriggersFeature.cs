@@ -15,7 +15,7 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 
 /// <summary>
 /// Opt-in host feature that fires recurring start triggers — Timer/Cron activities that start a <i>new</i>
-/// workflow instance on a schedule (W16), the counterpart to the durable-timer pump that resumes existing
+/// workflow instance on a schedule, the counterpart to the durable-timer pump that resumes existing
 /// instances. It registers the in-memory <see cref="IRecurringTriggerScheduleStore"/> default (swapped for a
 /// restart-surviving store by a durable persistence provider), the <see cref="IRecurringScheduleCalculator"/>,
 /// the background <see cref="RecurringTriggerPumpTask"/>, and decorates the publish-time

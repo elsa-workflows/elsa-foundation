@@ -25,7 +25,7 @@ namespace Elsa.Diagnostics.StructuredLogs.Tests.Support;
 
 /// <summary>
 /// Deterministic, plain TestServer host for exercising the production Structured Logs mapping and comparing
-/// it with the immutable FastEndpoints compatibility baseline.
+/// its HTTP evidence across repeated captures.
 /// </summary>
 public sealed class StructuredLogsApiHost : IAsyncDisposable
 {

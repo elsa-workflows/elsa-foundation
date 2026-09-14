@@ -1,7 +1,7 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Activities.Design.Core.Contracts;
-using Elsa.Activities.Design.Reconciliation.Core;
+using Elsa.Activities.Design.Core.Reconciliation;
 using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Events.Core.Extensions;

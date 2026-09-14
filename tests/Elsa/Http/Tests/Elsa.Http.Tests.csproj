@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\Elsa\Http\Elsa.Http.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
 
 </Project>

@@ -5,11 +5,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd "$script_dir/../.." && pwd -P)"
 cd "$repo_root"
 
-dotnet restore Elsa.Server.slnx "$@"
-
-# Historical capture executables deliberately stay out of the product solution, but repository-wide
-# architecture ratchets inspect every project.assets.json. Restore those evidence projects explicitly
-# without adding them to the product build or the container-free test filter.
-while IFS= read -r project; do
-  dotnet restore "$project" "$@"
-done < <(find tests -type f -path '*/Capture/*.BeforeCapture.csproj' | LC_ALL=C sort)
+# The architecture suite compares both configurations. Keep Debug's evaluated graph
+# isolated so it cannot replace the ordinary Release assets consumed by --no-restore
+# build and test steps.
+dotnet restore Elsa.Server.slnx -p:Configuration=Release "$@"
+dotnet restore Elsa.Server.slnx -p:Configuration=Debug -p:BaseIntermediateOutputPath=obj/ef-guard/Debug/ "$@"

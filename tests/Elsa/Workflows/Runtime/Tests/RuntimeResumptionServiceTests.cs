@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
@@ -37,7 +38,7 @@ public sealed class RuntimeResumptionServiceTests
         var services = new ServiceCollection();
         services.AddWorkflowRuntime();
         services.RemoveAll<TimeProvider>();
-        services.AddSingleton<TimeProvider>(new FixedTimeProvider(Now));
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
         services.AddSingleton<Marker>();
         services.AddRuntimePostCommitIntentHandler<MarkerHandler>(MarkerKind);
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
@@ -70,7 +71,7 @@ public sealed class RuntimeResumptionServiceTests
             new FakeRecoveryScanner(),
             agentProvider,
             new ShortRuntimeExecutionIdGenerator(),
-            new FixedTimeProvider(Now),
+            new FakeTimeProvider(Now),
             new InMemoryWorkflowExecutionStateStore());
 
         var result = await service.SweepAsync(new RuntimeResumptionSweepRequest());
@@ -222,7 +223,7 @@ public sealed class RuntimeResumptionServiceTests
             legacyScanner,
             agentProvider,
             new ShortRuntimeExecutionIdGenerator(),
-            new FixedTimeProvider(Now),
+            new FakeTimeProvider(Now),
             new InMemoryWorkflowExecutionStateStore());
 
         var result = await service.SweepAsync(new RuntimeResumptionSweepRequest(recoveryScanBatchSize: 1));
@@ -256,7 +257,7 @@ public sealed class RuntimeResumptionServiceTests
             scanner,
             agentProvider,
             new ShortRuntimeExecutionIdGenerator(),
-            new FixedTimeProvider(Now),
+            new FakeTimeProvider(Now),
             new InMemoryWorkflowExecutionStateStore());
 
         var result = await service.SweepAsync(new RuntimeResumptionSweepRequest(recoveryScanBatchSize: 1));
@@ -405,7 +406,7 @@ public sealed class RuntimeResumptionServiceTests
         var leaseDuration = TimeSpan.FromMinutes(1);
         var ownership = new RuntimeExecutionOwnershipService(
             operationalStore,
-            new FixedTimeProvider(Now),
+            new FakeTimeProvider(Now),
             new RuntimeExecutionOwnershipOptions { OwnerId = "owner-under-test", LeaseDuration = leaseDuration });
 
         // Acquire but never release: this is the crash mid-drain.
@@ -422,7 +423,7 @@ public sealed class RuntimeResumptionServiceTests
             recoveryScanner,
             agentProvider,
             new ShortRuntimeExecutionIdGenerator(),
-            new FixedTimeProvider(afterLeaseExpiry),
+            new FakeTimeProvider(afterLeaseExpiry),
             new InMemoryWorkflowExecutionStateStore());
 
         var result = await service.SweepAsync(new RuntimeResumptionSweepRequest(
@@ -460,7 +461,7 @@ public sealed class RuntimeResumptionServiceTests
             new FakeRecoveryScanner(),
             agentProvider,
             new ShortRuntimeExecutionIdGenerator(),
-            new FixedTimeProvider(Now),
+            new FakeTimeProvider(Now),
             stateStore);
 
         var result = await service.SweepAsync(new RuntimeResumptionSweepRequest());
@@ -493,7 +494,7 @@ public sealed class RuntimeResumptionServiceTests
             new FakeRecoveryScanner(),
             agentProvider,
             new ShortRuntimeExecutionIdGenerator(),
-            new FixedTimeProvider(Now),
+            new FakeTimeProvider(Now),
             stateStore);
 
         var result = await service.SweepAsync(new RuntimeResumptionSweepRequest());
@@ -525,7 +526,7 @@ public sealed class RuntimeResumptionServiceTests
             new FakeRecoveryScanner(),
             agentProvider,
             new ShortRuntimeExecutionIdGenerator(),
-            new FixedTimeProvider(Now),
+            new FakeTimeProvider(Now),
             stateStore);
 
         var result = await service.SweepAsync(new RuntimeResumptionSweepRequest());
@@ -610,7 +611,7 @@ public sealed class RuntimeResumptionServiceTests
                 RecoveryScanner,
                 AgentProvider,
                 new ShortRuntimeExecutionIdGenerator(),
-                new FixedTimeProvider(Now),
+                new FakeTimeProvider(Now),
                 StateStore);
         }
 
@@ -769,10 +770,5 @@ public sealed class RuntimeResumptionServiceTests
                     ? "set by test"
                     : null));
         }
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

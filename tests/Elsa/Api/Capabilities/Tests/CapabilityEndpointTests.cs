@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Elsa.Testing;
 
 namespace Elsa.Api.Capabilities.Tests;
 
@@ -59,12 +60,5 @@ public sealed class CapabilityEndpointTests
         services.AddApiCapabilities();
         services.AddApiCapability(declaration);
         return services.AddElsaEndpoints().BuildServiceProvider();
-    }
-
-    private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
-    {
-        public IServiceProvider ServiceProvider { get; } = serviceProvider;
-        public ICollection<EndpointDataSource> DataSources { get; } = [];
-        public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
     }
 }

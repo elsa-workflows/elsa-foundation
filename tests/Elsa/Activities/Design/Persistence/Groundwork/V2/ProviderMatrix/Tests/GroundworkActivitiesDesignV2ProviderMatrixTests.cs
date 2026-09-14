@@ -288,33 +288,6 @@ public sealed class GroundworkActivitiesDesignV2ProviderMatrixTests
             private readonly IReadOnlyDictionary<string, StorageUnit> units =
                 ActivitiesDesignStorageManifest.CreateUnits().ToDictionary(unit => unit.Id.Value, StringComparer.Ordinal);
         }
-
-        private sealed class RecordingSession(
-            IStorageSession inner,
-            ICollection<QueryRequest> queryRequests) : SynchronousStorageSessionTestDouble, IStorageSession, IPrivilegedCrossScopeQuerySession
-        {
-            public StorageUnit Unit => inner.Unit;
-            public StorageAccess Access => inner.Access;
-            public StoredEntry? Read(StorageKey key) => inner.Read(key);
-            public QueryMaterializedResult Query(QueryRequest request, QueryRenderOptions? options = null)
-            {
-                queryRequests.Add(request);
-                return inner.Query(request, options);
-            }
-
-            public CrossScopeQueryResult QueryAcrossScopes(QueryRequest request, QueryRenderOptions? options = null)
-            {
-                queryRequests.Add(request);
-                return ((IPrivilegedCrossScopeQuerySession)inner).QueryAcrossScopes(request, options);
-            }
-
-            public AggregationResult Aggregate(AggregationQuery query) => inner.Aggregate(query);
-            public WriteOutcome Insert(StorageValues values, WriteOptions? options = null) => inner.Insert(values, options);
-            public WriteOutcome Update(StorageValues values, WriteOptions? options = null) => inner.Update(values, options);
-            public WriteOutcome Upsert(StorageValues values, WriteOptions? options = null) => inner.Upsert(values, options);
-            public WriteOutcome Delete(StorageKey key, WriteOptions? options = null) => inner.Delete(key, options);
-            public WriteOutcome Append(OperationId operationId, IReadOnlyList<StorageValues> values) => inner.Append(operationId, values);
-        }
     }
 
     private sealed class MutableAccess(PersistenceAccessContext current) : IPersistenceAccessContextAccessor

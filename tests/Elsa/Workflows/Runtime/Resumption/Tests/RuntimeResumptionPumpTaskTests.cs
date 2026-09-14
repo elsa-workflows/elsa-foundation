@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Elsa.Testing;
 
 namespace Elsa.Workflows.Runtime.Resumption.Tests;
 
@@ -237,28 +238,4 @@ public sealed class RuntimeResumptionPumpTaskTests
         public override DateTimeOffset GetUtcNow() => _now;
         public void Advance(TimeSpan by) => _now = _now.Add(by);
     }
-
-    private sealed class RecordingLogger<T> : ILogger<T>
-    {
-        public List<LogEntry> Entries { get; } = [];
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-        public bool IsEnabled(LogLevel logLevel) => true;
-        public void Log<TState>(
-            LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception? exception,
-            Func<TState, Exception?, string> formatter)
-        {
-            var fields = state is IEnumerable<KeyValuePair<string, object?>> structured
-                ? structured.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)
-                : new Dictionary<string, object?> { ["Message"] = formatter(state, exception) };
-            Entries.Add(new LogEntry(eventId, fields, exception));
-        }
-    }
-
-    private sealed record LogEntry(
-        EventId EventId,
-        IReadOnlyDictionary<string, object?> Fields,
-        Exception? Exception);
 }

@@ -27,7 +27,8 @@ public sealed class RuntimeEngineTracingTests : RuntimePipelineTestSupport
         var recorded = new List<System.Diagnostics.Activity>();
         using var listener = new ActivityListener
         {
-            ShouldListenTo = source => source.Name == WorkflowEngineTelemetry.ActivitySourceName,
+            // ActivityListener is process-global; ignore same-name sources owned by parallel tests.
+            ShouldListenTo = source => ReferenceEquals(source, activitySource),
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
             ActivityStopped = recorded.Add
         };

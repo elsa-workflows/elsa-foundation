@@ -52,7 +52,7 @@ internal static class FlowchartStateMutator
     /// with the sole scope-append path here so iteration numbering can never drift from what
     /// <see cref="FlowchartScopeResolver.ResolveTargetScope"/> minted (both read the same pre-append
     /// counter). Non-loop scopes leave the map untouched. Keeping the bump atomic with the append is what
-    /// makes stale loop-iteration scopes prunable without ever reusing an earlier iteration key (#382 / W32).
+    /// makes stale loop-iteration scopes prunable without ever reusing an earlier iteration key (#382).
     /// </summary>
     private static IReadOnlyDictionary<string, int> AdvanceLoopIterationCounter(IReadOnlyDictionary<string, int> counters, ExecutionScope scope)
     {

@@ -2,6 +2,7 @@ using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Extensions;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
+using Elsa.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -147,7 +148,7 @@ public sealed class AgentProposalTests
     public async Task Proposal_execution_exception_surfaces_message_and_is_logged()
     {
         var audit = new InMemoryAgentAuditStore();
-        var logger = new RecordingLogger();
+        var logger = new RecordingLogger<InMemoryAgentProposalService>();
         var proposals = new InMemoryAgentProposalService(new ThrowingExecutor(), audit, logger);
         var proposal = await proposals.AddAsync(CreateProposal(requiresApproval: false));
 
@@ -257,17 +258,5 @@ public sealed class AgentProposalTests
     {
         public Task<AgentResult<AgentProposalExecutionResult>> ExecuteAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default)
             => throw new OperationCanceledException("Simulated cancellation.");
-    }
-
-    private sealed class RecordingLogger : ILogger<InMemoryAgentProposalService>
-    {
-        public List<(LogLevel Level, Exception? Exception, string Message)> Entries { get; } = [];
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-            Entries.Add((logLevel, exception, formatter(state, exception)));
     }
 }

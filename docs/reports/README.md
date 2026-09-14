@@ -4,6 +4,8 @@ Reports are point-in-time findings. They may become work units, but they are not
 
 ## Current reports
 
+- [EF Core persistence completion ledger](ef-core-persistence-completion-ledger.md) - active Program #1665 baseline and removal-audit boundary; #1671 owns entry-level expansion before broad implementation.
+- [Secrets EF persistence pilot verdict and conditional replacement plan 2026-09](secrets-ef-persistence-pilot-verdict-2026-09.md) - historical narrow technical pilot for provider-derived EF contexts, dual migration modes, and per-shell EF/Groundwork selection; its bounded recommendation is superseded by ADR 0073 while the technical evidence remains valid.
 - [Wave 4 Agent REST and SSE API migration 2026-08](wave-4-agent-api-migration-2026-08.md) - exact eleven-route FastEndpoints-before HTTP/OpenAPI evidence, shared Agent permissions, SSE framing/cancellation, mixed coexistence, and collectible owner lifecycle.
 - [Structured Logs Minimal API migration 2026-08](structured-logs-minimal-api-migration-2026-08.md) - streaming program wave: exact HTTP/SSE/OpenAPI parity, Foundation authorization and FastEndpoints coexistence, production dependency retirement, and repeated clean collection after real OpenAPI generation with no module-owned transformer contexts.
 - [Secrets Minimal API migration 2026-08](secrets-minimal-api-migration-2026-08.md) - representative ten-operation CRUD/security migration: immutable HTTP and OpenAPI parity, tenant isolation, granular Foundation authorization, sensitive-data non-disclosure, real FastEndpoints coexistence, clean route/traffic/service release, and an honestly retained collectible context after actual ASP.NET OpenAPI generation.
@@ -11,7 +13,7 @@ Reports are point-in-time findings. They may become work units, but they are not
 - [Endpoint framework and authorization spike 2026-08](endpoint-framework-authorization-spike-2026-08.md) - issue #1329 evidence and recommendation: adopt Minimal APIs as the target for all first-party REST APIs, use FastEndpoints coexistence only for staged migration, unify authorization on Foundation policies, atomically publish validated CShells endpoint manifests, and forbid FastEndpoints in dynamically unloadable endpoint assemblies.
 - [Elsa 4 architecture review 2026-07](elsa-4-architecture-review-2026-07.md) - consolidated full-codebase review with verified findings and improvement roadmap (W1-W21). Detail sub-reports and per-work-unit implementation briefs: [elsa-4-architecture-review-2026-07/](elsa-4-architecture-review-2026-07/README.md).
 - [Simplification review 2026-07](simplification-review-2026-07.md) - YAGNI/DRY/modernization pass over the tree after the W1-W21 roadmap landed; public-API surface, build-config duplication, missing style enforcement, and the accretion pressure behind the project/LoC/type growth. Static analysis only, not compile-verified.
-- [Elsa 4 activity contract parity audit 2026-07](elsa-4-activity-contract-parity-2026-07.md) - member-level diff of every out-of-the-box activity's inputs, outputs and outcomes against Elsa 3, with regenerable evidence. Supersedes [elsa-4-activity-gaps.md](elsa-4-activity-gaps.md).
+- [Elsa 4 activity contract parity audit 2026-07](elsa-4-activity-contract-parity-2026-07.md) - member-level diff of every out-of-the-box activity's inputs, outputs and outcomes against Elsa 3, with regenerable evidence. Supersedes [elsa-4-activity-gaps.md](archive/elsa-4-activity-gaps.md).
 - [Elsa 4 activity behavioural drive 2026-08](elsa-4-activity-behavioural-drive-2026-08.md) - the behavioural half of that audit: every activity driven through a real workflow engine, with declared outcomes, outputs and required inputs measured against what the engine actually committed. Records the contract-surface snapshot guard, the fixes applied, and the REST e2e coverage still outstanding.
 - [Subtractive obligation amendment 2026-08](subtractive-obligation-amendment-2026-08.md) - proposed framework constitution §2.25: a periodic consolidation review with standing to retire specs, superseded guards and stale catalog entries, and an evidence bar forbidding census-driven removal. Also records why the proposed §2.16.1 aggregate-growth trigger was **not** pursued: measured like-for-like, project count grew 2.25× against 6.32× LoC.
 - [Simplification review decisions 2026-08](simplification-review-decisions-2026-08.md) - build-verified follow-up to the above. Records the §9 items that are governance decisions rather than refactors, and corrects three findings that did not survive compilation: the `internal sealed` sweep is barred by constitution §2.23.3, and the `*.Unified` provider base measured net +74 lines.
@@ -29,23 +31,18 @@ Reports are point-in-time findings. They may become work units, but they are not
 - [Maps v2 findings](maps-v2-findings.md)
 - [Test maturity and weak implementation report](test-maturity-and-weak-implementation-report.md)
 - [Skills stabilization audit](skills-stabilization-audit.md)
-- [Zero-EF constitution review](zero-ef-constitution-review.md) - targeted review of the Elsa persistence-provider boundary and the eventual §E2.5 amendment surface.
-- [Diagnostics storage workload](diagnostics-storage-workload.md) - Structured Logs and OpenTelemetry append/query/retention inventory and the specialized Groundwork capability ask.
-- [EF Core oracle scoping 2026-08](ef-core-oracle-scoping-2026-08.md) - verification of the six assumptions behind the EF ↔ Groundwork comparison harness, before any harness is built. Finds that EF implements **zero** runtime persistence seams: only diagnostics (OpenTelemetry, Structured Logs) and ASP.NET Core Identity are dual-stack, the oracle is SQLite-only because EF has no PostgreSQL or SQL Server wiring in `src/`, and ten of the thirteen frozen workloads declare "EF baselines" that are hand-written contract descriptions which can never be executed. The behavioural differential the plan treats as pending is already built for all three EF-comparable seams, over the exact six dimensions requested. The one seam with a real EF oracle and a numeric gate is blocked in code, and the identical 1.25×/80%/2× ratio was already ratified away for design persistence on fairness grounds.
-- [ASP.NET Core Identity and OpenIddict Groundwork contract inventory](identity-openiddict-groundwork-contract-inventory.md) - exact framework-store, schema, concurrency, tenancy, registration, and conformance requirements for replacing the two EF-backed identity lanes.
+- [Zero-EF constitution review](zero-ef-constitution-review.md) - superseded historical review of the former Groundwork-only persistence boundary; ADR 0073 owns the opposite current direction.
+- [Diagnostics storage workload](diagnostics-storage-workload.md) - historical Groundwork capability analysis whose timing-independent Structured Logs and OpenTelemetry domain inventory is carried into EF Core Persistence issue #1681; its performance gates are retired.
+- [EF Core oracle scoping 2026-08](ef-core-oracle-scoping-2026-08.md) - historical technical input to the superseded Zero-EF program. Its verified implementation inventory and behavioural-contract evidence remain inputs to the active EF Core completion ledger; its performance comparisons and removal direction do not.
+- [ASP.NET Core Identity and OpenIddict Groundwork contract inventory](identity-openiddict-groundwork-contract-inventory.md) - historical technical input to the superseded Groundwork direction. Its framework-store, schema, concurrency, tenancy, registration, and conformance inventory remains input to EF Core Persistence issue #1682.
 - [CShells composition evidence](cshells-composition-evidence.md)
 - [Runtime execution pre-spec handoff](runtime-execution-pre-spec-handoff.md)
 - [Elsa Core runtime broken windows brainstorm](elsa-core-runtime-broken-windows-brainstorm.md)
-- [Elsa Core runtime execution layer analysis](elsa-core-runtime-execution-layer-analysis.md)
-- [Elsa 4 runtime serialization brainstorm decisions](elsa-4-runtime-serialization-brainstorm-decisions.md)
 - [Elsa 4 runtime execution brainstorm decisions](elsa-4-runtime-execution-brainstorm-decisions.md)
-- [Elsa 4 runtime execution action plan](elsa-4-runtime-execution-action-plan.md)
-- [Elsa 4 runtime execution addendum topics](elsa-4-runtime-execution-addendum-topics.md)
-- [Elsa 4 runtime terminology decisions](elsa-4-runtime-terminology-decisions.md)
-- [Constitution draft history](constitution-draft-history.md)
-- [Constitution amendment index](constitution-amendment-index.md)
-- [Framework constitution draft history](constitution-history-framework.md)
-- [Elsa constitution draft history](constitution-history-elsa.md)
+
+## Archive
+
+[archive/](archive/README.md) holds reports that are no longer current (superseded, folded into ADRs or the constitutions, or older than 2026-08 with no live reader). Git history is authoritative for them; they may cite paths that no longer exist. The constitution draft-history family now lives there, minus the raw history extracts and amendment index, which were deleted on 2026-09-10 in favour of git history.
 
 ## Planned reports
 

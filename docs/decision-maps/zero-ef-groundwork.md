@@ -1,5 +1,13 @@
 # Zero-EF Groundwork Decision Map
 
+Status: superseded historical decision record.
+
+> **Historical record.** Accepted
+> [ADR 0073](../adr/0073-ef-core-is-the-only-first-party-persistence-family.md) supersedes this map's
+> zero-EF/Groundwork-only direction. Every status and answer below records the decisions as they stood
+> during that former program; no work may be scheduled from them. Current work is owned by the
+> [EF Core Persistence](../program-goals/ef-core-persistence.md) goal and Program #1665.
+
 Program goal: [Zero-EF Persistence](../program-goals/zero-ef-persistence.md).
 
 This compact map coordinates decisions across `elsa-foundation` and the Groundwork repository. Assets and implementation details belong in linked ADRs, reports, specs, PRDs, and issues rather than in this file.

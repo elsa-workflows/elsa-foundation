@@ -1,6 +1,6 @@
 # Extension points - Foundation Identity domain
 
-The Foundation Identity Abstractions feature owns the provider-agnostic authentication, IAM, authorization, ownership, and security-default seams. Concrete OIDC, OpenIddict, ASP.NET Core Identity, and legacy Elsa Identity providers implement these contracts from sibling modules; none are implemented here.
+The Foundation Identity Abstractions feature owns the provider-agnostic authentication, IAM, authorization, and ownership seams. Concrete OIDC, OpenIddict, ASP.NET Core Identity, and legacy Elsa Identity providers implement these contracts from sibling modules; none are implemented here.
 
 ## Overridable contracts
 
@@ -16,7 +16,17 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 | `IAuthSessionService` | `ClaimsAuthSessionService` (`Elsa.Foundation.Identity.Api`) | The host needs to enrich the provider-agnostic Studio session from server-side state beyond normalized claims. |
 | `IClaimsNormalizer` | `DefaultClaimsNormalizer` (`Elsa.Foundation.Identity.Abstractions`) | A provider needs custom claim projection while still emitting normalized Elsa role/permission claims. |
 | `IClaimMappingRuleEvaluator` | `ClaimMappingRuleEvaluator` (`Elsa.Foundation.Identity.Abstractions`) | Mapping rules need richer matching than exact claim-type/value comparisons. |
-| `ISecurityDefaultGuardEvaluator` | `SecurityDefaultGuardEvaluator` (`Elsa.Foundation.Identity.Abstractions`) | A host needs custom aggregation/reporting of security-default guard results. |
+| `IUserStore`, `IRevisionAwareUserStore` | `GroundworkUserStore`; opt-in `EfUserStore` | Select one tenant-local user authority while preserving normalized lookup, conditional email uniqueness, aggregate writes, and optimistic concurrency. |
+| `IRoleStore`, `IRevisionAwareRoleStore`, `IPagedRoleStore` | `GroundworkRoleStore`; opt-in `EfRoleStore` | Select one tenant-local role authority while preserving stable bounded enumeration, reservations, and optimistic concurrency. |
+| `IClaimMappingStore`, `IRevisionAwareClaimMappingStore`, `IPagedClaimMappingStore` | `GroundworkClaimMappingStore`; opt-in `EfClaimMappingStore` | Select one claim-mapping authority while preserving provider-local stable ordering and revision behavior. |
+| `IExternalIdentityStore`, `IRevisionAwareExternalIdentityStore`, `IPagedExternalIdentityStore` | `GroundworkExternalIdentityStore`; opt-in `EfExternalIdentityStore` | Select one external-login authority while preserving subject uniqueness, ownership/rebind rules, bounded ordering, and atomic owner updates. |
+| `ITenantMembershipStore`, `IRevisionAwareTenantMembershipStore` | `GroundworkTenantMembershipStore`; opt-in `EfTenantMembershipStore` | Select one membership authority while preserving tenant isolation, lossless sets, and atomic user ownership. |
+| `IApplicationStore` | `GroundworkApplicationStore` (`Elsa.Foundation.Identity.Persistence.Groundwork`); opt-in `EfApplicationStore` (`Elsa.Foundation.Identity.Persistence.EntityFrameworkCore`) | A host selects a different tenant-local application backend while preserving lossless records, normalized lookup, and unconditional upsert semantics. The EF IAM feature selects this together with the complete IAM authority. |
+| `IRevisionAwareApplicationStore` | Same scoped Groundwork or EF application store selected for `IApplicationStore` | A replacement must preserve create-only saves, opaque revisions, atomic compare-and-swap, and conflict/not-found distinctions. |
+| `ICredentialStore` | `GroundworkCredentialStore` (`Elsa.Foundation.Identity.Persistence.Groundwork`); opt-in `EfCredentialStore` (`Elsa.Foundation.Identity.Persistence.EntityFrameworkCore`) | A host selects a different tenant-local credential backend while preserving hashed-secret-only persistence, lossless records, normalized lookup, and unconditional upsert semantics. The EF IAM feature selects this together with the complete IAM authority. |
+| `IRevisionAwareCredentialStore` | Same scoped Groundwork or EF credential store selected for `ICredentialStore` | A replacement must preserve create-only saves, opaque revisions, atomic compare-and-swap, and conflict/not-found distinctions. |
+| `IProviderConfigurationStore` | `GroundworkProviderConfigurationStore` (`Elsa.Foundation.Identity.Persistence.Groundwork`); opt-in `EfProviderConfigurationStore` (`Elsa.Foundation.Identity.Persistence.EntityFrameworkCore`) | A host selects a different durable provider-configuration backend while preserving tenant/global access, effective fallback, and unconditional upsert semantics. The EF feature replaces only this contract and its revision-aware companion. |
+| `IRevisionAwareProviderConfigurationStore` | Same scoped Groundwork or EF provider-configuration store selected for `IProviderConfigurationStore` | A replacement must preserve create-only saves, opaque revisions, atomic compare-and-swap, and conflict/not-found distinctions. |
 
 ## Implementable contributor interfaces
 
@@ -32,7 +42,7 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 - **Kind:** Contributor (feature-owned permission contribution to the shared catalog).
 - **Register:** `services.AddPermissionContributor<MyContributor>()` (or `services.TryAddEnumerable(ServiceDescriptor.Singleton<IPermissionContributor, MyContributor>())`).
 - **Consumed by:** `CompositePermissionCatalog`, which canonicalizes keys for lookup while retaining declared spelling and provenance. The default identity permissions are contributed by `DefaultIdentityPermissionCatalog`; canonical duplicates, padded keys, wildcard definitions, and wildcard implication targets fail during catalog construction with both ownership sources in the diagnostic.
-- **Known implementations:** `DefaultIdentityPermissionCatalog` (identity permissions), `ModuleManagementPermissionContributor` (`Elsa.Modularity.Api`), `ExtensionBuilderPermissionContributor` (`Elsa.Modularity.ExtensionBuilder`) — the two host-control features that own `module-management.*` / `extension-builder.*` permissions per ADR 0037 *(cross-domain)*.
+- **Known implementations:** `DefaultIdentityPermissionCatalog` (identity permissions), `ModuleManagementPermissionContributor` (`Elsa.Modularity.Api`) — the host-control feature that owns the `module-management.*` permissions per ADR 0037 *(cross-domain)*.
 
 ### `IPermissionResourceHandler`
 
@@ -76,13 +86,6 @@ window for external hosts, but the built-in HTTP adapters mark their permission 
 fail closed rather than blocking on asynchronous work. First-party production callers are migrated to
 the async siblings. The synchronous members are candidates for removal in the next major release;
 hosts should migrate replacements before then.
-
-### `ISecurityDefaultGuard`
-
-- **Kind:** Validator (action-named contributor that returns startup/configuration violations).
-- **Register:** `services.AddScoped<ISecurityDefaultGuard, MySecurityGuard>()`.
-- **Consumed by:** `SecurityDefaultGuardEvaluator`, which returns all violations rather than swallowing failures.
-- **Known implementations:** `SigningKeySecurityDefaultGuard`, `HttpsMetadataSecurityDefaultGuard`, `SecretHashSecurityDefaultGuard` *(intra-domain - default)*.
 
 ## Events
 

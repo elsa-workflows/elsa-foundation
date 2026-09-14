@@ -15,7 +15,7 @@ namespace Elsa.Workflows.Publishing.Services;
 /// Compiles a single authored activity input into its durable <see cref="RuntimeInputBinding"/>. Owns the
 /// closed role-owned sources, authored-type resolution against the well-known type registry, and literal
 /// value conversion. Extracted from
-/// <see cref="WorkflowExecutableCompiler"/> (W30b, #418) so binding compilation is independently
+/// <see cref="WorkflowExecutableCompiler"/> (#418) so binding compilation is independently
 /// unit-testable and can evolve without touching activity-tree compilation.
 /// </summary>
 public sealed class RuntimeInputBindingCompiler(

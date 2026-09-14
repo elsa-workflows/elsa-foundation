@@ -8,7 +8,7 @@ public static class EventHandlerHelper
 {
     // Per-event-type compiled invoker. Rebuilding typeof(IEventHandler<>).MakeGenericType + GetMethod and
     // then dispatching through MethodBase.Invoke on every Publish was avoidable per-call reflection on a
-    // hot path (IN-10). The compiled delegate closes over nothing, casts the handler and event to their
+    // hot path. The compiled delegate closes over nothing, casts the handler and event to their
     // closed generic types, and calls Handle directly — no reflection, no args-array allocation per
     // dispatch, and exceptions surface unwrapped (the handler's own exception, not a
     // TargetInvocationException), matching the previous InvokeAndUnwrap behaviour.

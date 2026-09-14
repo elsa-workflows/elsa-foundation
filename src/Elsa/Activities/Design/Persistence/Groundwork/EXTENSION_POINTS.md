@@ -1,7 +1,10 @@
 # Extension points — Activities.Design.Persistence.Groundwork
 
-This feature supplies the current-only activity-design implementations over the public Groundwork v2
-row, query, and store APIs. Domain contracts live in `Elsa.Activities.Design.Persistence.Core`.
+This feature supplies the currently shipped activity-design implementations over the public Groundwork v2
+row, query, and store APIs. It is scheduled for replacement under accepted
+[ADR 0073](../../../../../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md);
+"currently shipped" does not make it the governing persistence direction. Domain contracts live in
+`Elsa.Activities.Design.Persistence.Core`.
 
 ## Replacement contracts
 

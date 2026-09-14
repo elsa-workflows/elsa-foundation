@@ -180,5 +180,5 @@ public sealed class PublicationSnapshotReviewException(string code, string messa
     public string Code { get; } = code;
 
     public static PublicationSnapshotReviewException Stale() =>
-        new("publication_snapshot_stale", "The publication snapshot review is stale or does not match this publish request.");
+        new(PublicationFailureCodes.PublicationSnapshotStale, "The publication snapshot review is stale or does not match this publish request.");
 }

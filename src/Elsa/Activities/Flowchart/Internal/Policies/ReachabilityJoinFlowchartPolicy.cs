@@ -8,7 +8,7 @@ namespace Elsa.Activities.Flowchart.Internal.Policies;
 /// inbound source that has not arrived. Deadness is never recorded, only re-derived — a downstream join learns
 /// that a decision's untaken branch is dead by proving no live token can reach it.
 /// <para>
-/// The search runs over the graph's forward projection (ADR 0064 WU-1). Over the full connection set it could
+/// The search runs over the graph's forward projection (ADR 0064). Over the full connection set it could
 /// not tell "a token can still get there" from "both nodes sit in the same loop", and only the
 /// <see cref="FlowchartExecutionState.ActiveChildren"/> filter on the execution scope kept it from deadlocking
 /// inside one.

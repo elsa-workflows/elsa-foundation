@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-bookmark-resume-handler-boundary`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #58, #59 (restatused 2026-09-10 from git evidence)
 **Input**: Continue the Runtime Execution Seam after bookmark stimulus resume dispatch. Dispatch now records `ResumeBookmark` scheduler work; the Activities runtime should handle that work through stable resume target IDs without persisting callback method names.
 
 ## Scenarios & Tests

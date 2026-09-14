@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-bookmark-creation-checkpoint`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #60, #61 (restatused 2026-09-10 from git evidence)
 **Input**: Continue the Runtime Execution Seam after bookmark resume consumption. Runtime has bookmark state projection and resume consumption; it now needs a narrow scheduler command boundary that creates durable bookmark state and suspends the owning activity through a named checkpoint.
 
 ## Scenarios & Tests

@@ -11,6 +11,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Activities.Runtime.Tests;
 
@@ -510,7 +511,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         await using var provider = NewProvider(activator, includeInspection: true);
         var handler = new WorkflowParentActivityCompletionSchedulerWorkHandler(
             provider.GetRequiredService<IServiceScopeFactory>(),
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
         var newerWorkItem = NewParentCallbackWorkItem("callback-work-newer", "command-newer");
         var oldWorkItem = NewParentCallbackWorkItem("callback-work-old", "command-old");
 
@@ -553,7 +554,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         await using var provider = NewProvider(activator, includeInspection: true);
         var handler = new WorkflowParentActivityCompletionSchedulerWorkHandler(
             provider.GetRequiredService<IServiceScopeFactory>(),
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
         await handler.HandleAsync(NewParentCallbackWorkItem("callback-work-101", "command-101"));
 
@@ -576,7 +577,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         await using var provider = NewProvider(activator, includeInspection: false);
         var handler = new WorkflowParentActivityCompletionSchedulerWorkHandler(
             provider.GetRequiredService<IServiceScopeFactory>(),
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
         await handler.HandleAsync(NewParentCallbackWorkItem("callback-work-newer", "command-newer"));
 
@@ -608,7 +609,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
             includeInspection: true);
         var handler = new WorkflowParentActivityCompletionSchedulerWorkHandler(
             provider.GetRequiredService<IServiceScopeFactory>(),
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
         await handler.HandleAsync(NewParentCallbackWorkItem("callback-work", "callback-command"));
 
@@ -621,7 +622,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     private WorkflowInvokeActivitySchedulerWorkHandler NewHandler(ServiceProvider provider) =>
-        new(provider.GetRequiredService<IServiceScopeFactory>(), new FixedTimeProvider(_now));
+        new(provider.GetRequiredService<IServiceScopeFactory>(), new FakeTimeProvider(_now));
 
     private async Task<RuntimeCompleteActivityCommandPayload> AssertCompletionWorkAsync()
     {
@@ -649,7 +650,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         services.AddSingleton<IIncidentStateStore>(_ => _incidentStateStore);
         services.AddSingleton<IRuntimeCheckpointCommitStore>(_ => _checkpointWriter);
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
-        services.AddSingleton<TimeProvider>(new FixedTimeProvider(_now));
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider(_now));
         services.AddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
         services.AddSingleton<IRuntimeExecutionOwnershipContextAccessor, AsyncLocalRuntimeExecutionOwnershipContextAccessor>();
         services.AddSingleton<RuntimeCheckpointCommitter>();
@@ -1288,10 +1289,5 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
                 ? new RuntimePayloadCaptureDecision(RuntimePayloadCaptureMode.None, "Sensitive test payload excluded.")
                 : new RuntimePayloadCaptureDecision(RuntimePayloadCaptureMode.Payload, "Test payload captured.");
         }
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

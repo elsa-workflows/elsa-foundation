@@ -13,7 +13,7 @@
 
 ## Phase 3: Decision Report
 
-- [x] T006 Add runtime evaluation report in `docs/reports/groundwork-runtime-evaluation.md`
+- [x] T006 Add runtime evaluation report in `docs/reports/archive/groundwork-runtime-evaluation.md`
 - [x] T007 Verify report and evaluator matrix agree
 
 ## Phase 4: Validation

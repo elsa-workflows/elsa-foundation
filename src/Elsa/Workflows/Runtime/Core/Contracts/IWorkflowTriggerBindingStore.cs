@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
 /// Durable store for <see cref="WorkflowTriggerBinding"/> entries — the trigger index Elsa 4 was
-/// missing (W7, E3-1). Bindings are written at publish time (one per start-trigger activity in a
+/// missing. Bindings are written at publish time (one per start-trigger activity in a
 /// published executable) and read by the stimulus router to start a new workflow instance when a
 /// matching stimulus arrives, with no explicit execution id.
 /// </summary>

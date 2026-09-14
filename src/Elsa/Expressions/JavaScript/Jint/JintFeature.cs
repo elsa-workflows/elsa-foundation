@@ -18,19 +18,19 @@ namespace Elsa.Expressions.JavaScript.Jint;
 public class JintFeature : IShellFeature
 {
     /// <summary>
-    /// Sandbox limit (DS-9): wall-clock execution timeout for a single script evaluation. Empty disables it.
+    /// Sandbox limit: wall-clock execution timeout for a single script evaluation. Empty disables it.
     /// </summary>
     [ManifestSetting(DisplayName = "Execution timeout", Description = "Maximum wall-clock time a single script evaluation may run before it is aborted; empty disables the timeout. Guards against infinite loops.", Category = "Security", UIHint = "duration")]
     public TimeSpan? ExecutionTimeout { get; set; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    /// Sandbox limit (DS-9): maximum statements a single evaluation may execute. Empty/zero disables it.
+    /// Sandbox limit: maximum statements a single evaluation may execute. Empty/zero disables it.
     /// </summary>
     [ManifestSetting(DisplayName = "Max statements", Description = "Maximum number of statements a single script evaluation may execute before it is aborted; empty or zero disables the limit.", Category = "Security", Advanced = true)]
     public int? MaxStatements { get; set; } = 10_000_000;
 
     /// <summary>
-    /// Sandbox limit (DS-9): maximum call-stack recursion depth for a single evaluation. Empty/zero disables it.
+    /// Sandbox limit: maximum call-stack recursion depth for a single evaluation. Empty/zero disables it.
     /// </summary>
     [ManifestSetting(DisplayName = "Max recursion depth", Description = "Maximum call-stack recursion depth for a single script evaluation; empty or zero disables the limit.", Category = "Security", Advanced = true)]
     public int? MaxRecursionDepth { get; set; } = 300;

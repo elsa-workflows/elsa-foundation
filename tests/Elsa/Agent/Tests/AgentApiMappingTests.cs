@@ -2,6 +2,7 @@ using Elsa.Agent.Api;
 using Elsa.Agent.Api.Constants;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
+using Elsa.Testing;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http.Metadata;
@@ -73,12 +74,5 @@ public sealed class AgentApiMappingTests
             Assert.Equal(dispositions[0].Value, authorization[0].Policy);
             Assert.DoesNotContain(endpoint.Metadata, item => item is IAllowAnonymous);
         }
-    }
-
-    private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
-    {
-        public IServiceProvider ServiceProvider { get; } = serviceProvider;
-        public ICollection<EndpointDataSource> DataSources { get; } = [];
-        public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
     }
 }

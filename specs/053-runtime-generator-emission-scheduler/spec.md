@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-generator-emission-scheduler`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #55, #56 (restatused 2026-09-10 from git evidence)
 **Input**: Continue the Runtime Execution Seam after generator contracts and control-plane pause-boundary contracts. Add the narrow runtime seam that records generator emissions as ordered scheduler work without creating a separate generator state store.
 
 ## Scenarios & Tests

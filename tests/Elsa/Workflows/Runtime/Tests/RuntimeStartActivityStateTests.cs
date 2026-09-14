@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
@@ -232,7 +233,7 @@ public sealed class RuntimeStartActivityStateTests : IDisposable
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
                 new InMemoryRuntimeCheckpointCommitStore(null, _activityStateStore, null, null, null, null, null, _inspectionStore), new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             _serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             durableValueStateStore: _durableValueStateStore,
             workflowExecutionStateStore: _workflowStateStore);
@@ -246,7 +247,7 @@ public sealed class RuntimeStartActivityStateTests : IDisposable
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
                 checkpointWriter, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             _serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             _durableValueStateStore,
             workflowExecutionStateStore: _workflowStateStore);
@@ -395,9 +396,4 @@ public sealed class RuntimeStartActivityStateTests : IDisposable
 
     private static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 }

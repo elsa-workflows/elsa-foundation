@@ -7,6 +7,7 @@ This is the short orientation path. It explains where things are and why they ex
 `elsa-foundation` is the transitional Elsa foundation workspace:
 
 - `src/` contains foundation libraries and default implementations.
+- `src/Apps/Elsa.Workbench/Program.cs` is the process entry point; it composes the libraries into shells from `src/Apps/Elsa.Workbench/shells.json`. [How a workflow executes](how-a-workflow-executes.md) follows one request from there to a durable checkpoint.
 - `tests/` contains focused tests for foundation behavior.
 - `specs/` contains Speckit work units and feature plans.
 - `.specify/` contains Speckit templates, workflows, extensions, and the two-layer constitution.

@@ -123,7 +123,7 @@ public sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider s
 
         foreach (var backgroundTask in backgroundTasks)
         {
-            // Track the instance so TaskStateManager can signal it to stop gracefully on shutdown (IN-5).
+            // Track the instance so TaskStateManager can signal it to stop gracefully on shutdown.
             stateManager.BackgroundTasks.Add(backgroundTask);
 
             var task = backgroundTaskStarter

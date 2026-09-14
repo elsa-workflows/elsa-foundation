@@ -19,6 +19,7 @@ public sealed class AnthropicAgentFeature : IShellFeature
 {
     public bool Enabled { get; set; }
 
+    [ManifestSetting(Secret = true)]
     public string? ApiKey { get; set; }
 
     public string? ApiKeyEnvironmentVariable { get; set; } = "ANTHROPIC_API_KEY";
