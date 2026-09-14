@@ -90,7 +90,7 @@ adapters validate and translate the selected context at their own persistence bo
 - **Kind:** Replacement (one provider owns retained workflow-execution state and its executable-retention projection).
 - **Signature:** in addition to save/find/list, `ListPinnedExecutableArtifactIdsAsync(...)` returns the distinct artifact IDs pinned by every retained execution status, and `DeleteAsync(workflowExecutionId, ...)` removes an execution under the host's retention policy.
 - **Usage:** workflow-execution records are durable executable-retention roots. Completion or fault does not release an artifact; only deletion of the retained execution does. Providers must answer the distinct-root query without materializing every full workflow-execution document and must keep the projection consistent with save/delete.
-- **Default implementation:** `InMemoryWorkflowExecutionStateStore`; durable persistence providers such as Groundwork replace it.
+- **Default implementation:** `InMemoryWorkflowExecutionStateStore`; durable persistence providers such as Groundwork or the opt-in `RuntimeWorkflowExecutionEntityFrameworkCoreFeature` replace it. EF providers retain an authoritative lossless document plus indexed history, alteration-capture, authority and pinned-artifact projections; `IWorkflowRuntimeAttentionQuery` remains a separate cross-store contract.
 
 ### `IWorkflowExecutableReferenceGarbageCollector` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one collector owns physical executable-artifact reclamation for a runtime composition).

@@ -48,6 +48,12 @@ public static class GroundworkV2RuntimeRegistration
             var cacheOptions = CopyAndValidate(workflowExecutableCacheOptions);
             var existingActivityExecutionBackend = RuntimeActivityExecutionStoreBackend.Find(services);
             RuntimeActivityExecutionStoreBackend.EnsureCheckpointCompositionCompatible(existingActivityExecutionBackend, RuntimeActivityExecutionStoreBackend.Groundwork);
+            var existingWorkflowExecutionStateBackend = WorkflowExecutionStateStoreBackend.Find(services);
+            if (existingWorkflowExecutionStateBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework)
+                throw new InvalidOperationException("Groundwork runtime cannot replace workflow execution state EF persistence while the runtime checkpoint writer owns the EF transaction.");
+            existingWorkflowExecutionStateBackend?.EnsureOwnsRegisteredContract(services);
+            if (existingWorkflowExecutionStateBackend is null && services.Any(descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionStateStore) && descriptor.ImplementationType != typeof(Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowExecutionStateStore)))
+                throw new InvalidOperationException("Groundwork runtime refuses to replace an unowned workflow execution state store.");
             var target = BindRuntimeTarget(services, targetName);
             if (existingActivityExecutionBackend is null)
                 RuntimeActivityExecutionStoreBackend.EnsureNoUnownedRegistrations(services);
@@ -119,6 +125,11 @@ public static class GroundworkV2RuntimeRegistration
             typeof(IActivityExecutionHierarchyStore), typeof(IActivityExecutionHierarchyReader), typeof(IActivityExecutionHierarchyWriter));
         ReplaceScoped<GroundworkV2WorkflowExecutionStateStore>(services, Standard<GroundworkV2WorkflowExecutionStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowExecutionStateStore));
+        services.RemoveAll<WorkflowExecutionStateStoreBackend>();
+        var groundworkExecutionDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionStateStore));
+        WorkflowExecutionStateStoreBackend.Register(services, new WorkflowExecutionStateStoreBackend(
+            WorkflowExecutionStateStoreBackend.Groundwork,
+            [groundworkExecutionDescriptor]));
         ReplaceScoped<GroundworkV2WorkflowAlterationStore>(services, Standard<GroundworkV2WorkflowAlterationStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowAlterationStore));
         ReplaceScoped<GroundworkV2WorkflowTestScopeStore>(services, Standard<GroundworkV2WorkflowTestScopeStore>(target, static (sessions, access, target) => new(sessions, access, target)),

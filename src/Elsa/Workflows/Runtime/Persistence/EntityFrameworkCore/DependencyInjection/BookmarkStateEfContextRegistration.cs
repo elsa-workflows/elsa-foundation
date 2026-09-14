@@ -110,6 +110,15 @@ internal static class BookmarkStateEfContextRegistration
             connectionName,
             defaultConnectionString,
             "Runtime activity executions");
+        EnsureCompatible(
+            services.Select(x => x.ImplementationInstance)
+                .OfType<RuntimeWorkflowExecutionEntityFrameworkCoreOptions>()
+                .SingleOrDefault(),
+            provider,
+            connectionString,
+            connectionName,
+            defaultConnectionString,
+            "Runtime workflow executions");
     }
 
     private static void EnsureCompatible<TOptions>(
@@ -132,6 +141,8 @@ internal static class BookmarkStateEfContextRegistration
                 (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeArtifactEfModule.DefaultSqliteConnectionString),
             RuntimeActivityExecutionEntityFrameworkCoreOptions options =>
                 (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeActivityExecutionEfModule.DefaultSqliteConnectionString),
+            RuntimeWorkflowExecutionEntityFrameworkCoreOptions options =>
+                (options.Provider, options.ConnectionString, options.ConnectionName, RuntimeWorkflowExecutionEfModule.DefaultSqliteConnectionString),
             _ => throw new InvalidOperationException("Unknown Runtime EF context options.")
         };
 
