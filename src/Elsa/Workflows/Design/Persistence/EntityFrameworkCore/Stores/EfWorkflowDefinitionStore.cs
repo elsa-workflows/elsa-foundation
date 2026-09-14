@@ -15,7 +15,7 @@ public sealed class EfWorkflowDefinitionStore(WorkflowsDesignDbContext db, IPers
     {
         var lookupHash = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(id));
         var row = await EfDesignSupport.ReadAsync("reading workflow definition", () => Query().SingleOrDefaultAsync(
-            x => EF.Property<string>(x, "IdLookupHash") == lookupHash, cancellationToken));
+            x => x.IdLookupHash == lookupHash, cancellationToken));
         if (row is not null)
             EfDesignSupport.EnsureDefinitionIdentity(id, row.Id, "workflow definition lookup");
         return row;
@@ -29,13 +29,13 @@ public sealed class EfWorkflowDefinitionStore(WorkflowsDesignDbContext db, IPers
         if (filter.Id is not null)
         {
             var lookupHash = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(filter.Id));
-            query = query.Where(x => EF.Property<string>(x, "IdLookupHash") == lookupHash);
+            query = query.Where(x => x.IdLookupHash == lookupHash);
         }
         if (filter.Ids is not null)
         {
             if (filter.Ids.Count == 0) return [];
             var lookupHashes = filter.Ids.Select(EfDesignSupport.SearchKey).Select(EfDesignSupport.LookupHash).ToArray();
-            query = query.Where(x => lookupHashes.Contains(EF.Property<string>(x, "IdLookupHash")));
+            query = query.Where(x => lookupHashes.Contains(x.IdLookupHash));
         }
         if (filter.Name is not null) query = query.Where(x => x.Name == filter.Name);
         if (filter.Names is not null) { if (filter.Names.Count == 0) return []; query = query.Where(x => filter.Names.Contains(x.Name)); }
@@ -44,9 +44,9 @@ public sealed class EfWorkflowDefinitionStore(WorkflowsDesignDbContext db, IPers
         {
             var term = EfDesignSupport.SearchKey(filter.SearchTerm);
             query = query.Where(x =>
-                EF.Property<string?>(x, "IdSearchKey")!.Contains(term) ||
-                EF.Property<string?>(x, "NameSearchKey")!.Contains(term) ||
-                (EF.Property<string?>(x, "DescriptionSearchKey") != null && EF.Property<string?>(x, "DescriptionSearchKey")!.Contains(term)));
+                x.IdSearchKey.Contains(term) ||
+                x.NameSearchKey!.Contains(term) ||
+                (x.DescriptionSearchKey != null && x.DescriptionSearchKey.Contains(term)));
         }
         var exactRoute = filter.Id is not null || filter.Ids is not null || filter.Name is not null ||
                          filter.Names is not null || filter.Description is not null;

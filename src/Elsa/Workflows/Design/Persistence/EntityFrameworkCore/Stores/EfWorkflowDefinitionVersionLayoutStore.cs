@@ -11,8 +11,8 @@ public sealed class EfWorkflowDefinitionVersionLayoutStore(WorkflowsDesignDbCont
     {
         var row = await EfDesignSupport.ReadAsync("reading workflow version layout", () => EfDesignSupport.InScope(db.VersionLayouts, access, x => x.TenantId).Where(x => x.WorkflowDefinitionVersionId == workflowDefinitionVersionId).SingleOrDefaultAsync(cancellationToken));
         if (row is null) return null;
-        var records = EfDesignSupport.ReadLayout(db.Entry(row).Property<string>("RecordsJson").CurrentValue);
-        var presentation = EfDesignSupport.ReadPresentation(db.Entry(row).Property<string>("ActivityPresentationJson").CurrentValue);
+        var records = EfDesignSupport.ReadLayout(row.RecordsJson);
+        var presentation = EfDesignSupport.ReadPresentation(row.ActivityPresentationJson);
         return new WorkflowDefinitionVersionLayout { Id = row.Id, TenantId = row.TenantId, WorkflowDefinitionVersionId = row.WorkflowDefinitionVersionId, CreatedAt = row.CreatedAt, LastModifiedAt = row.LastModifiedAt, Records = records, ActivityPresentation = presentation };
     }
 }

@@ -16,7 +16,7 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
     {
         var key = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(workflowDefinitionId));
         var rows = await EfDesignSupport.ReadAsync("reading workflow definition draft", () => Query()
-            .Where(x => EF.Property<string>(x, "WorkflowDefinitionIdLookupHash") == key)
+            .Where(x => x.WorkflowDefinitionIdLookupHash == key)
             .ToListAsync(cancellationToken));
         rows = rows.OrderByDescending(x => x.LastModifiedAt).ThenByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id, StringComparer.Ordinal).ToList();
         foreach (var candidate in rows)
@@ -28,15 +28,15 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
     {
         var key = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(workflowDefinitionId));
         var rows = await EfDesignSupport.ReadAsync("listing workflow drafts", () => Query()
-            .Where(x => EF.Property<string>(x, "WorkflowDefinitionIdLookupHash") == key)
+            .Where(x => x.WorkflowDefinitionIdLookupHash == key)
             .ToListAsync(cancellationToken));
         rows = rows.OrderByDescending(x => x.LastModifiedAt).ThenByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id, StringComparer.Ordinal).ToList();
         foreach (var candidate in rows)
             EfDesignSupport.EnsureDefinitionIdentity(workflowDefinitionId, candidate.WorkflowDefinitionId, "workflow definition draft lookup");
         return rows.Select(x => EfDesignSupport.MapDraft(serializer, x)).ToArray();
     }
-    public async Task<IReadOnlyCollection<DesignMetadataRecord>> FindLayoutByDraftIdAsync(string draftId, CancellationToken cancellationToken = default) { var row = await EfDesignSupport.ReadAsync("reading workflow draft layout", () => Layout(draftId).SingleOrDefaultAsync(cancellationToken)); return row is null ? [] : EfDesignSupport.ReadLayout(db.Entry(row).Property<string>("RecordsJson").CurrentValue); }
-    public async Task<IReadOnlyCollection<ActivityPresentationRecord>> FindActivityPresentationByDraftIdAsync(string draftId, CancellationToken cancellationToken = default) { var row = await EfDesignSupport.ReadAsync("reading workflow draft presentation", () => Layout(draftId).SingleOrDefaultAsync(cancellationToken)); return row is null ? [] : EfDesignSupport.ReadPresentation(db.Entry(row).Property<string>("ActivityPresentationJson").CurrentValue); }
+    public async Task<IReadOnlyCollection<DesignMetadataRecord>> FindLayoutByDraftIdAsync(string draftId, CancellationToken cancellationToken = default) { var row = await EfDesignSupport.ReadAsync("reading workflow draft layout", () => Layout(draftId).SingleOrDefaultAsync(cancellationToken)); return row is null ? [] : EfDesignSupport.ReadLayout(row.RecordsJson); }
+    public async Task<IReadOnlyCollection<ActivityPresentationRecord>> FindActivityPresentationByDraftIdAsync(string draftId, CancellationToken cancellationToken = default) { var row = await EfDesignSupport.ReadAsync("reading workflow draft presentation", () => Layout(draftId).SingleOrDefaultAsync(cancellationToken)); return row is null ? [] : EfDesignSupport.ReadPresentation(row.ActivityPresentationJson); }
     public async Task<DraftWithLayout?> FindWithLayoutByIdAsync(string draftId, CancellationToken cancellationToken = default)
     {
         // Draft and layout are one read contract. Keep them in one provider-translatable
@@ -51,8 +51,8 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
              select new
              {
                  Draft = draft,
-                 RecordsJson = layout == null ? null : EF.Property<string>(layout, "RecordsJson"),
-                 ActivityPresentationJson = layout == null ? null : EF.Property<string>(layout, "ActivityPresentationJson")
+                 RecordsJson = layout == null ? null : layout.RecordsJson,
+                 ActivityPresentationJson = layout == null ? null : layout.ActivityPresentationJson
              }).SingleOrDefaultAsync(cancellationToken));
 
         if (result is null)

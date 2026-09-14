@@ -247,8 +247,8 @@ public sealed class EfWorkflowDesignPersistenceTests
         await db.SaveChangesAsync();
         var keys = await db.Definitions.AsNoTracking().Select(x => new
         {
-            Id = EF.Property<string>(x, "IdSearchKey"),
-            Hash = EF.Property<string>(x, "IdLookupHash")
+            Id = x.IdSearchKey,
+            Hash = x.IdLookupHash
         }).SingleAsync();
         Assert.Equal(WorkflowDefinitionLimits.IdentitySearchKeyMaximumLength, keys.Id.Length);
         Assert.Equal(64, keys.Hash.Length);
@@ -277,7 +277,7 @@ public sealed class EfWorkflowDesignPersistenceTests
             new WorkflowDefinitionDraft { Id = "sharp-s-draft", TenantId = "tenant-a", WorkflowDefinitionId = "sharp-s", State = State() });
 
         var store = new EfWorkflowDefinitionStore(db, access);
-        var persistedKeys = await db.Definitions.AsNoTracking().Select(x => new { x.Name, Key = EF.Property<string?>(x, "NameSearchKey") }).ToListAsync();
+        var persistedKeys = await db.Definitions.AsNoTracking().Select(x => new { x.Name, Key = x.NameSearchKey }).ToListAsync();
         Assert.Equal("|010400", persistedKeys.Single(x => x.Name == "𐐀").Key);
         Assert.Equal("cafe", Assert.Single(await store.ListAsync(new WorkflowDefinitionFilter { SearchTerm = "CAFÉ" })).Id);
         Assert.Equal("deseret", Assert.Single(await store.ListAsync(new WorkflowDefinitionFilter { SearchTerm = "𐐨" })).Id);
@@ -765,6 +765,60 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Rejected_stage_survives_rollback_failure_without_persisting_mutation_or_marker()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var writer = new EfDesignAtomicWriter(db, access, transactionFactory: _ => Task.FromResult<IDbContextTransaction>(
+            new FaultInjectingTransaction(new InvalidOperationException("rollback failure"), null)));
+
+        var result = await writer.ExecuteAsync(
+            new DesignOperationKey("rejected-rollback"),
+            "test.op",
+            new { Value = 1 },
+            ["definitions"],
+            (_, _) =>
+            {
+                db.Definitions.Add(new WorkflowDefinition { Id = "should-not-persist", TenantId = "tenant-a", Name = "Rejected" });
+                return Task.FromResult(DesignAtomicWriteStage<int>.Rejected());
+            });
+
+        Assert.Equal(DesignAtomicWriteStatus.Rejected, result.Status);
+        Assert.Empty(await db.Definitions.AsNoTracking().ToListAsync());
+        Assert.Empty(await db.Operations.AsNoTracking().ToListAsync());
+    }
+
+    [Fact]
+    public async Task Rejected_stage_survives_disposal_failure_without_persisting_mutation_or_marker()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var writer = new EfDesignAtomicWriter(db, access, transactionFactory: _ => Task.FromResult<IDbContextTransaction>(
+            new FaultInjectingTransaction(null, new InvalidOperationException("dispose failure"))));
+
+        var result = await writer.ExecuteAsync(
+            new DesignOperationKey("rejected-disposal"),
+            "test.op",
+            new { Value = 1 },
+            ["definitions"],
+            (_, _) =>
+            {
+                db.Definitions.Add(new WorkflowDefinition { Id = "should-not-persist", TenantId = "tenant-a", Name = "Rejected" });
+                return Task.FromResult(DesignAtomicWriteStage<int>.Rejected());
+            });
+
+        Assert.Equal(DesignAtomicWriteStatus.Rejected, result.Status);
+        Assert.Empty(await db.Definitions.AsNoTracking().ToListAsync());
+        Assert.Empty(await db.Operations.AsNoTracking().ToListAsync());
+    }
+
+    [Fact]
     public async Task Post_commit_transaction_disposal_failure_does_not_replace_the_committed_result()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
@@ -1073,8 +1127,8 @@ public sealed class EfWorkflowDesignPersistenceTests
         var layout = await db.DraftLayouts.SingleAsync();
         Assert.NotEqual(default, layout.CreatedAt);
         Assert.NotEqual(default, layout.LastModifiedAt);
-        Assert.Contains("\"nodeId\":\"root\"", db.Entry(layout).Property<string>("RecordsJson").CurrentValue, StringComparison.Ordinal);
-        Assert.Contains("\"displayName\":\"Root\"", db.Entry(layout).Property<string>("ActivityPresentationJson").CurrentValue, StringComparison.Ordinal);
+        Assert.Contains("\"nodeId\":\"root\"", layout.RecordsJson, StringComparison.Ordinal);
+        Assert.Contains("\"displayName\":\"Root\"", layout.ActivityPresentationJson, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1236,7 +1290,7 @@ public sealed class EfWorkflowDesignPersistenceTests
             Id = "layout", TenantId = "tenant-a", WorkflowDefinitionVersionId = version.Id,
             Records = [new DesignMetadataRecord("root", 1, 2)]
         };
-        db.Versions.Add(version); db.Entry(layout).Property<string>("RecordsJson").CurrentValue = "[{\"nodeId\":\"root\",\"x\":1,\"y\":2,\"width\":null,\"height\":null,\"additionalProperties\":null}]"; db.Entry(layout).Property<string>("ActivityPresentationJson").CurrentValue = "[]"; db.VersionLayouts.Add(layout);
+        db.Versions.Add(version); layout.RecordsJson = "[{\"nodeId\":\"root\",\"x\":1,\"y\":2,\"width\":null,\"height\":null,\"additionalProperties\":null}]"; layout.ActivityPresentationJson = "[]"; db.VersionLayouts.Add(layout);
         var draft = new WorkflowDefinitionDraft
         {
             Id = "provenance-draft",
@@ -1252,7 +1306,7 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.Throws<InvalidOperationException>(() => db.SaveChanges());
         db.ChangeTracker.Clear();
         var loadedVersion = await db.Versions.SingleAsync();
-        db.Entry(loadedVersion).Property(nameof(WorkflowDefinitionVersion.SemVerSortKey)).CurrentValue = "changed";
+        loadedVersion.SemVerSortKey = "changed";
         Assert.Throws<InvalidOperationException>(() => db.SaveChanges());
         db.ChangeTracker.Clear();
         var loadedDraft = await db.Drafts.SingleAsync();
@@ -1261,7 +1315,7 @@ public sealed class EfWorkflowDesignPersistenceTests
         db.ChangeTracker.Clear();
         Assert.Equal("source-version", (await db.Drafts.AsNoTracking().SingleAsync()).SourceVersionId);
         var loadedLayout = await db.VersionLayouts.SingleAsync();
-        db.Entry(loadedLayout).Property<string>("RecordsJson").CurrentValue = "[]";
+        loadedLayout.RecordsJson = "[]";
         Assert.Throws<InvalidOperationException>(() => db.SaveChanges());
     }
 
@@ -1846,6 +1900,41 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Shared_protocol_stage_rejection_survives_rollback_failure()
+    {
+        var scope = new ProtocolScope();
+        var lane = CreateProtocolLane(
+            scope,
+            (_, _) => Task.FromResult(DesignAtomicCommitDisposition.Committed),
+            _ => throw new InvalidOperationException("rollback failure"));
+
+        var result = await DesignAtomicWriteProtocol.ExecuteAsync(
+            lane,
+            (_, _) => Task.FromResult(new ProtocolStage(false)),
+            null,
+            CancellationToken.None);
+
+        Assert.Equal("rejected", result.Status);
+        Assert.Equal(1, scope.DisposeCount);
+    }
+
+    [Fact]
+    public async Task Shared_protocol_stage_rejection_survives_disposal_failure()
+    {
+        var scope = new ProtocolScope(new InvalidOperationException("dispose failure"));
+        var lane = CreateProtocolLane(scope, (_, _) => Task.FromResult(DesignAtomicCommitDisposition.Committed));
+
+        var result = await DesignAtomicWriteProtocol.ExecuteAsync(
+            lane,
+            (_, _) => Task.FromResult(new ProtocolStage(false)),
+            null,
+            CancellationToken.None);
+
+        Assert.Equal("rejected", result.Status);
+        Assert.Equal(1, scope.DisposeCount);
+    }
+
+    [Fact]
     public async Task Shared_protocol_scope_disposal_failure_preserves_authoritative_outcome_and_primary_exception()
     {
         var committedScope = new ProtocolScope(new InvalidOperationException("committed cleanup"));
@@ -2025,14 +2114,15 @@ public sealed class EfWorkflowDesignPersistenceTests
 
     private static DesignAtomicWriteLane<ProtocolScope, ProtocolMarker, ProtocolStage, ProtocolResult> CreateProtocolLane(
         ProtocolScope scope,
-        Func<ProtocolScope, CancellationToken, Task<DesignAtomicCommitDisposition>> commit) => new()
+        Func<ProtocolScope, CancellationToken, Task<DesignAtomicCommitDisposition>> commit,
+        Action<ProtocolScope>? rollback = null) => new()
     {
         MarkerId = "scope-cleanup",
         LoadMarker = _ => Task.FromResult<ProtocolMarker?>(null),
         BeginScope = () => scope,
         SaveMarker = (_, _, _) => Task.CompletedTask,
         Commit = commit,
-        Rollback = _ => { },
+        Rollback = rollback ?? (_ => { }),
         ClassifyMarkerRace = _ => false,
         ClassifyUncertainCommit = _ => false,
         OnUncertainCommit = (_, _) => throw new InvalidOperationException(),

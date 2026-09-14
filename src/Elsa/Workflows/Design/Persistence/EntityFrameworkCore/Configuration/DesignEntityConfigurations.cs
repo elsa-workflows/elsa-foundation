@@ -16,11 +16,11 @@ internal static class DesignEntityConfigurations
         b.ToTable(WorkflowsDesignEfModule.DefinitionTable);
         // SQL Server pads trailing spaces even under BIN2 collations. The folded hash therefore
         // owns relational identity while Id remains the exact domain value returned to callers.
-        b.Property<string>("IdLookupHash")
+        b.Property(x => x.IdLookupHash)
             .HasMaxLength(64)
             .IsRequired()
             .HasValueGenerator<WorkflowDefinitionIdentityHashValueGenerator>();
-        b.HasKey("TenantId", "IdLookupHash");
+        b.HasKey(x => new { x.TenantId, x.IdLookupHash });
         b.Ignore(x => x.RowNumber);
         b.Property(x => x.Id).HasMaxLength(WorkflowDefinitionLimits.IdentityMaximumLength);
         b.Property(x => x.Id).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
@@ -29,9 +29,9 @@ internal static class DesignEntityConfigurations
         b.Property(x => x.Description).HasMaxLength(WorkflowDefinitionLimits.TextMaximumLength);
         // Persisted folded keys keep ordinal-ignore-case search provider-neutral while the
         // logical entity remains a domain type. They are part of the definition storage contract.
-        b.Property<string>("IdSearchKey").HasMaxLength(WorkflowDefinitionLimits.IdentitySearchKeyMaximumLength).IsRequired();
-        b.Property<string?>("NameSearchKey").HasMaxLength(WorkflowDefinitionLimits.TextSearchKeyMaximumLength);
-        b.Property<string?>("DescriptionSearchKey").HasMaxLength(WorkflowDefinitionLimits.TextSearchKeyMaximumLength);
+        b.Property(x => x.IdSearchKey).HasMaxLength(WorkflowDefinitionLimits.IdentitySearchKeyMaximumLength).IsRequired();
+        b.Property(x => x.NameSearchKey).HasMaxLength(WorkflowDefinitionLimits.TextSearchKeyMaximumLength);
+        b.Property(x => x.DescriptionSearchKey).HasMaxLength(WorkflowDefinitionLimits.TextSearchKeyMaximumLength);
         b.HasIndex(x => new { x.TenantId, x.Name, x.Id });
         b.HasIndex(x => new { x.TenantId, x.Id });
         b.Property(x => x.LastModifiedAt).IsConcurrencyToken();
@@ -56,7 +56,7 @@ internal static class DesignEntityConfigurations
         b.Property(x => x.Id).HasMaxLength(128);
         b.Property(x => x.TenantId).HasMaxLength(128);
         b.Property(x => x.DefinitionId).HasMaxLength(128);
-        b.Property<string>("DefinitionIdLookupHash").HasMaxLength(64).IsRequired();
+        b.Property(x => x.DefinitionIdLookupHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.Version).HasMaxLength(128);
         b.Property(x => x.SemVerSortKey).HasMaxLength(128);
         b.Property(x => x.StateSource);
@@ -66,10 +66,10 @@ internal static class DesignEntityConfigurations
         b.Property(x => x.SourceDraftId).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
         b.Property(x => x.SourceCreatedAt).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
         b.Property(x => x.StateSource).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
-        b.HasIndex("TenantId", "DefinitionIdLookupHash", nameof(WorkflowDefinitionVersion.SemVerSortKey)).IsUnique();
+        b.HasIndex(x => new { x.TenantId, x.DefinitionIdLookupHash, x.SemVerSortKey }).IsUnique();
         b.HasOne(x => x.Definition).WithMany()
-            .HasForeignKey("TenantId", "DefinitionIdLookupHash")
-            .HasPrincipalKey("TenantId", "IdLookupHash")
+            .HasForeignKey(x => new { x.TenantId, x.DefinitionIdLookupHash })
+            .HasPrincipalKey(x => new { x.TenantId, x.IdLookupHash })
             .OnDelete(DeleteBehavior.Cascade);
         b.Property(x => x.LastModifiedAt).IsConcurrencyToken();
         b.Ignore(x => x.State);
@@ -83,14 +83,14 @@ internal static class DesignEntityConfigurations
         b.Property(x => x.Id).HasMaxLength(128);
         b.Property(x => x.TenantId).HasMaxLength(128);
         b.Property(x => x.WorkflowDefinitionId).HasMaxLength(128);
-        b.Property<string>("WorkflowDefinitionIdLookupHash").HasMaxLength(64).IsRequired();
+        b.Property(x => x.WorkflowDefinitionIdLookupHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.SourceVersionId).HasMaxLength(128);
         b.Property(x => x.SourceVersionId).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
         b.Property(x => x.StateSource);
-        b.HasIndex("TenantId", "WorkflowDefinitionIdLookupHash", nameof(WorkflowDefinitionDraft.LastModifiedAt), nameof(WorkflowDefinitionDraft.Id));
+        b.HasIndex(x => new { x.TenantId, x.WorkflowDefinitionIdLookupHash, x.LastModifiedAt, x.Id });
         b.HasOne(x => x.WorkflowDefinition).WithMany()
-            .HasForeignKey("TenantId", "WorkflowDefinitionIdLookupHash")
-            .HasPrincipalKey("TenantId", "IdLookupHash")
+            .HasForeignKey(x => new { x.TenantId, x.WorkflowDefinitionIdLookupHash })
+            .HasPrincipalKey(x => new { x.TenantId, x.IdLookupHash })
             .OnDelete(DeleteBehavior.Cascade);
         // Draft updates are explicitly last-writer-wins; stale writers must not be rejected by EF.
         b.Ignore(x => x.State);
@@ -104,8 +104,8 @@ internal static class DesignEntityConfigurations
         b.Property(x => x.Id).HasMaxLength(128);
         b.Property(x => x.TenantId).HasMaxLength(128);
         b.Property(x => x.WorkflowDefinitionDraftId).HasMaxLength(128);
-        b.Property<string>("RecordsJson");
-        b.Property<string>("ActivityPresentationJson");
+        b.Property(x => x.RecordsJson);
+        b.Property(x => x.ActivityPresentationJson);
         b.HasIndex(x => new { x.TenantId, x.WorkflowDefinitionDraftId }).IsUnique();
         b.HasOne(x => x.WorkflowDefinitionDraft).WithOne().HasForeignKey<WorkflowDefinitionDraftLayout>("TenantId", "WorkflowDefinitionDraftId").OnDelete(DeleteBehavior.Cascade);
         b.Ignore(x => x.Records);
@@ -121,15 +121,15 @@ internal static class DesignEntityConfigurations
         b.Property(x => x.Id).HasMaxLength(128);
         b.Property(x => x.TenantId).HasMaxLength(128);
         b.Property(x => x.WorkflowDefinitionVersionId).HasMaxLength(128);
-        b.Property<string>("RecordsJson");
-        b.Property<string>("ActivityPresentationJson");
+        b.Property(x => x.RecordsJson);
+        b.Property(x => x.ActivityPresentationJson);
         b.HasIndex(x => new { x.TenantId, x.WorkflowDefinitionVersionId }).IsUnique();
         b.HasOne(x => x.WorkflowDefinitionVersion).WithOne().HasForeignKey<WorkflowDefinitionVersionLayout>("TenantId", "WorkflowDefinitionVersionId").OnDelete(DeleteBehavior.Cascade);
         b.Ignore(x => x.Records);
         b.Ignore(x => x.ActivityPresentation);
         b.Property(x => x.WorkflowDefinitionVersionId).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
-        b.Property<string>("RecordsJson").Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
-        b.Property<string>("ActivityPresentationJson").Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
+        b.Property(x => x.RecordsJson).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
+        b.Property(x => x.ActivityPresentationJson).Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Throw);
         b.Property(x => x.LastModifiedAt).IsConcurrencyToken();
     }
 

@@ -17,6 +17,11 @@ public sealed class WorkflowDefinitionVersionLayout : TenantEntity, IWorkflowDef
 
     public WorkflowDefinitionVersion? WorkflowDefinitionVersion { get; init; }
 
+    /// <summary>Persistence-only serialized layout columns; not part of the domain read interface.</summary>
+    public string RecordsJson { get; set; } = "[]";
+
+    public string ActivityPresentationJson { get; set; } = "[]";
+
     public IEnumerable<DesignMetadataRecord> Records { get; init; } = [];
 
     IEnumerable<IDesignMetadataRecord> IWorkflowDefinitionLayout.Records => Records;

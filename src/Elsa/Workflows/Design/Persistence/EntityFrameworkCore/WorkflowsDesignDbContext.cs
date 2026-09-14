@@ -62,7 +62,7 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
             ValidateIdentity(entry.Entity.Version, nameof(WorkflowDefinitionVersion.Version));
             ValidateIdentity(entry.Entity.SemVerSortKey, nameof(WorkflowDefinitionVersion.SemVerSortKey));
             ValidateOptionalIdentity(entry.Entity.SourceDraftId, nameof(WorkflowDefinitionVersion.SourceDraftId));
-            Entry(entry.Entity).Property<string>("DefinitionIdLookupHash").CurrentValue = Stores.EfDesignSupport.LookupHash(Stores.EfDesignSupport.SearchKey(entry.Entity.DefinitionId));
+            entry.Entity.DefinitionIdLookupHash = Stores.EfDesignSupport.LookupHash(Stores.EfDesignSupport.SearchKey(entry.Entity.DefinitionId));
         }
         foreach (var entry in ChangeTracker.Entries<WorkflowDefinitionDraft>()
                      .Where(entry => entry.State is EntityState.Added or EntityState.Modified))
@@ -71,7 +71,7 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
             ValidateOptionalIdentity(entry.Entity.TenantId, nameof(WorkflowDefinitionDraft.TenantId));
             ValidateIdentity(entry.Entity.WorkflowDefinitionId, nameof(WorkflowDefinitionDraft.WorkflowDefinitionId));
             ValidateOptionalIdentity(entry.Entity.SourceVersionId, nameof(WorkflowDefinitionDraft.SourceVersionId));
-            Entry(entry.Entity).Property<string>("WorkflowDefinitionIdLookupHash").CurrentValue = Stores.EfDesignSupport.LookupHash(Stores.EfDesignSupport.SearchKey(entry.Entity.WorkflowDefinitionId));
+            entry.Entity.WorkflowDefinitionIdLookupHash = Stores.EfDesignSupport.LookupHash(Stores.EfDesignSupport.SearchKey(entry.Entity.WorkflowDefinitionId));
         }
         foreach (var entry in ChangeTracker.Entries<WorkflowDefinitionDraftLayout>()
                      .Where(entry => entry.State is EntityState.Added or EntityState.Modified))

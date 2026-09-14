@@ -22,10 +22,10 @@ public sealed class EfWorkflowDefinitionListProjectionStore(WorkflowsDesignDbCon
         {
             cancellationToken.ThrowIfCancellationRequested();
             drafts.AddRange(await EfDesignSupport.ReadAsync("reading workflow draft projections", () => EfDesignSupport.InScope(db.Drafts.AsNoTracking(), access, x => x.TenantId)
-                .Where(x => batch.Contains(EF.Property<string>(x, "WorkflowDefinitionIdLookupHash")))
+                .Where(x => batch.Contains(x.WorkflowDefinitionIdLookupHash))
                 .ToListAsync(cancellationToken)));
             versions.AddRange(await EfDesignSupport.ReadAsync("reading workflow version projections", () => EfDesignSupport.InScope(db.Versions.AsNoTracking(), access, x => x.TenantId)
-                .Where(x => batch.Contains(EF.Property<string>(x, "DefinitionIdLookupHash")))
+                .Where(x => batch.Contains(x.DefinitionIdLookupHash))
                 .ToListAsync(cancellationToken)));
         }
 

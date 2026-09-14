@@ -17,7 +17,7 @@ public sealed class EfWorkflowDefinitionVersionStore(WorkflowsDesignDbContext db
     {
         var key = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(definitionId));
         var rows = await EfDesignSupport.ReadAsync("reading latest workflow definition version", () => Query()
-            .Where(x => EF.Property<string>(x, "DefinitionIdLookupHash") == key)
+            .Where(x => x.DefinitionIdLookupHash == key)
             .OrderByDescending(x => x.SemVerSortKey)
             .ThenByDescending(x => x.Id)
             .ToListAsync(cancellationToken));
@@ -30,7 +30,7 @@ public sealed class EfWorkflowDefinitionVersionStore(WorkflowsDesignDbContext db
     {
         var key = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(definitionId));
         var rows = await EfDesignSupport.ReadAsync("listing workflow definition versions", () => Query()
-            .Where(x => EF.Property<string>(x, "DefinitionIdLookupHash") == key)
+            .Where(x => x.DefinitionIdLookupHash == key)
             .OrderBy(x => x.SemVerSortKey)
             .ThenBy(x => x.Id)
             .ToListAsync(cancellationToken));
@@ -43,7 +43,7 @@ public sealed class EfWorkflowDefinitionVersionStore(WorkflowsDesignDbContext db
     {
         var key = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(definitionId));
         var rows = await EfDesignSupport.ReadAsync("checking workflow definition version", () => Query()
-            .Where(x => EF.Property<string>(x, "DefinitionIdLookupHash") == key && x.SemVerSortKey == semVerSortKey)
+            .Where(x => x.DefinitionIdLookupHash == key && x.SemVerSortKey == semVerSortKey)
             .ToListAsync(cancellationToken));
         foreach (var candidate in rows)
             EfDesignSupport.EnsureDefinitionIdentity(definitionId, candidate.DefinitionId, "workflow definition version lookup");

@@ -77,10 +77,10 @@ internal static class EfDesignSupport
     public static void SetDefinitionSearchKeys(DbContext context, WorkflowDefinition definition)
     {
         WorkflowDefinitionLimits.Validate(definition);
-        context.Entry(definition).Property<string?>("IdSearchKey").CurrentValue = SearchKey(definition.Id);
-        context.Entry(definition).Property<string>("IdLookupHash").CurrentValue = LookupHash(SearchKey(definition.Id));
-        context.Entry(definition).Property<string?>("NameSearchKey").CurrentValue = SearchKey(definition.Name);
-        context.Entry(definition).Property<string?>("DescriptionSearchKey").CurrentValue = definition.Description is null ? null : SearchKey(definition.Description);
+        definition.IdSearchKey = SearchKey(definition.Id);
+        definition.IdLookupHash = LookupHash(definition.IdSearchKey);
+        definition.NameSearchKey = SearchKey(definition.Name);
+        definition.DescriptionSearchKey = definition.Description is null ? null : SearchKey(definition.Description);
     }
 
     public static string LookupHash(string value) =>
@@ -251,8 +251,21 @@ internal static class EfDesignSupport
 
     public static void SetLayout(DbContext context, object row, IReadOnlyCollection<DesignMetadataRecord> records, IReadOnlyCollection<ActivityPresentationRecord>? presentation = null)
     {
-        context.Entry(row).Property("RecordsJson").CurrentValue = Json(records.ToArray());
-        context.Entry(row).Property("ActivityPresentationJson").CurrentValue = Json((presentation ?? []).ToArray());
+        var recordsJson = Json(records.ToArray());
+        var presentationJson = Json((presentation ?? []).ToArray());
+        switch (row)
+        {
+            case WorkflowDefinitionDraftLayout draftLayout:
+                draftLayout.RecordsJson = recordsJson;
+                draftLayout.ActivityPresentationJson = presentationJson;
+                break;
+            case WorkflowDefinitionVersionLayout versionLayout:
+                versionLayout.RecordsJson = recordsJson;
+                versionLayout.ActivityPresentationJson = presentationJson;
+                break;
+            default:
+                throw new ArgumentException($"Unsupported workflow design layout entity '{row.GetType().Name}'.", nameof(row));
+        }
     }
 }
 

@@ -14,6 +14,9 @@ public sealed class WorkflowDefinitionDraft : TenantEntity, IWorkflowDefinitionD
     /// </summary>
     public string WorkflowDefinitionId { get; set; } = default!;
 
+    /// <summary>Persistence-only folded foreign-key lookup material; not part of the domain interface.</summary>
+    public string WorkflowDefinitionIdLookupHash { get; set; } = null!;
+
     /// <summary>
     /// Navigation property to the parent <see cref="WorkflowDefinition"/>.
     /// </summary>
@@ -36,7 +39,7 @@ public sealed class WorkflowDefinitionDraft : TenantEntity, IWorkflowDefinitionD
     public WorkflowDefinitionState State { get; set; } = default!;
 
     /// <summary>
-    /// Shadow property that contains the serialized state of this draft
+    /// Serialized state of this draft.
     /// </summary>
     public string? StateSource { get; set; }
 

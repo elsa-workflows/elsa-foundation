@@ -64,7 +64,8 @@ public static class DesignAtomicWriteProtocol
             ArgumentNullException.ThrowIfNull(staged);
             if (!lane.IsAccepted(staged))
             {
-                lane.Rollback(scope);
+                // Rejection is authoritative; provider cleanup failures must not replace it.
+                TryRollback(lane, scope);
                 return lane.OnRejected();
             }
             await lane.SaveMarker(scope, staged, cancellationToken);

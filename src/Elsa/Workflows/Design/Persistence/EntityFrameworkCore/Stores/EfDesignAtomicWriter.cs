@@ -121,7 +121,9 @@ public sealed class EfDesignAtomicWriter(
         if (!staged.IsAccepted)
         {
             transactionDisposed = true;
-            await CleanupAsync(transaction, null, operationKind, rollback: true);
+            // Rejection is an authoritative domain outcome. Rollback and disposal are best-effort
+            // cleanup and must remain diagnostic even when a provider reports either failure.
+            await CleanupAsync(transaction, null, operationKind, rollback: true, preserveAuthoritativeOutcome: true);
             db.ChangeTracker.Clear();
             return new DesignAtomicWriteResult<T>(DesignAtomicWriteStatus.Rejected, default);
         }

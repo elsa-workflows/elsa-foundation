@@ -10,6 +10,17 @@ namespace Elsa.Workflows.Design.Persistence.Core.Entities;
 /// </summary>
 public sealed class WorkflowDefinition : TenantEntity, IWorkflowDefinition
 {
+    // Persistence-only folded identity/search material. These are CLR properties so durable
+    // entity state never relies on EF shadow properties, while the domain read interface remains
+    // intentionally unaware of storage keys.
+    public string IdLookupHash { get; set; } = null!;
+
+    public string IdSearchKey { get; set; } = string.Empty;
+
+    public string? NameSearchKey { get; set; }
+
+    public string? DescriptionSearchKey { get; set; }
+
     public string Name { get; set; } = string.Empty;
 
     public string? Description { get; set; }
