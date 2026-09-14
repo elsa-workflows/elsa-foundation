@@ -104,7 +104,8 @@ public sealed class RuntimeActivityExecutionStoreBackend
                 : descriptors;
             foreach (var descriptor in providerOwnedDescriptors.Where(descriptor =>
                          BookmarkStateStoreBackend.Find(services)?.Owns(descriptor) != true &&
-                         RuntimeArtifactStoreBackend.Find(services)?.Owns(descriptor) != true))
+                         RuntimeArtifactStoreBackend.Find(services)?.Owns(descriptor) != true &&
+                         WorkflowExecutionStateStoreBackend.Find(services)?.Owns(descriptor) != true))
                 services.Remove(descriptor);
             for (var index = services.Count - 1; index >= 0; index--)
             {

@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 136
 - Test projects: 119
-- Direct project references: 1239
+- Direct project references: 1240
 
 ## Projects
 
@@ -140,7 +140,7 @@ Records direct project references only.
 | [Elsa.Workflows.Runtime](../../src/Elsa/Workflows/Runtime/Elsa.Workflows.Runtime.csproj) | source | Elsa.Workflows | - | default | Elsa.Activities.Runtime.Core<br>Elsa.Attention.Core<br>Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Http](../../src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | source | Elsa.Workflows | - | default | Elsa.Http.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | source | Elsa.Workflows | - | default | Elsa.Api.AspNetCore<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Primitives<br>Elsa.Workflows.Runtime.Core |
-| [Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj) | source | Elsa.Workflows | - | default | Elsa.Persistence.EntityFramework<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj) | source | Elsa.Workflows | - | default | Elsa.Persistence.EntityFramework<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Reconciliation.Core](../../src/Elsa/Workflows/Runtime/Reconciliation/Core/Elsa.Workflows.Runtime.Reconciliation.Core.csproj) | source | Elsa.Workflows | - | default | Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Reconciliation](../../src/Elsa/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation.csproj) | source | Elsa.Workflows | - | default | Elsa.Activities.Runtime<br>Elsa.Locking.Core<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Reconciliation.Core |
 | [Elsa.Workflows.Runtime.ReferenceGarbageCollection](../../src/Elsa/Workflows/Runtime/ReferenceGarbageCollection/Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj) | source | Elsa.Workflows | - | default | Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |

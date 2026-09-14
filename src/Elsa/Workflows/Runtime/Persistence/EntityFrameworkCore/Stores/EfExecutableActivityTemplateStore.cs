@@ -295,7 +295,7 @@ public sealed class EfExecutableActivityTemplateStore(
             () => context.ExecutableActivityTemplates.AsNoTracking().Where(x =>
                 x.ScopeKeyHash == Hash(identity.Scope) && x.ScopeKey == Encode(identity.Scope) &&
                 x.TemplateHashHash == Hash(identity.TemplateHash) && x.TemplateHash == identity.TemplateHash)
-                .OrderBy(x => x.TemplateId).Take(2).ToArrayAsync(cancellationToken));
+                .OrderBy(x => x.TemplateIdOrderKey).ThenBy(x => x.Id).Take(2).ToArrayAsync(cancellationToken));
     }
 
     private string RequireScope()

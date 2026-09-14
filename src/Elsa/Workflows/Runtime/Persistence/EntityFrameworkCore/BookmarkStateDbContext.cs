@@ -16,6 +16,7 @@ public abstract class BookmarkStateDbContext(DbContextOptions options) : DbConte
     public DbSet<ActivityExecutionStateEntity> ActivityExecutionStates => Set<ActivityExecutionStateEntity>();
     public DbSet<ActivityExecutionInspectionEntity> ActivityExecutionInspections => Set<ActivityExecutionInspectionEntity>();
     public DbSet<ActivityExecutionHierarchyEntity> ActivityExecutionHierarchies => Set<ActivityExecutionHierarchyEntity>();
+    public DbSet<WorkflowExecutionStateEntity> WorkflowExecutionStates => Set<WorkflowExecutionStateEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -28,6 +29,7 @@ public abstract class BookmarkStateDbContext(DbContextOptions options) : DbConte
         modelBuilder.ApplyConfiguration(new ActivityExecutionStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new ActivityExecutionInspectionEntityConfiguration());
         modelBuilder.ApplyConfiguration(new ActivityExecutionHierarchyEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new WorkflowExecutionStateEntityConfiguration());
         ConfigureProvider(modelBuilder);
     }
 

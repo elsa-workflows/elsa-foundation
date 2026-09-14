@@ -48,6 +48,11 @@ public static class GroundworkV2RuntimeRegistration
             var cacheOptions = CopyAndValidate(workflowExecutableCacheOptions);
             var existingActivityExecutionBackend = RuntimeActivityExecutionStoreBackend.Find(services);
             RuntimeActivityExecutionStoreBackend.EnsureCheckpointCompositionCompatible(existingActivityExecutionBackend, RuntimeActivityExecutionStoreBackend.Groundwork);
+            var existingWorkflowExecutionStateBackend = WorkflowExecutionStateStoreBackend.Find(services);
+            existingWorkflowExecutionStateBackend?.EnsureOwnsRegisteredContract(services);
+            if (existingWorkflowExecutionStateBackend is null && services.Any(descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionStateStore) && descriptor.ImplementationType != typeof(Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowExecutionStateStore)))
+                throw new InvalidOperationException("Groundwork runtime refuses to replace an unowned workflow execution state store.");
+            var commitExistingWorkflowExecutionRemoval = existingWorkflowExecutionStateBackend?.PrepareRemoveOwnedArtifacts(services);
             var target = BindRuntimeTarget(services, targetName);
             if (existingActivityExecutionBackend is null)
                 RuntimeActivityExecutionStoreBackend.EnsureNoUnownedRegistrations(services);
@@ -101,6 +106,10 @@ public static class GroundworkV2RuntimeRegistration
                 RemoveGroundworkBookmarkArtifacts(collection, ownedBookmarkStoreRegistration);
                 GroundworkV2RuntimeUnitWithdrawal.RemoveBookmarkState(collection, target);
             }));
+        // Withdraw the previous workflow declaration before the replacement units are declared.
+        // This keeps repeated Groundwork registration idempotent while allowing EF->Groundwork
+        // switching to remove the stale workflow unit through the prior backend's callback.
+        commitExistingWorkflowExecutionRemoval?.Invoke(services);
         foreach (var unit in ElsaRuntimeV2StorageManifest.CreateUnits())
             services.AddGroundworkStorageUnit(unit, target);
         ReplaceScoped<GroundworkV2ExecutableActivityTemplateStore>(services, Standard<GroundworkV2ExecutableActivityTemplateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
@@ -119,6 +128,13 @@ public static class GroundworkV2RuntimeRegistration
             typeof(IActivityExecutionHierarchyStore), typeof(IActivityExecutionHierarchyReader), typeof(IActivityExecutionHierarchyWriter));
         ReplaceScoped<GroundworkV2WorkflowExecutionStateStore>(services, Standard<GroundworkV2WorkflowExecutionStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowExecutionStateStore));
+        services.RemoveAll<WorkflowExecutionStateStoreBackend>();
+        var groundworkExecutionDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionStateStore));
+        var groundworkExecutionConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowExecutionStateStore));
+        WorkflowExecutionStateStoreBackend.Register(services, new WorkflowExecutionStateStoreBackend(
+            WorkflowExecutionStateStoreBackend.Groundwork,
+            [groundworkExecutionDescriptor, groundworkExecutionConcreteDescriptor],
+            collection => GroundworkV2RuntimeUnitWithdrawal.RemoveWorkflowExecutionState(collection, target)));
         ReplaceScoped<GroundworkV2WorkflowAlterationStore>(services, Standard<GroundworkV2WorkflowAlterationStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowAlterationStore));
         ReplaceScoped<GroundworkV2WorkflowTestScopeStore>(services, Standard<GroundworkV2WorkflowTestScopeStore>(target, static (sessions, access, target) => new(sessions, access, target)),
@@ -391,6 +407,9 @@ internal static class GroundworkV2RuntimeUnitWithdrawal
 
     public static void RemoveBookmarkState(IServiceCollection services, string? targetName) =>
         services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind, targetName);
+
+    public static void RemoveWorkflowExecutionState(IServiceCollection services, string? targetName) =>
+        services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind, targetName);
 
     public static void RemoveArtifacts(IServiceCollection services, string? targetName)
     {
