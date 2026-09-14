@@ -3,7 +3,6 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Workflows.Primitives.Models;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Models;
@@ -69,6 +68,7 @@ internal static class WorkflowsPublishingJsonOptions
 [JsonSerializable(typeof(ListValueConversionProfiles))]
 [JsonSerializable(typeof(PreflightActivityDraftPublication))]
 [JsonSerializable(typeof(GetActivityPublicationReceipt))]
+[JsonSerializable(typeof(GetPublicationRecord))]
 [JsonSerializable(typeof(GetWorkflowPublicationPolicy))]
 [JsonSerializable(typeof(SetWorkflowPublicationPolicy))]
 [JsonSerializable(typeof(PreflightWorkflowPublication))]
@@ -109,6 +109,7 @@ internal static class WorkflowsPublishingJsonOptions
 [JsonSerializable(typeof(PublicationSlotView))]
 [JsonSerializable(typeof(PublicationPolicyView))]
 [JsonSerializable(typeof(PublicationPreflightView))]
+[JsonSerializable(typeof(PublicationSlotOwnerView))]
 [JsonSerializable(typeof(PublicationTriggerClaimView))]
 [JsonSerializable(typeof(PublicationTriggerChangeView))]
 [JsonSerializable(typeof(PublicationTriggerConflictView))]

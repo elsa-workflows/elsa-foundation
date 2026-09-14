@@ -43,6 +43,7 @@ public class ActivitiesDesignApiFeature : IWebShellFeature
     private static readonly string ProcessDependencyCursorSigningKey = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
 
     public ActivityAvailabilityOptions ActivityAvailability { get; set; } = new();
+    [ManifestSetting(Secret = true)]
     public string? DependencyCursorSigningKey { get; set; }
     public int DependencyDefaultPageSize { get; set; } = 100;
     public int DependencyMaximumPageSize { get; set; } = 500;

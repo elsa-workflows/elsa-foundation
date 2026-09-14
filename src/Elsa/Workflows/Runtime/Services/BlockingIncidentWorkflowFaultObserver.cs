@@ -5,7 +5,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Services;
 
 /// <summary>
-/// Consumes recorded incidents to drive the workflow-level fault policy (RT-1 gap a, RT-5). After a drain, if the
+/// Consumes recorded incidents to drive the workflow-level fault policy. After a drain, if the
 /// workflow has one or more blocking incidents and has not already reached a terminal status, this observer commits
 /// a <see cref="RuntimeCheckpointNames.WorkflowFaulted"/> checkpoint transitioning the workflow execution status to
 /// <see cref="WorkflowExecutionStatus.Faulted"/> — making a faulted workflow observable instead of stuck in

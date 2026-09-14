@@ -1,5 +1,5 @@
 using System.Text.Json;
-using Elsa.Activities.Design.Reconciliation.Core.Models;
+using Elsa.Activities.Design.Core.Reconciliation.Models;
 using Elsa.Activities.Design.Reconciliation.Json.Contracts;
 using Elsa.Activities.Design.Reconciliation.Json.Exceptions;
 using Elsa.Serialization.Core;

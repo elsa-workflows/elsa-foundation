@@ -17,12 +17,10 @@ namespace Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests;
 /// </summary>
 public sealed class SqliteDesignProviderFixture
 {
-    private readonly GroundworkBaselineTelemetry _telemetry = new();
-
     [Fact]
     public async Task Close_and_reopen_preserves_admission_and_durable_design_state()
     {
-        await using var fixture = await SqliteDesignPersistenceContractFixture.CreateAsync(_telemetry);
+        await using var fixture = await SqliteDesignPersistenceContractFixture.CreateAsync();
         await fixture.ValidateReadinessAsync();
         using (var scope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA))
         {
@@ -47,7 +45,7 @@ public sealed class SqliteDesignProviderFixture
     [Fact]
     public async Task Physical_index_drift_is_degraded_on_revalidation_and_restart()
     {
-        await using var fixture = await SqliteDesignPersistenceContractFixture.CreateAsync(_telemetry);
+        await using var fixture = await SqliteDesignPersistenceContractFixture.CreateAsync();
         await fixture.ValidateReadinessAsync();
         var droppedIndex = await DropAppliedDesignIndexAsync(fixture.SqliteConnectionString);
 

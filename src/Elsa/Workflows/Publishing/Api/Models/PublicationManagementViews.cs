@@ -200,6 +200,19 @@ public static class PublicationIntentContract
     };
 }
 
+/// <summary>
+/// The activation source that owns a publication's target slot when it is not publishing, for example an imported or
+/// mounted artifact. Publish refuses such a slot with <c>slot_owner_conflict</c>; ownership transfer is an operator action.
+/// </summary>
+public sealed record PublicationSlotOwnerView(string SourceKind, string? SourceId)
+{
+    public static PublicationSlotOwnerView? From(WorkflowActivationSource? source) =>
+        source is null ? null : new(source.Kind, source.SourceId);
+}
+
+/// <param name="CanActivate">False when <paramref name="Conflicts"/> is non-empty or <paramref name="TargetSlotOwner"/> is set.</param>
+/// <param name="Conflicts">Trigger-claim conflicts only; a foreign slot owner is reported through <paramref name="TargetSlotOwner"/>.</param>
+/// <param name="TargetSlotOwner">The non-publishing owner of the resolved target slot, or <c>null</c> when publishing may take it.</param>
 public sealed record PublicationPreflightView(
     string DefinitionId,
     string VersionId,
@@ -209,7 +222,8 @@ public sealed record PublicationPreflightView(
     long? PolicyRevision,
     bool CanActivate,
     IReadOnlyCollection<PublicationTriggerChangeView> Triggers,
-    IReadOnlyCollection<PublicationTriggerConflictView> Conflicts);
+    IReadOnlyCollection<PublicationTriggerConflictView> Conflicts,
+    PublicationSlotOwnerView? TargetSlotOwner);
 
 public sealed record PublicationTriggerClaimView(string Key, PublicationTriggerCardinalityView Cardinality)
 {
@@ -217,6 +231,9 @@ public sealed record PublicationTriggerClaimView(string Key, PublicationTriggerC
         new(PublicationContract.TriggerKey(claim.StimulusType, claim.StimulusHash), PublicationContract.ToView(claim.Cardinality));
 }
 
+/// <param name="CanActivate">False when <paramref name="Conflicts"/> is non-empty or <paramref name="TargetSlotOwner"/> is set.</param>
+/// <param name="Conflicts">Trigger-claim conflicts only; a foreign slot owner is reported through <paramref name="TargetSlotOwner"/>.</param>
+/// <param name="TargetSlotOwner">The non-publishing owner of the resolved target slot, or <c>null</c> when publishing may take it.</param>
 public sealed record PublicationSnapshotPreflightView(
     string PreflightToken,
     string CandidateHash,
@@ -229,4 +246,5 @@ public sealed record PublicationSnapshotPreflightView(
     bool CanActivate,
     IReadOnlyCollection<PublicationTriggerClaimView> Claims,
     IReadOnlyCollection<PublicationTriggerChangeView> Triggers,
-    IReadOnlyCollection<PublicationTriggerConflictView> Conflicts);
+    IReadOnlyCollection<PublicationTriggerConflictView> Conflicts,
+    PublicationSlotOwnerView? TargetSlotOwner);

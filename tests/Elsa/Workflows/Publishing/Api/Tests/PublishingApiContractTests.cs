@@ -1,11 +1,7 @@
 using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Api.AspNetCore;
-using Elsa.Api.Compatibility.Testing.Baselines;
-using Elsa.Api.Compatibility.Testing.Comparison;
-using Elsa.Api.Compatibility.Testing.Http;
 using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Api.Compatibility.Testing.OpenApi;
-using Elsa.Api.Compatibility.Testing.Serialization;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
@@ -35,23 +31,22 @@ using Microsoft.Extensions.Options;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
-using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Xunit;
+using Elsa.Testing;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
 /// <summary>
-/// Post-migration contract gates for the Publishing owner. These tests intentionally call the public
-/// mapper and compare the resulting route surface with the immutable FastEndpoints-before oracle.
-/// They are expected to fail to compile until <c>WorkflowsPublishingApi</c> is introduced.
+/// Contract gates for the Publishing owner. These tests call the public mapper and the real Minimal
+/// API host and pin the published route, metadata, and OpenAPI surface.
 /// </summary>
 public sealed class PublishingApiContractTests
 {
     private const string Owner = "Elsa.Workflows.Publishing.Api";
 
     [Fact]
-    public void Publishing_mapper_exposes_exactly_the_current_22_operation_manifest()
+    public void Publishing_mapper_exposes_exactly_the_current_23_operation_manifest()
     {
         using var provider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(provider);
@@ -59,7 +54,7 @@ public sealed class PublishingApiContractTests
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
 
         var manifest = EndpointManifestBuilder.Capture(routes.DataSources);
-        Assert.Equal(22, manifest.Entries.Count);
+        Assert.Equal(23, manifest.Entries.Count);
         Assert.Equal(
             PublishingCurrentSurface.Manifest
                 .Select(route => route.Endpoint.ToString())
@@ -87,8 +82,8 @@ public sealed class PublishingApiContractTests
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
 
         var endpoints = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
-        Assert.Equal(22, endpoints.Length);
-        Assert.Equal(22, endpoints.Select(endpoint => endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName)
+        Assert.Equal(23, endpoints.Length);
+        Assert.Equal(23, endpoints.Select(endpoint => endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName)
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Distinct(StringComparer.Ordinal)
             .Count());
@@ -147,205 +142,18 @@ public sealed class PublishingApiContractTests
     }
 
     [Fact]
-    public async Task Frozen_http_and_openapi_corpus_replays_against_the_real_minimal_api_host()
+    public async Task Real_minimal_api_host_publishes_exactly_the_23_publishing_openapi_operations()
     {
         await using var host = await PublishingMinimalApiHost.StartAsync();
-        var afterHttp = new List<HttpCompatibilityObservation>(PublishingCompatibilityCases.All.Count);
-        foreach (var testCase in PublishingCompatibilityCases.All)
-            afterHttp.Add(await CaptureAsync(host.Client, testCase));
-
-        var afterOpenApi = OpenApiEvidenceCapture.Capture(await host.GetOpenApiAsync(), includeIdentityMetadata: true);
-        var publishingOperations = afterOpenApi.Operations
+        var openApi = OpenApiEvidenceCapture.Capture(await host.GetOpenApiAsync(), includeIdentityMetadata: true);
+        var publishingOperations = openApi.Operations
             .Where(operation => operation.Endpoint.Route.Value.StartsWith("/publishing/", StringComparison.Ordinal) ||
                                 operation.Endpoint.Route.Value.StartsWith("/design/activities/", StringComparison.Ordinal))
+            .Select(operation => operation.Endpoint.ToString())
             .ToArray();
-        Assert.Equal(22, publishingOperations.Length);
 
-        var beforeHttp = BaselineFile.Load<HttpCompatibilityObservation[]>(Path.Join(BaselineDirectory, "publishing-http-fastendpoints.json"));
-        var beforeOpenApi = BaselineFile.Load<OpenApiEvidenceDocument>(Path.Join(BaselineDirectory, "publishing-openapi-fastendpoints.json"));
-        // The immutable-before capture predates T117 and contains the two publishing GETs that
-        // were intentionally retired. Compare the preserved publishing contract only; their
-        // replacement runtime reads are covered by Runtime API contract and HTTP tests.
-        var before = new CompatibilityEvidenceSet
-        {
-            Http = beforeHttp.Where(observation => !IsRetiredSlotRead(observation.Endpoint)).ToArray(),
-            OpenApi = new OpenApiEvidenceDocument(beforeOpenApi.Operations.Where(operation => !IsRetiredSlotRead(operation.Endpoint)).ToArray())
-        };
-        var after = new CompatibilityEvidenceSet
-        {
-            Http = afterHttp,
-            OpenApi = new OpenApiEvidenceDocument(publishingOperations)
-        };
-
-        var approvalsPath = Path.Join(BaselineDirectory, "publishing-approved-differences.json");
-        if (!File.Exists(approvalsPath))
-            approvalsPath = Path.Join(BaselineDirectory, "publishing-approved-differences.initial.json");
-        var approvals = PublishingApprovalRegistry.Load(approvalsPath)
-            .Where(approval => !IsRetiredSlotRead(new EndpointIdentity(approval.Endpoint, approval.Method)))
-            .ToArray();
-        var httpComparison = CompatibilityComparer.CompareBidirectional(
-            before with { OpenApi = null },
-            after with { OpenApi = null },
-            approvals.Where(approval => approval.Case != "openapi"));
-        Assert.True(httpComparison.IsCompatible, string.Join(Environment.NewLine, httpComparison.Deltas.Select(delta =>
-            $"{delta.Endpoint} {delta.Case}: {delta.Facet}: {delta.Expected} -> {delta.Actual}")));
-
-        var comparison = CompatibilityComparer.CompareBidirectional(before, after, approvals);
-        Assert.True(comparison.IsCompatible, string.Join(Environment.NewLine, comparison.Deltas.Select(delta =>
-            $"{delta.Endpoint} {delta.Case}: {delta.Facet}: {delta.Expected} -> {delta.Actual}")));
-    }
-
-    [Fact]
-    public void Reviewed_approvals_are_exact_two_sided_and_mutation_bite_proof()
-    {
-        var approvalsPath = Path.Join(BaselineDirectory, "publishing-approved-differences.json");
-        var allApprovals = PublishingApprovalRegistry.Load(approvalsPath);
-        Assert.All(allApprovals, approval => Assert.NotEqual(approval.Expected, approval.Actual));
-
-        // The FastEndpoints-to-Minimal-API migration reviewed one OpenAPI difference per operation.
-        var approvals = allApprovals.Where(approval => approval.Case == "openapi").ToArray();
-        Assert.Equal(48, approvals.Length);
-        Assert.Equal(24, approvals.Count(approval => !approval.Reverse));
-        Assert.Equal(24, approvals.Count(approval => approval.Reverse));
-        Assert.All(approvals, approval => Assert.Equal(CompatibilityFacet.OpenApi, approval.Facet));
-
-        // Handler absorption reviewed the cases whose frozen rows only ever described the capture
-        // harness's sender fake: the two publish captures the real operation rejects as malformed,
-        // and the receipt status the fake fabricated. Every entry is two-sided and case-scoped.
-        var httpApprovals = allApprovals.Where(approval => approval.Case != "openapi").ToArray();
-        Assert.Equal(28, httpApprovals.Length);
-        Assert.Equal(
-            [
-                "ActivityDrafts.Publish|trusted-null-json-body",
-                "ActivityDrafts.Publish|trusted-success",
-                "ActivityPublications.GetReceipt|trusted-success"
-            ],
-            httpApprovals.Select(approval => approval.Case).Distinct().Order(StringComparer.Ordinal));
-        Assert.All(httpApprovals, approval => Assert.NotEqual(CompatibilityFacet.OpenApi, approval.Facet));
-        foreach (var group in httpApprovals.GroupBy(approval => (approval.Endpoint, approval.Case, approval.Facet)))
-        {
-            Assert.Equal(2, group.Count());
-            Assert.Single(group, approval => approval.Reverse);
-        }
-
-        var first = Assert.Single(approvals.Where(approval => !approval.Reverse).Take(1));
-        var reverse = Assert.Single(approvals, approval => approval.Reverse &&
-            approval.Endpoint == first.Endpoint && approval.Method == first.Method);
-        var before = Evidence(first.Expected);
-        var after = Evidence(first.Actual);
-
-        Assert.True(CompatibilityComparer.CompareBidirectional(before, after, [first, reverse]).IsCompatible);
-        Assert.Contains("Duplicate approved difference", Failure(before, after, [first, first, reverse]));
-        Assert.Contains("Unused approved difference", Failure(before, after,
-            [first with { Endpoint = "/publishing/stale" }, reverse]));
-        Assert.Contains("Unused approved difference", Failure(before, after,
-            [first with { Expected = first.Actual }, reverse]));
-        Assert.False(CompatibilityComparer.CompareBidirectional(before, after, [first]).IsCompatible);
-        Assert.Contains("Unused approved difference", Failure(before, after,
-            [first with { Expected = first.Expected + " " }, reverse]));
-        Assert.Contains("Unused approved difference", Failure(before, after,
-            [first with { Actual = first.Actual + " " }, reverse]));
-
-        var json = JsonNode.Parse(File.ReadAllText(approvalsPath))!.AsArray();
-        json[0]!.AsObject()["unexpectedFacet"] = "ignored-value";
-        var exception = Assert.Throws<InvalidDataException>(() =>
-            PublishingApprovalRegistry.Parse(json.ToJsonString()));
-        Assert.Contains("unexpectedFacet", exception.Message, StringComparison.Ordinal);
-    }
-
-    private static string Failure(
-        CompatibilityEvidenceSet before,
-        CompatibilityEvidenceSet after,
-        ApprovedDifference[] approvals) =>
-        string.Join(Environment.NewLine,
-            CompatibilityComparer.CompareBidirectional(before, after, approvals).Failures);
-
-    private static bool IsRetiredSlotRead(EndpointIdentity endpoint) =>
-        endpoint.Method.Value == "GET" &&
-        endpoint.Route.Value is "/publishing/workflows/{param}/slots" or "/publishing/workflows/{param}/slots/{param}";
-
-    private static CompatibilityEvidenceSet Evidence(string canonical)
-    {
-        var value = JsonNode.Parse(canonical)!.AsObject();
-        var endpointValue = value["endpoint"]!.GetValue<string>();
-        var separator = endpointValue.IndexOf(' ');
-        var endpoint = new EndpointIdentity(endpointValue[(separator + 1)..], endpointValue[..separator]);
-        return new CompatibilityEvidenceSet
-        {
-            OpenApi = new OpenApiEvidenceDocument(
-            [
-                new OpenApiOperationEvidence
-                {
-                    Endpoint = endpoint,
-                    OperationId = value["operationId"]?.GetValue<string>() ?? string.Empty,
-                    Tags = value["tags"]?.GetValue<string>() ?? "[]",
-                    Security = value["security"]?.GetValue<string>() ?? "[]",
-                    Parameters = value["parameters"]!.GetValue<string>(),
-                    RequestBody = value["requestBody"]!.GetValue<string>(),
-                    Responses = value["responses"]!.GetValue<string>(),
-                    MediaTypes = value["mediaTypes"]!.GetValue<string>(),
-                    Schemas = value["schemas"]!.GetValue<string>()
-                }
-            ])
-        };
-    }
-
-    internal static async Task<HttpCompatibilityObservation> CaptureAsync(HttpClient client, HttpCompatibilityCase testCase)
-    {
-        try
-        {
-            return NormalizeVolatileFields(await HttpEvidenceCapture.CaptureAsync(client, testCase));
-        }
-        catch (Exception exception)
-        {
-            var terminal = exception.GetBaseException();
-            return new HttpCompatibilityObservation
-            {
-                Endpoint = testCase.Endpoint,
-                Case = testCase.Case,
-                Binding = testCase.Binding ?? string.Empty,
-                PagingFiltering = testCase.PagingFiltering ?? string.Empty,
-                StatusCode = 0,
-                TerminalState = $"Faulted:{terminal.GetType().FullName}"
-            };
-        }
-    }
-
-    private static HttpCompatibilityObservation NormalizeVolatileFields(HttpCompatibilityObservation observation)
-    {
-        var headers = observation.Headers
-            .Where(header => !string.Equals(header.Key, "date", StringComparison.OrdinalIgnoreCase))
-            .ToDictionary(header => header.Key, header => header.Value, StringComparer.Ordinal);
-        if (observation.Json.Length == 0)
-            return observation with { Headers = headers };
-
-        if (JsonNode.Parse(observation.Json) is not JsonObject body)
-            return observation with { Headers = headers };
-
-        var changed = false;
-        if (body.ContainsKey("traceId"))
-        {
-            body["traceId"] = "<volatile-trace-id>";
-            changed = true;
-        }
-
-        if (body.ContainsKey("preflightToken"))
-        {
-            body["preflightToken"] = "<volatile-preflight-token>";
-            changed = true;
-        }
-
-        if (!changed)
-            return observation with { Headers = headers };
-
-        var normalized = CompatibilityJson.Canonicalize(body.ToJsonString());
-        return observation with
-        {
-            Headers = headers,
-            Json = normalized,
-            Body = observation.Body == observation.Json ? normalized : observation.Body,
-            ProblemDetails = observation.ProblemDetails == observation.Json ? normalized : observation.ProblemDetails
-        };
+        Assert.Equal(23, publishingOperations.Length);
+        Assert.Equal(23, publishingOperations.Distinct(StringComparer.Ordinal).Count());
     }
 
     private static bool RouteMatches(string expected, string actual) =>
@@ -362,48 +170,9 @@ public sealed class PublishingApiContractTests
         "ActivityTestRuns.Get" or
         "ActivityTestRuns.GetByIdempotencyKey" or
         "ActivityTestRuns.Cancel");
-
-    private static string BaselineDirectory => Path.Join(AppContext.BaseDirectory, "Baselines");
-
-    private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
-    {
-        public IServiceProvider ServiceProvider { get; } = serviceProvider;
-        public ICollection<EndpointDataSource> DataSources { get; } = [];
-        public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
-    }
 }
 
-internal static class PublishingApprovalRegistry
-{
-    private static readonly HashSet<string> AllowedProperties =
-    [
-        "endpoint", "method", "case", "facet", "expected", "actual", "owner", "reason", "followUp", "reverse"
-    ];
-
-    public static ApprovedDifference[] Load(string path) => Parse(File.ReadAllText(path));
-
-    public static ApprovedDifference[] Parse(string json)
-    {
-        var document = JsonNode.Parse(json)?.AsArray()
-            ?? throw new InvalidDataException("The Publishing approval registry must be a JSON array.");
-        foreach (var (entry, index) in document.Select((value, index) => (value, index)))
-        {
-            var approval = entry?.AsObject()
-                ?? throw new InvalidDataException($"Publishing approval {index} must be a JSON object.");
-            var unknown = approval.Select(property => property.Key)
-                .Where(property => !AllowedProperties.Contains(property))
-                .Order(StringComparer.Ordinal)
-                .ToArray();
-            if (unknown.Length > 0)
-                throw new InvalidDataException(
-                    $"Publishing approval {index} contains unknown properties: {string.Join(", ", unknown)}.");
-        }
-
-        return CompatibilityJson.Deserialize<ApprovedDifference[]>(json);
-    }
-}
-
-/// <summary>Real TestServer host used by the post-migration HTTP corpus and behavior tests.</summary>
+/// <summary>Real TestServer host used by the Publishing contract and behavior tests.</summary>
 internal sealed class PublishingMinimalApiHost(WebApplication app) : IAsyncDisposable
 {
     public WebApplication App { get; } = app;

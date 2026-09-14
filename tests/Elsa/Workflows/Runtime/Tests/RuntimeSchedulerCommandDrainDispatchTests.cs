@@ -9,6 +9,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
@@ -27,7 +28,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             drainer,
             new ImmediateWorkflowSchedulerDrainPolicy(),
             [observer],
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
         var envelope = NewEnvelope(1);
 
@@ -52,7 +53,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             drainer,
             new ImmediateWorkflowSchedulerDrainPolicy(),
             [],
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
         await using var ambientServices = new ServiceCollection().BuildServiceProvider();
 
         await processor.ProcessAsync(NewEnvelope(1), new WorkflowExecutionCommandDispatchOptions(ambientServices));
@@ -72,7 +73,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             drainer,
             new ImmediateWorkflowSchedulerDrainPolicy(),
             [observer],
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             outboxProcessor);
 
         await processor.ProcessAsync(NewEnvelope(1));
@@ -102,7 +103,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             drainer,
             DeferredSchedulerDrainPolicy.Instance,
             [],
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
         await processor.ProcessAsync(NewEnvelope(1));
 
@@ -120,7 +121,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             drainer,
             MismatchedSchedulerDrainPolicy.Instance,
             [],
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => processor.ProcessAsync(NewEnvelope(1)).AsTask());
 
@@ -140,7 +141,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             drainer,
             new ImmediateWorkflowSchedulerDrainPolicy(),
             [observer],
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
         await processor.ProcessAsync(NewEnvelope(1));
 
@@ -159,7 +160,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             new FaultingResultSchedulerDrainer(_now),
             new ImmediateWorkflowSchedulerDrainPolicy(),
             [],
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
         // RT-14: the drain result must not be discarded — the processor surfaces the fault verdict to its caller.
         var result = await processor.ProcessAsync(NewEnvelope(1));
@@ -179,7 +180,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             new RecordingSchedulerDrainer(queue, _now),
             DeferredSchedulerDrainPolicy.Instance,
             [],
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
         var result = await processor.ProcessAsync(NewEnvelope(1));
 
@@ -199,7 +200,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             drainer,
             new ImmediateWorkflowSchedulerDrainPolicy(),
             [observer],
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             outboxProcessor);
 
         await processor.ProcessAsync(NewEnvelope(1));
@@ -224,7 +225,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             drainer,
             new ImmediateWorkflowSchedulerDrainPolicy(),
             [observer],
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             outboxProcessor);
 
         await processor.ProcessAsync(NewEnvelope(1));
@@ -255,7 +256,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             drainer,
             new ImmediateWorkflowSchedulerDrainPolicy(),
             [observer],
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             outboxProcessor);
 
         await processor.ProcessAsync(NewEnvelope(1));
@@ -276,7 +277,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             new DequeuingSchedulerDrainer(queue, _now),
             new ImmediateWorkflowSchedulerDrainPolicy(),
             [],
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             CancelingPostCommitOutboxProcessor.Instance);
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => processor.ProcessAsync(NewEnvelope(1)).AsTask());
@@ -292,7 +293,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             new DequeuingSchedulerDrainer(queue, _now),
             new ImmediateWorkflowSchedulerDrainPolicy(),
             [],
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             AlwaysDeliveringPostCommitOutboxProcessor.Instance,
             options);
 
@@ -312,7 +313,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             new RecordingSchedulerDrainer(queue, _now),
             new ImmediateWorkflowSchedulerDrainPolicy(),
             [new ThrowingSchedulerDrainObserver(), recordingObserver],
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
         var exception = await Assert.ThrowsAsync<AggregateException>(() => processor.ProcessAsync(NewEnvelope(1)).AsTask());
 
@@ -330,7 +331,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             new RecordingSchedulerDrainer(queue, _now),
             new ImmediateWorkflowSchedulerDrainPolicy(),
             [new ThrowingSchedulerDrainObserver(), new CancelingSchedulerDrainObserver(cancellation)],
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
 
         var exception = await Assert.ThrowsAsync<AggregateException>(() => processor.ProcessAsync(NewEnvelope(1), cancellation.Token).AsTask());
 
@@ -873,11 +874,6 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             WorkflowExecutionCommandEnvelope envelope,
             RuntimeSchedulerWorkItem workItem) =>
             new("wfexec-other");
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private sealed class AlwaysFaultingSchedulerWorkHandler : IWorkflowSchedulerWorkHandler

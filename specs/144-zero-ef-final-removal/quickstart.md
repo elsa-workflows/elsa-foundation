@@ -1,6 +1,9 @@
 # Quickstart: Zero-EF Final Removal
 
-> **Current execution scope — 2026-09-07:** Follow [the current governing scope](spec.md#current-governing-scope--2026-09-07). This checklist and its receipts are retained history. Do not launch its broad provider, concurrency or performance commands as part of implementation delivery: those belong to the separate #646 harness. Vendor-host OpenIddict EF remains allowed; missing final validation remains unverified.
+> **Historical quickstart — superseded 2026-09-12.** The
+> [historical governing scope](spec.md#historical-governing-scope--superseded-2026-09-12), checklist,
+> commands, and receipts are retained only for provenance. Do not run them. ADR 0073 and Program
+> #1665 own the opposite all-EF replacement direction and retire all performance work.
 
 ## Shared-kernel implementation checkpoint — 2026-09-07
 
@@ -89,6 +92,8 @@ Apply one reviewed slice at a time:
 3. frozen Identity EF oracle after the IAM #646 verdict;
 4. shared `Elsa.Persistence.EFCore{,.Sqlite}` and EF-only tests/tools;
 5. host/solution/package references and central versions.
+
+> **Retired 2026-09-11.** The restore driver, the EF surface ratchet and its baseline described below were removed once first-party EF removal was complete. `tests/Elsa/Architecture/EfCoreDependencyGuardTests.cs` now walks the declared project graph with no restore and allows EF only in the `Elsa.Workbench` host. The commands below are kept as history.
 
 After each slice, regenerate the temporary baseline using the repository-owned discovery-driven restore driver. It must independently discover every repository project, force-evaluate that exact set, and write a receipt binding the repository/worktree state, project-set fingerprint, dependency-affecting input hashes, and `project.assets.json` hashes:
 

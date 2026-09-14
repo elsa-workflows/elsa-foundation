@@ -27,7 +27,7 @@ public sealed class OpenIddictIdentityOptions
     public string Issuer { get; set; } = "https://elsa-identity.local/";
 
     /// <summary>
-    /// Key material for signing access tokens (any string; a 256-bit key is derived from it). Falls back to
+    /// Base64-encoded PKCS#8 RSA private key that signs access tokens (RS256). Falls back to
     /// <c>FoundationIdentityOptions.SigningKey</c>. Required outside <see cref="IsDevelopmentOrDemo"/>.
     /// </summary>
     public string? SigningKey { get; set; }

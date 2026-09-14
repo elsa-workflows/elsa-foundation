@@ -64,6 +64,13 @@ Clients should call preflight immediately before publish, display the resolved a
 send `ExpectedPublicationId` when protecting against a stale Studio view. A `409` means the client must refresh
 authority state and preflight again; it must not assume that a candidate became active.
 
+Both preflight responses carry `targetSlotOwner` (`{ sourceKind, sourceId }`) when the resolved slot is live under an
+activation source other than publishing, such as an imported or mounted artifact, and `null` when the slot is empty,
+unpublished, or already publishing-owned. `canActivate` is false when there are trigger `conflicts` or a
+`targetSlotOwner`; `conflicts` itself stays trigger-only. Publish refuses such a slot with the same `409` a refused
+activation returned (the `slot_owner_conflict` failure, its detail naming the owner), but before it writes an executable,
+source reference, or publication record: ownership transfer is an operator action (ADR 0043).
+
 ## HTTP endpoint surface
 
 All routes are relative to the host's Elsa API base path.
@@ -74,13 +81,15 @@ All routes are relative to the host's Elsa API base path.
 | `GET` | `publishing/activities/{activityId}/construct` | `workflow-publishing.read` | Construct an activity from a catalog row. |
 | `GET` | `publishing/incident-strategies` | `workflow-publishing.read` | List safe incident-strategy descriptors and the effective default publication strategy. |
 | `GET` | `publishing/value-conversion/profiles` | `workflow-publishing.read` | List safe value-conversion profiles. |
-| `POST` | `publishing/workflows/{versionId}/preflight` | `workflow-publishing.read` | Resolve policy and return trigger changes/conflicts without changing authority. |
+| `POST` | `publishing/workflows/{versionId}/preflight` | `workflow-publishing.read` | Resolve policy and return trigger changes/conflicts and any foreign target-slot owner without changing authority. |
 | `POST` | `publishing/workflows/preflight` | `workflow-publishing.read` | Preflight a supplied workflow snapshot and issue a review token. |
 | `DELETE` | `publishing/workflows/{definitionId}/slots/{slotName}` | `workflow-publishing.manage` | Unpublish the slot authority and its serving projections. |
 | `POST` | `publishing/workflows/{definitionId}/slots/{slotName}/restore` | `workflow-publishing.manage` | Restore the latest eligible retired publication with a new authority transition. |
+| `GET` | `publishing/publications/{publicationId}` | `workflow-publishing.read` | Read one publication journal record, including the design version it published. |
 | `GET` | `publishing/workflows/{definitionId}/policy` | `workflow-publishing.read` | Read the effective workflow/host policy. |
 | `PUT` | `publishing/workflows/{definitionId}/policy` | `workflow-publishing.manage` | CAS-update workflow publication policy. |
 | `POST` | `publishing/workflows/{versionId}/publish` | `workflow-publishing.manage` | Compile, prepare, CAS-activate, reconcile, and return the publication. |
+| `GET` | `publishing/workflows/{versionId}/executable-export` | `workflow-publishing.read` | Download the published executable closure as an attachment. |
 | `POST` | `publishing/workflows/{versionId}/test-runs` | `workflow-publishing.manage` | Compile and run a persisted Design version without granting publication authority. |
 | `POST` | `publishing/workflows/drafts/test-runs` | `workflow-publishing.manage` | Compile and run a supplied draft snapshot without granting publication authority. |
 | `POST` | `publishing/preflight` | `workflow-publishing.read` | Validate Runtime Evidence requirements for supplied executable artifacts. |
@@ -96,7 +105,14 @@ The version route excludes the reserved literal `drafts`, so the two test-run ro
 
 Activation-slot reads are runtime-owned: `GET /runtime/workflows/activation-slots/{definitionId}` and
 `GET /runtime/workflows/activation-slots/{definitionId}/{slotName}` are served by `Elsa.Workflows.Runtime.Api`.
-Publishing keeps the two slot lifecycle commands above, whose responses may include the publication journal view.
+Publishing keeps the two slot lifecycle commands above, advertised as the `publication-slot-unpublish` and
+`publication-slot-restore` relations so a capability-driven client can still derive their URLs now that the
+`publication-slots` relation those reads used to share is gone. Their responses may include the publication
+journal view. The runtime view is unjoined by design, so a client that needs the design version behind an
+occupied slot resolves the runtime slot first and then, for an entry whose `sourceKind` is publishing, follows
+its `activeActivationId` through `GET publishing/publications/{publicationId}` (the `publication-record`
+relation). An id that names no record answers `404` problem details, so a failed lookup is never read as "no
+version".
 
 Activity publication clients must preflight immediately before publish and submit the returned
 opaque review token, one exact offered version, and a caller-stable idempotency key. Replaying the
@@ -113,6 +129,39 @@ a new preflight; `OutcomeUnknown` requires receipt reconciliation before choosin
 - Unpublish and restore use the same revisioned slot lifecycle and projection compensation rules as publish.
 - HTTP route tables are derived from active trigger bindings. Runtime HTTP contributes a neutral trigger-index
   observer; Publishing does not reference the HTTP or Scheduling modules.
+
+### Problem codes
+
+A `400` or `409` raised on the preflight, publish, slot restore, slot unpublish, or policy routes carries a
+machine-readable failure code, additive to the module's established problem shape (RFC 7807 fields plus the
+FastEndpoints-era `traceId` and `errors` extensions): a top-level `errorCode` string, positioned after
+`instance`. A problem with no failure code (a `404`, or a plain `400` argument error) omits the member
+entirely rather than sending it as `null`; existing clients that don't look for `errorCode` see no difference
+in the rest of the payload. Every code below is defined once, in `PublicationFailureCodes`, and used verbatim
+at every raise and map site (issue #1699).
+
+| `errorCode`                     | Status | Meaning / what to do                                                                                  |
+|----------------------------------|--------|--------------------------------------------------------------------------------------------------------|
+| `slot_owner_conflict`             | 409    | The target slot is owned by another activation source. Ownership transfer is an explicit operator action; publishing cannot take the slot. |
+| `slot_revision_conflict`          | 409    | The slot's optimistic revision changed between preflight and activation (or between read and unpublish). Re-run preflight against the current slot and retry. |
+| `activation_compensation_failed`  | 409    | Activation failed and its best-effort compensation did not converge. The slot may be in a partially-switched state; check operational diagnostics before retrying. |
+| `projection_preparation_failed`   | 409    | Preparing the serving projection (trigger bindings, recurring schedules) failed before activation. Retry once the underlying failure is resolved. |
+| `projection_activation_failed`    | 409    | Activating the serving projection, or notifying its trigger observers, failed. Retry once the underlying failure is resolved. |
+| `publication_activation_failed`   | 409    | Activation failed for a reason not covered by the codes above. See the response `detail` and server logs. |
+| `trigger_conflict`                | 409    | Preflight found one or more authoritative trigger conflicts with another active publication. Resolve the conflicting triggers, or target a different slot, before retrying. |
+| `publication_snapshot_stale`      | 409    | The supplied preflight/review token is stale, expired, or no longer matches the requested action, slot, or expected publication. Re-run preflight to obtain a current token. |
+| `policy_revision_conflict`        | 409    | The publication policy write lost its optimistic revision race. Re-read the policy and retry with its current revision. |
+| `expected_publication_mismatch`   | 409    | The slot's active publication no longer matches the request's `expectedPublicationId`. Re-read the slot's current publication and retry, or drop the expectation. |
+| `workflow_policy_mismatch`        | 400    | The supplied workflow publication policy is scoped to a different workflow definition. |
+| `invalid_host_policy`             | 400    | A host publication policy cannot be scoped to a workflow definition. |
+| `explicit_slot_required`          | 400    | The workflow's policy requires an explicit publication slot; the request did not supply one. |
+| `invalid_default_slot`            | 400    | The resolved policy's default slot name is missing or blank; configure a default slot name. |
+| `unsupported_action`              | 400    | The requested publication action is not supported. |
+| `named_slot_required`             | 400    | Side-by-side publication requires a meaningful named slot other than the default slot. |
+
+A publication record's `failure.code` (`GET publishing/publications/{publicationId}`) uses the same vocabulary;
+`publication_activation_refused` and `projection_delivery_failed` are recorded there only and never appear as a
+problem response's `errorCode`.
 
 See [the Publishing extension-point catalog](EXTENSION_POINTS.md) for supported replacements and provider work,
 and [the feature quickstart](../../../../../specs/092-domain-owned-apis/quickstart.md) for the `/foo` to `/bar`

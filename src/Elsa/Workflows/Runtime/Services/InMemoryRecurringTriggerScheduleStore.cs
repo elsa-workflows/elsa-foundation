@@ -168,7 +168,7 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         lock (_syncRoot)
         {
             // Compare-and-swap: claim the occurrence only if no other worker (or an earlier sweep) already moved
-            // the cursor. This is the single-node realization of the W20 cluster-safe claim contract.
+            // the cursor. This is the single-node realization of the cluster-safe claim contract.
             if (!_schedules.TryGetValue(scheduleId, out var schedule) || !schedule.IsActive || schedule.NextOccurrence != expectedNextOccurrence)
                 return new ValueTask<bool>(false);
 

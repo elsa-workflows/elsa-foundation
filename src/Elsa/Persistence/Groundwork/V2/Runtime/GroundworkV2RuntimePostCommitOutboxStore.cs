@@ -17,17 +17,12 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// the row revision plus the owner and fencing token in the row content. Atomic completion and dispatch redrive use
 /// one exact public v2 unit of work; no v1 document bridge, migration, fallback, or dual-write path is present.
 /// </remarks>
-public sealed class GroundworkV2RuntimePostCommitOutboxStore :
-    IRuntimePostCommitOutboxStore,
+public sealed class GroundworkV2RuntimePostCommitOutboxStore : GroundworkV2RuntimeStoreBase, IRuntimePostCommitOutboxStore,
     IPostCommitOutboxLookupStore,
     IRuntimePostCommitOutboxClaimStore,
     IRuntimePostCommitOutboxClaimCompletionStore,
     IWorkflowDispatchRedriveStore
 {
-    private readonly IGroundworkStorageSessionSource sessions;
-    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
-    private readonly string? targetName;
-    private readonly StorageUnit outboxUnit;
     private readonly StorageUnit dispatchUnit;
     private readonly StorageUnit executionUnit;
 
@@ -35,15 +30,10 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,
         string? targetName = null)
+        : base(sessions, accessContextAccessor, targetName, "post-commit outbox", ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind)
     {
-        ArgumentNullException.ThrowIfNull(sessions);
-        ArgumentNullException.ThrowIfNull(accessContextAccessor);
-        this.sessions = sessions;
-        this.accessContextAccessor = accessContextAccessor;
-        this.targetName = targetName;
-        outboxUnit = sessions.Unit(ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind, targetName);
-        dispatchUnit = sessions.Unit(ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind, targetName);
-        executionUnit = sessions.Unit(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind, targetName);
+        dispatchUnit = UnitFor(ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind);
+        executionUnit = UnitFor(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind);
     }
 
     public ValueTask SavePendingAsync(
@@ -55,7 +45,7 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
         if (item.Status != RuntimePostCommitOutboxStatus.Pending)
             throw new InvalidOperationException("Only pending post-commit outbox items can be saved as pending.");
 
-        var session = OpenOutbox();
+        var session = Open();
         var key = GroundworkRuntimeRowStore.Key(
             GroundworkV2PostCommitOutboxStorageConventions.PhysicalId(item.OutboxItemId));
         var existing = session.Read(key);
@@ -99,7 +89,7 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
         cancellationToken.ThrowIfCancellationRequested();
-        var entry = OpenOutbox().Read(GroundworkRuntimeRowStore.Key(
+        var entry = Open().Read(GroundworkRuntimeRowStore.Key(
             GroundworkV2PostCommitOutboxStorageConventions.PhysicalId(outboxItemId)));
         return ValueTask.FromResult(entry is null ? null : ReadOutbox(entry, outboxItemId));
     }
@@ -124,7 +114,7 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
         ArgumentNullException.ThrowIfNull(result);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var session = OpenOutbox();
+        var session = Open();
         var entry = session.Read(GroundworkRuntimeRowStore.Key(
                         GroundworkV2PostCommitOutboxStorageConventions.PhysicalId(result.OutboxItemId)))
                     ?? throw new InvalidOperationException(
@@ -181,7 +171,7 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
             CandidateSelection.Claimable,
             request.Limit,
             cancellationToken);
-        var session = OpenOutbox();
+        var session = Open();
         var claims = new List<RuntimePostCommitOutboxClaim>(Math.Min(request.Limit, candidates.Count));
         foreach (var candidate in candidates)
         {
@@ -222,7 +212,7 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
         ArgumentNullException.ThrowIfNull(result);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var session = OpenOutbox();
+        var session = Open();
         var entry = session.Read(GroundworkRuntimeRowStore.Key(
             GroundworkV2PostCommitOutboxStorageConventions.PhysicalId(claim.OutboxItemId)));
         if (entry is null)
@@ -263,7 +253,7 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
                 ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind,
                 ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind
             ]);
-        var outbox = unitOfWork.OpenSession(outboxUnit);
+        var outbox = unitOfWork.OpenSession(Unit);
         var dispatches = unitOfWork.OpenSession(dispatchUnit);
         var executions = unitOfWork.OpenSession(executionUnit);
 
@@ -287,7 +277,7 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
                                ?? throw new InvalidOperationException(
                                    $"Workflow dispatch '{projectedDispatch.DispatchId}' was not found in the atomic completion unit of work.");
             var existingDispatch = ReadDispatch(dispatchEntry, projectedDispatch.DispatchId);
-            accessContextAccessor.Current.EnsureTenantScope(existingDispatch.TenantId);
+            AccessContext.EnsureTenantScope(existingDispatch.TenantId);
             var childEntry = executions.Read(GroundworkRuntimeRowStore.Key(existingDispatch.ChildWorkflowExecutionId));
             var childExecution = childEntry is null ? null : ReadExecution(childEntry, existingDispatch.ChildWorkflowExecutionId);
             winningDispatch = WorkflowDispatchLifecycle.ResolveSuccessfulChildDelivery(
@@ -318,7 +308,7 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
 
         StageUpsert(
             unitOfWork,
-            outboxUnit,
+            Unit,
             GroundworkV2PostCommitOutboxStorageConventions.Values(completed),
             entry.Version ?? throw new InvalidDataException(
                 $"Post-commit outbox item '{completion.Claim.OutboxItemId}' did not expose an optimistic revision."));
@@ -369,13 +359,13 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
                 ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind,
                 ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind
             ]);
-        var outbox = unitOfWork.OpenSession(outboxUnit);
+        var outbox = unitOfWork.OpenSession(Unit);
         var dispatches = unitOfWork.OpenSession(dispatchUnit);
         var dispatchEntry = dispatches.Read(GroundworkRuntimeRowStore.Key(
             GroundworkV2WorkflowDispatchStorageConventions.PhysicalId(request.DispatchId)));
         var dispatch = dispatchEntry is null ? null : ReadDispatch(dispatchEntry, request.DispatchId);
         if (dispatch is not null)
-            accessContextAccessor.Current.EnsureTenantScope(dispatch.TenantId);
+            AccessContext.EnsureTenantScope(dispatch.TenantId);
 
         var deadLetterId = dispatch is null ? null : WorkflowDispatchLifecycle.ReadDeliveryDeadLetterId(dispatch);
         var deadLetterEntry = deadLetterId is null
@@ -389,7 +379,7 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
 
         StageUpsert(
             unitOfWork,
-            outboxUnit,
+            Unit,
             GroundworkV2PostCommitOutboxStorageConventions.Values(transition.OutboxItem!),
             deadLetterEntry!.Version ?? throw new InvalidDataException(
                 $"Workflow dispatch dead-letter outbox '{transition.OutboxItem!.OutboxItemId}' did not expose an optimistic revision."));
@@ -409,9 +399,9 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
         int maximumResults,
         CancellationToken cancellationToken)
     {
-        var session = OpenOutbox();
+        var session = Open();
         var route = SelectRoute(query, selection);
-        var table = new TableId(outboxUnit.Name);
+        var table = new TableId(Unit.Name);
         var candidateAt = Column(table, route.CandidateAtField);
         var predicates = new List<Predicate>
         {
@@ -436,7 +426,7 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
         var options = selection == CandidateSelection.Claimable &&
                       query.WorkflowExecutionId is null &&
                       query.IntentKind is null
-            ? outboxUnit.CreateQueryRenderOptions(route.IndexName)
+            ? Unit.CreateQueryRenderOptions(route.IndexName)
             : null;
         var result = session.Query(request, options);
 
@@ -518,7 +508,7 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
         }
 
         unitOfWork.Stage(RowWrite.Upsert(
-            outboxUnit,
+            Unit,
             GroundworkV2PostCommitOutboxStorageConventions.Values(item),
             WriteOptions.CreateOnly));
     }
@@ -530,39 +520,13 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
         long expectedVersion) =>
         unitOfWork.Stage(RowWrite.Upsert(unit, values, WriteOptions.IfVersion(expectedVersion)));
 
-    private IUnitOfWork BeginAtomicUnitOfWork(IReadOnlyList<string> unitIds) => sessions.BeginUnitOfWork(
-        Access,
-        BatchWriteOptions.Exact,
-        unitIds,
-        targetName);
-
     private void RequireAtomicCommit()
     {
-        if (sessions is not IGroundworkStorageCapabilitySource capabilitySource ||
-            !capabilitySource.Capabilities(targetName).Any(capability => capability.Id.Equals(WellKnownCapabilities.AtomicCommit)))
-        {
+        if (!HasAtomicCommit)
             throw new NotSupportedException(
                 "Groundwork post-commit outbox atomic transitions require the provider's evidenced atomic-commit capability.");
-        }
     }
 
-    private IStorageSession OpenOutbox() => sessions.Open(outboxUnit.Id.Value, Access, targetName);
-
-    private StorageAccess Access
-    {
-        get
-        {
-            var context = accessContextAccessor.Current ??
-                          throw new InvalidOperationException("Groundwork post-commit outbox persistence access context is missing.");
-            if (context.Scope is null || context.AcrossScopes)
-            {
-                throw new InvalidOperationException(
-                    "Groundwork post-commit outbox requires one explicit persistence scope; global and across-scope access are refused.");
-            }
-
-            return StorageAccess.Scoped(new StorageScope(context.Scope.Value));
-        }
-    }
 
     private static RuntimePostCommitOutboxItem ReadOutbox(StoredEntry entry, string requestedId)
     {
@@ -646,48 +610,14 @@ public sealed class GroundworkV2RuntimePostCommitOutboxStore :
             ? RuntimePostCommitOutboxStatus.FailedFinal
             : status;
 
-    private static WriteOutcome ConditionalUpsert(
+    private WriteOutcome ConditionalUpsert(
         IStorageSession session,
         StorageValues values,
         StoredEntry existing)
     {
         if (existing.Version is not { } revision)
             throw new InvalidDataException("Groundwork post-commit outbox row did not return an optimistic revision.");
-        if (session is not IConcurrencyStorageSession concurrency)
-        {
-            throw new NotSupportedException(
-                "The selected Groundwork provider does not advertise optimistic post-commit outbox concurrency.");
-        }
-
-        return concurrency.ConditionalUpsert(values, WriteOptions.IfVersion(revision));
-    }
-
-    private static bool IsSaved(WriteOutcomeStatus status) =>
-        status is WriteOutcomeStatus.Inserted or WriteOutcomeStatus.Updated or WriteOutcomeStatus.Upserted or WriteOutcomeStatus.Replayed;
-
-    private static Predicate Equal(ColumnRef column, string value) =>
-        new Predicate.Equal(column, QueryConstant.Of(column, value));
-
-    private static Predicate Equal(ColumnRef column, bool value) =>
-        new Predicate.Equal(column, QueryConstant.Of(column, value));
-
-    private ColumnRef Column(TableId table, string name)
-    {
-        var definition = outboxUnit.Columns.SingleOrDefault(column =>
-            StringComparer.Ordinal.Equals(column.Name, name))
-            ?? throw new InvalidOperationException(
-                $"Groundwork post-commit outbox unit '{outboxUnit.Id.Value}' does not declare query column '{name}'.");
-        var type = definition.Type switch
-        {
-            PortableType.String => QueryType.String,
-            PortableType.DateTimeOffset => QueryType.DateTimeOffset,
-            PortableType.Int32 => QueryType.Int32,
-            PortableType.Int64 => QueryType.Int64,
-            PortableType.Boolean => QueryType.Boolean,
-            _ => throw new InvalidOperationException(
-                $"Groundwork post-commit outbox query column '{name}' has unsupported type '{definition.Type}'.")
-        };
-        return new ColumnRef(table, name, type, definition.IsNullable, definition.MaxLength);
+        return ConditionalUpsert(session, values, revision);
     }
 
     private enum CandidateSelection

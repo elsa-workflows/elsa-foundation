@@ -12,9 +12,6 @@ public sealed class GroundworkActivityDefinitionVersionStore(
     IActivityDefinitionStore definitions,
     IPayloadSerializer payloadSerializer) : IActivityDefinitionVersionStore
 {
-    private readonly JsonSerializerOptions _jsonOptions =
-        GroundworkActivitiesDesignDocumentSerialization.Create(payloadSerializer);
-
     public async Task<ActivityDefinitionVersion> GetAsync(
         string versionId,
         CancellationToken cancellationToken = default)
@@ -103,5 +100,5 @@ public sealed class GroundworkActivityDefinitionVersionStore(
         => document is null
             ? null
             : JsonSerializer.Deserialize<GroundworkV2ActivityDesignDocument<ActivityDefinitionVersion>>(
-                document.ContentJson, _jsonOptions)?.Entity;
+                document.ContentJson, GroundworkActivitiesDesignDocumentSerialization.Get(payloadSerializer))?.Entity;
 }

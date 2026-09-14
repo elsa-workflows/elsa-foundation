@@ -2,7 +2,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Api.Models;
 
-/// <summary>The view returned by <c>POST runtime/workflows/stimuli</c>: which instances the stimulus started and resumed (W7).</summary>
+/// <summary>The view returned by <c>POST runtime/workflows/stimuli</c>: which instances the stimulus started and resumed.</summary>
 public sealed record DispatchStimulusResponse(
     int StartedCount,
     int SkippedStartCount,

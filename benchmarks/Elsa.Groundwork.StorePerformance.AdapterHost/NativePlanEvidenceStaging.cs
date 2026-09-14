@@ -205,6 +205,13 @@ internal static class NativePlanEvidenceStaging
             {
                 if (page is null)
                     throw new PerformanceContractException("Native-plan evidence contains a null trace-detail page.");
+                if (string.IsNullOrWhiteSpace(page.RawPlanReference))
+                {
+                    if (page.StructuredEvidence is null)
+                        throw new PerformanceContractException(
+                            $"Trace-detail page {page.PageIndex} of '{constituent.RouteIdentity}' cannot omit its raw plan without structured execution evidence.");
+                    continue;
+                }
                 EnsureRawPlan(outputDirectory, page.RawPlanReference);
             }
         }

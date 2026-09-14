@@ -72,7 +72,10 @@ The engine registers one independent event subscriber for a Design-side event (s
   definition whose source opted in (`PublishOnReconcile` on the JSON source → `PublishRequested` on the
   claim) via the in-process `PublishWorkflow` request. Idempotent across restarts (publication-slot
   pre-check + the publish handler's unchanged-artifact replay); per-definition failures are logged and
-  isolated — the handler never throws (Sequential delivery would otherwise fail shell activation).
+  isolated — the handler never throws (Sequential delivery would otherwise fail shell activation). A
+  target slot owned by another activation source refuses with `slot_owner_conflict` and is logged rather
+  than recorded, even when it already serves the same artifact; ownership transfer is an operator action
+  ([ADR 0043](../../../../docs/adr/0043-publication-slots-define-start-authority.md)).
   Contract and delivery semantics:
   [reconciliation extension-point catalog](../Design/Reconciliation/EXTENSION_POINTS.md).
 

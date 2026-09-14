@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 
 /// <summary>
 /// Decorates the publish-time <see cref="IWorkflowTriggerIndexer"/> to also populate the recurring-trigger
-/// schedule store (W16). When an artifact is (re)published, this decorator first materializes the complete
+/// schedule store. When an artifact is (re)published, this decorator first materializes the complete
 /// recurring schedule set from the pinned executable — walking its nodes, asking each
 /// <see cref="IRecurringTriggerScheduleProvider"/> to describe the Timer/Cron trigger nodes, and seeding each
 /// schedule's initial <see cref="RecurringTriggerSchedule.NextOccurrence"/> through the

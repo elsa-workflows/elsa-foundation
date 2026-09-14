@@ -1,5 +1,12 @@
 # EF Removal Intake Inventory
 
+> **Historical artifact — superseded 2026-09-12.** This file belongs to superseded Work Unit 144
+> and is preserved only as provenance. Do not use its Groundwork gates, performance prerequisites,
+> or deletion dispositions as current instructions. [ADR 0073](../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
+> and [Program #1665](../../docs/program-goals/ef-core-persistence.md) govern the opposite all-EF
+> direction; only timing-independent correctness requirements survive when mapped into the current
+> completion ledger.
+
 **Task**: T002 — mechanical intake freeze
 
 **Source ref**: `origin/main` at `f769b516598eb807c9528e7c2e72085b346603e8`

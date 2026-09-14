@@ -14,18 +14,16 @@ namespace Elsa.Persistence.Groundwork.DesignConformance.Sqlite.Tests;
 /// </summary>
 public sealed class SqliteAtomicityContractSuite : DesignAtomicityContractSuite
 {
-    private readonly GroundworkBaselineTelemetry _telemetry = new();
-
     protected override DesignPersistenceContractProfile ContractProfile => DesignPersistenceContractProfiles.Target;
 
     protected override async Task<IDesignPersistenceContractFixture> CreateFixtureAsync(
         CancellationToken cancellationToken = default) =>
-        await SqliteDesignPersistenceContractFixture.CreateAsync(_telemetry, cancellationToken);
+        await SqliteDesignPersistenceContractFixture.CreateAsync(cancellationToken);
 
     [Fact]
     public async Task Public_create_draft_command_publishes_DraftCreated_only_after_the_draft_is_durable()
     {
-        await using var fixture = await SqliteDesignPersistenceContractFixture.CreateAsync(_telemetry);
+        await using var fixture = await SqliteDesignPersistenceContractFixture.CreateAsync();
         await fixture.ValidateReadinessAsync();
 
         using var scope = fixture.CreateScope(DesignPersistenceFixtureData.ScopeA);

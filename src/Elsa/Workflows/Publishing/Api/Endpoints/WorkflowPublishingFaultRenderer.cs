@@ -2,8 +2,11 @@ using Elsa.Api.AspNetCore;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Primitives.Diagnostics;
 using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Exceptions;
 using Elsa.Workflows.Publishing.Api.Models;
+using Elsa.Workflows.Publishing.Handlers;
+using Elsa.Workflows.Publishing.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -34,9 +37,12 @@ internal sealed class WorkflowPublicationProblemEndpointMetadata(bool expression
 }
 
 /// <summary>
-/// Renders the Publishing owner's structured failure families — activity publication rejections,
-/// runtime preflight problems, expression validation and value conversion rejections — scoped by
-/// endpoint metadata so each shape applies exactly where the hand-written handlers applied it.
+/// Renders the Publishing owner's structured failure families. Activity publication rejections,
+/// runtime preflight problems, and expression validation/value conversion rejections come first,
+/// scoped by endpoint metadata so each of those shapes applies exactly where the hand-written
+/// handlers applied it. Coded publishing failures (issue #1699) render last and are deliberately
+/// unscoped: every Publishing endpoint gets the module's established problem shape with an
+/// additive <c>errorCode</c>, whichever endpoint raised the failure.
 /// </summary>
 internal sealed class WorkflowPublishingFaultRenderer : IEndpointFaultRenderer
 {
@@ -95,8 +101,33 @@ internal sealed class WorkflowPublishingFaultRenderer : IEndpointFaultRenderer
             }
         }
 
+        // Not scoped by endpoint metadata: every Publishing failure below carries a code (issue #1699), so it
+        // renders here regardless of which endpoint raised it, ahead of WorkflowPublishingExceptionTranslator,
+        // which handles only the codeless arms (404, generic 400).
+        if (ClassifyCodedFailure(exception) is { } coded)
+        {
+            var problem = WorkflowPublishingLegacyProblems.Build(
+                context, EndpointProblem.General(coded.Status, exception.Message), coded.Code);
+            await WorkflowPublishingLegacyProblems.WriteAsync(context, problem);
+            return true;
+        }
+
         return false;
     }
+
+    private static (int Status, string Code)? ClassifyCodedFailure(Exception exception) => exception switch
+    {
+        PublicationActivationException activation => (StatusCodes.Status409Conflict, activation.Code),
+        PublicationPreflightConflictException preflight => (StatusCodes.Status409Conflict, preflight.Code),
+        PublicationSnapshotReviewException review => (StatusCodes.Status409Conflict, review.Code),
+        PublicationPolicyRevisionConflictException policyRevision => (StatusCodes.Status409Conflict, policyRevision.Code),
+        PublicationPolicyResolutionException policy => (
+            policy.Code == PublicationFailureCodes.ExpectedPublicationMismatch
+                ? StatusCodes.Status409Conflict
+                : StatusCodes.Status400BadRequest,
+            policy.Code),
+        _ => null,
+    };
 
     private static async Task WriteRuntimePreflightAsync(HttpContext context, RuntimePreflightProblemDetails problem)
     {

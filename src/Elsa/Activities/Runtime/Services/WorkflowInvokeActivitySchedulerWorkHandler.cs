@@ -34,8 +34,10 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         return workItem.CommandKind == WorkflowExecutionCommandKind.InvokeActivity;
     }
 
+    private static readonly string[] PayloadValidationParamNames = ["pinnedExecutable", "executableNodeId", "activityExecutionId", "reason"];
+
     protected override RuntimeInvokeActivityCommandPayload DeserializePayload(RuntimeSchedulerWorkItem workItem) =>
-        DeserializeInvokePayload(workItem);
+        SchedulerWorkItems.DeserializePayload<RuntimeInvokeActivityCommandPayload>(workItem, "InvokeActivity", "invoke activity payload", PayloadValidationParamNames);
 
     protected override async ValueTask HandleWithServicesAsync(
         RuntimeSchedulerWorkItem workItem,
@@ -919,7 +921,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                         cancellationToken: cancellationToken),
                     Metadata: metadata)
             };
-        var childWorkItems = NewChildActivityScheduleWorkItems(idGenerator, invokeWorkItem, invokePayload, scheduleRequests).ToArray();
+        var childWorkItems = SchedulerWorkItems.NewChildActivityScheduleWorkItems(
+            TimeProvider, idGenerator, invokeWorkItem, invokePayload.PinnedExecutable, invokePayload.ActivityExecutionId, scheduleRequests).ToArray();
         var commit = new RuntimeCheckpointCommit(
             CommitId: $"commit:{invokeWorkItem.WorkItemId}:activity-inspection-captured:{invokePayload.ActivityExecutionId}",
             Checkpoint: new RuntimeCheckpoint(
@@ -962,66 +965,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         IReadOnlyCollection<RuntimeChildActivityScheduleRequest> scheduleRequests,
         CancellationToken cancellationToken)
     {
-        foreach (var workItem in NewChildActivityScheduleWorkItems(idGenerator, invokeWorkItem, invokePayload, scheduleRequests))
+        foreach (var workItem in SchedulerWorkItems.NewChildActivityScheduleWorkItems(
+                     TimeProvider, idGenerator, invokeWorkItem, invokePayload.PinnedExecutable, invokePayload.ActivityExecutionId, scheduleRequests))
             await schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
-    }
-
-    private IEnumerable<RuntimeSchedulerWorkItem> NewChildActivityScheduleWorkItems(
-        IRuntimeExecutionIdGenerator idGenerator,
-        RuntimeSchedulerWorkItem invokeWorkItem,
-        RuntimeInvokeActivityCommandPayload invokePayload,
-        IReadOnlyCollection<RuntimeChildActivityScheduleRequest> scheduleRequests)
-    {
-        var requests = scheduleRequests.ToArray();
-        for (var index = 0; index < requests.Length; index++)
-        {
-            var request = requests[index];
-            var now = TimeProvider.GetUtcNow();
-            var childActivityExecutionId = idGenerator.NewActivityExecutionId();
-            var payload = new RuntimeScheduleActivityCommandPayload(
-                invokePayload.PinnedExecutable,
-                request.ExecutableNodeId,
-                childActivityExecutionId,
-                RuntimeScheduleActivityCommandPayload.ActivityCompletionReason,
-                request.SchedulingActivityExecutionId ?? invokePayload.ActivityExecutionId,
-                invokePayload.ActivityExecutionId,
-                request.SchedulingProvenance == ActivitySchedulingProvenance.Empty
-                    ? ActivitySchedulingProvenance.From(
-                        invokeWorkItem.WorkflowExecutionId,
-                        invokePayload.ActivityExecutionId,
-                        request.SchedulingActivityExecutionId ?? invokePayload.ActivityExecutionId,
-                        branchId: null,
-                        iterationId: null,
-                        executionPathId: null,
-                        executionScopeId: null,
-                        schedulingCause: RuntimeScheduleActivityCommandPayload.ActivityCompletionReason,
-                        metadata: request.Metadata)
-                    : request.SchedulingProvenance,
-                request.IterationFrame);
-
-            var commandMetadata = invokeWorkItem.CommandMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-            foreach (var item in request.Metadata)
-                commandMetadata[item.Key] = item.Value;
-
-            commandMetadata[RuntimeMetadataKeys.ParentActivityExecutionId] = invokePayload.ActivityExecutionId;
-            commandMetadata[RuntimeMetadataKeys.ChildExecutableNodeId] = request.ExecutableNodeId;
-
-            var workItem = new RuntimeSchedulerWorkItem(
-                workItemId: RuntimeChainId.Derive(invokeWorkItem.WorkItemId, $"schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}"),
-                workflowExecutionId: invokeWorkItem.WorkflowExecutionId,
-                commandId: RuntimeChainId.Derive(invokeWorkItem.CommandId, $"schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}"),
-                commandKind: WorkflowExecutionCommandKind.ScheduleActivity,
-                envelopeId: invokeWorkItem.EnvelopeId,
-                idempotencyKey: RuntimeChainId.Derive(invokeWorkItem.IdempotencyKey, $"schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}"),
-                enqueuedAt: now,
-                recordedAt: now,
-                sequence: invokeWorkItem.Sequence is { } sequence ? sequence + index + 1 : null,
-                payload: JsonSerializer.SerializeToElement(payload),
-                commandMetadata: commandMetadata,
-                envelopeMetadata: invokeWorkItem.EnvelopeMetadata);
-
-            yield return workItem;
-        }
     }
 
     private static IReadOnlyDictionary<string, string> MergeMetadata(
@@ -1139,7 +1085,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 valueSnapshots: valueSnapshots,
                 metadata: metadata,
                 cancellationToken: cancellationToken);
-        var completionWorkItem = NewCompletionWorkItem(invokeWorkItem, invokePayload, completedState);
+        var completionWorkItem = SchedulerWorkItems.NewCompletionWorkItem(
+            TimeProvider, invokeWorkItem, invokePayload.PinnedExecutable, invokePayload.ExecutableNodeId, invokePayload.ActivityExecutionId, completedState, SkippedSubStatus);
         RuntimeStateChange<WorkflowDispatchRecord>[] workflowDispatches = workflowDispatch is null
             ? []
             :
@@ -1219,54 +1166,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
 
         return matches[0];
     }
-
-    private RuntimeSchedulerWorkItem NewCompletionWorkItem(
-        RuntimeSchedulerWorkItem invokeWorkItem,
-        RuntimeInvokeActivityCommandPayload invokePayload,
-        ActivityExecutionState completedState)
-    {
-        var now = TimeProvider.GetUtcNow();
-        var payload = new RuntimeCompleteActivityCommandPayload(
-            invokePayload.PinnedExecutable,
-            invokePayload.ExecutableNodeId,
-            invokePayload.ActivityExecutionId,
-            completedState.ParentActivityExecutionId,
-            completedState.BranchId,
-            SchedulerWorkHandlerHelpers.ReadCompletionOutcomeNames(completedState, SkippedSubStatus),
-            RuntimeCompleteActivityCommandPayload.ActivityInvocationCompletedReason);
-
-        return new RuntimeSchedulerWorkItem(
-            workItemId: RuntimeChainId.Derive(invokeWorkItem.WorkItemId, $"complete:{invokePayload.ActivityExecutionId}"),
-            workflowExecutionId: invokeWorkItem.WorkflowExecutionId,
-            commandId: RuntimeChainId.Derive(invokeWorkItem.CommandId, $"complete:{invokePayload.ActivityExecutionId}"),
-            commandKind: WorkflowExecutionCommandKind.CompleteActivity,
-            envelopeId: invokeWorkItem.EnvelopeId,
-            idempotencyKey: RuntimeChainId.Derive(invokeWorkItem.IdempotencyKey, $"complete:{invokePayload.ActivityExecutionId}"),
-            enqueuedAt: now,
-            recordedAt: now,
-            sequence: invokeWorkItem.Sequence is { } sequence ? sequence + 1 : null,
-            payload: JsonSerializer.SerializeToElement(payload),
-            commandMetadata: invokeWorkItem.CommandMetadata,
-            envelopeMetadata: invokeWorkItem.EnvelopeMetadata);
-    }
-
-    private static RuntimeInvokeActivityCommandPayload DeserializeInvokePayload(RuntimeSchedulerWorkItem workItem) =>
-        SchedulerWorkHandlerHelpers.DeserializePayload(
-            workItem,
-            requiresPayloadMessage: "InvokeActivity scheduler work item requires an invoke activity payload.",
-            resolvedToNullMessage: "InvokeActivity scheduler work item payload resolved to null.",
-            invalidPayloadMessage: "InvokeActivity scheduler work item payload is not a valid invoke activity payload.",
-            deserialize: static (_, payload) => payload.Deserialize<RuntimeInvokeActivityCommandPayload>(),
-            isPayloadValidationException: static exception =>
-                exception is JsonException or NotSupportedException ||
-                exception is ArgumentException argumentException && IsInvokePayloadValidationException(argumentException));
-
-    private static bool IsInvokePayloadValidationException(ArgumentException exception) =>
-        exception.ParamName is
-            "pinnedExecutable" or
-            "executableNodeId" or
-            "activityExecutionId" or
-            "reason";
 
     private ActivityExecutionState CompleteActivity(
         RuntimeSchedulerWorkItem workItem,

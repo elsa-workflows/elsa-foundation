@@ -110,7 +110,12 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             {
                 services.AddGroundworkStorageProviderConnection(
                     _ => new SqliteProviderFactory().Create(connectionString));
-                new GroundworkWorkflowRuntimeFeature().ConfigureServices(services);
+                // Durable composition refuses the ephemeral development signer, so the fixture supplies the
+                // stable recovery-continuation key a real durable host configures.
+                new GroundworkWorkflowRuntimeFeature
+                {
+                    RecoveryContinuationSigningKey = "http-endpoint-fixture-recovery-signing-key-32-bytes"
+                }.ConfigureServices(services);
 
                 new WorkflowsRuntimeCheckpointPersistenceFeature
                 {

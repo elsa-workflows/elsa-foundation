@@ -35,7 +35,7 @@ public sealed class ExecutionLivenessState
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
     }
 
-    // Persisted JSON key: the `operationalStateId` property name predates the W14 rename of this type
+    // Persisted JSON key: the `operationalStateId` property name predates a later rename of this type
     // (ExecutionLivenessState was OperationalState). The member name is intentionally left unchanged to keep the wire key stable.
     public string OperationalStateId { get; }
     public string WorkflowExecutionId { get; }

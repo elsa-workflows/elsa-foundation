@@ -14,6 +14,7 @@ using Elsa.Workflows.Design.Persistence.Groundwork;
 using Groundwork.Store;
 using Xunit;
 using Elsa.Primitives.Exceptions;
+using Elsa.Testing;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
 
@@ -390,9 +391,4 @@ public class GroundworkAddWorkflowDefinitionCommandTests
             WorkflowDefinitionId = definitionId,
             State = WorkflowDefinitionState.Empty
         };
-
-    private sealed class FakeSystemClock : ISystemClock
-    {
-        public DateTimeOffset UtcNow { get; } = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
-    }
 }

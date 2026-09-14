@@ -1,6 +1,6 @@
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
-using Elsa.Activities.Design.Reconciliation.Core;
+using Elsa.Activities.Design.Core.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Json.Contracts;
 using Elsa.Activities.Design.Reconciliation.Json.Options;
 using Elsa.Activities.Design.Reconciliation.Json.Services;

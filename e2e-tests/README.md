@@ -46,10 +46,9 @@ starts "failing", the referenced bug was probably fixed and the tracker should b
 
 ## Test categorization (true e2e vs integration-candidate)
 
-Every suite is kept; each is tagged by whether it genuinely needs the live HTTP + persistence + runtime path
-(**true e2e**) or mainly asserts an API contract/shape that could later move to a C# integration test
-(`WebApplicationFactory`) or a TestContainers harness (**integration-candidate**). Nothing is deleted here;
-candidates are flagged for future migration so coverage is never dropped before its replacement exists.
+Each suite is tagged by whether it genuinely needs the live HTTP + persistence + runtime path (**true e2e**)
+or mainly asserts an API contract/shape that belongs in an in-process C# test (**integration-candidate**).
+A candidate is retired from here only once its in-process replacement exists.
 
 | Suite | Category | Why |
 |---|---|---|
@@ -62,15 +61,16 @@ candidates are flagged for future migration so coverage is never dropped before 
 | `runtime-alterations` | true e2e | durable plan admission, capture, hosted orchestration, checkpoint outcomes, replay and restart |
 | `bpmn`, `composition` | true e2e | waited `DispatchWorkflow` + BPMN error boundary |
 | `logging` | mixed | `Test-ValueCapture` is runtime e2e; `Test-DiagnosticsSettings` is a read-only contract check |
-| `get-endpoints` | integration-candidate | GET status/shape contract; migrate to `WebApplicationFactory` |
-| `write-endpoints` | integration-candidate | CRUD status/shape contract; migrate to `WebApplicationFactory` |
 | `workflow-version-override` | true e2e | exact-version preflight and promotion through live HTTP + persistence |
 | `groundwork` | true e2e | Groundwork release adoption through author/save/reload/publish/execute/resume |
 | `file-deployment` | true e2e | server restart with a mounted definitions folder; startup reconcile + publish-on-reconcile, readiness gate, restart idempotency (spec 147) |
 
-The two integration-candidate suites (`get-endpoints`, `write-endpoints`) mostly assert HTTP status codes and
-response shapes with little runtime behavior — the natural long-term home is an in-process `WebApplicationFactory`
-(or TestContainers) test in `tests/`, at which point they can be retired from here.
+The former `get-endpoints` and `write-endpoints` suites (GET / CRUD status-and-shape checks) were retired on
+2026-09-10: that coverage now runs in-process as the `*ApiContractTests` classes under `tests/` (for example
+`ActivitiesDesignApiContractTests`, `PublishingApiContractTests`, `RuntimeAlterationApiContractTests`,
+`SecretsApiContractTests`, `StructuredLogsApiContractTests`, `StudioPreferencesApiContractTests`,
+`WorkflowsDesignApiContractTests`). Their shared mutation harness survives as `_WriteCommon.ps1` because the
+`workflow-version-override` and `reusable-activities` suites dot-source it.
 
 ## Scripts
 
@@ -93,7 +93,6 @@ response shapes with little runtime behavior — the natural long-term home is a
 | `http/Test-SendHttpRequestStatusOutcomes.ps1` | the per-status outcome ports the compiler pins from `SendHttpRequest.ExpectedStatusCodes` are connectable on the PUBLISHED node and route correctly, including the `Unmatched status code` catch-all (#1119) |
 | `bpmn/Test-BpmnCallActivity.ps1` | BPMN `callActivity` bound to a REAL waited `DispatchWorkflow` child (spec 133): child completes -> parent resumes via `Completed`; child faults -> the error boundary routes (no parent incident) |
 | `correlate/Test-Correlate.ps1` | `SetCorrelationId` intrinsic sets the instance correlation id; found by `?correlationId=` |
-| `get-endpoints/Test-IntrinsicAuthoringCatalog.ps1` | the authoring catalog offers the five author-facing engine intrinsics and withholds the four engine-internal ones; a node authored from the `SetCorrelationId` descriptor's own template publishes and runs (#1113) |
 | `events/Test-Event.ps1` | `Event` start-trigger fired by publishing a stimulus to `runtime/workflows/stimuli` |
 | `logging/Test-ValueCapture.ps1` | per-activity value snapshot: a WriteLine's `Text` input is captured (`DiagnosticSnapshot`) and its payload retrieved via the value-evidence endpoint |
 | `logging/Test-DiagnosticsSettings.ps1` | read-only `GET runtime/workflows/diagnostics/settings` — the capture policy that governs what value snapshots are captured |
@@ -101,6 +100,7 @@ response shapes with little runtime behavior — the natural long-term home is a
 | `runtime-alterations/Test-AlterationPlans.ps1` | bulk `CancelWorkflow`, root `ModifyVariable`, Sequence `ScheduleActivity` with visible child completion, `RescheduleActivity` with visible supersession, retained-identity `Migrate` smoke path; plus paging, cooperative cancellation, and redacted reads |
 | `runtime-alterations/Test-AlterationReplayAndRestart.ps1` | idempotency replay and restart-safe continuation from a durably captured first target page against the real SQLite server |
 | `_ElsaCommon.ps1`           | shared helpers (dot-sourced): login, activity lookup, submit/publish/execute, structures, observability |
+| `_WriteCommon.ps1`          | shared mutation harness (dot-sourced): `Invoke-Write` / `Assert-Write` / `Complete-WriteSuite` for status-and-shape assertions on writes |
 | `workflow-version-override/Test-WorkflowVersionOverride.ps1` | automatic/exact promotion preflight, exact SemVer promotion, immutable version read |
 | `groundwork/Test-GroundworkReleaseLifecycle.ps1` | live Groundwork release path: author/save/reload, publish, suspend at a persisted Event bookmark, resume, complete |
 | `file-deployment/Test-FileBasedDeployment.ps1` | file-based deployment at startup (spec 147): definitions folder composed via env vars (`JsonWorkflowReconciliation` + `PublishOnReconcile`), `/health/ready` gate, imported + published + executable, idempotent restart |

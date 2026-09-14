@@ -4,7 +4,7 @@ using Elsa.Workflows.Design.Api.Models;
 namespace Elsa.Workflows.Design.Api.Endpoints.Definitions.Update;
 
 /// <summary>
-/// The HTTP-surface command behind <c>PUT design/workflows/definitions/{id}</c> — the DS-6 Draft mutation
+/// The HTTP-surface command behind <c>PUT design/workflows/definitions/{id}</c> — the Draft mutation
 /// gate. It carries the complete desired Draft <see cref="State"/> (and optional <see cref="Layout"/>) for the
 /// definition's current Draft; the handler resolves the owning Draft and forwards to the single coarse
 /// <c>IUpdateDraftCommand</c>, which diffs the desired state against stored state and emits the per-concept

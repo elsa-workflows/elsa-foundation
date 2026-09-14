@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
 /// Request to find every waiting bookmark across all workflow executions that matches an external
-/// stimulus identity (W7, E3-5). An optional correlation id narrows the set to instances that were
+/// stimulus identity. An optional correlation id narrows the set to instances that were
 /// created or suspended under the same correlation.
 /// </summary>
 public sealed class GlobalBookmarkStimulusLookupRequest

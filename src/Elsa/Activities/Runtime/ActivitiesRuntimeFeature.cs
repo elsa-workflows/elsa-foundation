@@ -45,7 +45,7 @@ public class ActivitiesRuntimeFeature : IShellFeature
         // CLR construction descriptor resolve an activity's stable alias back to its real type (no
         // Assembly.Load(name, version)), and a complex- or enum-typed input resolve to its real CLR type at
         // compile time instead of falling back to object. Sources both the runtime-loaded assemblies and the
-        // registered IFeatureAssemblyProvider set, so dynamically-loaded extension-builder activities are covered
+        // registered IFeatureAssemblyProvider set, so dynamically-loaded package activities are covered
         // once their package is loaded; the pass re-runs on each shell (re)build.
         services.AddScoped<IStartupTask, RegisterActivityTypesStartupTask>();
     }

@@ -1,5 +1,6 @@
 using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
+using Elsa.Persistence.Groundwork.V2.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -673,10 +674,5 @@ public sealed class GroundworkV2WorkflowTestScopeStoreTests
         }
 
         Skip.If(true, message);
-    }
-
-    private sealed class TestAccessContextAccessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
-    {
-        public PersistenceAccessContext Current { get; } = current;
     }
 }

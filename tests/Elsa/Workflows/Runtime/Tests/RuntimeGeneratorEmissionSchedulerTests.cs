@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
@@ -14,7 +15,7 @@ public sealed class RuntimeGeneratorEmissionSchedulerTests
     public async Task ScheduleAsync_EnqueuesGeneratedEventAsDeterministicSchedulerWork()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var scheduler = new RuntimeGeneratorEmissionScheduler(queue, new FixedTimeProvider(_now));
+        var scheduler = new RuntimeGeneratorEmissionScheduler(queue, new FakeTimeProvider(_now));
         var generatedEvent = NewGeneratedEvent(5);
 
         var result = await scheduler.ScheduleAsync(new RuntimeGeneratorEmissionScheduleRequest(
@@ -51,7 +52,7 @@ public sealed class RuntimeGeneratorEmissionSchedulerTests
     public async Task ScheduleAsync_IsIdempotentByGeneratedEventIdentity()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var scheduler = new RuntimeGeneratorEmissionScheduler(queue, new FixedTimeProvider(_now));
+        var scheduler = new RuntimeGeneratorEmissionScheduler(queue, new FakeTimeProvider(_now));
         var generatedEvent = NewGeneratedEvent(1);
 
         var first = await scheduler.ScheduleAsync(new RuntimeGeneratorEmissionScheduleRequest(generatedEvent, "GeneratorEmitted"));
@@ -68,7 +69,7 @@ public sealed class RuntimeGeneratorEmissionSchedulerTests
     public async Task ScheduleAsync_IsolatesWorkflowExecutionQueues()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var scheduler = new RuntimeGeneratorEmissionScheduler(queue, new FixedTimeProvider(_now));
+        var scheduler = new RuntimeGeneratorEmissionScheduler(queue, new FakeTimeProvider(_now));
 
         await scheduler.ScheduleAsync(new RuntimeGeneratorEmissionScheduleRequest(NewGeneratedEvent(1), "GeneratorEmitted"));
         await scheduler.ScheduleAsync(new RuntimeGeneratorEmissionScheduleRequest(NewGeneratedEvent(1, "wfexec-2"), "GeneratorEmitted"));
@@ -84,7 +85,7 @@ public sealed class RuntimeGeneratorEmissionSchedulerTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var scheduler = new RuntimeGeneratorEmissionScheduler(
             queue,
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             new JsonSerializerOptions(JsonSerializerDefaults.General)
             {
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -162,9 +163,4 @@ public sealed class RuntimeGeneratorEmissionSchedulerTests
         durability: GeneratedEventDurability.PolicyControlled,
         payloadValue: new GeneratedEventPayloadReference($"durable-payload-{sequence}"),
         metadata: new Dictionary<string, string> { ["Generator"] = "timer" });
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 }

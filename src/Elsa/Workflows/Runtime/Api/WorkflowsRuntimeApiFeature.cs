@@ -40,6 +40,7 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature
     /// Persistent HMAC key for restart- and multi-instance-stable hierarchy cursors. Configure at least 32 UTF-8 bytes
     /// in production; when omitted, the in-memory development adapter uses a process-local random key.
     /// </summary>
+    [ManifestSetting(Secret = true)]
     public string? ActivityExecutionHierarchyCursorSigningKey { get; set; }
 
     /// <summary>
@@ -50,12 +51,13 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature
     public string? WorkflowAlterationPayloadProtectionActiveKeyId { get; set; }
 
     /// <summary>Key ring retained for as long as durable alteration plans may be read or cancelled.</summary>
+    [ManifestSetting(Secret = true)]
     public IDictionary<string, string>? WorkflowAlterationPayloadProtectionKeys { get; set; }
 
     public virtual void ConfigureServices(IServiceCollection services)
     {
         services.AddElsaEndpoints();
-        // The runtime execution spine is host-agnostic (RT-4): it is composed here so the API endpoints can drive it,
+        // The runtime execution spine is host-agnostic: it is composed here so the API endpoints can drive it,
         // but a non-HTTP host (worker, test harness, another module) can compose the same runtime via
         // AddWorkflowRuntime() without this API feature. See RuntimeCoreServiceCollectionExtensions.
         services.AddWorkflowRuntime();

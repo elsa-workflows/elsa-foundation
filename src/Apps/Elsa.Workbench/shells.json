@@ -67,7 +67,8 @@
           "GroundworkProviderSqlite": {},
           "GroundworkWorkflowRuntime": {
             "CacheWorkflowExecutables": true,
-            "WorkflowExecutableCacheCapacity": 256
+            "WorkflowExecutableCacheCapacity": 256,
+            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key"
           },
           "ActivitiesDesignGroundworkPersistence": {},
           "WorkflowsDesignGroundworkPersistence": {},

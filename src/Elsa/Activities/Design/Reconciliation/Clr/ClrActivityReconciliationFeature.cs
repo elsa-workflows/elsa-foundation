@@ -3,7 +3,7 @@ using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Activities.Design.Reconciliation.Clr.Contracts;
 using Elsa.Activities.Design.Reconciliation.Clr.Options;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
-using Elsa.Activities.Design.Reconciliation.Core;
+using Elsa.Activities.Design.Core.Reconciliation;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.Design.Reconciliation.Clr;

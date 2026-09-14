@@ -5,7 +5,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Activities.Primitives.Activities;
 
 /// <summary>
-/// The <see cref="IActivityTriggerStimulusProvider"/> for the <see cref="Event"/> start trigger (W7, E3-1). It
+/// The <see cref="IActivityTriggerStimulusProvider"/> for the <see cref="Event"/> start trigger. It
 /// recognizes published <see cref="Event"/> nodes and derives their stimulus identity from the authored
 /// <see cref="Event.EventName"/> literal, so the trigger extractor can index the event at publish time over the
 /// pinned artifact.

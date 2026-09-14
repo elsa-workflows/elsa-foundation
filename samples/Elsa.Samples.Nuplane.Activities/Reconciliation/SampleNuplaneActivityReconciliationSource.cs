@@ -1,6 +1,6 @@
 using Elsa.Activities.Design.Core.Models;
-using Elsa.Activities.Design.Reconciliation.Core;
-using Elsa.Activities.Design.Reconciliation.Core.Models;
+using Elsa.Activities.Design.Core.Reconciliation;
+using Elsa.Activities.Design.Core.Reconciliation.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Samples.Nuplane.Activities.Activities;

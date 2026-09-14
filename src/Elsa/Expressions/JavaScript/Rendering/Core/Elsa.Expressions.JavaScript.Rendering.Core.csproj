@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Primitives\Elsa.Expressions.JavaScript.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\Events\Core\Elsa.Events.Core.csproj" />
   </ItemGroup>
 

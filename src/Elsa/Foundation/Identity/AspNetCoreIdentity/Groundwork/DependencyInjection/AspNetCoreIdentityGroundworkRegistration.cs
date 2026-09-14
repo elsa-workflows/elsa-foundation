@@ -19,11 +19,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
-using ElsaExternalIdentityStore = Elsa.Foundation.Identity.Abstractions.Iam.IExternalIdentityStore;
-using ElsaRoleStore = Elsa.Foundation.Identity.Abstractions.Iam.IRoleStore;
-using ElsaTenantMembershipStore = Elsa.Foundation.Identity.Abstractions.Iam.ITenantMembershipStore;
-using ElsaUserStore = Elsa.Foundation.Identity.Abstractions.Iam.IUserStore;
-
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.DependencyInjection;
 
 public static class AspNetCoreIdentityGroundworkRegistration
@@ -93,11 +88,6 @@ public static class AspNetCoreIdentityGroundworkRegistration
 
                 options.EventsType = typeof(GroundworkIdentityCookieEvents);
             });
-
-        services.ReplaceScoped<ElsaUserStore, Persistence.Groundwork.Stores.GroundworkUserStore>();
-        services.ReplaceScoped<ElsaRoleStore, Persistence.Groundwork.Stores.GroundworkRoleStore>();
-        services.ReplaceScoped<ElsaExternalIdentityStore, Persistence.Groundwork.Stores.GroundworkExternalIdentityStore>();
-        services.ReplaceScoped<ElsaTenantMembershipStore, Persistence.Groundwork.Stores.GroundworkTenantMembershipStore>();
 
         if (initialAdmin is not null)
         {

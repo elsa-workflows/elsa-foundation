@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-composed-activity-execution`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #70, #71 (restatused 2026-09-10 from git evidence)
 **Input**: Continue the Elsa 4 runtime execution seam after removing the direct executor. The runtime must prove that an in-process workflow execution agent can start a pinned runtime executable and invoke a real activity through composed Workflows Runtime API + Activities Runtime services.
 
 ## Scenarios & Tests

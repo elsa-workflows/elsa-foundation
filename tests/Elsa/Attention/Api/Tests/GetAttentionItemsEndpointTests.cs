@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Elsa.Testing;
 
 namespace Elsa.Attention.Api.Tests;
 
@@ -99,13 +100,6 @@ public sealed class GetAttentionItemsEndpointTests
         if (queryString is not null)
             context.Request.QueryString = new QueryString(queryString);
         return context;
-    }
-
-    private sealed class TestEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder
-    {
-        public IServiceProvider ServiceProvider { get; } = serviceProvider;
-        public ICollection<EndpointDataSource> DataSources { get; } = [];
-        public IApplicationBuilder CreateApplicationBuilder() => new ApplicationBuilder(ServiceProvider);
     }
 
     private sealed class StubAggregationService(Exception? exception = null) : IAttentionAggregationService

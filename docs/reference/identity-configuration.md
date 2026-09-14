@@ -79,7 +79,7 @@ is never written to the log; the username xor password half-configured is a star
 |---|---|---|
 | `IsDevelopmentOrDemo` | In-memory token store + ephemeral keys. | **`false`.** |
 | `Issuer` | Logical issuer URI written into (and required from) first-party access tokens. | Set to a stable absolute URI, e.g. `https://elsa.example.com/`. |
-| `SigningKey` | Base64-encoded **PKCS#8 RSA private key** used to sign access tokens (RS256). Falls back to `FoundationIdentityOptions.SigningKey`. | **Required.** See generation command below. |
+| `SigningKey` | Base64-encoded **PKCS#8 RSA private key** of at least 2048 bits, used to sign access tokens (RS256). Falls back to `FoundationIdentityOptions.SigningKey`. | **Required.** See generation command below. |
 | `EncryptionKey` | Key material for OpenIddict's encryption credentials. Defaults to a key derived (domain-separated) from `SigningKey`. | Recommended: set a **distinct** value from `SigningKey`. |
 | `ConnectionString` | Sqlite connection string for the OpenIddict token store. | Optional; set for a dedicated token DB. |
 | `AutoMigrate` | Lets Workbench's host-owned OpenIddict EF provider migrate its schema during startup. Defaults to `true`. | Turn off for multi-instance deployments that apply migrations out-of-band. |
@@ -92,19 +92,30 @@ choice with `OpenIddict.EntityFrameworkCore`; another host may select a differen
 Generate a signing key:
 
 ```bash
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -outform DER | base64
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | openssl pkcs8 -topk8 -nocrypt -outform DER | base64
 ```
 
-(The same command is documented in the remarks of `ConfigureOpenIddictServerOptions`.) Outside
-`IsDevelopmentOrDemo`, startup **fails fast** with a clear error if no signing/encryption key is configured.
+Pipe through `openssl pkcs8 -topk8`: `genpkey -outform DER` on its own writes a PKCS#1 key, which the host
+rejects. (The same command appears in the errors `ConfigureOpenIddictServerOptions` throws for a malformed or short
+key.) Outside `IsDevelopmentOrDemo`, a missing or malformed signing key, or an RSA key under 2048 bits, fails with a
+clear error when the OpenIddict
+server options are built. The feature builds them at startup, so the error fails shell activation (in Workbench,
+`/health/ready` reports `503 shell_activation_failed`) rather than the first request that authenticates. An
+`Issuer` that `System.Uri` cannot parse as absolute fails activation the same way, in any mode, with a
+`UriFormatException`.
+
+### `FoundationIdentityOidc`
+
+Only for an external IdP. Its settings are `Authority`, `ClientId`, `ClientSecret` (secret; supply it from a
+secret store), `RequireHttpsMetadata` and `IsDefault`. With no `ClientId` the interactive sign-in handler is not
+registered and the provider only validates bearer tokens. For what each setting means and per-IdP recipes, see
+[authentication-architecture §8](authentication-architecture.md#8-per-idp-recipes-for-the-oidc-module).
 
 ### `FoundationIdentityOptions` (shared, bound from the `Elsa:Identity` section if you surface it)
 
 | Setting | Default | Notes |
 |---|---|---|
 | `SigningKey` | — | Fallback signing key material for the OpenIddict server. |
-| `RequireHttpsMetadata` | `true` | Keep `true` in production; the security-default guards reject HTTP metadata otherwise. |
-| `IsDevelopmentOrDemo` | `false` | Global dev switch surfaced to the security-default guards. |
 
 ### Cookie / session hardening
 
@@ -118,12 +129,11 @@ The backend-served login page (`GET /_elsa/identity/login`) embeds an antiforger
 cookie; the login `POST` validates it for the HTML-form flow. JSON API callers are unaffected. No configuration
 is required.
 
-### The API kill-switch
+### No API kill-switch
 
-`ApiSecurity.AllowAnonymous` disables endpoint security for a shell. **It is honored only in the `Development`
-environment** (locked product decision — there is no auth off-switch in production). Outside `Development` the
-flag is ignored, the shell stays secure, and a prominent warning is logged. Do not rely on it for anything but
-local development or tests.
+The former `ApiSecurity.AllowAnonymous` setting has been removed, and no configuration disables authentication for a
+shell's API routes. Workflow-defined HTTP endpoints are anonymous unless their `HttpEndpoint` activity sets
+`Authorize`; see [Security posture](authentication-architecture.md#7-security-posture).
 
 ## Same-origin hosting
 
@@ -140,12 +150,13 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
    sourced from a secret store.
 4. `FoundationIdentityOpenIddict.EncryptionKey` = a distinct base64/secret value (recommended).
 5. `FoundationIdentityOpenIddict.Issuer` = your stable absolute issuer URI.
-6. `FoundationIdentityOptions.RequireHttpsMetadata = true` (default) and serve the server over **HTTPS** (so the
-   `SecurePolicy=Always` session cookie is accepted).
+6. If you compose `FoundationIdentityOidc`, keep its `RequireHttpsMetadata` setting at the default `true` so the
+   upstream IdP's metadata must be HTTPS, and supply `ClientSecret` from a secret store. Either way, serve the
+   server over **HTTPS** (so the `SecurePolicy=Always` session cookie is accepted).
 7. Provision real user accounts — either through your own onboarding, or by setting `SeedAdminUserName` with a
    secret `SeedAdminPassword` (the committed dev `admin`/`Password123!` values apply only under `IsDevelopmentOrDemo`).
-8. Ensure `ApiSecurity.AllowAnonymous` is **not** set on any shell (it is ignored outside `Development`, but
-   remove it to avoid the startup warning).
+8. Remove any leftover `ApiSecurity` entry from shell feature lists: the feature no longer exists, and CShells
+   logs a warning listing the unknown feature names.
 9. Host the Studio SPA same-origin, and set `Studio:Auth:Enabled=true`.
 10. **Apply the OpenIddict token-store migrations.** Workbench migrates its host-owned vendor EF schema at
     startup while `AutoMigrate=true`. For multi-instance deployments, set `AutoMigrate=false` and apply the
@@ -160,8 +171,9 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
     Groundwork Identity schema initialization is owned by the selected Groundwork provider; it does not require
     an ASP.NET Core Identity EF migration step.
 
-If a required signing/encryption key is missing outside `IsDevelopmentOrDemo`, the host throws at startup with a
-message naming the setting to configure — a missing key never silently degrades to an insecure default.
+If the signing key is missing, malformed, or under 2048 bits outside `IsDevelopmentOrDemo`, startup fails (shell activation, for a
+shell host) with an error that says how to fix it (see the `SigningKey` note above). The encryption key falls back to
+the signing key, so it cannot be missing on its own. A missing key never silently degrades to an insecure default.
 
 `IsDevelopmentOrDemo` is also **safe by construction**: if it is left `true` while the host runs in any
 environment other than `Development` (e.g. the unedited default deployed to Production), the host **hard-fails
@@ -175,8 +187,9 @@ the administrator seeded from the committed dev credentials). There is no insecu
 shipped `shells.Production.json` resets `IsDevelopmentOrDemo` to `false` for both identity features. In a
 container the default environment is `Production`, so editing (or mounting) `shells.json` with
 `"IsDevelopmentOrDemo": true` has **no effect** — the overlay wins, the flag is `false`, and with no signing
-key configured every request that touches token issuance or validation fails with the
-"No signing key is configured for the OpenIddict identity module" error. This is why the same image behaves
+key configured the default shell fails activation with the
+"No signing key is configured for the OpenIddict identity module" error. (The overlay also blanks the seed admin
+password; if that is missing too, activation fails on it first.) This is why the same image behaves
 differently under `ASPNETCORE_ENVIRONMENT=Development` (no `shells.Development.json` exists, so the
 `shells.json` value survives — and the Development environment also satisfies the startup guard above). For a
 non-Development demo host, don't chase the flag: configure a real `SigningKey` per the go-live checklist. For

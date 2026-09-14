@@ -4,11 +4,17 @@
 
 **Created**: 2026-07-26
 
-**Status**: Restated for first-party EF removal; implementation and final promotion remain pending.
+**Status**: Superseded by [ADR 0073](../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
+and the [EF Core Persistence program](../../docs/program-goals/ef-core-persistence.md); retained for
+historical requirement and issue provenance only.
 
-## Current governing scope — 2026-09-07
+## Historical governing scope — superseded 2026-09-12
 
-This section supersedes the July specification below where it conflicts. It records the owner-approved vendor-host exception (2026-09-01) and implementation/validation split (2026-09-06); it is not a completion receipt. Issue [#1489](https://github.com/elsa-workflows/elsa-foundation/issues/1489) owns this restatement, after shared-kernel removal [#1484](https://github.com/elsa-workflows/elsa-foundation/issues/1484).
+This section formerly superseded the July specification where it conflicted. It records the
+owner-approved vendor-host exception (2026-09-01) and implementation/validation split (2026-09-06),
+but it is no longer governing scope or a completion receipt. Issue
+[#1489](https://github.com/elsa-workflows/elsa-foundation/issues/1489) owns the historical restatement,
+after shared-kernel removal [#1484](https://github.com/elsa-workflows/elsa-foundation/issues/1484).
 
 1. **First-party EF-free, not package-absolute zero.** Remove Elsa-owned EF stores, adapters, wrappers, contexts, migrations, shared EF infrastructure, obsolete EF-only tests and compiled benchmark comparators. Preserve valid behavioral objectives in named replacement tests. Core contracts and Groundwork adapters remain.
 2. **Narrow vendor-host exception.** Workbench may use the vendor `OpenIddict.EntityFrameworkCore` stores and the dependencies/configuration needed for them. This does not permit Elsa-owned OpenIddict EF wrappers or first-party persistence through EF. Do not implement an OpenIddict adapter on Groundwork. Groundwork provider selection covers Elsa-owned durable lanes, not the vendor authorization-server store.

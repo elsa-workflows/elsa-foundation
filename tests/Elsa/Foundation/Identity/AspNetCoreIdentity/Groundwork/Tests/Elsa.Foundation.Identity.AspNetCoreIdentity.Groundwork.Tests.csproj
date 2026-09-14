@@ -6,8 +6,8 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
-    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.4.0-preview.27" />
-    <PackageReference Include="Groundwork.Testing" VersionOverride="0.4.0-preview.27" />
+    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.4.0-preview.30" />
+    <PackageReference Include="Groundwork.Testing" VersionOverride="0.4.0-preview.30" />
     <PackageReference Include="CShells.FastEndpoints" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
@@ -29,6 +29,7 @@
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Foundation\Identity\Persistence\Groundwork\Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\ProcessProbe\Elsa.Foundation.Identity.AspNetCoreIdentity.Groundwork.ProcessProbe.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\..\Persistence\Groundwork\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
 
   <ItemGroup>

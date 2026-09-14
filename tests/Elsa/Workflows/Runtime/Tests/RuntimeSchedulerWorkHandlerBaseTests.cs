@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -82,7 +83,7 @@ public sealed class RuntimeSchedulerWorkHandlerBaseTests
     [Fact]
     public void TimeProvider_DefaultsToSystemAndKeepsExplicitInstance()
     {
-        var explicitProvider = new FixedTimeProvider();
+        var explicitProvider = new FakeTimeProvider();
 
         Assert.Same(TimeProvider.System, new TestHandler(new CountingScopeFactory()).Clock);
         Assert.Same(explicitProvider, new TestHandler(new CountingScopeFactory(), explicitProvider).Clock);
@@ -105,8 +106,6 @@ public sealed class RuntimeSchedulerWorkHandlerBaseTests
     }
 
     private sealed class Marker;
-
-    private sealed class FixedTimeProvider : TimeProvider;
 
     private sealed class TestHandler(IServiceScopeFactory scopeFactory, TimeProvider? timeProvider = null)
         : RuntimeSchedulerWorkHandlerBase<string>(scopeFactory, timeProvider)

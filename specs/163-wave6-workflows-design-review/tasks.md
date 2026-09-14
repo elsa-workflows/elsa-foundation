@@ -4,7 +4,7 @@
 
 - [X] T001 Read review round 1, issue #1372 comments, ADR 0068, constitutions, migration reports, and current Workflows Design routes in `docs/`, `src/Elsa/Workflows/Design/Api/`, and `tests/`.
 - [X] T002 Create this official Spec Kit correction work unit and record its scope in `specs/163-wave6-workflows-design-review/`.
-- [X] T003 [P] Add the review reconciliation and owner migration report in `docs/reports/workflows-design-api-migration-2026-08.md`.
+- [X] T003 [P] Add the review reconciliation and owner migration report in `docs/reports/archive/workflows-design-api-migration-2026-08.md`.
 
 ## Phase 2: Foundational baseline and comparer
 
@@ -34,8 +34,8 @@
 
 ## Phase 6: Integration and evidence
 
-- [X] T018 [P] Run the documented Workflows Design backend E2E against a rebuilt Workbench and fresh SQLite database, recording command/result in `docs/reports/workflows-design-api-migration-2026-08.md`.
-- [X] T019 [P] Run import ordering/format, affected tests, Architecture, full build, maps check, and diff review; record results in `docs/reports/workflows-design-api-migration-2026-08.md`.
+- [X] T018 [P] Run the documented Workflows Design backend E2E against a rebuilt Workbench and fresh SQLite database, recording command/result in `docs/reports/archive/workflows-design-api-migration-2026-08.md`.
+- [X] T019 [P] Run import ordering/format, affected tests, Architecture, full build, maps check, and diff review; record results in `docs/reports/archive/workflows-design-api-migration-2026-08.md`.
 - [X] T020 Recheck issue comments/open PRs, review the final diff, commit clean local correction changes, and release the issue claim without push/PR.
 
 ## Dependencies

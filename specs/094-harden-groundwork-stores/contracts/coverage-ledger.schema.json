@@ -12,6 +12,7 @@
     "baselineRef",
     "mandatoryProviders",
     "compositionEvidence",
+    "compositionConditionalEntries",
     "entries"
   ],
   "properties": {
@@ -51,6 +52,9 @@
     "compositionEvidence": {
       "$ref": "#/$defs/compositionEvidence"
     },
+    "compositionConditionalEntries": {
+      "$ref": "#/$defs/compositionConditionalEntries"
+    },
     "entries": {
       "type": "array",
       "minItems": 1,
@@ -58,6 +62,94 @@
     }
   },
   "$defs": {
+    "compositionConditionalEntries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/compositionConditionalEntry" }
+    },
+    "compositionConditionalEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entryId",
+        "requiredWhenFeature",
+        "omittedWhenFeature",
+        "groundworkEvidenceOwner",
+        "alternateEvidenceOwner",
+        "alternateCompositionArtifact",
+        "alternateCompositionArtifactSha256",
+        "pilotIssue"
+      ],
+      "properties": {
+        "entryId": {
+          "type": "string",
+          "const": "secrets-repository"
+        },
+        "requiredWhenFeature": {
+          "type": "string",
+          "const": "SecretsGroundworkPersistence"
+        },
+        "omittedWhenFeature": {
+          "type": "string",
+          "const": "SecretsEntityFrameworkCore"
+        },
+        "groundworkEvidenceOwner": {
+          "type": "string",
+          "const": "tests/Elsa/Secrets/Persistence/Groundwork/"
+        },
+        "alternateEvidenceOwner": {
+          "type": "string",
+          "const": "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/"
+        },
+        "alternateCompositionArtifact": {
+          "type": "string",
+          "const": "evidence/composition/host-selection-ef-secrets-pilot.json"
+        },
+        "alternateCompositionArtifactSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "pilotIssue": {
+          "type": "string",
+          "const": "#1631"
+        }
+      }
+    },
+    "compositionOwnership": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "requiredWhenFeature",
+        "omittedWhenFeature",
+        "universalPrerequisite",
+        "pilotIssue"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "const": "selected-feature"
+        },
+        "requiredWhenFeature": {
+          "type": "string",
+          "const": "SecretsGroundworkPersistence"
+        },
+        "omittedWhenFeature": {
+          "type": "string",
+          "const": "SecretsEntityFrameworkCore"
+        },
+        "universalPrerequisite": {
+          "type": "boolean",
+          "const": false
+        },
+        "pilotIssue": {
+          "type": "string",
+          "const": "#1631"
+        }
+      }
+    },
     "compositionEvidence": {
       "type": "object",
       "additionalProperties": false,
@@ -469,9 +561,25 @@
           "items": { "type": "string", "minLength": 1 },
           "minItems": 1,
           "uniqueItems": true
+        },
+        "compositionOwnership": {
+          "$ref": "#/$defs/compositionOwnership"
         }
       },
       "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "const": "secrets-repository" }
+            },
+            "required": ["id"]
+          },
+          "then": {
+            "type": "object",
+            "required": ["compositionOwnership"]
+          }
+        },
         {
           "if": {
             "type": "object",

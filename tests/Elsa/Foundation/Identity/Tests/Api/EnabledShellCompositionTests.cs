@@ -33,8 +33,6 @@ namespace Elsa.Foundation.Identity.Tests.Api;
 /// (a) an anonymous request to the permission-secured endpoint is rejected with 401; and (b) the full
 /// login → token → bearer flow yields a token whose <c>elsa.identity.permission</c> claims satisfy
 /// <c>ConfigurePermissions()</c> (proving the same normalized permission-policy evaluator is used).
-/// The Development-only behaviour of the ApiSecurity.AllowAnonymous kill-switch (c) is proven directly by
-/// <c>ApiSecurityConfiguratorTests</c> and <c>PerShellApiSecurityIntegrationTests</c>.
 /// </summary>
 [Collection(FastEndpointsHostCollection.Name)]
 public sealed class EnabledShellCompositionTests : IAsyncLifetime

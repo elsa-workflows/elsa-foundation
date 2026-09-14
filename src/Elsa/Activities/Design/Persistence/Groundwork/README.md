@@ -1,6 +1,8 @@
 # Elsa.Activities.Design.Persistence.Groundwork
 
-Current-only Groundwork v2 persistence for Elsa activity design. The adapter uses the public
+Currently shipped Groundwork v2 persistence for Elsa activity design, pending replacement under
+[ADR 0073](../../../../../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md).
+The adapter uses the public
 `Groundwork.Kernel`, `Groundwork.Query.Model`, and `Groundwork.Store` APIs through
 `Elsa.Persistence.Groundwork.V2`; it does not open provider connections or execute provider-specific
 queries.

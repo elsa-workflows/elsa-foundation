@@ -51,10 +51,10 @@ Spec-number collisions exist (parallel branch numbering not yet reconciled): 071
 
 Two bodies of settled decisions were not represented in the bucket's objectives and are now linked and turned into Remaining objectives:
 
-1. **Seven addendum decisions** — [elsa-4-runtime-execution-addendum-topics.md](elsa-4-runtime-execution-addendum-topics.md): volatile wait vs. durable suspension, activity-completion propagation, event-driven generators vs. triggers, pause/unpause control-plane semantics, runtime terminology/glossary, wait-registration/post-commit-intent correlation, actor-style distributed execution. Locked, but no spec or implementation surface. This is the largest genuinely-undesigned area remaining.
-2. **Fifteen serialization/value-persistence decisions** — [elsa-4-runtime-serialization-brainstorm-decisions.md](elsa-4-runtime-serialization-brainstorm-decisions.md): unified value declaration model, durability vocabulary, ephemeral-by-default outputs. Partially reflected; no dedicated spec yet.
+1. **Seven addendum decisions** — [elsa-4-runtime-execution-addendum-topics.md](archive/elsa-4-runtime-execution-addendum-topics.md): volatile wait vs. durable suspension, activity-completion propagation, event-driven generators vs. triggers, pause/unpause control-plane semantics, runtime terminology/glossary, wait-registration/post-commit-intent correlation, actor-style distributed execution. Locked, but no spec or implementation surface. This is the largest genuinely-undesigned area remaining.
+2. **Fifteen serialization/value-persistence decisions** — [elsa-4-runtime-serialization-brainstorm-decisions.md](archive/elsa-4-runtime-serialization-brainstorm-decisions.md): unified value declaration model, durability vocabulary, ephemeral-by-default outputs. Partially reflected; no dedicated spec yet.
 
-The [action plan](elsa-4-runtime-execution-action-plan.md)'s 9 slices predate the delivered specs and should be cross-checked against this audit before any slice is treated as unstarted.
+The [action plan](archive/elsa-4-runtime-execution-action-plan.md)'s 9 slices predate the delivered specs and should be cross-checked against this audit before any slice is treated as unstarted.
 
 ## Governance Loose Ends
 

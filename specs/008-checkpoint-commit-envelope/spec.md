@@ -2,8 +2,9 @@
 
 **Feature Branch**: `codex/runtime-next-execution-slice`
 **Created**: 2026-06-10
-**Status**: Draft
-**Input**: Slice 3 from `docs/reports/elsa-4-runtime-execution-action-plan.md`
+**Status**: Implemented
+Implemented: #8 (restatused 2026-09-10 from git evidence)
+**Input**: Slice 3 from `docs/reports/archive/elsa-4-runtime-execution-action-plan.md`
 
 ## User Scenarios & Testing
 

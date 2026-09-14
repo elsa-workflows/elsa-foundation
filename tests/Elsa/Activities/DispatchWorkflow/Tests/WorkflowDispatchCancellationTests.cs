@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Activities.DispatchWorkflow.Tests;
 
@@ -390,7 +391,7 @@ public sealed class WorkflowDispatchCancellationTests
         await dispatchStore.SaveAsync(NewDispatch(WorkflowDispatchStatus.Pending));
         await dispatchStore.ApplyCancellationAsync(NewCancelRequest());
         var startDispatcher = new RecordingStartDispatcher();
-        var executor = new ChildStartExecutor(startDispatcher, dispatchStore, new FixedTimeProvider(Now.AddMinutes(1)));
+        var executor = new ChildStartExecutor(startDispatcher, dispatchStore, new FakeTimeProvider(Now.AddMinutes(1)));
 
         await executor.HandleAsync(NewStartIntent());
         await executor.HandleAsync(NewStartIntent());
@@ -407,7 +408,7 @@ public sealed class WorkflowDispatchCancellationTests
         var dispatchStore = new InMemoryWorkflowDispatchStore();
         await dispatchStore.SaveAsync(NewDispatch(WorkflowDispatchStatus.Pending));
         var startDispatcher = new RecordingStartDispatcher();
-        var executor = new ChildStartExecutor(startDispatcher, dispatchStore, new FixedTimeProvider(Now.AddMinutes(1)));
+        var executor = new ChildStartExecutor(startDispatcher, dispatchStore, new FakeTimeProvider(Now.AddMinutes(1)));
         var intent = NewStartIntent();
 
         await executor.HandleAsync(intent);
@@ -861,10 +862,5 @@ public sealed class WorkflowDispatchCancellationTests
                     Now),
                 ChildSource()));
         }
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

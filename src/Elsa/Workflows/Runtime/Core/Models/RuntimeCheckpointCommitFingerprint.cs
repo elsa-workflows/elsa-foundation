@@ -14,7 +14,7 @@ public static class RuntimeCheckpointCommitFingerprint
 
         // Preserve the exact pre-#676 JSON shape for commits without dispatch state so durable replay markers
         // written by older binaries keep the same fingerprint after upgrade.
-        // Consumed scheduler work items only appear on the WU-1 atomic-ack path, which never existed for older markers.
+        // Consumed scheduler work items only appear on the atomic-ack path, which never existed for older markers.
         // Emit a superset shape that also includes them so the pre-existing branches below stay byte-identical (and old
         // durable replay markers keep the same fingerprint) whenever no work item is consumed.
         object stateChanges = commit.StateChanges.ConsumedSchedulerWorkItems.Count > 0 || commit.StateChanges.AlterationJobTerminalChange is not null

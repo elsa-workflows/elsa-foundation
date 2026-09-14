@@ -25,6 +25,7 @@ internal static class RouteConstants
     internal static string Activities => GetRoute("activities");
     internal static string IncidentStrategies => GetRoute("incident-strategies");
     internal static string ValueConversionProfiles => GetRoute("value-conversion/profiles");
+    internal static string PublicationRecord => GetRoute("publications/{publicationId}");
     internal static string WorkflowSnapshotPreflight => GetRoute("workflows/preflight");
     internal static string WorkflowPreflight => GetRoute($"workflows/{{versionId:{VersionIdConstraint}}}/preflight");
     internal static string WorkflowPublish => GetRoute($"workflows/{{versionId:{VersionIdConstraint}}}/publish");

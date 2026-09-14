@@ -8,6 +8,8 @@ using Elsa.Workflows.Runtime.Core.Services.Coalescing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
+using Elsa.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
@@ -90,7 +92,7 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         var processor = new RuntimePostCommitOutboxProcessor(
             store,
             dispatcher,
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             DefaultRuntimeFaultCapturePolicy.CreateDefault(),
             workflowDispatchStore: null,
             logger);
@@ -139,7 +141,7 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         var processor = new RuntimePostCommitOutboxProcessor(
             store,
             dispatcher,
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             DefaultRuntimeFaultCapturePolicy.CreateDefault(),
             workflowDispatchStore: null,
             logger);
@@ -210,7 +212,7 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         var processor = new RuntimePostCommitOutboxProcessor(
             store,
             dispatcher,
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             DefaultRuntimeFaultCapturePolicy.CreateDefault(),
             workflowDispatchStore: null,
             logger);
@@ -260,7 +262,7 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         var processor = new RuntimePostCommitOutboxProcessor(
             store,
             scope.ServiceProvider.GetRequiredService<IRuntimePostCommitIntentDispatcher>(),
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
         await store.AddPendingForTestingAsync(NewOutboxItem(
             "outbox-unsupported",
             "intent-unsupported",
@@ -296,7 +298,7 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         var processor = new RuntimePostCommitOutboxProcessor(
             store,
             new RecordingDispatcher(identity.StartIntentId, new InvalidOperationException("start rejected")),
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             DefaultRuntimeFaultCapturePolicy.CreateDefault(),
             dispatchStore);
 
@@ -325,7 +327,7 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         var processor = new RuntimePostCommitOutboxProcessor(
             store,
             new RecordingDispatcher(identity.StartIntentId, new InvalidOperationException("unsupported failure")),
-            new FixedTimeProvider(_now),
+            new FakeTimeProvider(_now),
             DefaultRuntimeFaultCapturePolicy.CreateDefault(),
             dispatchStore);
 
@@ -556,7 +558,7 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         new(
             store,
             dispatcher,
-            new FixedTimeProvider(now),
+            new FakeTimeProvider(now),
             DefaultRuntimeFaultCapturePolicy.CreateDefault(),
             workflowDispatchStore: null,
             logger: null,
@@ -575,7 +577,7 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         IRuntimePostCommitOutboxStore store,
         RecordingDispatcher dispatcher,
         DateTimeOffset now) =>
-        new(store, dispatcher, new FixedTimeProvider(now));
+        new(store, dispatcher, new FakeTimeProvider(now));
 
     private RuntimePostCommitOutboxItem NewOutboxItem(
         string outboxItemId,
@@ -670,33 +672,6 @@ public sealed class RuntimePostCommitOutboxProcessorTests
             throw exception;
     }
 
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
-
-    private sealed class RecordingLogger<T> : ILogger<T>
-    {
-        public List<LogEntry> Entries { get; } = [];
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => NoopDisposable.Instance;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(
-            LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception? exception,
-            Func<TState, Exception?, string> formatter)
-        {
-            var fields = state is IEnumerable<KeyValuePair<string, object?>> structured
-                ? structured.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)
-                : new Dictionary<string, object?> { ["Message"] = formatter(state, exception) };
-            Entries.Add(new LogEntry(logLevel, eventId, fields, exception));
-        }
-    }
-
     private static void AssertPayloadSafe(LogEntry entry)
     {
         Assert.Null(entry.Exception);
@@ -705,19 +680,5 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         Assert.DoesNotContain("stack-secret", serialized, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("signal", serialized, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("sent", serialized, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private sealed record LogEntry(
-        LogLevel Level,
-        EventId EventId,
-        IReadOnlyDictionary<string, object?> Fields,
-        Exception? Exception);
-
-    private sealed class NoopDisposable : IDisposable
-    {
-        public static NoopDisposable Instance { get; } = new();
-        public void Dispose()
-        {
-        }
     }
 }

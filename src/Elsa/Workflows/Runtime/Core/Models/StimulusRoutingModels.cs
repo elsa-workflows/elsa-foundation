@@ -5,7 +5,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// How a stimulus should be routed (W7). A stimulus can start new workflow instances (from the trigger
+/// How a stimulus should be routed. A stimulus can start new workflow instances (from the trigger
 /// index), resume waiting instances (from the cross-execution bookmark index), or both.
 /// </summary>
 public enum StimulusRoutingMode
@@ -21,7 +21,7 @@ public enum StimulusRoutingMode
 }
 
 /// <summary>
-/// A request to route an external stimulus to workflows (W7, E3-1 + E3-5). The stimulus identity is the
+/// A request to route an external stimulus to workflows. The stimulus identity is the
 /// opaque <c>(StimulusType, StimulusHash)</c> pair that is already the engine's routing key on bookmarks
 /// and trigger bindings; the router does not invent a second hashing scheme.
 /// </summary>

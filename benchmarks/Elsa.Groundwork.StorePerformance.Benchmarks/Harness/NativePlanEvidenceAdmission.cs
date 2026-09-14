@@ -121,7 +121,19 @@ public static class NativePlanEvidenceAdmission
                     constituent.RawPlanSha256 is null ||
                     string.IsNullOrWhiteSpace(constituent.PlanClassification) ||
                     constituent.PhysicalIndexName is null ||
-                    string.IsNullOrWhiteSpace(constituent.CommandText))
+                    constituent.CommandText is null)
+                    throw new PerformanceContractException($"{name} contains an invalid trace-detail constituent entry.");
+                // A typed constituent carries its Groundwork observations and no raw plan or command text;
+                // its pages likewise. Admission of typed constituents reads the typed facts only.
+                var typedConstituent = constituent.StructuredEvidence is not null;
+                if (typedConstituent)
+                {
+                    if (constituent.RawPlanReference.Length != 0 || constituent.RawPlanSha256.Length != 0 || constituent.CommandText.Length != 0 ||
+                        (constituent.Pages ?? []).Any(page => page is null || page.StructuredEvidence is null ||
+                            page.RawPlanReference.Length != 0 || page.RawPlanSha256.Length != 0 || page.CommandText.Length != 0))
+                        throw new PerformanceContractException($"{name} contains a typed trace-detail constituent that also carries raw plan or command text.");
+                }
+                else if (string.IsNullOrWhiteSpace(constituent.CommandText))
                     throw new PerformanceContractException($"{name} contains an invalid trace-detail constituent entry.");
                 if (constituent.PhysicalCardinality <= 0 || constituent.FiniteLimit <= 0 || constituent.PublicRowBound <= 0 ||
                     constituent.MaterializedCandidateCount <= 0 || constituent.ObservedCommandCount <= 0 || constituent.MaxInvocationCount <= 0)
@@ -144,14 +156,16 @@ public static class NativePlanEvidenceAdmission
                 {
                     if (constituent.PlanClassification != "index-search" || string.IsNullOrWhiteSpace(constituent.PhysicalIndexName))
                         throw new PerformanceContractException($"{name} contains an unsafe or undigested trace-detail raw-plan reference.");
-                    references.Add(RequireRawPlan(evidenceDirectory, name, constituent.RawPlanReference, constituent.RawPlanSha256, "trace-detail raw-plan"));
+                    if (!typedConstituent)
+                        references.Add(RequireRawPlan(evidenceDirectory, name, constituent.RawPlanReference, constituent.RawPlanSha256, "trace-detail raw-plan"));
                 }
                 var indices = new List<int>();
                 foreach (var page in pages)
                 {
-                    if (page is null || page.PageIndex <= 0 || string.IsNullOrWhiteSpace(page.CommandText))
+                    if (page is null || page.PageIndex <= 0 || (!typedConstituent && string.IsNullOrWhiteSpace(page.CommandText)))
                         throw new PerformanceContractException($"{name} contains an invalid trace-detail continuation page entry.");
-                    references.Add(RequireRawPlan(evidenceDirectory, name, page.RawPlanReference, page.RawPlanSha256, $"trace-detail page {page.PageIndex} raw-plan"));
+                    if (!typedConstituent)
+                        references.Add(RequireRawPlan(evidenceDirectory, name, page.RawPlanReference, page.RawPlanSha256, $"trace-detail page {page.PageIndex} raw-plan"));
                     indices.Add(page.PageIndex);
                 }
                 var expectedPages = pointRead ? 1 : (constituent.PublicRowBound + constituent.FiniteLimit - 1) / constituent.FiniteLimit;

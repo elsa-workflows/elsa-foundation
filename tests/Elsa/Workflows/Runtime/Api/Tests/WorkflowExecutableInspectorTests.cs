@@ -9,6 +9,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Api.Tests;
 
@@ -27,7 +28,7 @@ public sealed class WorkflowExecutableInspectorTests
             _executableStore,
             _referenceStore,
             _executionStore,
-            new FixedTimeProvider(_now));
+            new FakeTimeProvider(_now));
     }
 
     [Fact]
@@ -798,11 +799,6 @@ public sealed class WorkflowExecutableInspectorTests
             scope == WorkflowExecutableReferenceScope.Published ? createdAt : null,
             scope,
             expiresAt);
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 
     private static Type ElementType(Type collectionType) => collectionType.GetInterfaces().Append(collectionType)
         .First(type => type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>)).GenericTypeArguments[0];

@@ -5,10 +5,10 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Services;
 
 /// <summary>
-/// Default <see cref="IStimulusRouter"/> (W7). It closes the largest Elsa 3 → Elsa 4 parity gap: routing an
+/// Default <see cref="IStimulusRouter"/>. It closes the largest Elsa 3 → Elsa 4 parity gap: routing an
 /// external stimulus to workflows with no explicit execution id. On a stimulus it (1) starts a new instance of
-/// every published workflow whose trigger index matches (E3-1), and (2) resumes every waiting instance across
-/// executions whose bookmark matches (E3-5).
+/// every published workflow whose trigger index matches, and (2) resumes every waiting instance across
+/// executions whose bookmark matches.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -83,13 +83,13 @@ public sealed class StimulusRouter : IStimulusRouter
             ? []
             : await SnapshotWaitingExecutionsAsync(request, now, cancellationToken);
 
-        // 2. Start a new instance for every matching published trigger (E3-1). A targeted request is ResumeOnly by
+        // 2. Start a new instance for every matching published trigger. A targeted request is ResumeOnly by
         //    construction, so it is already excluded here — no separate start-suppression rule is needed.
         var starts = request.Mode == StimulusRoutingMode.ResumeOnly
             ? []
             : await StartMatchingTriggersAsync(request, dispatchMetadata, cancellationToken);
 
-        // 3. Resume the snapshot fan-in set (E3-5).
+        // 3. Resume the snapshot fan-in set.
         var resumes = request.Mode == StimulusRoutingMode.StartOnly
             ? []
             : await ResumeWaitingExecutionsAsync(request, waitingExecutionIds, dispatchMetadata, cancellationToken);

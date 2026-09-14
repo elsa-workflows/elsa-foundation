@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-pause-boundary-enforcement`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #56, #57 (restatused 2026-09-10 from git evidence)
 **Input**: Continue the Runtime Execution Seam after control-plane state store and generator emission scheduling. The runtime has pause decisions but the scheduler drain path does not enforce them.
 
 ## Scenarios & Tests

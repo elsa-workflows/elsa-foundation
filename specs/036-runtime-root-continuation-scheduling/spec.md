@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-root-continuation-scheduling`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #38, #39 (restatused 2026-09-10 from git evidence)
 **Input**: Continue deterministic activity completion propagation after downstream scheduling exists.
 
 This slice intentionally supersedes the earlier slice-032 deferral where root activity completion still stopped before continuation scheduling. Child completion with a parent still follows the parent-evaluation path first.

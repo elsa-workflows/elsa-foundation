@@ -2,8 +2,9 @@
 
 **Feature Branch**: `codex/runtime-pipeline-slots`
 **Created**: 2026-06-10
-**Status**: Draft
-**Input**: Slice 4 from `docs/reports/elsa-4-runtime-execution-action-plan.md`
+**Status**: Implemented
+Implemented: #9 (restatused 2026-09-10 from git evidence)
+**Input**: Slice 4 from `docs/reports/archive/elsa-4-runtime-execution-action-plan.md`
 
 ## User Scenarios & Testing
 

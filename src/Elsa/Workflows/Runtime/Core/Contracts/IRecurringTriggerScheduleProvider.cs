@@ -3,8 +3,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
-/// Describes the recurring-start schedule a Timer/Cron start-trigger activity node declares, at publish time
-/// (W16). Providers form an exact-one Strategy set selected by executable-node context: the schedule indexer
+/// Describes the recurring-start schedule a Timer/Cron start-trigger activity node declares, at publish time.
+/// Providers form an exact-one Strategy set selected by executable-node context: the schedule indexer
 /// asks every provider to describe each recurring trigger node and fails preflight if more than one recognizes
 /// it. Returning <c>null</c> means "not my activity type".
 /// </summary>

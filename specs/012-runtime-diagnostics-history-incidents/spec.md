@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/runtime-diagnostics-history-incidents`
 **Created**: 2026-06-10
-**Input**: Slice 7 from `docs/reports/elsa-4-runtime-execution-action-plan.md`
+**Input**: Slice 7 from `docs/reports/archive/elsa-4-runtime-execution-action-plan.md`
 
 ## User Scenarios & Testing
 

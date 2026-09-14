@@ -1,7 +1,7 @@
 namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
 
 /// <summary>
-/// Options for the burst-coalescing checkpoint persistence policy (E3-6, RT-10). Bounds a coalesced segment so
+/// Options for the burst-coalescing checkpoint persistence policy. Bounds a coalesced segment so
 /// replay cost after a crash and in-memory working-set size stay bounded.
 /// </summary>
 public sealed class CoalescingRuntimeCheckpointPersistenceOptions

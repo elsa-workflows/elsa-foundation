@@ -28,10 +28,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Compile Remove="extension-builder\**\*.cs" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<Content Update="shells.baseline.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
@@ -90,7 +86,11 @@
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
 		<ProjectReference Include="..\..\Elsa\Secrets\Persistence\Groundwork\Elsa.Secrets.Persistence.Groundwork.csproj" />
-		<ProjectReference Include="..\..\Elsa\Secrets\Attention\Elsa.Secrets.Attention.csproj" />
+		<!--
+			Opt-in Secrets EF catalog (pilot #1630). WithHostAssemblies() makes SecretsEntityFrameworkCore
+			enablable via shells.json. Default shells keep SecretsGroundworkPersistence; do not enable both.
+		-->
+		<ProjectReference Include="..\..\Elsa\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Dashboard\Elsa.Workflows.Dashboard.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\JavaScript\Elsa.Workflows.Design.JavaScript.csproj" />
 		<!--
@@ -101,7 +101,13 @@
 		<ProjectReference Include="..\..\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Publishing\Persistence\Groundwork\Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
-		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Attention\Elsa.Workflows.Runtime.Attention.csproj" />
+		<!--
+			Hosts the WorkflowsRuntimeAttention and WorkflowsRuntimeTracing features. Tracing swaps the no-op
+			IWorkflowEngineTracer for the ActivitySource-backed tracer so the runtime emits drain/dispatch/activity/checkpoint
+			spans on the Elsa.Workflows.Runtime source; the host-local OpenTelemetryEngineTracingBridge feature then forwards
+			those spans into the OTel ingestion store.
+		-->
+		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Elsa.Workflows.Runtime.csproj" />
 		<ProjectReference Include="..\..\Elsa\Caching\Core\Elsa.Caching.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Caching\Memory\Elsa.Caching.Memory.csproj" />
 		<ProjectReference Include="..\..\Elsa\Diagnostics\ConsoleLogStreaming\Elsa.Diagnostics.ConsoleLogStreaming.csproj" />
@@ -112,9 +118,7 @@
 		<ProjectReference Include="..\..\Elsa\Locking\FileSystem\Elsa.Locking.FileSystem.csproj" />
 		<ProjectReference Include="..\..\Elsa\Mediator\Elsa.Mediator.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Api\Elsa.Modularity.Api.csproj" />
-		<ProjectReference Include="..\..\Elsa\Modularity\Attention\Elsa.Modularity.Attention.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Core\Elsa.Modularity.Core.csproj" />
-		<ProjectReference Include="..\..\Elsa\Modularity\ExtensionBuilder\Elsa.Modularity.ExtensionBuilder.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Nuplane\Elsa.Modularity.Nuplane.csproj" />
 		<ProjectReference Include="..\..\Elsa\Persistence\Groundwork\V2\Elsa.Persistence.Groundwork.V2.csproj" />
 		<ProjectReference Include="..\..\Elsa\Primitives\Primitives\Elsa.Primitives.csproj" />
@@ -158,14 +162,6 @@
 		-->
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Reconciliation\Elsa.Workflows.Runtime.Reconciliation.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
-		<!--
-			Engine self-instrumentation (MS-9): swaps the no-op IWorkflowEngineTracer for the ActivitySource-backed
-			tracer so the runtime emits drain/dispatch/activity/checkpoint spans on the Elsa.Workflows.Runtime source.
-			Its assembly must be in the CShells catalog so the WorkflowsRuntimeTracing feature is enablable via shells.json;
-			the host-local OpenTelemetryEngineTracingBridge feature then forwards those spans into the OTel ingestion store.
-		-->
-		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Tracing\Elsa.Workflows.Runtime.Tracing.csproj" />
-
 		<!--
 			Test-host execution evidence. The Workbench is a development and QA host, so the collector's assembly is in
 			the catalog and the feature is enabled below; a product host would simply omit both. It observes committed

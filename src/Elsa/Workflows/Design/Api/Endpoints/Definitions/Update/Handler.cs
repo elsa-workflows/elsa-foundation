@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Design.Api.Endpoints.Definitions.Update;
 
 /// <summary>
 /// Handles <see cref="UpdateDefinition"/>: resolves the current Draft owned by the target definition and
-/// forwards the complete desired state to the single coarse <see cref="IUpdateDraftCommand"/> (the DS-6
+/// forwards the complete desired state to the single coarse <see cref="IUpdateDraftCommand"/> (the Draft
 /// mutation gate). When the caller omits <see cref="UpdateDefinition.Layout"/> the stored layout is preserved
 /// rather than wiped, keeping a state-only edit from discarding designer positions. The updated details view
 /// is read back through the existing <see cref="GetDefinition"/> query so this handler owns no read assembly.

@@ -3,7 +3,7 @@ using Elsa.Workflows.Runtime.Core.Services.Coalescing;
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
-/// Establishes a checkpoint-coalescing session for the duration of a single workflow-execution drain (E3-6, RT-10).
+/// Establishes a checkpoint-coalescing session for the duration of a single workflow-execution drain.
 /// Registered only when coalescing is opted in; when absent the drain coordinator runs its existing path unchanged, so
 /// the default (Immediate) behavior is byte-for-byte preserved.
 /// </summary>
@@ -20,7 +20,7 @@ public interface IRuntimeCoalescingDrainScopeFactory
 /// <summary>
 /// A coalescing session scope. While alive, the ambient coalescing session redirects the runtime store decorators onto
 /// an in-memory working set. At quiescence the buffered segment is folded and flushed through the checkpoint committer
-/// (so W5 ownership fencing gates it); disposing pops the ambient scope.
+/// (so single-writer ownership fencing gates it); disposing pops the ambient scope.
 /// </summary>
 public interface IRuntimeCoalescingDrainScope : IAsyncDisposable
 {

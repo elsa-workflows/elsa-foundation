@@ -9,6 +9,11 @@ namespace Elsa.Modularity.Tests;
 
 public sealed class FeatureManagementServiceTests
 {
+    private const string SecuredFeatureId = "Secured";
+    private const string SigningKeyValue = "signing-key-value-that-must-not-leak";
+    private const string KeyRingValue = "key-ring-material-that-must-not-leak";
+    private const string DefaultApiKeyValue = "default-api-key-that-must-not-leak";
+
     private readonly FakeShellStore _store = new();
     private readonly FakeRuntimeRefresher _refresher = new();
     private readonly FakeShellReloader _reloader = new();
@@ -105,66 +110,195 @@ public sealed class FeatureManagementServiceTests
         Assert.Contains(result.Catalog.Features, x => x.Enabled);
     }
 
+    [Fact]
+    public async Task CatalogMasksSetSecretsAndLeavesUnsetSecretsAndOtherSettingsAlone()
+    {
+        _store.Features[SecuredFeatureId] = Json($$"""{"signingKey":"{{SigningKeyValue}}","KeyRing":{"k1":"{{KeyRingValue}}"},"EmptySecret":"","Mode":"fast"}""");
+
+        var catalog = await CreateService(SecuredFeature()).GetCatalogAsync();
+
+        var configuration = Assert.Single(catalog.Features, x => x.Id == SecuredFeatureId).Configuration;
+        Assert.Equal(SecretSettingMask.Placeholder, configuration.GetProperty("signingKey").GetString());
+        Assert.Equal(SecretSettingMask.Placeholder, configuration.GetProperty("KeyRing").GetString());
+        Assert.Equal("", configuration.GetProperty("EmptySecret").GetString());
+        Assert.Equal("fast", configuration.GetProperty("Mode").GetString());
+        AssertNoSecretValue(catalog);
+    }
+
+    [Fact]
+    public async Task CatalogMasksSecretDefaultValues()
+    {
+        var catalog = await CreateService(SecuredFeature()).GetCatalogAsync();
+
+        var settings = Assert.Single(catalog.Features, x => x.Id == SecuredFeatureId).Settings;
+        Assert.Equal(SecretSettingMask.Placeholder, Assert.Single(settings, x => x.Name == "ApiKey").DefaultValue?.GetString());
+        Assert.Equal("fast", Assert.Single(settings, x => x.Name == "Mode").DefaultValue?.GetString());
+        AssertNoSecretValue(catalog);
+    }
+
+    [Fact]
+    public async Task ApplyKeepsStoredSecretsWhenTheCatalogIsRoundTripped()
+    {
+        _store.Features[SecuredFeatureId] = Json($$"""{"SigningKey":"{{SigningKeyValue}}","KeyRing":{"k1":"{{KeyRingValue}}"},"Mode":"fast"}""");
+        var service = CreateService(SecuredFeature());
+        var catalog = await service.GetCatalogAsync();
+
+        var result = await service.ApplyAsync(new FeatureApplyRequest(
+            catalog.Revision,
+            catalog.Features.Where(x => x.Enabled).Select(x => new FeatureApplyItem(x.Id, true, x.Configuration)).ToArray()));
+
+        var stored = _store.Features[SecuredFeatureId];
+        Assert.Equal(SigningKeyValue, stored.GetProperty("SigningKey").GetString());
+        Assert.Equal(KeyRingValue, stored.GetProperty("KeyRing").GetProperty("k1").GetString());
+        AssertNoSecretValue(result.Catalog);
+    }
+
+    [Fact]
+    public async Task CatalogHidesTheConfigurationOfAFeatureWithoutSettingsMetadata()
+    {
+        // e.g. a feature still listed in shells.json whose package was pruned: nothing declares its settings.
+        _store.Features["Orphaned"] = Json($$"""{"ApiToken":"{{SigningKeyValue}}"}""");
+
+        var catalog = await CreateService().GetCatalogAsync();
+
+        var configuration = Assert.Single(catalog.Features, x => x.Id == "Orphaned").Configuration;
+        Assert.Equal(SecretSettingMask.Placeholder, configuration.GetProperty("ApiToken").GetString());
+        AssertNoSecretValue(catalog);
+    }
+
+    [Fact]
+    public async Task ApplyRestoresEachSecretFromItsOwnFeatureWhateverItsCasing()
+    {
+        _store.Features["SecuredA"] = Json("""{"signingKey":"signing-key-of-a"}""");
+        _store.Features["SecuredB"] = Json("""{"SIGNINGKEY":"signing-key-of-b"}""");
+        var service = CreateService(SecuredFeature("SecuredA"), SecuredFeature("SecuredB"));
+        var catalog = await service.GetCatalogAsync();
+        var placeholder = Json($$"""{"SigningKey":"{{SecretSettingMask.Placeholder}}"}""");
+
+        await service.ApplyAsync(new FeatureApplyRequest(catalog.Revision, [new("SecuredA", true, placeholder), new("SecuredB", true, placeholder)]));
+
+        Assert.Equal("signing-key-of-a", _store.Features["SecuredA"].GetProperty("SigningKey").GetString());
+        Assert.Equal("signing-key-of-b", _store.Features["SecuredB"].GetProperty("SigningKey").GetString());
+    }
+
+    [Fact]
+    public async Task ApplyKeepsAValueHiddenAtReadTimeEvenIfItsSettingIsDeclaredByApplyTime()
+    {
+        // The package declaring ApiUrl loads between the read and the apply; shells.json, and so the revision, is unchanged.
+        _store.Features["Sample"] = Json("""{"ApiUrl":"https://real"}""");
+        var contributor = new ContributingFeatureCatalogContributor("Sample");
+        var service = CreateService(contributor);
+        var catalog = await service.GetCatalogAsync();
+        contributor.Settings = [Setting("ApiUrl", "string", secret: false)];
+
+        await service.ApplyAsync(new FeatureApplyRequest(catalog.Revision, [new("Sample", true, Assert.Single(catalog.Features).Configuration)]));
+
+        Assert.Equal("https://real", _store.Features["Sample"].GetProperty("ApiUrl").GetString());
+    }
+
+    [Fact]
+    public async Task ApplyRestoresASecretWhenTheStoreMatchesFeatureIdsCaseSensitively()
+    {
+        var store = new FakeShellStore(StringComparer.Ordinal);
+        store.Features[SecuredFeatureId] = Json($$"""{"SigningKey":"{{SigningKeyValue}}"}""");
+        var service = new FeatureManagementService(store, [SecuredFeature()], _refresher, _reloader);
+        var catalog = await service.GetCatalogAsync();
+
+        await service.ApplyAsync(new FeatureApplyRequest(
+            catalog.Revision,
+            [new(SecuredFeatureId.ToLowerInvariant(), true, Json($$"""{"SigningKey":"{{SecretSettingMask.Placeholder}}"}"""))]));
+
+        Assert.Equal(SigningKeyValue, store.Features[SecuredFeatureId.ToLowerInvariant()].GetProperty("SigningKey").GetString());
+    }
+
+    [Fact]
+    public async Task ApplyWithoutFeaturesIsRejectedAsAnInvalidRequest()
+    {
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => CreateService().ApplyAsync(new FeatureApplyRequest("", null!)));
+
+        Assert.Contains("Revision is required", exception.Message);
+    }
+
+    [Fact]
+    public async Task ApplyRejectsAFeatureWithoutAnId()
+    {
+        var service = CreateService();
+        var catalog = await service.GetCatalogAsync();
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => service.ApplyAsync(new FeatureApplyRequest(
+            catalog.Revision,
+            [new(null!, true, Json($$"""{"SigningKey":"{{SecretSettingMask.Placeholder}}"}"""))])));
+
+        Assert.Contains("Feature ID is required", exception.Message);
+    }
+
+    [Fact]
+    public async Task ApplyStoresANewSecretValue()
+    {
+        _store.Features[SecuredFeatureId] = Json($$"""{"SigningKey":"{{SigningKeyValue}}"}""");
+        var service = CreateService(SecuredFeature());
+        var catalog = await service.GetCatalogAsync();
+
+        await service.ApplyAsync(new FeatureApplyRequest(
+            catalog.Revision,
+            [new(SecuredFeatureId, true, Json("""{"SigningKey":"rotated-signing-key"}"""))]));
+
+        Assert.Equal("rotated-signing-key", _store.Features[SecuredFeatureId].GetProperty("SigningKey").GetString());
+    }
+
+    [Fact]
+    public async Task ApplyDropsAPlaceholderThatHasNoStoredValue()
+    {
+        _store.Features[SecuredFeatureId] = Json("{}");
+        var service = CreateService(SecuredFeature());
+        var catalog = await service.GetCatalogAsync();
+
+        await service.ApplyAsync(new FeatureApplyRequest(
+            catalog.Revision,
+            [new(SecuredFeatureId, true, Json($$"""{"SigningKey":"{{SecretSettingMask.Placeholder}}","Mode":"slow"}"""))]));
+
+        var stored = _store.Features[SecuredFeatureId];
+        Assert.False(stored.TryGetProperty("SigningKey", out _));
+        Assert.Equal("slow", stored.GetProperty("Mode").GetString());
+    }
+
+    private static ContributingFeatureCatalogContributor SecuredFeature(string featureId = SecuredFeatureId) =>
+        new(
+            featureId,
+            Setting("SigningKey", "string", secret: true),
+            Setting("KeyRing", "object", secret: true),
+            Setting("EmptySecret", "string", secret: true),
+            Setting("ApiKey", "string", secret: true, defaultValue: $"\"{DefaultApiKeyValue}\""),
+            Setting("Mode", "string", secret: false, defaultValue: "\"fast\""));
+
+    private static FeatureSettingDescriptor Setting(string name, string jsonType, bool secret, string? defaultValue = null) =>
+        new(name, name, null, null, null, null, jsonType, false, defaultValue is null ? null : Json(defaultValue), secret, false, false, false, false, null, null, []);
+
+    private static void AssertNoSecretValue(FeatureCatalogResponse catalog)
+    {
+        var json = JsonSerializer.Serialize(catalog);
+        Assert.DoesNotContain(SigningKeyValue, json);
+        Assert.DoesNotContain(KeyRingValue, json);
+        Assert.DoesNotContain(DefaultApiKeyValue, json);
+    }
+
     private FeatureManagementService CreateService(params IFeatureCatalogContributor[] contributors) =>
         new(_store, contributors, _refresher, _reloader);
 
     private static JsonElement Json(string json) =>
         JsonDocument.Parse(json).RootElement.Clone();
 
-    private sealed class FakeShellStore : IShellFeatureConfigurationStore
+    private sealed class ContributingFeatureCatalogContributor(string featureId, params FeatureSettingDescriptor[] settings) : IFeatureCatalogContributor
     {
-        public Dictionary<string, JsonElement> Features { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public FeatureSettingDescriptor[] Settings { get; set; } = settings;
 
-        public Task<ShellFeatureConfigurationSnapshot> LoadAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(Snapshot());
-
-        public Task<ShellFeatureConfigurationSnapshot> SaveAsync(
-            string expectedRevision,
-            IReadOnlyList<FeatureConfigurationChange> features,
-            CancellationToken cancellationToken = default)
-        {
-            var current = Snapshot();
-            if (expectedRevision != current.Revision)
-                throw new FeatureCatalogRevisionConflictException(expectedRevision, current.Revision);
-
-            Features.Clear();
-            foreach (var feature in features.Where(x => x.Enabled))
-                Features[feature.Id] = feature.Configuration.Clone();
-
-            return Task.FromResult(Snapshot());
-        }
-
-        private ShellFeatureConfigurationSnapshot Snapshot()
-        {
-            var revision = string.Join('|', Features.OrderBy(x => x.Key).Select(x => $"{x.Key}:{x.Value.GetRawText()}"));
-            return new ShellFeatureConfigurationSnapshot("default", revision, Features);
-        }
-    }
-
-    private sealed class ContributingFeatureCatalogContributor(string featureId) : IFeatureCatalogContributor
-    {
         public Task ContributeAsync(FeatureCatalogContributionContext context, CancellationToken cancellationToken = default)
         {
             var feature = context.GetOrAdd(featureId);
             feature.DisplayName = featureId;
             feature.SourceKind = FeatureSourceKinds.Runtime;
+            feature.Settings = Settings;
             return Task.CompletedTask;
         }
-    }
-
-    private sealed class FakeRuntimeRefresher : IRuntimeFeatureCatalogRefresher
-    {
-        public int RefreshCount { get; private set; }
-
-        public Task<int> RefreshAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(++RefreshCount);
-    }
-
-    private sealed class FakeShellReloader : IShellReloader
-    {
-        public int ReloadCount { get; private set; }
-
-        public Task<int> ReloadAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(++ReloadCount);
     }
 }

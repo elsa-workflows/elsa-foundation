@@ -15,7 +15,7 @@ public sealed class WorkflowStrategyOptions
     /// The exact incident strategy to use when a fault occurs, or <see langword="null"/> to inherit
     /// the publishing host's effective default.
     /// </summary>
-    public Elsa.Workflows.Primitives.Models.IncidentStrategyReference? IncidentStrategy { get; set; }
+    public Elsa.Primitives.Models.IncidentStrategyReference? IncidentStrategy { get; set; }
 
     /// <summary>
     /// The alias of the strategy for committing workflow state.

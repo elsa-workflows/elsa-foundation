@@ -132,7 +132,7 @@ public sealed class GroundworkActivityDefinitionVersionStoreTests
     {
         var existing = Version("v1", "def1", "1.0.0");
         using var harness = await SeededAsync([Definition("def1")], existing);
-        var options = GroundworkActivitiesDesignDocumentSerialization.Create(Payloads);
+        var options = GroundworkActivitiesDesignDocumentSerialization.Get(Payloads);
         var duplicate = Version("v2", "def1", "1.0.0");
         var request = GroundworkV2ActivityDesignDocumentWriter.ToSaveRequest(
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,
@@ -239,7 +239,7 @@ public sealed class GroundworkActivityDefinitionVersionStoreTests
                 ActivitiesDesignStorageManifest.ActivityDefinitionCollection,
                 definition,
                 GroundworkActivitiesDesignJson.Options);
-        var options = GroundworkActivitiesDesignDocumentSerialization.Create(Payloads);
+        var options = GroundworkActivitiesDesignDocumentSerialization.Get(Payloads);
         foreach (var version in versions)
             await harness.SaveAsync(
                 ActivitiesDesignStorageManifest.ActivityDefinitionVersionDocumentKind,

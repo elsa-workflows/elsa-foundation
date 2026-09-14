@@ -68,7 +68,18 @@ internal static class StructuredEvidenceMapper
         Map(query.NativeLimit),
         query.HasContinuation,
         query.HasLookahead,
-        query.IncludesTotalCount);
+        query.IncludesTotalCount)
+    {
+        Continuation = query.Continuation is null ? null : Map(query.Continuation)
+    };
+
+    private static StructuredContinuationPredicate Map(ProviderContinuationPredicate continuation) => new(
+        continuation.Form.ToString(),
+        continuation.Branches.Select(branch => new StructuredContinuationBranch(
+            branch.Equalities.Select(Map).ToArray(),
+            Map(branch.Boundary),
+            branch.BoundaryAdmitsNull)).ToArray(),
+        continuation.TupleBounds.Select(Map).ToArray());
 
     private static StructuredPredicateFact Map(ProviderPredicateFact fact) => new(
         fact.LogicalColumn,
@@ -77,7 +88,7 @@ internal static class StructuredEvidenceMapper
         fact.Comparison.ToString(),
         fact.BoundInclusivity.ToString(),
         fact.BindingRole.ToString(),
-        fact.BindingId.Value);
+        fact.BindingId?.Value);
 
     private static StructuredOrderTerm Map(ProviderOrderTerm term) => new(
         term.LogicalColumn,
@@ -99,7 +110,10 @@ internal static class StructuredEvidenceMapper
         plan.FailureCategory?.ToString(),
         plan.CollectionCommandCount,
         plan.WinningPlan?.Nodes.Select(Map).ToArray(),
-        plan.WinningPlan?.ObservedRootOrder?.ToArray());
+        plan.WinningPlan?.ObservedRootOrder?.ToArray())
+    {
+        WithheldReason = plan.WithheldReason?.ToString()
+    };
 
     private static StructuredPlanNode Map(ProviderPlanNode node) => new(
         node.Id,

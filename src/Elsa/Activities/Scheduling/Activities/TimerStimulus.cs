@@ -5,8 +5,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Activities.Scheduling.Activities;
 
 /// <summary>
-/// Derives the stimulus identity and recurring-schedule spec of a <see cref="Timer"/> interval start trigger
-/// (W16). It maps an authored interval literal to the engine's opaque <c>(StimulusType, StimulusHash)</c>
+/// Derives the stimulus identity and recurring-schedule spec of a <see cref="Timer"/> interval start trigger.
+/// It maps an authored interval literal to the engine's opaque <c>(StimulusType, StimulusHash)</c>
 /// routing pair — the same pair the recurring-trigger pump dispatches and the trigger index binds — plus the
 /// recurrence descriptor the schedule store fires from. The publish-time trigger provider and schedule provider
 /// both derive their values here so a published <see cref="Timer"/> and the pump's dispatched stimulus resolve

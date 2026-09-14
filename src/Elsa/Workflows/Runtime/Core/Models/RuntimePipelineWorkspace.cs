@@ -21,9 +21,9 @@ public sealed class RuntimePipelineWorkspace
     /// <summary>
     /// The workflow-scoped service provider the drain established for this dispatch (the drain request's ambient
     /// services), staged explicitly by the dispatcher so slot-invoked handlers read it from the workspace instead of an
-    /// AsyncLocal service locator (RT-7). Null when the drain carried no ambient services, in which case a handler that
+    /// AsyncLocal service locator. Null when the drain carried no ambient services, in which case a handler that
     /// needs a scope creates its own — byte-identical to the former <c>accessor.Current is null</c> fallback. Distinct
-    /// from W9's opt-in ambient coalescing <em>session flag</em>, which remains a deliberate documented exception.
+    /// from the coalescing layer's opt-in ambient <em>session flag</em>, which remains a deliberate documented exception.
     /// </summary>
     public IServiceProvider? AmbientServices { get; set; }
 
@@ -41,8 +41,8 @@ public sealed class RuntimePipelineWorkspace
     /// <c>RuntimeCheckpointCommitter.CommitAsync</c> once per entry — one staged entry maps to exactly one committer
     /// call, byte-identical to the handler's former inline sequence. Most handlers stage exactly one commit; handlers
     /// that commit multiple times per dispatch (e.g. InvokeActivity) stage several. The Checkpoint slot MUST NOT fold or
-    /// batch these into a single commit: folding adjacent commits is the coalescing layer's job (W9), and batching at the
-    /// slot would change W9 boundary detection and W5 fencing granularity.
+    /// batch these into a single commit: folding adjacent commits is the coalescing layer's job, and batching at the
+    /// slot would change coalescing-boundary detection and single-writer fencing granularity.
     /// </summary>
     public IReadOnlyList<RuntimeCheckpointCommit> PendingCheckpointCommits => _pendingCheckpointCommits;
 

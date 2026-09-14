@@ -1,15 +1,9 @@
-using CShells.AspNetCore.Configuration;
-using CShells.AspNetCore.Extensions;
-using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Foundation.Identity.Abstractions.Security;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 
 namespace Elsa.Foundation.Identity.Tests.Api;
 
@@ -26,17 +20,13 @@ namespace Elsa.Foundation.Identity.Tests.Api;
 /// </summary>
 public sealed class DevelopmentOrDemoGuardShellActivationTests
 {
-    private const string ShellName = "identity-guard-probe";
-
     [Fact]
     public async Task DevDemo_Flag_In_Production_Aborts_Shell_Activation_With_The_Actionable_Message()
     {
-        await using var host = await StartHostAsync(Environments.Production);
-
-        var registry = host.Services.GetRequiredService<IShellRegistry>();
+        await using var host = await ShellActivationHost.StartAsync<GuardProbeFeature>(Environments.Production);
 
         // Activating the shell runs its initializers — the guard's real production path. It must abort.
-        var exception = await Assert.ThrowsAnyAsync<Exception>(() => registry.GetOrActivateAsync(ShellName));
+        var exception = await Assert.ThrowsAnyAsync<Exception>(host.ActivateShellAsync);
 
         var message = Flatten(exception);
         Assert.Contains("IsDevelopmentOrDemo", message, StringComparison.Ordinal);
@@ -50,32 +40,11 @@ public sealed class DevelopmentOrDemoGuardShellActivationTests
     [Fact]
     public async Task DevDemo_Flag_In_Development_Activates_The_Shell_Cleanly()
     {
-        await using var host = await StartHostAsync(Environments.Development);
-
-        var registry = host.Services.GetRequiredService<IShellRegistry>();
+        await using var host = await ShellActivationHost.StartAsync<GuardProbeFeature>(Environments.Development);
 
         // Same shell, same dev/demo flag, but Development environment — activation must succeed (no throw).
-        var shell = await registry.GetOrActivateAsync(ShellName);
+        var shell = await host.ActivateShellAsync();
         Assert.NotNull(shell);
-    }
-
-    private static async Task<WebApplication> StartHostAsync(string environment)
-    {
-        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = environment });
-        builder.WebHost.UseUrls("http://127.0.0.1:0");
-        builder.Logging.ClearProviders();
-
-        builder.Services.AddCShellsAspNetCore(shells =>
-        {
-            shells
-                .WithAssemblies(typeof(GuardProbeFeature).Assembly)
-                .AddShell(ShellName, shell => shell.WithFeature<GuardProbeFeature>());
-        });
-
-        var app = builder.Build();
-        app.MapShells();
-        await app.StartAsync();
-        return app;
     }
 
     /// <summary>Flattens an exception chain (activation may wrap the guard's exception) into one string.</summary>

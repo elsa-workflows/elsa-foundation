@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-activity-state-projection`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #42, #43 (restatused 2026-09-10 from git evidence)
 **Input**: Continue the Runtime Execution Seam after workflow execution state projection. Checkpoint commits already carry activity execution state changes; the default in-memory writer should project those changes into the existing activity execution state store.
 
 ## Scenarios & Tests

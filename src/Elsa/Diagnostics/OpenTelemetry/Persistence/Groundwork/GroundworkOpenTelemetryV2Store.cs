@@ -240,7 +240,9 @@ public sealed class GroundworkOpenTelemetryStore :
                 tracePredicate,
                 SpanColumns.StartTime,
                 maxQuerySize,
-                V2OpenTelemetryStorageSchema.SpanTraceDetailIndex,
+                // No nomination: the spanId ordinal identity orders through its persisted key and every
+                // continuation page carries typed evidence (valence-works/groundwork-v2#443, #422).
+                selectedIndex: null,
                 cancellationToken,
                 SpanColumns.SpanId,
                 SpanColumns.Sequence)
@@ -254,7 +256,7 @@ public sealed class GroundworkOpenTelemetryStore :
                 logPredicate,
                 LogColumns.Timestamp,
                 maxQuerySize,
-                V2OpenTelemetryStorageSchema.LogTraceDetailIndex,
+                selectedIndex: null,
                 cancellationToken,
                 LogColumns.Id,
                 LogColumns.Sequence)

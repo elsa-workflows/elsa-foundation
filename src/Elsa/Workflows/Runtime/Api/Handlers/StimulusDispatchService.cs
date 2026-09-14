@@ -7,8 +7,8 @@ namespace Elsa.Workflows.Runtime.Api.Handlers;
 
 /// <summary>
 /// Maps the <see cref="DispatchStimulus"/> API request onto the runtime <see cref="IStimulusRouter"/> and projects
-/// its result into a <see cref="DispatchStimulusResponse"/> (W7). The endpoint is the integration surface that
-/// makes trigger-based start (E3-1) and cross-execution fan-in (E3-5) reachable from outside the process.
+/// its result into a <see cref="DispatchStimulusResponse"/>. The endpoint is the integration surface that
+/// makes trigger-based start and cross-execution fan-in reachable from outside the process.
 /// </summary>
 public sealed class StimulusDispatchService(IStimulusRouter router) : IStimulusDispatchService
 {

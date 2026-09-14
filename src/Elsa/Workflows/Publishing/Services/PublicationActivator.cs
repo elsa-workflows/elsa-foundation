@@ -61,7 +61,7 @@ public sealed class PublicationActivator(
             // still be marked failed while the coordinator's domain exception continues to the caller.
             await FailCandidateAsync(
                 candidate,
-                new PublicationFailure("publication_activation_refused", SafeMessage(exception.Message)),
+                new PublicationFailure(PublicationFailureCodes.PublicationActivationRefused, SafeMessage(exception.Message)),
                 CancellationToken.None);
             throw;
         }
@@ -113,20 +113,20 @@ public sealed class PublicationActivator(
     private static PublicationFailure MapFailure(WorkflowActivationResult activation) => activation.Conflict switch
     {
         WorkflowActivationConflict.RevisionMismatch =>
-            new("slot_revision_conflict", activation.Diagnostic ?? "The publication slot revision changed."),
+            new(PublicationFailureCodes.SlotRevisionConflict, activation.Diagnostic ?? "The publication slot revision changed."),
         WorkflowActivationConflict.ForeignSource =>
-            new("slot_owner_conflict", activation.Diagnostic ?? "The activation slot is owned by another activation source."),
+            new(PublicationFailureCodes.SlotOwnerConflict, activation.Diagnostic ?? "The activation slot is owned by another activation source."),
         _ when activation.CompensationDiagnostic is not null =>
-            new("activation_compensation_failed", activation.Diagnostic ?? "Publication activation failed and its compensation did not converge."),
+            new(PublicationFailureCodes.ActivationCompensationFailed, activation.Diagnostic ?? "Publication activation failed and its compensation did not converge."),
         _ => new(MapFailedStep(activation.FailedStep), activation.Diagnostic ?? "Publication activation failed.")
     };
 
     private static string MapFailedStep(WorkflowActivationStep step) => step switch
     {
-        WorkflowActivationStep.ProjectionPreparation => "projection_preparation_failed",
+        WorkflowActivationStep.ProjectionPreparation => PublicationFailureCodes.ProjectionPreparationFailed,
         WorkflowActivationStep.ProjectionActivation or WorkflowActivationStep.TriggerObserverNotification =>
-            "projection_activation_failed",
-        _ => "publication_activation_failed"
+            PublicationFailureCodes.ProjectionActivationFailed,
+        _ => PublicationFailureCodes.PublicationActivationFailed
     };
 
     private async ValueTask<PublicationRecord> FailCandidateAsync(

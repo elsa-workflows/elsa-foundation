@@ -2,7 +2,6 @@ using Elsa.Api.AspNetCore;
 using System.Security.Claims;
 using CShells.AspNetCore.Features;
 using Elsa.Api.Compatibility.Testing.Endpoints;
-using Elsa.Api.Compatibility.Testing.Http;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
@@ -23,6 +22,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Studio.Preferences.Tests.Support;
 
@@ -37,6 +37,7 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
     public const string SubjectId = "user-7";
     public const string TenantId = "tenant-3";
 
+    private static readonly DateTimeOffset FixedUtcNow = new(2026, 8, 15, 12, 0, 0, TimeSpan.Zero);
     private readonly IHost host;
 
     private StudioPreferencesCanaryHost(IHost host)
@@ -72,7 +73,7 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
                         {
                             CanaryAuthenticationHandler.SchemeName
                         });
-                    services.AddSingleton<TimeProvider>(new FixedTimeProvider());
+                    services.AddSingleton<TimeProvider>(new FakeTimeProvider(FixedUtcNow));
                     services.AddSingleton<IAuthSessionService, CanaryAuthSessionService>();
                     services.AddScoped<IPermissionResourceHandler, CanaryPermissionResourceHandler>();
 
@@ -116,23 +117,6 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
         return new StudioPreferencesCanaryHost(host);
     }
 
-    public static async Task<IReadOnlyList<HttpCompatibilityObservation>> CaptureAsync(
-        IReadOnlyList<HttpCompatibilityCase> cases)
-    {
-        ArgumentNullException.ThrowIfNull(cases);
-        var observations = new List<HttpCompatibilityObservation>(cases.Count);
-
-        // A fresh host per case makes each observation independent of prior conditional writes and
-        // keeps revisions, timestamps, and seeded documents deterministic across repeated captures.
-        foreach (var testCase in cases)
-        {
-            await using var canary = await StartAsync();
-            observations.Add(await HttpEvidenceCapture.CaptureAsync(canary.Client, testCase));
-        }
-
-        return observations;
-    }
-
     public async Task<StudioPreferenceDocument?> FindDashboardAsync()
     {
         await using var scope = Services.CreateAsyncScope();
@@ -158,7 +142,7 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
             key,
             new StudioPreferenceWrite(1, value.RootElement.Clone()),
             StudioPreferenceWriteCondition.MustNotExist,
-            FixedTimeProvider.UtcNow);
+            FixedUtcNow);
     }
 
     private static void MapMigratedFeature(IEndpointRouteBuilder endpoints)
@@ -172,13 +156,6 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
         Client.Dispose();
         await host.StopAsync();
         host.Dispose();
-    }
-
-    private sealed class FixedTimeProvider : TimeProvider
-    {
-        public static readonly DateTimeOffset UtcNow = new(2026, 8, 15, 12, 0, 0, TimeSpan.Zero);
-
-        public override DateTimeOffset GetUtcNow() => UtcNow;
     }
 
     private sealed class CanaryAuthSessionService : IAuthSessionService

@@ -10,13 +10,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Elsa.Persistence.Groundwork.Runtime;
 
 /// <summary>Current-only Groundwork v2 immutable workflow executable and retention-coordination store.</summary>
-public sealed class GroundworkV2WorkflowExecutableStore : IWorkflowExecutableStore
+public sealed class GroundworkV2WorkflowExecutableStore : GroundworkV2RuntimeStoreBase, IWorkflowExecutableStore
 {
-    private readonly IGroundworkStorageSessionSource sessions;
-    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
-    private readonly string? targetName;
     private readonly ILogger<GroundworkV2WorkflowExecutableStore> logger;
-    private readonly StorageUnit executableUnit;
     private readonly StorageUnit coordinationUnit;
 
     public GroundworkV2WorkflowExecutableStore(
@@ -24,15 +20,10 @@ public sealed class GroundworkV2WorkflowExecutableStore : IWorkflowExecutableSto
         IPersistenceAccessContextAccessor accessContextAccessor,
         string? targetName = null,
         ILogger<GroundworkV2WorkflowExecutableStore>? logger = null)
+        : base(sessions, accessContextAccessor, targetName, "workflow executable", ElsaRuntimeV2StorageManifest.WorkflowExecutableDocumentKind)
     {
-        ArgumentNullException.ThrowIfNull(sessions);
-        ArgumentNullException.ThrowIfNull(accessContextAccessor);
-        this.sessions = sessions;
-        this.accessContextAccessor = accessContextAccessor;
-        this.targetName = targetName;
         this.logger = logger ?? NullLogger<GroundworkV2WorkflowExecutableStore>.Instance;
-        executableUnit = sessions.Unit(ElsaRuntimeV2StorageManifest.WorkflowExecutableDocumentKind, targetName);
-        coordinationUnit = sessions.Unit(ElsaRuntimeV2StorageManifest.WorkflowExecutableCoordinationDocumentKind, targetName);
+        coordinationUnit = UnitFor(ElsaRuntimeV2StorageManifest.WorkflowExecutableCoordinationDocumentKind);
     }
 
     public async ValueTask SaveAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default)
@@ -57,8 +48,8 @@ public sealed class GroundworkV2WorkflowExecutableStore : IWorkflowExecutableSto
         for (var attempt = 0; attempt < 32; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var executableSession = OpenExecutable();
-            var coordinationSession = OpenCoordination();
+            var executableSession = Open();
+            var coordinationSession = OpenScoped(coordinationUnit);
             var missing = new List<WorkflowExecutable>();
             foreach (var executable in executables)
             {
@@ -88,7 +79,7 @@ public sealed class GroundworkV2WorkflowExecutableStore : IWorkflowExecutableSto
             foreach (var executable in missing)
             {
                 unitOfWork.Stage(RowWrite.Insert(
-                    executableUnit,
+                    Unit,
                     GroundworkV2WorkflowExecutableStorageConventions.Values(executable),
                     WriteOptions.CreateOnly));
                 unitOfWork.Stage(RowWrite.Insert(
@@ -128,7 +119,7 @@ public sealed class GroundworkV2WorkflowExecutableStore : IWorkflowExecutableSto
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         cancellationToken.ThrowIfCancellationRequested();
-        var row = OpenExecutable().Read(GroundworkRuntimeRowStore.Key(artifactId));
+        var row = Open().Read(GroundworkRuntimeRowStore.Key(artifactId));
         return ValueTask.FromResult(row is null
             ? null
             : GroundworkV2WorkflowExecutableStorageConventions.Deserialize(row.Values.Values));
@@ -143,14 +134,14 @@ public sealed class GroundworkV2WorkflowExecutableStore : IWorkflowExecutableSto
         {
             using var unitOfWork = BeginAtomicUnitOfWork();
             var key = GroundworkRuntimeRowStore.Key(artifactId);
-            var executable = unitOfWork.OpenSession(executableUnit).Read(key);
+            var executable = unitOfWork.OpenSession(Unit).Read(key);
             var coordination = unitOfWork.OpenSession(coordinationUnit).Read(key);
             if (executable is null && coordination is null)
                 return false;
             if (executable is null || coordination is null)
                 throw new InvalidDataException($"Workflow executable '{artifactId}' has incomplete current storage state.");
 
-            unitOfWork.Stage(RowWrite.Delete(executableUnit, key, WriteOptions.IfVersion(RequiredVersion(executable, artifactId))));
+            unitOfWork.Stage(RowWrite.Delete(Unit, key, WriteOptions.IfVersion(RequiredVersion(executable, artifactId))));
             unitOfWork.Stage(RowWrite.Delete(coordinationUnit, key, WriteOptions.IfVersion(RequiredVersion(coordination, artifactId))));
             if ((await CommitAsync(unitOfWork, cancellationToken)).IsSuccessful)
                 return true;
@@ -330,7 +321,7 @@ public sealed class GroundworkV2WorkflowExecutableStore : IWorkflowExecutableSto
         {
             using var unitOfWork = BeginAtomicUnitOfWork();
             var key = GroundworkRuntimeRowStore.Key(guard.ArtifactId);
-            var executable = unitOfWork.OpenSession(executableUnit).Read(key);
+            var executable = unitOfWork.OpenSession(Unit).Read(key);
             var coordination = unitOfWork.OpenSession(coordinationUnit).Read(key);
             if (executable is null || coordination is null)
                 return false;
@@ -342,7 +333,7 @@ public sealed class GroundworkV2WorkflowExecutableStore : IWorkflowExecutableSto
                 return false;
 
             unitOfWork.Stage(RowWrite.Delete(
-                executableUnit,
+                Unit,
                 key,
                 WriteOptions.IfVersion(RequiredVersion(executable, guard.ArtifactId))));
             unitOfWork.Stage(RowWrite.Delete(
@@ -368,7 +359,7 @@ public sealed class GroundworkV2WorkflowExecutableStore : IWorkflowExecutableSto
             seenContinuations.Add(continuation);
         while (true)
         {
-            var table = new TableId(executableUnit.Name);
+            var table = new TableId(Unit.Name);
             var collection = Column(table, ElsaRuntimeV2StorageManifest.CollectionField);
             var artifact = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutableArtifactIdField);
             var query = new QueryRequest(
@@ -381,7 +372,7 @@ public sealed class GroundworkV2WorkflowExecutableStore : IWorkflowExecutableSto
                 continuation is null
                     ? Paging.Keyset(request.Limit)
                     : Paging.Continuation(continuation, request.Limit));
-            var result = OpenExecutable().Query(query);
+            var result = Open().Query(query);
             var executables = new List<WorkflowExecutable>(result.Rows.Count);
             foreach (var row in result.Rows)
             {
@@ -418,29 +409,16 @@ public sealed class GroundworkV2WorkflowExecutableStore : IWorkflowExecutableSto
         }
     }
 
-    private IStorageSession OpenExecutable() => sessions.Open(executableUnit.Id.Value, Access, targetName);
 
-    private IStorageSession OpenCoordination() => sessions.Open(coordinationUnit.Id.Value, Access, targetName);
-
-    private ColumnRef Column(TableId table, string name)
-    {
-        var definition = executableUnit.Columns.Single(column => StringComparer.Ordinal.Equals(column.Name, name));
-        return new ColumnRef(
-            table,
-            name,
-            QueryType.String,
-            definition.IsNullable,
-            definition.MaxLength);
-    }
 
     private (GroundworkV2WorkflowExecutableStorageConventions.CoordinationState State, long Version)? ReadCoordination(
         string artifactId)
     {
         var key = GroundworkRuntimeRowStore.Key(artifactId);
-        var row = OpenCoordination().Read(key);
+        var row = OpenScoped(coordinationUnit).Read(key);
         if (row is null)
             return null;
-        if (OpenExecutable().Read(key) is null)
+        if (Open().Read(key) is null)
             return null;
         return (
             GroundworkV2WorkflowExecutableStorageConventions.DeserializeCoordination(row.Values.Values, artifactId),
@@ -450,8 +428,8 @@ public sealed class GroundworkV2WorkflowExecutableStore : IWorkflowExecutableSto
     private bool HasCompleteWinningArtifact(string artifactId)
     {
         var key = GroundworkRuntimeRowStore.Key(artifactId);
-        var winner = OpenExecutable().Read(key);
-        var coordination = OpenCoordination().Read(key);
+        var winner = Open().Read(key);
+        var coordination = OpenScoped(coordinationUnit).Read(key);
         if (winner is null || coordination is null)
             return false;
         _ = GroundworkV2WorkflowExecutableStorageConventions.Deserialize(winner.Values.Values);
@@ -466,48 +444,23 @@ public sealed class GroundworkV2WorkflowExecutableStore : IWorkflowExecutableSto
         GroundworkV2WorkflowExecutableStorageConventions.CoordinationState state,
         long expectedVersion)
     {
-        if (OpenCoordination() is not IConcurrencyStorageSession concurrency)
-            throw new NotSupportedException(
-                "The selected Groundwork provider does not advertise optimistic workflow executable coordination.");
-        var outcome = concurrency.ConditionalUpsert(
+        var outcome = ConditionalUpsert(
+            OpenScoped(coordinationUnit),
             GroundworkV2WorkflowExecutableStorageConventions.CoordinationValues(artifactId, state),
-            WriteOptions.IfVersion(expectedVersion));
+            expectedVersion);
         return IsSaved(outcome.Status);
     }
 
-    private IUnitOfWork BeginAtomicUnitOfWork() => sessions.BeginUnitOfWork(
-        Access,
-        BatchWriteOptions.Exact,
-        [
+    private IUnitOfWork BeginAtomicUnitOfWork() => BeginAtomicUnitOfWork([
             ElsaRuntimeV2StorageManifest.WorkflowExecutableDocumentKind,
             ElsaRuntimeV2StorageManifest.WorkflowExecutableCoordinationDocumentKind
-        ],
-        targetName);
-
-    private StorageAccess Access
-    {
-        get
-        {
-            var context = accessContextAccessor.Current ??
-                          throw new InvalidOperationException("Workflow executable persistence access context is missing.");
-            if (context.Scope is null || context.AcrossScopes)
-            {
-                throw new InvalidOperationException(
-                    "Groundwork workflow executables require one explicit persistence scope; global and across-scope access are refused.");
-            }
-
-            return StorageAccess.Scoped(new StorageScope(context.Scope.Value));
-        }
-    }
+        ]);
 
     private void RequireAtomicCommit()
     {
-        if (sessions is not IGroundworkStorageCapabilitySource capabilitySource ||
-            !capabilitySource.Capabilities(targetName).Any(capability => capability.Id.Equals(WellKnownCapabilities.AtomicCommit)))
-        {
+        if (!HasAtomicCommit)
             throw new NotSupportedException(
                 "Groundwork workflow executable changes require the provider's evidenced atomic-commit capability.");
-        }
     }
 
     private static async ValueTask<BatchWriteReport> CommitAsync(
@@ -583,9 +536,6 @@ public sealed class GroundworkV2WorkflowExecutableStore : IWorkflowExecutableSto
         new(artifactId, state.OperationId, state.FencingToken);
 
     private static string NewFencingToken() => Guid.NewGuid().ToString("N");
-
-    private static bool IsSaved(WriteOutcomeStatus status) =>
-        status is WriteOutcomeStatus.Inserted or WriteOutcomeStatus.Updated or WriteOutcomeStatus.Upserted or WriteOutcomeStatus.Replayed;
 
     private static void ValidateTransition(
         string artifactId,

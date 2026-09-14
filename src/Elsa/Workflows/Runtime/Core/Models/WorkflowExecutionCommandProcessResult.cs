@@ -3,7 +3,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <summary>
 /// The outcome of <see cref="Contracts.IWorkflowExecutionCommandExecutor.ProcessAsync(WorkflowExecutionCommandEnvelope, WorkflowExecutionCommandDispatchOptions, System.Threading.CancellationToken)"/>.
 ///
-/// <para>Before RT-14 the processor returned <c>void</c>, so the <see cref="RuntimeSchedulerDrainResult"/> produced by the
+/// <para>The processor used to return <c>void</c>, so the <see cref="RuntimeSchedulerDrainResult"/> produced by the
 /// drain coordinator was discarded and dispatch callers always observed success even when the drain stopped on a fault or
 /// the outbox failed to deliver. This result carries the drain verdict back to the agent so it can surface a non-success
 /// dispatch outcome.</para>

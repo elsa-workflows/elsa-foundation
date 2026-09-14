@@ -1,8 +1,23 @@
 # Zero-EF Persistence
 
-Constitution reconciliation: ratified constitution v4.0.0 retains historical EF implementation examples in §E2.2.1, §E2.5 and §E5. Those examples do not enumerate current shipped APIs after this program's owner-approved deletion. Normative provider-neutrality rules remain unchanged. Updating the constitutional text itself is deferred to its proposal/discussion/ratification process; this program does not claim a new ratification. Current implementation inventory is the generated maps and this program's scope.
+> **Historical program — superseded 2026-09-12.** This goal records the former Groundwork
+> consolidation direction and any residual issue provenance, but it is no longer an active policy or
+> scheduling surface. [ADR 0073](../adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
+> and the active [EF Core Persistence goal](ef-core-persistence.md) own the opposite all-EF
+> replacement direction. Unfinished correctness and historical performance obligations did not pass
+> merely because this goal was superseded; the replacement program must implement each applicable
+> correctness obligation, carry it into the completed ledger, or explicitly retire only its
+> performance portion by owner policy.
 
-Status: active.
+Historical constitution reconciliation: ratified constitution v4.0.0 retains EF implementation
+examples in §E2.2.1, §E2.5 and §E5. This former program treated those examples as non-exhaustive,
+but its planned deletion did not complete and is not current policy. Normative provider-neutrality
+rules remain unchanged. Updating the constitutional text itself is deferred to its
+proposal/discussion/ratification process; this page does not claim a new ratification. The generated
+maps, ADR 0073, and the active EF Core Persistence goal own the current implementation inventory and
+direction.
+
+Status: superseded.
 
 Area: Elsa persistence-provider consolidation / Groundwork adoption.
 
@@ -10,13 +25,22 @@ Steward(s): Sipke plus active architects/agents.
 
 ## Purpose
 
-Make Groundwork the only first-party Elsa persistence implementation family, while keeping core persistence contracts and invariants independent of Groundwork. Remove Elsa-owned EF dependencies and implementations; retain the narrowly approved Workbench vendor `OpenIddict.EntityFrameworkCore` store and its necessary support. No Groundwork OpenIddict adapter is required.
+Historical purpose: make Groundwork the only first-party Elsa persistence implementation family,
+while keeping core persistence contracts and invariants independent of Groundwork. That direction is
+superseded by ADR 0073; the consolidation evidence and linked issue history remain useful provenance.
+No active work should be scheduled from this page.
 
-This is the successor to the completed [Groundwork Persistence Readiness](groundwork-persistence-readiness.md) goal. The earlier goal established and validated the provider-neutral foundation; this goal completes product adoption and removal of the parallel EF Core implementation lane.
+This was the successor to the completed [Groundwork Persistence Readiness](groundwork-persistence-readiness.md)
+goal. The earlier goal established and validated the provider-neutral foundation; this former goal
+would have completed product adoption and removed the parallel EF Core implementation lane.
 
-## In Scope
+## Historical Scope (superseded)
 
-- Ratify the Elsa provider boundary and the narrow constitution amendment it requires.
+The bullets in this section describe the former Groundwork program. They are retained only as
+provenance and must not be treated as current policy, requirements, or scheduling instructions.
+
+- The former program proposed ratifying the Elsa provider boundary and a narrow constitution
+  amendment; ADR 0073 later found no constitution conflict requiring such an amendment.
 - Track upstream Groundwork dependencies through the [Zero-EF Groundwork decision map](../decision-maps/zero-ef-groundwork.md).
 - Replace scale-bearing in-memory query fallbacks with bounded, server-side Groundwork queries.
 - Use Groundwork for Elsa-owned structured logs, OpenTelemetry and ASP.NET Core Identity persistence; preserve the vendor authorization-server boundary.
@@ -25,7 +49,7 @@ This is the successor to the completed [Groundwork Persistence Readiness](ground
 - Switch Elsa-owned reference-host lanes to Groundwork and remove first-party EF projects, migrations, registrations, dependencies and obsolete EF-only tests with recorded dispositions.
 - Keep an architecture guard that rejects first-party EF and scopes the vendor-host exception narrowly.
 
-## Out Of Scope
+## Historical Exclusions
 
 - Creating or maintaining a separate repository for optional EF Core implementations.
 - Migrating data from an already-released EF-backed Elsa installation; this software is greenfield.
@@ -33,7 +57,10 @@ This is the successor to the completed [Groundwork Persistence Readiness](ground
 - Reproducing general `IQueryable` or arbitrary LINQ support in Groundwork.
 - Generic map/reduce without a concrete Elsa workload that proves the need.
 
-## Active Objectives
+## Historical Objectives
+
+These objectives are retained for provenance. Any unfinished obligation continues only through its
+linked GitHub issue or another active program goal.
 
 1. Integrate diagnostics #642 and shared EF removal #1484, preserving the test-retention dispositions and historical evidence contracts.
 2. Complete the vendor-host scope restatement #1489 and final guard/leftover cleanup #1490.
@@ -57,9 +84,9 @@ This is the successor to the completed [Groundwork Persistence Readiness](ground
 - [Diagnostics Observability Readiness](diagnostics-observability-readiness.md)
 - [Runtime Execution Seam](runtime-execution-seam.md)
 
-## Current Roadmap Notes
+## Historical Roadmap Notes (superseded)
 
-**Current scope (2026-09-07):** The owner separated broad validation from implementation to reduce credit consumption. [Spec 144's governing scope](../../specs/144-zero-ef-final-removal/spec.md#current-governing-scope--2026-09-07) records that decision and the vendor OpenIddict exception. The combined removal candidate is under integration; final main promotion, guard cleanup and closeout are not yet claimed. Existing performance budgets and historical receipts are unchanged.
+**Historical scope (2026-09-07):** The owner separated broad validation from implementation to reduce credit consumption. [Spec 144's historical governing scope](../../specs/144-zero-ef-final-removal/spec.md#historical-governing-scope--superseded-2026-09-12) records that former decision and the vendor OpenIddict exception. The all-EF direction now belongs to ADR 0073 and Program #1665. Existing timing results remain historical evidence; performance measurement itself is retired by owner policy without a claim that its unfinished budgets passed.
 
 ### Historical roadmap notes — not current scheduling instructions
 
@@ -89,12 +116,14 @@ The dated notes below preserve prior milestones, package identities and failures
 - Structured Logs multi-writer replay hardening is implemented by [spec 091](../../specs/091-structured-logs-replay-cursors/spec.md): Core remains Groundwork-neutral, while the first-party adapter consumes Groundwork preview.33 diagnostic records. The temporary EF adapter received no migration or schema expansion.
 - Runtime hot paths remain subject to Runtime Execution Seam correctness and performance gates.
 
-## Drift / Review Notes
+## Historical Drift / Review Notes
 
 - If work changes general Groundwork vocabulary, public APIs, providers, or migration mechanics, implement it upstream and link the released dependency here.
 - If work changes diagnostic capture/query semantics rather than its persistence substrate, route it through Diagnostics Observability Readiness.
 - If a proposed rule is durable and enforceable across Elsa work units, route only that gate through Constitution Readiness; keep plans and sequencing here.
 
-## Removal or Completion Conditions
+## Historical Removal or Completion Conditions
 
-Complete implementation only after remote `main` contains the reviewed first-party EF removal, Elsa-owned durable lanes use Groundwork, vendor OpenIddict remains within its explicit host exception, narrow build/regression/startup/persistence checks pass, the permanent guard reflects that boundary, and issue/board records match delivery. The separate broad-validation handoff must be available with unresolved findings and exact source identities. Do not report #646, the full provider matrix or performance budgets as passed merely because this implementation bucket closes.
+This historical goal remains superseded. Its prior completion conditions were never satisfied and
+must not be reported as passed. Program #1665 maps their still-applicable correctness requirements
+into EF work and records performance-only requirements as retired by owner policy.

@@ -2,12 +2,35 @@
 
 The `Elsa.Secrets` package provides default services and shell feature registration for named secret management.
 
-## Groundwork persistence — host selection
+## Persistence host selection during the ADR 0073 migration
 
-`Elsa.Secrets.Persistence.Groundwork` is the first-party durable replacement for `ISecretRepository`; the
-contracts in this package remain Groundwork-free. Register a Groundwork v2 provider connection and call
+`Elsa.Secrets.Persistence.Groundwork` is still the default durable replacement for `ISecretRepository`
+until the Secrets migration slice completes its explicit flip; it is not the governing first-party direction.
+The contracts in this package remain provider-free. Register a Groundwork v2 provider connection and call
 `AddGroundworkSecretsStore()`. The feature contributes one scoped, optimistic `StorageUnit` and replaces the
 repository as a scoped service. A named target can be supplied when a host routes Secrets to a dedicated store.
+
+An EF Core replacement lives in `Elsa.Secrets.Persistence.EntityFrameworkCore`. It began as the
+ADR 0072 pilot and is the first existing implementation feeding accepted
+[ADR 0073](../../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md). It remains
+opt-in while the four-provider replacement gate is incomplete. Workbench catalogs the feature so a
+shell can select it; committed default shells temporarily keep
+`SecretsGroundworkPersistence` and must not also enable `SecretsEntityFrameworkCore`.
+Both registrations record `SecretRepositoryBackend` and throw if the other backend is already selected.
+
+Groundwork Secrets provider-matrix, coverage-ledger growth, and `host-selection-all35` obligations
+are owned by the Groundwork-selected composition (#1631). An EF-selected shell does not register the
+Groundwork `elsa-secrets` source and is not blocked by those Groundwork-only gates. When this
+Groundwork feature is selected or changed, retain
+`tests/Elsa/Secrets/Persistence/Groundwork/` (including the native provider matrix). See
+[`Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Persistence/EntityFrameworkCore/EXTENSION_POINTS.md)
+and that module's README for the exact feature swap.
+
+## Interim gate ownership — Groundwork vs EF
+
+- **Groundwork-selected** (`SecretsGroundworkPersistence`): `tests/Elsa/Secrets/Persistence/Groundwork/`, ledger row `secrets-repository`, `host-selection-all35`, and the Groundwork v2 native provider matrix CI job.
+- **EF-selected** (`SecretsEntityFrameworkCore`): `tests/Elsa/Secrets/Persistence/EntityFrameworkCore/`, `host-selection-ef-secrets-pilot.json` (omits `secrets-repository`), and the independent `Secrets EF composition` CI job.
+- Either/or per host. Quarantining Groundwork-only gates must not delete Groundwork Secrets tests.
 
 `SecretsGroundworkStorageSchema` declares the fresh `elsa-secrets` unit. Tenant id and normalized secret name form
 its key, searchable/filterable values are projected into typed columns, and the complete secret is retained in a

@@ -1,6 +1,7 @@
 using Elsa.Workflows.Dashboard;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Dashboard.Tests;
@@ -112,7 +113,7 @@ public sealed class WorkflowRunHealthServiceTests
     [Fact]
     public async Task UnsupportedProviderIsExplicitlyUnavailable()
     {
-        var service = new WorkflowRunHealthService(new UnavailableWorkflowRunHealthDataSource(), new FixedTimeProvider(Now));
+        var service = new WorkflowRunHealthService(new UnavailableWorkflowRunHealthDataSource(), new FakeTimeProvider(Now));
 
         var result = await service.QueryAsync(Query(Now, Now.AddHours(1)));
 
@@ -139,7 +140,7 @@ public sealed class WorkflowRunHealthServiceTests
             executionStore.SaveAsync(execution).AsTask().GetAwaiter().GetResult();
         foreach (var incident in incidents ?? [])
             incidentStore.SaveAsync(incident).AsTask().GetAwaiter().GetResult();
-        return new(new InMemoryWorkflowRunHealthDataSource(executionStore, incidentStore), new FixedTimeProvider(Now));
+        return new(new InMemoryWorkflowRunHealthDataSource(executionStore, incidentStore), new FakeTimeProvider(Now));
     }
 
     private static WorkflowRunHealthQuery Query(DateTimeOffset from, DateTimeOffset to) =>
@@ -172,9 +173,4 @@ public sealed class WorkflowRunHealthServiceTests
     private static IncidentState Incident(string id, string executionId) =>
         new(id, executionId, null, null, IncidentSeverity.Error, IncidentStatus.Open,
             null, "Failure", "Failed", Now, null);
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 }

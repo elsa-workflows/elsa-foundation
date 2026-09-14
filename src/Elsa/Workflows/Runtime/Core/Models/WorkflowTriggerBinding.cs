@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
 /// A durable index entry mapping an external stimulus identity to a start-trigger activity inside a
-/// published workflow executable (W7, E3-1). It is written at publish time and read by the stimulus
+/// published workflow executable. It is written at publish time and read by the stimulus
 /// router to start a new workflow instance when a matching stimulus arrives — the piece Elsa 4 was
 /// missing that made "start a workflow from an external event" impossible.
 /// </summary>

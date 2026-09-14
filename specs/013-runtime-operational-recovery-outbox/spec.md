@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/runtime-operational-recovery-outbox`
 **Created**: 2026-06-10
-**Input**: Slice 8 from `docs/reports/elsa-4-runtime-execution-action-plan.md`
+**Input**: Slice 8 from `docs/reports/archive/elsa-4-runtime-execution-action-plan.md`
 
 ## User Scenarios & Testing
 

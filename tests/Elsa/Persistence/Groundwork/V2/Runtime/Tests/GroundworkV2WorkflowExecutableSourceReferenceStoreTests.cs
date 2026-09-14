@@ -11,6 +11,7 @@ using Groundwork.SqlServer;
 using Groundwork.Store;
 using Xunit;
 using Xunit.Sdk;
+using Elsa.Persistence.Groundwork.V2.Testing;
 
 namespace Elsa.Persistence.Groundwork.V2.Runtime.Tests;
 
@@ -403,11 +404,6 @@ public sealed class GroundworkV2WorkflowExecutableSourceReferenceStoreTests
         }
 
         Skip.If(true, message);
-    }
-
-    private sealed class TestAccessContextAccessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
-    {
-        public PersistenceAccessContext Current { get; } = current;
     }
 
     private sealed class DirectSessionSource(IStorageProviderConnection connection, StorageUnit unit)

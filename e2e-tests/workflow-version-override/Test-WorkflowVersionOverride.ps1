@@ -12,7 +12,7 @@ param(
     [string] $Password = "Password123!"
 )
 
-. "$PSScriptRoot/../write-endpoints/_WriteCommon.ps1"
+. "$PSScriptRoot/../_WriteCommon.ps1"
 
 $script:WPass = 0
 $script:WTotal = 0

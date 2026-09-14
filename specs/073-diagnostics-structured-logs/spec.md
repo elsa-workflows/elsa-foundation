@@ -4,7 +4,8 @@
 
 **Created**: 2026-06-18
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: 1f2ce13ba, #649 (restatused 2026-09-10 from git evidence)
 
 **Input**: Port the structured-logs diagnostics capability from elsa-core (`Elsa.Diagnostics.StructuredLogs`) into elsa-foundation, adapted to foundation architecture. This slice covers capture, live streaming, an in-memory bounded store, and a query/recent API. Durable persistence is a separate follow-up slice.
 
