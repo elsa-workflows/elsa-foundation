@@ -78,15 +78,14 @@ public sealed class EfWorkflowExecutionStateStoreTests
         Assert.Contains(featureType.CustomAttributes, attribute => attribute.AttributeType.Name == "ShellFeatureAttribute");
         Assert.Contains(featureType.CustomAttributes, attribute => attribute.AttributeType.Name == "ManifestRuntimeKindAttribute");
         Assert.Equal(3, featureType.CustomAttributes.Count(attribute => attribute.AttributeType.Name == "ManifestFeatureCategoryAttribute"));
-        foreach (var propertyName in new[]
+        foreach (var property in new[]
                  {
                      nameof(RuntimeWorkflowExecutionEntityFrameworkCoreFeature.Provider),
                      nameof(RuntimeWorkflowExecutionEntityFrameworkCoreFeature.ConnectionString),
                      nameof(RuntimeWorkflowExecutionEntityFrameworkCoreFeature.ConnectionName),
                      nameof(RuntimeWorkflowExecutionEntityFrameworkCoreFeature.RecoveryContinuationSigningKey)
-                 })
+                 }.Select(featureType.GetProperty))
         {
-            var property = featureType.GetProperty(propertyName);
             Assert.Contains(property!.CustomAttributes, attribute => attribute.AttributeType.Name == "ManifestSettingAttribute");
         }
 
@@ -288,9 +287,18 @@ public sealed class EfWorkflowExecutionStateStoreTests
     private sealed class Database : IAsyncDisposable
     {
         private readonly SqliteConnection _connection;
-        private Database(SqliteConnection connection) => _connection = connection;
-        public static async Task<Database> CreateAsync() { var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync(); await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options); await context.Database.EnsureCreatedAsync(); return new Database(connection); }
-        public Fixture Open(string scope) => new(_connection, scope);
+        private readonly string _connectionString;
+        private Database(SqliteConnection connection, string connectionString) { _connection = connection; _connectionString = connectionString; }
+        public static async Task<Database> CreateAsync()
+        {
+            var connectionString = $"Data Source=file:elsa-runtime-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+            var connection = new SqliteConnection(connectionString);
+            await connection.OpenAsync();
+            await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+            await context.Database.EnsureCreatedAsync();
+            return new Database(connection, connectionString);
+        }
+        public Fixture Open(string scope) => new(_connectionString, scope);
         public async ValueTask DisposeAsync() => await _connection.DisposeAsync();
     }
     private sealed class Fixture : IAsyncDisposable
@@ -298,7 +306,13 @@ public sealed class EfWorkflowExecutionStateStoreTests
         private readonly SqliteConnection _connection;
         public readonly BookmarkStateSqliteDbContext Context;
         public readonly EfWorkflowExecutionStateStore Store;
-        public Fixture(SqliteConnection connection, string scope) { _connection = connection; Context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options); Store = new EfWorkflowExecutionStateStore(Context, new Accessor(scope), new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "01234567890123456789012345678901" }))); }
+        public Fixture(string connectionString, string scope)
+        {
+            _connection = new SqliteConnection(connectionString);
+            _connection.Open();
+            Context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(_connection).Options);
+            Store = new EfWorkflowExecutionStateStore(Context, new Accessor(scope), new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "01234567890123456789012345678901" })));
+        }
         public async ValueTask DisposeAsync() { await Context.DisposeAsync(); }
     }
     private sealed class Accessor(string value) : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(value)); }

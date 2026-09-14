@@ -70,6 +70,15 @@ internal static class RuntimeWorkflowExecutionProviderSmoke
             Assert.Equal(state.WorkflowExecutionId, (await store.FindAsync(state.WorkflowExecutionId))!.WorkflowExecutionId);
             Assert.Single((await store.QueryPageAsync(new WorkflowExecutionStatePageQuery(10))).Items);
             Assert.Contains("artifact-a", await store.ListPinnedExecutableArtifactIdsAsync());
+
+            var updated = state with { Status = WorkflowExecutionStatus.Running, SubStatus = "provider-update", UpdatedAt = state.UpdatedAt!.Value.AddMinutes(1) };
+            await store.SaveAsync(updated);
+            var updatedRoundTrip = await store.FindAsync(state.WorkflowExecutionId);
+            Assert.Equal(WorkflowExecutionStatus.Running, updatedRoundTrip!.Status);
+            Assert.Equal("provider-update", updatedRoundTrip.SubStatus);
+            Assert.Equal(updated.UpdatedAt, updatedRoundTrip.UpdatedAt);
+            Assert.True(await store.DeleteAsync(state.WorkflowExecutionId));
+            Assert.False(await store.DeleteAsync(state.WorkflowExecutionId));
         }
 
         var concurrent = State("workflow-execution-concurrent", scope, DateTimeOffset.UtcNow);
