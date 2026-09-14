@@ -8,6 +8,33 @@ public sealed class DesignPersistenceBackend
     public const string Groundwork = "groundwork";
     public const string EntityFramework = "entity-framework";
 
+    /// <summary>Provider-neutral design persistence contracts that select exactly one implementation.</summary>
+    public static IReadOnlySet<Type> ReplacementContractTypes { get; } = new HashSet<Type>
+    {
+        typeof(Elsa.Workflows.Design.Core.Contracts.IWorkflowDefinitionFactory),
+        typeof(Elsa.Workflows.Design.Core.Contracts.IWorkflowDefinitionDraftFactory),
+        typeof(Elsa.Workflows.Design.Core.Contracts.IWorkflowDefinitionVersionFactory),
+        typeof(Elsa.Workflows.Design.Core.Contracts.IWorkflowDefinitionLookup),
+        typeof(Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionStore),
+        typeof(Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionVersionStore),
+        typeof(Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionDraftStore),
+        typeof(Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionVersionLayoutStore),
+        typeof(Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionListProjectionStore),
+        typeof(Elsa.Workflows.Design.Persistence.Core.Contracts.IDesignAtomicWriter),
+        typeof(Elsa.Workflows.Design.Persistence.Core.Contracts.IAddWorkflowDefinitionCommand),
+        typeof(Elsa.Workflows.Design.Persistence.Core.Contracts.IAddWorkflowDefinitionVersionCommand),
+        typeof(Elsa.Workflows.Design.Persistence.Core.Contracts.ICreateDraftCommand),
+        typeof(Elsa.Workflows.Design.Persistence.Core.Contracts.ICloneDraftFromVersionCommand),
+        typeof(Elsa.Workflows.Design.Persistence.Core.Contracts.IDeleteWorkflowDefinitionPermanentlyCommand),
+        typeof(Elsa.Workflows.Design.Persistence.Core.Contracts.IDiscardDraftCommand),
+        typeof(Elsa.Workflows.Design.Persistence.Core.Contracts.IMaterializeWorkflowDefinitionCommand),
+        typeof(Elsa.Workflows.Design.Persistence.Core.Contracts.IMaterializeWorkflowDefinitionVersionCommand),
+        typeof(Elsa.Workflows.Design.Persistence.Core.Contracts.IPromoteDraftToVersionCommand),
+        typeof(Elsa.Workflows.Design.Persistence.Core.Contracts.ISaveWorkflowDefinitionCommand),
+        typeof(Elsa.Workflows.Design.Persistence.Core.Contracts.ISubmitWorkflowDefinitionCommand),
+        typeof(Elsa.Workflows.Design.Persistence.Core.Contracts.IUpdateDraftCommand)
+    };
+
     private readonly IReadOnlyList<ServiceDescriptor> descriptors;
 
     public DesignPersistenceBackend(string name, IEnumerable<ServiceDescriptor> descriptors)

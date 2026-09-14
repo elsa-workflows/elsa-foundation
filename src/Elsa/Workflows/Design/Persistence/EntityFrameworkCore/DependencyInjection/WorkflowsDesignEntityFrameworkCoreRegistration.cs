@@ -1,13 +1,16 @@
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Commands;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Elsa.Tasks.Core;
 
 namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.DependencyInjection;
 
@@ -30,6 +33,7 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         // before capturing this backend so a later backend replacement cannot remove the default
         // access-context accessor (and a caller's TryAdd custom accessor still wins).
         services.AddPersistenceCore();
+        services.TryAddSingleton<IServiceCollection>(services);
         var registrationStart = services.Count;
         services.AddSingleton(options);
         switch (provider)
@@ -41,6 +45,10 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
             default: throw new ArgumentException($"Unknown Workflows Design EF provider '{options.Provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.", nameof(options));
         }
         services.TryAddScoped<IDesignAtomicWriter, EfDesignAtomicWriter>();
+        services.TryAddScoped<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
+        services.TryAddScoped<IWorkflowDefinitionDraftFactory, WorkflowDefinitionDraftFactory>();
+        services.TryAddScoped<IWorkflowDefinitionVersionFactory, WorkflowDefinitionVersionFactory>();
+        services.TryAddScoped<IStartupTask, ValidateDesignPersistenceReplacementContractsStartupTask>();
         services.AddScoped<EfWorkflowDefinitionStore>(); services.AddScoped<IWorkflowDefinitionStore>(sp => sp.GetRequiredService<EfWorkflowDefinitionStore>());
         services.AddScoped<EfWorkflowDefinitionVersionStore>(); services.AddScoped<IWorkflowDefinitionVersionStore>(sp => sp.GetRequiredService<EfWorkflowDefinitionVersionStore>());
         services.AddScoped<EfWorkflowDefinitionDraftStore>(); services.AddScoped<IWorkflowDefinitionDraftStore>(sp => sp.GetRequiredService<EfWorkflowDefinitionDraftStore>());

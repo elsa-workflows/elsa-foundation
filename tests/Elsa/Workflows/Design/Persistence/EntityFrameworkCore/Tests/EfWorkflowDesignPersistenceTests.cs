@@ -19,6 +19,7 @@ using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Commands;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.DependencyInjection;
@@ -42,6 +43,20 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests;
 
 public sealed class EfWorkflowDesignPersistenceTests
 {
+    [Fact]
+    public void Definition_identity_rejects_malformed_utf16()
+    {
+        Assert.Throws<ArgumentException>(() => WorkflowDefinitionIdentity.Fold("\uD800"));
+        Assert.Throws<ArgumentException>(() => WorkflowDefinitionIdentity.Fold("\uDC00"));
+        Assert.Throws<ArgumentException>(() => WorkflowDefinitionIdentity.Fold("\uD800x"));
+    }
+
+    [Fact]
+    public void Definition_identity_accepts_and_folds_a_valid_surrogate_pair()
+    {
+        Assert.Equal("|010400", WorkflowDefinitionIdentity.Fold("\uD801\uDC00"));
+    }
+
     [Fact]
     public async Task Definition_ids_follow_groundwork_identity_folding_and_tenants_remain_ordinal()
     {
@@ -73,8 +88,8 @@ public sealed class EfWorkflowDesignPersistenceTests
         await db.SaveChangesAsync();
 
         await db.Database.ExecuteSqlRawAsync(
-            $"UPDATE {WorkflowsDesignEfModule.DefinitionTable} SET IdSearchKey = {{0}} WHERE TenantId = {{1}} AND Id = {{2}}",
-            WorkflowDefinitionIdentity.Fold("requested"), "tenant-a", "actual");
+            $"UPDATE {WorkflowsDesignEfModule.DefinitionTable} SET IdLookupHash = {{0}} WHERE TenantId = {{1}} AND Id = {{2}}",
+            LookupHash("requested"), "tenant-a", "actual");
 
         var store = new EfWorkflowDefinitionStore(db, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.FindByIdAsync("requested"));
@@ -293,6 +308,9 @@ public sealed class EfWorkflowDesignPersistenceTests
 
         Assert.NotNull(serviceProvider.GetRequiredService<IPersistenceAccessContextAccessor>());
         Assert.IsType<CustomDesignAtomicWriter>(serviceProvider.GetRequiredService<IDesignAtomicWriter>());
+        Assert.IsType<WorkflowDefinitionFactory>(serviceProvider.GetRequiredService<IWorkflowDefinitionFactory>());
+        Assert.IsType<WorkflowDefinitionDraftFactory>(serviceProvider.GetRequiredService<IWorkflowDefinitionDraftFactory>());
+        Assert.IsType<WorkflowDefinitionVersionFactory>(serviceProvider.GetRequiredService<IWorkflowDefinitionVersionFactory>());
         _ = serviceProvider.GetRequiredService<WorkflowsDesignDbContext>();
         _ = serviceProvider.GetRequiredService<WorkflowsDesignSqliteDbContext>();
         foreach (var serviceType in new[]

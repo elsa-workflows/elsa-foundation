@@ -13,8 +13,9 @@ public sealed class EfWorkflowDefinitionStore(WorkflowsDesignDbContext db, IPers
     public async Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => await FindByIdAsync(id, cancellationToken) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), id);
     public async Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default)
     {
+        var lookupHash = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(id));
         var row = await EfDesignSupport.ReadAsync("reading workflow definition", () => Query().SingleOrDefaultAsync(
-            x => EF.Property<string>(x, "IdSearchKey") == EfDesignSupport.SearchKey(id), cancellationToken));
+            x => EF.Property<string>(x, "IdLookupHash") == lookupHash, cancellationToken));
         if (row is not null)
             EfDesignSupport.EnsureDefinitionIdentity(id, row.Id, "workflow definition lookup");
         return row;
@@ -25,8 +26,17 @@ public sealed class EfWorkflowDefinitionStore(WorkflowsDesignDbContext db, IPers
         if (filter.TenantAgnostic == true && !access.Current.AcrossScopes)
             throw new InvalidOperationException("Tenant-agnostic workflow reads require privileged across-scope access.");
         var query = filter.TenantAgnostic == true ? db.Definitions.AsNoTracking() : Query();
-        if (filter.Id is not null) query = query.Where(x => EF.Property<string>(x, "IdSearchKey") == EfDesignSupport.SearchKey(filter.Id));
-        if (filter.Ids is not null) { if (filter.Ids.Count == 0) return []; var ids = filter.Ids.Select(EfDesignSupport.SearchKey).ToArray(); query = query.Where(x => ids.Contains(EF.Property<string>(x, "IdSearchKey"))); }
+        if (filter.Id is not null)
+        {
+            var lookupHash = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(filter.Id));
+            query = query.Where(x => EF.Property<string>(x, "IdLookupHash") == lookupHash);
+        }
+        if (filter.Ids is not null)
+        {
+            if (filter.Ids.Count == 0) return [];
+            var lookupHashes = filter.Ids.Select(EfDesignSupport.SearchKey).Select(EfDesignSupport.LookupHash).ToArray();
+            query = query.Where(x => lookupHashes.Contains(EF.Property<string>(x, "IdLookupHash")));
+        }
         if (filter.Name is not null) query = query.Where(x => x.Name == filter.Name);
         if (filter.Names is not null) { if (filter.Names.Count == 0) return []; query = query.Where(x => filter.Names.Contains(x.Name)); }
         if (filter.Description is not null) query = query.Where(x => x.Description == filter.Description);

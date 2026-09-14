@@ -5,6 +5,7 @@
     <ProjectReference Include="..\..\..\..\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\Core\Elsa.Workflows.Design.Core.csproj" />
     <ProjectReference Include="..\..\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
   </ItemGroup>
 
 </Project>

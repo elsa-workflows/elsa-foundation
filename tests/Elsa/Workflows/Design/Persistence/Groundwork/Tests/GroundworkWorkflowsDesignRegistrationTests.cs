@@ -21,6 +21,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 using Elsa.Testing;
+using Elsa.Tasks.Core;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
 
@@ -165,6 +166,22 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
         using var scope = provider.CreateScope();
         Assert.IsType<PriorDraftOriginator>(scope.ServiceProvider.GetRequiredService<IDraftOriginator>());
         Assert.Single(scope.ServiceProvider.GetServices<IDraftOriginator>());
+    }
+
+    [Fact]
+    public async Task Groundwork_registration_fails_startup_when_a_replacement_contract_is_duplicated_late()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkWorkflowsDesignStores();
+        services.AddScoped<IWorkflowDefinitionStore, PriorStore>();
+        using var provider = services.BuildServiceProvider();
+
+        using var scope = provider.CreateScope();
+        var task = Assert.Single(scope.ServiceProvider.GetServices<IStartupTask>(),
+            item => item is ValidateDesignPersistenceReplacementContractsStartupTask);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => task.ExecuteAsync(CancellationToken.None));
+
+        Assert.Contains(nameof(IWorkflowDefinitionStore), exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

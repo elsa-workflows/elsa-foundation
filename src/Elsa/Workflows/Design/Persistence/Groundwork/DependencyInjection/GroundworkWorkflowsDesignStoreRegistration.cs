@@ -11,6 +11,7 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Elsa.Tasks.Core;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
 
@@ -32,6 +33,7 @@ public static class GroundworkWorkflowsDesignStoreRegistration
         else if (HasOwnedSurfaceRegistration(services))
             throw new InvalidOperationException("An explicit workflow-design persistence registration is already present; Groundwork refuses to replace it implicitly.");
         services.AddPersistenceCore();
+        services.TryAddSingleton<IServiceCollection>(services);
         services.AddGroundworkStorageLane<WorkflowsDesignGroundworkStorageManifestSource>(targetName);
         foreach (var unit in WorkflowsDesignStorageManifest.CreateUnits())
             services.AddGroundworkStorageUnit(unit, targetName);
@@ -72,6 +74,7 @@ public static class GroundworkWorkflowsDesignStoreRegistration
         services.TryAddScoped<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
         services.TryAddScoped<IWorkflowDefinitionVersionFactory, WorkflowDefinitionVersionFactory>();
         services.TryAddScoped<IWorkflowDefinitionDraftFactory, WorkflowDefinitionDraftFactory>();
+        services.TryAddScoped<IStartupTask, ValidateDesignPersistenceReplacementContractsStartupTask>();
         DesignPersistenceBackend.Register(services, new DesignPersistenceBackend(
             DesignPersistenceBackend.Groundwork,
             services.Where(IsOwnedDescriptor).ToArray()));

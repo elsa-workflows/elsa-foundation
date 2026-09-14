@@ -37,6 +37,33 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
     }
     public async Task<IReadOnlyCollection<DesignMetadataRecord>> FindLayoutByDraftIdAsync(string draftId, CancellationToken cancellationToken = default) { var row = await EfDesignSupport.ReadAsync("reading workflow draft layout", () => Layout(draftId).SingleOrDefaultAsync(cancellationToken)); return row is null ? [] : EfDesignSupport.ReadLayout(db.Entry(row).Property<string>("RecordsJson").CurrentValue); }
     public async Task<IReadOnlyCollection<ActivityPresentationRecord>> FindActivityPresentationByDraftIdAsync(string draftId, CancellationToken cancellationToken = default) { var row = await EfDesignSupport.ReadAsync("reading workflow draft presentation", () => Layout(draftId).SingleOrDefaultAsync(cancellationToken)); return row is null ? [] : EfDesignSupport.ReadPresentation(db.Entry(row).Property<string>("ActivityPresentationJson").CurrentValue); }
-    public async Task<DraftWithLayout?> FindWithLayoutByIdAsync(string draftId, CancellationToken cancellationToken = default) { var draft = await FindByIdAsync(draftId, cancellationToken); if (draft is null) return null; var row = await EfDesignSupport.ReadAsync("reading workflow draft layout", () => Layout(draftId).SingleOrDefaultAsync(cancellationToken)); return new DraftWithLayout(draft, row is null ? [] : EfDesignSupport.ReadLayout(db.Entry(row).Property<string>("RecordsJson").CurrentValue), row is null ? [] : EfDesignSupport.ReadPresentation(db.Entry(row).Property<string>("ActivityPresentationJson").CurrentValue)); }
+    public async Task<DraftWithLayout?> FindWithLayoutByIdAsync(string draftId, CancellationToken cancellationToken = default)
+    {
+        // Draft and layout are one read contract. Keep them in one provider-translatable
+        // left-join so a concurrent update cannot produce a mixed snapshot between statements.
+        var drafts = Query();
+        var layouts = Layouts();
+        var result = await EfDesignSupport.ReadAsync("reading workflow draft with layout", () =>
+            (from draft in drafts
+             join layout in layouts on draft.Id equals layout.WorkflowDefinitionDraftId into matchingLayouts
+             from layout in matchingLayouts.DefaultIfEmpty()
+             where draft.Id == draftId
+             select new
+             {
+                 Draft = draft,
+                 RecordsJson = layout == null ? null : EF.Property<string>(layout, "RecordsJson"),
+                 ActivityPresentationJson = layout == null ? null : EF.Property<string>(layout, "ActivityPresentationJson")
+             }).SingleOrDefaultAsync(cancellationToken));
+
+        if (result is null)
+            return null;
+
+        var draft = EfDesignSupport.MapDraft(serializer, result.Draft);
+        return new DraftWithLayout(
+            draft,
+            EfDesignSupport.ReadLayout(result.RecordsJson),
+            EfDesignSupport.ReadPresentation(result.ActivityPresentationJson));
+    }
     private IQueryable<WorkflowDefinitionDraftLayout> Layout(string id) => EfDesignSupport.InScope(db.DraftLayouts, access, x => x.TenantId).Where(x => x.WorkflowDefinitionDraftId == id);
+    private IQueryable<WorkflowDefinitionDraftLayout> Layouts() => EfDesignSupport.InScope(db.DraftLayouts.AsNoTracking(), access, x => x.TenantId);
 }
