@@ -23,6 +23,55 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 public sealed class EfBookmarkStateStoreTests
 {
     [Fact]
+    public async Task Existing_R01_schema_without_incarnation_column_remains_usable()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = $"""
+                CREATE TABLE "{BookmarkStateEfModule.TableName}" (
+                    "Id" TEXT NOT NULL PRIMARY KEY,
+                    "ScopeKey" TEXT NOT NULL,
+                    "ScopeKeyHash" TEXT NOT NULL,
+                    "WorkflowExecutionId" TEXT NOT NULL,
+                    "WorkflowExecutionIdHash" TEXT NOT NULL,
+                    "WorkflowExecutionIdOrderKey" TEXT NOT NULL,
+                    "BookmarkId" TEXT NOT NULL,
+                    "BookmarkIdHash" TEXT NOT NULL,
+                    "BookmarkIdOrderKey" TEXT NOT NULL,
+                    "ActivityExecutionId" TEXT NOT NULL,
+                    "ExecutableNodeId" TEXT NOT NULL,
+                    "ResumeTargetId" TEXT NOT NULL,
+                    "StimulusType" TEXT NOT NULL,
+                    "StimulusHash" TEXT NOT NULL,
+                    "StimulusLookupKey" TEXT NOT NULL,
+                    "StimulusTypeLookupKey" TEXT NOT NULL,
+                    "PayloadJson" TEXT NULL,
+                    "ContentJson" TEXT NOT NULL,
+                    "MetadataJson" TEXT NOT NULL,
+                    "SchemaVersion" TEXT NOT NULL,
+                    "CreatedAtUtcTicks" INTEGER NOT NULL,
+                    "CreatedAtOffsetMinutes" INTEGER NOT NULL,
+                    "ExpiresAtUtcTicks" INTEGER NULL,
+                    "ExpiresAtOffsetMinutes" INTEGER NULL,
+                    "Revision" INTEGER NOT NULL
+                )
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        await using var context = new BookmarkStateSqliteDbContext(
+            new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+        var store = new EfBookmarkStateStore(context, new Accessor("tenant-a"));
+
+        await store.SaveAsync(State("r01-workflow", "r01-bookmark", "Event", "r01-hash"));
+
+        var roundTrip = await store.FindAsync("r01-workflow", "r01-bookmark");
+        Assert.Equal("r01-hash", roundTrip!.StimulusHash);
+    }
+
+    [Fact]
     public async Task Saves_round_trips_composite_identity_scope_and_lossless_payload()
     {
         await using var fixture = await Fixture.CreateAsync("tenant-a");
@@ -347,6 +396,26 @@ public sealed class EfBookmarkStateStoreTests
     }
 
     [Fact]
+    public async Task Stale_delete_after_delete_and_recreate_same_key_and_revision_preserves_successor()
+    {
+        await using var database = await FileDatabase.CreateAsync();
+        await using (var seed = database.Open())
+            await seed.Store.SaveAsync(State("wf-recreate", "bm", "Event", "original"));
+
+        var pause = new PausingSaveInterceptor();
+        await using var deleting = database.Open(pause);
+        await using var current = database.Open();
+        var delete = deleting.Store.DeleteAsync("wf-recreate", "bm").AsTask();
+        await pause.Entered;
+        Assert.True(await current.Store.DeleteAsync("wf-recreate", "bm"));
+        await current.Store.SaveAsync(State("wf-recreate", "bm", "Event", "successor"));
+        pause.Release();
+
+        Assert.False(await delete);
+        Assert.Equal("successor", (await current.Store.FindAsync("wf-recreate", "bm"))!.StimulusHash);
+    }
+
+    [Fact]
     public async Task External_transaction_rollback_leaves_no_bookmark()
     {
         await using var fixture = await Fixture.CreateAsync("tenant-a");
@@ -541,6 +610,325 @@ public sealed class EfBookmarkStateStoreTests
 
     }
 
+    [Theory]
+    [InlineData("context-type")]
+    [InlineData("context-instance")]
+    [InlineData("context-factory")]
+    [InlineData("options")]
+    [InlineData("base-context")]
+    public void Equivalent_registration_rejects_post_registration_context_contamination(string registration)
+    {
+        var options = new RuntimeBookmarksEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=runtime-bookmarks.db"
+        };
+        var services = new ServiceCollection();
+        services.AddRuntimeBookmarksEntityFrameworkCore(options);
+        AddCustomContextRegistration(services, registration);
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeBookmarksEntityFrameworkCore(options));
+        Assert.Equal(before, services);
+    }
+
+    [Fact]
+    public void Equivalent_registration_rejects_missing_owned_bookmark_store()
+    {
+        var options = new RuntimeBookmarksEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=runtime-bookmarks.db"
+        };
+        var services = new ServiceCollection();
+        services.AddRuntimeBookmarksEntityFrameworkCore(options);
+        var ownedStore = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfBookmarkStateStore));
+        services.Remove(ownedStore);
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeBookmarksEntityFrameworkCore(options));
+        Assert.Equal(before, services);
+    }
+
+    private static void AddCustomContextRegistration(IServiceCollection services, string registration)
+    {
+        switch (registration)
+        {
+            case "context-type":
+                services.AddScoped<BookmarkStateSqliteDbContext>();
+                break;
+            case "context-instance":
+                services.AddSingleton<BookmarkStateSqliteDbContext>(new BookmarkStateSqliteDbContext(
+                    new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().Options));
+                break;
+            case "context-factory":
+                services.AddScoped<BookmarkStateSqliteDbContext>(_ => throw new NotSupportedException());
+                break;
+            case "options":
+                services.AddSingleton<DbContextOptions<BookmarkStateSqliteDbContext>>(
+                    new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().Options);
+                break;
+            case "base-context":
+                services.AddScoped<BookmarkStateDbContext>(_ => throw new NotSupportedException());
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(registration), registration, null);
+        }
+    }
+
+    [Fact]
+    public void Registration_restores_the_exact_service_collection_when_backend_registration_fails()
+    {
+        var services = new ThrowingServiceCollection(
+            descriptor => descriptor.ServiceType == typeof(BookmarkStateStoreBackend));
+        services.Add(ServiceDescriptor.Singleton<object>(new object()));
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeBookmarksEntityFrameworkCore(new()));
+
+        Assert.Equal(before, services);
+    }
+
+    [Fact]
+    public void Combined_runtime_ef_registration_rejects_incompatible_options_in_either_order()
+    {
+        var bookmarks = new RuntimeBookmarksEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=bookmarks.db"
+        };
+        var artifacts = new RuntimeArtifactsEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=artifacts.db"
+        };
+
+        var bookmarksFirst = new ServiceCollection();
+        bookmarksFirst.AddWorkflowRuntime();
+        bookmarksFirst.AddRuntimeBookmarksEntityFrameworkCore(bookmarks);
+        Assert.Throws<InvalidOperationException>(() => bookmarksFirst.AddRuntimeArtifactsEntityFrameworkCore(artifacts));
+
+        var artifactsFirst = new ServiceCollection();
+        artifactsFirst.AddWorkflowRuntime();
+        artifactsFirst.AddRuntimeArtifactsEntityFrameworkCore(artifacts);
+        Assert.Throws<InvalidOperationException>(() => artifactsFirst.AddRuntimeBookmarksEntityFrameworkCore(bookmarks));
+    }
+
+    [Fact]
+    public void Combined_runtime_ef_registration_rejects_different_default_connections_in_either_order()
+    {
+        foreach (var register in new[] { "bookmarks-first", "artifacts-first" })
+        {
+            var services = new ServiceCollection();
+            services.AddWorkflowRuntime();
+            if (register == "bookmarks-first")
+            {
+                services.AddRuntimeBookmarksEntityFrameworkCore(new());
+                Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(new()));
+            }
+            else
+            {
+                services.AddRuntimeArtifactsEntityFrameworkCore(new());
+                Assert.Throws<InvalidOperationException>(() => services.AddRuntimeBookmarksEntityFrameworkCore(new()));
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Combined_runtime_ef_registration_accepts_matching_options_in_either_order()
+    {
+        var bookmarks = new RuntimeBookmarksEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=shared.db"
+        };
+        var artifacts = new RuntimeArtifactsEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=shared.db"
+        };
+
+        foreach (var register in new[] { "bookmarks-first", "artifacts-first" })
+        {
+            var services = new ServiceCollection();
+            services.AddWorkflowRuntime();
+            if (register == "bookmarks-first")
+            {
+                services.AddRuntimeBookmarksEntityFrameworkCore(bookmarks);
+                services.AddRuntimeArtifactsEntityFrameworkCore(artifacts);
+            }
+            else
+            {
+                services.AddRuntimeArtifactsEntityFrameworkCore(artifacts);
+                services.AddRuntimeBookmarksEntityFrameworkCore(bookmarks);
+            }
+
+            await using var provider = services.BuildServiceProvider();
+            using var scope = provider.CreateScope();
+            Assert.IsAssignableFrom<BookmarkStateDbContext>(scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
+            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
+            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(DbContextOptions<BookmarkStateSqliteDbContext>));
+            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+        }
+    }
+
+    [Fact]
+    public async Task Shared_context_resolves_after_artifact_withdrawal_and_artifact_ef_can_be_readded()
+    {
+        var options = new RuntimeBookmarksEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        };
+        var artifactOptions = new RuntimeArtifactsEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        };
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddRuntimeArtifactsEntityFrameworkCore(artifactOptions);
+        services.AddRuntimeBookmarksEntityFrameworkCore(options);
+        var customRegistration = ServiceDescriptor.Singleton(new CustomRegistration());
+        ((IServiceCollection)services).Add(customRegistration);
+
+        var artifactBackend = RuntimeArtifactStoreBackend.Find(services);
+        Assert.NotNull(artifactBackend);
+        artifactBackend!.RemoveOwnedArtifacts(services);
+
+        Assert.Contains(services, descriptor => ReferenceEquals(descriptor, customRegistration));
+        Assert.Equal(BookmarkStateStoreBackend.EntityFramework, BookmarkStateStoreBackend.Find(services)!.Name);
+        await using (var provider = services.BuildServiceProvider())
+        using (var scope = provider.CreateScope())
+        {
+            Assert.IsType<EfBookmarkStateStore>(scope.ServiceProvider.GetRequiredService<IBookmarkStateStore>());
+            Assert.IsType<BookmarkStateSqliteDbContext>(scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
+        }
+
+        services.AddRuntimeArtifactsEntityFrameworkCore(artifactOptions);
+
+        await using var restoredProvider = services.BuildServiceProvider();
+        using var restoredScope = restoredProvider.CreateScope();
+        Assert.IsType<EfWorkflowExecutableStore>(restoredScope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>());
+        Assert.IsType<EfBookmarkStateStore>(restoredScope.ServiceProvider.GetRequiredService<IBookmarkStateStore>());
+        Assert.IsType<BookmarkStateSqliteDbContext>(restoredScope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
+        Assert.IsType<CustomRegistration>(restoredScope.ServiceProvider.GetRequiredService<CustomRegistration>());
+    }
+
+    [Fact]
+    public async Task Shared_context_resolves_after_bookmark_withdrawal_and_bookmark_ef_can_be_readded()
+    {
+        var options = new RuntimeBookmarksEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        };
+        var artifactOptions = new RuntimeArtifactsEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        };
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddRuntimeBookmarksEntityFrameworkCore(options);
+        services.AddRuntimeArtifactsEntityFrameworkCore(artifactOptions);
+        var customRegistration = ServiceDescriptor.Singleton(new CustomRegistration());
+        ((IServiceCollection)services).Add(customRegistration);
+
+        var bookmarkBackend = BookmarkStateStoreBackend.Find(services);
+        Assert.NotNull(bookmarkBackend);
+        bookmarkBackend!.RemoveOwnedArtifacts(services);
+
+        Assert.Contains(services, descriptor => ReferenceEquals(descriptor, customRegistration));
+        Assert.Equal(RuntimeArtifactStoreBackend.EntityFramework, RuntimeArtifactStoreBackend.Find(services)!.Name);
+        await using (var provider = services.BuildServiceProvider())
+        using (var scope = provider.CreateScope())
+        {
+            Assert.IsType<EfWorkflowExecutableStore>(scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>());
+            Assert.IsType<BookmarkStateSqliteDbContext>(scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
+        }
+
+        services.AddRuntimeBookmarksEntityFrameworkCore(options);
+
+        await using var restoredProvider = services.BuildServiceProvider();
+        using var restoredScope = restoredProvider.CreateScope();
+        Assert.IsType<EfWorkflowExecutableStore>(restoredScope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>());
+        Assert.IsType<EfBookmarkStateStore>(restoredScope.ServiceProvider.GetRequiredService<IBookmarkStateStore>());
+        Assert.IsType<BookmarkStateSqliteDbContext>(restoredScope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
+        Assert.IsType<CustomRegistration>(restoredScope.ServiceProvider.GetRequiredService<CustomRegistration>());
+    }
+
+    [Theory]
+    [InlineData("bookmarks-first", "one")]
+    [InlineData("bookmarks-first", "all")]
+    [InlineData("artifacts-first", "one")]
+    [InlineData("artifacts-first", "all")]
+    public void Sibling_registration_rejects_missing_shared_context_descriptors_atomically(string first, string removal)
+    {
+        var bookmarks = new RuntimeBookmarksEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=shared.db"
+        };
+        var artifacts = new RuntimeArtifactsEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=shared.db"
+        };
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        if (first == "bookmarks-first")
+            services.AddRuntimeBookmarksEntityFrameworkCore(bookmarks);
+        else
+            services.AddRuntimeArtifactsEntityFrameworkCore(artifacts);
+
+        var contextDescriptors = services.Where(IsSharedContextDescriptor).ToArray();
+        Assert.NotEmpty(contextDescriptors);
+        if (removal == "one")
+            services.Remove(contextDescriptors[0]);
+        else
+            foreach (var descriptor in contextDescriptors)
+                services.Remove(descriptor);
+        var before = services.ToArray();
+
+        if (first == "bookmarks-first")
+            Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(artifacts));
+        else
+            Assert.Throws<InvalidOperationException>(() => services.AddRuntimeBookmarksEntityFrameworkCore(bookmarks));
+
+        Assert.Equal(before, services);
+    }
+
+    [Theory]
+    [InlineData("bookmarks-first")]
+    [InlineData("artifacts-first")]
+    public void Combined_runtime_ef_registration_rejects_post_registration_context_contamination(string first)
+    {
+        var bookmarks = new RuntimeBookmarksEntityFrameworkCoreOptions { Provider = "Sqlite", ConnectionString = "Data Source=shared.db" };
+        var artifacts = new RuntimeArtifactsEntityFrameworkCoreOptions { Provider = "Sqlite", ConnectionString = "Data Source=shared.db" };
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        if (first == "bookmarks-first")
+            services.AddRuntimeBookmarksEntityFrameworkCore(bookmarks);
+        else
+            services.AddRuntimeArtifactsEntityFrameworkCore(artifacts);
+
+        services.AddScoped<BookmarkStateSqliteDbContext>(_ => throw new NotSupportedException());
+        var before = services.ToArray();
+
+        var exception = first == "bookmarks-first"
+            ? Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(artifacts))
+            : Assert.Throws<InvalidOperationException>(() => services.AddRuntimeBookmarksEntityFrameworkCore(bookmarks));
+
+        Assert.Contains("registration already exists", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(before, services);
+    }
+
+    private static bool IsSharedContextDescriptor(ServiceDescriptor descriptor) =>
+        descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext) ||
+        descriptor.ServiceType == typeof(BookmarkStateDbContext) ||
+        descriptor.ServiceType == typeof(DbContextOptions<BookmarkStateSqliteDbContext>);
+
     private static async Task<Exception?> Capture(ValueTask<BookmarkState> operation)
     {
         try
@@ -566,6 +954,35 @@ public sealed class EfBookmarkStateStoreTests
     private sealed class DerivedFeature : RuntimeBookmarksEntityFrameworkCoreFeature
     {
         public override void ConfigureServices(IServiceCollection services) { }
+    }
+
+    private sealed class ThrowingServiceCollection(Func<ServiceDescriptor, bool> shouldThrow) : IServiceCollection
+    {
+        private readonly List<ServiceDescriptor> descriptors = [];
+
+        public ServiceDescriptor this[int index] { get => descriptors[index]; set => descriptors[index] = value; }
+        public int Count => descriptors.Count;
+        public bool IsReadOnly => false;
+        public void Add(ServiceDescriptor item)
+        {
+            if (shouldThrow(item))
+                throw new InvalidOperationException("synthetic service registration failure");
+            descriptors.Add(item);
+        }
+        public void Clear() => descriptors.Clear();
+        public bool Contains(ServiceDescriptor item) => descriptors.Contains(item);
+        public void CopyTo(ServiceDescriptor[] array, int arrayIndex) => descriptors.CopyTo(array, arrayIndex);
+        public IEnumerator<ServiceDescriptor> GetEnumerator() => descriptors.GetEnumerator();
+        public int IndexOf(ServiceDescriptor item) => descriptors.IndexOf(item);
+        public void Insert(int index, ServiceDescriptor item)
+        {
+            if (shouldThrow(item))
+                throw new InvalidOperationException("synthetic service registration failure");
+            descriptors.Insert(index, item);
+        }
+        public bool Remove(ServiceDescriptor item) => descriptors.Remove(item);
+        public void RemoveAt(int index) => descriptors.RemoveAt(index);
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     private sealed class Fixture : IAsyncDisposable
@@ -787,5 +1204,9 @@ public sealed class EfBookmarkStateStoreTests
     {
         public ValueTask<RuntimeStorePage<BookmarkState>> ListByStimulusPageAsync(BookmarkStimulusPageQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public ValueTask<RuntimeStorePage<BookmarkState>> ListByStimulusTypePageAsync(BookmarkStimulusTypePageQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class CustomRegistration
+    {
     }
 }

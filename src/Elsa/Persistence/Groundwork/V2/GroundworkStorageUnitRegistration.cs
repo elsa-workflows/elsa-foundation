@@ -57,12 +57,14 @@ public static class GroundworkStorageUnitServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Withdraws a storage declaration from every Groundwork target before the service provider is built.
+    /// Withdraws a storage declaration before the service provider is built. When a target is supplied,
+    /// only that physical store's declaration is removed; omitting it preserves all-target withdrawal.
     /// Runtime services remain registered because other Groundwork units can still own active stores.
     /// </summary>
     public static IServiceCollection RemoveGroundworkStorageUnit(
         this IServiceCollection services,
-        string unitId)
+        string unitId,
+        string? targetName = null)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(unitId);
@@ -71,7 +73,7 @@ public static class GroundworkStorageUnitServiceCollectionExtensions
             .Select(descriptor => descriptor.ImplementationInstance)
             .OfType<GroundworkStorageUnitRegistry>()
             .SingleOrDefault();
-        registry?.Withdraw(unitId);
+        registry?.Withdraw(unitId, targetName);
         return services;
     }
 

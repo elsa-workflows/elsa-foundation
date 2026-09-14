@@ -2,6 +2,7 @@ using System.Data.Common;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Security.Cryptography;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -30,7 +31,7 @@ public sealed class EfBookmarkStateStore(
             var existing = await context.Bookmarks.SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
             if (existing is null)
             {
-                context.Bookmarks.Add(ToEntity(state, scope, id, 1));
+                context.Bookmarks.Add(ToEntity(state, scope, id, NewRevision()));
             }
             else
             {
@@ -279,6 +280,17 @@ public sealed class EfBookmarkStateStore(
         var row = new BookmarkStateEntity { Id = id };
         CopyToEntity(row, state, scope, id, revision);
         return row;
+    }
+
+    // R01's schema only has a numeric concurrency token. Use a fresh positive token for
+    // each insertion so a stale delete cannot match a delete-and-recreate successor that
+    // happens to reuse the same logical key and revision sequence.
+    private static long NewRevision()
+    {
+        Span<byte> bytes = stackalloc byte[sizeof(long)];
+        RandomNumberGenerator.Fill(bytes);
+        var value = BitConverter.ToInt64(bytes) & (long.MaxValue >> 1);
+        return value == 0 ? 1 : value;
     }
 
     private static void CopyToEntity(BookmarkStateEntity row, BookmarkState state, string scope, string id, long revision)

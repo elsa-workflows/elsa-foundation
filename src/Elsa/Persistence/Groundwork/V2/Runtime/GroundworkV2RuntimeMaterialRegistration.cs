@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Persistence.Groundwork.Composition;
+using Elsa.Persistence.Groundwork.Targets;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,15 +39,33 @@ public static class GroundworkV2RuntimeMaterialRegistration
         string? targetName = null)
     {
         ArgumentNullException.ThrowIfNull(services);
-        foreach (var unitId in UnitIds)
-            services.AddGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.Require(unitId), targetName);
+        var target = GroundworkTargetNames.Normalize(targetName);
+        var snapshot = services.ToArray();
+        var registry = services
+            .Where(descriptor => descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry))
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<GroundworkStorageUnitRegistry>()
+            .SingleOrDefault();
+        var registrySnapshot = registry?.Registrations;
+        try
+        {
+            var existingBackend = RuntimeArtifactStoreBackend.Find(services);
+            if (existingBackend is not null)
+            {
+                existingBackend.EnsureOwnsRegisteredContracts(services);
+                existingBackend.RemoveOwnedArtifacts(services);
+            }
+            else
+                RuntimeArtifactStoreBackend.EnsureNoUnownedArtifactRegistrations(services);
+            foreach (var unitId in UnitIds)
+                services.AddGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.Require(unitId), target);
 
         services.RemoveAll<GroundworkV2WorkflowExecutableStore>();
         services.RemoveAll<IWorkflowExecutableStore>();
         services.AddScoped<GroundworkV2WorkflowExecutableStore>(provider => new(
             provider.GetRequiredService<IGroundworkStorageSessionSource>(),
             provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
-            targetName));
+            target));
         services.AddScoped<IWorkflowExecutableStore>(provider =>
             provider.GetRequiredService<GroundworkV2WorkflowExecutableStore>());
 
@@ -57,7 +76,7 @@ public static class GroundworkV2RuntimeMaterialRegistration
         services.AddScoped<GroundworkV2ExecutableActivityTemplateStore>(provider => new(
             provider.GetRequiredService<IGroundworkStorageSessionSource>(),
             provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
-            targetName));
+            target));
         services.AddScoped<IExecutableActivityTemplateStore>(provider =>
             provider.GetRequiredService<GroundworkV2ExecutableActivityTemplateStore>());
         services.AddScoped<IExecutableActivityTemplateReader>(provider =>
@@ -72,14 +91,27 @@ public static class GroundworkV2RuntimeMaterialRegistration
         services.AddScoped<GroundworkV2WorkflowExecutableSourceReferenceStore>(provider => new(
             provider.GetRequiredService<IGroundworkStorageSessionSource>(),
             provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
-            targetName));
+            target));
         services.AddScoped<IWorkflowExecutableSourceReferenceStore>(provider =>
             provider.GetRequiredService<GroundworkV2WorkflowExecutableSourceReferenceStore>());
         services.AddScoped<IWorkflowExecutableSourceReferenceReader>(provider =>
             provider.GetRequiredService<GroundworkV2WorkflowExecutableSourceReferenceStore>());
         services.AddScoped<IWorkflowExecutableSourceReferenceWriter>(provider =>
             provider.GetRequiredService<GroundworkV2WorkflowExecutableSourceReferenceStore>());
-        return services;
+            RuntimeArtifactStoreBackend.Register(services, new RuntimeArtifactStoreBackend(
+                RuntimeArtifactStoreBackend.Groundwork,
+                RuntimeArtifactStoreBackend.CaptureArtifactSurfaceRegistrations(services),
+                collection => GroundworkV2RuntimeUnitWithdrawal.RemoveArtifacts(collection, target)));
+            return services;
+        }
+        catch
+        {
+            services.Clear();
+            foreach (var descriptor in snapshot)
+                services.Add(descriptor);
+            registry?.Restore(registrySnapshot!);
+            throw;
+        }
     }
 
     private static readonly string[] UnitIds =

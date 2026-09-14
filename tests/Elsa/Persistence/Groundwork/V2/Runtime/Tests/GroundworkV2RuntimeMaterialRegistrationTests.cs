@@ -35,6 +35,34 @@ public sealed class GroundworkV2RuntimeMaterialRegistrationTests
         AssertAlias(services, typeof(IWorkflowExecutableSourceReferenceWriter));
     }
 
+    [Fact]
+    public void Material_registration_restores_the_exact_service_collection_when_backend_registration_fails()
+    {
+        var services = new ThrowingServiceCollection(
+            descriptor => descriptor.ServiceType == typeof(RuntimeArtifactStoreBackend));
+        services.Add(ServiceDescriptor.Singleton<object>(new object()));
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddGroundworkV2RuntimeMaterials());
+
+        Assert.Equal(before, services);
+    }
+
+    [Fact]
+    public void Replacing_default_material_backend_does_not_withdraw_named_target_declarations()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkV2RuntimeMaterials();
+        foreach (var unitId in UnitIds)
+            services.AddGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.Require(unitId), "named");
+
+        services.AddGroundworkV2RuntimeMaterials();
+
+        var registry = Assert.IsType<GroundworkStorageUnitRegistry>(services.Single(descriptor =>
+            descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance);
+        Assert.All(UnitIds, unitId => Assert.Equal("named", registry.Require(unitId, "named").TargetName));
+    }
+
     private static void AssertScoped<TImplementation>(IServiceCollection services, Type contract)
     {
         var implementation = Assert.Single(services, candidate => candidate.ServiceType == typeof(TImplementation));
@@ -51,5 +79,43 @@ public sealed class GroundworkV2RuntimeMaterialRegistrationTests
         var descriptor = Assert.Single(services, candidate => candidate.ServiceType == contract);
         Assert.Equal(ServiceLifetime.Scoped, descriptor.Lifetime);
         Assert.NotNull(descriptor.ImplementationFactory);
+    }
+
+    private static readonly string[] UnitIds =
+    [
+        ElsaRuntimeV2StorageManifest.WorkflowExecutableDocumentKind,
+        ElsaRuntimeV2StorageManifest.WorkflowExecutableCoordinationDocumentKind,
+        ElsaRuntimeV2StorageManifest.ExecutableActivityTemplateDocumentKind,
+        ElsaRuntimeV2StorageManifest.ExecutableActivityTemplateHashClaimDocumentKind,
+        ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDocumentKind
+    ];
+
+    private sealed class ThrowingServiceCollection(Func<ServiceDescriptor, bool> shouldThrow) : IServiceCollection
+    {
+        private readonly List<ServiceDescriptor> descriptors = [];
+
+        public ServiceDescriptor this[int index] { get => descriptors[index]; set => descriptors[index] = value; }
+        public int Count => descriptors.Count;
+        public bool IsReadOnly => false;
+        public void Add(ServiceDescriptor item)
+        {
+            if (shouldThrow(item))
+                throw new InvalidOperationException("synthetic service registration failure");
+            descriptors.Add(item);
+        }
+        public void Clear() => descriptors.Clear();
+        public bool Contains(ServiceDescriptor item) => descriptors.Contains(item);
+        public void CopyTo(ServiceDescriptor[] array, int arrayIndex) => descriptors.CopyTo(array, arrayIndex);
+        public IEnumerator<ServiceDescriptor> GetEnumerator() => descriptors.GetEnumerator();
+        public int IndexOf(ServiceDescriptor item) => descriptors.IndexOf(item);
+        public void Insert(int index, ServiceDescriptor item)
+        {
+            if (shouldThrow(item))
+                throw new InvalidOperationException("synthetic service registration failure");
+            descriptors.Insert(index, item);
+        }
+        public bool Remove(ServiceDescriptor item) => descriptors.Remove(item);
+        public void RemoveAt(int index) => descriptors.RemoveAt(index);
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }

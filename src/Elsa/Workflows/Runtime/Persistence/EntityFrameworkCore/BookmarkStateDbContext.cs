@@ -8,10 +8,20 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 public abstract class BookmarkStateDbContext(DbContextOptions options) : DbContext(options)
 {
     public DbSet<BookmarkStateEntity> Bookmarks => Set<BookmarkStateEntity>();
+    public DbSet<WorkflowExecutableEntity> WorkflowExecutables => Set<WorkflowExecutableEntity>();
+    public DbSet<WorkflowExecutableCoordinationEntity> WorkflowExecutableCoordinations => Set<WorkflowExecutableCoordinationEntity>();
+    public DbSet<ExecutableActivityTemplateEntity> ExecutableActivityTemplates => Set<ExecutableActivityTemplateEntity>();
+    public DbSet<ExecutableActivityTemplateHashClaimEntity> ExecutableActivityTemplateHashClaims => Set<ExecutableActivityTemplateHashClaimEntity>();
+    public DbSet<WorkflowExecutableSourceReferenceEntity> WorkflowExecutableSourceReferences => Set<WorkflowExecutableSourceReferenceEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new BookmarkStateEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new WorkflowExecutableEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new WorkflowExecutableCoordinationEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new ExecutableActivityTemplateEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new ExecutableActivityTemplateHashClaimEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new WorkflowExecutableSourceReferenceEntityConfiguration());
         ConfigureProvider(modelBuilder);
     }
 
