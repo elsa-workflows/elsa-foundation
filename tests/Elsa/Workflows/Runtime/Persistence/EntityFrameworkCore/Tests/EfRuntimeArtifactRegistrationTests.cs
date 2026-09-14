@@ -99,6 +99,19 @@ public sealed class EfRuntimeArtifactRegistrationTests
     }
 
     [Fact]
+    public void Artifact_registration_rejects_instance_and_factory_owned_contracts_hidden_behind_object()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<object>(new CustomTemplateStore());
+        services.AddSingleton<object>(CreateCustomTemplateStore);
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(new()));
+
+        Assert.Equal(before, services);
+    }
+
+    [Fact]
     public void Artifact_registration_restores_all_descriptors_when_context_validation_fails()
     {
         var services = new ServiceCollection();
@@ -255,4 +268,6 @@ public sealed class EfRuntimeArtifactRegistrationTests
 
         public ValueTask<bool> DeleteAsync(string templateId, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
     }
+
+    private static CustomTemplateStore CreateCustomTemplateStore(IServiceProvider _) => new();
 }

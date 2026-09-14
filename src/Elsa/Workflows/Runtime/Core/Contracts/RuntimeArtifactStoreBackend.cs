@@ -89,7 +89,9 @@ public sealed class RuntimeArtifactStoreBackend
     private static bool IsArtifactSurfaceRegistration(ServiceDescriptor descriptor) =>
         ArtifactContractTypes.Any(contract =>
             contract.IsAssignableFrom(descriptor.ServiceType) ||
-            descriptor.ImplementationType is { } implementationType && contract.IsAssignableFrom(implementationType));
+            descriptor.ImplementationType is { } implementationType && contract.IsAssignableFrom(implementationType) ||
+            descriptor.ImplementationInstance is { } implementationInstance && contract.IsAssignableFrom(implementationInstance.GetType()) ||
+            descriptor.ImplementationFactory?.Method.ReturnType is { } returnType && contract.IsAssignableFrom(returnType));
 
     public void RemoveOwnedArtifacts(IServiceCollection services)
     {

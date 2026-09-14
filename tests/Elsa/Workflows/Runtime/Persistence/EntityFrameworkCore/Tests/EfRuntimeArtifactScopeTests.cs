@@ -467,6 +467,33 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Provider_invalid_operation_failures_are_normalized_on_delete_and_source_write_boundaries()
+    {
+        await using var database = await Database.CreateAsync();
+        await using (var seed = database.Open("tenant-a"))
+        {
+            await seed.Executable.SaveAsync(Executable("delete-provider-failure"));
+            await seed.Template.SaveAsync(Template("delete-provider-failure", "delete-provider-hash"));
+        }
+
+        await using var failing = database.Open("tenant-a", new ThrowingInvalidOperationSaveInterceptor());
+        var executableFailure = await Assert.ThrowsAsync<RuntimeArtifactEntityFrameworkPersistenceException>(() =>
+            failing.Executable.DeleteAsync("delete-provider-failure").AsTask());
+        Assert.Equal("deleting", executableFailure.Operation);
+        Assert.Equal("delete-provider-failure", executableFailure.Identity);
+
+        var templateFailure = await Assert.ThrowsAsync<RuntimeArtifactEntityFrameworkPersistenceException>(() =>
+            failing.Template.DeleteAsync("delete-provider-failure").AsTask());
+        Assert.Equal("deleting", templateFailure.Operation);
+        Assert.Equal("delete-provider-failure", templateFailure.Identity);
+
+        var sourceFailure = await Assert.ThrowsAsync<RuntimeArtifactEntityFrameworkPersistenceException>(() =>
+            failing.Store.SaveAsync(Reference("source-provider-failure", "artifact-provider-failure")).AsTask());
+        Assert.Equal("saving", sourceFailure.Operation);
+        Assert.Equal("source-provider-failure", sourceFailure.Identity);
+    }
+
+    [Fact]
     public async Task Provider_read_failures_are_normalized_for_every_artifact_reader()
     {
         await using var database = await Database.CreateAsync();
@@ -869,6 +896,15 @@ public sealed class EfRuntimeArtifactScopeTests
             InterceptionResult<int> result,
             CancellationToken cancellationToken = default) =>
             throw new DbUpdateException("provider save failure");
+    }
+
+    private sealed class ThrowingInvalidOperationSaveInterceptor : SaveChangesInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("provider save failure");
     }
 
     private sealed class RecreateBeforeSaveInterceptor(Func<Task> recreate) : SaveChangesInterceptor

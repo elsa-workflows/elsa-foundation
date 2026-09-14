@@ -78,8 +78,10 @@ public sealed class EfWorkflowExecutableStore(
                     incarnationId));
                 context.WorkflowExecutableCoordinations.Add(ToCoordinationEntity(item.Identity.ArtifactId, scope, id, incarnationId));
             }
-            await context.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+            await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                context, "saving", scope, () => context.SaveChangesAsync(cancellationToken));
+            await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                context, "saving", scope, () => transaction.CommitAsync(cancellationToken));
         }
         catch (DbUpdateException exception) when (
             EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception) ||
@@ -398,7 +400,8 @@ public sealed class EfWorkflowExecutableStore(
 
                 if (artifact is null && coordination is null)
                 {
-                    await transaction.CommitAsync(cancellationToken);
+                    await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                        context, "deleting", artifactId, () => transaction.CommitAsync(cancellationToken));
                     return false;
                 }
 
@@ -407,7 +410,8 @@ public sealed class EfWorkflowExecutableStore(
 
                 if (artifact.IncarnationId != expectedIncarnationId || coordination.IncarnationId != expectedIncarnationId)
                 {
-                    await transaction.CommitAsync(cancellationToken);
+                    await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                        context, "deleting", artifactId, () => transaction.CommitAsync(cancellationToken));
                     return false;
                 }
 
@@ -416,13 +420,16 @@ public sealed class EfWorkflowExecutableStore(
 
                 if (guard is not null && !CanDelete(state, guard, now))
                 {
-                    await transaction.CommitAsync(cancellationToken);
+                    await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                        context, "deleting", artifactId, () => transaction.CommitAsync(cancellationToken));
                     return false;
                 }
 
                 context.RemoveRange(artifact, coordination);
-                await context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
+                await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                    context, "deleting", artifactId, () => context.SaveChangesAsync(cancellationToken));
+                await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                    context, "deleting", artifactId, () => transaction.CommitAsync(cancellationToken));
                 return true;
             }
             catch (DbUpdateConcurrencyException exception)
@@ -437,6 +444,18 @@ public sealed class EfWorkflowExecutableStore(
                 await RollbackQuietlyAsync(transaction);
                 context.ChangeTracker.Clear();
                 throw;
+            }
+            catch (DbUpdateException exception)
+            {
+                await RollbackQuietlyAsync(transaction);
+                context.ChangeTracker.Clear();
+                throw NormalizeProviderFailure("deleting", artifactId, exception);
+            }
+            catch (DbException exception)
+            {
+                await RollbackQuietlyAsync(transaction);
+                context.ChangeTracker.Clear();
+                throw NormalizeProviderFailure("deleting", artifactId, exception);
             }
             catch
             {

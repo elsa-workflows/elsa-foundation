@@ -38,16 +38,19 @@ public static class GroundworkV2RuntimeMaterialRegistration
         string? targetName = null)
     {
         ArgumentNullException.ThrowIfNull(services);
-        var existingBackend = RuntimeArtifactStoreBackend.Find(services);
-        if (existingBackend is not null)
+        var snapshot = services.ToArray();
+        try
         {
-            existingBackend.EnsureOwnsRegisteredContracts(services);
-            existingBackend.RemoveOwnedArtifacts(services);
-        }
-        else
-            RuntimeArtifactStoreBackend.EnsureNoUnownedArtifactRegistrations(services);
-        foreach (var unitId in UnitIds)
-            services.AddGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.Require(unitId), targetName);
+            var existingBackend = RuntimeArtifactStoreBackend.Find(services);
+            if (existingBackend is not null)
+            {
+                existingBackend.EnsureOwnsRegisteredContracts(services);
+                existingBackend.RemoveOwnedArtifacts(services);
+            }
+            else
+                RuntimeArtifactStoreBackend.EnsureNoUnownedArtifactRegistrations(services);
+            foreach (var unitId in UnitIds)
+                services.AddGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.Require(unitId), targetName);
 
         services.RemoveAll<GroundworkV2WorkflowExecutableStore>();
         services.RemoveAll<IWorkflowExecutableStore>();
@@ -87,10 +90,18 @@ public static class GroundworkV2RuntimeMaterialRegistration
             provider.GetRequiredService<GroundworkV2WorkflowExecutableSourceReferenceStore>());
         services.AddScoped<IWorkflowExecutableSourceReferenceWriter>(provider =>
             provider.GetRequiredService<GroundworkV2WorkflowExecutableSourceReferenceStore>());
-        RuntimeArtifactStoreBackend.Register(services, new RuntimeArtifactStoreBackend(
-            RuntimeArtifactStoreBackend.Groundwork,
-            RuntimeArtifactStoreBackend.CaptureArtifactSurfaceRegistrations(services)));
-        return services;
+            RuntimeArtifactStoreBackend.Register(services, new RuntimeArtifactStoreBackend(
+                RuntimeArtifactStoreBackend.Groundwork,
+                RuntimeArtifactStoreBackend.CaptureArtifactSurfaceRegistrations(services)));
+            return services;
+        }
+        catch
+        {
+            services.Clear();
+            foreach (var descriptor in snapshot)
+                services.Add(descriptor);
+            throw;
+        }
     }
 
     private static readonly string[] UnitIds =

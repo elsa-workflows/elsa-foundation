@@ -36,8 +36,11 @@ public static class GroundworkV2RuntimeRegistration
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
-        var cacheOptions = CopyAndValidate(workflowExecutableCacheOptions);
-        var target = BindRuntimeTarget(services, targetName);
+        var snapshot = services.ToArray();
+        try
+        {
+            var cacheOptions = CopyAndValidate(workflowExecutableCacheOptions);
+            var target = BindRuntimeTarget(services, targetName);
 
         services.AddPersistenceCore();
         ReplaceExistingArtifactBackend(services);
@@ -155,8 +158,16 @@ public static class GroundworkV2RuntimeRegistration
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2DispatchStoreDurabilityEvidence>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2OutboxDurabilityEvidence>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2SchedulerDurabilityEvidence>());
-        RegisterArtifactBackend(services);
-        return services;
+            RegisterArtifactBackend(services);
+            return services;
+        }
+        catch
+        {
+            services.Clear();
+            foreach (var descriptor in snapshot)
+                services.Add(descriptor);
+            throw;
+        }
     }
 
     private static WorkflowExecutableCacheOptions CopyAndValidate(WorkflowExecutableCacheOptions options)

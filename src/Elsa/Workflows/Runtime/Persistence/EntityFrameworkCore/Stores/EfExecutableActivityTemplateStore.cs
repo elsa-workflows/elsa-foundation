@@ -47,7 +47,8 @@ public sealed class EfExecutableActivityTemplateStore(
                     if (claim!.IncarnationId != current.IncarnationId)
                         throw new InvalidDataException("Executable activity template and its hash claim have mismatched incarnation identities.");
                     EnsureSameIdentityAndContent(existing, template);
-                    await transaction.CommitAsync(cancellationToken);
+                    await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                        context, "saving", template.TemplateId, () => transaction.CommitAsync(cancellationToken));
                     return;
                 }
                 if (claim is not null)
@@ -62,8 +63,10 @@ public sealed class EfExecutableActivityTemplateStore(
                 var incarnationId = NewIncarnationId();
                 context.ExecutableActivityTemplates.Add(ToEntity(template, identity, json, incarnationId));
                 context.ExecutableActivityTemplateHashClaims.Add(ToClaimEntity(template, identity, incarnationId));
-                await context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
+                await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                    context, "saving", template.TemplateId, () => context.SaveChangesAsync(cancellationToken));
+                await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                    context, "saving", template.TemplateId, () => transaction.CommitAsync(cancellationToken));
                 return;
             }
             catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception) || EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
@@ -196,8 +199,10 @@ public sealed class EfExecutableActivityTemplateStore(
                     context, "deleting", templateId, () => context.Database.BeginTransactionAsync(cancellationToken));
                 context.Remove(row);
                 context.Remove(claim);
-                await context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
+                await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                    context, "deleting", templateId, () => context.SaveChangesAsync(cancellationToken));
+                await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                    context, "deleting", templateId, () => transaction.CommitAsync(cancellationToken));
                 context.ChangeTracker.Clear();
                 return true;
             }
@@ -205,9 +210,19 @@ public sealed class EfExecutableActivityTemplateStore(
             {
                 context.ChangeTracker.Clear();
             }
-            catch (DbUpdateException) when (attempt + 1 < MaximumDeleteAttempts)
+            catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception) && attempt + 1 < MaximumDeleteAttempts)
             {
                 context.ChangeTracker.Clear();
+            }
+            catch (DbUpdateException exception)
+            {
+                context.ChangeTracker.Clear();
+                throw NormalizeProviderFailure("deleting", templateId, exception);
+            }
+            catch (DbException exception)
+            {
+                context.ChangeTracker.Clear();
+                throw NormalizeProviderFailure("deleting", templateId, exception);
             }
             catch
             {

@@ -49,8 +49,10 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
                 throw new InvalidOperationException($"Workflow executable source reference '{reference.SourceReferenceId}' already exists; source references are create-only.");
             }
             context.WorkflowExecutableSourceReferences.Add(ToEntity(reference, scope, id));
-            await context.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+            await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                context, "saving", reference.SourceReferenceId, () => context.SaveChangesAsync(cancellationToken));
+            await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                context, "saving", reference.SourceReferenceId, () => transaction.CommitAsync(cancellationToken));
         }
         catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
         { context.ChangeTracker.Clear(); throw new InvalidOperationException("The workflow executable source reference already exists; source references are create-only.", exception); }
@@ -177,8 +179,10 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             Copy(row, current.Retire(deletedAt, reason), scope);
             await using var transaction = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
                 context, "retiring", sourceReferenceId, () => context.Database.BeginTransactionAsync(cancellationToken));
-            await context.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+            await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                context, "retiring", sourceReferenceId, () => context.SaveChangesAsync(cancellationToken));
+            await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                context, "retiring", sourceReferenceId, () => transaction.CommitAsync(cancellationToken));
             context.ChangeTracker.Clear();
             return true;
         }
@@ -237,7 +241,11 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
                 return false;
             }
             Copy(row, replacement, scope);
-            await context.SaveChangesAsync(cancellationToken);
+            await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                context,
+                restore ? "restoring" : "retiring",
+                expected.SourceReferenceId,
+                () => context.SaveChangesAsync(cancellationToken));
             context.ChangeTracker.Clear();
             return true;
         }
@@ -274,8 +282,10 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             context.Remove(row);
             await using var transaction = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
                 context, "deleting", sourceReferenceId, () => context.Database.BeginTransactionAsync(cancellationToken));
-            await context.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+            await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                context, "deleting", sourceReferenceId, () => context.SaveChangesAsync(cancellationToken));
+            await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                context, "deleting", sourceReferenceId, () => transaction.CommitAsync(cancellationToken));
             context.ChangeTracker.Clear();
             return true;
         }
@@ -352,8 +362,10 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         {
             await using var transaction = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
                 context, "cleaning up", sourceReferenceId, () => context.Database.BeginTransactionAsync(cancellationToken));
-            await context.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+            await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                context, "cleaning up", sourceReferenceId, () => context.SaveChangesAsync(cancellationToken));
+            await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                context, "cleaning up", sourceReferenceId, () => transaction.CommitAsync(cancellationToken));
             context.ChangeTracker.Clear();
             return true;
         }

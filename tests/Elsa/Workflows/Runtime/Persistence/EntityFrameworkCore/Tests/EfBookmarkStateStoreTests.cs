@@ -611,6 +611,19 @@ public sealed class EfBookmarkStateStoreTests
     }
 
     [Fact]
+    public void Registration_restores_the_exact_service_collection_when_backend_registration_fails()
+    {
+        var services = new ThrowingServiceCollection(
+            descriptor => descriptor.ServiceType == typeof(BookmarkStateStoreBackend));
+        services.Add(ServiceDescriptor.Singleton<object>(new object()));
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeBookmarksEntityFrameworkCore(new()));
+
+        Assert.Equal(before, services);
+    }
+
+    [Fact]
     public void Combined_runtime_ef_registration_rejects_incompatible_options_in_either_order()
     {
         var bookmarks = new RuntimeBookmarksEntityFrameworkCoreOptions
@@ -715,6 +728,35 @@ public sealed class EfBookmarkStateStoreTests
     private sealed class DerivedFeature : RuntimeBookmarksEntityFrameworkCoreFeature
     {
         public override void ConfigureServices(IServiceCollection services) { }
+    }
+
+    private sealed class ThrowingServiceCollection(Func<ServiceDescriptor, bool> shouldThrow) : IServiceCollection
+    {
+        private readonly List<ServiceDescriptor> descriptors = [];
+
+        public ServiceDescriptor this[int index] { get => descriptors[index]; set => descriptors[index] = value; }
+        public int Count => descriptors.Count;
+        public bool IsReadOnly => false;
+        public void Add(ServiceDescriptor item)
+        {
+            if (shouldThrow(item))
+                throw new InvalidOperationException("synthetic service registration failure");
+            descriptors.Add(item);
+        }
+        public void Clear() => descriptors.Clear();
+        public bool Contains(ServiceDescriptor item) => descriptors.Contains(item);
+        public void CopyTo(ServiceDescriptor[] array, int arrayIndex) => descriptors.CopyTo(array, arrayIndex);
+        public IEnumerator<ServiceDescriptor> GetEnumerator() => descriptors.GetEnumerator();
+        public int IndexOf(ServiceDescriptor item) => descriptors.IndexOf(item);
+        public void Insert(int index, ServiceDescriptor item)
+        {
+            if (shouldThrow(item))
+                throw new InvalidOperationException("synthetic service registration failure");
+            descriptors.Insert(index, item);
+        }
+        public bool Remove(ServiceDescriptor item) => descriptors.Remove(item);
+        public void RemoveAt(int index) => descriptors.RemoveAt(index);
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     private sealed class Fixture : IAsyncDisposable
