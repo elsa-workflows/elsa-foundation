@@ -20,6 +20,7 @@ public static class GroundworkDesignDocumentSerialization
         "RecordsJson",
         "ActivityPresentationJson",
         "DefinitionIdLookupHash",
+        "WorkflowDefinitionVersionIdLookupHash",
         "StateSource",
         "Definition",
         "WorkflowDefinition",

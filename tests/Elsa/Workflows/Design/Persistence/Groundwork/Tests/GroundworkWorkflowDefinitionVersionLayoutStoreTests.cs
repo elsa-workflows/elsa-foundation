@@ -94,6 +94,7 @@ public sealed class GroundworkWorkflowDefinitionVersionLayoutStoreTests
             Assert.Contains("\"records\"", json);
             Assert.DoesNotContain("rowNumber", json);
             Assert.DoesNotContain("workflowDefinitionVersion\"", json);
+            Assert.DoesNotContain("workflowDefinitionVersionIdLookupHash", json);
             Assert.DoesNotContain("recordsJson", json);
             Assert.DoesNotContain("activityPresentationJson", json);
         }
