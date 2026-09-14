@@ -1318,6 +1318,45 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Shared_protocol_reconcile_before_read_disposes_scope_once()
+    {
+        var scope = new ProtocolScope();
+        var primary = new InvalidOperationException("commit acknowledgement lost");
+        var lane = new DesignAtomicWriteLane<ProtocolScope, ProtocolMarker, ProtocolStage, ProtocolResult>
+        {
+            MarkerId = "reconcile-before-read",
+            LoadMarker = _ => Task.FromResult<ProtocolMarker?>(null),
+            BeginScope = () => scope,
+            SaveMarker = (_, _, _) => Task.CompletedTask,
+            Commit = (_, _) => Task.FromException<DesignAtomicCommitDisposition>(primary),
+            Rollback = _ => throw new InvalidOperationException("rollback should not run after early disposal"),
+            ClassifyMarkerRace = _ => false,
+            ClassifyUncertainCommit = _ => false,
+            OnUncertainCommit = (_, _) => throw new InvalidOperationException(),
+            DisposeBeforeReconcile = value =>
+            {
+                value.Dispose();
+                return Task.CompletedTask;
+            },
+            TryReconcileAfterCommit = (_, _) => Task.FromResult<ProtocolResult?>(new ProtocolResult("reconciled")),
+            Delay = (_, _) => Task.CompletedTask,
+            IsAccepted = stage => stage.Accepted,
+            OnCommitted = _ => new ProtocolResult("committed"),
+            OnReplay = _ => new ProtocolResult("replayed"),
+            OnRejected = () => new ProtocolResult("rejected")
+        };
+
+        var result = await DesignAtomicWriteProtocol.ExecuteAsync(
+            lane,
+            (_, _) => Task.FromResult(new ProtocolStage(true)),
+            null,
+            CancellationToken.None);
+
+        Assert.Equal("reconciled", result.Status);
+        Assert.Equal(1, scope.DisposeCount);
+    }
+
+    [Fact]
     public async Task Shared_protocol_logs_rollback_failure_without_masking_primary_exception()
     {
         var scope = new ProtocolScope();
@@ -1499,7 +1538,16 @@ public sealed class EfWorkflowDesignPersistenceTests
         else
             element.WriteTo(writer);
     }
-    private sealed class ProtocolScope : IDisposable { public bool Disposed { get; private set; } public void Dispose() => Disposed = true; }
+    private sealed class ProtocolScope : IDisposable
+    {
+        public bool Disposed { get; private set; }
+        public int DisposeCount { get; private set; }
+        public void Dispose()
+        {
+            DisposeCount++;
+            Disposed = true;
+        }
+    }
     private sealed class RecordingTraceListener : TraceListener
     {
         public List<string> Messages { get; } = [];

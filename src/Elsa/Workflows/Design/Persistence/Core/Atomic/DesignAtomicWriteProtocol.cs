@@ -55,8 +55,8 @@ public static class DesignAtomicWriteProtocol
         where TMarker : class
         where TResult : class
     {
-        using var scope = lane.BeginScope();
-        var scopeDisposed = false;
+        using var scopeLifetime = new ScopeLifetime<TScope>(lane.BeginScope());
+        var scope = scopeLifetime.Value;
         try
         {
             var staged = await stage(scope, cancellationToken);
@@ -81,10 +81,7 @@ public static class DesignAtomicWriteProtocol
                 if (!lane.ShouldReconcileAfterCommitFailure(exception))
                     throw;
                 if (lane.DisposeBeforeReconcile is not null)
-                {
-                    await lane.DisposeBeforeReconcile(scope);
-                    scopeDisposed = true;
-                }
+                    await scopeLifetime.DisposeBeforeReconcileAsync(lane.DisposeBeforeReconcile);
                 var reconciled = await lane.TryReconcileAfterCommit(exception, cancellationToken);
                 if (reconciled is not null)
                     return reconciled;
@@ -99,7 +96,7 @@ public static class DesignAtomicWriteProtocol
         }
         catch (Exception exception) when (lane.ClassifyMarkerRace(exception))
         {
-            if (!scopeDisposed)
+            if (!scopeLifetime.IsDisposed)
                 TryRollback(lane, scope);
             throw;
         }
@@ -109,7 +106,7 @@ public static class DesignAtomicWriteProtocol
         }
         catch
         {
-            if (!scopeDisposed)
+            if (!scopeLifetime.IsDisposed)
                 TryRollback(lane, scope);
             throw;
         }
@@ -153,6 +150,29 @@ public static class DesignAtomicWriteProtocol
         catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException or AccessViolationException))
         {
             Trace.TraceWarning("Workflow design atomic rollback failed for marker '{0}': {1}", lane.MarkerId, exception);
+        }
+    }
+
+    private sealed class ScopeLifetime<TScope>(TScope value) : IDisposable
+        where TScope : IDisposable
+    {
+        private int disposed;
+
+        public TScope Value { get; } = value;
+        public bool IsDisposed => Volatile.Read(ref disposed) != 0;
+
+        public async Task DisposeBeforeReconcileAsync(Func<TScope, Task> disposeBeforeReconcile)
+        {
+            if (IsDisposed)
+                return;
+            await disposeBeforeReconcile(Value);
+            Volatile.Write(ref disposed, 1);
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref disposed, 1) == 0)
+                Value.Dispose();
         }
     }
 }

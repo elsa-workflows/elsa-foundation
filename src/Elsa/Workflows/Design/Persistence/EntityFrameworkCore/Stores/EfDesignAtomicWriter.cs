@@ -224,7 +224,7 @@ public sealed class EfDesignAtomicWriter(
             {
                 await transaction.RollbackAsync(CancellationToken.None);
             }
-            catch (Exception exception)
+            catch (Exception exception) when (IsNonFatalCleanupFailure(exception))
             {
                 cleanupFailures.Add(exception);
             }
@@ -234,7 +234,7 @@ public sealed class EfDesignAtomicWriter(
         {
             await transaction.DisposeAsync();
         }
-        catch (Exception exception)
+        catch (Exception exception) when (IsNonFatalCleanupFailure(exception))
         {
             cleanupFailures.Add(exception);
         }
@@ -258,6 +258,9 @@ public sealed class EfDesignAtomicWriter(
         for (var current = exception; current is not null; current = current.InnerException)
             yield return current;
     }
+
+    private static bool IsNonFatalCleanupFailure(Exception exception) =>
+        exception is not (OutOfMemoryException or StackOverflowException or AccessViolationException);
 
     private async Task<DesignAtomicWriteResult<T>> ReconcileAfterCommitAsync<T>(
         string tenantId,

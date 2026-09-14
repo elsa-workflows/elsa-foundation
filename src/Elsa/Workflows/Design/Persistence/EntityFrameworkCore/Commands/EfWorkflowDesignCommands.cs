@@ -294,7 +294,7 @@ public sealed class EfDiscardDraftCommand(WorkflowsDesignDbContext db, IPersiste
         // The result intentionally remains a bool for compatibility with markers written by the
         // original EF implementation. Legacy replay has no definition id after the draft is gone,
         // so it cannot publish a duplicate discard event.
-        if (outcome.ShouldPublishPostCommitOutcome && outcome.Value == true && definitionId is not null && deferredEvents is not null)
+        if (outcome.ShouldPublishPostCommitOutcome && outcome.Value && definitionId is not null && deferredEvents is not null)
             await deferredEvents.Publish(new DraftDiscarded(draftId, definitionId), CancellationToken.None);
     }
 }
