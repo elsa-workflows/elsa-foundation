@@ -41,7 +41,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
                     x.ScopeKeyHash == Hash(scope) &&
                     x.ScopeKey == Encode(scope) &&
                     x.SourceReferenceIdHash == Hash(reference.SourceReferenceId) &&
-                    x.SourceReferenceId == reference.SourceReferenceId,
+                    x.SourceReferenceId == Encode(reference.SourceReferenceId),
                     cancellationToken));
             if (existing is not null)
             {
@@ -77,7 +77,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
                 x.ScopeKeyHash == Hash(scope) &&
                 x.ScopeKey == Encode(scope) &&
                 x.SourceReferenceIdHash == Hash(sourceReferenceId) &&
-                x.SourceReferenceId == sourceReferenceId,
+                x.SourceReferenceId == Encode(sourceReferenceId),
                 cancellationToken));
         return row is null ? null : Read(row, scope, sourceReferenceId);
     }
@@ -114,9 +114,9 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         if (!acrossScopes)
             query = query.Where(x => x.ScopeKeyHash == Hash(scope!) && x.ScopeKey == Encode(scope!));
         if (artifact is not null)
-            query = query.Where(x => x.ArtifactIdHash == EfRelationalIdentity.Hash(artifact) && x.ArtifactId == artifact);
+            query = query.Where(x => x.ArtifactIdHash == EfRelationalIdentity.Hash(artifact) && x.ArtifactId == Encode(artifact));
         if (definition is not null)
-            query = query.Where(x => x.DefinitionVersionIdHash == EfRelationalIdentity.Hash(definition) && x.DefinitionVersionId == definition);
+            query = query.Where(x => x.DefinitionVersionIdHash == EfRelationalIdentity.Hash(definition) && x.DefinitionVersionId == Encode(definition));
         if (all?.Scope is { } sourceScope)
             query = query.Where(x => x.Scope == sourceScope.ToString());
         if (all?.LiveOnly == true)
@@ -140,7 +140,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         var hasMore = rows.Length > request.Limit;
         if (hasMore)
             rows = rows[..request.Limit];
-        var items = rows.Select(x => Read(x, acrossScopes ? EfRelationalIdentity.Decode(x.ScopeKey) : scope!, x.SourceReferenceId)).ToArray();
+        var items = rows.Select(x => Read(x, acrossScopes ? EfRelationalIdentity.Decode(x.ScopeKey) : scope!, Decode(x.SourceReferenceId))).ToArray();
         var next = hasMore
             ? EncodeCursor(binding, rows[^1].ScopeKeyOrderKey, rows[^1].SourceReferenceIdOrderKey, rows[^1].Id)
             : null;
@@ -163,7 +163,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
                     x.ScopeKeyHash == Hash(scope) &&
                     x.ScopeKey == Encode(scope) &&
                     x.SourceReferenceIdHash == Hash(sourceReferenceId) &&
-                    x.SourceReferenceId == sourceReferenceId,
+                    x.SourceReferenceId == Encode(sourceReferenceId),
                     cancellationToken));
             if (row is null)
             {
@@ -227,7 +227,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
                     x.ScopeKeyHash == Hash(scope) &&
                     x.ScopeKey == Encode(scope) &&
                     x.SourceReferenceIdHash == Hash(expected.SourceReferenceId) &&
-                    x.SourceReferenceId == expected.SourceReferenceId,
+                    x.SourceReferenceId == Encode(expected.SourceReferenceId),
                     cancellationToken));
             if (row is null)
             {
@@ -271,7 +271,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
                     x.ScopeKeyHash == Hash(scope) &&
                     x.ScopeKey == Encode(scope) &&
                     x.SourceReferenceIdHash == Hash(sourceReferenceId) &&
-                    x.SourceReferenceId == sourceReferenceId,
+                    x.SourceReferenceId == Encode(sourceReferenceId),
                     cancellationToken));
             if (row is null)
             {
@@ -312,7 +312,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             var deleted = new List<string>(rows.Length);
             foreach (var row in rows)
             {
-                var current = Read(row, scope, row.SourceReferenceId);
+                var current = Read(row, scope, Decode(row.SourceReferenceId));
                 if (await TryDeleteCapturedAsync(current.SourceReferenceId, row.IncarnationId, row.Revision, cancellationToken))
                     deleted.Add(current.SourceReferenceId);
             }
@@ -349,7 +349,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
                 x.ScopeKeyHash == Hash(scope) &&
                 x.ScopeKey == Encode(scope) &&
                 x.SourceReferenceIdHash == Hash(sourceReferenceId) &&
-                x.SourceReferenceId == sourceReferenceId,
+                x.SourceReferenceId == Encode(sourceReferenceId),
                 cancellationToken));
         if (row is null || row.IncarnationId != expectedIncarnationId || row.Revision != expectedRevision)
         {
@@ -399,7 +399,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
                         !x.IsRetired &&
                         x.ExpiresAtUtcTicks > now.UtcTicks &&
                         x.ArtifactIdHash == candidateHash &&
-                        x.ArtifactId == candidate)
+                        x.ArtifactId == Encode(candidate))
                     .OrderBy(x => x.SourceReferenceIdOrderKey)
                     .Select(x => x.Id)
                     .Take(1)
@@ -435,14 +435,14 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
     }
     private static void Copy(WorkflowExecutableSourceReferenceEntity row, WorkflowExecutableSourceReference value, string scope)
     {
-        row.SourceReferenceId = value.SourceReferenceId;
+        row.SourceReferenceId = Encode(value.SourceReferenceId);
         row.SourceReferenceIdHash = Hash(value.SourceReferenceId);
         row.SourceReferenceIdOrderKey = OrderKey(value.SourceReferenceId);
-        row.ArtifactId = value.ArtifactId;
+        row.ArtifactId = Encode(value.ArtifactId);
         row.ArtifactIdHash = Hash(value.ArtifactId);
-        row.DefinitionVersionId = value.DefinitionVersionId;
+        row.DefinitionVersionId = Encode(value.DefinitionVersionId);
         row.DefinitionVersionIdHash = Hash(value.DefinitionVersionId);
-        row.DefinitionId = value.DefinitionId;
+        row.DefinitionId = Encode(value.DefinitionId);
         row.DefinitionIdHash = Hash(value.DefinitionId);
         row.ScopeKey = Encode(scope);
         row.ScopeKeyHash = Hash(scope);
@@ -462,22 +462,22 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         try
         {
             if (row.Id != CreateId(expectedScope, expectedId) ||
-                row.SourceReferenceId != expectedId ||
+                row.SourceReferenceId != Encode(expectedId) ||
                 row.SourceReferenceIdHash != Hash(expectedId) ||
                 row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion ||
                 row.SourceReferenceIdOrderKey != OrderKey(expectedId) ||
                 row.ScopeKey != Encode(expectedScope) ||
                 row.ScopeKeyHash != Hash(expectedScope) ||
                 row.ScopeKeyOrderKey != ScopeOrderKey(expectedScope) ||
-                row.ArtifactIdHash != Hash(row.ArtifactId) ||
-                row.DefinitionIdHash != Hash(row.DefinitionId) ||
-                row.DefinitionVersionIdHash != Hash(row.DefinitionVersionId) ||
+                row.ArtifactIdHash != Hash(Decode(row.ArtifactId)) ||
+                row.DefinitionIdHash != Hash(Decode(row.DefinitionId)) ||
+                row.DefinitionVersionIdHash != Hash(Decode(row.DefinitionVersionId)) ||
                 row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId))
                 throw new InvalidDataException("The persisted workflow executable source reference row is corrupt.");
             var envelope = JsonNode.Parse(row.ContentJson)?.AsObject()
                            ?? throw new InvalidDataException("The persisted workflow executable source reference envelope is empty.");
             if (!StringComparer.Ordinal.Equals(ReadString(envelope, "collection"), "workflowExecutableSourceReference") ||
-                !StringComparer.Ordinal.Equals(ReadString(envelope, "artifactId"), row.ArtifactId) ||
+                !StringComparer.Ordinal.Equals(Decode(ReadString(envelope, "artifactId")), Decode(row.ArtifactId)) ||
                 envelope["reference"] is null)
                 throw new InvalidDataException("The persisted workflow executable source reference envelope projection is corrupt.");
             var value = RuntimeArtifactJson.Deserialize<WorkflowExecutableSourceReference>(envelope["reference"]!.ToJsonString());
@@ -485,9 +485,9 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             if ((value.TenantId is not null && value.TenantId != expectedScope) ||
                 EfRelationalIdentity.Decode(row.ScopeKey) != expectedScope ||
                 value.SourceReferenceId != expectedId ||
-                value.ArtifactId != row.ArtifactId ||
-                value.DefinitionId != row.DefinitionId ||
-                value.DefinitionVersionId != row.DefinitionVersionId ||
+                value.ArtifactId != Decode(row.ArtifactId) ||
+                value.DefinitionId != Decode(row.DefinitionId) ||
+                value.DefinitionVersionId != Decode(row.DefinitionVersionId) ||
                 value.Scope.ToString() != row.Scope ||
                 row.ExpiresAtUtcTicks != (value.ExpiresAt ?? DateTimeOffset.MaxValue).UtcTicks ||
                 row.IsRetired != (value.DeletedAt is not null))
@@ -532,7 +532,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         return new JsonObject
         {
             ["collection"] = "workflowExecutableSourceReference",
-            ["artifactId"] = value.ArtifactId,
+            ["artifactId"] = Encode(value.ArtifactId),
             ["reference"] = reference
         }.ToJsonString();
     }
@@ -547,6 +547,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
     private static string NewIncarnationId() => Guid.NewGuid().ToString("N");
     private static string Hash(string value) => EfRelationalIdentity.Hash(value);
     private static string Encode(string value) => EfRelationalIdentity.Encode(value);
+    private static string Decode(string value) => EfRelationalIdentity.Decode(value);
     private static string OrderKey(string value) => Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(value, RuntimeArtifactEfModule.IdentityMaximumLength));
 
     // Scope values are opaque persistence partitions and are not subject to the artifact-id bound. The

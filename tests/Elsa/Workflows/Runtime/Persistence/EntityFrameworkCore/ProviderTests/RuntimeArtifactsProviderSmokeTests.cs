@@ -107,7 +107,7 @@ internal static class RuntimeArtifactsProviderSmoke
             Assert.Equal(["reference-a", "reference-b"], new[] { firstAcrossPage.Items[0].SourceReferenceId, secondAcrossPage.Items[0].SourceReferenceId }.Order(StringComparer.Ordinal));
 
             await executable.SaveAsync(Executable("rollback-existing"));
-            var coordination = await context.WorkflowExecutableCoordinations.SingleAsync(x => x.ArtifactId == "rollback-existing");
+            var coordination = await context.WorkflowExecutableCoordinations.SingleAsync(x => x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("rollback-existing"));
             context.WorkflowExecutableCoordinations.Remove(coordination);
             await context.SaveChangesAsync();
             context.ChangeTracker.Clear();

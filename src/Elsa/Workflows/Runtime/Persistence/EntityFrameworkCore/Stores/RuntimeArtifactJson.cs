@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -21,6 +22,18 @@ internal static class RuntimeArtifactJson
         });
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web) { TypeInfoResolver = resolver };
         options.Converters.Add(new JsonStringEnumConverter());
+        // Runtime artifact identities are opaque UTF-16 values. Encoding string values as framed UTF-16
+        // preserves accepted lone surrogates in JSON before the payload reaches a provider.
+        options.Converters.Add(new LosslessUtf16StringConverter());
         return options;
+    }
+
+    private sealed class LosslessUtf16StringConverter : JsonConverter<string>
+    {
+        public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+            EfRelationalIdentity.Decode(reader.GetString() ?? throw new JsonException("A runtime artifact string was null."));
+
+        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options) =>
+            writer.WriteStringValue(EfRelationalIdentity.Encode(value));
     }
 }

@@ -158,7 +158,7 @@ public sealed class EfWorkflowExecutableStore(
                          x.ScopeKeyHash == Hash(scope) &&
                          x.ScopeKey == Encode(scope) &&
                          x.ArtifactIdHash == Hash(artifactId) &&
-                         x.ArtifactId == artifactId,
+                         x.ArtifactId == Encode(artifactId),
                     cancellationToken));
         return row is null ? null : Read(row, scope, artifactId, id);
     }
@@ -186,7 +186,7 @@ public sealed class EfWorkflowExecutableStore(
         var more = rows.Length > request.Limit;
         if (more)
             rows = rows[..request.Limit];
-        var items = rows.Select(x => Read(x, scope, x.ArtifactId, x.Id)).ToArray();
+        var items = rows.Select(x => Read(x, scope, Decode(x.ArtifactId), x.Id)).ToArray();
         var continuation = more ? Encode(rows[^1].ArtifactIdOrderKey, scope) : null;
         return new RuntimeStorePage<WorkflowExecutable>(request, items, continuation);
     }
@@ -245,21 +245,30 @@ public sealed class EfWorkflowExecutableStore(
         ValidateTransition(lease.ArtifactId, lease.LeaseId, expiresAt, now);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        var pair = await LoadPairAsync(scope, lease.ArtifactId, cancellationToken);
-        if (pair is null)
-            return false;
-        var row = pair.Value.Coordination;
-        var state = ReadCoordination(row, scope, lease.ArtifactId, CreateId(scope, lease.ArtifactId));
-        if (state.Guard is { } guard && guard.ExpiresAt > now ||
-            !state.Leases.TryGetValue(lease.LeaseId, out var current) ||
-            current.Token != lease.ConcurrencyToken || current.ExpiresAt <= now)
+        for (var attempt = 0; attempt < MaximumCoordinationAttempts; attempt++)
         {
-            return false;
+            var pair = await LoadPairAsync(scope, lease.ArtifactId, cancellationToken);
+            if (pair is null)
+                return false;
+            var row = pair.Value.Coordination;
+            var state = ReadCoordination(row, scope, lease.ArtifactId, CreateId(scope, lease.ArtifactId));
+            if (state.Guard is { } guard && guard.ExpiresAt > now ||
+                !state.Leases.TryGetValue(lease.LeaseId, out var current) ||
+                current.Token != lease.ConcurrencyToken || current.ExpiresAt <= now)
+            {
+                return false;
+            }
+
+            var leases = state.Leases.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
+            leases[lease.LeaseId] = current with { ExpiresAt = expiresAt };
+            if (await UpdateCoordination(row, new CoordinationState(leases, state.Guard), cancellationToken))
+            {
+                context.ChangeTracker.Clear();
+                return true;
+            }
         }
 
-        var leases = state.Leases.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
-        leases[lease.LeaseId] = current with { ExpiresAt = expiresAt };
-        return await UpdateCoordination(row, new CoordinationState(leases, state.Guard), cancellationToken);
+        throw new InvalidOperationException($"Runtime coordination for workflow executable '{lease.ArtifactId}' changed concurrently and did not settle after {MaximumCoordinationAttempts} attempts.");
     }
 
     public async ValueTask ReleaseRootWriteLeaseAsync(
@@ -347,14 +356,23 @@ public sealed class EfWorkflowExecutableStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(guard.ConcurrencyToken);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        var pair = await LoadPairAsync(scope, guard.ArtifactId, cancellationToken);
-        if (pair is null)
-            return false;
-        var row = pair.Value.Coordination;
-        var state = ReadCoordination(row, scope, guard.ArtifactId, CreateId(scope, guard.ArtifactId));
-        if (state.Guard is not { } current || current.OperationId != guard.OperationId || current.Token != guard.ConcurrencyToken)
-            return false;
-        return await UpdateCoordination(row, new CoordinationState(state.Leases, null), cancellationToken);
+        for (var attempt = 0; attempt < MaximumCoordinationAttempts; attempt++)
+        {
+            var pair = await LoadPairAsync(scope, guard.ArtifactId, cancellationToken);
+            if (pair is null)
+                return false;
+            var row = pair.Value.Coordination;
+            var state = ReadCoordination(row, scope, guard.ArtifactId, CreateId(scope, guard.ArtifactId));
+            if (state.Guard is not { } current || current.OperationId != guard.OperationId || current.Token != guard.ConcurrencyToken)
+                return false;
+            if (await UpdateCoordination(row, new CoordinationState(state.Leases, null), cancellationToken))
+            {
+                context.ChangeTracker.Clear();
+                return true;
+            }
+        }
+
+        throw new InvalidOperationException($"Runtime coordination for workflow executable '{guard.ArtifactId}' changed concurrently and did not settle after {MaximumCoordinationAttempts} attempts.");
     }
     public async ValueTask<bool> DeleteAsync(
         WorkflowExecutableDeletionGuard guard,
@@ -503,7 +521,7 @@ public sealed class EfWorkflowExecutableStore(
                      x.ScopeKeyHash == Hash(scope) &&
                      x.ScopeKey == Encode(scope) &&
                      x.ArtifactIdHash == Hash(artifactId) &&
-                     x.ArtifactId == artifactId,
+                     x.ArtifactId == Encode(artifactId),
                 cancellationToken));
 
     private async Task<WorkflowExecutableCoordinationEntity?> FindCoordinationAsync(
@@ -520,7 +538,7 @@ public sealed class EfWorkflowExecutableStore(
                      x.ScopeKeyHash == Hash(scope) &&
                      x.ScopeKey == Encode(scope) &&
                      x.ArtifactIdHash == Hash(artifactId) &&
-                     x.ArtifactId == artifactId,
+                     x.ArtifactId == Encode(artifactId),
                 cancellationToken));
     private async Task<(WorkflowExecutableEntity Artifact, WorkflowExecutableCoordinationEntity Coordination)?> LoadPairAsync(
         string scope,
@@ -578,7 +596,7 @@ public sealed class EfWorkflowExecutableStore(
             Id = id,
             ScopeKey = Encode(scope),
             ScopeKeyHash = Hash(scope),
-            ArtifactId = executable.Identity.ArtifactId,
+            ArtifactId = Encode(executable.Identity.ArtifactId),
             ArtifactIdHash = Hash(executable.Identity.ArtifactId),
             ArtifactHash = executable.Identity.ArtifactHash,
             ArtifactIdOrderKey = OrderKey(executable.Identity.ArtifactId),
@@ -596,7 +614,7 @@ public sealed class EfWorkflowExecutableStore(
             Id = id,
             ScopeKey = Encode(scope),
             ScopeKeyHash = Hash(scope),
-            ArtifactId = artifactId,
+            ArtifactId = Encode(artifactId),
             ArtifactIdHash = Hash(artifactId),
             ContentJson = RuntimeArtifactJson.Serialize(CoordinationState.Empty),
             SchemaVersion = RuntimeArtifactEfModule.SchemaVersion,
@@ -611,7 +629,7 @@ public sealed class EfWorkflowExecutableStore(
         string id)
     {
         if (row.Id != id || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
-            row.ArtifactId != expected || row.ArtifactIdHash != Hash(expected) ||
+            row.ArtifactId != Encode(expected) || row.ArtifactIdHash != Hash(expected) ||
             string.IsNullOrWhiteSpace(row.ArtifactHash) ||
             row.ArtifactHash.Length > RuntimeArtifactEfModule.HashMaximumLength ||
             row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion || row.ArtifactIdOrderKey != OrderKey(expected) ||
@@ -635,7 +653,7 @@ public sealed class EfWorkflowExecutableStore(
     private static CoordinationState ReadCoordination(WorkflowExecutableCoordinationEntity row, string scope, string expected, string id)
     {
         if (row.Id != id || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
-            row.ArtifactId != expected || row.ArtifactIdHash != Hash(expected) ||
+            row.ArtifactId != Encode(expected) || row.ArtifactIdHash != Hash(expected) ||
             row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion || row.Revision <= 0 ||
             string.IsNullOrWhiteSpace(row.IncarnationId))
             throw new InvalidDataException("The persisted workflow executable coordination row is corrupt.");
@@ -751,6 +769,8 @@ public sealed class EfWorkflowExecutableStore(
     private static string Hash(string x) => EfRelationalIdentity.Hash(x);
 
     private static string Encode(string x) => EfRelationalIdentity.Encode(x);
+
+    private static string Decode(string x) => EfRelationalIdentity.Decode(x);
 
     private static string OrderKey(string x) =>
         Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(x, RuntimeArtifactEfModule.IdentityMaximumLength));

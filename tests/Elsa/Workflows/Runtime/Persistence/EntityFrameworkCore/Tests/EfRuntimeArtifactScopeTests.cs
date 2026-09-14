@@ -20,6 +20,38 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 public sealed class EfRuntimeArtifactScopeTests
 {
     [Fact]
+    public async Task Malformed_utf16_artifact_identities_round_trip_through_json_and_sqlite_projections()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var malformed = "identity-" + '\uD800';
+
+        await fixture.Executable.SaveAsync(Executable(malformed, "safe-artifact-hash"));
+        await fixture.Template.SaveAsync(Template(malformed, "template-hash"));
+        await fixture.Store.SaveAsync(new WorkflowExecutableSourceReference(
+            malformed, malformed, "WorkflowDefinition", malformed, "1", malformed, malformed, "1",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, WorkflowExecutableReferenceScope.Published));
+
+        Assert.Equal(malformed, (await fixture.Executable.FindAsync(malformed))!.Identity.ArtifactId);
+        Assert.Equal(malformed, (await fixture.Template.FindAsync(malformed))!.TemplateId);
+        var reference = await fixture.Store.FindAsync(malformed);
+        Assert.Equal(malformed, reference!.SourceReferenceId);
+        Assert.Equal(malformed, reference.ArtifactId);
+        Assert.Equal(malformed, reference.DefinitionId);
+        Assert.Equal(malformed, reference.DefinitionVersionId);
+
+        var executableRow = await fixture.Context.WorkflowExecutables.SingleAsync();
+        var templateRow = await fixture.Context.ExecutableActivityTemplates.SingleAsync();
+        var referenceRow = await fixture.Context.WorkflowExecutableSourceReferences.SingleAsync();
+        Assert.Equal(Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(malformed), executableRow.ArtifactId);
+        Assert.Equal(Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(malformed), templateRow.TemplateId);
+        Assert.Equal(Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(malformed), referenceRow.SourceReferenceId);
+        Assert.DoesNotContain('\uD800', executableRow.ContentJson);
+        Assert.DoesNotContain('\uD800', templateRow.ContentJson);
+        Assert.DoesNotContain('\uD800', referenceRow.ContentJson);
+    }
+
+    [Fact]
     public async Task Source_reference_ids_are_isolated_when_tenants_reuse_the_same_id()
     {
         await using var database = await Database.CreateAsync();
@@ -73,7 +105,7 @@ public sealed class EfRuntimeArtifactScopeTests
         await using var fixture = database.Open("tenant-a");
         await fixture.Store.SaveAsync(Reference("ref-b", "artifact-b"));
 
-        var row = await fixture.Context.WorkflowExecutableSourceReferences.SingleAsync(x => x.ArtifactId == "artifact-b");
+        var row = await fixture.Context.WorkflowExecutableSourceReferences.SingleAsync(x => x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("artifact-b"));
         row.ArtifactIdHash = Elsa.Persistence.EntityFramework.EfRelationalIdentity.Hash("artifact-a");
         await fixture.Context.SaveChangesAsync();
 
@@ -176,7 +208,7 @@ public sealed class EfRuntimeArtifactScopeTests
         Assert.Single(second.Items);
         Assert.Equal("template-b", second.Items[0].TemplateId);
 
-        var row = await fixture.Context.ExecutableActivityTemplates.SingleAsync(x => x.TemplateId == "template-a");
+        var row = await fixture.Context.ExecutableActivityTemplates.SingleAsync(x => x.TemplateId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("template-a"));
         row.ContentJson = "{}";
         await fixture.Context.SaveChangesAsync();
         fixture.Context.ChangeTracker.Clear();
@@ -408,7 +440,7 @@ public sealed class EfRuntimeArtifactScopeTests
 
         await fixture.Executable.SaveAsync(Executable("incomplete"));
         var coordination = await fixture.Context.WorkflowExecutableCoordinations
-            .SingleAsync(x => x.ArtifactId == "incomplete");
+            .SingleAsync(x => x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("incomplete"));
         fixture.Context.WorkflowExecutableCoordinations.Remove(coordination);
         await fixture.Context.SaveChangesAsync();
         fixture.Context.ChangeTracker.Clear();
@@ -541,12 +573,61 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Renew_root_write_lease_retries_after_unrelated_coordination_contention()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var seed = database.Open("tenant-a");
+        await seed.Executable.SaveAsync(Executable("renew-contention"));
+        var now = DateTimeOffset.UtcNow;
+        var lease = await seed.Executable.TryAcquireRootWriteLeaseAsync("renew-contention", "lease", now.AddMinutes(5), now);
+        Assert.NotNull(lease);
+
+        await using var current = database.Open("tenant-a");
+        var interleaving = new RecreateBeforeSaveInterceptor(async () =>
+        {
+            var row = await current.Context.WorkflowExecutableCoordinations.SingleAsync();
+            row.Revision++;
+            await current.Context.SaveChangesAsync();
+            current.Context.ChangeTracker.Clear();
+        });
+        await using var renewing = database.Open("tenant-a", interleaving);
+
+        Assert.True(await renewing.Executable.RenewRootWriteLeaseAsync(lease!, now.AddMinutes(10), now));
+        Assert.NotNull(await current.Executable.FindAsync("renew-contention"));
+    }
+
+    [Fact]
+    public async Task Cancel_deletion_guard_retries_after_unrelated_coordination_contention()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var seed = database.Open("tenant-a");
+        await seed.Executable.SaveAsync(Executable("cancel-contention"));
+        var now = DateTimeOffset.UtcNow;
+        var guard = await seed.Executable.TryBeginDeletionAsync("cancel-contention", "delete", now.AddMinutes(5), now);
+        Assert.NotNull(guard);
+
+        await using var current = database.Open("tenant-a");
+        var interleaving = new RecreateBeforeSaveInterceptor(async () =>
+        {
+            var row = await current.Context.WorkflowExecutableCoordinations.SingleAsync();
+            row.Revision++;
+            await current.Context.SaveChangesAsync();
+            current.Context.ChangeTracker.Clear();
+        });
+        await using var cancelling = database.Open("tenant-a", interleaving);
+
+        Assert.True(await cancelling.Executable.CancelDeletionAsync(guard!));
+        Assert.NotNull(await current.Executable.FindAsync("cancel-contention"));
+        Assert.NotNull(await current.Executable.TryAcquireRootWriteLeaseAsync("cancel-contention", "new-lease", now.AddMinutes(5), now));
+    }
+
+    [Fact]
     public async Task Executable_artifact_hash_projection_rejects_valid_json_tampering()
     {
         await using var database = await Database.CreateAsync();
         await using var fixture = database.Open("tenant-a");
         await fixture.Executable.SaveAsync(Executable("artifact-hash-corrupt"));
-        var row = await fixture.Context.WorkflowExecutables.SingleAsync(x => x.ArtifactId == "artifact-hash-corrupt");
+        var row = await fixture.Context.WorkflowExecutables.SingleAsync(x => x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("artifact-hash-corrupt"));
         var payload = JsonNode.Parse(row.ContentJson)!.AsObject();
         payload["identity"]!.AsObject()["artifactHash"] = "tampered-artifact-hash";
         row.ContentJson = payload.ToJsonString();
@@ -563,7 +644,7 @@ public sealed class EfRuntimeArtifactScopeTests
         await using var fixture = database.Open("tenant-a");
         await fixture.Executable.SaveAsync(Executable("artifact-hash-overlong"));
 
-        var row = await fixture.Context.WorkflowExecutables.SingleAsync(x => x.ArtifactId == "artifact-hash-overlong");
+        var row = await fixture.Context.WorkflowExecutables.SingleAsync(x => x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("artifact-hash-overlong"));
         var oversizedHash = new string('h', RuntimeArtifactEfModule.HashMaximumLength + 1);
         var payload = JsonNode.Parse(row.ContentJson)!.AsObject();
         payload["identity"]!.AsObject()["artifactHash"] = oversizedHash;
@@ -594,7 +675,7 @@ public sealed class EfRuntimeArtifactScopeTests
         var guard = await fixture.Executable.TryBeginDeletionAsync("guarded", "operation", now.AddMinutes(5), now);
         Assert.NotNull(guard);
 
-        var row = await other.Context.WorkflowExecutableCoordinations.SingleAsync(x => x.ArtifactId == "guarded");
+        var row = await other.Context.WorkflowExecutableCoordinations.SingleAsync(x => x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("guarded"));
         row.ContentJson = "{\"Leases\":{},\"Guard\":null}";
         row.Revision++;
         await other.Context.SaveChangesAsync();
@@ -635,7 +716,7 @@ public sealed class EfRuntimeArtifactScopeTests
         var first = await fixture.Executable.TryAcquireRootWriteLeaseAsync("conflict", "first", now.AddMinutes(5), now);
         Assert.NotNull(first);
 
-        var row = await other.Context.WorkflowExecutableCoordinations.SingleAsync(x => x.ArtifactId == "conflict");
+        var row = await other.Context.WorkflowExecutableCoordinations.SingleAsync(x => x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("conflict"));
         row.ContentJson = "{\"Leases\":{},\"Guard\":null}";
         row.Revision++;
         await other.Context.SaveChangesAsync();
@@ -651,7 +732,7 @@ public sealed class EfRuntimeArtifactScopeTests
         await using var fixture = database.Open("tenant-a");
         var now = DateTimeOffset.UtcNow;
         await fixture.Executable.SaveAsync(Executable("orphan"));
-        var executable = await fixture.Context.WorkflowExecutables.SingleAsync(x => x.ArtifactId == "orphan");
+        var executable = await fixture.Context.WorkflowExecutables.SingleAsync(x => x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("orphan"));
         fixture.Context.WorkflowExecutables.Remove(executable);
         await fixture.Context.SaveChangesAsync();
         fixture.Context.ChangeTracker.Clear();
@@ -668,7 +749,7 @@ public sealed class EfRuntimeArtifactScopeTests
             .CancelDeletionAsync(new("orphan", "operation", "token")).AsTask());
 
         await fixture.Executable.SaveAsync(Executable("corrupt-executable"));
-        var corrupt = await fixture.Context.WorkflowExecutables.SingleAsync(x => x.ArtifactId == "corrupt-executable");
+        var corrupt = await fixture.Context.WorkflowExecutables.SingleAsync(x => x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("corrupt-executable"));
         corrupt.ContentJson = "{";
         await fixture.Context.SaveChangesAsync();
         fixture.Context.ChangeTracker.Clear();
@@ -699,7 +780,7 @@ public sealed class EfRuntimeArtifactScopeTests
             await using var database = await Database.CreateAsync();
             await using var fixture = database.Open("tenant-a");
             await fixture.Executable.SaveAsync(Executable("corrupt"));
-            var row = await fixture.Context.WorkflowExecutableCoordinations.SingleAsync(x => x.ArtifactId == "corrupt");
+            var row = await fixture.Context.WorkflowExecutableCoordinations.SingleAsync(x => x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("corrupt"));
             row.ContentJson = payload;
             await fixture.Context.SaveChangesAsync();
             fixture.Context.ChangeTracker.Clear();
@@ -719,8 +800,8 @@ public sealed class EfRuntimeArtifactScopeTests
         await using var fixture = database.Open("tenant-a");
         await fixture.Executable.SaveAsync(Executable("case-sensitive-leases"));
         var row = await fixture.Context.WorkflowExecutableCoordinations
-            .SingleAsync(x => x.ArtifactId == "case-sensitive-leases");
-        row.ContentJson = "{\"Leases\":{\"A\":{\"Id\":\"A\",\"Token\":\"token-a\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"},\"a\":{\"Id\":\"a\",\"Token\":\"token-b\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"Guard\":null}";
+            .SingleAsync(x => x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("case-sensitive-leases"));
+        row.ContentJson = $"{{\"Leases\":{{\"A\":{{\"Id\":\"{Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("A")}\",\"Token\":\"{Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("token-a")}\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}},\"a\":{{\"Id\":\"{Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("a")}\",\"Token\":\"{Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("token-b")}\",\"ExpiresAt\":\"2030-01-01T00:00:00+00:00\"}}}},\"Guard\":null}}";
         await fixture.Context.SaveChangesAsync();
         fixture.Context.ChangeTracker.Clear();
 
@@ -771,7 +852,8 @@ public sealed class EfRuntimeArtifactScopeTests
 
         public static async Task<Database> CreateFileAsync()
         {
-            var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-runtime-artifacts-{Guid.NewGuid():N}.db");
+            var fileName = $"elsa-runtime-artifacts-{Guid.NewGuid():N}.db";
+            var databasePath = Path.Combine(Path.GetTempPath(), Path.GetFileName(fileName));
             var connectionString = $"Data Source={databasePath};Pooling=False";
             var connection = new SqliteConnection(connectionString);
             await connection.OpenAsync();

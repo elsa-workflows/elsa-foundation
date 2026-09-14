@@ -100,6 +100,16 @@ public sealed class EfRuntimeArtifactRegistrationTests
     }
 
     [Fact]
+    public void Runtime_default_backend_does_not_claim_a_reader_factory_registered_before_runtime()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IExecutableActivityTemplateReader>(_ => new CustomTemplateStore());
+        services.AddWorkflowRuntime();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(new()));
+    }
+
+    [Fact]
     public void Artifact_registration_rejects_instance_and_factory_owned_contracts_hidden_behind_object()
     {
         var services = new ServiceCollection();

@@ -13,7 +13,7 @@ public sealed class WorkflowExecutableEntityConfiguration : IEntityTypeConfigura
         b.Property(x => x.Id).HasMaxLength(64).IsRequired();
         b.Property(x => x.ScopeKey).IsRequired();
         b.Property(x => x.ScopeKeyHash).HasMaxLength(64).IsRequired();
-        b.Property(x => x.ArtifactId).HasMaxLength(128).IsRequired();
+        b.Property(x => x.ArtifactId).HasMaxLength(RuntimeArtifactEfModule.IdentityProjectionMaximumLength).IsRequired();
         b.Property(x => x.ArtifactIdHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.ArtifactHash).HasMaxLength(RuntimeArtifactEfModule.HashMaximumLength).IsRequired();
         b.Property(x => x.ArtifactIdOrderKey).HasMaxLength(655).IsRequired();
@@ -50,7 +50,7 @@ public sealed class ExecutableActivityTemplateEntityConfiguration : IEntityTypeC
         b.Property(x => x.Id).HasMaxLength(64).IsRequired();
         b.Property(x => x.ScopeKey).IsRequired();
         b.Property(x => x.ScopeKeyHash).HasMaxLength(64).IsRequired();
-        b.Property(x => x.TemplateId).HasMaxLength(128).IsRequired();
+        b.Property(x => x.TemplateId).HasMaxLength(RuntimeArtifactEfModule.IdentityProjectionMaximumLength).IsRequired();
         b.Property(x => x.TemplateIdHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.TemplateHash).HasMaxLength(RuntimeArtifactEfModule.HashMaximumLength).IsRequired();
         b.Property(x => x.TemplateIdOrderKey).HasMaxLength(655).IsRequired();
@@ -72,7 +72,7 @@ public sealed class ExecutableActivityTemplateHashClaimEntityConfiguration : IEn
         b.Property(x => x.ScopeKeyHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.TemplateHash).HasMaxLength(RuntimeArtifactEfModule.HashMaximumLength).IsRequired();
         b.Property(x => x.TemplateHashHash).HasMaxLength(64).IsRequired();
-        b.Property(x => x.TemplateId).HasMaxLength(128).IsRequired();
+        b.Property(x => x.TemplateId).HasMaxLength(RuntimeArtifactEfModule.IdentityProjectionMaximumLength).IsRequired();
         b.Property(x => x.ContentJson).IsRequired();
         b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();
         b.Property(x => x.Revision).IsConcurrencyToken().IsRequired();
@@ -87,14 +87,14 @@ public sealed class WorkflowExecutableSourceReferenceEntityConfiguration : IEnti
         b.ToTable(RuntimeArtifactEfModule.SourceReferenceTableName);
         b.HasKey(x => x.Id);
         b.Property(x => x.Id).HasMaxLength(128).IsRequired();
-        b.Property(x => x.SourceReferenceId).HasMaxLength(128).IsRequired();
+        b.Property(x => x.SourceReferenceId).HasMaxLength(RuntimeArtifactEfModule.IdentityProjectionMaximumLength).IsRequired();
         b.Property(x => x.SourceReferenceIdHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.SourceReferenceIdOrderKey).HasMaxLength(655).IsRequired();
-        b.Property(x => x.ArtifactId).HasMaxLength(128).IsRequired();
+        b.Property(x => x.ArtifactId).HasMaxLength(RuntimeArtifactEfModule.IdentityProjectionMaximumLength).IsRequired();
         b.Property(x => x.ArtifactIdHash).HasMaxLength(64).IsRequired();
-        b.Property(x => x.DefinitionVersionId).HasMaxLength(128).IsRequired();
+        b.Property(x => x.DefinitionVersionId).HasMaxLength(RuntimeArtifactEfModule.IdentityProjectionMaximumLength).IsRequired();
         b.Property(x => x.DefinitionVersionIdHash).HasMaxLength(64).IsRequired();
-        b.Property(x => x.DefinitionId).HasMaxLength(128).IsRequired();
+        b.Property(x => x.DefinitionId).HasMaxLength(RuntimeArtifactEfModule.IdentityProjectionMaximumLength).IsRequired();
         b.Property(x => x.DefinitionIdHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.ScopeKey).IsRequired();
         b.Property(x => x.ScopeKeyHash).HasMaxLength(64).IsRequired();

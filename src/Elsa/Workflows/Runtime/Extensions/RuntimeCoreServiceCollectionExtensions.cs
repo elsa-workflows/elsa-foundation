@@ -121,14 +121,22 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IRuntimeRequirementChecker, RuntimeRequirementChecker>();
         services.TryAddSingleton<IWorkflowArtifactClosureSerializer, WorkflowArtifactClosureSerializer>();
         services.TryAddSingleton<IExecutableActivityTemplateStore, InMemoryExecutableActivityTemplateStore>();
+        var defaultActivityTemplateReader = ServiceDescriptor.Singleton<IExecutableActivityTemplateReader>(serviceProvider =>
+            serviceProvider.GetRequiredService<IExecutableActivityTemplateStore>());
+        services.TryAdd(defaultActivityTemplateReader);
         services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
+        var defaultSourceReferenceReader = ServiceDescriptor.Singleton<IWorkflowExecutableSourceReferenceReader>(serviceProvider =>
+            serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>());
+        services.TryAdd(defaultSourceReferenceReader);
         if (RuntimeArtifactStoreBackend.Find(services) is null)
         {
             var defaultArtifactDescriptors = services.Where(descriptor =>
                 descriptor.ServiceType == typeof(IWorkflowExecutableStore) && descriptor.ImplementationType == typeof(InMemoryWorkflowExecutableStore) ||
                 descriptor.ServiceType == typeof(IExecutableActivityTemplateStore) && descriptor.ImplementationType == typeof(InMemoryExecutableActivityTemplateStore) ||
-                descriptor.ServiceType == typeof(IWorkflowExecutableSourceReferenceStore) && descriptor.ImplementationType == typeof(InMemoryWorkflowExecutableSourceReferenceStore)).ToArray();
-            if (defaultArtifactDescriptors.Length == 3)
+                descriptor.ServiceType == typeof(IWorkflowExecutableSourceReferenceStore) && descriptor.ImplementationType == typeof(InMemoryWorkflowExecutableSourceReferenceStore) ||
+                ReferenceEquals(descriptor, defaultActivityTemplateReader) ||
+                ReferenceEquals(descriptor, defaultSourceReferenceReader)).ToArray();
+            if (defaultArtifactDescriptors.Length == 5)
                 RuntimeArtifactStoreBackend.Register(services, new RuntimeArtifactStoreBackend(RuntimeArtifactStoreBackend.InMemory, defaultArtifactDescriptors));
         }
         services.AddOptions<ActivityExecutionHierarchyCursorOptions>();

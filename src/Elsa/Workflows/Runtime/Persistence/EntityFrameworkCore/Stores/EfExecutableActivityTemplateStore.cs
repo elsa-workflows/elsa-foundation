@@ -144,7 +144,7 @@ public sealed class EfExecutableActivityTemplateStore(
         var hasMore = rows.Length > request.Limit;
         if (hasMore)
             rows = rows[..request.Limit];
-        var items = rows.Select(x => Read(x, new TemplateIdentity(scope, x.TemplateId, x.TemplateHash))).ToArray();
+        var items = rows.Select(x => Read(x, new TemplateIdentity(scope, Decode(x.TemplateId), x.TemplateHash))).ToArray();
         var next = hasMore ? EncodeCursor(scope, rows[^1].TemplateIdOrderKey) : null;
         return new RuntimeStorePage<ExecutableActivityTemplate>(request, items, next);
     }
@@ -266,7 +266,7 @@ public sealed class EfExecutableActivityTemplateStore(
             identity.TemplateId,
             () => context.ExecutableActivityTemplates.AsNoTracking().SingleOrDefaultAsync(x =>
                 x.Id == CreateId(identity.Scope, identity.TemplateId) && x.ScopeKeyHash == Hash(identity.Scope) && x.ScopeKey == Encode(identity.Scope) &&
-                x.TemplateIdHash == Hash(identity.TemplateId) && x.TemplateId == identity.TemplateId, cancellationToken));
+                x.TemplateIdHash == Hash(identity.TemplateId) && x.TemplateId == Encode(identity.TemplateId), cancellationToken));
     }
 
     private async Task<ExecutableActivityTemplateHashClaimEntity?> FindClaimRowAsync(TemplateIdentity identity, CancellationToken cancellationToken)
@@ -306,7 +306,7 @@ public sealed class EfExecutableActivityTemplateStore(
 
     private static ExecutableActivityTemplateEntity ToEntity(ExecutableActivityTemplate template, TemplateIdentity identity, string json, string incarnationId) => new()
     {
-        Id = CreateId(identity.Scope, template.TemplateId), ScopeKey = Encode(identity.Scope), ScopeKeyHash = Hash(identity.Scope), TemplateId = template.TemplateId,
+        Id = CreateId(identity.Scope, template.TemplateId), ScopeKey = Encode(identity.Scope), ScopeKeyHash = Hash(identity.Scope), TemplateId = Encode(template.TemplateId),
         TemplateIdHash = Hash(template.TemplateId), TemplateHash = template.TemplateHash, TemplateIdOrderKey = OrderKey(template.TemplateId), ContentJson = json,
         SchemaVersion = RuntimeArtifactEfModule.SchemaVersion, Revision = 1, IncarnationId = incarnationId
     };
@@ -314,23 +314,23 @@ public sealed class EfExecutableActivityTemplateStore(
     private static ExecutableActivityTemplateHashClaimEntity ToClaimEntity(ExecutableActivityTemplate template, TemplateIdentity identity, string incarnationId) => new()
     {
         Id = HashClaimId(identity.Scope, template.TemplateHash), ScopeKey = Encode(identity.Scope), ScopeKeyHash = Hash(identity.Scope), TemplateHash = template.TemplateHash,
-        TemplateHashHash = Hash(template.TemplateHash), TemplateId = template.TemplateId, ContentJson = RuntimeArtifactJson.Serialize(new HashClaim(template.TemplateHash, template.TemplateId)),
+        TemplateHashHash = Hash(template.TemplateHash), TemplateId = Encode(template.TemplateId), ContentJson = RuntimeArtifactJson.Serialize(new HashClaim(template.TemplateHash, template.TemplateId)),
         SchemaVersion = RuntimeArtifactEfModule.SchemaVersion, Revision = 1, IncarnationId = incarnationId
     };
 
     private static ExecutableActivityTemplate Read(ExecutableActivityTemplateEntity row, TemplateIdentity identity)
     {
         if (identity.TemplateId is null || row.Id != CreateId(identity.Scope, identity.TemplateId) || row.ScopeKey != Encode(identity.Scope) || row.ScopeKeyHash != Hash(identity.Scope) ||
-            row.TemplateId != identity.TemplateId || row.TemplateIdHash != Hash(identity.TemplateId) || row.TemplateIdOrderKey != OrderKey(identity.TemplateId) || row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion || row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId))
+            row.TemplateId != Encode(identity.TemplateId) || row.TemplateIdHash != Hash(identity.TemplateId) || row.TemplateIdOrderKey != OrderKey(identity.TemplateId) || row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion || row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId))
             throw new InvalidDataException("The persisted executable activity template row is corrupt.");
         try
         {
             var envelope = JsonNode.Parse(row.ContentJson)?.AsObject() ?? throw new InvalidDataException("The persisted executable activity template envelope is empty.");
-            if (!StringComparer.Ordinal.Equals(ReadString(envelope, "collection"), "executableActivityTemplate") || !StringComparer.Ordinal.Equals(ReadString(envelope, "templateHash"), row.TemplateHash) || envelope["template"] is null)
+            if (!StringComparer.Ordinal.Equals(ReadString(envelope, "collection"), "executableActivityTemplate") || !StringComparer.Ordinal.Equals(Decode(ReadString(envelope, "templateHash")), row.TemplateHash) || envelope["template"] is null)
                 throw new InvalidDataException("The persisted executable activity template envelope projection is corrupt.");
             var value = RuntimeArtifactJson.Deserialize<ExecutableActivityTemplate>(envelope["template"]!.ToJsonString());
             Validate(value);
-            if (value.TemplateId != row.TemplateId || value.TemplateHash != row.TemplateHash)
+            if (value.TemplateId != Decode(row.TemplateId) || value.TemplateHash != row.TemplateHash)
                 throw new InvalidDataException("The persisted executable activity template projection is corrupt.");
             return value;
         }
@@ -342,12 +342,12 @@ public sealed class EfExecutableActivityTemplateStore(
     private static HashClaim ReadClaim(ExecutableActivityTemplateHashClaimEntity row, TemplateIdentity identity)
     {
         if (identity.TemplateHash is null || row.Id != HashClaimId(identity.Scope, identity.TemplateHash) || row.ScopeKey != Encode(identity.Scope) || row.ScopeKeyHash != Hash(identity.Scope) ||
-            row.TemplateHash != identity.TemplateHash || row.TemplateHashHash != Hash(identity.TemplateHash) || string.IsNullOrWhiteSpace(row.TemplateId) || row.TemplateId.Length > RuntimeArtifactEfModule.IdentityMaximumLength || row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion || row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId))
+            row.TemplateHash != identity.TemplateHash || row.TemplateHashHash != Hash(identity.TemplateHash) || string.IsNullOrWhiteSpace(row.TemplateId) || row.TemplateId.Length > RuntimeArtifactEfModule.IdentityProjectionMaximumLength || row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion || row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId))
             throw new InvalidDataException("The persisted executable activity template hash claim is corrupt.");
         try
         {
             var claim = RuntimeArtifactJson.Deserialize<HashClaim>(row.ContentJson);
-            if (claim.TemplateHash != identity.TemplateHash || claim.TemplateId != row.TemplateId)
+            if (claim.TemplateHash != identity.TemplateHash || claim.TemplateId != Decode(row.TemplateId))
                 throw new InvalidDataException("The persisted executable activity template hash claim projection is corrupt.");
             return claim;
         }
@@ -382,7 +382,7 @@ public sealed class EfExecutableActivityTemplateStore(
     {
         var payload = JsonNode.Parse(RuntimeArtifactJson.Serialize(template)) ?? throw new InvalidDataException("Executable activity template payload could not be serialized.");
         payload.AsObject().Remove("nodesById");
-        return new JsonObject { ["collection"] = "executableActivityTemplate", ["templateHash"] = template.TemplateHash, ["template"] = payload }.ToJsonString();
+        return new JsonObject { ["collection"] = "executableActivityTemplate", ["templateHash"] = Encode(template.TemplateHash), ["template"] = payload }.ToJsonString();
     }
 
     private string EncodeCursor(string scope, string key) => continuationCodec.Encode(ContinuationPurpose, Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(new Cursor(1, Hash(scope), key))));
@@ -409,6 +409,7 @@ public sealed class EfExecutableActivityTemplateStore(
     private static string NewIncarnationId() => Guid.NewGuid().ToString("N");
     private static string Hash(string value) => EfRelationalIdentity.Hash(value);
     private static string Encode(string value) => EfRelationalIdentity.Encode(value);
+    private static string Decode(string value) => EfRelationalIdentity.Decode(value);
     private static string HashClaimId(string scope, string hash) => CreateId(scope, $"templateHash:{Hash(hash)}");
     private static string OrderKey(string value) => Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(value, RuntimeArtifactEfModule.IdentityMaximumLength));
     private static RuntimeArtifactEntityFrameworkPersistenceException NormalizeProviderFailure(string operation, string identity, Exception inner) =>
