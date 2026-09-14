@@ -41,6 +41,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "Microsoft.EntityFrameworkCore.Design",
         "Microsoft.EntityFrameworkCore.SqlServer",
         "Microsoft.EntityFrameworkCore.Sqlite",
+        "MySql.EntityFrameworkCore",
         "Npgsql.EntityFrameworkCore.PostgreSQL"
     ];
 
@@ -58,6 +59,9 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Configuration/SecretRecordConfiguration.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/DependencyInjection/SecretsEntityFrameworkCoreRegistration.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Entities/SecretRecord.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20260912081709_Initial.Designer.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20260912081709_Initial.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/SecretsMySqlDbContextModelSnapshot.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260910210216_Initial.Designer.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260910210216_Initial.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260911011058_WidenLookupKeys.Designer.cs",
@@ -92,6 +96,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Stores/UnicodeOrdinalCasingData.Generated.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/Program.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/SecretsDesignTimeConnection.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/SecretsMySqlDesignTimeFactory.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/SecretsPostgreSqlDesignTimeFactory.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/SecretsSqlServerDesignTimeFactory.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/Tooling/SecretsSqliteDesignTimeFactory.cs",

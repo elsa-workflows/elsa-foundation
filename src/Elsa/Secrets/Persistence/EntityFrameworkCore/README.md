@@ -87,9 +87,8 @@ OCC is an explicit `ConcurrencyToken` stamped on save — **not** cross-provider
 stored as UTC ticks (`INTEGER`) so active-only expiry comparisons translate.
 
 Derived contexts: `SecretsSqliteDbContext`, `SecretsSqlServerDbContext`,
-`SecretsPostgreSqlDbContext`, and `SecretsMySqlDbContext`. The SQLite, SQL Server, and PostgreSQL
-contexts each have their own `Migrations/` folder and `ModelSnapshot`; MySQL production migrations
-are intentionally not included in this slice.
+`SecretsPostgreSqlDbContext`, and `SecretsMySqlDbContext`. Each context has its own
+`Migrations/` folder and `ModelSnapshot`.
 History table: `__EFMigrationsHistory_ElsaSecrets`.
 
 ### Persisted text projections

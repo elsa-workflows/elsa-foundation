@@ -19,11 +19,13 @@ public sealed class SecretsEfDualMigrateToolTests
         Assert.Contains("SecretsSqliteDbContext", lib, StringComparison.Ordinal);
         Assert.Contains("SecretsSqlServerDbContext", lib, StringComparison.Ordinal);
         Assert.Contains("SecretsPostgreSqlDbContext", lib, StringComparison.Ordinal);
+        Assert.Contains("SecretsMySqlDbContext", lib, StringComparison.Ordinal);
         Assert.Contains("has-pending-model-changes", script, StringComparison.Ordinal);
         Assert.Contains("database update", script, StringComparison.Ordinal);
         Assert.Contains(nameof(SecretsSqliteDbContext), lib, StringComparison.Ordinal);
         Assert.Contains(nameof(SecretsSqlServerDbContext), lib, StringComparison.Ordinal);
         Assert.Contains(nameof(SecretsPostgreSqlDbContext), lib, StringComparison.Ordinal);
+        Assert.Contains(nameof(SecretsMySqlDbContext), lib, StringComparison.Ordinal);
     }
 
     [SkippableFact]
@@ -133,7 +135,8 @@ public sealed class SecretsEfDualMigrateToolTests
                     "build|Canary|1",
                     "manifest-ef|SecretsSqliteDbContext|Canary|1",
                     "manifest-ef|SecretsSqlServerDbContext|Canary|1",
-                    "manifest-ef|SecretsPostgreSqlDbContext|Canary|1"
+                    "manifest-ef|SecretsPostgreSqlDbContext|Canary|1",
+                    "manifest-ef|SecretsMySqlDbContext|Canary|1"
                 ],
                 File.ReadAllLines(recordingLog));
         }
@@ -240,6 +243,8 @@ public sealed class SecretsEfDualMigrateToolTests
     [InlineData("--sqlserver", "ELSA_SECRETS_EF_SQLSERVER", "   ")]
     [InlineData("--postgresql", "ELSA_SECRETS_EF_POSTGRESQL", null)]
     [InlineData("--postgresql", "ELSA_SECRETS_EF_POSTGRESQL", "\t")]
+    [InlineData("--mysql", "ELSA_SECRETS_EF_MYSQL", null)]
+    [InlineData("--mysql", "ELSA_SECRETS_EF_MYSQL", "\t")]
     public void Explicit_engine_apply_fails_when_the_connection_env_is_unset_or_whitespace(
         string selector,
         string envName,
@@ -272,8 +277,9 @@ public sealed class SecretsEfDualMigrateToolTests
         Assert.Contains("has-pending-model-changes --context SecretsSqliteDbContext", result.Output, StringComparison.Ordinal);
         Assert.Contains("has-pending-model-changes --context SecretsSqlServerDbContext", result.Output, StringComparison.Ordinal);
         Assert.Contains("has-pending-model-changes --context SecretsPostgreSqlDbContext", result.Output, StringComparison.Ordinal);
+        Assert.Contains("has-pending-model-changes --context SecretsMySqlDbContext", result.Output, StringComparison.Ordinal);
         // Echo-only pending would still print the banners. The ef tool writes this line once per context.
-        Assert.Equal(3, CountOccurrences(result.Output, "No changes have been made to the model since the last migration."));
+        Assert.Equal(4, CountOccurrences(result.Output, "No changes have been made to the model since the last migration."));
     }
 
     [SkippableFact]
@@ -290,11 +296,14 @@ public sealed class SecretsEfDualMigrateToolTests
                     ["ELSA_SECRETS_EF_SQLITE"] = $"Data Source={path}",
                     ["ELSA_SECRETS_EF_SQLSERVER"] = null,
                     ["ELSA_SECRETS_EF_POSTGRESQL"] = null,
+                    ["ELSA_SECRETS_EF_MYSQL"] = null,
                     ["ELSA_SECRETS_EF_REQUIRE_ALL"] = null
                 });
             Assert.True(result.ExitCode == 0, result.Describe());
-            Assert.Equal(3, CountOccurrences(result.Output, "No changes have been made to the model since the last migration."));
+            Assert.Equal(4, CountOccurrences(result.Output, "No changes have been made to the model since the last migration."));
             Assert.Contains("skip SecretsSqlServerDbContext", result.Output, StringComparison.Ordinal);
+            Assert.Contains("skip SecretsPostgreSqlDbContext", result.Output, StringComparison.Ordinal);
+            Assert.Contains("skip SecretsMySqlDbContext", result.Output, StringComparison.Ordinal);
             Assert.True(await TableExistsAsync(path, SecretsEfModule.TableName));
         }
         finally
@@ -319,11 +328,13 @@ public sealed class SecretsEfDualMigrateToolTests
                     ["ELSA_SECRETS_EF_SQLITE"] = $"Data Source={path}",
                     ["ELSA_SECRETS_EF_SQLSERVER"] = null,
                     ["ELSA_SECRETS_EF_POSTGRESQL"] = null,
+                    ["ELSA_SECRETS_EF_MYSQL"] = null,
                     ["ELSA_SECRETS_EF_REQUIRE_ALL"] = null
                 });
             Assert.True(skipped.ExitCode == 0, skipped.Describe());
             Assert.Contains("skip SecretsSqlServerDbContext", skipped.Output, StringComparison.Ordinal);
             Assert.Contains("skip SecretsPostgreSqlDbContext", skipped.Output, StringComparison.Ordinal);
+            Assert.Contains("skip SecretsMySqlDbContext", skipped.Output, StringComparison.Ordinal);
             Assert.True(await TableExistsAsync(path, SecretsEfModule.TableName));
 
             var required = RunDualMigrateFromExistingBuild(
@@ -333,6 +344,7 @@ public sealed class SecretsEfDualMigrateToolTests
                     ["ELSA_SECRETS_EF_SQLITE"] = $"Data Source={path}",
                     ["ELSA_SECRETS_EF_SQLSERVER"] = null,
                     ["ELSA_SECRETS_EF_POSTGRESQL"] = null,
+                    ["ELSA_SECRETS_EF_MYSQL"] = null,
                     ["ELSA_SECRETS_EF_REQUIRE_ALL"] = "1"
                 });
             Assert.Equal(1, required.ExitCode);

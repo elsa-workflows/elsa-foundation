@@ -10,6 +10,7 @@ public static class SecretsDesignTimeConnection
     public const string SqliteVariable = "ELSA_SECRETS_EF_SQLITE";
     public const string SqlServerVariable = "ELSA_SECRETS_EF_SQLSERVER";
     public const string PostgreSqlVariable = "ELSA_SECRETS_EF_POSTGRESQL";
+    public const string MySqlVariable = "ELSA_SECRETS_EF_MYSQL";
 
     public static string Resolve(string environmentVariable, string fallback)
     {

@@ -7,7 +7,7 @@
 #
 # Usage:
 #   bash tools/ef/dual-migrate.sh pending
-#   bash tools/ef/dual-migrate.sh apply [--sqlite|--sqlserver|--postgresql|--all]
+#   bash tools/ef/dual-migrate.sh apply [--sqlite|--sqlserver|--postgresql|--mysql|--all]
 #   bash tools/ef/dual-migrate.sh all
 #   bash tools/ef/dual-migrate.sh            # same as all
 #
@@ -15,6 +15,7 @@
 #   ELSA_SECRETS_EF_SQLITE      Sqlite connection. Default: a temp file.
 #   ELSA_SECRETS_EF_SQLSERVER   Required to apply the SqlServer context.
 #   ELSA_SECRETS_EF_POSTGRESQL  Required to apply the PostgreSql context.
+#   ELSA_SECRETS_EF_MYSQL       Required to apply the MySql context.
 #   ELSA_SECRETS_EF_REQUIRE_ALL=1  Fail when a non-Sqlite connection is missing.
 #   ELSA_SECRETS_EF_CONFIGURATION  MSBuild configuration for the tooling build and EF calls.
 #                                  Default: Release.
@@ -36,7 +37,7 @@ usage() {
   cat <<'EOF'
 Usage:
   bash tools/ef/dual-migrate.sh pending
-  bash tools/ef/dual-migrate.sh apply [--sqlite|--sqlserver|--postgresql|--all]
+  bash tools/ef/dual-migrate.sh apply [--sqlite|--sqlserver|--postgresql|--mysql|--all]
   bash tools/ef/dual-migrate.sh all
 
 pending  Fail if any derived Secrets context has pending model changes.
@@ -44,7 +45,7 @@ pending  Fail if any derived Secrets context has pending model changes.
 
 apply    Apply compiled migrations and reindex legacy projections for the selected contexts.
          Sqlite uses ELSA_SECRETS_EF_SQLITE or a temp file.
-         --sqlserver / --postgresql fail when the matching env is unset.
+         --sqlserver / --postgresql / --mysql fail when the matching env is unset.
          --all skips a missing non-Sqlite env unless ELSA_SECRETS_EF_REQUIRE_ALL=1.
 
 all      pending, then apply (default).
@@ -171,6 +172,9 @@ run_apply() {
       postgresql)
         [[ "$secrets_ef_context" == SecretsPostgreSqlDbContext ]] || continue
         ;;
+      mysql)
+        [[ "$secrets_ef_context" == SecretsMySqlDbContext ]] || continue
+        ;;
       *)
         echo "error: unknown apply selector '$want'" >&2
         usage >&2
@@ -189,6 +193,7 @@ while [[ $# -gt 0 ]]; do
     --sqlite) selector="sqlite" ;;
     --sqlserver) selector="sqlserver" ;;
     --postgresql) selector="postgresql" ;;
+    --mysql) selector="mysql" ;;
     --all) selector="all" ;;
     -h|--help)
       usage

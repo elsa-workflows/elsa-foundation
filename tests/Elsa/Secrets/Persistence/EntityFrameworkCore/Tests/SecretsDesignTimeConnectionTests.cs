@@ -62,6 +62,7 @@ public sealed class SecretsDesignTimeConnectionTests
         Assert.Equal("ELSA_SECRETS_EF_SQLITE", SecretsDesignTimeConnection.SqliteVariable);
         Assert.Equal("ELSA_SECRETS_EF_SQLSERVER", SecretsDesignTimeConnection.SqlServerVariable);
         Assert.Equal("ELSA_SECRETS_EF_POSTGRESQL", SecretsDesignTimeConnection.PostgreSqlVariable);
+        Assert.Equal("ELSA_SECRETS_EF_MYSQL", SecretsDesignTimeConnection.MySqlVariable);
     }
 
     [Fact]
@@ -91,6 +92,17 @@ public sealed class SecretsDesignTimeConnectionTests
         var connection = context.Database.GetConnectionString();
         Assert.Contains("ci-pg", connection, StringComparison.Ordinal);
         Assert.Contains("elsa-secrets-env", connection, StringComparison.Ordinal);
+        Assert.DoesNotContain("localhost", connection, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MySql_factory_uses_the_environment_connection()
+    {
+        using var _ = Override(SecretsDesignTimeConnection.MySqlVariable, "Server=ci-mysql;Database=elsa_secrets_env;User ID=root;******");
+        using var context = new SecretsMySqlDesignTimeFactory().CreateDbContext([]);
+        var connection = context.Database.GetConnectionString();
+        Assert.Contains("ci-mysql", connection, StringComparison.Ordinal);
+        Assert.Contains("elsa_secrets_env", connection, StringComparison.Ordinal);
         Assert.DoesNotContain("localhost", connection, StringComparison.Ordinal);
     }
 

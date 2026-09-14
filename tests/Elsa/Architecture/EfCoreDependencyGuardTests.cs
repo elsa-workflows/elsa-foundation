@@ -624,6 +624,7 @@ public sealed class EfCoreDependencyGuardTests
                     "Microsoft.EntityFrameworkCore.Design",
                     "Microsoft.EntityFrameworkCore.SqlServer",
                     "Microsoft.EntityFrameworkCore.Sqlite",
+                    "MySql.EntityFrameworkCore",
                     "Microsoft.EntityFrameworkCore.Sqlite.Core",
                     "Npgsql.EntityFrameworkCore.PostgreSQL"
                 ],

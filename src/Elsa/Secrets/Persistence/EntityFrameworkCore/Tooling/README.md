@@ -1,11 +1,11 @@
 # Secrets EF design-time tooling
 
-This executable project lets `dotnet ef` see Sqlite, SqlServer, and Npgsql providers plus
+This executable project lets `dotnet ef` see Sqlite, SqlServer, PostgreSql, and MySql providers plus
 `Microsoft.EntityFrameworkCore.Design`, and hosts the operator-only projection reindex command.
 It is **not** a Nuplane runtime package.
 
 Generated migrations live in the **module** assembly
-(`../Migrations/Sqlite|SqlServer|PostgreSql`) so `MigrateAsync` and
+(`../Migrations/Sqlite|SqlServer|PostgreSql|MySql`) so `MigrateAsync` and
 `tools/ef/dual-migrate.sh` can apply them without loading this tooling project at runtime.
 
 ## Generate
@@ -38,16 +38,18 @@ dotnet ef migrations add <MigrationName> \
   --namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.Sqlite
 ```
 
-Repeat with `SecretsSqlServerDbContext` / `Migrations/SqlServer` and
-`SecretsPostgreSqlDbContext` / `Migrations/PostgreSql`.
+Repeat with `SecretsSqlServerDbContext` / `Migrations/SqlServer`,
+`SecretsPostgreSqlDbContext` / `Migrations/PostgreSql`, and
+`SecretsMySqlDbContext` / `Migrations/MySql`.
 
 Factories set `MigrationsHistoryTable(__EFMigrationsHistory_ElsaSecrets)`. Connection strings
-come from `ELSA_SECRETS_EF_SQLITE`, `ELSA_SECRETS_EF_SQLSERVER`, and
-`ELSA_SECRETS_EF_POSTGRESQL` when set; `dotnet ef --connection` still overrides.
+come from `ELSA_SECRETS_EF_SQLITE`, `ELSA_SECRETS_EF_SQLSERVER`,
+`ELSA_SECRETS_EF_POSTGRESQL`, and `ELSA_SECRETS_EF_MYSQL` when set; `dotnet ef --connection`
+still overrides.
 
 ## Migration and deployment safety
 
-Each provider has an independent migration set and snapshot. Review all three generated outputs;
+Each provider has an independent migration set and snapshot. Review all four generated outputs;
 `migrations has-pending-model-changes` detects source model/snapshot drift, while
 `database update` and runtime `MigratePolicy=Validate` use the database's
 `__EFMigrationsHistory_ElsaSecrets` to detect unapplied compiled migrations. One check does not

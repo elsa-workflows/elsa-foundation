@@ -53,7 +53,7 @@ checkout; the manifest path is the normal CI path.
 | `apply` | `dotnet ef database update`, then managed legacy-projection reindex for `<Derived>` (factories read `ELSA_SECRETS_EF_*`) | yes |
 
 Both run for each derived Secrets context (`SecretsSqliteDbContext`,
-`SecretsSqlServerDbContext`, `SecretsPostgreSqlDbContext`).
+`SecretsSqlServerDbContext`, `SecretsPostgreSqlDbContext`, `SecretsMySqlDbContext`).
 
 Apply connections:
 
@@ -61,6 +61,7 @@ Apply connections:
 - SqlServer: `ELSA_SECRETS_EF_SQLSERVER`. Required for `apply --sqlserver`. Under
   `--all` / default, skipped when unset unless `ELSA_SECRETS_EF_REQUIRE_ALL=1`.
 - PostgreSql: `ELSA_SECRETS_EF_POSTGRESQL` (same explicit-vs-all rule).
+- MySql: `ELSA_SECRETS_EF_MYSQL` (same explicit-vs-all rule).
 
 `ELSA_SECRETS_EF_CONFIGURATION` selects the MSBuild configuration used for the one tooling build
 and every EF call; it defaults to `Release`. The script builds the tooling project once, then
@@ -71,7 +72,7 @@ responsibility for artifact freshness; clean operator checkouts should keep the 
 safety net. The repository test harness derives the active Debug/Release configuration from its
 assembly and declares the Tooling project as a build dependency before opting into this mode.
 
-`pending` is the CI-safe check for all three providers. The current Build & test job restores
+`pending` is the CI-safe check for all four providers. The current Build & test job restores
 repository-local tools before build and test; if that job invokes this check, no extra restore is
 needed. Any other job must run `dotnet tool restore` (or install the explicit `.tools` tool) first.
 
@@ -87,8 +88,8 @@ The checks cover different failure classes:
   missing from `__EFMigrationsHistory_ElsaSecrets`, then reindexes projection fields in bounded
   transactions. The repair targets fields
   written by the pre-contract host-runtime casing algorithm, derives them from
-  the stored document, preserves concurrency tokens, and is idempotent. SQL Server and PostgreSQL require their
-  provider-specific connection environment variable and a reachable database. SQLite uses
+  the stored document, preserves concurrency tokens, and is idempotent. SQL Server, PostgreSQL,
+  and MySQL require their provider-specific connection environment variable and a reachable database. SQLite uses
   `ELSA_SECRETS_EF_SQLITE` when set; otherwise the script creates a temporary database and removes
   it on exit, which validates the artifact but does not update a deployment database.
 - Runtime `MigratePolicy=Validate` calls EF's pending-database-migration check and fails closed
@@ -98,8 +99,8 @@ The checks cover different failure classes:
 
 ## Deployment and rollback boundary
 
-Use an explicit provider selector (`apply --sqlite`, `apply --sqlserver`, or
-`apply --postgresql`) and set its matching `ELSA_SECRETS_EF_*` connection for the target database.
+Use an explicit provider selector (`apply --sqlite`, `apply --sqlserver`,
+`apply --postgresql`, or `apply --mysql`) and set its matching `ELSA_SECRETS_EF_*` connection for the target database.
 Omitting `ELSA_SECRETS_EF_SQLITE` intentionally targets only the disposable fallback. Before
 applying to a deployment database, take a backup, quiesce writes, and run `pending`. Use a short-lived least-privilege deployment identity
 with the DDL rights needed for that provider; after the schema is verified, run the application

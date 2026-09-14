@@ -25,7 +25,7 @@ feature. EF-selected proof is `tests/Elsa/Secrets/Persistence/EntityFrameworkCor
 ## Derived contexts
 
 `SecretsDbContext` is shared model configuration. `SecretsSqliteDbContext`,
-`SecretsSqlServerDbContext`, and `SecretsPostgreSqlDbContext` each own a migrations set.
+`SecretsSqlServerDbContext`, `SecretsPostgreSqlDbContext`, and `SecretsMySqlDbContext` each own a migrations set.
 They are not a mandated application `DbContext` base (framework §2.9).
 
 ## Gate ownership

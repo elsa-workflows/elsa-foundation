@@ -13,6 +13,7 @@ secrets_ef_init() {
     "SecretsSqliteDbContext|Migrations/Sqlite|Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.Sqlite|ELSA_SECRETS_EF_SQLITE"
     "SecretsSqlServerDbContext|Migrations/SqlServer|Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.SqlServer|ELSA_SECRETS_EF_SQLSERVER"
     "SecretsPostgreSqlDbContext|Migrations/PostgreSql|Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.PostgreSql|ELSA_SECRETS_EF_POSTGRESQL"
+    "SecretsMySqlDbContext|Migrations/MySql|Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.MySql|ELSA_SECRETS_EF_MYSQL"
   )
 }
 

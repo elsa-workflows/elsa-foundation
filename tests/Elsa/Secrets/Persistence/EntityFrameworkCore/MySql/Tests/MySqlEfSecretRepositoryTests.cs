@@ -74,8 +74,7 @@ public sealed class MySqlEfSecretRepositoryTests(MySqlContainerFixture fixture)
         var lifecycle = provider.GetRequiredService<SecretsEfMigrationHostedService>();
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => lifecycle.StartAsync(CancellationToken.None));
-        Assert.Contains("AutoMigrate", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("Validate", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("pending migrations", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [SkippableFact]

@@ -6,7 +6,7 @@ if (args is not ["reindex", var contextName])
 {
     Console.Error.WriteLine(
         "Usage: Elsa.Secrets.Persistence.EntityFrameworkCore.Tooling reindex " +
-        "<SecretsSqliteDbContext|SecretsSqlServerDbContext|SecretsPostgreSqlDbContext>");
+        "<SecretsSqliteDbContext|SecretsSqlServerDbContext|SecretsPostgreSqlDbContext|SecretsMySqlDbContext>");
     return 2;
 }
 
@@ -15,6 +15,7 @@ await using SecretsDbContext? context = contextName switch
     nameof(SecretsSqliteDbContext) => new SecretsSqliteDesignTimeFactory().CreateDbContext([]),
     nameof(SecretsSqlServerDbContext) => new SecretsSqlServerDesignTimeFactory().CreateDbContext([]),
     nameof(SecretsPostgreSqlDbContext) => new SecretsPostgreSqlDesignTimeFactory().CreateDbContext([]),
+    nameof(SecretsMySqlDbContext) => new SecretsMySqlDesignTimeFactory().CreateDbContext([]),
     _ => null
 };
 
