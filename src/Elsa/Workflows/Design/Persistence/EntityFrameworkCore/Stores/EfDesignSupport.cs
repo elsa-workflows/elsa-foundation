@@ -48,28 +48,29 @@ internal static class EfDesignSupport
     public static string Fingerprint<T>(string operationKind, T value)
     {
         var json = Json(value);
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"elsa-design-material:v1\n{operationKind}\n{json}"));
-        return $"sha256:{Convert.ToHexStringLower(bytes)}";
+        return FingerprintJson(operationKind, json);
     }
+
+    /// <summary>
+    /// Computes the pre-canonical EF marker format used before the provider-neutral framing was
+    /// introduced. It remains available only to read existing markers during the transition.
+    /// </summary>
+    public static string LegacyFingerprint<T>(string operationKind, T value) =>
+        LegacyFingerprintJson(operationKind, Json(value));
 
     public static bool IsResultFingerprintValid(string operationKind, string fingerprint, string json)
     {
         if (StringComparer.Ordinal.Equals(fingerprint, FingerprintJson(operationKind, json)))
             return true;
 
-        // Groundwork's provider-neutral atomic command supplies authoritative result markers
-        // using its framed material identity. Accept that format so the same command remains
-        // usable with the EF writer without coupling this provider to Groundwork.
-        return StringComparer.Ordinal.Equals(fingerprint, GroundworkFingerprintJson(operationKind, json));
+        // Preserve replay of markers written by the initial EF implementation.
+        if (StringComparer.Ordinal.Equals(fingerprint, LegacyFingerprintJson(operationKind, json)))
+            return true;
+
+        return false;
     }
 
     private static string FingerprintJson(string operationKind, string json)
-    {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"elsa-design-material:v1\n{operationKind}\n{json}"));
-        return $"sha256:{Convert.ToHexStringLower(bytes)}";
-    }
-
-    private static string GroundworkFingerprintJson(string operationKind, string json)
     {
         using var document = JsonDocument.Parse(json);
         var canonical = Canonical(document.RootElement);
@@ -82,7 +83,10 @@ internal static class EfDesignSupport
         return $"sha256:{Convert.ToHexStringLower(bytes)}";
     }
 
-    private static string Frame(string value) => $"{Encoding.UTF8.GetByteCount(value)}:{value}";
+    private static string LegacyFingerprintJson(string operationKind, string json) =>
+        $"sha256:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"elsa-design-material:v1\n{operationKind}\n{json}")))}";
+
+    private static string Frame(string value) => $"{Encoding.UTF8.GetByteCount(value).ToString(System.Globalization.CultureInfo.InvariantCulture)}:{value}";
 
     private static string Canonical(JsonElement element)
     {

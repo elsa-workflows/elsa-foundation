@@ -58,6 +58,64 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Operation_fingerprint_is_canonical_across_request_property_order()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync(); await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))); IDesignAtomicWriter writer = new EfDesignAtomicWriter(db, access);
+        var key = new DesignOperationKey("canonical-request");
+        await writer.ExecuteAsync(key, "test.op", new { A = "é", B = "東京" }, ["test"], (_, _) => Task.FromResult(DesignAtomicWriteStage<string>.Accepted("winner")));
+        var replay = await writer.ExecuteAsync<string>(key, "test.op", new { B = "東京", A = "é" }, ["test"], (_, _) => throw new InvalidOperationException("canonical replay must not restage"));
+        Assert.Equal(DesignAtomicWriteStatus.Replayed, replay.Status);
+        Assert.Equal("winner", replay.Value);
+    }
+
+    [Fact]
+    public async Task State_request_material_uses_the_configured_payload_serializer_and_groundwork_framing()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync(); await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))); var state = State();
+        var serializerOptions = new JsonSerializerOptions { PropertyNamingPolicy = null }; var serializer = new TestSerializer(serializerOptions); var identity = new TestIdentity(); var writer = new EfDesignAtomicWriter(db, access);
+        db.Definitions.Add(new WorkflowDefinition { Id = "definition", TenantId = "tenant-a", Name = "Definition" }); await db.SaveChangesAsync();
+        await new EfAddWorkflowDefinitionVersionCommand(db, access, writer, serializer, identity, new TestLockProvider()).Execute(new DesignOperationKey("serializer-request"), "definition", state);
+        var marker = await db.Operations.SingleAsync(x => x.OperationKey == "serializer-request");
+        var stateJson = serializer.Serialize(state);
+        var materialJson = JsonSerializer.Serialize(new { definitionId = "definition", stateJson });
+        Assert.Equal(GroundworkFingerprint("workflow.version.add.v1", materialJson), marker.RequestFingerprint);
+    }
+
+    [Fact]
+    public async Task Projection_batches_definition_ids_without_truncating_rows_and_preserves_scope_and_order()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync(); await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        var tenant = "tenant-a"; var definitions = Enumerable.Range(0, 205).Select(index => new WorkflowDefinition { Id = $"definition-{index:D3}", TenantId = tenant, Name = $"Definition {index:D3}" }).ToArray();
+        db.Definitions.AddRange(definitions);
+        var oldDraft = new WorkflowDefinitionDraft { Id = "draft-old", TenantId = tenant, WorkflowDefinitionId = definitions[0].Id, CreatedAt = DateTimeOffset.UnixEpoch, LastModifiedAt = DateTimeOffset.UnixEpoch.AddDays(1), StateSource = "{}" };
+        var currentDraft = new WorkflowDefinitionDraft { Id = "draft-current", TenantId = tenant, WorkflowDefinitionId = definitions[0].Id, CreatedAt = DateTimeOffset.UnixEpoch.AddDays(2), LastModifiedAt = DateTimeOffset.UnixEpoch.AddDays(1), StateSource = "{}" };
+        db.Drafts.AddRange([oldDraft, currentDraft]);
+        foreach (var definition in definitions.Skip(1))
+            db.Drafts.Add(new WorkflowDefinitionDraft { Id = $"draft-{definition.Id}", TenantId = tenant, WorkflowDefinitionId = definition.Id, StateSource = "{}" });
+        db.Versions.AddRange(Enumerable.Range(1, 201).Select(number => new WorkflowDefinitionVersion(definitions[0].Id, $"{number}.0.0") { Id = $"version-{number:D3}", TenantId = tenant }));
+        foreach (var definition in definitions.Skip(1))
+            db.Versions.Add(new WorkflowDefinitionVersion(definition.Id, "1.0.0") { Id = $"version-{definition.Id}", TenantId = tenant });
+        db.Definitions.Add(new WorkflowDefinition { Id = "tenant-b-only", TenantId = "tenant-b", Name = "Foreign" });
+        db.Versions.Add(new WorkflowDefinitionVersion("tenant-b-only", "9.0.0") { Id = "foreign-version", TenantId = "tenant-b" });
+        await db.SaveChangesAsync();
+
+        var requested = definitions.Select(x => x.Id).Reverse().Append("tenant-b-only").Append(definitions[0].Id).ToArray();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
+        var projections = await new EfWorkflowDefinitionListProjectionStore(db, access).ListByDefinitionIdsAsync(requested);
+        Assert.Equal(206, projections.Count);
+        Assert.Equal(requested.Distinct(StringComparer.Ordinal), projections.Select(x => x.WorkflowDefinitionId));
+        var first = Assert.Single(projections, x => x.WorkflowDefinitionId == definitions[0].Id);
+        Assert.Equal("draft-current", first.DraftId);
+        Assert.Equal("version-201", first.LatestVersionId);
+        Assert.Equal("201.0.0", first.LatestVersion);
+        Assert.Equal(201, first.VersionCount);
+        var foreign = Assert.Single(projections, x => x.WorkflowDefinitionId == "tenant-b-only");
+        Assert.Null(foreign.DraftId); Assert.Null(foreign.LatestVersionId); Assert.Null(foreign.LatestVersion); Assert.Equal(0, foreign.VersionCount);
+    }
+
+    [Fact]
     public async Task Same_ids_and_operation_keys_are_isolated_by_tenant()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
@@ -307,7 +365,7 @@ public sealed class EfWorkflowDesignPersistenceTests
     private static string GroundworkFingerprint(string operationKind, string json)
     {
         var identity = "elsa-design-material:v1";
-        var material = $"{identity.Length}:{identity}{operationKind.Length}:{operationKind}1:1{json.Length}:{json}";
+        var material = $"{Encoding.UTF8.GetByteCount(identity)}:{identity}{Encoding.UTF8.GetByteCount(operationKind)}:{operationKind}1:1{Encoding.UTF8.GetByteCount(json)}:{json}";
         return $"sha256:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(material)))}";
     }
     private sealed class ProtocolScope : IDisposable { public bool Disposed { get; private set; } public void Dispose() => Disposed = true; }
@@ -334,15 +392,16 @@ public sealed class EfWorkflowDesignPersistenceTests
             return Task.FromException(new InvalidOperationException("commit acknowledgement lost"));
         }
     }
-    private sealed class TestSerializer : IPayloadSerializer
+    private sealed class TestSerializer(JsonSerializerOptions? serializerOptions = null) : IPayloadSerializer
     {
-        public string Serialize(object payload) => JsonSerializer.Serialize(payload);
-        public JsonElement SerializeToElement(object payload) => JsonSerializer.SerializeToElement(payload);
+        private readonly JsonSerializerOptions options = serializerOptions ?? new();
+        public string Serialize(object payload) => JsonSerializer.Serialize(payload, options);
+        public JsonElement SerializeToElement(object payload) => JsonSerializer.SerializeToElement(payload, options);
         public object Deserialize(string serializedData) => JsonSerializer.Deserialize<JsonElement>(serializedData);
         public object Deserialize(string serializedData, Type type) => JsonSerializer.Deserialize(serializedData, type)!;
         public object Deserialize(JsonElement serializedData) => serializedData;
         public T Deserialize<T>(string serializedData) => JsonSerializer.Deserialize<T>(serializedData)!;
-        public T Deserialize<T>(JsonElement serializedData) => serializedData.Deserialize<T>()!;
-        public JsonSerializerOptions GetOptions() => new();
+        public T Deserialize<T>(JsonElement serializedData) => serializedData.Deserialize<T>(options)!;
+        public JsonSerializerOptions GetOptions() => options;
     }
 }

@@ -65,11 +65,12 @@ public sealed class EfDesignAtomicWriter(
         var tenantId = access.Current.Scope?.Value
                        ?? throw new InvalidOperationException("Workflow design mutations require an explicit persistence scope.");
         var requestFingerprint = EfDesignSupport.Fingerprint(operationKind, request);
+        var legacyRequestFingerprint = EfDesignSupport.LegacyFingerprint(operationKind, request);
         var existing = await db.Operations.AsNoTracking().SingleOrDefaultAsync(
             x => x.TenantId == tenantId && x.OperationKind == operationKind && x.OperationKey == key.Value,
             cancellationToken);
         if (existing is not null)
-            return ResolveExisting(existing, operationKind, requestFingerprint, DesignAtomicWriteStatus.Replayed, resultCodec);
+            return ResolveExisting(existing, operationKind, requestFingerprint, legacyRequestFingerprint, DesignAtomicWriteStatus.Replayed, resultCodec);
         if (attempt == 0 && beforeAttempt is not null)
             await beforeAttempt(cancellationToken);
 
@@ -126,7 +127,7 @@ public sealed class EfDesignAtomicWriter(
                 await transaction.DisposeAsync();
                 db.ChangeTracker.Clear();
                 return await ReconcileAfterCommitAsync<T>(
-                    tenantId, operationKind, key.Value, requestFingerprint, exception, resultCodec);
+                    tenantId, operationKind, key.Value, requestFingerprint, legacyRequestFingerprint, exception, resultCodec);
             }
             return new DesignAtomicWriteResult<T>(DesignAtomicWriteStatus.Committed, value, resultFingerprint, resultJson);
         }
@@ -148,7 +149,7 @@ public sealed class EfDesignAtomicWriter(
                 x => x.TenantId == tenantId && x.OperationKind == operationKind && x.OperationKey == key.Value,
                 cancellationToken);
             if (winner is not null)
-                return ResolveExisting(winner, operationKind, requestFingerprint, DesignAtomicWriteStatus.Reconciled, resultCodec);
+                return ResolveExisting(winner, operationKind, requestFingerprint, legacyRequestFingerprint, DesignAtomicWriteStatus.Reconciled, resultCodec);
             throw;
         }
         catch
@@ -164,6 +165,7 @@ public sealed class EfDesignAtomicWriter(
         string operationKind,
         string operationKey,
         string requestFingerprint,
+        string legacyRequestFingerprint,
         Exception commitException,
         IDesignAtomicWriteResultCodec<T> resultCodec)
     {
@@ -177,7 +179,7 @@ public sealed class EfDesignAtomicWriter(
                     x => x.TenantId == tenantId && x.OperationKind == operationKind && x.OperationKey == operationKey,
                     timeoutSource.Token);
                 if (winner is not null)
-                    return ResolveExisting(winner, operationKind, requestFingerprint, DesignAtomicWriteStatus.Reconciled, resultCodec);
+                    return ResolveExisting(winner, operationKind, requestFingerprint, legacyRequestFingerprint, DesignAtomicWriteStatus.Reconciled, resultCodec);
             }
             catch (Exception exception) when (exception is InvalidDataException or JsonException)
             {
@@ -206,10 +208,12 @@ public sealed class EfDesignAtomicWriter(
         DesignOperationEntity existing,
         string operationKind,
         string requestFingerprint,
+        string legacyRequestFingerprint,
         DesignAtomicWriteStatus matchingStatus,
         IDesignAtomicWriteResultCodec<T> resultCodec)
     {
-        if (!StringComparer.Ordinal.Equals(existing.RequestFingerprint, requestFingerprint))
+        if (!StringComparer.Ordinal.Equals(existing.RequestFingerprint, requestFingerprint) &&
+            !StringComparer.Ordinal.Equals(existing.RequestFingerprint, legacyRequestFingerprint))
             return new DesignAtomicWriteResult<T>(DesignAtomicWriteStatus.Conflict, default);
         var value = DeserializeResult(resultCodec, existing.ResultJson);
         if (!EfDesignSupport.IsResultFingerprintValid(operationKind + ".result", existing.ResultFingerprint, existing.ResultJson)
