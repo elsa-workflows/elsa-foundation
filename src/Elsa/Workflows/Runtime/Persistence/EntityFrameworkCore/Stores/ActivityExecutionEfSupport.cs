@@ -53,6 +53,8 @@ internal static class ActivityExecutionEfSupport
         ArgumentNullException.ThrowIfNull(state.BookmarkIds);
         ArgumentNullException.ThrowIfNull(state.IncidentIds);
         ArgumentNullException.ThrowIfNull(state.Metadata);
+        if (!Enum.IsDefined(state.Status))
+            throw new InvalidOperationException("The activity execution status is undefined.");
         if (state.ExecutionSequence < 0)
             throw new ArgumentOutOfRangeException(nameof(state.ExecutionSequence));
         state.EnsureValueFlowCompatible();
@@ -84,6 +86,8 @@ internal static class ActivityExecutionEfSupport
         ArgumentNullException.ThrowIfNull(projection.Incidents);
         ArgumentNullException.ThrowIfNull(projection.ValueSnapshots);
         ArgumentNullException.ThrowIfNull(projection.Metadata);
+        if (!Enum.IsDefined(projection.Status))
+            throw new InvalidOperationException("The activity inspection status is undefined.");
         if (projection.ExecutionSequence < 0)
             throw new ArgumentOutOfRangeException(nameof(projection.ExecutionSequence));
         if (projection.Provenance.SchedulingWorkflowExecutionId is { } schedulingWorkflow &&

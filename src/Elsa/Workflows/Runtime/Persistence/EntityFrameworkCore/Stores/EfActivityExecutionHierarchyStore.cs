@@ -1,9 +1,11 @@
+using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -23,12 +25,28 @@ public sealed class EfActivityExecutionHierarchyStore(
         context.ChangeTracker.Clear();
         try
         {
-            var row = await context.ActivityExecutionHierarchies.SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+            var row = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "reading", id,
+                () => context.ActivityExecutionHierarchies.SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken));
             if (row is null)
                 context.ActivityExecutionHierarchies.Add(ToEntity(record, scope, id, ActivityExecutionEfSupport.NewRevision()));
             else
                 CopyToEntity(row, record, scope, id, checked(row.Revision + 1), ReadChecked(row, scope));
             await context.SaveChangesAsync(cancellationToken);
+        }
+        catch (RuntimeActivityExecutionEntityFrameworkPersistenceException)
+        {
+            context.ChangeTracker.Clear();
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            context.ChangeTracker.Clear();
+            throw;
+        }
+        catch (InvalidDataException)
+        {
+            context.ChangeTracker.Clear();
+            throw;
         }
         catch (DbUpdateConcurrencyException exception)
         {
@@ -38,7 +56,17 @@ public sealed class EfActivityExecutionHierarchyStore(
         catch (DbUpdateException exception)
         {
             context.ChangeTracker.Clear();
-            throw new InvalidOperationException("The activity execution hierarchy could not be saved; retry the operation if the conflict is transient.", exception);
+            throw RuntimeActivityExecutionEfPersistenceBoundary.Normalize("saving", record.ActivityExecutionId, exception);
+        }
+        catch (DbException exception)
+        {
+            context.ChangeTracker.Clear();
+            throw RuntimeActivityExecutionEfPersistenceBoundary.Normalize("saving", record.ActivityExecutionId, exception);
+        }
+        catch (InvalidOperationException exception)
+        {
+            context.ChangeTracker.Clear();
+            throw RuntimeActivityExecutionEfPersistenceBoundary.Normalize("saving", record.ActivityExecutionId, exception);
         }
     }
 
@@ -58,8 +86,9 @@ public sealed class EfActivityExecutionHierarchyStore(
 
         var workflowHash = ActivityExecutionEfSupport.Hash(query.WorkflowExecutionId);
         var scopeHash = ActivityExecutionEfSupport.Hash(scope);
-        var rootRow = await context.ActivityExecutionHierarchies.AsNoTracking().SingleOrDefaultAsync(row =>
-            row.Id == ActivityExecutionEfSupport.CreateId("hierarchy", scope, query.WorkflowExecutionId, query.RootActivityExecutionId), cancellationToken);
+        var rootRow = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "reading", query.RootActivityExecutionId,
+            () => context.ActivityExecutionHierarchies.AsNoTracking().SingleOrDefaultAsync(row =>
+                row.Id == ActivityExecutionEfSupport.CreateId("hierarchy", scope, query.WorkflowExecutionId, query.RootActivityExecutionId), cancellationToken));
         if (rootRow is null)
         {
             if (cursor is not null)
@@ -73,11 +102,12 @@ public sealed class EfActivityExecutionHierarchyStore(
         if (cursor is not null && !StringComparer.Ordinal.Equals(cursor.RootSnapshotFingerprint, fingerprint))
             throw ExpiredCursor("The committed hierarchy snapshot root is no longer available.");
 
-        var watermarkRow = await context.ActivityExecutionHierarchies.AsNoTracking()
-            .Where(row => row.ScopeKeyHash == scopeHash && row.WorkflowExecutionIdHash == workflowHash)
-            .OrderByDescending(row => row.ExecutionSequence)
-            .ThenByDescending(row => row.ActivityExecutionIdOrderKey)
-            .FirstOrDefaultAsync(cancellationToken);
+        var watermarkRow = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "reading", query.WorkflowExecutionId,
+            () => context.ActivityExecutionHierarchies.AsNoTracking()
+                .Where(row => row.ScopeKeyHash == scopeHash && row.WorkflowExecutionIdHash == workflowHash)
+                .OrderByDescending(row => row.ExecutionSequence)
+                .ThenByDescending(row => row.ActivityExecutionIdOrderKey)
+                .FirstOrDefaultAsync(cancellationToken));
         var currentWatermark = watermarkRow is null ? 0 : ReadChecked(watermarkRow, scope).ExecutionSequence;
         var watermark = cursor?.CommittedThroughSequence ?? currentWatermark;
         if (cursor is not null && currentWatermark < watermark)
@@ -95,8 +125,9 @@ public sealed class EfActivityExecutionHierarchyStore(
             source = source.Where(row => row.ExecutionSequence > cursor.LastExecutionSequence ||
                                          row.ExecutionSequence == cursor.LastExecutionSequence &&
                                          row.ActivityExecutionIdOrderKey.CompareTo(ActivityExecutionEfSupport.OrderKey(cursor.LastActivityExecutionId)) > 0);
-        var rows = await source.OrderBy(row => row.ExecutionSequence).ThenBy(row => row.ActivityExecutionIdOrderKey)
-            .Take(effectiveLimit + 1).ToArrayAsync(cancellationToken);
+        var rows = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "listing", query.WorkflowExecutionId,
+            () => source.OrderBy(row => row.ExecutionSequence).ThenBy(row => row.ActivityExecutionIdOrderKey)
+                .Take(effectiveLimit + 1).ToArrayAsync(cancellationToken));
         EnsureProviderPageProgress(rows, effectiveLimit);
         var hasMore = rows.Length > effectiveLimit;
         if (hasMore)
@@ -127,8 +158,9 @@ public sealed class EfActivityExecutionHierarchyStore(
         ValidateIdentity(workflowExecutionId, activityExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = ActivityExecutionEfSupport.RequireScope(accessContextAccessor);
-        var row = await context.ActivityExecutionHierarchies.AsNoTracking().SingleOrDefaultAsync(candidate =>
-            candidate.Id == ActivityExecutionEfSupport.CreateId("hierarchy", scope, workflowExecutionId, activityExecutionId), cancellationToken);
+        var row = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "reading", activityExecutionId,
+            () => context.ActivityExecutionHierarchies.AsNoTracking().SingleOrDefaultAsync(candidate =>
+                candidate.Id == ActivityExecutionEfSupport.CreateId("hierarchy", scope, workflowExecutionId, activityExecutionId), cancellationToken));
         if (row is null)
             return null;
         var record = ReadChecked(row, scope, workflowExecutionId, activityExecutionId);
@@ -169,8 +201,9 @@ public sealed class EfActivityExecutionHierarchyStore(
                                              row.ExecutionSequence == sequence &&
                                              row.ActivityExecutionIdOrderKey.CompareTo(orderKey) > 0);
             }
-            var rows = await source.OrderBy(row => row.ExecutionSequence).ThenBy(row => row.ActivityExecutionIdOrderKey)
-                .Take(ActivityExecutionHierarchyPager.MaximumLimit).ToArrayAsync(cancellationToken);
+            var rows = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "listing", record.WorkflowExecutionId,
+                () => source.OrderBy(row => row.ExecutionSequence).ThenBy(row => row.ActivityExecutionIdOrderKey)
+                    .Take(ActivityExecutionHierarchyPager.MaximumLimit).ToArrayAsync(cancellationToken));
             EnsureProviderPageProgress(rows, ActivityExecutionHierarchyPager.MaximumLimit);
             if (rows.Length == 0)
                 break;
@@ -192,10 +225,11 @@ public sealed class EfActivityExecutionHierarchyStore(
 
     private async ValueTask<long> CurrentWatermark(string workflowExecutionId, string scope, CancellationToken cancellationToken)
     {
-        var row = await context.ActivityExecutionHierarchies.AsNoTracking()
-            .Where(candidate => candidate.ScopeKeyHash == ActivityExecutionEfSupport.Hash(scope) && candidate.WorkflowExecutionIdHash == ActivityExecutionEfSupport.Hash(workflowExecutionId))
-            .OrderByDescending(candidate => candidate.ExecutionSequence).ThenByDescending(candidate => candidate.ActivityExecutionIdOrderKey)
-            .FirstOrDefaultAsync(cancellationToken);
+        var row = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "reading", workflowExecutionId,
+            () => context.ActivityExecutionHierarchies.AsNoTracking()
+                .Where(candidate => candidate.ScopeKeyHash == ActivityExecutionEfSupport.Hash(scope) && candidate.WorkflowExecutionIdHash == ActivityExecutionEfSupport.Hash(workflowExecutionId))
+                .OrderByDescending(candidate => candidate.ExecutionSequence).ThenByDescending(candidate => candidate.ActivityExecutionIdOrderKey)
+                .FirstOrDefaultAsync(cancellationToken));
         return row is null ? 0 : ReadChecked(row, scope, workflowExecutionId, null).ExecutionSequence;
     }
 
@@ -218,8 +252,9 @@ public sealed class EfActivityExecutionHierarchyStore(
                                              row.ExecutionSequence == sequence &&
                                              row.ActivityExecutionIdOrderKey.CompareTo(orderKey) < 0);
             }
-            var rows = await source.OrderByDescending(row => row.ExecutionSequence).ThenByDescending(row => row.ActivityExecutionIdOrderKey)
-                .Take(ActivityExecutionHierarchyPager.MaximumLimit).ToArrayAsync(cancellationToken);
+            var rows = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "listing", workflowExecutionId,
+                () => source.OrderByDescending(row => row.ExecutionSequence).ThenByDescending(row => row.ActivityExecutionIdOrderKey)
+                    .Take(ActivityExecutionHierarchyPager.MaximumLimit).ToArrayAsync(cancellationToken));
             if (rows.Length == 0)
                 break;
             foreach (var current in rows.Select(row => ReadChecked(row, scope, workflowExecutionId, null)))
@@ -285,8 +320,9 @@ public sealed class EfActivityExecutionHierarchyStore(
             if (!cache.TryGetValue(parentId, out var parent))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var parentRow = await context.ActivityExecutionHierarchies.AsNoTracking().SingleOrDefaultAsync(candidate =>
-                    candidate.Id == ActivityExecutionEfSupport.CreateId("hierarchy", persistenceScope, current.WorkflowExecutionId, parentId), cancellationToken);
+                var parentRow = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "reading", parentId,
+                    () => context.ActivityExecutionHierarchies.AsNoTracking().SingleOrDefaultAsync(candidate =>
+                        candidate.Id == ActivityExecutionEfSupport.CreateId("hierarchy", persistenceScope, current.WorkflowExecutionId, parentId), cancellationToken));
                 if (parentRow is null)
                     throw new InvalidDataException("Committed activity execution hierarchy contains a missing parent.");
                 parent = ReadChecked(parentRow, persistenceScope, current.WorkflowExecutionId, parentId);

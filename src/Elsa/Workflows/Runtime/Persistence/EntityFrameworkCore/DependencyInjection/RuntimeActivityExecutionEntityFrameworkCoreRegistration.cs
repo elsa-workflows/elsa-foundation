@@ -23,6 +23,7 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
             var provider = EfRelationalProviderBinding.Normalize(options.Provider);
             _ = EfRelationalProviderBinding.ExpectedProviderName(options.Provider);
             var existingBackend = RuntimeActivityExecutionStoreBackend.Find(services);
+            RuntimeActivityExecutionStoreBackend.EnsureCheckpointCompositionCompatible(existingBackend, RuntimeActivityExecutionStoreBackend.EntityFramework);
             if (existingBackend?.Name == RuntimeActivityExecutionStoreBackend.EntityFramework)
             {
                 existingBackend.EnsureOwnsRegisteredContracts(services);
@@ -57,7 +58,14 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
             var commitExistingRemoval = existingBackend?.PrepareRemoveOwnedArtifacts(services);
 
             services.AddOptions<ActivityExecutionHierarchyCursorOptions>();
+            services.Configure<ActivityExecutionHierarchyCursorOptions>(configuredOptions =>
+            {
+                if (!string.IsNullOrWhiteSpace(options.HierarchyCursorSigningKey))
+                    configuredOptions.SigningKey = options.HierarchyCursorSigningKey;
+                configuredOptions.AllowEphemeralDevelopmentKey = false;
+            });
             services.TryAddSingleton<IActivityExecutionHierarchyCursorCodec, HmacActivityExecutionHierarchyCursorCodec>();
+            services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateActivityExecutionHierarchyCursorCodecStartupTask>());
             services.AddOptions<RuntimeRecoveryContinuationOptions>()
                 .Configure(configuredOptions =>
                 {
@@ -72,6 +80,7 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
                 Provider = options.Provider,
                 ConnectionString = options.ConnectionString,
                 ConnectionName = options.ConnectionName,
+                HierarchyCursorSigningKey = options.HierarchyCursorSigningKey,
                 RecoveryContinuationSigningKey = options.RecoveryContinuationSigningKey
             };
             var optionsDescriptor = ServiceDescriptor.Singleton(configured);
@@ -141,6 +150,7 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
         StringComparer.Ordinal.Equals(EfRelationalProviderBinding.Normalize(left.Provider), EfRelationalProviderBinding.Normalize(right.Provider)) &&
         StringComparer.Ordinal.Equals(left.ConnectionString, right.ConnectionString) &&
         StringComparer.Ordinal.Equals(left.ConnectionName, right.ConnectionName) &&
+        StringComparer.Ordinal.Equals(left.HierarchyCursorSigningKey, right.HierarchyCursorSigningKey) &&
         StringComparer.Ordinal.Equals(left.RecoveryContinuationSigningKey, right.RecoveryContinuationSigningKey);
 
     private static void EnsureContext(IServiceCollection services, string provider, RuntimeActivityExecutionStoreBackend backend, string owner)
@@ -207,5 +217,6 @@ public sealed class RuntimeActivityExecutionEntityFrameworkCoreOptions
     public string Provider { get; set; } = "Sqlite";
     public string? ConnectionString { get; set; }
     public string? ConnectionName { get; set; }
+    public string? HierarchyCursorSigningKey { get; set; }
     public string? RecoveryContinuationSigningKey { get; set; }
 }

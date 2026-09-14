@@ -43,6 +43,7 @@ public class RuntimeActivityExecutionEntityFrameworkCoreFeature : IShellFeature
             Provider = Provider,
             ConnectionString = ConnectionString,
             ConnectionName = ConnectionName,
+            HierarchyCursorSigningKey = HierarchyCursorSigningKey,
             RecoveryContinuationSigningKey = RecoveryContinuationSigningKey
         });
     }

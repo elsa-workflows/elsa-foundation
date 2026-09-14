@@ -56,6 +56,19 @@ public sealed class RuntimeActivityExecutionStoreBackend
 
     public static bool HasRegisteredContract(IServiceCollection services) => services.Any(IsSurfaceRegistration);
 
+    /// <summary>
+    /// Prevents switching between the Groundwork and EF activity-execution families while the current
+    /// checkpoint writer still commits the R07-R09 units as one Groundwork transaction.
+    /// </summary>
+    public static void EnsureCheckpointCompositionCompatible(RuntimeActivityExecutionStoreBackend? existingBackend, string requestedBackend)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestedBackend);
+        if (existingBackend is not null && !StringComparer.Ordinal.Equals(existingBackend.Name, requestedBackend) &&
+            existingBackend.Name is Groundwork or EntityFramework && requestedBackend is Groundwork or EntityFramework)
+            throw new InvalidOperationException(
+                "Activity execution Groundwork/EF switching is unavailable while the runtime checkpoint writer still commits R07-R09 through Groundwork; complete checkpoint ownership before switching this backend.");
+    }
+
     public static IReadOnlyCollection<ServiceDescriptor> CaptureSurfaceRegistrations(IServiceCollection services) => services.Where(IsSurfaceRegistration).ToArray();
 
     public static void EnsureNoUnownedRegistrations(IServiceCollection services)

@@ -4,6 +4,7 @@ using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -25,7 +26,8 @@ public sealed class EfActivityExecutionStateStore(
         context.ChangeTracker.Clear();
         try
         {
-            var row = await context.ActivityExecutionStates.SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+            var row = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "reading", id,
+                () => context.ActivityExecutionStates.SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken));
             if (row is null)
                 context.ActivityExecutionStates.Add(ToEntity(state, scope, id, ActivityExecutionEfSupport.NewRevision()));
             else
@@ -33,6 +35,21 @@ public sealed class EfActivityExecutionStateStore(
 
             await context.SaveChangesAsync(cancellationToken);
             return state;
+        }
+        catch (RuntimeActivityExecutionEntityFrameworkPersistenceException)
+        {
+            context.ChangeTracker.Clear();
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            context.ChangeTracker.Clear();
+            throw;
+        }
+        catch (InvalidDataException)
+        {
+            context.ChangeTracker.Clear();
+            throw;
         }
         catch (DbUpdateConcurrencyException exception)
         {
@@ -42,12 +59,17 @@ public sealed class EfActivityExecutionStateStore(
         catch (DbUpdateException exception)
         {
             context.ChangeTracker.Clear();
-            throw new InvalidOperationException("The activity execution state could not be saved; retry the operation if the conflict is transient.", exception);
+            throw RuntimeActivityExecutionEfPersistenceBoundary.Normalize("saving", state.Execution.ActivityExecutionId, exception);
         }
         catch (DbException exception)
         {
             context.ChangeTracker.Clear();
-            throw new InvalidOperationException("The activity execution state provider operation failed.", exception);
+            throw RuntimeActivityExecutionEfPersistenceBoundary.Normalize("saving", state.Execution.ActivityExecutionId, exception);
+        }
+        catch (InvalidOperationException exception)
+        {
+            context.ChangeTracker.Clear();
+            throw RuntimeActivityExecutionEfPersistenceBoundary.Normalize("saving", state.Execution.ActivityExecutionId, exception);
         }
     }
 
@@ -57,7 +79,8 @@ public sealed class EfActivityExecutionStateStore(
         cancellationToken.ThrowIfCancellationRequested();
         var scope = ActivityExecutionEfSupport.RequireScope(accessContextAccessor);
         var id = ActivityExecutionEfSupport.CreateId("state", scope, workflowExecutionId, activityExecutionId);
-        var row = await context.ActivityExecutionStates.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+        var row = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "reading", id,
+            () => context.ActivityExecutionStates.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken));
         return row is null ? null : ReadChecked(row, scope, workflowExecutionId, activityExecutionId);
     }
 
@@ -66,9 +89,10 @@ public sealed class EfActivityExecutionStateStore(
         ValidateWorkflow(workflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = ActivityExecutionEfSupport.RequireScope(accessContextAccessor);
-        return await context.ActivityExecutionStates.LongCountAsync(row =>
-            row.ScopeKeyHash == ActivityExecutionEfSupport.Hash(scope) &&
-            row.WorkflowExecutionIdHash == ActivityExecutionEfSupport.Hash(workflowExecutionId), cancellationToken);
+        return await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "counting", workflowExecutionId,
+            () => context.ActivityExecutionStates.LongCountAsync(row =>
+                row.ScopeKeyHash == ActivityExecutionEfSupport.Hash(scope) &&
+                row.WorkflowExecutionIdHash == ActivityExecutionEfSupport.Hash(workflowExecutionId), cancellationToken));
     }
 
     public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListPageAsync(ActivityExecutionStatePageQuery query, CancellationToken cancellationToken = default)
@@ -108,11 +132,12 @@ public sealed class EfActivityExecutionStateStore(
             source = source.Where(row => row.ActivityExecutionIdOrderKey.CompareTo(cursor.OrderKey) > 0 ||
                                          row.ActivityExecutionIdOrderKey == cursor.OrderKey && row.Id.CompareTo(cursor.Id) > 0);
 
-        var rows = await source
-            .OrderBy(row => row.ActivityExecutionIdOrderKey)
-            .ThenBy(row => row.Id)
-            .Take(query.Limit + 1)
-            .ToArrayAsync(cancellationToken);
+        var rows = await RuntimeActivityExecutionEfPersistenceBoundary.QueryAsync(context, "listing", workflowExecutionId,
+            () => source
+                .OrderBy(row => row.ActivityExecutionIdOrderKey)
+                .ThenBy(row => row.Id)
+                .Take(query.Limit + 1)
+                .ToArrayAsync(cancellationToken));
         var hasMore = rows.Length > query.Limit;
         if (hasMore)
             rows = rows[..query.Limit];
@@ -160,7 +185,23 @@ public sealed class EfActivityExecutionStateStore(
         row.Revision = revision;
     }
 
-    private ActivityExecutionState ReadChecked(ActivityExecutionStateEntity row, string scope, string? expectedWorkflow = null, string? expectedActivityOrParent = null, bool expectedParent = false)
+    private static ActivityExecutionState ReadChecked(ActivityExecutionStateEntity row, string scope, string? expectedWorkflow = null, string? expectedActivityOrParent = null, bool expectedParent = false)
+    {
+        try
+        {
+            return ReadCheckedCore(row, scope, expectedWorkflow, expectedActivityOrParent, expectedParent);
+        }
+        catch (InvalidDataException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or JsonException or NotSupportedException or KeyNotFoundException or FormatException or OverflowException)
+        {
+            throw new InvalidDataException("The persisted EF activity execution state row is not valid current JSON or projections.", exception);
+        }
+    }
+
+    private static ActivityExecutionState ReadCheckedCore(ActivityExecutionStateEntity row, string scope, string? expectedWorkflow, string? expectedActivityOrParent, bool expectedParent)
     {
         ActivityExecutionEfSupport.EnsureRowEnvelope(row.SchemaVersion, row.ScopeKey, scope, row.ScopeKeyHash,
             ActivityExecutionEfSupport.CreateId("state", scope, Decode(row.WorkflowExecutionId), Decode(row.ActivityExecutionId)), row.Id, row.Revision);

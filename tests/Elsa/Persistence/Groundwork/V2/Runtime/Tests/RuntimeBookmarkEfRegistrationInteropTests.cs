@@ -33,6 +33,7 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
     {
         Provider = "Sqlite",
         ConnectionString = "Data Source=:memory:",
+        HierarchyCursorSigningKey = "ef-runtime-activity-switch-hierarchy-key-32-bytes",
         RecoveryContinuationSigningKey = "ef-runtime-activity-switch-signing-key-32-bytes"
     };
 
@@ -53,61 +54,39 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
     }
 
     [Fact]
-    public void Groundwork_and_ef_activity_execution_back_switch_is_reorderable()
+    public void Groundwork_and_ef_activity_execution_backend_switch_fails_closed_until_checkpoint_ownership_is_coherent()
     {
-        var services = new ServiceCollection();
-        services.AddWorkflowRuntime();
-        services.AddGroundworkV2RuntimeStores();
-        services.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions);
+        var groundworkServices = new ServiceCollection();
+        groundworkServices.AddWorkflowRuntime();
+        groundworkServices.AddGroundworkV2RuntimeStores();
 
-        Assert.Equal(RuntimeActivityExecutionStoreBackend.EntityFramework, RuntimeActivityExecutionStoreBackend.Find(services)!.Name);
-        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2ActivityExecutionStateStore));
-        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfActivityExecutionStateStore));
+        Assert.Throws<InvalidOperationException>(() => groundworkServices.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions));
+        Assert.Equal(RuntimeActivityExecutionStoreBackend.Groundwork, RuntimeActivityExecutionStoreBackend.Find(groundworkServices)!.Name);
+        Assert.Single(groundworkServices, descriptor => descriptor.ServiceType == typeof(GroundworkV2ActivityExecutionStateStore));
 
-        services.AddGroundworkV2RuntimeStores();
+        var efServices = new ServiceCollection();
+        efServices.AddWorkflowRuntime();
+        efServices.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions);
 
-        Assert.Equal(RuntimeActivityExecutionStoreBackend.Groundwork, RuntimeActivityExecutionStoreBackend.Find(services)!.Name);
-        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(EfActivityExecutionStateStore));
-        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2ActivityExecutionStateStore));
-
-        services.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions);
-
-        Assert.Equal(RuntimeActivityExecutionStoreBackend.EntityFramework, RuntimeActivityExecutionStoreBackend.Find(services)!.Name);
-        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2ActivityExecutionStateStore));
-        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfActivityExecutionStateStore));
+        Assert.Throws<InvalidOperationException>(() => efServices.AddGroundworkV2RuntimeStores());
+        Assert.Equal(RuntimeActivityExecutionStoreBackend.EntityFramework, RuntimeActivityExecutionStoreBackend.Find(efServices)!.Name);
+        Assert.Single(efServices, descriptor => descriptor.ServiceType == typeof(EfActivityExecutionStateStore));
     }
 
     [Fact]
-    public void Activity_execution_ef_owns_only_ef_surfaces_across_groundwork_registration_orders()
+    public void Activity_execution_backends_are_idempotent_when_registered_without_switching()
     {
-        var orders = new Action<ServiceCollection>[]
-        {
-            services =>
-            {
-                services.AddGroundworkV2RuntimeStores();
-                services.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions);
-            },
-            services =>
-            {
-                services.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions);
-                services.AddGroundworkV2RuntimeStores();
-                services.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions);
-            }
-        };
+        var efServices = new ServiceCollection();
+        efServices.AddWorkflowRuntime();
+        efServices.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions);
+        efServices.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions);
+        Assert.Equal(RuntimeActivityExecutionStoreBackend.EntityFramework, RuntimeActivityExecutionStoreBackend.Find(efServices)!.Name);
 
-        foreach (var configure in orders)
-        {
-            var services = new ServiceCollection();
-            configure(services);
-
-            var backend = Assert.IsType<RuntimeActivityExecutionStoreBackend>(Assert.Single(services, descriptor => descriptor.ImplementationInstance is RuntimeActivityExecutionStoreBackend).ImplementationInstance);
-            Assert.Equal(RuntimeActivityExecutionStoreBackend.EntityFramework, backend.Name);
-            backend.EnsureOwnsRegisteredContracts(services);
-            Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(InMemoryActivityExecutionInspectionStore));
-            Assert.DoesNotContain(services, descriptor => descriptor.ImplementationType == typeof(InMemoryActivityExecutionInspectionStore));
-            Assert.DoesNotContain(services, descriptor => descriptor.ImplementationInstance?.GetType() == typeof(InMemoryActivityExecutionInspectionStore));
-            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfActivityExecutionInspectionStore));
-        }
+        var groundworkServices = new ServiceCollection();
+        groundworkServices.AddWorkflowRuntime();
+        groundworkServices.AddGroundworkV2RuntimeStores();
+        groundworkServices.AddGroundworkV2RuntimeStores();
+        Assert.Equal(RuntimeActivityExecutionStoreBackend.Groundwork, RuntimeActivityExecutionStoreBackend.Find(groundworkServices)!.Name);
     }
 
     [Fact]

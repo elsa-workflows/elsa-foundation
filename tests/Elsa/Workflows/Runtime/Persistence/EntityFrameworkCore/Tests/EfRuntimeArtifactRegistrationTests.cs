@@ -62,6 +62,53 @@ public sealed class EfRuntimeArtifactRegistrationTests
     }
 
     [Fact]
+    public void Activity_execution_feature_configures_durable_signers_and_owned_stores()
+    {
+        const string hierarchyKey = "ef-runtime-hierarchy-signing-key-32-bytes";
+        const string recoveryKey = "ef-runtime-recovery-signing-key-32-bytes";
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        new RuntimeActivityExecutionEntityFrameworkCoreFeature
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:",
+            HierarchyCursorSigningKey = hierarchyKey,
+            RecoveryContinuationSigningKey = recoveryKey
+        }.ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider(validateScopes: true);
+        using var scope = provider.CreateScope();
+        Assert.Equal(hierarchyKey, provider.GetRequiredService<IOptions<ActivityExecutionHierarchyCursorOptions>>().Value.SigningKey);
+        Assert.False(provider.GetRequiredService<IOptions<ActivityExecutionHierarchyCursorOptions>>().Value.AllowEphemeralDevelopmentKey);
+        Assert.Equal(recoveryKey, provider.GetRequiredService<IOptions<RuntimeRecoveryContinuationOptions>>().Value.SigningKey);
+        Assert.False(provider.GetRequiredService<IOptions<RuntimeRecoveryContinuationOptions>>().Value.AllowEphemeralDevelopmentKey);
+        Assert.IsType<EfActivityExecutionStateStore>(scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>());
+        Assert.IsType<EfActivityExecutionInspectionStore>(scope.ServiceProvider.GetRequiredService<IActivityExecutionInspectionStore>());
+        Assert.IsType<EfActivityExecutionHierarchyStore>(scope.ServiceProvider.GetRequiredService<IActivityExecutionHierarchyStore>());
+
+        var codec = scope.ServiceProvider.GetRequiredService<IActivityExecutionHierarchyCursorCodec>();
+        var token = codec.Encode(new ActivityExecutionHierarchyCursorState("tenant-a", "profile", "workflow", "root", [], 1, 0, 0, "child"));
+        Assert.NotNull(codec.Decode(token));
+    }
+
+    [Fact]
+    public void Activity_execution_feature_fails_closed_without_a_hierarchy_signing_key()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        new RuntimeActivityExecutionEntityFrameworkCoreFeature
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:",
+            RecoveryContinuationSigningKey = SigningKey
+        }.ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<IActivityExecutionHierarchyCursorCodec>());
+        Assert.Throws<InvalidOperationException>(() => provider.GetServices<IStartupTask>().ToArray());
+    }
+
+    [Fact]
     public void Feature_can_be_extended_without_replacing_its_registration_contract()
     {
         var feature = new ExtensibleFeature

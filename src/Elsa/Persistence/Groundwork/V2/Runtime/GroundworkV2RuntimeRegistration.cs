@@ -46,8 +46,9 @@ public static class GroundworkV2RuntimeRegistration
         try
         {
             var cacheOptions = CopyAndValidate(workflowExecutableCacheOptions);
-            var target = BindRuntimeTarget(services, targetName);
             var existingActivityExecutionBackend = RuntimeActivityExecutionStoreBackend.Find(services);
+            RuntimeActivityExecutionStoreBackend.EnsureCheckpointCompositionCompatible(existingActivityExecutionBackend, RuntimeActivityExecutionStoreBackend.Groundwork);
+            var target = BindRuntimeTarget(services, targetName);
             if (existingActivityExecutionBackend is null)
                 RuntimeActivityExecutionStoreBackend.EnsureNoUnownedRegistrations(services);
             else

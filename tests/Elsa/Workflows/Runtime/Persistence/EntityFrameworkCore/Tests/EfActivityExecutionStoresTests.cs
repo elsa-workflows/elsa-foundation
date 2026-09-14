@@ -1,14 +1,17 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Data.Common;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -54,6 +57,153 @@ public sealed class EfActivityExecutionStoresTests
         var second = await fixture.Inspection.ListSummariesPageAsync(new ActivityExecutionInspectionSummaryPageQuery("wf", 1, first.NextContinuationToken));
         Assert.Equal("b", second.Items[0].ActivityExecutionId);
         Assert.NotNull(await fixture.Inspection.FindAsync("wf", "a"));
+    }
+
+    [Fact]
+    public async Task Activity_execution_rows_survive_an_independent_file_backed_sqlite_restart()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"elsa-runtime-{Guid.NewGuid():N}.db");
+        const string scope = "tenant-restart";
+        const string workflow = "wf-restart";
+        try
+        {
+            await using (var connection = new SqliteConnection($"Data Source={path}"))
+            {
+                await connection.OpenAsync();
+                await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+                await context.Database.EnsureCreatedAsync();
+                var accessor = new Accessor(scope);
+                var continuationCodec = new HmacRuntimeRecoveryContinuationCodec(Microsoft.Extensions.Options.Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "ef-runtime-restart-signing-key-32-bytes" }));
+                var hierarchyCodec = new HmacActivityExecutionHierarchyCursorCodec(Microsoft.Extensions.Options.Options.Create(new ActivityExecutionHierarchyCursorOptions { SigningKey = "ef-runtime-restart-signing-key-32-bytes" }));
+                var state = new EfActivityExecutionStateStore(context, accessor, continuationCodec);
+                var inspection = new EfActivityExecutionInspectionStore(context, accessor, continuationCodec);
+                var hierarchy = new EfActivityExecutionHierarchyStore(context, accessor, hierarchyCodec);
+                await state.SaveAsync(State(workflow, "activity", 1));
+                await inspection.SaveAsync(Projection(workflow, "root", 1, "root", null, true));
+                await hierarchy.SaveAsync(HierarchyProjection(workflow, "root", 1, "root", null, true));
+                await hierarchy.SaveAsync(HierarchyProjection(workflow, "child", 2, "root", "root"));
+            }
+
+            await using (var connection = new SqliteConnection($"Data Source={path}"))
+            {
+                await connection.OpenAsync();
+                await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+                var accessor = new Accessor(scope);
+                var continuationCodec = new HmacRuntimeRecoveryContinuationCodec(Microsoft.Extensions.Options.Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "ef-runtime-restart-signing-key-32-bytes" }));
+                var hierarchyCodec = new HmacActivityExecutionHierarchyCursorCodec(Microsoft.Extensions.Options.Options.Create(new ActivityExecutionHierarchyCursorOptions { SigningKey = "ef-runtime-restart-signing-key-32-bytes" }));
+                var state = new EfActivityExecutionStateStore(context, accessor, continuationCodec);
+                var inspection = new EfActivityExecutionInspectionStore(context, accessor, continuationCodec);
+                var hierarchy = new EfActivityExecutionHierarchyStore(context, accessor, hierarchyCodec);
+                Assert.NotNull(await state.FindAsync(workflow, "activity"));
+                Assert.NotNull(await inspection.FindAsync(workflow, "root"));
+                var page = await hierarchy.ReadPageAsync(new ActivityExecutionHierarchyQuery(workflow, "root", null, 10,
+                    new HashSet<ActivityExecutionHierarchyInclude>(), "profile", $"tenant:{scope}"));
+                Assert.Equal("child", Assert.Single(page!.Items).ActivityExecutionId);
+            }
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Two_context_create_races_normalize_conflicts_through_each_activity_execution_store()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"elsa-runtime-race-{Guid.NewGuid():N}.db");
+        const string scope = "tenant-race";
+        try
+        {
+            await using (var connection = new SqliteConnection($"Data Source={path}"))
+            {
+                await connection.OpenAsync();
+                await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+                await context.Database.EnsureCreatedAsync();
+            }
+
+            var stateResults = await RunCreateRaceAsync(path, "elsa_runtime_activity_execution_state", context =>
+                new EfActivityExecutionStateStore(context, new Accessor(scope), RecoveryCodec()).SaveAsync(State("wf-race-state", "activity", 1)).AsTask());
+            var inspectionResults = await RunCreateRaceAsync(path, "elsa_runtime_activity_execution_inspection", context =>
+                new EfActivityExecutionInspectionStore(context, new Accessor(scope), RecoveryCodec()).SaveAsync(Projection("wf-race-inspection", "activity", 1, "activity")).AsTask());
+            var hierarchyResults = await RunCreateRaceAsync(path, "elsa_runtime_activity_execution_hierarchy", context =>
+                new EfActivityExecutionHierarchyStore(context, new Accessor(scope), HierarchyCodec()).SaveAsync(HierarchyProjection("wf-race-hierarchy", "root", 1, "root", null, true)).AsTask());
+
+            AssertCreateRaceConflict(stateResults, "activity");
+            AssertCreateRaceConflict(inspectionResults, "activity");
+            AssertCreateRaceConflict(hierarchyResults, "root");
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Provider_read_and_write_failures_normalize_through_each_activity_execution_store()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"elsa-runtime-provider-{Guid.NewGuid():N}.db");
+        const string scope = "tenant-provider";
+        try
+        {
+            await using (var connection = new SqliteConnection($"Data Source={path}"))
+            {
+                await connection.OpenAsync();
+                await using var context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+                await context.Database.EnsureCreatedAsync();
+            }
+
+            await AssertProviderFailuresAsync(path, scope, "state", context => new EfActivityExecutionStateStore(context, new Accessor(scope), RecoveryCodec()),
+                store => store.FindAsync("wf-provider-state", "activity").AsTask(),
+                context => new EfActivityExecutionStateStore(context, new Accessor(scope), RecoveryCodec()).SaveAsync(State("wf-provider-state", "activity", 1)).AsTask());
+            await AssertProviderFailuresAsync(path, scope, "inspection", context => new EfActivityExecutionInspectionStore(context, new Accessor(scope), RecoveryCodec()),
+                store => store.FindAsync("wf-provider-inspection", "activity").AsTask(),
+                context => new EfActivityExecutionInspectionStore(context, new Accessor(scope), RecoveryCodec()).SaveAsync(Projection("wf-provider-inspection", "activity", 1, "activity")).AsTask());
+            await AssertProviderFailuresAsync(path, scope, "hierarchy", context => new EfActivityExecutionHierarchyStore(context, new Accessor(scope), HierarchyCodec()),
+                store => store.FindBoundaryAsync("wf-provider-hierarchy", "root").AsTask(),
+                context => new EfActivityExecutionHierarchyStore(context, new Accessor(scope), HierarchyCodec()).SaveAsync(HierarchyProjection("wf-provider-hierarchy", "root", 1, "root", null, true)).AsTask());
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task State_store_rejects_undefined_numeric_status_in_persisted_json()
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        await fixture.State.SaveAsync(State("wf-undefined-status", "activity", 1));
+
+        var row = await fixture.Context.ActivityExecutionStates.SingleAsync();
+        var payload = JsonNode.Parse(row.ContentJson)!.AsObject();
+        payload["status"] = 999;
+        row.ContentJson = payload.ToJsonString();
+        row.Status = "999";
+        fixture.Context.ChangeTracker.Clear();
+        fixture.Context.ActivityExecutionStates.Update(row);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.State.FindAsync("wf-undefined-status", "activity").AsTask());
+    }
+
+    [Fact]
+    public async Task Inspection_store_rejects_undefined_numeric_status_in_persisted_json()
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        await fixture.Inspection.SaveAsync(Projection("wf-undefined-status", "activity", 1, "activity"));
+
+        var row = await fixture.Context.ActivityExecutionInspections.SingleAsync();
+        var payload = JsonNode.Parse(row.ContentJson)!.AsObject();
+        payload["status"] = 999;
+        row.ContentJson = payload.ToJsonString();
+        row.Status = "999";
+        fixture.Context.ChangeTracker.Clear();
+        fixture.Context.ActivityExecutionInspections.Update(row);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Inspection.FindAsync("wf-undefined-status", "activity").AsTask());
     }
 
     [Fact]
@@ -343,12 +493,14 @@ public sealed class EfActivityExecutionStoresTests
         {
             Provider = "sqlite",
             ConnectionString = "Data Source=:memory:",
+            HierarchyCursorSigningKey = "ef-r07-r09-registration-hierarchy-key-32-bytes",
             RecoveryContinuationSigningKey = "ef-r07-r09-registration-signing-key-32-bytes"
         });
         services.AddRuntimeActivityExecutionEntityFrameworkCore(new RuntimeActivityExecutionEntityFrameworkCoreOptions
         {
             Provider = "SQLite",
             ConnectionString = "Data Source=:memory:",
+            HierarchyCursorSigningKey = "ef-r07-r09-registration-hierarchy-key-32-bytes",
             RecoveryContinuationSigningKey = "ef-r07-r09-registration-signing-key-32-bytes"
         });
 
@@ -475,12 +627,121 @@ public sealed class EfActivityExecutionStoresTests
     {
         Provider = "Sqlite",
         ConnectionString = "Data Source=:memory:",
+        HierarchyCursorSigningKey = "ef-r07-r09-registration-hierarchy-key-32-bytes",
         RecoveryContinuationSigningKey = "ef-r07-r09-registration-signing-key-32-bytes"
     };
+
+    private static IRuntimeRecoveryContinuationCodec RecoveryCodec() =>
+        new HmacRuntimeRecoveryContinuationCodec(Microsoft.Extensions.Options.Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "ef-r07-r09-race-recovery-signing-key-32-bytes" }));
+
+    private static IActivityExecutionHierarchyCursorCodec HierarchyCodec() =>
+        new HmacActivityExecutionHierarchyCursorCodec(Microsoft.Extensions.Options.Options.Create(new ActivityExecutionHierarchyCursorOptions { SigningKey = "ef-r07-r09-race-hierarchy-signing-key-32-bytes" }));
+
+    private static async Task<Exception?[]> RunCreateRaceAsync(string path, string tableName, Func<BookmarkStateDbContext, Task> save)
+    {
+        var barrier = new ConcurrentCreateBarrier(tableName);
+        await using var firstConnection = new SqliteConnection($"Data Source={path}");
+        await using var secondConnection = new SqliteConnection($"Data Source={path}");
+        await Task.WhenAll(firstConnection.OpenAsync(), secondConnection.OpenAsync());
+        await using var firstContext = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(firstConnection).AddInterceptors(barrier).Options);
+        await using var secondContext = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(secondConnection).AddInterceptors(barrier).Options);
+        return await Task.WhenAll(CaptureAsync(() => save(firstContext)), CaptureAsync(() => save(secondContext)));
+    }
+
+    private static async Task AssertProviderFailuresAsync<TStore>(
+        string path,
+        string scope,
+        string identity,
+        Func<BookmarkStateDbContext, TStore> createStore,
+        Func<TStore, Task> read,
+        Func<BookmarkStateDbContext, Task> save)
+    {
+        await using (var readConnection = new SqliteConnection($"Data Source={path}"))
+        {
+            await readConnection.OpenAsync();
+            await using var readContext = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(readConnection).AddInterceptors(new ThrowingReaderInterceptor()).Options);
+            var exception = await Assert.ThrowsAsync<RuntimeActivityExecutionEntityFrameworkPersistenceException>(() => read(createStore(readContext)));
+            Assert.Equal("reading", exception.Operation);
+            Assert.False(string.IsNullOrWhiteSpace(exception.Identity));
+        }
+
+        await using (var saveConnection = new SqliteConnection($"Data Source={path}"))
+        {
+            await saveConnection.OpenAsync();
+            await using var saveContext = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(saveConnection).AddInterceptors(new ThrowingSaveInterceptor()).Options);
+            var exception = await Assert.ThrowsAsync<RuntimeActivityExecutionEntityFrameworkPersistenceException>(() => save(saveContext));
+            Assert.Equal("saving", exception.Operation);
+            Assert.Equal(identity == "hierarchy" ? "root" : "activity", exception.Identity);
+        }
+    }
+
+    private static async Task<Exception?> CaptureAsync(Func<Task> operation)
+    {
+        try
+        {
+            await operation();
+            return null;
+        }
+        catch (Exception exception)
+        {
+            return exception;
+        }
+    }
+
+    private static void AssertCreateRaceConflict(IReadOnlyCollection<Exception?> results, string identity)
+    {
+        Assert.Equal(2, results.Count);
+        Assert.Single(results, exception => exception is null);
+        var failure = Assert.Single(results, exception => exception is not null);
+        var normalized = Assert.IsType<RuntimeActivityExecutionEntityFrameworkPersistenceException>(failure);
+        Assert.Equal("saving", normalized.Operation);
+        Assert.Equal(identity, normalized.Identity);
+    }
 
     private sealed class Accessor(string scope) : IPersistenceAccessContextAccessor
     {
         public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(scope));
+    }
+
+    private sealed class ConcurrentCreateBarrier(string tableName) : DbCommandInterceptor
+    {
+        private readonly TaskCompletionSource bothReadersArrived = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int arrivals;
+
+        public override async ValueTask<DbDataReader> ReaderExecutedAsync(
+            DbCommand command,
+            CommandExecutedEventData eventData,
+            DbDataReader result,
+            CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains(tableName, StringComparison.OrdinalIgnoreCase) &&
+                command.CommandText.TrimStart().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
+            {
+                if (Interlocked.Increment(ref arrivals) >= 2)
+                    bothReadersArrived.TrySetResult();
+                await bothReadersArrived.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
+            }
+            return result;
+        }
+    }
+
+    private sealed class ThrowingReaderInterceptor : DbCommandInterceptor
+    {
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<InterceptionResult<DbDataReader>>(new SqliteException("provider read failure", 1, 1));
+    }
+
+    private sealed class ThrowingSaveInterceptor : SaveChangesInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<InterceptionResult<int>>(new DbUpdateException("provider save failure"));
     }
 
     private sealed class Fixture : IAsyncDisposable
