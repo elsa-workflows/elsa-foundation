@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 113
+- Discovered feature classes: 114
 
 ## Features
 
@@ -115,6 +115,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | WorkflowsRuntimeHttpFeature | direct IShellFeature | Elsa.Workflows.Runtime.Http | IShellFeature | [WorkflowsRuntimeHttpFeature.cs](../../src/Elsa/Workflows/Runtime/Http/WorkflowsRuntimeHttpFeature.cs) |
 | JavaScriptActivitiesEndpointsFeature | direct IWebShellFeature | Elsa.Workflows.Runtime.JavaScript | IWebShellFeature | [JavaScriptActivitiesEndpointsFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesEndpointsFeature.cs) |
 | JavaScriptActivitiesFeature | direct IShellFeature | Elsa.Workflows.Runtime.JavaScript | IShellFeature | [JavaScriptActivitiesFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesFeature.cs) |
+| RuntimeActivityExecutionEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore | IShellFeature | [RuntimeActivityExecutionEntityFrameworkCoreFeature.cs](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeActivityExecutionEntityFrameworkCoreFeature.cs) |
 | RuntimeArtifactsEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore | IShellFeature | [RuntimeArtifactsEntityFrameworkCoreFeature.cs](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeArtifactsEntityFrameworkCoreFeature.cs) |
 | RuntimeBookmarksEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore | IShellFeature | [RuntimeBookmarksEntityFrameworkCoreFeature.cs](../../src/Elsa/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeBookmarksEntityFrameworkCoreFeature.cs) |
 | WorkflowsArtifactReconciliationFeature | direct IShellFeature | Elsa.Workflows.Runtime.Reconciliation | IShellFeature | [WorkflowsArtifactReconciliationFeature.cs](../../src/Elsa/Workflows/Runtime/Reconciliation/WorkflowsArtifactReconciliationFeature.cs) |

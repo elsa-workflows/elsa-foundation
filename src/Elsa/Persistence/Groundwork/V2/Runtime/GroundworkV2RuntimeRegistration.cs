@@ -47,6 +47,18 @@ public static class GroundworkV2RuntimeRegistration
         {
             var cacheOptions = CopyAndValidate(workflowExecutableCacheOptions);
             var target = BindRuntimeTarget(services, targetName);
+            var existingActivityExecutionBackend = RuntimeActivityExecutionStoreBackend.Find(services);
+            if (existingActivityExecutionBackend is null)
+                RuntimeActivityExecutionStoreBackend.EnsureNoUnownedRegistrations(services);
+            else
+            {
+                existingActivityExecutionBackend.EnsureOwnsRegisteredContracts(services);
+            }
+            var commitExistingActivityExecutionBackendRemoval = existingActivityExecutionBackend?.PrepareRemoveOwnedArtifacts(services);
+            // Withdraw the previous backend's provider-owned artifacts before the new
+            // registration re-adds the manifest units. The service-collection snapshot
+            // and registry snapshot above still make this atomic on a later failure.
+            commitExistingActivityExecutionBackendRemoval?.Invoke(services);
 
         services.AddPersistenceCore();
         ReplaceExistingArtifactBackend(services);
@@ -169,6 +181,7 @@ public static class GroundworkV2RuntimeRegistration
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2OutboxDurabilityEvidence>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2SchedulerDurabilityEvidence>());
         RegisterArtifactBackend(services, target);
+        RegisterActivityExecutionBackend(services, target);
         return services;
         }
         catch
@@ -346,6 +359,22 @@ public static class GroundworkV2RuntimeRegistration
                 .ToArray(),
             collection => GroundworkV2RuntimeUnitWithdrawal.RemoveArtifacts(collection, target)));
     }
+
+    private static void RegisterActivityExecutionBackend(IServiceCollection services, string target)
+    {
+        var concreteTypes = new[]
+        {
+            typeof(GroundworkV2ActivityExecutionStateStore),
+            typeof(GroundworkV2ActivityExecutionInspectionStore),
+            typeof(GroundworkV2ActivityExecutionHierarchyStore)
+        };
+        RuntimeActivityExecutionStoreBackend.Register(services, new RuntimeActivityExecutionStoreBackend(
+            RuntimeActivityExecutionStoreBackend.Groundwork,
+            RuntimeActivityExecutionStoreBackend.CaptureSurfaceRegistrations(services)
+                .Concat(services.Where(descriptor => concreteTypes.Contains(descriptor.ServiceType)))
+                .ToArray(),
+            collection => GroundworkV2RuntimeUnitWithdrawal.RemoveActivityExecutions(collection, target)));
+    }
 }
 
 internal static class GroundworkV2RuntimeUnitWithdrawal
@@ -366,6 +395,13 @@ internal static class GroundworkV2RuntimeUnitWithdrawal
     {
         foreach (var unitId in ArtifactUnitIds)
             services.RemoveGroundworkStorageUnit(unitId, targetName);
+    }
+
+    public static void RemoveActivityExecutions(IServiceCollection services, string? targetName)
+    {
+        services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.ActivityExecutionStateDocumentKind, targetName);
+        services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.ActivityExecutionInspectionDocumentKind, targetName);
+        services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyDocumentKind, targetName);
     }
 }
 

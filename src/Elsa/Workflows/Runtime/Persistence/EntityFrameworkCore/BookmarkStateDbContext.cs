@@ -13,6 +13,9 @@ public abstract class BookmarkStateDbContext(DbContextOptions options) : DbConte
     public DbSet<ExecutableActivityTemplateEntity> ExecutableActivityTemplates => Set<ExecutableActivityTemplateEntity>();
     public DbSet<ExecutableActivityTemplateHashClaimEntity> ExecutableActivityTemplateHashClaims => Set<ExecutableActivityTemplateHashClaimEntity>();
     public DbSet<WorkflowExecutableSourceReferenceEntity> WorkflowExecutableSourceReferences => Set<WorkflowExecutableSourceReferenceEntity>();
+    public DbSet<ActivityExecutionStateEntity> ActivityExecutionStates => Set<ActivityExecutionStateEntity>();
+    public DbSet<ActivityExecutionInspectionEntity> ActivityExecutionInspections => Set<ActivityExecutionInspectionEntity>();
+    public DbSet<ActivityExecutionHierarchyEntity> ActivityExecutionHierarchies => Set<ActivityExecutionHierarchyEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -22,6 +25,9 @@ public abstract class BookmarkStateDbContext(DbContextOptions options) : DbConte
         modelBuilder.ApplyConfiguration(new ExecutableActivityTemplateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new ExecutableActivityTemplateHashClaimEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutableSourceReferenceEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new ActivityExecutionStateEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new ActivityExecutionInspectionEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new ActivityExecutionHierarchyEntityConfiguration());
         ConfigureProvider(modelBuilder);
     }
 

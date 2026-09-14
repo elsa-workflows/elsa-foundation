@@ -42,6 +42,7 @@ public static class RuntimeCoreServiceCollectionExtensions
     public static IServiceCollection AddWorkflowRuntime(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+        var hadExplicitActivityExecutionContracts = RuntimeActivityExecutionStoreBackend.HasRegisteredContract(services);
         services.ClaimWorkflowTestScopeProvider(typeof(InMemoryWorkflowTestScopeStore), isInMemoryDefault: true);
         services.AddPersistenceCore();
         services.TryAddScoped<IWorkflowExecutionPartitionAccessor, PersistenceWorkflowExecutionPartitionAccessor>();
@@ -152,7 +153,12 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IActivityExecutionHierarchyWriter>(serviceProvider => serviceProvider.GetRequiredService<IActivityExecutionHierarchyStore>());
         services.TryAddSingleton<IWorkflowExecutionStateStore, InMemoryWorkflowExecutionStateStore>();
         services.TryAddSingleton<IActivityExecutionStateStore, InMemoryActivityExecutionStateStore>();
-        services.TryAddSingleton<InMemoryActivityExecutionInspectionStore>();
+        // Do not resurrect the in-memory concrete when a durable backend already owns
+        // the inspection contracts (AddWorkflowRuntime is intentionally reorderable).
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(InMemoryActivityExecutionInspectionStore) ||
+                                        descriptor.ServiceType == typeof(IActivityExecutionInspectionStore) ||
+                                        descriptor.ServiceType == typeof(IActivityExecutionInspectionWriter)))
+            services.AddSingleton<InMemoryActivityExecutionInspectionStore>();
         services.TryAddSingleton<IActivityExecutionInspectionStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryActivityExecutionInspectionStore>());
         services.TryAddSingleton<IActivityExecutionInspectionWriter>(serviceProvider => serviceProvider.GetRequiredService<InMemoryActivityExecutionInspectionStore>());
         services.TryAddScoped<IRuntimeActivityExecutionInspectionAccumulator, RuntimeActivityExecutionInspectionAccumulator>();
@@ -439,6 +445,13 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.AddOptions<WorkflowExecutableGarbageCollectionOptions>();
         services.TryAddScoped<IWorkflowExecutableRootWriteLeaseManager, WorkflowExecutableRootWriteLeaseManager>();
         services.TryAddScoped<IWorkflowExecutableReferenceGarbageCollector, WorkflowExecutableReferenceGarbageCollector>();
+
+        if (!hadExplicitActivityExecutionContracts && RuntimeActivityExecutionStoreBackend.Find(services) is null)
+        {
+            var defaults = RuntimeActivityExecutionStoreBackend.CaptureSurfaceRegistrations(services);
+            if (defaults.Count > 0)
+                RuntimeActivityExecutionStoreBackend.Register(services, new RuntimeActivityExecutionStoreBackend(RuntimeActivityExecutionStoreBackend.InMemory, defaults));
+        }
 
         return services;
     }

@@ -31,6 +31,9 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                 var siblingBookmarksBackendForRepeat = BookmarkStateStoreBackend.Find(services);
                 if (siblingBookmarksBackendForRepeat?.Name == BookmarkStateStoreBackend.EntityFramework)
                     siblingBookmarksBackendForRepeat.EnsureOwnsRegisteredContract(services);
+                var siblingActivityBackendForRepeat = RuntimeActivityExecutionStoreBackend.Find(services);
+                if (siblingActivityBackendForRepeat?.Name == RuntimeActivityExecutionStoreBackend.EntityFramework)
+                    siblingActivityBackendForRepeat.EnsureOwnsRegisteredContracts(services);
                 var existing = services.Select(x => x.ImplementationInstance).OfType<RuntimeArtifactsEntityFrameworkCoreOptions>().SingleOrDefault();
                 if (existing is null ||
                     !string.Equals(EfRelationalProviderBinding.Normalize(existing.Provider), EfRelationalProviderBinding.Normalize(options.Provider), StringComparison.Ordinal) ||
@@ -44,6 +47,9 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                     registeredBackend.Owns,
                     BookmarkStateStoreBackend.Find(services) is { Name: BookmarkStateStoreBackend.EntityFramework } siblingBookmarksBackend
                         ? siblingBookmarksBackend.Owns
+                        : null,
+                    siblingActivityBackendForRepeat?.Name == RuntimeActivityExecutionStoreBackend.EntityFramework
+                        ? siblingActivityBackendForRepeat.Owns
                         : null);
                 return services;
             }
@@ -56,6 +62,9 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
             var existingBookmarksBackend = BookmarkStateStoreBackend.Find(services);
             if (existingBookmarksBackend?.Name == BookmarkStateStoreBackend.EntityFramework)
                 existingBookmarksBackend.EnsureOwnsRegisteredContract(services);
+            var existingActivityBackend = RuntimeActivityExecutionStoreBackend.Find(services);
+            if (existingActivityBackend?.Name == RuntimeActivityExecutionStoreBackend.EntityFramework)
+                existingActivityBackend.EnsureOwnsRegisteredContracts(services);
             BookmarkStateEfContextRegistration.EnsureCompatible(
                 services,
                 provider,
@@ -73,14 +82,20 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
             var ownedInfrastructure = new List<ServiceDescriptor> { services[optionsStart] };
             var bookmarksBackend = existingBookmarksBackend;
             var bookmarksOwnContext = bookmarksBackend?.Name == BookmarkStateStoreBackend.EntityFramework;
+            var activityBackend = existingActivityBackend;
+            var activityOwnContext = activityBackend?.Name == RuntimeActivityExecutionStoreBackend.EntityFramework;
             BookmarkStateEfContextRegistration.EnsureContextIsAvailable(
                 services,
                 provider,
+                "Runtime artifacts",
                 bookmarksOwnContext ? bookmarksBackend!.Owns : null,
-                "Runtime artifacts");
+                activityOwnContext ? activityBackend!.Owns : null);
             if (bookmarksOwnContext)
                 ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider)
                     .Where(bookmarksBackend!.Owns));
+            else if (activityOwnContext)
+                ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider)
+                    .Where(activityBackend!.Owns));
             else
                 switch (provider)
                 {

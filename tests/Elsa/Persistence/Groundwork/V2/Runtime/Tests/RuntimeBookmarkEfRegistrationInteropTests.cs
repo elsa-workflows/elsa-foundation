@@ -28,6 +28,13 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
         ConnectionString = "Data Source=:memory:"
     };
 
+    private static readonly RuntimeActivityExecutionEntityFrameworkCoreOptions ActivityEfOptions = new()
+    {
+        Provider = "Sqlite",
+        ConnectionString = "Data Source=:memory:",
+        RecoveryContinuationSigningKey = "ef-runtime-activity-switch-signing-key-32-bytes"
+    };
+
     [Fact]
     public void Groundwork_then_ef_withdraws_only_the_groundwork_bookmark_backend()
     {
@@ -42,6 +49,31 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfBookmarkStateStore));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStateStore));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStimulusIndex));
+    }
+
+    [Fact]
+    public void Groundwork_and_ef_activity_execution_back_switch_is_reorderable()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddGroundworkV2RuntimeStores();
+        services.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions);
+
+        Assert.Equal(RuntimeActivityExecutionStoreBackend.EntityFramework, RuntimeActivityExecutionStoreBackend.Find(services)!.Name);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2ActivityExecutionStateStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfActivityExecutionStateStore));
+
+        services.AddGroundworkV2RuntimeStores();
+
+        Assert.Equal(RuntimeActivityExecutionStoreBackend.Groundwork, RuntimeActivityExecutionStoreBackend.Find(services)!.Name);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(EfActivityExecutionStateStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2ActivityExecutionStateStore));
+
+        services.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions);
+
+        Assert.Equal(RuntimeActivityExecutionStoreBackend.EntityFramework, RuntimeActivityExecutionStoreBackend.Find(services)!.Name);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2ActivityExecutionStateStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfActivityExecutionStateStore));
     }
 
     [Fact]
