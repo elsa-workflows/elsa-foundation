@@ -4,6 +4,7 @@ using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -74,6 +75,41 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
         Assert.Equal(RuntimeActivityExecutionStoreBackend.EntityFramework, RuntimeActivityExecutionStoreBackend.Find(services)!.Name);
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2ActivityExecutionStateStore));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfActivityExecutionStateStore));
+    }
+
+    [Fact]
+    public void Activity_execution_ef_owns_only_ef_surfaces_across_groundwork_registration_orders()
+    {
+        var orders = new Action<ServiceCollection>[]
+        {
+            services =>
+            {
+                services.AddGroundworkV2RuntimeStores();
+                services.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions);
+            },
+            services =>
+            {
+                services.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions);
+                services.AddGroundworkV2RuntimeStores();
+                services.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions);
+            }
+        };
+
+        foreach (var configure in orders)
+        {
+            var services = new ServiceCollection();
+            configure(services);
+
+            var backend = Assert.Single(services, descriptor => descriptor.ImplementationInstance is RuntimeActivityExecutionStoreBackend)
+                .ImplementationInstance as RuntimeActivityExecutionStoreBackend;
+            Assert.NotNull(backend);
+            Assert.Equal(RuntimeActivityExecutionStoreBackend.EntityFramework, backend!.Name);
+            backend.EnsureOwnsRegisteredContracts(services);
+            Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(InMemoryActivityExecutionInspectionStore));
+            Assert.DoesNotContain(services, descriptor => descriptor.ImplementationType == typeof(InMemoryActivityExecutionInspectionStore));
+            Assert.DoesNotContain(services, descriptor => descriptor.ImplementationInstance?.GetType() == typeof(InMemoryActivityExecutionInspectionStore));
+            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfActivityExecutionInspectionStore));
+        }
     }
 
     [Fact]

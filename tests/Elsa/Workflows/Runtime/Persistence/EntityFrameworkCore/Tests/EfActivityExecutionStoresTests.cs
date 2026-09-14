@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -98,6 +99,207 @@ public sealed class EfActivityExecutionStoresTests
     }
 
     [Fact]
+    public async Task Hierarchy_store_continues_equal_sequence_boundaries_and_attempts_by_activity_id()
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-equal", "root", 0, "root", null, true));
+
+        const int attemptCount = 501;
+        for (var attemptNumber = 1; attemptNumber <= attemptCount; attemptNumber++)
+        {
+            var activityExecutionId = $"attempt-{attemptNumber:D4}";
+            var projection = Projection("wf-equal", activityExecutionId, 1, "root", "root") with
+            {
+                Attempt = new(
+                    attemptNumber,
+                    "attempt-0001",
+                    attemptNumber == 1 ? null : $"attempt-{attemptNumber - 1:D4}")
+            };
+            await fixture.Hierarchy.SaveAsync(ActivityExecutionHierarchyProjector.FromInspection(projection));
+        }
+
+        var boundary = await fixture.Hierarchy.FindBoundaryAsync("wf-equal", "root");
+        Assert.NotNull(boundary);
+        Assert.Equal(attemptCount, boundary!.CommittedDescendantCount);
+
+        var navigation = await fixture.Hierarchy.FindAttemptNavigationAsync("wf-equal", "attempt-0250");
+        Assert.NotNull(navigation);
+        Assert.Equal("attempt-0251", navigation!.NextAttemptActivityExecutionId);
+        Assert.Equal(attemptCount, navigation.TotalAttempts);
+    }
+
+    [Fact]
+    public async Task Hierarchy_store_rejects_malformed_persisted_item_json_and_projection_drift()
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-malformed", "root", 1, "root", null, true));
+
+        var row = await fixture.Context.ActivityExecutionHierarchies.SingleAsync();
+        var payload = JsonNode.Parse(row.ContentJson)!.AsObject();
+        payload["item"]!.AsObject().Remove("executableNodeId");
+        row.ContentJson = payload.ToJsonString();
+        fixture.Context.ChangeTracker.Clear();
+        fixture.Context.ActivityExecutionHierarchies.Update(row);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Hierarchy.FindBoundaryAsync("wf-malformed", "root").AsTask());
+
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-drift", "root", 1, "root", null, true));
+        var drifted = await fixture.Context.ActivityExecutionHierarchies.SingleAsync(row => row.WorkflowExecutionIdHash == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Hash("wf-drift"));
+        drifted.ActivityExecutionIdOrderKey = "drifted";
+        fixture.Context.ChangeTracker.Clear();
+        fixture.Context.ActivityExecutionHierarchies.Update(drifted);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Hierarchy.FindBoundaryAsync("wf-drift", "root").AsTask());
+    }
+
+    [Theory]
+    [InlineData("outcomeNames")]
+    [InlineData("metadata")]
+    public async Task Hierarchy_store_rejects_null_required_collections_in_persisted_item_json(string propertyName)
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-malformed-collections", "root", 1, "root", null, true));
+
+        var row = await fixture.Context.ActivityExecutionHierarchies.SingleAsync();
+        var payload = JsonNode.Parse(row.ContentJson)!.AsObject();
+        payload["item"]!.AsObject()[propertyName] = null;
+        row.ContentJson = payload.ToJsonString();
+        fixture.Context.ChangeTracker.Clear();
+        fixture.Context.ActivityExecutionHierarchies.Update(row);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Hierarchy.FindBoundaryAsync("wf-malformed-collections", "root").AsTask());
+    }
+
+    [Fact]
+    public async Task Hierarchy_store_rejects_parent_cycles_and_anomalous_watermark_cursors()
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-cycle", "root", 1, "root", null, true));
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-cycle", "child-a", 2, "root", "child-b"));
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-cycle", "child-b", 3, "root", "child-a"));
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Hierarchy.ReadPageAsync(new ActivityExecutionHierarchyQuery(
+            "wf-cycle", "root", null, 2, new HashSet<ActivityExecutionHierarchyInclude>(), "profile", "tenant:tenant-a")).AsTask());
+
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-watermark", "root", 1, "root", null, true));
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-watermark", "child-a", 2, "root", "root"));
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-watermark", "child-b", 3, "root", "root"));
+        var first = await fixture.Hierarchy.ReadPageAsync(new ActivityExecutionHierarchyQuery(
+            "wf-watermark", "root", null, 1, new HashSet<ActivityExecutionHierarchyInclude>(), "profile", "tenant:tenant-a"));
+        var cursor = fixture.HierarchyCursorCodec.Decode(first!.NextCursor!);
+        var anomalous = fixture.HierarchyCursorCodec.Encode(cursor with { CommittedThroughSequence = cursor.CommittedThroughSequence + 1 });
+        var exception = await Assert.ThrowsAsync<ActivityExecutionHierarchyCursorException>(() => fixture.Hierarchy.ReadPageAsync(new ActivityExecutionHierarchyQuery(
+            "wf-watermark", "root", anomalous, 1, new HashSet<ActivityExecutionHierarchyInclude>(), "profile", "tenant:tenant-a")).AsTask());
+        Assert.Equal(ActivityExecutionHierarchyCursorFailure.Expired, exception.Failure);
+    }
+
+    [Fact]
+    public async Task Hierarchy_store_rejects_cursor_binding_and_provider_continuation_mismatch()
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-cursor", "root", 1, "root", null, true));
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-cursor", "child-a", 2, "root", "root"));
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-cursor", "child-b", 3, "root", "root"));
+
+        var first = await fixture.Hierarchy.ReadPageAsync(new ActivityExecutionHierarchyQuery(
+            "wf-cursor", "root", null, 1, new HashSet<ActivityExecutionHierarchyInclude>(), "profile", "tenant:tenant-a"));
+        var bound = fixture.HierarchyCursorCodec.Decode(first!.NextCursor!);
+        var bindingException = await Assert.ThrowsAsync<ActivityExecutionHierarchyCursorException>(() => fixture.Hierarchy.ReadPageAsync(new ActivityExecutionHierarchyQuery(
+            "wf-cursor", "root", fixture.HierarchyCursorCodec.Encode(bound with { AuthorizationProfile = "other-profile" }), 1,
+            new HashSet<ActivityExecutionHierarchyInclude>(), "profile", "tenant:tenant-a")).AsTask());
+        Assert.Equal(ActivityExecutionHierarchyCursorFailure.BindingMismatch, bindingException.Failure);
+
+        var providerException = await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Hierarchy.ReadPageAsync(new ActivityExecutionHierarchyQuery(
+            "wf-cursor", "root", fixture.HierarchyCursorCodec.Encode(bound with { ProviderContinuation = "provider-token" }), 1,
+            new HashSet<ActivityExecutionHierarchyInclude>(), "profile", "tenant:tenant-a")).AsTask());
+        Assert.Contains("provider continuation", providerException.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Direct_state_and_inspection_writes_reject_provenance_scope_mismatch()
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        var state = State("wf-provenance", "activity", 1, scope: "scope-a") with
+        {
+            Provenance = State("wf-provenance", "activity", 1, scope: "scope-b").Provenance
+        };
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.State.SaveAsync(state).AsTask());
+
+        var projection = Projection("wf-provenance", "activity", 1, "scope-a") with
+        {
+            Provenance = Projection("wf-provenance", "activity", 1, "scope-b").Provenance
+        };
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Inspection.SaveAsync(projection).AsTask());
+
+        var stateAttempt = State("wf-provenance", "attempted", 1, scope: "scope-a") with
+        {
+            Attempt = new(2, "attempt-1", "attempt-0"),
+            Provenance = State("wf-provenance", "attempted", 1, scope: "scope-a").Provenance with
+            {
+                Attempt = new(1, "attempt-1", null)
+            }
+        };
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.State.SaveAsync(stateAttempt).AsTask());
+
+        var projectionAttempt = Projection("wf-provenance", "inspected", 1, "scope-a") with
+        {
+            Attempt = new(2, "attempt-1", "attempt-0"),
+            Provenance = Projection("wf-provenance", "inspected", 1, "scope-a").Provenance with
+            {
+                Attempt = new(1, "attempt-1", null)
+            }
+        };
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Inspection.SaveAsync(projectionAttempt).AsTask());
+    }
+
+    [Fact]
+    public async Task Inspection_store_preserves_merge_and_retraction_semantics()
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        var bookmark = new ActivityExecutionBookmarkSummary(
+            new("bookmark", "wf-merge", "activity", "resume"), "stimulus", "hash", DateTimeOffset.UnixEpoch, null);
+        var initial = Projection("wf-merge", "activity", 1, "activity") with
+        {
+            Bookmarks = [bookmark],
+            Metadata = new Dictionary<string, string> { ["initial"] = "yes" }
+        };
+        await fixture.Inspection.SaveAsync(initial);
+
+        var superseded = State("wf-merge", "activity", 2, scope: "activity") with
+        {
+            Status = ActivityExecutionStatus.Superseded,
+            SupersededByActivityExecutionId = "successor",
+            SupersededAt = DateTimeOffset.UnixEpoch.AddSeconds(3),
+            Metadata = new Dictionary<string, string> { ["updated"] = "yes" }
+        };
+        var accumulator = new RuntimeActivityExecutionInspectionAccumulator(fixture.Inspection);
+        var merged = await accumulator.BuildProjectionAsync(
+            superseded,
+            "checkpoint-2",
+            DateTimeOffset.UnixEpoch.AddSeconds(4),
+            outcomeNames: ["Retried"],
+            metadata: new Dictionary<string, string> { ["merge"] = "yes" });
+        await fixture.Inspection.SaveAsync(merged);
+
+        var stored = await fixture.Inspection.FindAsync("wf-merge", "activity");
+        Assert.NotNull(stored);
+        Assert.Equal(ActivityExecutionStatus.Superseded, stored!.Status);
+        Assert.Equal("successor", stored.SupersededByActivityExecutionId);
+        Assert.Equal("checkpoint-2", stored.LastCheckpointId);
+        Assert.Equal("yes", stored.Metadata["initial"]);
+        Assert.Equal("yes", stored.Metadata["updated"]);
+        Assert.Equal("yes", stored.Metadata["merge"]);
+        Assert.Equal("bookmark", Assert.Single(stored.Bookmarks).Identity.BookmarkId);
+        Assert.Equal("Retried", Assert.Single(stored.OutcomeNames));
+    }
+
+    [Fact]
     public void Activity_execution_registration_replaces_only_runtime_defaults_and_is_idempotent()
     {
         var services = new ServiceCollection();
@@ -139,6 +341,45 @@ public sealed class EfActivityExecutionStoresTests
         using var scope = provider.CreateScope();
         Assert.IsType<EfBookmarkStateStore>(scope.ServiceProvider.GetRequiredService<IBookmarkStateStore>());
         Assert.IsType<EfWorkflowExecutableStore>(scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>());
+    }
+
+    [Fact]
+    public void Activity_execution_ef_owns_only_ef_surfaces_in_every_registration_order()
+    {
+        var orders = new Action<ServiceCollection>[]
+        {
+            services =>
+            {
+                services.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions());
+                services.AddWorkflowRuntime();
+            },
+            services =>
+            {
+                services.AddWorkflowRuntime();
+                services.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions());
+            },
+            services =>
+            {
+                services.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions());
+                services.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions());
+            }
+        };
+
+        foreach (var configure in orders)
+        {
+            var services = new ServiceCollection();
+            configure(services);
+
+            var backend = Assert.Single(services, descriptor => descriptor.ImplementationInstance is RuntimeActivityExecutionStoreBackend)
+                .ImplementationInstance as RuntimeActivityExecutionStoreBackend;
+            Assert.NotNull(backend);
+            Assert.Equal(RuntimeActivityExecutionStoreBackend.EntityFramework, backend!.Name);
+            backend.EnsureOwnsRegisteredContracts(services);
+            Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(InMemoryActivityExecutionInspectionStore));
+            Assert.DoesNotContain(services, descriptor => descriptor.ImplementationType == typeof(InMemoryActivityExecutionInspectionStore));
+            Assert.DoesNotContain(services, descriptor => descriptor.ImplementationInstance?.GetType() == typeof(InMemoryActivityExecutionInspectionStore));
+            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfActivityExecutionInspectionStore));
+        }
     }
 
     private static ActivityExecutionState State(string workflow, string id, long sequence, string? parent = null, string? scope = null) =>
@@ -197,6 +438,13 @@ public sealed class EfActivityExecutionStoresTests
     private static ActivityExecutionHierarchyRecord HierarchyProjection(string workflow, string id, long sequence, string scope, string? parent, bool boundary = false) =>
         ActivityExecutionHierarchyProjector.FromInspection(Projection(workflow, id, sequence, scope, parent, boundary));
 
+    private static RuntimeActivityExecutionEntityFrameworkCoreOptions ActivityEfOptions() => new()
+    {
+        Provider = "Sqlite",
+        ConnectionString = "Data Source=:memory:",
+        RecoveryContinuationSigningKey = "ef-r07-r09-registration-signing-key-32-bytes"
+    };
+
     private sealed class Accessor(string scope) : IPersistenceAccessContextAccessor
     {
         public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(scope));
@@ -211,6 +459,7 @@ public sealed class EfActivityExecutionStoresTests
         public EfActivityExecutionInspectionStore Inspection { get; }
         public EfActivityExecutionHierarchyStore Hierarchy { get; }
         public BookmarkStateDbContext Context => context;
+        public IActivityExecutionHierarchyCursorCodec HierarchyCursorCodec { get; }
 
         private Fixture(SqliteConnection connection, BookmarkStateDbContext context, Accessor accessor)
         {
@@ -219,7 +468,8 @@ public sealed class EfActivityExecutionStoresTests
             this.accessor = accessor;
             State = new EfActivityExecutionStateStore(context, accessor, new HmacRuntimeRecoveryContinuationCodec(Microsoft.Extensions.Options.Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "ef-r07-r09-test-signing-key-32-bytes" })));
             Inspection = new EfActivityExecutionInspectionStore(context, accessor, new HmacRuntimeRecoveryContinuationCodec(Microsoft.Extensions.Options.Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "ef-r07-r09-test-signing-key-32-bytes" })));
-            Hierarchy = new EfActivityExecutionHierarchyStore(context, accessor, new Elsa.Workflows.Runtime.Core.Services.HmacActivityExecutionHierarchyCursorCodec(Microsoft.Extensions.Options.Options.Create(new Elsa.Workflows.Runtime.Core.Services.ActivityExecutionHierarchyCursorOptions { SigningKey = "ef-r07-r09-test-hierarchy-signing-key-32-bytes" })));
+            HierarchyCursorCodec = new Elsa.Workflows.Runtime.Core.Services.HmacActivityExecutionHierarchyCursorCodec(Microsoft.Extensions.Options.Options.Create(new Elsa.Workflows.Runtime.Core.Services.ActivityExecutionHierarchyCursorOptions { SigningKey = "ef-r07-r09-test-hierarchy-signing-key-32-bytes" }));
+            Hierarchy = new EfActivityExecutionHierarchyStore(context, accessor, HierarchyCursorCodec);
         }
 
         public static async Task<Fixture> CreateAsync(string scope)

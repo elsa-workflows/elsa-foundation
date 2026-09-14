@@ -68,9 +68,36 @@ internal static class RuntimeActivityExecutionProviderSmoke
 
             var projection = Projection(workflow, "root", 1, "root", null, true);
             await inspection.SaveAsync(projection);
+            var childProjection = Projection(workflow, "child", 2, "root", "root", false);
+            var siblingProjection = Projection(workflow, "child-b", 2, "root", "root", false);
+            await inspection.SaveAsync(childProjection);
+            await inspection.SaveAsync(siblingProjection);
+            var summaryFirst = await inspection.ListSummariesPageAsync(new ActivityExecutionInspectionSummaryPageQuery(workflow, 1));
+            Assert.Equal(3, summaryFirst.TotalCount);
+            Assert.NotNull(summaryFirst.NextContinuationToken);
             await hierarchy.SaveAsync(ActivityExecutionHierarchyProjector.FromInspection(projection));
+            await hierarchy.SaveAsync(ActivityExecutionHierarchyProjector.FromInspection(childProjection));
+            await hierarchy.SaveAsync(ActivityExecutionHierarchyProjector.FromInspection(siblingProjection));
             Assert.NotNull(await inspection.FindAsync(workflow, "root"));
             Assert.NotNull(await hierarchy.FindBoundaryAsync(workflow, "root"));
+            var hierarchyFirst = await hierarchy.ReadPageAsync(new ActivityExecutionHierarchyQuery(
+                workflow,
+                "root",
+                null,
+                1,
+                new HashSet<ActivityExecutionHierarchyInclude>(),
+                "provider-smoke",
+                $"tenant:{scope}"));
+            Assert.NotNull(hierarchyFirst?.NextCursor);
+            var hierarchySecond = await hierarchy.ReadPageAsync(new ActivityExecutionHierarchyQuery(
+                workflow,
+                "root",
+                hierarchyFirst!.NextCursor,
+                1,
+                new HashSet<ActivityExecutionHierarchyInclude>(),
+                "provider-smoke",
+                $"tenant:{scope}"));
+            Assert.Single(hierarchySecond!.Items);
 
             await using var transaction = await context.Database.BeginTransactionAsync();
             await state.SaveAsync(State(workflow, "rolled-back", 3, null));

@@ -453,6 +453,10 @@ public static class RuntimeCoreServiceCollectionExtensions
                 RuntimeActivityExecutionStoreBackend.Register(services, new RuntimeActivityExecutionStoreBackend(RuntimeActivityExecutionStoreBackend.InMemory, defaults));
         }
 
+        // A durable activity-execution backend may be registered before the Runtime composition root. The
+        // TryAdd defaults above must not leave an unowned concrete implementation beside that backend.
+        RuntimeActivityExecutionStoreBackend.Find(services)?.EnsureOwnsRegisteredContracts(services);
+
         return services;
     }
 
