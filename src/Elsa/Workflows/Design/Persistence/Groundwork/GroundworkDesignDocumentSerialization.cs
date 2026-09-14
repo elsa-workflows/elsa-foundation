@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
@@ -30,30 +29,10 @@ public static class GroundworkDesignDocumentSerialization
 
     private static JsonSerializerOptions CreateOptions() => new(JsonSerializerDefaults.Web)
     {
-        TypeInfoResolver = new GroundworkDesignTypeInfoResolver()
+        TypeInfoResolver = new ExcludingJsonTypeInfoResolver(
+            ExcludedMembers,
+            new DefaultJsonTypeInfoResolver())
     };
-
-    private sealed class GroundworkDesignTypeInfoResolver : IJsonTypeInfoResolver
-    {
-        private readonly DefaultJsonTypeInfoResolver inner = new();
-
-        public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
-        {
-            var typeInfo = inner.GetTypeInfo(type, options);
-            if (typeInfo?.Kind != JsonTypeInfoKind.Object)
-                return typeInfo;
-            foreach (var property in typeInfo.Properties)
-            {
-                if (ExcludedMembers.Contains(property.Name, StringComparer.OrdinalIgnoreCase) ||
-                    property.AttributeProvider is PropertyInfo member &&
-                    ExcludedMembers.Contains(member.Name, StringComparer.OrdinalIgnoreCase))
-                {
-                    property.ShouldSerialize = static (_, _) => false;
-                }
-            }
-            return typeInfo;
-        }
-    }
 
     private sealed class PayloadDelegatingConverterFactory(IPayloadSerializer payloadSerializer) : JsonConverterFactory
     {
