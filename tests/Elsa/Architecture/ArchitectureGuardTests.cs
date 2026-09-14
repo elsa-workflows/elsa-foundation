@@ -727,7 +727,7 @@ public sealed class ArchitectureGuardTests
     {
         var sourceRoot = Path.Join(RepoRoot, "src");
         var violations = Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
-            .Where(file => !IsGeneratedScratchFile(file) && !IsBuildArtifactFile(file))
+            .Where(file => !IsBuildArtifactFile(file))
             .SelectMany(file => FindPrunedPublicContractNames(File.ReadAllText(file))
                 .Select(name => $"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {name}"))
             .Distinct()
