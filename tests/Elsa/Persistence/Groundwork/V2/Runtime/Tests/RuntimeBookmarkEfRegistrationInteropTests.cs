@@ -4,6 +4,7 @@ using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -28,6 +29,14 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
         ConnectionString = "Data Source=:memory:"
     };
 
+    private static readonly RuntimeActivityExecutionEntityFrameworkCoreOptions ActivityEfOptions = new()
+    {
+        Provider = "Sqlite",
+        ConnectionString = "Data Source=:memory:",
+        HierarchyCursorSigningKey = "ef-runtime-activity-switch-hierarchy-key-32-bytes",
+        RecoveryContinuationSigningKey = "ef-runtime-activity-switch-signing-key-32-bytes"
+    };
+
     [Fact]
     public void Groundwork_then_ef_withdraws_only_the_groundwork_bookmark_backend()
     {
@@ -42,6 +51,42 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfBookmarkStateStore));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStateStore));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStimulusIndex));
+    }
+
+    [Fact]
+    public void Groundwork_and_ef_activity_execution_backend_switch_fails_closed_until_checkpoint_ownership_is_coherent()
+    {
+        var groundworkServices = new ServiceCollection();
+        groundworkServices.AddWorkflowRuntime();
+        groundworkServices.AddGroundworkV2RuntimeStores();
+
+        Assert.Throws<InvalidOperationException>(() => groundworkServices.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions));
+        Assert.Equal(RuntimeActivityExecutionStoreBackend.Groundwork, RuntimeActivityExecutionStoreBackend.Find(groundworkServices)!.Name);
+        Assert.Single(groundworkServices, descriptor => descriptor.ServiceType == typeof(GroundworkV2ActivityExecutionStateStore));
+
+        var efServices = new ServiceCollection();
+        efServices.AddWorkflowRuntime();
+        efServices.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions);
+
+        Assert.Throws<InvalidOperationException>(() => efServices.AddGroundworkV2RuntimeStores());
+        Assert.Equal(RuntimeActivityExecutionStoreBackend.EntityFramework, RuntimeActivityExecutionStoreBackend.Find(efServices)!.Name);
+        Assert.Single(efServices, descriptor => descriptor.ServiceType == typeof(EfActivityExecutionStateStore));
+    }
+
+    [Fact]
+    public void Activity_execution_backends_are_idempotent_when_registered_without_switching()
+    {
+        var efServices = new ServiceCollection();
+        efServices.AddWorkflowRuntime();
+        efServices.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions);
+        efServices.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions);
+        Assert.Equal(RuntimeActivityExecutionStoreBackend.EntityFramework, RuntimeActivityExecutionStoreBackend.Find(efServices)!.Name);
+
+        var groundworkServices = new ServiceCollection();
+        groundworkServices.AddWorkflowRuntime();
+        groundworkServices.AddGroundworkV2RuntimeStores();
+        groundworkServices.AddGroundworkV2RuntimeStores();
+        Assert.Equal(RuntimeActivityExecutionStoreBackend.Groundwork, RuntimeActivityExecutionStoreBackend.Find(groundworkServices)!.Name);
     }
 
     [Fact]

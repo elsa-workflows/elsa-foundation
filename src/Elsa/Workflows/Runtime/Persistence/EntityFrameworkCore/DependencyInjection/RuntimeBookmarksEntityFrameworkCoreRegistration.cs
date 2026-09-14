@@ -41,6 +41,9 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
                 var siblingArtifactsBackend = RuntimeArtifactStoreBackend.Find(services);
                 if (siblingArtifactsBackend?.Name == RuntimeArtifactStoreBackend.EntityFramework)
                     siblingArtifactsBackend.EnsureOwnsRegisteredContracts(services);
+                var siblingActivityBackend = RuntimeActivityExecutionStoreBackend.Find(services);
+                if (siblingActivityBackend?.Name == RuntimeActivityExecutionStoreBackend.EntityFramework)
+                    siblingActivityBackend.EnsureOwnsRegisteredContracts(services);
                 var existingOptions = services
                     .Select(descriptor => descriptor.ImplementationInstance)
                     .OfType<RuntimeBookmarksEntityFrameworkCoreOptions>()
@@ -57,6 +60,9 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
                     existingBackend.Owns,
                     siblingArtifactsBackend?.Name == RuntimeArtifactStoreBackend.EntityFramework
                         ? siblingArtifactsBackend.Owns
+                        : null,
+                    siblingActivityBackend?.Name == RuntimeActivityExecutionStoreBackend.EntityFramework
+                        ? siblingActivityBackend.Owns
                         : null);
                 return services;
             }
@@ -65,11 +71,16 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
             var artifactsOwnContext = artifactsBackend?.Name == RuntimeArtifactStoreBackend.EntityFramework;
             if (artifactsOwnContext)
                 artifactsBackend!.EnsureOwnsRegisteredContracts(services);
+            var activityBackend = RuntimeActivityExecutionStoreBackend.Find(services);
+            var activityOwnContext = activityBackend?.Name == RuntimeActivityExecutionStoreBackend.EntityFramework;
+            if (activityOwnContext)
+                activityBackend!.EnsureOwnsRegisteredContracts(services);
             BookmarkStateEfContextRegistration.EnsureContextIsAvailable(
                 services,
                 provider,
+                "Runtime bookmarks",
                 artifactsOwnContext ? artifactsBackend!.Owns : null,
-                "Runtime bookmarks");
+                activityOwnContext ? activityBackend!.Owns : null);
 
             if (existingBackend is null && BookmarkStateStoreBackend.HasRegisteredContract(services))
             {
@@ -86,7 +97,10 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
             if (artifactsOwnContext)
                 ownedArtifacts.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider)
                     .Where(artifactsBackend!.Owns));
-            if (!artifactsOwnContext)
+            if (activityOwnContext)
+                ownedArtifacts.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider)
+                    .Where(activityBackend!.Owns));
+            if (!artifactsOwnContext && !activityOwnContext)
                 switch (provider)
                 {
                     case "sqlite": ownedArtifacts.AddRange(AddContext<BookmarkStateSqliteDbContext>(services, configured, EfRelationalProviderBinding.UseSqlite)); break;
@@ -158,7 +172,8 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
             throw new InvalidOperationException("Runtime bookmarks EF persistence no longer exclusively owns its auxiliary registrations.");
 
         foreach (var descriptor in ownedArtifacts.Where(descriptor =>
-                     RuntimeArtifactStoreBackend.Find(services)?.Owns(descriptor) != true))
+                     RuntimeArtifactStoreBackend.Find(services)?.Owns(descriptor) != true &&
+                     RuntimeActivityExecutionStoreBackend.Find(services)?.Owns(descriptor) != true))
         {
             // Artifact EF may reuse this context and records the same descriptor as a sibling owner.
             // Keep it alive while replacing only the bookmark backend; the artifact backend remains valid.

@@ -10,6 +10,7 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 public sealed class ActivityExecutionHierarchyCursorOptions
 {
     public string? SigningKey { get; set; }
+    public bool AllowEphemeralDevelopmentKey { get; set; } = true;
 }
 
 public sealed class HmacActivityExecutionHierarchyCursorCodec : IActivityExecutionHierarchyCursorCodec
@@ -20,9 +21,18 @@ public sealed class HmacActivityExecutionHierarchyCursorCodec : IActivityExecuti
     public HmacActivityExecutionHierarchyCursorCodec(IOptions<ActivityExecutionHierarchyCursorOptions> options)
     {
         var configured = options.Value.SigningKey;
-        _key = string.IsNullOrWhiteSpace(configured)
-            ? RandomNumberGenerator.GetBytes(32)
-            : Encoding.UTF8.GetBytes(configured);
+        if (string.IsNullOrWhiteSpace(configured))
+        {
+            if (!options.Value.AllowEphemeralDevelopmentKey)
+                throw new InvalidOperationException(
+                    "Activity execution hierarchy cursor signing key must be configured for durable hierarchy paging. " +
+                    "Set ActivityExecutionHierarchyCursorOptions.SigningKey to at least 32 UTF-8 bytes, shared by every " +
+                    "node that consumes hierarchy pages; shell hosts configure it through the durable runtime " +
+                    "persistence feature's HierarchyCursorSigningKey setting.");
+            _key = RandomNumberGenerator.GetBytes(32);
+        }
+        else
+            _key = Encoding.UTF8.GetBytes(configured);
         if (_key.Length < 32)
             throw new InvalidOperationException("Activity execution hierarchy cursor signing key must contain at least 32 UTF-8 bytes.");
     }

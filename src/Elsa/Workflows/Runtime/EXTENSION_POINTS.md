@@ -463,6 +463,7 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - **Signature:** `SaveAsync(ActivityExecutionState state, ...)`, `FindAsync(string workflowExecutionId, string activityExecutionId, ...)`, `ListAsync(string workflowExecutionId, ...)`.
 - **Usage:** stores `ActivityExecutionState` keyed by `WorkflowExecutionId` and durable `ActivityExecutionId`. `SaveAsync` is an upsert for future lifecycle transitions. The default scheduler uses it to record `Scheduled` state when `ScheduleActivity` work is drained, but it does not overwrite an existing activity execution state when replaying the same schedule work. It does not invoke activities, store authored workflow documents, or project diagnostics/history.
 - **Default implementation:** `InMemoryActivityExecutionStateStore` *(single-node in-memory default for the current runtime slice)*.
+- **EF Core implementation:** `EfActivityExecutionStateStore` *(opt-in `WorkflowsRuntimeActivityExecutionEntityFrameworkCorePersistence`; Groundwork remains the default durable composition until the EF program default flip)*.
 
 ### `IActivityExecutionInspectionStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement query surface (one store owns committed inspection projections for concrete activity executions in a runtime composition).
@@ -470,6 +471,7 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - **Usage:** reads runtime-owned inspection evidence keyed by concrete activity execution identity. Consumers use this store for lightweight per-instance activity execution summaries and selected execution detail without loading authored workflow documents.
 - **Default implementation:** `InMemoryActivityExecutionInspectionStore` *(single-node in-memory default for the current runtime slice)*.
 - **Known provider implementations:** `Elsa.Persistence.Groundwork` — `GroundworkActivityExecutionInspectionStore` *(cross-domain persistence provider replacement)*.
+- **EF Core implementation:** `EfActivityExecutionInspectionStore` *(opt-in `WorkflowsRuntimeActivityExecutionEntityFrameworkCorePersistence`; Groundwork remains the default durable composition until the EF program default flip)*.
 
 ### `IActivityExecutionInspectionWriter` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement command surface (one writer owns committed inspection projection upserts for concrete activity executions in a runtime composition).
@@ -477,6 +479,7 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - **Usage:** writes runtime-owned inspection evidence from accepted checkpoint commits through the activity-execution-inspection lane, so inspection evidence does not get ahead of lifecycle state. The command surface is split from `IActivityExecutionInspectionStore` to preserve command/query separation.
 - **Default implementation:** `InMemoryActivityExecutionInspectionStore` *(single-node in-memory default for the current runtime slice)*.
 - **Known provider implementations:** `Elsa.Persistence.Groundwork` — `GroundworkActivityExecutionInspectionStore` *(cross-domain persistence provider replacement)*.
+- **EF Core implementation:** `EfActivityExecutionInspectionStore` *(opt-in `WorkflowsRuntimeActivityExecutionEntityFrameworkCorePersistence`; Groundwork remains the default durable composition until the EF program default flip)*.
 
 ### `IRuntimeActivityExecutionInspectionAccumulator` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one accumulator assembles checkpoint-scoped activity execution inspection projections for a runtime composition).
@@ -625,6 +628,7 @@ A handler that must not gain pipeline dispatch (the resume handler) implements t
 - **Signature:** write `ActivityExecutionHierarchyRecord`; read cursor-paged descendants, boundary metadata, pinned execution layout, and previous/next attempt navigation by workflow/activity execution identity.
 - **Usage:** preserves one workflow execution while making reusable composite boundaries navigable. Inspection clients can click through a graph activity into its full descendant execution graph and complete pinned structural layout, including authored nodes that did not execute, without loading authored Design documents. Boundary lifecycle remains separate from descendant aggregate state. Records are checkpoint-gated and use ordinary activity execution identities/scopes; there is no special “custom activity” scope and no child workflow identity.
 - **Default implementation:** `RuntimeInMemoryActivityExecutionHierarchyStore`; Groundwork replaces it for durable hosts. Opaque page cursors are encoded by `IActivityExecutionHierarchyCursorCodec`.
+- **EF Core implementation:** `EfActivityExecutionHierarchyStore` *(opt-in `WorkflowsRuntimeActivityExecutionEntityFrameworkCorePersistence`; Groundwork remains the default durable composition until the EF program default flip)*.
 
 Cursor failures carry the cursor class, boundary/query/access binding results, and a recoverable restart action. Authorization-profile changes invalidate issued cursors but do not alter committed hierarchy history.
 
