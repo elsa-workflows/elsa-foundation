@@ -44,6 +44,9 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
                 var siblingActivityBackend = RuntimeActivityExecutionStoreBackend.Find(services);
                 if (siblingActivityBackend?.Name == RuntimeActivityExecutionStoreBackend.EntityFramework)
                     siblingActivityBackend.EnsureOwnsRegisteredContracts(services);
+                var siblingWorkflowBackend = WorkflowExecutionStateStoreBackend.Find(services);
+                if (siblingWorkflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework)
+                    siblingWorkflowBackend.EnsureOwnsRegisteredContract(services);
                 var existingOptions = services
                     .Select(descriptor => descriptor.ImplementationInstance)
                     .OfType<RuntimeBookmarksEntityFrameworkCoreOptions>()
@@ -63,6 +66,9 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
                         : null,
                     siblingActivityBackend?.Name == RuntimeActivityExecutionStoreBackend.EntityFramework
                         ? siblingActivityBackend.Owns
+                        : null,
+                    siblingWorkflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework
+                        ? siblingWorkflowBackend.Owns
                         : null);
                 return services;
             }
@@ -75,12 +81,18 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
             var activityOwnContext = activityBackend?.Name == RuntimeActivityExecutionStoreBackend.EntityFramework;
             if (activityOwnContext)
                 activityBackend!.EnsureOwnsRegisteredContracts(services);
+            var workflowBackend = WorkflowExecutionStateStoreBackend.Find(services);
+            if (workflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework)
+                workflowBackend.EnsureOwnsRegisteredContract(services);
             BookmarkStateEfContextRegistration.EnsureContextIsAvailable(
                 services,
                 provider,
                 "Runtime bookmarks",
                 artifactsOwnContext ? artifactsBackend!.Owns : null,
-                activityOwnContext ? activityBackend!.Owns : null);
+                activityOwnContext ? activityBackend!.Owns : null,
+                workflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework
+                    ? workflowBackend.Owns
+                    : null);
 
             if (existingBackend is null && BookmarkStateStoreBackend.HasRegisteredContract(services))
             {
@@ -100,7 +112,10 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
             if (activityOwnContext)
                 ownedArtifacts.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider)
                     .Where(activityBackend!.Owns));
-            if (!artifactsOwnContext && !activityOwnContext)
+            if (!artifactsOwnContext && !activityOwnContext && workflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework)
+                ownedArtifacts.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider)
+                    .Where(workflowBackend.Owns));
+            if (!artifactsOwnContext && !activityOwnContext && workflowBackend?.Name != WorkflowExecutionStateStoreBackend.EntityFramework)
                 switch (provider)
                 {
                     case "sqlite": ownedArtifacts.AddRange(AddContext<BookmarkStateSqliteDbContext>(services, configured, EfRelationalProviderBinding.UseSqlite)); break;

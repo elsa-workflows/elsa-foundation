@@ -12,6 +12,10 @@ public static class RuntimeWorkflowExecutionEfModule
     public const string SchemaVersion = "1.0.0";
     public const int IdentityMaximumLength = 128;
     public const int IdentityProjectionMaximumLength = 450;
-    public const int OrderKeyMaximumLength = 655;
+    // Order keys are the hexadecimal representation of the UTF-16 ordinal key
+    // (128 code units plus a two-byte length suffix).  Keeping this projection
+    // bounded to its actual width makes every composite index valid on SQL
+    // Server and MySQL while retaining lossless ordinal ordering.
+    public const int OrderKeyMaximumLength = (IdentityMaximumLength + 1) * sizeof(char) * 2;
     public static string HistoryTableName => EfMigrationsHistory.TableName(HistoryModuleName);
 }

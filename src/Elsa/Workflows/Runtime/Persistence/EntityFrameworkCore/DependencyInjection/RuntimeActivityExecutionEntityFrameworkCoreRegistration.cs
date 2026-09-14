@@ -46,6 +46,9 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
             var artifactsBackend = RuntimeArtifactStoreBackend.Find(services);
             if (artifactsBackend?.Name == RuntimeArtifactStoreBackend.EntityFramework)
                 artifactsBackend.EnsureOwnsRegisteredContracts(services);
+            var workflowBackend = WorkflowExecutionStateStoreBackend.Find(services);
+            if (workflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework)
+                workflowBackend.EnsureOwnsRegisteredContract(services);
 
             BookmarkStateEfContextRegistration.EnsureCompatible(
                 services,
@@ -54,7 +57,9 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
                 options.ConnectionName,
                 RuntimeActivityExecutionEfModule.DefaultSqliteConnectionString);
             EnsureContext(services, provider, bookmarksBackend?.Name == BookmarkStateStoreBackend.EntityFramework ? bookmarksBackend.Owns : null,
-                artifactsBackend?.Name == RuntimeArtifactStoreBackend.EntityFramework ? artifactsBackend.Owns : null, "Runtime activity executions");
+                artifactsBackend?.Name == RuntimeArtifactStoreBackend.EntityFramework ? artifactsBackend.Owns : null,
+                workflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework ? workflowBackend.Owns : null,
+                "Runtime activity executions");
             var commitExistingRemoval = existingBackend?.PrepareRemoveOwnedArtifacts(services);
 
             services.AddOptions<ActivityExecutionHierarchyCursorOptions>();
@@ -92,6 +97,8 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
                 ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(bookmarksBackend!.Owns));
             else if (ownsArtifactContext)
                 ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(artifactsBackend!.Owns));
+            else if (workflowBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework)
+                ownedInfrastructure.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider).Where(workflowBackend.Owns));
             else
                 ownedInfrastructure.AddRange(AddContext(services, configured, provider));
 
@@ -157,13 +164,15 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
     {
         var bookmarks = BookmarkStateStoreBackend.Find(services);
         var artifacts = RuntimeArtifactStoreBackend.Find(services);
+        var workflow = WorkflowExecutionStateStoreBackend.Find(services);
         Func<ServiceDescriptor, bool>? bookmarksOwner = bookmarks is null ? null : bookmarks.Owns;
         Func<ServiceDescriptor, bool>? artifactsOwner = artifacts is null ? null : artifacts.Owns;
-        BookmarkStateEfContextRegistration.EnsureContextIsAvailable(services, provider, owner, backend.Owns, bookmarksOwner, artifactsOwner);
+        Func<ServiceDescriptor, bool>? workflowOwner = workflow is null ? null : workflow.Owns;
+        BookmarkStateEfContextRegistration.EnsureContextIsAvailable(services, provider, owner, backend.Owns, bookmarksOwner, artifactsOwner, workflowOwner);
     }
 
-    private static void EnsureContext(IServiceCollection services, string provider, Func<ServiceDescriptor, bool>? bookmarksOwner, Func<ServiceDescriptor, bool>? artifactsOwner, string owner) =>
-        BookmarkStateEfContextRegistration.EnsureContextIsAvailable(services, provider, owner, bookmarksOwner, artifactsOwner);
+    private static void EnsureContext(IServiceCollection services, string provider, Func<ServiceDescriptor, bool>? bookmarksOwner, Func<ServiceDescriptor, bool>? artifactsOwner, Func<ServiceDescriptor, bool>? workflowOwner, string owner) =>
+        BookmarkStateEfContextRegistration.EnsureContextIsAvailable(services, provider, owner, bookmarksOwner, artifactsOwner, workflowOwner);
 
     private static IReadOnlyCollection<ServiceDescriptor> AddContext(IServiceCollection services, RuntimeActivityExecutionEntityFrameworkCoreOptions options, string provider)
     {

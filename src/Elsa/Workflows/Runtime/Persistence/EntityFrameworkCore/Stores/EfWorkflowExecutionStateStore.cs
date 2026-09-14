@@ -62,23 +62,35 @@ public sealed class EfWorkflowExecutionStateStore(
     {
         ValidateIdentity(workflowExecutionId, nameof(workflowExecutionId));
         cancellationToken.ThrowIfCancellationRequested();
-        var scope = RequireScope();
-        var id = CreateId(scope, workflowExecutionId);
-        var row = await context.WorkflowExecutionStates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
-        return row is null ? null : ReadChecked(row, scope, workflowExecutionId);
+        try
+        {
+            var scope = RequireScope();
+            var id = CreateId(scope, workflowExecutionId);
+            var row = await context.WorkflowExecutionStates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+            return row is null ? null : ReadChecked(row, scope, workflowExecutionId);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (InvalidDataException) { context.ChangeTracker.Clear(); throw; }
+        catch (DbException exception) { throw Normalize("reading", workflowExecutionId, exception); }
     }
 
     public async ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default)
     {
-        var result = new List<WorkflowExecutionState>();
-        string? cursor = null;
-        do
+        try
         {
-            var page = await QueryPageAsync(new WorkflowExecutionStatePageQuery(WorkflowExecutionStatePaging.MaximumPageSize, Cursor: cursor), cancellationToken);
-            result.AddRange(page.Items);
-            cursor = page.NextCursor;
-        } while (cursor is not null);
-        return result;
+            var result = new List<WorkflowExecutionState>();
+            string? cursor = null;
+            do
+            {
+                var page = await QueryPageAsync(new WorkflowExecutionStatePageQuery(WorkflowExecutionStatePaging.MaximumPageSize, Cursor: cursor), cancellationToken);
+                result.AddRange(page.Items);
+                cursor = page.NextCursor;
+            } while (cursor is not null);
+            return result;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (InvalidDataException) { throw; }
+        catch (DbException exception) { throw Normalize("listing", "<all>", exception); }
     }
 
     public async ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default)
@@ -86,19 +98,29 @@ public sealed class EfWorkflowExecutionStateStore(
         ArgumentNullException.ThrowIfNull(query);
         query.Validate();
         cancellationToken.ThrowIfCancellationRequested();
-        var scope = RequireScope();
-        var cursor = DecodeHistoryCursor(query.Cursor, query, scope);
-        var source = HistoryQuery(query, scope);
-        var total = await source.LongCountAsync(cancellationToken);
-        if (cursor is not null)
-            source = source.Where(x => x.SortTimestampUtcTicks < cursor.SortTicks || x.SortTimestampUtcTicks == cursor.SortTicks && string.Compare(x.WorkflowExecutionIdOrderKey, cursor.OrderKey) > 0);
-        var rows = await source.OrderByDescending(x => x.SortTimestampUtcTicks).ThenBy(x => x.WorkflowExecutionIdOrderKey).Take(checked(query.PageSize + 1)).ToArrayAsync(cancellationToken);
-        var hasNext = rows.Length > query.PageSize;
-        if (hasNext) rows = rows[..query.PageSize];
-        var items = rows.Select(x => ReadChecked(x, scope, Decode(x.WorkflowExecutionId))).ToArray();
-        return new WorkflowExecutionStatePage(items,
-            hasNext && rows.Length > 0 ? EncodeHistoryCursor(rows[^1], query, scope) : null,
-            hasNext, total);
+        try
+        {
+            var scope = RequireScope();
+            var cursor = DecodeHistoryCursor(query.Cursor, query, scope);
+            // Decode first so a cursor bound to another filter is reported as
+            // cursor misuse; a tenant mismatch without a cursor still fails
+            // closed below before any query is executed.
+            accessContextAccessor.Current.EnsureTenantScope(query.TenantId);
+            var source = HistoryQuery(query, scope);
+            var total = await source.LongCountAsync(cancellationToken);
+            if (cursor is not null)
+                source = source.Where(x => x.SortTimestampUtcTicks < cursor.SortTicks || x.SortTimestampUtcTicks == cursor.SortTicks && string.Compare(x.WorkflowExecutionIdOrderKey, cursor.OrderKey) > 0);
+            var rows = await source.OrderByDescending(x => x.SortTimestampUtcTicks).ThenBy(x => x.WorkflowExecutionIdOrderKey).Take(checked(query.PageSize + 1)).ToArrayAsync(cancellationToken);
+            var hasNext = rows.Length > query.PageSize;
+            if (hasNext) rows = rows[..query.PageSize];
+            var items = rows.Select(x => ReadChecked(x, scope, Decode(x.WorkflowExecutionId))).ToArray();
+            return new WorkflowExecutionStatePage(items,
+                hasNext && rows.Length > 0 ? EncodeHistoryCursor(rows[^1], query, scope) : null,
+                hasNext, total);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (InvalidDataException) { throw; }
+        catch (DbException exception) { throw Normalize("querying", "<history>", exception); }
     }
 
     public async ValueTask<WorkflowExecutionAlterationCapturePage> QueryAlterationCapturePageAsync(WorkflowExecutionAlterationCaptureQuery query, CancellationToken cancellationToken = default)
@@ -106,50 +128,61 @@ public sealed class EfWorkflowExecutionStateStore(
         ArgumentNullException.ThrowIfNull(query);
         query.Validate();
         cancellationToken.ThrowIfCancellationRequested();
-        var scope = RequireScope();
-        if (!StringComparer.Ordinal.Equals(scope, query.TenantPartition))
-            throw new InvalidOperationException("The requested resource does not belong to the current persistence scope.");
-        var cursor = DecodeCaptureCursor(query.Cursor, query, scope);
-        var source = context.WorkflowExecutionStates.AsNoTracking()
-            .Where(x => x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) &&
-                        x.TenantIdHash == Hash(query.TenantPartition) && x.TenantId == Encode(query.TenantPartition) &&
-                        x.AuthorityPartitionKey == query.AuthorityPartitionKey)
-            ;
-        source = ApplySelector(source, query.Selector);
-        if (cursor is not null)
-            source = source.Where(x => string.Compare(x.WorkflowExecutionIdOrderKey, cursor.OrderKey) > 0);
-        var rows = await source.OrderBy(x => x.WorkflowExecutionIdOrderKey).Take(checked(query.PageSize + 1)).ToArrayAsync(cancellationToken);
-        var hasNext = rows.Length > query.PageSize;
-        if (hasNext) rows = rows[..query.PageSize];
-        var items = rows.Select(x =>
+        try
         {
-            var state = ReadChecked(x, scope, Decode(x.WorkflowExecutionId));
-            if (state.Authority is not { } authority || !WorkflowExecutionAuthoritySnapshot.Matches(authority, query.SystemIdentity, query.RootInitiator, query.AuthorityMetadata))
-                throw new InvalidDataException("The persisted workflow execution authority projection does not match its content.");
-            return state;
-        }).ToArray();
-        return new WorkflowExecutionAlterationCapturePage(items,
-            hasNext && rows.Length > 0 ? EncodeCaptureCursor(rows[^1], query, scope) : null, hasNext);
+            var scope = RequireScope();
+            if (!StringComparer.Ordinal.Equals(scope, query.TenantPartition))
+                throw new InvalidOperationException("The requested resource does not belong to the current persistence scope.");
+            var cursor = DecodeCaptureCursor(query.Cursor, query, scope);
+            var source = context.WorkflowExecutionStates.AsNoTracking()
+                .Where(x => x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) &&
+                            x.TenantIdHash == Hash(query.TenantPartition) && x.TenantId == Encode(query.TenantPartition) &&
+                            x.AuthorityPartitionKey == query.AuthorityPartitionKey);
+            source = ApplySelector(source, query.Selector);
+            if (cursor is not null)
+                source = source.Where(x => string.Compare(x.WorkflowExecutionIdOrderKey, cursor.OrderKey) > 0);
+            var rows = await source.OrderBy(x => x.WorkflowExecutionIdOrderKey).Take(checked(query.PageSize + 1)).ToArrayAsync(cancellationToken);
+            var hasNext = rows.Length > query.PageSize;
+            if (hasNext) rows = rows[..query.PageSize];
+            var items = rows.Select(x =>
+            {
+                var state = ReadChecked(x, scope, Decode(x.WorkflowExecutionId));
+                if (state.Authority is not { } authority || !WorkflowExecutionAuthoritySnapshot.Matches(authority, query.SystemIdentity, query.RootInitiator, query.AuthorityMetadata))
+                    throw new InvalidDataException("The persisted workflow execution authority projection does not match its content.");
+                return state;
+            }).ToArray();
+            return new WorkflowExecutionAlterationCapturePage(items,
+                hasNext && rows.Length > 0 ? EncodeCaptureCursor(rows[^1], query, scope) : null, hasNext);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (InvalidDataException) { throw; }
+        catch (DbException exception) { throw Normalize("querying", "<alteration-capture>", exception); }
     }
 
     public async ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var scope = RequireScope();
-        var rows = await context.WorkflowExecutionStates.AsNoTracking()
-            .Where(x => x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope))
-            .Select(x => new { x.ArtifactId, x.ArtifactIdHash })
-            .Distinct()
-            .OrderBy(x => x.ArtifactId)
-            .ToArrayAsync(cancellationToken);
-        var ids = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var row in rows)
+        try
         {
-            var id = Decode(row.ArtifactId);
-            if (row.ArtifactIdHash != Hash(id)) throw new InvalidDataException("The persisted workflow execution artifact projection is corrupt.");
-            ids.Add(id);
+            var scope = RequireScope();
+            var rows = await context.WorkflowExecutionStates.AsNoTracking()
+                .Where(x => x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope))
+                .Select(x => new { x.ArtifactId, x.ArtifactIdHash })
+                .Distinct()
+                .OrderBy(x => x.ArtifactId)
+                .ToArrayAsync(cancellationToken);
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var row in rows)
+            {
+                var id = Decode(row.ArtifactId);
+                if (row.ArtifactIdHash != Hash(id)) throw new InvalidDataException("The persisted workflow execution artifact projection is corrupt.");
+                ids.Add(id);
+            }
+            return ids.ToArray();
         }
-        return ids.ToArray();
+        catch (OperationCanceledException) { throw; }
+        catch (InvalidDataException) { throw; }
+        catch (DbException exception) { throw Normalize("listing pinned artifacts for", "<all>", exception); }
     }
 
     public async ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
@@ -168,7 +201,7 @@ public sealed class EfWorkflowExecutionStateStore(
             return true;
         }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception)) { context.ChangeTracker.Clear(); return false; }
+        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception)) { context.ChangeTracker.Clear(); throw Normalize("deleting", workflowExecutionId, exception); }
         catch (OperationCanceledException) { context.ChangeTracker.Clear(); throw; }
         catch (InvalidDataException) { context.ChangeTracker.Clear(); throw; }
         catch (DbUpdateException exception) { context.ChangeTracker.Clear(); throw Normalize("deleting", workflowExecutionId, exception); }

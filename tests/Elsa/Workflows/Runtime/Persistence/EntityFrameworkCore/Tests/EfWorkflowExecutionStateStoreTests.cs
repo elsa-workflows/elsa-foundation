@@ -32,6 +32,23 @@ public sealed class EfWorkflowExecutionStateStoreTests
         foreign.AddSingleton<IWorkflowExecutionStateStore>(new InMemoryWorkflowExecutionStateStore());
         Assert.Throws<InvalidOperationException>(() => foreign.AddRuntimeWorkflowExecutionEntityFrameworkCore(options));
     }
+
+    [Fact]
+    public void Registration_can_follow_or_precede_runtime_defaults_without_duplicate_contracts()
+    {
+        var options = new RuntimeWorkflowExecutionEntityFrameworkCoreOptions { ConnectionString = "Data Source=:memory:", RecoveryContinuationSigningKey = "01234567890123456789012345678901" };
+        var afterDefaults = new ServiceCollection();
+        afterDefaults.AddWorkflowRuntime();
+        afterDefaults.AddRuntimeWorkflowExecutionEntityFrameworkCore(options);
+        Assert.Equal(WorkflowExecutionStateStoreBackend.EntityFramework, WorkflowExecutionStateStoreBackend.Find(afterDefaults)!.Name);
+        Assert.Single(afterDefaults.Where(x => x.ServiceType == typeof(IWorkflowExecutionStateStore)));
+
+        var beforeDefaults = new ServiceCollection();
+        beforeDefaults.AddRuntimeWorkflowExecutionEntityFrameworkCore(options);
+        beforeDefaults.AddWorkflowRuntime();
+        Assert.Equal(WorkflowExecutionStateStoreBackend.EntityFramework, WorkflowExecutionStateStoreBackend.Find(beforeDefaults)!.Name);
+        Assert.Single(beforeDefaults.Where(x => x.ServiceType == typeof(IWorkflowExecutionStateStore)));
+    }
     [Fact]
     public async Task Crud_restart_and_scope_isolation_round_trip_lossless_state()
     {
@@ -68,6 +85,7 @@ public sealed class EfWorkflowExecutionStateStoreTests
         Assert.Equal(["a", "b"], first.Items.Select(x => x.WorkflowExecutionId));
         Assert.Equal(["c", "d"], second.Items.Select(x => x.WorkflowExecutionId));
         await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.QueryPageAsync(new WorkflowExecutionStatePageQuery(2, TenantId: "other", Cursor: first.NextCursor)).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.QueryPageAsync(new WorkflowExecutionStatePageQuery(2, TenantId: "other")).AsTask());
     }
 
     [Fact]
@@ -115,6 +133,54 @@ public sealed class EfWorkflowExecutionStateStoreTests
         await using var database = await Database.CreateAsync();
         await using var fixture = database.Open("tenant-a");
         await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Store.SaveAsync(State("execution", "tenant-b", DateTimeOffset.UtcNow)).AsTask());
+    }
+
+    [Fact]
+    public async Task Invalid_revision_and_json_fail_closed_without_poisoning_the_tracker()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var state = State("execution", "tenant-a", DateTimeOffset.UtcNow);
+        await fixture.Store.SaveAsync(state);
+        var row = await fixture.Context.WorkflowExecutionStates.SingleAsync();
+        row.Revision = 0;
+        await fixture.Context.SaveChangesAsync();
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Store.SaveAsync(state with { Status = WorkflowExecutionStatus.Running }).AsTask());
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+
+        row = await fixture.Context.WorkflowExecutionStates.SingleAsync();
+        row.Revision = 1;
+        await fixture.Context.SaveChangesAsync();
+        row.ContentJson = "not-json";
+        await fixture.Context.SaveChangesAsync();
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Store.FindAsync(state.WorkflowExecutionId).AsTask());
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+    }
+
+    [Fact]
+    public async Task Concurrent_create_race_leaves_one_authoritative_row_and_recoverable_contexts()
+    {
+        await using var database = await Database.CreateAsync();
+        var state = State("race", "tenant-a", DateTimeOffset.UtcNow);
+        await using var left = database.Open("tenant-a");
+        await using var right = database.Open("tenant-a");
+        var outcomes = await Task.WhenAll(
+            Capture(left.Store.SaveAsync(state)),
+            Capture(right.Store.SaveAsync(state)));
+        Assert.All(outcomes, outcome => Assert.True(outcome is null or InvalidOperationException));
+        await using var verification = database.Open("tenant-a");
+        Assert.NotNull(await verification.Store.FindAsync(state.WorkflowExecutionId));
+        Assert.Single(await verification.Context.WorkflowExecutionStates.ToArrayAsync());
+        left.Context.ChangeTracker.Clear();
+        right.Context.ChangeTracker.Clear();
+        Assert.Empty(left.Context.ChangeTracker.Entries());
+        Assert.Empty(right.Context.ChangeTracker.Entries());
+    }
+
+    private static async Task<Exception?> Capture(ValueTask<WorkflowExecutionState> operation)
+    {
+        try { await operation; return null; }
+        catch (Exception exception) when (exception is InvalidOperationException) { return exception; }
     }
 
     private static WorkflowExecutionState State(string id, string tenant, DateTimeOffset timestamp) => new(id, new WorkflowExecutableIdentity("artifact", "definition", "version", "1", "hash"), WorkflowExecutionStatus.Completed, null, timestamp.AddMinutes(-1), timestamp.AddMinutes(-1), timestamp, timestamp, null, null, tenant, new Dictionary<string, string>());

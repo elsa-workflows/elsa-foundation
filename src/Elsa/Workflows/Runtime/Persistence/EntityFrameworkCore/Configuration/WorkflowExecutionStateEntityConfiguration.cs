@@ -29,10 +29,14 @@ public sealed class WorkflowExecutionStateEntityConfiguration : IEntityTypeConfi
         b.Property(x => x.ContentJson).IsRequired();
         b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();
         b.Property(x => x.Revision).IsConcurrencyToken().IsRequired();
-        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash, x.WorkflowExecutionId }).IsUnique();
-        b.HasIndex(x => new { x.ScopeKeyHash, x.SortTimestampUtcTicks, x.WorkflowExecutionIdOrderKey, x.WorkflowExecutionId });
-        b.HasIndex(x => new { x.ScopeKeyHash, x.TenantIdHash, x.AuthorityPartitionKey, x.WorkflowExecutionIdOrderKey, x.WorkflowExecutionId });
-        b.HasIndex(x => new { x.ScopeKeyHash, x.ArtifactIdHash, x.ArtifactId });
+        // Hashes identify opaque values exactly; the order projection already
+        // contains the complete identity and is therefore the deterministic
+        // tie-breaker.  Do not append the encoded identity to these indexes:
+        // the redundant wide columns exceed SQL Server/MySQL key limits.
+        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash }).IsUnique();
+        b.HasIndex(x => new { x.ScopeKeyHash, x.SortTimestampUtcTicks, x.WorkflowExecutionIdOrderKey });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.TenantIdHash, x.AuthorityPartitionKey, x.WorkflowExecutionIdOrderKey });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.ArtifactIdHash });
         b.HasIndex(x => new { x.ScopeKeyHash, x.Status, x.SortTimestampUtcTicks, x.WorkflowExecutionIdOrderKey });
     }
 }

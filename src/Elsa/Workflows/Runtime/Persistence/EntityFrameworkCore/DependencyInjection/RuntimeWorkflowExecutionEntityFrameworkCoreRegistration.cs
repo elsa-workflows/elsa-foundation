@@ -33,7 +33,6 @@ public static class RuntimeWorkflowExecutionEntityFrameworkCoreRegistration
                     BookmarkStateStoreBackend.Find(services) is { } repeatBookmarks ? repeatBookmarks.Owns : null);
                 return services;
             }
-            if (existing?.Name == WorkflowExecutionStateStoreBackend.Groundwork) throw new InvalidOperationException("Workflow execution state EF persistence cannot replace Groundwork while the runtime checkpoint writer owns the Groundwork transaction.");
             if (existing is not null) existing.EnsureOwnsRegisteredContract(services);
             else
             {
@@ -41,6 +40,7 @@ public static class RuntimeWorkflowExecutionEntityFrameworkCoreRegistration
                 if (explicitStore.Any(x => x.ImplementationType != typeof(Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowExecutionStateStore))) throw new InvalidOperationException("Runtime workflow execution EF persistence refuses to replace an unowned execution-state store.");
             }
             BookmarkStateEfContextRegistration.EnsureCompatible(services, provider, options.ConnectionString, options.ConnectionName, RuntimeWorkflowExecutionEfModule.DefaultSqliteConnectionString);
+            var commitExistingRemoval = existing?.PrepareRemoveOwnedArtifacts(services);
             var artifacts = RuntimeArtifactStoreBackend.Find(services); var activity = RuntimeActivityExecutionStoreBackend.Find(services); var bookmarks = BookmarkStateStoreBackend.Find(services);
             if (artifacts?.Name == RuntimeArtifactStoreBackend.EntityFramework) artifacts.EnsureOwnsRegisteredContracts(services);
             if (activity?.Name == RuntimeActivityExecutionStoreBackend.EntityFramework) activity.EnsureOwnsRegisteredContracts(services);
@@ -60,6 +60,7 @@ public static class RuntimeWorkflowExecutionEntityFrameworkCoreRegistration
             services.RemoveAll<IWorkflowExecutionStateStore>();
             var contract = ServiceDescriptor.Scoped<IWorkflowExecutionStateStore>(p => p.GetRequiredService<EfWorkflowExecutionStateStore>()); services.Add(contract);
             WorkflowExecutionStateStoreBackend.Register(services, new WorkflowExecutionStateStoreBackend(WorkflowExecutionStateStoreBackend.EntityFramework, [contract, .. owned], collection => RemoveOwned(collection, owned)));
+            commitExistingRemoval?.Invoke(services);
             return services;
         }
         catch { services.Clear(); foreach (var descriptor in snapshot) services.Add(descriptor); throw; }

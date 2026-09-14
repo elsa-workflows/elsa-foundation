@@ -49,11 +49,10 @@ public static class GroundworkV2RuntimeRegistration
             var existingActivityExecutionBackend = RuntimeActivityExecutionStoreBackend.Find(services);
             RuntimeActivityExecutionStoreBackend.EnsureCheckpointCompositionCompatible(existingActivityExecutionBackend, RuntimeActivityExecutionStoreBackend.Groundwork);
             var existingWorkflowExecutionStateBackend = WorkflowExecutionStateStoreBackend.Find(services);
-            if (existingWorkflowExecutionStateBackend?.Name == WorkflowExecutionStateStoreBackend.EntityFramework)
-                throw new InvalidOperationException("Groundwork runtime cannot replace workflow execution state EF persistence while the runtime checkpoint writer owns the EF transaction.");
             existingWorkflowExecutionStateBackend?.EnsureOwnsRegisteredContract(services);
             if (existingWorkflowExecutionStateBackend is null && services.Any(descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionStateStore) && descriptor.ImplementationType != typeof(Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowExecutionStateStore)))
                 throw new InvalidOperationException("Groundwork runtime refuses to replace an unowned workflow execution state store.");
+            var commitExistingWorkflowExecutionRemoval = existingWorkflowExecutionStateBackend?.PrepareRemoveOwnedArtifacts(services);
             var target = BindRuntimeTarget(services, targetName);
             if (existingActivityExecutionBackend is null)
                 RuntimeActivityExecutionStoreBackend.EnsureNoUnownedRegistrations(services);
@@ -194,6 +193,7 @@ public static class GroundworkV2RuntimeRegistration
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2SchedulerDurabilityEvidence>());
         RegisterArtifactBackend(services, target);
         RegisterActivityExecutionBackend(services, target);
+        commitExistingWorkflowExecutionRemoval?.Invoke(services);
         return services;
         }
         catch
