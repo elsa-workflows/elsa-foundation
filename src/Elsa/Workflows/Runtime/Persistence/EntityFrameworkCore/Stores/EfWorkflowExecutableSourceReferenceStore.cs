@@ -1,30 +1,49 @@
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
-using System.Text.Json;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 public sealed class EfWorkflowExecutableSourceReferenceStore(
     BookmarkStateDbContext context,
-    IPersistenceAccessContextAccessor access) : IWorkflowExecutableSourceReferenceStore
+    IPersistenceAccessContextAccessor access,
+    IRuntimeRecoveryContinuationCodec? continuationCodec = null) : IWorkflowExecutableSourceReferenceStore
 {
+    private const string ContinuationPurpose = "ef-runtime-source-reference-page-v1";
+    private readonly IRuntimeRecoveryContinuationCodec continuationCodec = continuationCodec ??
+        new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { AllowEphemeralDevelopmentKey = true }));
     public async ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default)
     {
         Validate(reference);
         var scope = ScopeForWrite(reference);
         var id = CreateId(scope, reference.SourceReferenceId);
-        var existing = await context.WorkflowExecutableSourceReferences.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) && x.SourceReferenceId == reference.SourceReferenceId, cancellationToken);
-        if (existing is not null)
-        {
-            _ = Read(existing, scope, reference.SourceReferenceId);
-            throw new InvalidOperationException($"Workflow executable source reference '{reference.SourceReferenceId}' already exists; source references are create-only.");
-        }
-        context.WorkflowExecutableSourceReferences.Add(ToEntity(reference, scope, id));
+        context.ChangeTracker.Clear();
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         try
-        { await context.SaveChangesAsync(cancellationToken); }
+        {
+            var existing = await context.WorkflowExecutableSourceReferences.AsNoTracking().SingleOrDefaultAsync(x =>
+                x.Id == id &&
+                x.ScopeKeyHash == Hash(scope) &&
+                x.ScopeKey == Encode(scope) &&
+                x.SourceReferenceIdHash == Hash(reference.SourceReferenceId) &&
+                x.SourceReferenceId == reference.SourceReferenceId,
+                cancellationToken);
+            if (existing is not null)
+            {
+                _ = Read(existing, scope, reference.SourceReferenceId);
+                throw new InvalidOperationException($"Workflow executable source reference '{reference.SourceReferenceId}' already exists; source references are create-only.");
+            }
+            context.WorkflowExecutableSourceReferences.Add(ToEntity(reference, scope, id));
+            await context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
         catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
         { context.ChangeTracker.Clear(); throw new InvalidOperationException("The workflow executable source reference already exists; source references are create-only.", exception); }
         catch { context.ChangeTracker.Clear(); throw; }
@@ -35,21 +54,38 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceReferenceId);
         var scope = RequireScope();
         var id = CreateId(scope, sourceReferenceId);
-        var row = await context.WorkflowExecutableSourceReferences.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) && x.SourceReferenceId == sourceReferenceId, cancellationToken);
+        var row = await context.WorkflowExecutableSourceReferences.AsNoTracking().SingleOrDefaultAsync(x =>
+            x.Id == id &&
+            x.ScopeKeyHash == Hash(scope) &&
+            x.ScopeKey == Encode(scope) &&
+            x.SourceReferenceIdHash == Hash(sourceReferenceId) &&
+            x.SourceReferenceId == sourceReferenceId,
+            cancellationToken);
         return row is null ? null : Read(row, scope, sourceReferenceId);
     }
 
-    public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByArtifactPageAsync(WorkflowExecutableSourceReferenceArtifactPageQuery query, CancellationToken cancellationToken = default) => Page(query, Route.Artifact, query.ArtifactId, null, null, cancellationToken);
-    public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByDefinitionVersionPageAsync(WorkflowExecutableSourceReferenceDefinitionVersionPageQuery query, CancellationToken cancellationToken = default) => Page(query, Route.DefinitionVersion, null, query.DefinitionVersionId, null, cancellationToken);
-    public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(WorkflowExecutableSourceReferencePageQuery query, CancellationToken cancellationToken = default) => Page(query, Route.All, null, null, query, cancellationToken);
+    public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByArtifactPageAsync(
+        WorkflowExecutableSourceReferenceArtifactPageQuery query,
+        CancellationToken cancellationToken = default) =>
+        Page(query, Route.Artifact, query.ArtifactId, null, null, cancellationToken);
+
+    public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListByDefinitionVersionPageAsync(
+        WorkflowExecutableSourceReferenceDefinitionVersionPageQuery query,
+        CancellationToken cancellationToken = default) =>
+        Page(query, Route.DefinitionVersion, null, query.DefinitionVersionId, null, cancellationToken);
+
+    public ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> ListPageAsync(
+        WorkflowExecutableSourceReferencePageQuery query,
+        CancellationToken cancellationToken = default) =>
+        Page(query, Route.All, null, null, query, cancellationToken);
 
     private async ValueTask<RuntimeStorePage<WorkflowExecutableSourceReference>> Page(RuntimeStorePageRequest request, Route route, string? artifact, string? definition, WorkflowExecutableSourceReferencePageQuery? all, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        var binding = artifact ?? definition ?? (all?.Scope?.ToString() ?? "all");
-        var cursor = Decode(request.ContinuationToken, route, scope, binding);
+        var binding = BuildBinding(route, scope, artifact, definition, all);
+        var cursor = Decode(request.ContinuationToken, binding);
         var query = context.WorkflowExecutableSourceReferences.AsNoTracking().AsQueryable();
         query = query.Where(x => x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope));
         if (artifact is not null)
@@ -61,13 +97,13 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         if (all?.LiveOnly == true)
             query = query.Where(x => !x.IsRetired && x.ExpiresAtUtcTicks > all.Now!.Value.UtcTicks);
         if (cursor is not null)
-            query = query.Where(x => string.CompareOrdinal(x.SourceReferenceIdOrderKey, cursor.Key) > 0);
+            query = query.Where(x => x.SourceReferenceIdOrderKey.CompareTo(cursor.Key) > 0);
         var rows = await query.OrderBy(x => x.SourceReferenceIdOrderKey).Take(request.Limit + 1).ToArrayAsync(cancellationToken);
         var hasMore = rows.Length > request.Limit;
         if (hasMore)
             rows = rows[..request.Limit];
         var items = rows.Select(x => Read(x, scope, x.SourceReferenceId)).ToArray();
-        var next = hasMore ? Encode(route, scope, binding, rows[^1].SourceReferenceIdOrderKey) : null;
+        var next = hasMore ? EncodeCursor(binding, rows[^1].SourceReferenceIdOrderKey) : null;
         return new RuntimeStorePage<WorkflowExecutableSourceReference>(request, items, next);
     }
 
@@ -75,53 +111,101 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceReferenceId);
         var scope = RequireScope();
-        var row = await context.WorkflowExecutableSourceReferences.SingleOrDefaultAsync(x => x.Id == CreateId(scope, sourceReferenceId) && x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) && x.SourceReferenceId == sourceReferenceId, cancellationToken);
+        var row = await context.WorkflowExecutableSourceReferences.SingleOrDefaultAsync(x =>
+            x.Id == CreateId(scope, sourceReferenceId) &&
+            x.ScopeKeyHash == Hash(scope) &&
+            x.ScopeKey == Encode(scope) &&
+            x.SourceReferenceIdHash == Hash(sourceReferenceId) &&
+            x.SourceReferenceId == sourceReferenceId,
+            cancellationToken);
         if (row is null)
             return false;
         var current = Read(row, scope, sourceReferenceId);
         if (current.DeletedAt is not null)
             return true;
         Copy(row, current.Retire(deletedAt, reason), scope);
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         try
-        { await context.SaveChangesAsync(cancellationToken); return true; }
+        {
+            await context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return true;
+        }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
+        catch { context.ChangeTracker.Clear(); throw; }
     }
 
-    public ValueTask<bool> TryRetireAsync(WorkflowExecutableSourceReference expectedLiveReference, WorkflowExecutableSourceReference retiredReference, CancellationToken cancellationToken = default) => TryReplace(expectedLiveReference, retiredReference, false, cancellationToken);
-    public ValueTask<bool> TryRestoreAsync(WorkflowExecutableSourceReference expectedRetiredReference, WorkflowExecutableSourceReference restoredReference, CancellationToken cancellationToken = default) => TryReplace(expectedRetiredReference, restoredReference, true, cancellationToken);
+    public ValueTask<bool> TryRetireAsync(
+        WorkflowExecutableSourceReference expectedLiveReference,
+        WorkflowExecutableSourceReference retiredReference,
+        CancellationToken cancellationToken = default) =>
+        TryReplace(expectedLiveReference, retiredReference, false, cancellationToken);
+
+    public ValueTask<bool> TryRestoreAsync(
+        WorkflowExecutableSourceReference expectedRetiredReference,
+        WorkflowExecutableSourceReference restoredReference,
+        CancellationToken cancellationToken = default) =>
+        TryReplace(expectedRetiredReference, restoredReference, true, cancellationToken);
 
     private async ValueTask<bool> TryReplace(WorkflowExecutableSourceReference expected, WorkflowExecutableSourceReference replacement, bool restore, CancellationToken cancellationToken)
     {
         Validate(expected);
         Validate(replacement);
-        var valid = WorkflowExecutableSourceReferenceComparer.SameIdentity(expected, replacement) && (restore ? expected.DeletedAt is not null && replacement.DeletedAt is null : expected.DeletedAt is null && replacement.DeletedAt is not null);
+        var valid = WorkflowExecutableSourceReferenceComparer.SameIdentity(expected, replacement) &&
+                    (restore
+                        ? expected.DeletedAt is not null && replacement.DeletedAt is null
+                        : expected.DeletedAt is null && replacement.DeletedAt is not null);
         if (!valid)
             return false;
         var scope = RequireScope();
-        var row = await context.WorkflowExecutableSourceReferences.SingleOrDefaultAsync(x => x.Id == CreateId(scope, expected.SourceReferenceId) && x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) && x.SourceReferenceId == expected.SourceReferenceId, cancellationToken);
+        var row = await context.WorkflowExecutableSourceReferences.SingleOrDefaultAsync(x =>
+            x.Id == CreateId(scope, expected.SourceReferenceId) &&
+            x.ScopeKeyHash == Hash(scope) &&
+            x.ScopeKey == Encode(scope) &&
+            x.SourceReferenceIdHash == Hash(expected.SourceReferenceId) &&
+            x.SourceReferenceId == expected.SourceReferenceId,
+            cancellationToken);
         if (row is null)
             return false;
         var current = Read(row, scope, expected.SourceReferenceId);
         if (!WorkflowExecutableSourceReferenceComparer.SameSnapshot(current, expected))
             return false;
         Copy(row, replacement, scope);
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         try
-        { await context.SaveChangesAsync(cancellationToken); return true; }
+        {
+            await context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return true;
+        }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
+        catch { context.ChangeTracker.Clear(); throw; }
     }
 
     public async ValueTask<bool> DeleteAsync(string sourceReferenceId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceReferenceId);
         var scope = RequireScope();
-        var row = await context.WorkflowExecutableSourceReferences.SingleOrDefaultAsync(x => x.Id == CreateId(scope, sourceReferenceId) && x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) && x.SourceReferenceId == sourceReferenceId, cancellationToken);
+        var row = await context.WorkflowExecutableSourceReferences.SingleOrDefaultAsync(x =>
+            x.Id == CreateId(scope, sourceReferenceId) &&
+            x.ScopeKeyHash == Hash(scope) &&
+            x.ScopeKey == Encode(scope) &&
+            x.SourceReferenceIdHash == Hash(sourceReferenceId) &&
+            x.SourceReferenceId == sourceReferenceId,
+            cancellationToken);
         if (row is null)
             return false;
         _ = Read(row, scope, sourceReferenceId);
         context.Remove(row);
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         try
-        { await context.SaveChangesAsync(cancellationToken); return true; }
+        {
+            await context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return true;
+        }
         catch (DbUpdateConcurrencyException) { context.ChangeTracker.Clear(); return false; }
+        catch { context.ChangeTracker.Clear(); throw; }
     }
 
     public async ValueTask<IReadOnlyCollection<string>> DeleteExpiredOrRetiredAsync(WorkflowExecutableSourceReferenceCleanupBatch batch, DateTimeOffset now, CancellationToken cancellationToken = default)
@@ -133,7 +217,11 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         var rows = await query.OrderBy(x => x.ExpiresAtUtcTicks).ThenBy(x => x.SourceReferenceIdOrderKey).Take(batch.Limit).ToArrayAsync(cancellationToken);
         var deleted = new List<string>(rows.Length);
         foreach (var row in rows)
-        { var current = Read(row, scope, row.SourceReferenceId); if (await DeleteAsync(current.SourceReferenceId, cancellationToken)) deleted.Add(current.SourceReferenceId); }
+        {
+            var current = Read(row, scope, row.SourceReferenceId);
+            if (await DeleteAsync(current.SourceReferenceId, cancellationToken))
+                deleted.Add(current.SourceReferenceId);
+        }
         return deleted;
     }
 
@@ -142,7 +230,12 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         ArgumentNullException.ThrowIfNull(candidates);
         var scope = RequireScope();
         var candidateHashes = candidates.ArtifactIds.Select(Hash).ToArray();
-        var query = context.WorkflowExecutableSourceReferences.Where(x => x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope) && !x.IsRetired && x.ExpiresAtUtcTicks > now.UtcTicks && candidateHashes.Contains(x.ArtifactIdHash));
+        var query = context.WorkflowExecutableSourceReferences.Where(x =>
+            x.ScopeKeyHash == Hash(scope) &&
+            x.ScopeKey == Encode(scope) &&
+            !x.IsRetired &&
+            x.ExpiresAtUtcTicks > now.UtcTicks &&
+            candidateHashes.Contains(x.ArtifactIdHash));
         var rows = await query.Select(x => new { x.ArtifactId, x.ArtifactIdHash }).ToArrayAsync(cancellationToken);
         return candidates.ArtifactIds.Where(candidate => !rows.Any(row => row.ArtifactIdHash == EfRelationalIdentity.Hash(candidate) && row.ArtifactId == candidate)).ToArray();
     }
@@ -163,21 +256,29 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             access.Current.EnsureTenantScope(reference.TenantId);
         return scope;
     }
-    private static WorkflowExecutableSourceReferenceEntity ToEntity(WorkflowExecutableSourceReference value, string scope, string id) { var row = new WorkflowExecutableSourceReferenceEntity { Id = id }; Copy(row, value, scope); return row; }
+    private static WorkflowExecutableSourceReferenceEntity ToEntity(WorkflowExecutableSourceReference value, string scope, string id)
+    {
+        var row = new WorkflowExecutableSourceReferenceEntity { Id = id };
+        Copy(row, value, scope);
+        return row;
+    }
     private static void Copy(WorkflowExecutableSourceReferenceEntity row, WorkflowExecutableSourceReference value, string scope)
     {
         row.SourceReferenceId = value.SourceReferenceId;
+        row.SourceReferenceIdHash = Hash(value.SourceReferenceId);
         row.SourceReferenceIdOrderKey = OrderKey(value.SourceReferenceId);
         row.ArtifactId = value.ArtifactId;
         row.ArtifactIdHash = Hash(value.ArtifactId);
         row.DefinitionVersionId = value.DefinitionVersionId;
         row.DefinitionVersionIdHash = Hash(value.DefinitionVersionId);
+        row.DefinitionId = value.DefinitionId;
+        row.DefinitionIdHash = Hash(value.DefinitionId);
         row.ScopeKey = Encode(scope);
         row.ScopeKeyHash = Hash(scope);
         row.Scope = value.Scope.ToString();
         row.IsRetired = value.DeletedAt is not null;
         row.ExpiresAtUtcTicks = (value.ExpiresAt ?? DateTimeOffset.MaxValue).UtcTicks;
-        row.ContentJson = RuntimeArtifactJson.Serialize(value);
+        row.ContentJson = SerializeEnvelope(value);
         row.SchemaVersion = RuntimeArtifactEfModule.SchemaVersion;
         if (row.Revision <= 0)
             row.Revision = 1;
@@ -188,23 +289,113 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
     {
         try
         {
-            if (row.Id != CreateId(expectedScope, expectedId) || row.SourceReferenceId != expectedId || row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion || row.SourceReferenceIdOrderKey != OrderKey(expectedId) || row.ScopeKey != Encode(expectedScope) || row.ScopeKeyHash != Hash(expectedScope) || row.ArtifactIdHash != Hash(row.ArtifactId) || row.DefinitionVersionIdHash != Hash(row.DefinitionVersionId) || row.Revision <= 0)
+            if (row.Id != CreateId(expectedScope, expectedId) ||
+                row.SourceReferenceId != expectedId ||
+                row.SourceReferenceIdHash != Hash(expectedId) ||
+                row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion ||
+                row.SourceReferenceIdOrderKey != OrderKey(expectedId) ||
+                row.ScopeKey != Encode(expectedScope) ||
+                row.ScopeKeyHash != Hash(expectedScope) ||
+                row.ArtifactIdHash != Hash(row.ArtifactId) ||
+                row.DefinitionIdHash != Hash(row.DefinitionId) ||
+                row.DefinitionVersionIdHash != Hash(row.DefinitionVersionId) ||
+                row.Revision <= 0)
                 throw new InvalidDataException("The persisted workflow executable source reference row is corrupt.");
-            var value = RuntimeArtifactJson.Deserialize<WorkflowExecutableSourceReference>(row.ContentJson);
+            var envelope = JsonNode.Parse(row.ContentJson)?.AsObject()
+                           ?? throw new InvalidDataException("The persisted workflow executable source reference envelope is empty.");
+            if (!StringComparer.Ordinal.Equals(ReadString(envelope, "collection"), "workflowExecutableSourceReference") ||
+                !StringComparer.Ordinal.Equals(ReadString(envelope, "artifactId"), row.ArtifactId) ||
+                envelope["reference"] is null)
+                throw new InvalidDataException("The persisted workflow executable source reference envelope projection is corrupt.");
+            var value = RuntimeArtifactJson.Deserialize<WorkflowExecutableSourceReference>(envelope["reference"]!.ToJsonString());
             Validate(value);
-            if ((value.TenantId is not null && value.TenantId != expectedScope) || EfRelationalIdentity.Decode(row.ScopeKey) != expectedScope || value.SourceReferenceId != expectedId || value.ArtifactId != row.ArtifactId || value.DefinitionVersionId != row.DefinitionVersionId || value.Scope.ToString() != row.Scope || row.ExpiresAtUtcTicks != (value.ExpiresAt ?? DateTimeOffset.MaxValue).UtcTicks || row.IsRetired != (value.DeletedAt is not null))
+            if ((value.TenantId is not null && value.TenantId != expectedScope) ||
+                EfRelationalIdentity.Decode(row.ScopeKey) != expectedScope ||
+                value.SourceReferenceId != expectedId ||
+                value.ArtifactId != row.ArtifactId ||
+                value.DefinitionId != row.DefinitionId ||
+                value.DefinitionVersionId != row.DefinitionVersionId ||
+                value.Scope.ToString() != row.Scope ||
+                row.ExpiresAtUtcTicks != (value.ExpiresAt ?? DateTimeOffset.MaxValue).UtcTicks ||
+                row.IsRetired != (value.DeletedAt is not null))
                 throw new InvalidDataException("The persisted workflow executable source reference projection is corrupt.");
             return value;
         }
-        catch (Exception exception) when (exception is JsonException or InvalidOperationException or ArgumentException or NotSupportedException or FormatException) { throw new InvalidDataException("The persisted workflow executable source reference payload is corrupt.", exception); }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException or ArgumentException or NotSupportedException or FormatException or OverflowException)
+        {
+            throw new InvalidDataException("The persisted workflow executable source reference payload is corrupt.", exception);
+        }
     }
-    private static void Validate(WorkflowExecutableSourceReference value) { ArgumentNullException.ThrowIfNull(value); ArgumentException.ThrowIfNullOrWhiteSpace(value.SourceReferenceId); ArgumentException.ThrowIfNullOrWhiteSpace(value.ArtifactId); ArgumentException.ThrowIfNullOrWhiteSpace(value.DefinitionVersionId); if (!Enum.IsDefined(value.Scope)) throw new ArgumentOutOfRangeException(nameof(value.Scope)); }
+    private static void Validate(WorkflowExecutableSourceReference value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        ArgumentException.ThrowIfNullOrWhiteSpace(value.SourceReferenceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(value.ArtifactId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(value.SourceKind);
+        ArgumentException.ThrowIfNullOrWhiteSpace(value.SourceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(value.DefinitionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(value.DefinitionVersionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(value.ArtifactVersion);
+        if (value.SourceVersion is not null)
+            ArgumentException.ThrowIfNullOrWhiteSpace(value.SourceVersion);
+        if (!Enum.IsDefined(value.Scope))
+            throw new ArgumentOutOfRangeException(nameof(value.Scope));
+    }
+
+    private static string SerializeEnvelope(WorkflowExecutableSourceReference value)
+    {
+        var reference = JsonNode.Parse(RuntimeArtifactJson.Serialize(value))
+                       ?? throw new InvalidDataException("The workflow executable source reference payload could not be serialized.");
+        return new JsonObject
+        {
+            ["collection"] = "workflowExecutableSourceReference",
+            ["artifactId"] = value.ArtifactId,
+            ["reference"] = reference
+        }.ToJsonString();
+    }
+
+    private static string ReadString(JsonObject node, string property) =>
+        node[property] is JsonValue value &&
+        value.TryGetValue<string>(out var text) &&
+        !string.IsNullOrWhiteSpace(text)
+            ? text
+            : throw new InvalidDataException($"The source-reference envelope is missing '{property}'.");
     private static string CreateId(string scope, string value) => Hash($"{scope.Length}:{scope}{value.Length}:{value}");
     private static string Hash(string value) => EfRelationalIdentity.Hash(value);
     private static string Encode(string value) => EfRelationalIdentity.Encode(value);
     private static string OrderKey(string value) => Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(value, RuntimeArtifactEfModule.IdentityMaximumLength));
-    private static string Encode(Route route, string? scope, string binding, string key) => Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(new Cursor(1, route, scope is null ? null : EfRelationalIdentity.Hash(scope), binding, key))));
-    private static Cursor? Decode(string? token, Route route, string? scope, string binding) { if (token is null) return null; try { var cursor = RuntimeArtifactJson.Deserialize<Cursor>(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(token))); if (cursor.Version != 1 || cursor.Route != route || cursor.ScopeHash != (scope is null ? null : EfRelationalIdentity.Hash(scope)) || cursor.Binding != binding) throw new FormatException(); return cursor; } catch (Exception exception) when (exception is FormatException or ArgumentException or JsonException or InvalidOperationException) { throw new ArgumentException("The source-reference continuation token is invalid.", nameof(token), exception); } }
+    private string BuildBinding(Route route, string scope, string? artifact, string? definition, WorkflowExecutableSourceReferencePageQuery? all)
+    {
+        var shape = RuntimeArtifactJson.Serialize(new
+        {
+            Route = route.ToString(),
+            Scope = Hash(scope),
+            Artifact = artifact,
+            Definition = definition,
+            FilterScope = all?.Scope?.ToString(),
+            all?.LiveOnly,
+            NowTicks = all?.Now?.UtcTicks
+        });
+        return Hash(shape);
+    }
+
+    private string EncodeCursor(string binding, string key) => continuationCodec.Encode(ContinuationPurpose, Encoding.UTF8.GetBytes(RuntimeArtifactJson.Serialize(new Cursor(1, binding, key))));
+
+    private Cursor? Decode(string? token, string binding)
+    {
+        if (token is null)
+            return null;
+        try
+        {
+            var cursor = RuntimeArtifactJson.Deserialize<Cursor>(Encoding.UTF8.GetString(continuationCodec.Decode(ContinuationPurpose, token)));
+            if (cursor.Version != 1 || cursor.Binding != binding || string.IsNullOrWhiteSpace(cursor.Key))
+                throw new FormatException();
+            return cursor;
+        }
+        catch (Exception exception) when (exception is FormatException or ArgumentException or JsonException or InvalidOperationException or OverflowException)
+        { throw new ArgumentException("The source-reference continuation token is invalid.", nameof(token), exception); }
+    }
+
     private enum Route { All, Artifact, DefinitionVersion }
-    private sealed record Cursor(int Version, Route Route, string? ScopeHash, string Binding, string Key);
+    private sealed record Cursor(int Version, string Binding, string Key);
 }

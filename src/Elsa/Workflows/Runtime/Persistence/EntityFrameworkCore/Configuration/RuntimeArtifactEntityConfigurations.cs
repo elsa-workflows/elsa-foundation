@@ -53,6 +53,7 @@ public sealed class ExecutableActivityTemplateEntityConfiguration : IEntityTypeC
         b.Property(x => x.TemplateIdOrderKey).HasMaxLength(655).IsRequired();
         b.Property(x => x.ContentJson).IsRequired();
         b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();
+        b.Property(x => x.Revision).IsConcurrencyToken().IsRequired();
         b.HasIndex(x => new { x.ScopeKeyHash, x.TemplateIdHash, x.TemplateId }).IsUnique();
     }
 }
@@ -70,6 +71,7 @@ public sealed class ExecutableActivityTemplateHashClaimEntityConfiguration : IEn
         b.Property(x => x.TemplateId).HasMaxLength(128).IsRequired();
         b.Property(x => x.ContentJson).IsRequired();
         b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();
+        b.Property(x => x.Revision).IsConcurrencyToken().IsRequired();
         b.HasIndex(x => new { x.ScopeKeyHash, x.TemplateHashHash, x.TemplateHash }).IsUnique();
     }
 }
@@ -81,11 +83,14 @@ public sealed class WorkflowExecutableSourceReferenceEntityConfiguration : IEnti
         b.HasKey(x => x.Id);
         b.Property(x => x.Id).HasMaxLength(128).IsRequired();
         b.Property(x => x.SourceReferenceId).HasMaxLength(128).IsRequired();
+        b.Property(x => x.SourceReferenceIdHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.SourceReferenceIdOrderKey).HasMaxLength(655).IsRequired();
         b.Property(x => x.ArtifactId).HasMaxLength(128).IsRequired();
         b.Property(x => x.ArtifactIdHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.DefinitionVersionId).HasMaxLength(128).IsRequired();
         b.Property(x => x.DefinitionVersionIdHash).HasMaxLength(64).IsRequired();
+        b.Property(x => x.DefinitionId).HasMaxLength(128).IsRequired();
+        b.Property(x => x.DefinitionIdHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.ScopeKey).IsRequired();
         b.Property(x => x.ScopeKeyHash).HasMaxLength(64).IsRequired();
         b.Property(x => x.Scope).HasMaxLength(32).IsRequired();
@@ -93,7 +98,9 @@ public sealed class WorkflowExecutableSourceReferenceEntityConfiguration : IEnti
         b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();
         b.Property(x => x.Revision).IsConcurrencyToken().IsRequired();
         b.HasIndex(x => new { x.ScopeKeyHash, x.ArtifactIdHash });
-        b.HasIndex(x => new { x.ScopeKeyHash, x.DefinitionVersionIdHash });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.DefinitionVersionIdHash, x.DefinitionVersionId });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.DefinitionIdHash, x.DefinitionId });
+        b.HasIndex(x => new { x.ScopeKeyHash, x.SourceReferenceIdHash, x.SourceReferenceId }).IsUnique();
         b.HasIndex(x => new { x.ScopeKeyHash, x.IsRetired, x.ExpiresAtUtcTicks });
     }
 }

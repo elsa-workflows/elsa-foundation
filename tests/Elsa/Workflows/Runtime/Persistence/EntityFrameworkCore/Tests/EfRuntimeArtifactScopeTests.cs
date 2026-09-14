@@ -1,9 +1,9 @@
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
-using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Primitives.Models;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
@@ -35,6 +35,8 @@ public sealed class EfRuntimeArtifactScopeTests
         await using var tenantB = database.Open("tenant-b");
         await tenantA.Executable.SaveAsync(Executable("same-artifact"));
         await tenantB.Executable.SaveAsync(Executable("same-artifact"));
+        await tenantA.Store.SaveAsync(Reference("same-ref", "artifact-a"));
+        await tenantB.Store.SaveAsync(Reference("same-ref", "artifact-b"));
         await tenantA.Template.SaveAsync(Template("same-template", "hash-a"));
         await tenantB.Template.SaveAsync(Template("same-template", "hash-b"));
         Assert.Equal("same-artifact", (await tenantA.Executable.FindAsync("same-artifact"))!.Identity.ArtifactId);
@@ -44,6 +46,7 @@ public sealed class EfRuntimeArtifactScopeTests
         await using var privileged = database.Open(PersistenceAccessContext.PrivilegedScoped(new PersistenceScope("tenant-a"), new PersistenceAccessPurpose("maintenance")));
         Assert.NotNull(await privileged.Executable.FindAsync("same-artifact"));
         Assert.NotNull(await privileged.Template.FindAsync("same-template"));
+        Assert.NotNull(await privileged.Store.FindAsync("same-ref"));
     }
 
     [Fact]
@@ -83,6 +86,77 @@ public sealed class EfRuntimeArtifactScopeTests
         var unreferenced = await fixture.Store.ListUnreferencedArtifactIdsAsync(new(["artifact-live", "artifact-missing"]), DateTimeOffset.UtcNow);
 
         Assert.Equal(["artifact-missing"], unreferenced);
+    }
+
+    [Fact]
+    public async Task Template_save_uses_content_comparison_and_authenticated_bound_cursor()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Template.SaveAsync(Template("template-a", "hash-a"));
+        await fixture.Template.SaveAsync(Template("template-a", "hash-a"));
+        await fixture.Template.SaveAsync(Template("template-b", "hash-b"));
+
+        var first = await fixture.Template.ListPageAsync(new RuntimeStorePageRequest(1));
+        Assert.Single(first.Items);
+        Assert.NotNull(first.NextContinuationToken);
+        var second = await fixture.Template.ListPageAsync(new RuntimeStorePageRequest(1, first.NextContinuationToken));
+        Assert.Single(second.Items);
+        Assert.Equal("template-b", second.Items[0].TemplateId);
+
+        var row = await fixture.Context.ExecutableActivityTemplates.SingleAsync(x => x.TemplateId == "template-a");
+        row.ContentJson = "{}";
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Template.FindAsync("template-a").AsTask());
+    }
+
+    [Fact]
+    public async Task Template_hash_claims_reject_collisions_and_corrupt_owners()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Template.SaveAsync(Template("template-a", "shared-hash"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Template.SaveAsync(Template("template-b", "shared-hash")).AsTask());
+
+        var claim = await fixture.Context.ExecutableActivityTemplateHashClaims.SingleAsync();
+        claim.ContentJson = "{\"templateHash\":\"shared-hash\",\"templateId\":\"other\"}";
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Template.FindByHashAsync("shared-hash").AsTask());
+    }
+
+    [Fact]
+    public async Task Source_reference_definition_projection_and_cursor_shape_are_verified()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Store.SaveAsync(Reference("ref-a", "artifact-a"));
+        var first = await fixture.Store.ListByArtifactPageAsync(new("artifact-a", 1));
+        Assert.Single(first.Items);
+        Assert.Null(first.NextContinuationToken);
+
+        var row = await fixture.Context.WorkflowExecutableSourceReferences.SingleAsync();
+        row.DefinitionId = "different-definition";
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Store.FindAsync("ref-a").AsTask());
+    }
+
+    [Fact]
+    public async Task Source_reference_page_cursor_is_authenticated_and_query_bound()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Store.SaveAsync(Reference("ref-a", "artifact-a"));
+        await fixture.Store.SaveAsync(Reference("ref-b", "artifact-b"));
+        var first = await fixture.Store.ListPageAsync(new(null, false, null, 1));
+        Assert.NotNull(first.NextContinuationToken);
+        var token = first.NextContinuationToken!;
+        var payloadStart = token.IndexOf('.') + 1;
+        var tampered = token[..payloadStart] + (token[payloadStart] == 'A' ? 'B' : 'A') + token[(payloadStart + 1)..];
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.ListPageAsync(new(null, false, null, 1, tampered)).AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.ListPageAsync(new(WorkflowExecutableReferenceScope.Published, false, null, 1, token)).AsTask());
     }
 
     [Fact]
