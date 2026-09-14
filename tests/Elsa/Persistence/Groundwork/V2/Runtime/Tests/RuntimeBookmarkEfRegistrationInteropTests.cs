@@ -1,3 +1,5 @@
+using CShells.Lifecycle;
+using Elsa.Persistence.Groundwork.Composition;
 using Elsa.Persistence.Groundwork.Runtime;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
@@ -5,6 +7,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Groundwork.Store;
+using Groundwork.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -109,6 +113,48 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(EfBookmarkStateStore));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStateStore));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStimulusIndex));
+    }
+
+    [Fact]
+    public async Task Groundwork_to_ef_withdraws_only_selected_target_units_and_back_redeclares_them_before_admission()
+    {
+        using var runtimeConnection = new SqliteProviderFactory().Create("Data Source=:memory:");
+        using var otherConnection = new SqliteProviderFactory().Create("Data Source=:memory:");
+        var services = new ServiceCollection()
+            .AddWorkflowRuntime()
+            .AddGroundworkStorageProviderConnection(runtimeConnection, "runtime")
+            .AddGroundworkStorageProviderConnection(otherConnection, "other");
+        services.AddGroundworkStorageUnit(
+            ElsaRuntimeV2StorageManifest.Require(ElsaRuntimeV2StorageManifest.ActivityExecutionStateDocumentKind),
+            "other");
+        services.AddGroundworkV2RuntimeStores("runtime");
+
+        services.AddRuntimeBookmarksEntityFrameworkCore(EfOptions);
+        services.AddRuntimeArtifactsEntityFrameworkCore(ArtifactEfOptions);
+
+        var registry = Registry(services);
+        Assert.DoesNotContain(registry.Registrations, registration =>
+            registration.TargetName == "runtime" &&
+            (registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind ||
+             ArtifactUnitIds.Contains(registration.Unit.Id.Value, StringComparer.Ordinal)));
+        Assert.Contains(registry.Registrations, registration =>
+            registration.TargetName == "other" &&
+            registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.ActivityExecutionStateDocumentKind);
+
+        using (var provider = services.BuildServiceProvider())
+            await provider.GetRequiredService<IShellInitializer>().InitializeAsync();
+
+        services.AddGroundworkV2RuntimeStores("runtime");
+        registry = Registry(services);
+        Assert.All(
+            ElsaRuntimeV2StorageManifest.CreateUnits().Select(unit => unit.Id.Value),
+            unitId => Assert.Equal(unitId, registry.Require(unitId, "runtime").Unit.Id.Value));
+        Assert.Contains(registry.Registrations, registration =>
+            registration.TargetName == "other" &&
+            registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.ActivityExecutionStateDocumentKind);
+
+        using (var provider = services.BuildServiceProvider())
+            await provider.GetRequiredService<IShellInitializer>().InitializeAsync();
     }
 
     [Fact]
@@ -222,4 +268,17 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }
+
+    private static GroundworkStorageUnitRegistry Registry(IServiceCollection services) =>
+        Assert.IsType<GroundworkStorageUnitRegistry>(services.Single(descriptor =>
+            descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance);
+
+    private static readonly string[] ArtifactUnitIds =
+    [
+        ElsaRuntimeV2StorageManifest.WorkflowExecutableDocumentKind,
+        ElsaRuntimeV2StorageManifest.WorkflowExecutableCoordinationDocumentKind,
+        ElsaRuntimeV2StorageManifest.ExecutableActivityTemplateDocumentKind,
+        ElsaRuntimeV2StorageManifest.ExecutableActivityTemplateHashClaimDocumentKind,
+        ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDocumentKind
+    ];
 }

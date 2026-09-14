@@ -28,6 +28,18 @@ public sealed class GroundworkStorageUnitRegistry
         }
     }
 
+    /// <summary>Restores a previously captured declaration set when service composition rolls back.</summary>
+    public void Restore(IEnumerable<GroundworkStorageUnitRegistration> registrationsSnapshot)
+    {
+        ArgumentNullException.ThrowIfNull(registrationsSnapshot);
+        lock (gate)
+        {
+            registrations.Clear();
+            foreach (var registration in registrationsSnapshot)
+                registrations.Add((registration.TargetName, registration.Unit.Id.Value), registration);
+        }
+    }
+
     public void Declare(StorageUnit unit, string? targetName = null)
     {
         ArgumentNullException.ThrowIfNull(unit);
@@ -54,17 +66,19 @@ public sealed class GroundworkStorageUnitRegistry
     }
 
     /// <summary>
-    /// Withdraws every declaration for <paramref name="unitId"/> before the service provider is built.
-    /// This supports order-independent composition when another persistence backend replaces a store
-    /// while other Groundwork units remain active.
+    /// Withdraws declarations for <paramref name="unitId"/> before the service provider is built.
+    /// An omitted target preserves the historical all-target behavior; a target restricts withdrawal
+    /// to that physical store so another target's declaration remains active.
     /// </summary>
-    public void Withdraw(string unitId)
+    public void Withdraw(string unitId, string? targetName = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(unitId);
+        var target = targetName is null ? null : GroundworkTargetNames.Normalize(targetName);
         lock (gate)
         {
             foreach (var key in registrations.Keys.Where(candidate =>
-                         StringComparer.Ordinal.Equals(candidate.UnitId, unitId)).ToArray())
+                         StringComparer.Ordinal.Equals(candidate.UnitId, unitId) &&
+                         (target is null || StringComparer.Ordinal.Equals(candidate.Target, target))).ToArray())
             {
                 registrations.Remove(key);
             }

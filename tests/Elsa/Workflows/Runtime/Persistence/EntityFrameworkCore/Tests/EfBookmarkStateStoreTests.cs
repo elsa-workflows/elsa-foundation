@@ -632,6 +632,24 @@ public sealed class EfBookmarkStateStoreTests
         Assert.Equal(before, services);
     }
 
+    [Fact]
+    public void Equivalent_registration_rejects_missing_owned_bookmark_store()
+    {
+        var options = new RuntimeBookmarksEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=runtime-bookmarks.db"
+        };
+        var services = new ServiceCollection();
+        services.AddRuntimeBookmarksEntityFrameworkCore(options);
+        var ownedStore = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfBookmarkStateStore));
+        services.Remove(ownedStore);
+        var before = services.ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeBookmarksEntityFrameworkCore(options));
+        Assert.Equal(before, services);
+    }
+
     private static void AddCustomContextRegistration(IServiceCollection services, string registration)
     {
         switch (registration)

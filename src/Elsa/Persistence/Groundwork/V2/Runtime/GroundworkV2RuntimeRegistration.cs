@@ -37,6 +37,12 @@ public static class GroundworkV2RuntimeRegistration
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
         var snapshot = services.ToArray();
+        var registry = services
+            .Where(descriptor => descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry))
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<GroundworkStorageUnitRegistry>()
+            .SingleOrDefault();
+        var registrySnapshot = registry?.Registrations;
         try
         {
             var cacheOptions = CopyAndValidate(workflowExecutableCacheOptions);
@@ -56,8 +62,6 @@ public static class GroundworkV2RuntimeRegistration
         // worker, a test harness) still fails activation on a missing key rather than on every recovery sweep.
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateRuntimeRecoveryContinuationCodecStartupTask>());
         services.ClaimWorkflowTestScopeProvider(typeof(GroundworkV2WorkflowTestScopeStore));
-        foreach (var unit in ElsaRuntimeV2StorageManifest.CreateUnits())
-            services.AddGroundworkStorageUnit(unit, target);
 
         RegisterExecutableStore(services, cacheOptions, target);
         var existingBookmarkBackend = BookmarkStateStoreBackend.Find(services);
@@ -79,7 +83,13 @@ public static class GroundworkV2RuntimeRegistration
             BookmarkStateStoreBackend.Groundwork,
             bookmarkDescriptor,
             bookmarkIndexDescriptor,
-            collection => RemoveGroundworkBookmarkArtifacts(collection, ownedBookmarkStoreRegistration)));
+            collection =>
+            {
+                RemoveGroundworkBookmarkArtifacts(collection, ownedBookmarkStoreRegistration);
+                GroundworkV2RuntimeUnitWithdrawal.RemoveBookmarkState(collection, target);
+            }));
+        foreach (var unit in ElsaRuntimeV2StorageManifest.CreateUnits())
+            services.AddGroundworkStorageUnit(unit, target);
         ReplaceScoped<GroundworkV2ExecutableActivityTemplateStore>(services, Standard<GroundworkV2ExecutableActivityTemplateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IExecutableActivityTemplateStore), typeof(IExecutableActivityTemplateReader), typeof(IExecutableActivityTemplateWriter));
         ReplaceScoped<GroundworkV2WorkflowExecutableSourceReferenceStore>(services, Standard<GroundworkV2WorkflowExecutableSourceReferenceStore>(target, static (sessions, access, target) => new(sessions, access, target)),
@@ -158,14 +168,15 @@ public static class GroundworkV2RuntimeRegistration
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2DispatchStoreDurabilityEvidence>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2OutboxDurabilityEvidence>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2SchedulerDurabilityEvidence>());
-            RegisterArtifactBackend(services);
-            return services;
+        RegisterArtifactBackend(services, target);
+        return services;
         }
         catch
         {
             services.Clear();
             foreach (var descriptor in snapshot)
                 services.Add(descriptor);
+            registry?.Restore(registrySnapshot!);
             throw;
         }
     }
@@ -318,7 +329,7 @@ public static class GroundworkV2RuntimeRegistration
         RuntimeArtifactStoreBackend.EnsureNoUnownedArtifactRegistrations(services);
     }
 
-    private static void RegisterArtifactBackend(IServiceCollection services)
+    private static void RegisterArtifactBackend(IServiceCollection services, string target)
     {
         var infrastructureTypes = new[]
         {
@@ -332,7 +343,29 @@ public static class GroundworkV2RuntimeRegistration
             RuntimeArtifactStoreBackend.Groundwork,
             RuntimeArtifactStoreBackend.CaptureArtifactSurfaceRegistrations(services)
                 .Concat(services.Where(descriptor => infrastructureTypes.Contains(descriptor.ServiceType)))
-                .ToArray()));
+                .ToArray(),
+            collection => GroundworkV2RuntimeUnitWithdrawal.RemoveArtifacts(collection, target)));
+    }
+}
+
+internal static class GroundworkV2RuntimeUnitWithdrawal
+{
+    private static readonly string[] ArtifactUnitIds =
+    [
+        ElsaRuntimeV2StorageManifest.WorkflowExecutableDocumentKind,
+        ElsaRuntimeV2StorageManifest.WorkflowExecutableCoordinationDocumentKind,
+        ElsaRuntimeV2StorageManifest.ExecutableActivityTemplateDocumentKind,
+        ElsaRuntimeV2StorageManifest.ExecutableActivityTemplateHashClaimDocumentKind,
+        ElsaRuntimeV2StorageManifest.WorkflowExecutableSourceReferenceDocumentKind
+    ];
+
+    public static void RemoveBookmarkState(IServiceCollection services, string? targetName) =>
+        services.RemoveGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind, targetName);
+
+    public static void RemoveArtifacts(IServiceCollection services, string? targetName)
+    {
+        foreach (var unitId in ArtifactUnitIds)
+            services.RemoveGroundworkStorageUnit(unitId, targetName);
     }
 }
 

@@ -37,6 +37,7 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
             existingBackend?.EnsureOwnsRegisteredContract(services);
             if (existingBackend is not null && existingBackend.Name == BookmarkStateStoreBackend.EntityFramework)
             {
+                existingBackend.EnsureOwnsRegisteredAuxiliaryContracts(services);
                 var existingOptions = services
                     .Select(descriptor => descriptor.ImplementationInstance)
                     .OfType<RuntimeBookmarksEntityFrameworkCoreOptions>()
@@ -68,10 +69,7 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
                 BookmarkStateStoreBackend.RemoveDefaultStimulusIndex(services);
                 BookmarkStateStoreBackend.RemoveDefaultStateStore(services);
             }
-            else
-            {
-                existingBackend?.RemoveOwnedArtifacts(services);
-            }
+            var commitExistingBackendRemoval = existingBackend?.PrepareRemoveOwnedArtifacts(services);
 
             var ownedArtifacts = new List<ServiceDescriptor>();
             var optionsDescriptor = ServiceDescriptor.Singleton(configured);
@@ -99,6 +97,7 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
                 descriptorIndex,
                 collection => RemoveEfArtifacts(collection, ownedArtifacts),
                 ownedArtifacts));
+            commitExistingBackendRemoval?.Invoke(services);
             return services;
         }
         catch

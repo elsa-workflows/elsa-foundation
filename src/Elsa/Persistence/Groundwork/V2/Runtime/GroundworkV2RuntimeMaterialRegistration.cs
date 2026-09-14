@@ -39,6 +39,12 @@ public static class GroundworkV2RuntimeMaterialRegistration
     {
         ArgumentNullException.ThrowIfNull(services);
         var snapshot = services.ToArray();
+        var registry = services
+            .Where(descriptor => descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry))
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<GroundworkStorageUnitRegistry>()
+            .SingleOrDefault();
+        var registrySnapshot = registry?.Registrations;
         try
         {
             var existingBackend = RuntimeArtifactStoreBackend.Find(services);
@@ -92,7 +98,8 @@ public static class GroundworkV2RuntimeMaterialRegistration
             provider.GetRequiredService<GroundworkV2WorkflowExecutableSourceReferenceStore>());
             RuntimeArtifactStoreBackend.Register(services, new RuntimeArtifactStoreBackend(
                 RuntimeArtifactStoreBackend.Groundwork,
-                RuntimeArtifactStoreBackend.CaptureArtifactSurfaceRegistrations(services)));
+                RuntimeArtifactStoreBackend.CaptureArtifactSurfaceRegistrations(services),
+                collection => GroundworkV2RuntimeUnitWithdrawal.RemoveArtifacts(collection, targetName)));
             return services;
         }
         catch
@@ -100,6 +107,7 @@ public static class GroundworkV2RuntimeMaterialRegistration
             services.Clear();
             foreach (var descriptor in snapshot)
                 services.Add(descriptor);
+            registry?.Restore(registrySnapshot!);
             throw;
         }
     }

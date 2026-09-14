@@ -154,20 +154,47 @@ public sealed class BookmarkStateStoreBackend
         var indexDescriptors = services.Where(descriptor => descriptor.ServiceType == typeof(IBookmarkStimulusIndex)).ToArray();
         if (indexDescriptors.Length != 1 || !ReferenceEquals(indexDescriptors[0], indexDescriptor))
             throw new InvalidOperationException($"Bookmark state backend '{Name}' no longer exclusively owns IBookmarkStimulusIndex.");
+
+        if (auxiliaryDescriptors.Any(descriptor => !services.Contains(descriptor)))
+            throw new InvalidOperationException($"Bookmark state backend '{Name}' no longer exclusively owns its auxiliary registrations.");
+    }
+
+    /// <summary>Validates ownership and rejects additional registrations for the same auxiliary service types.</summary>
+    public void EnsureOwnsRegisteredAuxiliaryContracts(IServiceCollection services)
+    {
+        EnsureOwnsRegisteredContract(services);
+        var auxiliaryTypes = auxiliaryDescriptors
+            .Select(descriptor => descriptor.ServiceType)
+            .ToHashSet();
+        if (services.Any(descriptor => auxiliaryTypes.Contains(descriptor.ServiceType) && !auxiliaryDescriptors.Contains(descriptor)))
+            throw new InvalidOperationException($"Bookmark state backend '{Name}' no longer exclusively owns its auxiliary registrations.");
     }
 
     public void RemoveOwnedArtifacts(IServiceCollection services)
+    {
+        var snapshot = services.ToArray();
+        var commit = PrepareRemoveOwnedArtifacts(services);
+        try
+        {
+            commit?.Invoke(services);
+        }
+        catch
+        {
+            services.Clear();
+            foreach (var descriptor in snapshot)
+                services.Add(descriptor);
+            throw;
+        }
+    }
+
+    /// <summary>Removes public contracts and returns auxiliary cleanup to invoke after replacement validation succeeds.</summary>
+    public Action<IServiceCollection>? PrepareRemoveOwnedArtifacts(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
         EnsureOwnsRegisteredContract(services);
         var snapshot = services.ToArray();
         try
         {
-            // Auxiliary cleanup runs while the public contracts are still present. This lets us
-            // validate that a callback only removed its own registrations before committing the
-            // public descriptor removal, and makes a failed replacement retryable.
-            removeOwnedArtifacts?.Invoke(services);
-            EnsureOwnsRegisteredContract(services);
             services.Remove(stateDescriptor);
             services.Remove(indexDescriptor);
             for (var index = services.Count - 1; index >= 0; index--)
@@ -175,6 +202,8 @@ public sealed class BookmarkStateStoreBackend
                 if (ReferenceEquals(services[index].ImplementationInstance, this))
                     services.RemoveAt(index);
             }
+
+            return removeOwnedArtifacts;
         }
         catch
         {

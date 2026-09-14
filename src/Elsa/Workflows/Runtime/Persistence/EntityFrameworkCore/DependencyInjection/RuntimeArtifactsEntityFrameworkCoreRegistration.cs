@@ -49,7 +49,7 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                 options.ConnectionString,
                 options.ConnectionName,
                 RuntimeArtifactEfModule.DefaultSqliteConnectionString);
-            existingBackend?.RemoveOwnedArtifacts(services);
+            var commitExistingBackendRemoval = existingBackend?.PrepareRemoveOwnedArtifacts(services);
             services.AddOptions<RuntimeRecoveryContinuationOptions>()
                 .Configure(options => options.AllowEphemeralDevelopmentKey = false);
             services.TryAddSingleton<IRuntimeRecoveryContinuationCodec, HmacRuntimeRecoveryContinuationCodec>();
@@ -98,6 +98,7 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                 RuntimeArtifactStoreBackend.CaptureArtifactSurfaceRegistrations(services)
                     .Concat(ownedInfrastructure)
                     .ToArray()));
+            commitExistingBackendRemoval?.Invoke(services);
             return services;
         }
         catch

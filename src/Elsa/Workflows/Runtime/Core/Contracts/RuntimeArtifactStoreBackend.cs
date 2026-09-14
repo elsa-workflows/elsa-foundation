@@ -97,11 +97,28 @@ public sealed class RuntimeArtifactStoreBackend
 
     public void RemoveOwnedArtifacts(IServiceCollection services)
     {
+        var snapshot = services.ToArray();
+        var commit = PrepareRemoveOwnedArtifacts(services);
+        try
+        {
+            commit?.Invoke(services);
+        }
+        catch
+        {
+            services.Clear();
+            foreach (var descriptor in snapshot)
+                services.Add(descriptor);
+            throw;
+        }
+    }
+
+    /// <summary>Removes owned descriptors and returns cleanup to invoke after replacement validation succeeds.</summary>
+    public Action<IServiceCollection>? PrepareRemoveOwnedArtifacts(IServiceCollection services)
+    {
         EnsureOwnsRegisteredContracts(services);
         var snapshot = services.ToArray();
         try
         {
-            removeOwnedArtifacts?.Invoke(services);
             foreach (var descriptor in descriptors)
                 services.Remove(descriptor);
             for (var index = services.Count - 1; index >= 0; index--)
@@ -109,6 +126,7 @@ public sealed class RuntimeArtifactStoreBackend
                 if (ReferenceEquals(services[index].ImplementationInstance, this))
                     services.RemoveAt(index);
             }
+            return removeOwnedArtifacts;
         }
         catch
         {

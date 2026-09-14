@@ -5,8 +5,10 @@ using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Groundwork.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -212,6 +214,57 @@ public sealed class GroundworkV2RuntimeRegistrationTests
     }
 
     [Fact]
+    public void Ef_replacement_failure_preserves_groundwork_unit_declarations()
+    {
+        var source = new ServiceCollection();
+        source.AddWorkflowRuntime();
+        source.AddGroundworkV2RuntimeStores(targetName: "runtime");
+        var services = new ThrowingServiceCollection(descriptor =>
+            descriptor.ServiceType == typeof(RuntimeArtifactStoreBackend) &&
+            descriptor.ImplementationInstance is RuntimeArtifactStoreBackend backend &&
+            backend.Name == RuntimeArtifactStoreBackend.EntityFramework);
+        services.DisableThrowing();
+        foreach (var descriptor in source)
+            services.Add(descriptor);
+        services.EnableThrowing();
+        var before = services.ToArray();
+        var registry = Assert.IsType<GroundworkStorageUnitRegistry>(services.Single(descriptor =>
+            descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance);
+        var beforeIds = registry.Registrations.Select(registration => registration.Unit.Id.Value).ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(new()));
+
+        Assert.Equal(before, services);
+        Assert.Equal(beforeIds, registry.Registrations.Select(registration => registration.Unit.Id.Value));
+    }
+
+    [Fact]
+    public void Groundwork_replacement_failure_after_withdraw_preserves_unit_declarations()
+    {
+        var source = new ServiceCollection();
+        source.AddGroundworkV2RuntimeStores(targetName: "runtime");
+        var throwOnce = true;
+        var services = new ThrowingServiceCollection(descriptor =>
+            descriptor.ServiceType == typeof(RuntimeArtifactStoreBackend) &&
+            descriptor.ImplementationInstance is RuntimeArtifactStoreBackend backend &&
+            backend.Name == RuntimeArtifactStoreBackend.Groundwork &&
+            Interlocked.Exchange(ref throwOnce, false));
+        services.DisableThrowing();
+        foreach (var descriptor in source)
+            services.Add(descriptor);
+        services.EnableThrowing();
+        var before = services.ToArray();
+        var registry = Assert.IsType<GroundworkStorageUnitRegistry>(services.Single(descriptor =>
+            descriptor.ServiceType == typeof(GroundworkStorageUnitRegistry)).ImplementationInstance);
+        var beforeIds = registry.Registrations.Select(registration => registration.Unit.Id.Value).ToArray();
+
+        Assert.Throws<InvalidOperationException>(() => services.AddGroundworkV2RuntimeStores(targetName: "runtime"));
+
+        Assert.Equal(before, services);
+        Assert.Equal(beforeIds, registry.Registrations.Select(registration => registration.Unit.Id.Value));
+    }
+
+    [Fact]
     public void Named_public_provider_composition_resolves_cache_modes_and_atomic_durability_evidence()
     {
         using var connection = new SqliteProviderFactory().Create("Data Source=:memory:");
@@ -260,13 +313,14 @@ public sealed class GroundworkV2RuntimeRegistrationTests
     private sealed class ThrowingServiceCollection(Func<ServiceDescriptor, bool> shouldThrow) : IServiceCollection
     {
         private readonly List<ServiceDescriptor> descriptors = [];
+        private bool throwing = true;
 
         public ServiceDescriptor this[int index] { get => descriptors[index]; set => descriptors[index] = value; }
         public int Count => descriptors.Count;
         public bool IsReadOnly => false;
         public void Add(ServiceDescriptor item)
         {
-            if (shouldThrow(item))
+            if (throwing && shouldThrow(item))
                 throw new InvalidOperationException("synthetic service registration failure");
             descriptors.Add(item);
         }
@@ -277,12 +331,14 @@ public sealed class GroundworkV2RuntimeRegistrationTests
         public int IndexOf(ServiceDescriptor item) => descriptors.IndexOf(item);
         public void Insert(int index, ServiceDescriptor item)
         {
-            if (shouldThrow(item))
+            if (throwing && shouldThrow(item))
                 throw new InvalidOperationException("synthetic service registration failure");
             descriptors.Insert(index, item);
         }
         public bool Remove(ServiceDescriptor item) => descriptors.Remove(item);
         public void RemoveAt(int index) => descriptors.RemoveAt(index);
+        public void DisableThrowing() => throwing = false;
+        public void EnableThrowing() => throwing = true;
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }
