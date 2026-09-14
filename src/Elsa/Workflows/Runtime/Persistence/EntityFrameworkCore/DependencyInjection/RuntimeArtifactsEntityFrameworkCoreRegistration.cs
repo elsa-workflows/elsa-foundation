@@ -27,6 +27,11 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                 throw new InvalidOperationException("Runtime artifacts EF persistence is already registered with different provider options.");
             return services;
         }
+        var existingBackend = RuntimeArtifactStoreBackend.Find(services);
+        if (existingBackend is not null)
+            existingBackend.RemoveOwnedArtifacts(services);
+        else if (HasArtifactContractRegistration(services))
+            throw new InvalidOperationException("An explicit runtime artifact store registration is already present; Runtime artifact EF persistence refuses to replace it implicitly.");
         var provider = EfRelationalProviderBinding.Normalize(options.Provider);
         _ = EfRelationalProviderBinding.ExpectedProviderName(options.Provider);
         services.AddOptions<RuntimeRecoveryContinuationOptions>()
@@ -63,13 +68,6 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
             default:
                 throw new ArgumentException($"Unknown Runtime artifacts EF provider '{options.Provider}'.", nameof(options));
         }
-        EnsureReplaceable<IWorkflowExecutableStore>(services);
-        EnsureReplaceable<IExecutableActivityTemplateStore>(services);
-        EnsureReplaceable<IWorkflowExecutableSourceReferenceStore>(services);
-        EnsureReplaceable<IExecutableActivityTemplateReader>(services);
-        EnsureReplaceable<IExecutableActivityTemplateWriter>(services);
-        EnsureReplaceable<IWorkflowExecutableSourceReferenceReader>(services);
-        EnsureReplaceable<IWorkflowExecutableSourceReferenceWriter>(services);
         services.RemoveAll<EfWorkflowExecutableStore>();
         services.RemoveAll<EfExecutableActivityTemplateStore>();
         services.RemoveAll<EfWorkflowExecutableSourceReferenceStore>();
@@ -90,22 +88,30 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
         services.AddScoped<IWorkflowExecutableSourceReferenceStore>(p => p.GetRequiredService<EfWorkflowExecutableSourceReferenceStore>());
         services.AddScoped<IWorkflowExecutableSourceReferenceReader>(p => p.GetRequiredService<EfWorkflowExecutableSourceReferenceStore>());
         services.AddScoped<IWorkflowExecutableSourceReferenceWriter>(p => p.GetRequiredService<EfWorkflowExecutableSourceReferenceStore>());
+        RuntimeArtifactStoreBackend.Register(services, new RuntimeArtifactStoreBackend(
+            RuntimeArtifactStoreBackend.EntityFramework,
+            services.Where(descriptor => descriptor.ServiceType is
+                { } serviceType && (serviceType == typeof(EfWorkflowExecutableStore) ||
+                                    serviceType == typeof(EfExecutableActivityTemplateStore) ||
+                                    serviceType == typeof(EfWorkflowExecutableSourceReferenceStore) ||
+                                    serviceType == typeof(IWorkflowExecutableStore) ||
+                                    serviceType == typeof(IExecutableActivityTemplateStore) ||
+                                    serviceType == typeof(IExecutableActivityTemplateReader) ||
+                                    serviceType == typeof(IExecutableActivityTemplateWriter) ||
+                                    serviceType == typeof(IWorkflowExecutableSourceReferenceStore) ||
+                                    serviceType == typeof(IWorkflowExecutableSourceReferenceReader) ||
+                                    serviceType == typeof(IWorkflowExecutableSourceReferenceWriter)))
+                .ToArray()));
         return services;
     }
     public static IServiceCollection AddRuntimeExecutableArtifactsEntityFrameworkCore(this IServiceCollection services, RuntimeArtifactsEntityFrameworkCoreOptions options) => services.AddRuntimeArtifactsEntityFrameworkCore(options);
     private static void AddContext<T>(IServiceCollection services, RuntimeArtifactsEntityFrameworkCoreOptions options, Action<DbContextOptionsBuilder, string, string, string?> bind) where T : BookmarkStateDbContext
     { services.AddDbContext<T>((provider, builder) => bind(builder, Resolve(provider, options), RuntimeArtifactEfModule.HistoryTableName, typeof(BookmarkStateDbContext).Assembly.GetName().Name)); services.TryAddScoped<BookmarkStateDbContext>(p => p.GetRequiredService<T>()); }
     private static string Resolve(IServiceProvider provider, RuntimeArtifactsEntityFrameworkCoreOptions options) { if (!string.IsNullOrWhiteSpace(options.ConnectionString)) return options.ConnectionString!; var cfg = provider.GetService<IConfiguration>(); if (!string.IsNullOrWhiteSpace(options.ConnectionName)) return cfg?.GetConnectionString(options.ConnectionName!) ?? throw new InvalidOperationException($"Runtime artifacts EF connection '{options.ConnectionName}' was not found."); var fallback = cfg?.GetConnectionString(RuntimeArtifactEfModule.DefaultConnectionName); if (!string.IsNullOrWhiteSpace(fallback)) return fallback!; if (EfRelationalProviderBinding.Normalize(options.Provider) == "sqlite") return RuntimeArtifactEfModule.DefaultSqliteConnectionString; throw new InvalidOperationException("Runtime artifacts EF requires ConnectionString or ConnectionName for a non-Sqlite provider."); }
-    private static void EnsureReplaceable<T>(IServiceCollection services)
-    {
-        var descriptors = services.Where(x => x.ServiceType == typeof(T)).ToArray();
-        if (descriptors.Any(x => x.ImplementationInstance is not null) ||
-            descriptors.Any(x => x.ImplementationType is not null && x.ImplementationType != typeof(InMemoryWorkflowExecutableStore) && x.ImplementationType != typeof(InMemoryExecutableActivityTemplateStore) && x.ImplementationType != typeof(InMemoryWorkflowExecutableSourceReferenceStore) && !x.ImplementationType.Namespace?.StartsWith("Elsa.Persistence.Groundwork", StringComparison.Ordinal) == true) ||
-            descriptors.Any(x => x.ImplementationFactory is not null && !x.ImplementationFactory.Method.DeclaringType?.Namespace?.StartsWith("Elsa.Persistence.Groundwork", StringComparison.Ordinal) == true))
-            throw new InvalidOperationException($"An explicit {typeof(T).Name} is already registered; Runtime artifact EF persistence refuses to replace it implicitly.");
-        foreach (var descriptor in descriptors)
-            services.Remove(descriptor);
-    }
+    private static bool HasArtifactContractRegistration(IServiceCollection services) => services.Any(descriptor =>
+        descriptor.ServiceType == typeof(IWorkflowExecutableStore) ||
+        descriptor.ServiceType == typeof(IExecutableActivityTemplateStore) ||
+        descriptor.ServiceType == typeof(IWorkflowExecutableSourceReferenceStore));
 }
 public sealed class RuntimeArtifactsEntityFrameworkCoreOptions
 {

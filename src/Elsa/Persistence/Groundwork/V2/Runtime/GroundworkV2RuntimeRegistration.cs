@@ -40,6 +40,7 @@ public static class GroundworkV2RuntimeRegistration
         var target = BindRuntimeTarget(services, targetName);
 
         services.AddPersistenceCore();
+        ReplaceExistingArtifactBackend(services);
         // Recovery cursors may outlive this process or be consumed by another node. Groundwork therefore refuses
         // the runtime core's development-only ephemeral signer unless the host supplies RuntimeRecoveryContinuationOptions.SigningKey.
         services.AddOptions<RuntimeRecoveryContinuationOptions>()
@@ -154,6 +155,7 @@ public static class GroundworkV2RuntimeRegistration
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2DispatchStoreDurabilityEvidence>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2OutboxDurabilityEvidence>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkV2SchedulerDurabilityEvidence>());
+        RegisterArtifactBackend(services);
         return services;
     }
 
@@ -290,6 +292,44 @@ public static class GroundworkV2RuntimeRegistration
             throw new InvalidOperationException("The Groundwork bookmark backend no longer exclusively owns its concrete implementation registration.");
 
         services.Remove(ownedStoreRegistration);
+    }
+
+    private static void ReplaceExistingArtifactBackend(IServiceCollection services)
+    {
+        var existing = RuntimeArtifactStoreBackend.Find(services);
+        if (existing is not null)
+        {
+            existing.RemoveOwnedArtifacts(services);
+            return;
+        }
+
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(IWorkflowExecutableStore) ||
+                                      descriptor.ServiceType == typeof(IExecutableActivityTemplateStore) ||
+                                      descriptor.ServiceType == typeof(IWorkflowExecutableSourceReferenceStore)))
+            throw new InvalidOperationException("An explicit runtime artifact store registration is already present; Groundwork refuses to replace it implicitly.");
+    }
+
+    private static void RegisterArtifactBackend(IServiceCollection services)
+    {
+        var contracts = new[]
+        {
+            typeof(GroundworkV2WorkflowExecutableStore),
+            typeof(CachingWorkflowExecutableStore),
+            typeof(InvalidatingWorkflowExecutableStore),
+            typeof(WorkflowExecutableCache),
+            typeof(GroundworkV2WorkflowExecutableCacheLoader),
+            typeof(WorkflowExecutableCacheOptions),
+            typeof(IWorkflowExecutableStore),
+            typeof(IExecutableActivityTemplateStore),
+            typeof(IExecutableActivityTemplateReader),
+            typeof(IExecutableActivityTemplateWriter),
+            typeof(IWorkflowExecutableSourceReferenceStore),
+            typeof(IWorkflowExecutableSourceReferenceReader),
+            typeof(IWorkflowExecutableSourceReferenceWriter)
+        };
+        RuntimeArtifactStoreBackend.Register(services, new RuntimeArtifactStoreBackend(
+            RuntimeArtifactStoreBackend.Groundwork,
+            services.Where(descriptor => contracts.Contains(descriptor.ServiceType)).ToArray()));
     }
 }
 

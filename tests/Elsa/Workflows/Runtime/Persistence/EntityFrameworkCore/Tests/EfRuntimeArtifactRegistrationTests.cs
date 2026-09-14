@@ -129,6 +129,38 @@ public sealed class EfRuntimeArtifactRegistrationTests
     }
 
     [Fact]
+    public void Artifact_registration_resolves_the_owned_context_and_every_store_projection_in_scope()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddOptions<RuntimeRecoveryContinuationOptions>()
+            .Configure(options => options.SigningKey = SigningKey);
+        services.AddRuntimeArtifactsEntityFrameworkCore(new RuntimeArtifactsEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        });
+
+        using var provider = services.BuildServiceProvider(validateScopes: true);
+        using var scope = provider.CreateScope();
+        var serviceProvider = scope.ServiceProvider;
+
+        Assert.IsType<BookmarkStateSqliteDbContext>(serviceProvider.GetRequiredService<BookmarkStateDbContext>());
+
+        var executableStore = serviceProvider.GetRequiredService<IWorkflowExecutableStore>();
+        var templateStore = serviceProvider.GetRequiredService<IExecutableActivityTemplateStore>();
+        var sourceReferenceStore = serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
+
+        Assert.IsType<EfWorkflowExecutableStore>(executableStore);
+        Assert.Same(templateStore, serviceProvider.GetRequiredService<IExecutableActivityTemplateReader>());
+        Assert.Same(templateStore, serviceProvider.GetRequiredService<IExecutableActivityTemplateWriter>());
+        Assert.IsType<EfExecutableActivityTemplateStore>(templateStore);
+        Assert.Same(sourceReferenceStore, serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceReader>());
+        Assert.Same(sourceReferenceStore, serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceWriter>());
+        Assert.IsType<EfWorkflowExecutableSourceReferenceStore>(sourceReferenceStore);
+    }
+
+    [Fact]
     public void Bookmark_feature_can_be_extended_without_replacing_its_registration_contract()
     {
         var feature = new ExtensibleBookmarksFeature();

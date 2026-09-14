@@ -38,6 +38,13 @@ public static class GroundworkV2RuntimeMaterialRegistration
         string? targetName = null)
     {
         ArgumentNullException.ThrowIfNull(services);
+        var existingBackend = RuntimeArtifactStoreBackend.Find(services);
+        if (existingBackend is not null)
+            existingBackend.RemoveOwnedArtifacts(services);
+        else if (services.Any(descriptor => descriptor.ServiceType == typeof(IWorkflowExecutableStore) ||
+                                            descriptor.ServiceType == typeof(IExecutableActivityTemplateStore) ||
+                                            descriptor.ServiceType == typeof(IWorkflowExecutableSourceReferenceStore)))
+            throw new InvalidOperationException("An explicit runtime artifact store registration is already present; Groundwork refuses to replace it implicitly.");
         foreach (var unitId in UnitIds)
             services.AddGroundworkStorageUnit(ElsaRuntimeV2StorageManifest.Require(unitId), targetName);
 
@@ -79,6 +86,18 @@ public static class GroundworkV2RuntimeMaterialRegistration
             provider.GetRequiredService<GroundworkV2WorkflowExecutableSourceReferenceStore>());
         services.AddScoped<IWorkflowExecutableSourceReferenceWriter>(provider =>
             provider.GetRequiredService<GroundworkV2WorkflowExecutableSourceReferenceStore>());
+        RuntimeArtifactStoreBackend.Register(services, new RuntimeArtifactStoreBackend(
+            RuntimeArtifactStoreBackend.Groundwork,
+            services.Where(descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowExecutableStore) ||
+                                         descriptor.ServiceType == typeof(GroundworkV2ExecutableActivityTemplateStore) ||
+                                         descriptor.ServiceType == typeof(GroundworkV2WorkflowExecutableSourceReferenceStore) ||
+                                         descriptor.ServiceType == typeof(IWorkflowExecutableStore) ||
+                                         descriptor.ServiceType == typeof(IExecutableActivityTemplateStore) ||
+                                         descriptor.ServiceType == typeof(IExecutableActivityTemplateReader) ||
+                                         descriptor.ServiceType == typeof(IExecutableActivityTemplateWriter) ||
+                                         descriptor.ServiceType == typeof(IWorkflowExecutableSourceReferenceStore) ||
+                                         descriptor.ServiceType == typeof(IWorkflowExecutableSourceReferenceReader) ||
+                                         descriptor.ServiceType == typeof(IWorkflowExecutableSourceReferenceWriter)).ToArray()));
         return services;
     }
 

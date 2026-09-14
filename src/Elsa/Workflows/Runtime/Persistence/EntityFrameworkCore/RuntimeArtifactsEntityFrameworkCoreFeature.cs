@@ -17,8 +17,23 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
     DependsOn = new object[] { "WorkflowsRuntime" })]
 public class RuntimeArtifactsEntityFrameworkCoreFeature : IShellFeature
 {
+    [ManifestSetting(
+        DisplayName = "Provider",
+        Description = "Relational provider for the Runtime artifact DbContext: Sqlite, SqlServer, PostgreSql, or MySql. The host must reference that provider package; this feature does not provision schema.",
+        Category = "Persistence")]
     public string? Provider { get; set; }
+
+    [ManifestSetting(
+        DisplayName = "Connection string",
+        Description = "Optional explicit connection string. When omitted, ConnectionName or ConnectionStrings:ElsaRuntimeArtifacts is used. Sqlite defaults to Data Source=elsa-runtime-artifacts.db.",
+        Category = "Persistence",
+        Secret = true)]
     public string? ConnectionString { get; set; }
+
+    [ManifestSetting(
+        DisplayName = "Connection name",
+        Description = "Optional configuration connection-string name. When omitted, ElsaRuntimeArtifacts is used.",
+        Category = "Persistence")]
     public string? ConnectionName { get; set; }
     [ManifestSetting(
         DisplayName = "Recovery continuation signing key",

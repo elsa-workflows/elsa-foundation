@@ -598,6 +598,7 @@ A handler that must not gain pipeline dispatch (the resume handler) implements t
 - **Signature:** `SaveAsync(WorkflowExecutable executable, ...)`, unconditional `DeleteAsync(string artifactId, ...)`, guarded `DeleteAsync(WorkflowExecutableDeletionGuard, now, ...)`, root-write lease acquire/renew/release, deletion-guard begin/cancel, `FindAsync(string artifactId, ...)`, and `ListAsync(...)`.
 - **Usage:** stores and retrieves runtime-owned immutable `WorkflowExecutable` artifacts by content-addressed artifact ID. Publishing writes artifacts through this contract; runtime start, resume, and scheduler paths read them without loading Design-owned workflow state. Mutable source-reference publication, retirement, scope, and expiry checks remain outside this store and authoritative.
 - **Default implementation:** `InMemoryWorkflowExecutableStore` *(single-process default)*. Groundwork supplies `GroundworkWorkflowExecutableStore` as a keyed backend; SQLite reference features select a bounded `CachingWorkflowExecutableStore`, while PostgreSQL/distributed and legacy direct registrations preserve direct reads by default. The cache coalesces same-ID misses, retains only positive provider results, invalidates on save/unconditional delete and successful guarded delete, and never populates from `ListAsync`. Root-write lease and deletion-guard transitions pass through to the provider unchanged; custom providers can replace the keyed backend without a concrete dependency.
+- **EF Core implementation:** `EfWorkflowExecutableStore` *(opt-in `WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence`; provider contexts and entities are owned by the Runtime persistence leaf)*.
 - **Durable-provider controls:** `CacheWorkflowExecutables` defaults to `true` for SQLite and `false` for PostgreSQL/distributed features; `WorkflowExecutableCacheCapacity` defaults to `256` positive artifacts per shell/provider. Disable caching to restore direct durable reads. Telemetry reports bounded hit/miss, eviction reason, and provider-load outcome/duration dimensions without workflow or artifact IDs. Cache state and mutation invalidation are process-local; PostgreSQL hosts must explicitly opt in with an accepted immutable-retention/invalidation policy.
 
 ### `WorkflowExecutableStoreDecorator` *(Core — `Elsa.Workflows.Runtime.Core`)*
@@ -610,12 +611,14 @@ A handler that must not gain pipeline dispatch (the resume handler) implements t
 - **Signature:** find by template id or behavior hash, list, save, and delete unreferenced templates.
 - **Usage:** Publishing compiles provider-neutral activity versions into `ExecutableActivityTemplate` artifacts. Workflow artifacts pin exact template identities and closed dependency sets; Runtime loads only these artifacts and never falls back to Design state. Equal canonical behavior can share a template even when source version labels differ.
 - **Default implementation:** `InMemoryExecutableActivityTemplateStore`; Groundwork replaces it for durable hosts.
+- **EF Core implementation:** `EfExecutableActivityTemplateStore` *(opt-in `WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence`; provider contexts and entities are owned by the Runtime persistence leaf)*.
 
 ### `IWorkflowExecutableSourceReferenceStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns source/version/publication references to content-addressed workflow and activity artifacts).
 - **Signature:** find/list by source reference or artifact, save, retire/delete, and discover unreferenced artifacts.
 - **Usage:** keeps mutable lifecycle, retention, expiry, and layout sidecars outside immutable behavior artifacts. Source-owned CLR reconciliation creates a distinct source reference per definition version even when versions share one template hash. Runtime start pins the exact referenced artifact; garbage collection follows live references.
 - **Default implementation:** `InMemoryWorkflowExecutableSourceReferenceStore`; Groundwork replaces it for durable hosts.
+- **EF Core implementation:** `EfWorkflowExecutableSourceReferenceStore` *(opt-in `WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence`; provider contexts and entities are owned by the Runtime persistence leaf)*.
 
 ### `IActivityExecutionHierarchyStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement read/write surface for checkpoint-committed activity execution hierarchy and composite-boundary layout.

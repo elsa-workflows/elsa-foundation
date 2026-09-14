@@ -122,6 +122,15 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IWorkflowArtifactClosureSerializer, WorkflowArtifactClosureSerializer>();
         services.TryAddSingleton<IExecutableActivityTemplateStore, InMemoryExecutableActivityTemplateStore>();
         services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
+        if (RuntimeArtifactStoreBackend.Find(services) is null)
+        {
+            var defaultArtifactDescriptors = services.Where(descriptor =>
+                descriptor.ServiceType == typeof(IWorkflowExecutableStore) && descriptor.ImplementationType == typeof(InMemoryWorkflowExecutableStore) ||
+                descriptor.ServiceType == typeof(IExecutableActivityTemplateStore) && descriptor.ImplementationType == typeof(InMemoryExecutableActivityTemplateStore) ||
+                descriptor.ServiceType == typeof(IWorkflowExecutableSourceReferenceStore) && descriptor.ImplementationType == typeof(InMemoryWorkflowExecutableSourceReferenceStore)).ToArray();
+            if (defaultArtifactDescriptors.Length == 3)
+                RuntimeArtifactStoreBackend.Register(services, new RuntimeArtifactStoreBackend(RuntimeArtifactStoreBackend.InMemory, defaultArtifactDescriptors));
+        }
         services.AddOptions<ActivityExecutionHierarchyCursorOptions>();
         services.TryAddSingleton<IActivityExecutionHierarchyCursorCodec, HmacActivityExecutionHierarchyCursorCodec>();
         services.AddOptions<RuntimeRecoveryContinuationOptions>();
