@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
@@ -28,14 +29,12 @@ public sealed class ExcludingJsonTypeInfoResolver : IJsonTypeInfoResolver
         if (typeInfo?.Kind != JsonTypeInfoKind.Object)
             return typeInfo;
 
-        foreach (var property in typeInfo.Properties)
+        foreach (var property in typeInfo.Properties.Where(property =>
+                     excludedMembers.Contains(property.Name) ||
+                     property.AttributeProvider is PropertyInfo member &&
+                     excludedMembers.Contains(member.Name)))
         {
-            if (excludedMembers.Contains(property.Name) ||
-                property.AttributeProvider is PropertyInfo member &&
-                excludedMembers.Contains(member.Name))
-            {
-                property.ShouldSerialize = static (_, _) => false;
-            }
+            property.ShouldSerialize = static (_, _) => false;
         }
 
         return typeInfo;

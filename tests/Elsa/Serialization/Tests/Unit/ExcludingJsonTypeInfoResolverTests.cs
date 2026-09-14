@@ -30,6 +30,25 @@ public sealed class ExcludingJsonTypeInfoResolverTests
     }
 
     [Fact]
+    public void Constructor_throws_when_excluded_members_is_null()
+    {
+        var exception = Assert.Throws<ArgumentNullException>(() => new ExcludingJsonTypeInfoResolver(null!));
+
+        Assert.Equal("excludedMembers", exception.ParamName);
+    }
+
+    [Fact]
+    public void GetTypeInfo_returns_null_when_inner_returns_null()
+    {
+        var resolver = new ExcludingJsonTypeInfoResolver(["Secret"], new NullResolver());
+        var options = new JsonSerializerOptions { TypeInfoResolver = resolver };
+
+        var typeInfo = resolver.GetTypeInfo(typeof(NamedSample), options);
+
+        Assert.Null(typeInfo);
+    }
+
+    [Fact]
     public void Non_object_json_type_info_kind_is_unchanged()
     {
         var resolver = new ExcludingJsonTypeInfoResolver(["Length"]);
@@ -108,5 +127,10 @@ public sealed class ExcludingJsonTypeInfoResolverTests
             Calls++;
             return inner.GetTypeInfo(type, options);
         }
+    }
+
+    private sealed class NullResolver : IJsonTypeInfoResolver
+    {
+        public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options) => null;
     }
 }
