@@ -153,7 +153,7 @@ internal static class WorkflowsDesignNativeProviderSmoke
                 await context.SaveChangesAsync();
                 return null;
             }
-            catch (Exception exception)
+            catch (DbUpdateException exception)
             {
                 return exception;
             }
