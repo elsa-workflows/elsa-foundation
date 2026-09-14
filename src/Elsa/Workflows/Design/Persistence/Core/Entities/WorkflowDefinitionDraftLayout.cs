@@ -14,7 +14,13 @@ namespace Elsa.Workflows.Design.Persistence.Core.Entities;
 /// </summary>
 public sealed class WorkflowDefinitionDraftLayout : TenantEntity, IWorkflowDefinitionLayout
 {
+    /// <summary>Persistence-only exact identity hash for the raw layout id.</summary>
+    public string IdLookupHash { get; set; } = null!;
+
     public string WorkflowDefinitionDraftId { get; set; } = default!;
+
+    /// <summary>Persistence-only exact identity hash for the raw draft foreign key.</summary>
+    public string WorkflowDefinitionDraftIdLookupHash { get; set; } = null!;
 
     public WorkflowDefinitionDraft? WorkflowDefinitionDraft { get; set; }
 

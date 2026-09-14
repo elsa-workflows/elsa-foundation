@@ -52,6 +52,23 @@ public abstract class EfDesignCommand(WorkflowsDesignDbContext db, IPersistenceA
         DesignAtomicWriteStatus.Rejected => throw new InvalidOperationException($"Design operation '{operationKind}/{key.Value}' was rejected."),
         _ => throw new ArgumentOutOfRangeException(nameof(outcome.Status))
     };
+
+    protected static bool IsSemanticVersionIdentityViolation(Exception exception)
+    {
+        if (!EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+            return false;
+
+        for (var current = (Exception?)exception; current is not null; current = current.InnerException)
+        {
+            var message = current.Message;
+            if (message.Contains(WorkflowsDesignEfModule.VersionIdentityIndex, StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("DefinitionIdLookupHash", StringComparison.Ordinal) &&
+                message.Contains("SemVerSortKey", StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
+    }
 }
 
 public sealed class EfAddWorkflowDefinitionCommand(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access, IDesignAtomicWriter atomic, IPayloadSerializer serializer, IIdentityGenerator identities) : EfDesignCommand(db, access, atomic), IAddWorkflowDefinitionCommand
@@ -122,7 +139,8 @@ public sealed class EfCreateDraftCommand(WorkflowsDesignDbContext db, IPersisten
         var result = RequireOutcome(outcome, "workflow.draft.create.v1", key);
         if (outcome.ShouldPublishPostCommitOutcome && deferredEvents is not null)
         {
-            var persistedEntity = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId).SingleAsync(x => x.Id == result, CancellationToken.None);
+            var persistedEntity = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId).SingleAsync(x => x.IdLookupHash == EfDesignSupport.LookupHash(result), CancellationToken.None);
+            EfDesignSupport.EnsureExactIdentity(result, persistedEntity.Id, "workflow draft creation publication lookup");
             var persisted = EfDesignSupport.MapDraft(serializer, persistedEntity);
             await deferredEvents.Publish(new DraftCreated(persisted.Id, persisted.WorkflowDefinitionId, persisted.SourceVersionId), CancellationToken.None);
             await deferredEvents.Publish(new DraftValidated(persisted, errors), CancellationToken.None);
@@ -151,9 +169,12 @@ public sealed class EfCloneDraftFromVersionCommand(WorkflowsDesignDbContext db, 
                     await draftLock.DisposeAsync();
                     draftLock = null;
                 }
-                var source = await Scoped(Db.Versions.AsNoTracking(), x => x.TenantId).SingleOrDefaultAsync(x => x.Id == sourceVersionId, token) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionVersion), sourceVersionId);
+                var source = await Scoped(Db.Versions.AsNoTracking(), x => x.TenantId).SingleOrDefaultAsync(x => x.IdLookupHash == EfDesignSupport.LookupHash(sourceVersionId), token) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionVersion), sourceVersionId);
+                EfDesignSupport.EnsureExactIdentity(sourceVersionId, source.Id, "workflow definition version clone lookup");
                 Tenant(source.TenantId); var state = EfDesignSupport.ReadState(serializer, source.StateSource, "workflow.draft.clone-from-version.v1");
-                var layout = await Scoped(Db.VersionLayouts.AsNoTracking(), x => x.TenantId).SingleOrDefaultAsync(x => x.WorkflowDefinitionVersionId == sourceVersionId, token);
+                var layout = await Scoped(Db.VersionLayouts.AsNoTracking(), x => x.TenantId).SingleOrDefaultAsync(x => x.WorkflowDefinitionVersionIdLookupHash == EfDesignSupport.LookupHash(sourceVersionId), token);
+                if (layout is not null)
+                    EfDesignSupport.EnsureExactIdentity(sourceVersionId, layout.WorkflowDefinitionVersionId, "workflow version layout clone lookup");
                 var records = layout is null ? [] : EfDesignSupport.ReadLayout(layout.RecordsJson);
                 var presentation = layout is null ? [] : EfDesignSupport.ReadPresentation(layout.ActivityPresentationJson);
                 var id = identities.Generate(); var draft = Draft(id, source.DefinitionId, source.TenantId, state, sourceVersionId); SaveDraftState(draft, state, "workflow.draft.clone-from-version.v1");
@@ -164,7 +185,8 @@ public sealed class EfCloneDraftFromVersionCommand(WorkflowsDesignDbContext db, 
             result = RequireOutcome(outcome, "workflow.draft.clone-from-version.v1", key);
             if (outcome.ShouldPublishPostCommitOutcome && deferredEvents is not null)
             {
-                var persistedEntity = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId).SingleAsync(x => x.Id == result, CancellationToken.None);
+                var persistedEntity = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId).SingleAsync(x => x.IdLookupHash == EfDesignSupport.LookupHash(result), CancellationToken.None);
+                EfDesignSupport.EnsureExactIdentity(result, persistedEntity.Id, "workflow draft clone publication lookup");
                 var persisted = EfDesignSupport.MapDraft(serializer, persistedEntity);
                 await deferredEvents.Publish(new DraftCreated(result, persisted.WorkflowDefinitionId, persisted.SourceVersionId), CancellationToken.None);
                 await deferredEvents.Publish(new DraftValidated(persisted, errors), CancellationToken.None);
@@ -190,11 +212,11 @@ public sealed class EfAddWorkflowDefinitionVersionCommand(WorkflowsDesignDbConte
         {
             return await ExecuteCore(key, definitionId, state, ct, version => attemptedVersion = version);
         }
-        catch (DesignPersistenceException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (DesignPersistenceException exception) when (IsSemanticVersionIdentityViolation(exception))
         {
             throw new WorkflowDefinitionVersionConflictException(definitionId, attemptedVersion ?? "automatic");
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (DbUpdateException exception) when (IsSemanticVersionIdentityViolation(exception))
         {
             throw new WorkflowDefinitionVersionConflictException(definitionId, attemptedVersion ?? "automatic");
         }
@@ -267,11 +289,14 @@ public sealed class EfUpdateDraftCommand(WorkflowsDesignDbContext db, IPersisten
         var stateJson = EfDesignSupport.WriteState(serializer, request.State, "workflow.draft.replace.v1");
         var outcome = await Atomic.ExecuteAsync(key, "workflow.draft.replace.v1", new UpdateDraftRequestMaterial(request.DraftId, stateJson, EfDesignSupport.LayoutMaterial(request.Layout), EfDesignSupport.PresentationMaterial(request.ActivityPresentation ?? [])), [DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.DraftLayouts], async (_, token) =>
         {
-            var row = await Scoped(Db.Drafts, x => x.TenantId).SingleOrDefaultAsync(x => x.Id == request.DraftId, token) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionDraft), request.DraftId);
+            var row = await Scoped(Db.Drafts, x => x.TenantId).SingleOrDefaultAsync(x => x.IdLookupHash == EfDesignSupport.LookupHash(request.DraftId), token) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionDraft), request.DraftId);
+            EfDesignSupport.EnsureExactIdentity(request.DraftId, row.Id, "workflow draft update lookup");
             row.State = request.State; row.StateSource = stateJson;
             errors = inlineEvents is null ? [] : (await inlineEvents.DeriveValidationErrorsAsync(row, token)).ToArray();
             row.LastModifiedAt = Now;
-            var layout = await Scoped(Db.DraftLayouts, x => x.TenantId).SingleOrDefaultAsync(x => x.WorkflowDefinitionDraftId == request.DraftId, token);
+            var layout = await Scoped(Db.DraftLayouts, x => x.TenantId).SingleOrDefaultAsync(x => x.WorkflowDefinitionDraftIdLookupHash == EfDesignSupport.LookupHash(request.DraftId), token);
+            if (layout is not null)
+                EfDesignSupport.EnsureExactIdentity(request.DraftId, layout.WorkflowDefinitionDraftId, "workflow draft layout update lookup");
             if (layout is null) { layout = WorkflowDefinitionDraftLayout.CreateFor(new SequentialIdentityGenerator(), request.DraftId, request.Layout, request.ActivityPresentation); layout.TenantId = row.TenantId; EfDesignSupport.Stamp(layout, Now); EfDesignSupport.SetLayout(Db, layout, request.Layout, request.ActivityPresentation); Db.DraftLayouts.Add(layout); }
             else { EfDesignSupport.SetLayout(Db, layout, request.Layout, request.ActivityPresentation); layout.LastModifiedAt = Now; }
             return DesignAtomicWriteStage<bool>.Accepted(true);
@@ -279,7 +304,8 @@ public sealed class EfUpdateDraftCommand(WorkflowsDesignDbContext db, IPersisten
         RequireOutcome(outcome, "workflow.draft.replace.v1", key);
         if (outcome.ShouldPublishPostCommitOutcome && deferredEvents is not null)
         {
-            var persistedEntity = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId).SingleAsync(x => x.Id == request.DraftId, CancellationToken.None);
+            var persistedEntity = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId).SingleAsync(x => x.IdLookupHash == EfDesignSupport.LookupHash(request.DraftId), CancellationToken.None);
+            EfDesignSupport.EnsureExactIdentity(request.DraftId, persistedEntity.Id, "workflow draft update publication lookup");
             var persisted = EfDesignSupport.MapDraft(serializer, persistedEntity);
             await deferredEvents.Publish(new DraftValidated(persisted, errors), CancellationToken.None);
         }
@@ -294,9 +320,10 @@ public sealed class EfDiscardDraftCommand(WorkflowsDesignDbContext db, IPersiste
         string? definitionId = null;
         var outcome = await Atomic.ExecuteAsync(key, "workflow.draft.discard.v1", new DiscardDraftRequestMaterial(draftId), [DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.DraftLayouts], async (_, token) =>
         {
-            var row = await Scoped(Db.Drafts, x => x.TenantId).SingleOrDefaultAsync(x => x.Id == draftId, token);
+            var row = await Scoped(Db.Drafts, x => x.TenantId).SingleOrDefaultAsync(x => x.IdLookupHash == EfDesignSupport.LookupHash(draftId), token);
             if (row is null)
                 return DesignAtomicWriteStage<bool>.Accepted(false);
+            EfDesignSupport.EnsureExactIdentity(draftId, row.Id, "workflow draft discard lookup");
             definitionId = row.WorkflowDefinitionId;
             Db.Drafts.Remove(row);
             return DesignAtomicWriteStage<bool>.Accepted(true);
@@ -340,8 +367,9 @@ public sealed class EfPromoteDraftToVersionCommand(WorkflowsDesignDbContext db, 
                 async (_, token) =>
                 {
                     var draft = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId)
-                        .SingleOrDefaultAsync(x => x.Id == draftId, token)
+                        .SingleOrDefaultAsync(x => x.IdLookupHash == EfDesignSupport.LookupHash(draftId), token)
                         ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionDraft), draftId);
+                    EfDesignSupport.EnsureExactIdentity(draftId, draft.Id, "workflow draft promotion lookup");
                     draft = EfDesignSupport.MapDraft(serializer, draft);
                     if (inlineEvents is not null)
                     {
@@ -375,7 +403,9 @@ public sealed class EfPromoteDraftToVersionCommand(WorkflowsDesignDbContext db, 
                         LastModifiedAt = Now
                     };
                     var draftLayout = await Scoped(Db.DraftLayouts, x => x.TenantId)
-                        .SingleOrDefaultAsync(x => x.WorkflowDefinitionDraftId == draft.Id, token);
+                        .SingleOrDefaultAsync(x => x.WorkflowDefinitionDraftIdLookupHash == EfDesignSupport.LookupHash(draft.Id), token);
+                    if (draftLayout is not null)
+                        EfDesignSupport.EnsureExactIdentity(draft.Id, draftLayout.WorkflowDefinitionDraftId, "workflow draft layout promotion lookup");
                     var layout = new WorkflowDefinitionVersionLayout
                     {
                         Id = identities.Generate(),
@@ -406,8 +436,9 @@ public sealed class EfPromoteDraftToVersionCommand(WorkflowsDesignDbContext db, 
                     draftLock = await lockProvider.AcquireLockAsync(
                         WorkflowDesignPersistenceLockKeys.DraftKey(draftId), null, token);
                     var draft = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId)
-                        .SingleOrDefaultAsync(x => x.Id == draftId, token)
+                        .SingleOrDefaultAsync(x => x.IdLookupHash == EfDesignSupport.LookupHash(draftId), token)
                         ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionDraft), draftId);
+                    EfDesignSupport.EnsureExactIdentity(draftId, draft.Id, "workflow draft promotion lock lookup");
                     definitionLock = await lockProvider.AcquireLockAsync(
                         WorkflowDesignPersistenceLockKeys.DefinitionKey(draft.WorkflowDefinitionId), null, token);
                 },
@@ -418,13 +449,13 @@ public sealed class EfPromoteDraftToVersionCommand(WorkflowsDesignDbContext db, 
                     $"Workflow promotion operation '{key.Value}' was previously recorded with different request material.");
             return result.Value!;
         }
-        catch (DesignPersistenceException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (DesignPersistenceException exception) when (IsSemanticVersionIdentityViolation(exception))
         {
             throw new WorkflowDefinitionVersionConflictException(
                 draftId,
                 normalizedRequestedVersion ?? "automatic");
         }
-        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsUniqueConstraintViolation(exception))
+        catch (DbUpdateException exception) when (IsSemanticVersionIdentityViolation(exception))
         {
             throw new WorkflowDefinitionVersionConflictException(
                 draftId,

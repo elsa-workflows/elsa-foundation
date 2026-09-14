@@ -9,8 +9,10 @@ public sealed class EfWorkflowDefinitionVersionLayoutStore(WorkflowsDesignDbCont
 {
     public async Task<WorkflowDefinitionVersionLayout?> FindByVersionIdAsync(string workflowDefinitionVersionId, CancellationToken cancellationToken = default)
     {
-        var row = await EfDesignSupport.ReadAsync("reading workflow version layout", () => EfDesignSupport.InScope(db.VersionLayouts, access, x => x.TenantId).Where(x => x.WorkflowDefinitionVersionId == workflowDefinitionVersionId).SingleOrDefaultAsync(cancellationToken));
+        var idHash = EfDesignSupport.LookupHash(workflowDefinitionVersionId);
+        var row = await EfDesignSupport.ReadAsync("reading workflow version layout", () => EfDesignSupport.InScope(db.VersionLayouts, access, x => x.TenantId).Where(x => x.WorkflowDefinitionVersionIdLookupHash == idHash).SingleOrDefaultAsync(cancellationToken));
         if (row is null) return null;
+        EfDesignSupport.EnsureExactIdentity(workflowDefinitionVersionId, row.WorkflowDefinitionVersionId, "workflow version layout lookup");
         var records = EfDesignSupport.ReadLayout(row.RecordsJson);
         var presentation = EfDesignSupport.ReadPresentation(row.ActivityPresentationJson);
         return new WorkflowDefinitionVersionLayout { Id = row.Id, TenantId = row.TenantId, WorkflowDefinitionVersionId = row.WorkflowDefinitionVersionId, CreatedAt = row.CreatedAt, LastModifiedAt = row.LastModifiedAt, Records = records, ActivityPresentation = presentation };

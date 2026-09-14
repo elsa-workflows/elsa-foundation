@@ -58,9 +58,9 @@ internal static class WorkflowsDesignNativeProviderSmoke
         var definitionId = $"provider-definition-{Guid.NewGuid():N}";
         var trailingDefinitionId = definitionId + " ";
         var versionId = $"provider-version-{Guid.NewGuid():N}";
-        var trailingVersionId = versionId + "-trailing";
+        var trailingVersionId = versionId + " ";
         var draftId = $"provider-draft-{Guid.NewGuid():N}";
-        var trailingDraftId = draftId + "-trailing";
+        var trailingDraftId = draftId + " ";
         var access = new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
 
         await using (var context = createContext(fixture.ConnectionString))
@@ -103,6 +103,8 @@ internal static class WorkflowsDesignNativeProviderSmoke
                 });
             await context.SaveChangesAsync();
             var versions = new EfWorkflowDefinitionVersionStore(context, new NativeProviderSerializer(), definitions, access);
+            Assert.Equal(versionId, (await versions.FindByIdAsync(versionId))!.Id);
+            Assert.Equal(trailingVersionId, (await versions.FindByIdAsync(trailingVersionId))!.Id);
             Assert.Equal(versionId, (await versions.FindLatestVersionAsync(definitionId))!.Id);
             Assert.Equal(trailingVersionId, (await versions.FindLatestVersionAsync(trailingDefinitionId))!.Id);
 
@@ -118,17 +120,38 @@ internal static class WorkflowsDesignNativeProviderSmoke
                     Id = trailingDraftId, TenantId = tenant, WorkflowDefinitionId = trailingDefinitionId, StateSource = "{}",
                     CreatedAt = Now, LastModifiedAt = Now
                 });
-            var layout = new WorkflowDefinitionVersionLayout
-            {
-                Id = $"provider-layout-{Guid.NewGuid():N}", TenantId = tenant, WorkflowDefinitionVersionId = versionId,
-                CreatedAt = Now, LastModifiedAt = Now
-            };
-            context.VersionLayouts.Add(layout);
+            context.DraftLayouts.AddRange(
+                new WorkflowDefinitionDraftLayout
+                {
+                    Id = $"provider-draft-layout-{Guid.NewGuid():N}", TenantId = tenant, WorkflowDefinitionDraftId = draftId,
+                    CreatedAt = Now, LastModifiedAt = Now
+                },
+                new WorkflowDefinitionDraftLayout
+                {
+                    Id = $"provider-draft-layout-{Guid.NewGuid():N} ", TenantId = tenant, WorkflowDefinitionDraftId = trailingDraftId,
+                    CreatedAt = Now, LastModifiedAt = Now
+                });
+            context.VersionLayouts.AddRange(
+                new WorkflowDefinitionVersionLayout
+                {
+                    Id = $"provider-layout-{Guid.NewGuid():N}", TenantId = tenant, WorkflowDefinitionVersionId = versionId,
+                    CreatedAt = Now, LastModifiedAt = Now
+                },
+                new WorkflowDefinitionVersionLayout
+                {
+                    Id = $"provider-layout-{Guid.NewGuid():N} ", TenantId = tenant, WorkflowDefinitionVersionId = trailingVersionId,
+                    CreatedAt = Now, LastModifiedAt = Now
+                });
             await context.SaveChangesAsync();
             var drafts = new EfWorkflowDefinitionDraftStore(context, new NativeProviderSerializer(), access);
+            Assert.Equal(draftId, (await drafts.FindByIdAsync(draftId))!.Id);
+            Assert.Equal(trailingDraftId, (await drafts.FindByIdAsync(trailingDraftId))!.Id);
             Assert.Equal(draftId, (await drafts.FindByWorkflowDefinitionIdAsync(definitionId))!.Id);
             Assert.Equal(trailingDraftId, (await drafts.FindByWorkflowDefinitionIdAsync(trailingDefinitionId))!.Id);
+            Assert.Equal(draftId, (await drafts.FindWithLayoutByIdAsync(draftId))!.Draft.Id);
+            Assert.Equal(trailingDraftId, (await drafts.FindWithLayoutByIdAsync(trailingDraftId))!.Draft.Id);
             Assert.NotNull(await new EfWorkflowDefinitionVersionLayoutStore(context, access).FindByVersionIdAsync(versionId));
+            Assert.NotNull(await new EfWorkflowDefinitionVersionLayoutStore(context, access).FindByVersionIdAsync(trailingVersionId));
 
             // W05: the operation ledger commits atomically with its staged mutation and replays.
             var writer = new EfDesignAtomicWriter(context, access);

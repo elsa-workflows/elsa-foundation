@@ -13,5 +13,6 @@ public static class WorkflowsDesignEfModule
     public const string DraftLayoutTable = "elsa_workflow_definition_draft_layouts";
     public const string VersionLayoutTable = "elsa_workflow_definition_version_layouts";
     public const string OperationTable = "elsa_design_operations";
+    public const string VersionIdentityIndex = "UX_elsa_workflow_definition_versions_semver_identity";
     public static string HistoryTableName => EfMigrationsHistory.TableName(HistoryModuleName);
 }

@@ -53,6 +53,15 @@ internal static class EfDesignSupport
             $"The {operation} returned a row whose workflow-definition identity does not match the requested identity.");
     }
 
+    public static void EnsureExactIdentity(string requestedId, string? actualId, string operation)
+    {
+        if (actualId is not null && StringComparer.Ordinal.Equals(actualId, requestedId))
+            return;
+
+        throw new InvalidOperationException(
+            $"The {operation} returned a row whose exact identity does not match the requested identity.");
+    }
+
     public static void EnsureDefinitionIdentityInSet(
         IEnumerable<string> requestedIds,
         string? actualId,

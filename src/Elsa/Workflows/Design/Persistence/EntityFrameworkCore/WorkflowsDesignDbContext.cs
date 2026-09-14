@@ -62,6 +62,7 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
             ValidateIdentity(entry.Entity.Version, nameof(WorkflowDefinitionVersion.Version));
             ValidateIdentity(entry.Entity.SemVerSortKey, nameof(WorkflowDefinitionVersion.SemVerSortKey));
             ValidateOptionalIdentity(entry.Entity.SourceDraftId, nameof(WorkflowDefinitionVersion.SourceDraftId));
+            entry.Entity.IdLookupHash = Stores.EfDesignSupport.LookupHash(entry.Entity.Id);
             entry.Entity.DefinitionIdLookupHash = Stores.EfDesignSupport.LookupHash(Stores.EfDesignSupport.SearchKey(entry.Entity.DefinitionId));
         }
         foreach (var entry in ChangeTracker.Entries<WorkflowDefinitionDraft>()
@@ -71,6 +72,7 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
             ValidateOptionalIdentity(entry.Entity.TenantId, nameof(WorkflowDefinitionDraft.TenantId));
             ValidateIdentity(entry.Entity.WorkflowDefinitionId, nameof(WorkflowDefinitionDraft.WorkflowDefinitionId));
             ValidateOptionalIdentity(entry.Entity.SourceVersionId, nameof(WorkflowDefinitionDraft.SourceVersionId));
+            entry.Entity.IdLookupHash = Stores.EfDesignSupport.LookupHash(entry.Entity.Id);
             entry.Entity.WorkflowDefinitionIdLookupHash = Stores.EfDesignSupport.LookupHash(Stores.EfDesignSupport.SearchKey(entry.Entity.WorkflowDefinitionId));
         }
         foreach (var entry in ChangeTracker.Entries<WorkflowDefinitionDraftLayout>()
@@ -79,6 +81,8 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
             ValidateIdentity(entry.Entity.Id, nameof(WorkflowDefinitionDraftLayout.Id));
             ValidateOptionalIdentity(entry.Entity.TenantId, nameof(WorkflowDefinitionDraftLayout.TenantId));
             ValidateIdentity(entry.Entity.WorkflowDefinitionDraftId, nameof(WorkflowDefinitionDraftLayout.WorkflowDefinitionDraftId));
+            entry.Entity.IdLookupHash = Stores.EfDesignSupport.LookupHash(entry.Entity.Id);
+            entry.Entity.WorkflowDefinitionDraftIdLookupHash = Stores.EfDesignSupport.LookupHash(entry.Entity.WorkflowDefinitionDraftId);
         }
         foreach (var entry in ChangeTracker.Entries<WorkflowDefinitionVersionLayout>()
                      .Where(entry => entry.State is EntityState.Added or EntityState.Modified))
@@ -86,6 +90,8 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
             ValidateIdentity(entry.Entity.Id, nameof(WorkflowDefinitionVersionLayout.Id));
             ValidateOptionalIdentity(entry.Entity.TenantId, nameof(WorkflowDefinitionVersionLayout.TenantId));
             ValidateIdentity(entry.Entity.WorkflowDefinitionVersionId, nameof(WorkflowDefinitionVersionLayout.WorkflowDefinitionVersionId));
+            entry.Entity.IdLookupHash = Stores.EfDesignSupport.LookupHash(entry.Entity.Id);
+            entry.Entity.WorkflowDefinitionVersionIdLookupHash = Stores.EfDesignSupport.LookupHash(entry.Entity.WorkflowDefinitionVersionId);
         }
         foreach (var entry in ChangeTracker.Entries<DesignOperationEntity>()
                      .Where(entry => entry.State is EntityState.Added or EntityState.Modified))

@@ -11,7 +11,15 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, IPayloadSerializer serializer, IPersistenceAccessContextAccessor access) : IWorkflowDefinitionDraftStore
 {
     private IQueryable<WorkflowDefinitionDraft> Query() => EfDesignSupport.InScope(db.Drafts.AsNoTracking(), access, x => x.TenantId);
-    public async Task<WorkflowDefinitionDraft?> FindByIdAsync(string draftId, CancellationToken cancellationToken = default) { var row = await EfDesignSupport.ReadAsync("reading workflow draft", () => Query().SingleOrDefaultAsync(x => x.Id == draftId, cancellationToken)); return row is null ? null : EfDesignSupport.MapDraft(serializer, row); }
+    public async Task<WorkflowDefinitionDraft?> FindByIdAsync(string draftId, CancellationToken cancellationToken = default)
+    {
+        var idHash = EfDesignSupport.LookupHash(draftId);
+        var row = await EfDesignSupport.ReadAsync("reading workflow draft", () => Query().SingleOrDefaultAsync(x => x.IdLookupHash == idHash, cancellationToken));
+        if (row is null)
+            return null;
+        EfDesignSupport.EnsureExactIdentity(draftId, row.Id, "workflow draft lookup");
+        return EfDesignSupport.MapDraft(serializer, row);
+    }
     public async Task<WorkflowDefinitionDraft?> FindByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default)
     {
         var key = EfDesignSupport.LookupHash(EfDesignSupport.SearchKey(workflowDefinitionId));
@@ -35,8 +43,23 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
             EfDesignSupport.EnsureDefinitionIdentity(workflowDefinitionId, candidate.WorkflowDefinitionId, "workflow definition draft lookup");
         return rows.Select(x => EfDesignSupport.MapDraft(serializer, x)).ToArray();
     }
-    public async Task<IReadOnlyCollection<DesignMetadataRecord>> FindLayoutByDraftIdAsync(string draftId, CancellationToken cancellationToken = default) { var row = await EfDesignSupport.ReadAsync("reading workflow draft layout", () => Layout(draftId).SingleOrDefaultAsync(cancellationToken)); return row is null ? [] : EfDesignSupport.ReadLayout(row.RecordsJson); }
-    public async Task<IReadOnlyCollection<ActivityPresentationRecord>> FindActivityPresentationByDraftIdAsync(string draftId, CancellationToken cancellationToken = default) { var row = await EfDesignSupport.ReadAsync("reading workflow draft presentation", () => Layout(draftId).SingleOrDefaultAsync(cancellationToken)); return row is null ? [] : EfDesignSupport.ReadPresentation(row.ActivityPresentationJson); }
+    public async Task<IReadOnlyCollection<DesignMetadataRecord>> FindLayoutByDraftIdAsync(string draftId, CancellationToken cancellationToken = default)
+    {
+        var row = await EfDesignSupport.ReadAsync("reading workflow draft layout", () => Layout(draftId).SingleOrDefaultAsync(cancellationToken));
+        if (row is null)
+            return [];
+        EfDesignSupport.EnsureExactIdentity(draftId, row.WorkflowDefinitionDraftId, "workflow draft layout lookup");
+        return EfDesignSupport.ReadLayout(row.RecordsJson);
+    }
+
+    public async Task<IReadOnlyCollection<ActivityPresentationRecord>> FindActivityPresentationByDraftIdAsync(string draftId, CancellationToken cancellationToken = default)
+    {
+        var row = await EfDesignSupport.ReadAsync("reading workflow draft presentation", () => Layout(draftId).SingleOrDefaultAsync(cancellationToken));
+        if (row is null)
+            return [];
+        EfDesignSupport.EnsureExactIdentity(draftId, row.WorkflowDefinitionDraftId, "workflow draft presentation lookup");
+        return EfDesignSupport.ReadPresentation(row.ActivityPresentationJson);
+    }
     public async Task<DraftWithLayout?> FindWithLayoutByIdAsync(string draftId, CancellationToken cancellationToken = default)
     {
         // Draft and layout are one read contract. Keep them in one provider-translatable
@@ -45,12 +68,13 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
         var layouts = Layouts();
         var result = await EfDesignSupport.ReadAsync("reading workflow draft with layout", () =>
             (from draft in drafts
-             join layout in layouts on draft.Id equals layout.WorkflowDefinitionDraftId into matchingLayouts
+             join layout in layouts on draft.IdLookupHash equals layout.WorkflowDefinitionDraftIdLookupHash into matchingLayouts
              from layout in matchingLayouts.DefaultIfEmpty()
-             where draft.Id == draftId
+             where draft.IdLookupHash == EfDesignSupport.LookupHash(draftId)
              select new
              {
                  Draft = draft,
+                 LayoutDraftId = layout == null ? null : layout.WorkflowDefinitionDraftId,
                  RecordsJson = layout == null ? null : layout.RecordsJson,
                  ActivityPresentationJson = layout == null ? null : layout.ActivityPresentationJson
              }).SingleOrDefaultAsync(cancellationToken));
@@ -58,12 +82,16 @@ public sealed class EfWorkflowDefinitionDraftStore(WorkflowsDesignDbContext db, 
         if (result is null)
             return null;
 
+        EfDesignSupport.EnsureExactIdentity(draftId, result.Draft.Id, "workflow draft with layout lookup");
+        if (result.LayoutDraftId is not null)
+            EfDesignSupport.EnsureExactIdentity(draftId, result.LayoutDraftId, "workflow draft layout lookup");
+
         var draft = EfDesignSupport.MapDraft(serializer, result.Draft);
         return new DraftWithLayout(
             draft,
             EfDesignSupport.ReadLayout(result.RecordsJson),
             EfDesignSupport.ReadPresentation(result.ActivityPresentationJson));
     }
-    private IQueryable<WorkflowDefinitionDraftLayout> Layout(string id) => EfDesignSupport.InScope(db.DraftLayouts, access, x => x.TenantId).Where(x => x.WorkflowDefinitionDraftId == id);
+    private IQueryable<WorkflowDefinitionDraftLayout> Layout(string id) => EfDesignSupport.InScope(db.DraftLayouts, access, x => x.TenantId).Where(x => x.WorkflowDefinitionDraftIdLookupHash == EfDesignSupport.LookupHash(id));
     private IQueryable<WorkflowDefinitionDraftLayout> Layouts() => EfDesignSupport.InScope(db.DraftLayouts.AsNoTracking(), access, x => x.TenantId);
 }

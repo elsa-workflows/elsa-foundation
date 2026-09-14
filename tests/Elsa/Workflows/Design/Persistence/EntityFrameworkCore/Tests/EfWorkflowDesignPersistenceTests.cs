@@ -90,11 +90,17 @@ public sealed class EfWorkflowDesignPersistenceTests
             new WorkflowDefinition { Id = "alpha", TenantId = "tenant-a", Name = "Plain" },
             new WorkflowDefinition { Id = "alpha ", TenantId = "tenant-a", Name = "Trailing" });
         db.Versions.AddRange(
-            new WorkflowDefinitionVersion("alpha", "1.0.0", "{}") { Id = "version-plain", TenantId = "tenant-a" },
-            new WorkflowDefinitionVersion("alpha ", "1.0.0", "{}") { Id = "version-trailing", TenantId = "tenant-a" });
+            new WorkflowDefinitionVersion("alpha", "1.0.0", "{}") { Id = "version", TenantId = "tenant-a" },
+            new WorkflowDefinitionVersion("alpha ", "1.0.0", "{}") { Id = "version ", TenantId = "tenant-a" });
         db.Drafts.AddRange(
-            new WorkflowDefinitionDraft { Id = "draft-plain", TenantId = "tenant-a", WorkflowDefinitionId = "alpha", StateSource = "{}" },
-            new WorkflowDefinitionDraft { Id = "draft-trailing", TenantId = "tenant-a", WorkflowDefinitionId = "alpha ", StateSource = "{}" });
+            new WorkflowDefinitionDraft { Id = "draft", TenantId = "tenant-a", WorkflowDefinitionId = "alpha", StateSource = "{}" },
+            new WorkflowDefinitionDraft { Id = "draft ", TenantId = "tenant-a", WorkflowDefinitionId = "alpha ", StateSource = "{}" });
+        db.DraftLayouts.AddRange(
+            new WorkflowDefinitionDraftLayout { Id = "draft-layout", TenantId = "tenant-a", WorkflowDefinitionDraftId = "draft" },
+            new WorkflowDefinitionDraftLayout { Id = "draft-layout ", TenantId = "tenant-a", WorkflowDefinitionDraftId = "draft " });
+        db.VersionLayouts.AddRange(
+            new WorkflowDefinitionVersionLayout { Id = "version-layout", TenantId = "tenant-a", WorkflowDefinitionVersionId = "version" },
+            new WorkflowDefinitionVersionLayout { Id = "version-layout ", TenantId = "tenant-a", WorkflowDefinitionVersionId = "version " });
         await db.SaveChangesAsync();
 
         var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
@@ -104,10 +110,14 @@ public sealed class EfWorkflowDesignPersistenceTests
 
         Assert.Equal("Plain", (await definitions.FindByIdAsync("ALPHA"))!.Name);
         Assert.Equal("Trailing", (await definitions.FindByIdAsync("ALPHA "))!.Name);
-        Assert.Equal("version-plain", (await versions.FindLatestVersionAsync("alpha"))!.Id);
-        Assert.Equal("version-trailing", (await versions.FindLatestVersionAsync("alpha "))!.Id);
-        Assert.Equal("draft-plain", (await drafts.FindByWorkflowDefinitionIdAsync("alpha"))!.Id);
-        Assert.Equal("draft-trailing", (await drafts.FindByWorkflowDefinitionIdAsync("alpha "))!.Id);
+        Assert.Equal("version", (await versions.FindByIdAsync("version"))!.Id);
+        Assert.Equal("version ", (await versions.FindByIdAsync("version "))!.Id);
+        Assert.Equal("draft", (await drafts.FindByIdAsync("draft"))!.Id);
+        Assert.Equal("draft ", (await drafts.FindByIdAsync("draft "))!.Id);
+        Assert.Equal("draft", (await drafts.FindWithLayoutByIdAsync("draft"))!.Draft.Id);
+        Assert.Equal("draft ", (await drafts.FindWithLayoutByIdAsync("draft "))!.Draft.Id);
+        Assert.NotNull(await new EfWorkflowDefinitionVersionLayoutStore(db, access).FindByVersionIdAsync("version"));
+        Assert.NotNull(await new EfWorkflowDefinitionVersionLayoutStore(db, access).FindByVersionIdAsync("version "));
     }
 
     [Fact]
@@ -125,6 +135,18 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.Equal(
             ["TenantId", "WorkflowDefinitionIdLookupHash"],
             db.Model.FindEntityType(typeof(WorkflowDefinitionDraft))!.GetForeignKeys().Single().Properties.Select(property => property.Name));
+        Assert.Equal(
+            ["TenantId", "IdLookupHash"],
+            db.Model.FindEntityType(typeof(WorkflowDefinitionVersion))!.FindPrimaryKey()!.Properties.Select(property => property.Name));
+        Assert.Equal(
+            ["TenantId", "IdLookupHash"],
+            db.Model.FindEntityType(typeof(WorkflowDefinitionDraft))!.FindPrimaryKey()!.Properties.Select(property => property.Name));
+        Assert.Equal(
+            ["TenantId", "WorkflowDefinitionDraftIdLookupHash"],
+            db.Model.FindEntityType(typeof(WorkflowDefinitionDraftLayout))!.GetForeignKeys().Single().Properties.Select(property => property.Name));
+        Assert.Equal(
+            ["TenantId", "WorkflowDefinitionVersionIdLookupHash"],
+            db.Model.FindEntityType(typeof(WorkflowDefinitionVersionLayout))!.GetForeignKeys().Single().Properties.Select(property => property.Name));
     }
 
     [Fact]
@@ -163,13 +185,22 @@ public sealed class EfWorkflowDesignPersistenceTests
         db.Drafts.Add(draft);
         await db.SaveChangesAsync();
 
-        var requestedHash = LookupHash("requested");
+        var requestedDefinitionHash = LookupHash("requested");
+        var requestedIdHash = ExactLookupHash("requested");
         await db.Database.ExecuteSqlRawAsync(
             $"UPDATE {WorkflowsDesignEfModule.VersionTable} SET DefinitionIdLookupHash = {{0}} WHERE TenantId = {{1}} AND Id = {{2}}",
-            requestedHash, "tenant-a", version.Id);
+            requestedDefinitionHash, "tenant-a", version.Id);
         await db.Database.ExecuteSqlRawAsync(
             $"UPDATE {WorkflowsDesignEfModule.DraftTable} SET WorkflowDefinitionIdLookupHash = {{0}} WHERE TenantId = {{1}} AND Id = {{2}}",
-            requestedHash, "tenant-a", draft.Id);
+            requestedDefinitionHash, "tenant-a", draft.Id);
+        await db.Database.ExecuteSqlRawAsync(
+            $"UPDATE {WorkflowsDesignEfModule.VersionTable} SET IdLookupHash = {{0}} WHERE TenantId = {{1}} AND Id = {{2}}",
+            requestedIdHash, "tenant-a", version.Id);
+        await db.Database.ExecuteSqlRawAsync(
+            $"UPDATE {WorkflowsDesignEfModule.DraftTable} SET IdLookupHash = {{0}} WHERE TenantId = {{1}} AND Id = {{2}}",
+            requestedIdHash, "tenant-a", draft.Id);
+        db.ChangeTracker.Clear();
+        Assert.Equal(requestedIdHash, await db.Drafts.AsNoTracking().Where(x => x.Id == draft.Id).Select(x => x.IdLookupHash).SingleAsync());
 
         var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
         var serializer = new TestSerializer();
@@ -179,6 +210,8 @@ public sealed class EfWorkflowDesignPersistenceTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => drafts.FindByWorkflowDefinitionIdAsync("requested"));
         await Assert.ThrowsAsync<InvalidOperationException>(() => drafts.ListByWorkflowDefinitionIdAsync("requested"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => drafts.FindByIdAsync("requested"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => versions.FindByIdAsync("requested"));
         await Assert.ThrowsAsync<InvalidOperationException>(() => versions.FindLatestVersionAsync("requested"));
         await Assert.ThrowsAsync<InvalidOperationException>(() => versions.ListByDefinitionAsync("requested"));
         await Assert.ThrowsAsync<InvalidOperationException>(() => versions.ExistsAsync("requested", version.SemVerSortKey));
@@ -1833,7 +1866,10 @@ public sealed class EfWorkflowDesignPersistenceTests
     public async Task Ef_maps_only_unique_provider_failures_during_promotion_to_version_conflict()
     {
         var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
-        var unique = new DbUpdateException("unique", new SqliteException("UNIQUE constraint failed", 19, 1555));
+        var unique = new DbUpdateException("unique", new SqliteException(
+            "UNIQUE constraint failed: elsa_workflow_definition_versions.TenantId, elsa_workflow_definition_versions.DefinitionIdLookupHash, elsa_workflow_definition_versions.SemVerSortKey",
+            19,
+            1555));
         var writer = new ThrowingAtomicWriter(new DesignPersistenceException(
             DesignPersistenceDomain.Workflow,
             DesignPersistenceFailureKind.Provider,
@@ -1847,6 +1883,44 @@ public sealed class EfWorkflowDesignPersistenceTests
             new DesignOperationKey("promotion-unique-race"), "draft-1", "1.0.0"));
 
         Assert.Equal("draft-1", exception.DefinitionId);
+    }
+
+    [Fact]
+    public async Task Ef_preserves_unrelated_unique_provider_failures_during_promotion()
+    {
+        var providerFailure = new DesignPersistenceException(
+            DesignPersistenceDomain.Workflow,
+            DesignPersistenceFailureKind.Provider,
+            "workflow.draft.promote.v1",
+            null,
+            new SqliteException("UNIQUE constraint failed: elsa_workflow_definition_versions.TenantId, elsa_workflow_definition_versions.IdLookupHash", 19, 1555));
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var command = new EfPromoteDraftToVersionCommand(
+            null!, access, new ThrowingAtomicWriter(providerFailure), new TestSerializer(), new TestIdentity(), null!, new TestLockProvider());
+
+        var exception = await Assert.ThrowsAsync<DesignPersistenceException>(() => command.Execute(
+            new DesignOperationKey("promotion-generated-id-race"), "draft-1", "1.0.0"));
+
+        Assert.Same(providerFailure, exception);
+    }
+
+    [Fact]
+    public async Task Ef_preserves_generated_id_unique_provider_failures_during_version_add()
+    {
+        var providerFailure = new DesignPersistenceException(
+            DesignPersistenceDomain.Workflow,
+            DesignPersistenceFailureKind.Provider,
+            "workflow.version.add.v1",
+            null,
+            new SqliteException("UNIQUE constraint failed: elsa_workflow_definition_versions.TenantId, elsa_workflow_definition_versions.IdLookupHash", 19, 1555));
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var command = new EfAddWorkflowDefinitionVersionCommand(
+            null!, access, new ThrowingAtomicWriter(providerFailure), new TestSerializer(), new TestIdentity(), new TestLockProvider());
+
+        var exception = await Assert.ThrowsAsync<DesignPersistenceException>(() => command.Execute(
+            new DesignOperationKey("version-generated-id-race"), "definition-1", State()));
+
+        Assert.Same(providerFailure, exception);
     }
 
     [Fact]
@@ -2243,6 +2317,8 @@ public sealed class EfWorkflowDesignPersistenceTests
 
     private static WorkflowsDesignSqliteDbContext Create(SqliteConnection connection) => new(new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>().UseSqlite(connection).Options);
     private static string LookupHash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(WorkflowDefinitionIdentity.Fold(value)))).ToLowerInvariant();
+
+    private static string ExactLookupHash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
     private static WorkflowDefinitionState State() => new([], null, [], [], null);
     private sealed class TestIdentity(string prefix = "generated") : IIdentityGenerator { private int n; public string Generate() => $"{prefix}-{Interlocked.Increment(ref n)}"; }
     private sealed class CustomDesignAtomicWriter : IDesignAtomicWriter

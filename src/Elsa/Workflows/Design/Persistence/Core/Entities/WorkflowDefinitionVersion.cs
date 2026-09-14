@@ -26,6 +26,9 @@ public sealed class WorkflowDefinitionVersion(string definitionId, string versio
     /// </summary>
     public string DefinitionId { get; init; } = definitionId;
 
+    /// <summary>Persistence-only exact identity hash for the raw version id.</summary>
+    public string IdLookupHash { get; set; } = null!;
+
     /// <summary>Persistence-only folded foreign-key lookup material; not part of the domain interface.</summary>
     public string DefinitionIdLookupHash { get; set; } = null!;
 

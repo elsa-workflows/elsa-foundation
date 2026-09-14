@@ -11,7 +11,15 @@ public sealed class EfWorkflowDefinitionVersionStore(WorkflowsDesignDbContext db
 {
     private IQueryable<WorkflowDefinitionVersion> Query() => EfDesignSupport.InScope(db.Versions.AsNoTracking(), access, x => x.TenantId);
     public async Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) => await FindByIdAsync(versionId, cancellationToken) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionVersion), versionId);
-    public async Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default) { var row = await EfDesignSupport.ReadAsync("reading workflow definition version", () => Query().SingleOrDefaultAsync(x => x.Id == versionId, cancellationToken)); return row is null ? null : EfDesignSupport.MapVersion(serializer, row); }
+    public async Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default)
+    {
+        var idHash = EfDesignSupport.LookupHash(versionId);
+        var row = await EfDesignSupport.ReadAsync("reading workflow definition version", () => Query().SingleOrDefaultAsync(x => x.IdLookupHash == idHash, cancellationToken));
+        if (row is null)
+            return null;
+        EfDesignSupport.EnsureExactIdentity(versionId, row.Id, "workflow definition version lookup");
+        return EfDesignSupport.MapVersion(serializer, row);
+    }
     public async Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) { var row = await GetAsync(versionId, cancellationToken); row.Definition = await definitions.GetAsync(row.DefinitionId, cancellationToken); return row; }
     public async Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default)
     {

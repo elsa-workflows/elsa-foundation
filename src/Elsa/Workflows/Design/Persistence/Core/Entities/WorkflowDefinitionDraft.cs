@@ -7,6 +7,9 @@ namespace Elsa.Workflows.Design.Persistence.Core.Entities;
 
 public sealed class WorkflowDefinitionDraft : TenantEntity, IWorkflowDefinitionDraft, IStateSourcedEntity
 {
+    /// <summary>Persistence-only exact identity hash for the raw draft id.</summary>
+    public string IdLookupHash { get; set; } = null!;
+
     /// <summary>
     /// Foreign key to the owning <see cref="WorkflowDefinition"/>. Many Drafts may belong to one
     /// Definition (cardinality enforced at the data-model level; multi-Draft semantics arrive in
