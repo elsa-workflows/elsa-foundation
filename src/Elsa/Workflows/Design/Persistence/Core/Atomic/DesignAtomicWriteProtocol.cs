@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Atomic;
@@ -54,7 +55,7 @@ public static class DesignAtomicWriteProtocol
         where TMarker : class
         where TResult : class
     {
-        var scope = lane.BeginScope();
+        using var scope = lane.BeginScope();
         var scopeDisposed = false;
         try
         {
@@ -112,11 +113,6 @@ public static class DesignAtomicWriteProtocol
                 TryRollback(lane, scope);
             throw;
         }
-        finally
-        {
-            if (!scopeDisposed)
-                scope.Dispose();
-        }
     }
 
     private static async Task<TResult?> HandleMarkerRaceAsync<TScope, TMarker, TStage, TResult>(
@@ -154,6 +150,9 @@ public static class DesignAtomicWriteProtocol
         if (!lane.RollbackOnAttemptFailure)
             return;
         try { lane.Rollback(scope); }
-        catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException or AccessViolationException)) { }
+        catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException or AccessViolationException))
+        {
+            Trace.TraceWarning("Workflow design atomic rollback failed for marker '{0}': {1}", lane.MarkerId, exception);
+        }
     }
 }

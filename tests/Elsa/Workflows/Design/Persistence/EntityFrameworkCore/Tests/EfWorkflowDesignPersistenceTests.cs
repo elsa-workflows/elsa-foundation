@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -1316,6 +1317,53 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.True(scope.Disposed);
     }
 
+    [Fact]
+    public async Task Shared_protocol_logs_rollback_failure_without_masking_primary_exception()
+    {
+        var scope = new ProtocolScope();
+        var primary = new InvalidOperationException("primary failure");
+        var rollback = new InvalidOperationException("rollback failure");
+        var listener = new RecordingTraceListener();
+        Trace.Listeners.Add(listener);
+        try
+        {
+            var lane = new DesignAtomicWriteLane<ProtocolScope, ProtocolMarker, ProtocolStage, ProtocolResult>
+            {
+                MarkerId = "rollback-failure",
+                LoadMarker = _ => Task.FromResult<ProtocolMarker?>(null),
+                BeginScope = () => scope,
+                SaveMarker = (_, _, _) => Task.CompletedTask,
+                Commit = (_, _) => Task.FromException<DesignAtomicCommitDisposition>(primary),
+                Rollback = _ => throw rollback,
+                ClassifyMarkerRace = _ => false,
+                ClassifyUncertainCommit = _ => false,
+                OnUncertainCommit = (_, _) => throw new InvalidOperationException(),
+                TryReconcileAfterCommit = (_, _) => Task.FromResult<ProtocolResult?>(null),
+                Delay = (_, _) => Task.CompletedTask,
+                IsAccepted = stage => stage.Accepted,
+                OnCommitted = _ => new ProtocolResult("committed"),
+                OnReplay = _ => new ProtocolResult("replayed"),
+                OnRejected = () => new ProtocolResult("rejected")
+            };
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => DesignAtomicWriteProtocol.ExecuteAsync(
+                lane,
+                (_, _) => Task.FromResult(new ProtocolStage(true)),
+                null,
+                CancellationToken.None));
+
+            Assert.Same(primary, exception);
+            Trace.Flush();
+            Assert.Contains(listener.Messages, message =>
+                message.Contains("rollback-failure", StringComparison.Ordinal) &&
+                message.Contains("rollback failure", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Trace.Listeners.Remove(listener);
+        }
+    }
+
 
     private static WorkflowsDesignSqliteDbContext Create(SqliteConnection connection) => new(new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>().UseSqlite(connection).Options);
     private static WorkflowDefinitionState State() => new([], null, [], [], null);
@@ -1452,6 +1500,12 @@ public sealed class EfWorkflowDesignPersistenceTests
             element.WriteTo(writer);
     }
     private sealed class ProtocolScope : IDisposable { public bool Disposed { get; private set; } public void Dispose() => Disposed = true; }
+    private sealed class RecordingTraceListener : TraceListener
+    {
+        public List<string> Messages { get; } = [];
+        public override void Write(string? message) => Messages.Add(message ?? string.Empty);
+        public override void WriteLine(string? message) => Write(message);
+    }
     private sealed class ProtocolMarker { }
     private sealed record ProtocolStage(bool Accepted);
     private sealed record ProtocolResult(string Status);
