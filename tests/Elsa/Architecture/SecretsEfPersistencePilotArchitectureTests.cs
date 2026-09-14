@@ -32,6 +32,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
     [
         "Microsoft.EntityFrameworkCore.Sqlite",
         "Microsoft.EntityFrameworkCore.SqlServer",
+        "MySql.EntityFrameworkCore",
         "Npgsql.EntityFrameworkCore.PostgreSQL"
     ];
 
@@ -76,6 +77,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/SecretsEfMigrationHostedService.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/SecretsEfModule.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/SecretsEntityFrameworkCoreFeature.cs",
+        "src/Elsa/Secrets/Persistence/EntityFrameworkCore/SecretsMySqlDbContext.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/SecretsPostgreSqlDbContext.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/SecretsSqlServerDbContext.cs",
         "src/Elsa/Secrets/Persistence/EntityFrameworkCore/SecretsSqliteDbContext.cs",
@@ -99,6 +101,8 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "tests/Elsa/Persistence/EntityFramework/Tests/EfRelationalExceptionClassifierTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/EfRelationalIdentityTests.cs",
         "tests/Elsa/Persistence/EntityFramework/Tests/EfRelationalProviderBindingTests.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/MySqlContainerFixture.cs",
+        "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/MySqlEfSecretRepositoryTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Program.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/PostgreSqlEfSecretRepositoryTests.cs",
         "tests/Elsa/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/PostgreSqlSecretsShellJourneyTests.cs",
@@ -174,6 +178,18 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
 
         Assert.Equal(
             ["Npgsql.EntityFrameworkCore.PostgreSQL"],
+            packages.Intersect(ForbiddenProviderPackages, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void MySql_shell_proof_supplies_exactly_one_relational_provider_package()
+    {
+        var packages = PackageIncludes(RepoPath(
+            "tests", "Elsa", "Secrets", "Persistence", "EntityFrameworkCore", "MySql", "Tests",
+            "Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests.csproj"));
+
+        Assert.Equal(
+            ["MySql.EntityFrameworkCore"],
             packages.Intersect(ForbiddenProviderPackages, StringComparer.Ordinal));
     }
 
