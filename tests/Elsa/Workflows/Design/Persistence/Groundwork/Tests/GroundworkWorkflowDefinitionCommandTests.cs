@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
 using Elsa.Workflows.Design.Persistence.Core.Models;
@@ -416,6 +418,44 @@ public class GroundworkWorkflowDefinitionCommandTests
             [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind],
             (_, _) => Task.FromResult(DesignAtomicWriteStage<string>.Accepted(
                 "staged", supplied.Fingerprint, supplied.Json))));
+    }
+
+    [Fact]
+    public async Task Command_uses_custom_result_serializer_for_authoritative_validation_and_replay()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.Converters.Add(new JsonStringEnumConverter());
+        var operationKey = NextKey();
+        var value = new CustomResult(CustomResultStatus.Ready);
+
+        var committed = await GroundworkDesignAtomicCommand.ExecuteAsync(
+            AtomicWrite(),
+            operationKey,
+            "test.operation.v1",
+            new { Value = 1 },
+            [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind],
+            (_, _) => Task.FromResult(value),
+            options);
+
+        var replayStageCalled = false;
+        var replayed = await GroundworkDesignAtomicCommand.ExecuteAsync<object, CustomResult>(
+            AtomicWrite(),
+            operationKey,
+            "test.operation.v1",
+            new { Value = 1 },
+            [WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind],
+            (_, _) =>
+            {
+                replayStageCalled = true;
+                throw new InvalidOperationException("replay must not restage");
+            },
+            options);
+
+        Assert.Equal(DesignAtomicWriteStatus.Committed, committed.Status);
+        Assert.Equal(DesignAtomicWriteStatus.Replayed, replayed.Status);
+        Assert.Equal(value, committed.Value);
+        Assert.Equal(value, replayed.Value);
+        Assert.False(replayStageCalled);
     }
 
     [Fact]
@@ -1222,8 +1262,9 @@ public class GroundworkWorkflowDefinitionCommandTests
             IReadOnlyCollection<string> mutatedUnits,
             Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage,
             Func<CancellationToken, Task>? beforeAttempt = null,
-            CancellationToken cancellationToken = default) =>
-            inner.ExecuteAsync(operationKey, operationKind, requestMaterial, mutatedUnits, Observe(stage), beforeAttempt, cancellationToken);
+            CancellationToken cancellationToken = default,
+            IDesignAtomicWriteResultCodec<T>? resultCodec = null) =>
+            inner.ExecuteAsync(operationKey, operationKind, requestMaterial, mutatedUnits, Observe(stage), beforeAttempt, cancellationToken, resultCodec);
 
         private Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> Observe<T>(
             Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage) =>
@@ -1232,6 +1273,13 @@ public class GroundworkWorkflowDefinitionCommandTests
                 onStageEntered();
                 return stage(context, cancellationToken);
             };
+    }
+
+    private sealed record CustomResult(CustomResultStatus Status);
+
+    private enum CustomResultStatus
+    {
+        Ready
     }
 
     private sealed class SequentialIdentityGenerator : Elsa.Primitives.Contracts.IIdentityGenerator

@@ -117,12 +117,14 @@ public sealed class GroundworkDesignAtomicWrite(
         IReadOnlyCollection<string> mutatedUnits,
         Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage,
         Func<CancellationToken, Task>? beforeAttempt = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IDesignAtomicWriteResultCodec<T>? resultCodec = null)
     {
         ArgumentNullException.ThrowIfNull(operationKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(operationKind);
         ArgumentNullException.ThrowIfNull(requestMaterial);
         ArgumentNullException.ThrowIfNull(stage);
+        var codec = resultCodec ?? new GroundworkDesignAtomicWriteResultCodec<T>(MarkerOptions);
         var request = GroundworkDesignAtomicWriteMaterial.Create(operationKind, "1", requestMaterial, MarkerOptions);
         var result = await ExecuteLegacyAsync(
             new GroundworkDesignAtomicWriteRequest(
@@ -141,9 +143,10 @@ public sealed class GroundworkDesignAtomicWrite(
                     throw new InvalidDataException("An accepted design operation must provide both result fingerprint and result payload.");
                 if (staged.ResultFingerprint is not null)
                 {
-                    var suppliedValue = GroundworkDesignAtomicWriteMaterial.Deserialize<T>(
-                        staged.ResultFingerprint, staged.ResultJson!, $"{operationKind}.result", "1", MarkerOptions);
-                    if (!ResultValuesEquivalent(staged.Value, suppliedValue))
+                    GroundworkDesignAtomicWriteMaterial.ValidateFingerprint(
+                        staged.ResultFingerprint, staged.ResultJson!, $"{operationKind}.result", "1");
+                    var suppliedValue = codec.Deserialize(staged.ResultJson!);
+                    if (!codec.Equivalent(staged.Value, suppliedValue))
                         throw new InvalidDataException("The accepted design-operation result must match its staged value.");
                     return GroundworkDesignAtomicWriteStageResult.Accepted(staged.ResultFingerprint, staged.ResultJson!);
                 }
@@ -163,18 +166,20 @@ public sealed class GroundworkDesignAtomicWrite(
             _ => throw new ArgumentOutOfRangeException(nameof(result.Status))
         };
         var value = status is DesignAtomicWriteStatus.Committed or DesignAtomicWriteStatus.Reconciled or DesignAtomicWriteStatus.Replayed
-            ? GroundworkDesignAtomicWriteMaterial.Deserialize<T>(
-                result.AuthoritativeResultFingerprint!, result.AuthoritativeResultJson!,
-                $"{operationKind}.result", "1", MarkerOptions)
+            ? DeserializeAuthoritativeResult(codec, result, operationKind)
             : default;
         return new DesignAtomicWriteResult<T>(status, value, result.AuthoritativeResultFingerprint, result.AuthoritativeResultJson);
     }
 
-    private static bool ResultValuesEquivalent<T>(T left, T right)
+    private static T DeserializeAuthoritativeResult<T>(
+        IDesignAtomicWriteResultCodec<T> codec,
+        GroundworkDesignAtomicWriteResult result,
+        string operationKind)
     {
-        var leftJson = JsonSerializer.SerializeToElement(left, MarkerOptions);
-        var rightJson = JsonSerializer.SerializeToElement(right, MarkerOptions);
-        return JsonElement.DeepEquals(leftJson, rightJson);
+        GroundworkDesignAtomicWriteMaterial.ValidateFingerprint(
+            result.AuthoritativeResultFingerprint!, result.AuthoritativeResultJson!,
+            $"{operationKind}.result", "1");
+        return codec.Deserialize(result.AuthoritativeResultJson!);
     }
 
     // Compatibility overloads keep the existing Groundwork conformance harness source-compatible;
@@ -456,7 +461,8 @@ public static class GroundworkDesignAtomicCommand
                     return DesignAtomicWriteStage<TResult>.Accepted(value, authoritative.Fingerprint, authoritative.Json);
                 },
                 beforeAttempt,
-                cancellationToken);
+                cancellationToken,
+                new GroundworkDesignAtomicWriteResultCodec<TResult>(jsonOptions ?? new JsonSerializerOptions(JsonSerializerDefaults.Web)));
             return result.Status switch
             {
                 DesignAtomicWriteStatus.Committed or DesignAtomicWriteStatus.Reconciled or DesignAtomicWriteStatus.Replayed =>
@@ -523,6 +529,21 @@ public sealed record GroundworkDesignAtomicWriteMaterial(string Json, string Fin
 
     public static T Deserialize<T>(string fingerprint, string json, string operationKind, string schema, JsonSerializerOptions? options = null)
     {
+        ValidateFingerprint(fingerprint, json, operationKind, schema);
+        try
+        {
+            return JsonSerializer.Deserialize<T>(json, options ?? new JsonSerializerOptions(JsonSerializerDefaults.Web))
+                   ?? throw new GroundworkDesignCorruptResultException("Authoritative design result is null.");
+        }
+        catch (GroundworkDesignCorruptResultException) { throw; }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            throw new GroundworkDesignCorruptResultException("Authoritative design result could not be deserialized.", exception);
+        }
+    }
+
+    public static void ValidateFingerprint(string fingerprint, string json, string operationKind, string schema)
+    {
         try
         {
             using var document = JsonDocument.Parse(json);
@@ -531,13 +552,11 @@ public sealed record GroundworkDesignAtomicWriteMaterial(string Json, string Fin
             var expected = $"sha256:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(framed)))}";
             if (!StringComparer.Ordinal.Equals(expected, fingerprint))
                 throw new GroundworkDesignCorruptResultException("Authoritative design result fingerprint mismatch.");
-            return JsonSerializer.Deserialize<T>(json, options ?? new JsonSerializerOptions(JsonSerializerDefaults.Web))
-                   ?? throw new GroundworkDesignCorruptResultException("Authoritative design result is null.");
         }
         catch (GroundworkDesignCorruptResultException) { throw; }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
-            throw new GroundworkDesignCorruptResultException("Authoritative design result could not be deserialized.", exception);
+            throw new GroundworkDesignCorruptResultException("Authoritative design result could not be validated.", exception);
         }
     }
 
@@ -567,6 +586,39 @@ public sealed record GroundworkDesignAtomicWriteMaterial(string Json, string Fin
             writer.WriteEndArray();
         }
         else element.WriteTo(writer);
+    }
+}
+
+internal sealed class GroundworkDesignAtomicWriteResultCodec<T>(JsonSerializerOptions options) : IDesignAtomicWriteResultCodec<T>
+{
+    private readonly JsonSerializerOptions options = options ?? throw new ArgumentNullException(nameof(options));
+
+    public T Deserialize(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<T>(json, options)
+                   ?? throw new GroundworkDesignCorruptResultException("Authoritative design result is null.");
+        }
+        catch (GroundworkDesignCorruptResultException) { throw; }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            throw new GroundworkDesignCorruptResultException("Authoritative design result could not be deserialized.", exception);
+        }
+    }
+
+    public bool Equivalent(T left, T right)
+    {
+        try
+        {
+            var leftJson = JsonSerializer.SerializeToElement(left, options);
+            var rightJson = JsonSerializer.SerializeToElement(right, options);
+            return JsonElement.DeepEquals(leftJson, rightJson);
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException)
+        {
+            throw new GroundworkDesignSerializationException("Authoritative design result could not be compared.", exception);
+        }
     }
 }
 

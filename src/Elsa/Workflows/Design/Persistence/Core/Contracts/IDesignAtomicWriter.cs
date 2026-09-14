@@ -16,7 +16,20 @@ public interface IDesignAtomicWriter
         IReadOnlyCollection<string> mutatedUnits,
         Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage,
         Func<CancellationToken, Task>? beforeAttempt = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        IDesignAtomicWriteResultCodec<T>? resultCodec = null);
+}
+
+/// <summary>
+/// Provider-neutral result material semantics for atomic-write marker validation and replay.
+/// Implementations may supply their own serialization policy without exposing a serializer
+/// dependency in the Core contract.
+/// </summary>
+public interface IDesignAtomicWriteResultCodec<T>
+{
+    T Deserialize(string json);
+
+    bool Equivalent(T left, T right);
 }
 
 public interface IDesignAtomicWriteContext

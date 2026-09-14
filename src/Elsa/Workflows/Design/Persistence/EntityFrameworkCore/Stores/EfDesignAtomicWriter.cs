@@ -36,7 +36,8 @@ public sealed class EfDesignAtomicWriter(
         IReadOnlyCollection<string> mutatedUnits,
         Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage,
         Func<CancellationToken, Task>? beforeAttempt = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IDesignAtomicWriteResultCodec<T>? resultCodec = null)
     {
         ArgumentNullException.ThrowIfNull(mutatedUnits);
         if (mutatedUnits.Count == 0 || mutatedUnits.Any(string.IsNullOrWhiteSpace))
