@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
@@ -8,6 +9,7 @@ using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Serialization.Core;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 
@@ -15,11 +17,13 @@ public sealed class EfDesignAtomicWriter(
     WorkflowsDesignDbContext db,
     IPersistenceAccessContextAccessor access,
     TimeProvider? timeProvider = null,
-    TimeSpan? reconciliationTimeout = null) : IDesignAtomicWriter
+    TimeSpan? reconciliationTimeout = null,
+    Func<CancellationToken, Task<IDbContextTransaction>>? transactionFactory = null) : IDesignAtomicWriter
 {
     private static readonly TimeSpan ReconciliationBackoff = TimeSpan.FromMilliseconds(25);
     private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
     private readonly TimeSpan timeout = reconciliationTimeout ?? TimeSpan.FromSeconds(10);
+    private readonly Func<CancellationToken, Task<IDbContextTransaction>> beginTransaction = transactionFactory ?? (ct => db.Database.BeginTransactionAsync(ct));
 
     public Task<T> ExecuteAsync<T>(
         DesignOperationKey key,
@@ -89,22 +93,36 @@ public sealed class EfDesignAtomicWriter(
         if (beforeAttempt is not null)
             await beforeAttempt(cancellationToken);
 
-        await using var transaction = await EfDesignSupport.ReadAsync("starting design operation transaction", () => db.Database.BeginTransactionAsync(cancellationToken));
+        var transaction = await EfDesignSupport.ReadAsync("starting design operation transaction", () => beginTransaction(cancellationToken));
+        var transactionDisposed = false;
         DesignAtomicWriteStage<T> staged;
         try
         {
             staged = await EfDesignSupport.ReadAsync("staging design operation", () => stage(EmptyContext.Instance, cancellationToken));
         }
-        catch
+        catch (Exception exception)
         {
+            db.ChangeTracker.Clear();
+            transactionDisposed = true;
+            await CleanupAsync(transaction, exception, operationKind, rollback: true);
+            throw;
+        }
+        try
+        {
+            ArgumentNullException.ThrowIfNull(staged);
+        }
+        catch (Exception exception)
+        {
+            transactionDisposed = true;
+            await CleanupAsync(transaction, exception, operationKind, rollback: true);
             db.ChangeTracker.Clear();
             throw;
         }
-        ArgumentNullException.ThrowIfNull(staged);
         if (!staged.IsAccepted)
         {
-            try { await transaction.RollbackAsync(CancellationToken.None); }
-            finally { db.ChangeTracker.Clear(); }
+            transactionDisposed = true;
+            await CleanupAsync(transaction, null, operationKind, rollback: true);
+            db.ChangeTracker.Clear();
             return new DesignAtomicWriteResult<T>(DesignAtomicWriteStatus.Rejected, default);
         }
 
@@ -117,11 +135,20 @@ public sealed class EfDesignAtomicWriter(
             resultFingerprint = staged.ResultFingerprint ?? EfDesignSupport.Fingerprint(operationKind + ".result", value);
             ValidateAuthoritativeResult(staged, value, operationKind, resultJson, resultFingerprint, resultCodec);
         }
-        catch (DesignPersistenceException) { db.ChangeTracker.Clear(); throw; }
+        catch (DesignPersistenceException exception)
+        {
+            transactionDisposed = true;
+            await CleanupAsync(transaction, exception, operationKind, rollback: true);
+            db.ChangeTracker.Clear();
+            throw;
+        }
         catch (Exception exception) when (IsSerializationFailure(exception))
         {
+            var failure = SerializationFailure(operationKind, exception);
+            transactionDisposed = true;
+            await CleanupAsync(transaction, failure, operationKind, rollback: true);
             db.ChangeTracker.Clear();
-            throw SerializationFailure(operationKind, exception);
+            throw failure;
         }
         db.Operations.Add(new DesignOperationEntity
         {
@@ -142,7 +169,8 @@ public sealed class EfDesignAtomicWriter(
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                await transaction.DisposeAsync();
+                transactionDisposed = true;
+                await CleanupAsync(transaction, exception, operationKind, rollback: false);
                 db.ChangeTracker.Clear();
                 return await ReconcileAfterCommitAsync<T>(
                     tenantId, operationKind, key.Value, requestFingerprint, legacyRequestFingerprint, exception, resultCodec);
@@ -151,25 +179,18 @@ public sealed class EfDesignAtomicWriter(
         }
         catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
         {
-            try { await transaction.RollbackAsync(CancellationToken.None); }
-            catch (Exception rollbackException) when (rollbackException is not OperationCanceledException)
-            {
-                Trace.TraceWarning("Workflow design rollback failed after a transient write conflict: {0}", rollbackException);
-            }
+            transactionDisposed = true;
+            await CleanupAsync(transaction, exception, operationKind, rollback: true);
             db.ChangeTracker.Clear();
             if (attempt >= 3)
                 throw ProviderFailure(operationKind, exception);
-            await transaction.DisposeAsync();
             await Task.Delay(TimeSpan.FromMilliseconds(25 * (attempt + 1)), cancellationToken);
             return await ExecuteAttemptAsync(key, operationKind, request, stage, beforeAttempt, cancellationToken, resultCodec, attempt + 1);
         }
         catch (DbUpdateException exception)
         {
-            try { await transaction.RollbackAsync(CancellationToken.None); }
-            catch (Exception rollbackException) when (rollbackException is not OperationCanceledException)
-            {
-                Trace.TraceWarning("Workflow design rollback failed while resolving a write conflict: {0}", rollbackException);
-            }
+            transactionDisposed = true;
+            await CleanupAsync(transaction, exception, operationKind, rollback: true);
             db.ChangeTracker.Clear();
             var winner = await EfDesignSupport.ReadAsync("reading design operation winner", () => db.Operations.AsNoTracking().SingleOrDefaultAsync(
                 x => x.TenantId == tenantId && x.OperationKind == operationKind && x.OperationKey == key.Value,
@@ -180,16 +201,62 @@ public sealed class EfDesignAtomicWriter(
                 return ResolveExisting(winner, operationKind, requestFingerprint, legacyRequestFingerprint, DesignAtomicWriteStatus.Replayed, resultCodec);
             throw ProviderFailure(operationKind, exception);
         }
-        catch
+        catch (Exception exception)
         {
-            try { await transaction.RollbackAsync(CancellationToken.None); }
-            catch (Exception rollbackException) when (rollbackException is not OperationCanceledException)
-            {
-                Trace.TraceWarning("Workflow design rollback failed while handling an unexpected write error: {0}", rollbackException);
-            }
+            transactionDisposed = true;
+            await CleanupAsync(transaction, exception, operationKind, rollback: true);
             db.ChangeTracker.Clear();
             throw;
         }
+        finally
+        {
+            if (!transactionDisposed)
+                await CleanupAsync(transaction, null, operationKind, rollback: false);
+        }
+    }
+
+    private static async Task CleanupAsync(IDbContextTransaction transaction, Exception? primary, string operationKind, bool rollback)
+    {
+        var cleanupFailures = new List<Exception>();
+        if (rollback)
+        {
+            try
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+            }
+            catch (Exception exception)
+            {
+                cleanupFailures.Add(exception);
+            }
+        }
+
+        try
+        {
+            await transaction.DisposeAsync();
+        }
+        catch (Exception exception)
+        {
+            cleanupFailures.Add(exception);
+        }
+
+        if (cleanupFailures.Count == 0)
+            return;
+
+        if (primary is null)
+            ExceptionDispatchInfo.Capture(cleanupFailures.Count == 1 ? cleanupFailures[0] : new AggregateException(cleanupFailures)).Throw();
+
+        // Cleanup is diagnostic only once the operation already has an authoritative failure.
+        // In particular, provider cancellation during rollback/disposal must not mask it.
+        foreach (var (failure, index) in cleanupFailures.Select((failure, index) => (failure, index)))
+        foreach (var exception in ExceptionChain(primary))
+            exception.Data[$"Elsa.Design.Atomic.CleanupFailure.{operationKind}.{index}"] = failure;
+        Trace.TraceWarning("Workflow design transaction cleanup failed for {0}: {1}", operationKind, string.Join("; ", cleanupFailures.Select(failure => failure.Message)));
+    }
+
+    private static IEnumerable<Exception> ExceptionChain(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+            yield return current;
     }
 
     private async Task<DesignAtomicWriteResult<T>> ReconcileAfterCommitAsync<T>(

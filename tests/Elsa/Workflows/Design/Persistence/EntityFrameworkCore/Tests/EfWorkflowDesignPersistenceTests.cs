@@ -7,6 +7,7 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Core.Events;
+using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -31,6 +32,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -306,6 +308,98 @@ public sealed class EfWorkflowDesignPersistenceTests
             .Execute(new DesignOperationKey("discard-race"), "draft");
 
         Assert.Empty(events.Events);
+    }
+
+    [Fact]
+    public async Task Concurrent_unique_marker_race_publishes_only_the_committed_draft_events()
+    {
+        var path = Path.Join(Path.GetTempPath(), $"elsa-workflow-design-race-{Guid.NewGuid():N}.db");
+        try
+        {
+            await using (var setupConnection = new SqliteConnection($"Data Source={path};Default Timeout=30"))
+            {
+                await setupConnection.OpenAsync();
+                await using var setup = Create(setupConnection);
+                await setup.Database.EnsureCreatedAsync();
+                setup.Definitions.Add(new WorkflowDefinition { Id = "definition", TenantId = "tenant-a", Name = "Definition" });
+                await setup.SaveChangesAsync();
+            }
+
+            await using var firstConnection = new SqliteConnection($"Data Source={path};Default Timeout=30");
+            await using var secondConnection = new SqliteConnection($"Data Source={path};Default Timeout=30");
+            await firstConnection.OpenAsync();
+            await secondConnection.OpenAsync();
+            await using var firstDb = Create(firstConnection);
+            await using var secondDb = Create(secondConnection);
+            var firstEvents = new CapturingDeferredEventPublisher();
+            var secondEvents = new CapturingDeferredEventPublisher();
+            var first = new EfCreateDraftCommand(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), new EfDesignAtomicWriter(firstDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), new TestIdentity(), new TestSerializer(), new TestLockProvider(), deferredEvents: firstEvents);
+            var second = new EfCreateDraftCommand(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))), new EfDesignAtomicWriter(secondDb, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))), new TestIdentity(), new TestSerializer(), new TestLockProvider(), deferredEvents: secondEvents);
+
+            await Task.WhenAll(
+                first.Execute(new DesignOperationKey("same-marker-race"), "definition"),
+                second.Execute(new DesignOperationKey("same-marker-race"), "definition"));
+
+            var events = firstEvents.Events.Concat(secondEvents.Events).ToArray();
+            Assert.Single(events.OfType<DraftCreated>());
+            Assert.Single(events.OfType<DraftValidated>());
+        }
+        finally
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Legacy_bool_discard_marker_replays_without_duplicate_event()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var writer = new EfDesignAtomicWriter(db, access);
+        var key = new DesignOperationKey("legacy-discard");
+        await writer.ExecuteAsync(key, "workflow.draft.discard.v1", new { DraftId = "draft" }, [DesignPersistenceUnitNames.Drafts],
+            (_, _) => Task.FromResult(DesignAtomicWriteStage<bool>.Accepted(true)));
+        var marker = await db.Operations.SingleAsync();
+        marker.RequestFingerprint = LegacyFingerprint("workflow.draft.discard.v1", "{\"draftId\":\"draft\"}");
+        marker.ResultJson = "true";
+        marker.ResultFingerprint = LegacyFingerprint("workflow.draft.discard.v1.result", "true");
+        await db.SaveChangesAsync();
+
+        var events = new CapturingDeferredEventPublisher();
+        await new EfDiscardDraftCommand(db, access, writer, new TestLockProvider(), events).Execute(key, "draft");
+
+        Assert.Empty(events.Events);
+    }
+
+    [Fact]
+    public async Task Rollback_and_dispose_failures_do_not_mask_the_primary_domain_failure_or_cancellation()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var primary = new InvalidOperationException("primary domain failure");
+        var writer = new EfDesignAtomicWriter(db, access, transactionFactory: _ => Task.FromResult<IDbContextTransaction>(new FailingTransaction(new OperationCanceledException("rollback"), new InvalidOperationException("dispose"))));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.ExecuteAsync(
+            new DesignOperationKey("cleanup-domain"), "test.op", new { Value = 1 }, ["test"],
+            (_, _) => Task.FromException<DesignAtomicWriteStage<int>>(primary)));
+        Assert.Same(primary, exception);
+        Assert.NotEmpty(exception.Data);
+
+        using var cancellation = new CancellationTokenSource();
+        var cancelled = new OperationCanceledException(cancellation.Token);
+        writer = new EfDesignAtomicWriter(db, access, transactionFactory: _ => Task.FromResult<IDbContextTransaction>(new FailingTransaction(new InvalidOperationException("rollback"), new OperationCanceledException("dispose"))));
+        var cancellationException = await Assert.ThrowsAsync<OperationCanceledException>(() => writer.ExecuteAsync(
+            new DesignOperationKey("cleanup-cancellation"), "test.op", new { Value = 1 }, ["test"],
+            (_, _) => Task.FromException<DesignAtomicWriteStage<int>>(cancelled), cancellationToken: cancellation.Token));
+        Assert.Same(cancelled, cancellationException);
+        Assert.NotEmpty(cancellationException.Data);
     }
 
     [Fact]
@@ -1167,6 +1261,24 @@ public sealed class EfWorkflowDesignPersistenceTests
         public Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(DesignOperationKey operationKey, string operationKind, object requestMaterial, IReadOnlyCollection<string> mutatedUnits, Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage, Func<CancellationToken, Task>? beforeAttempt = null, CancellationToken cancellationToken = default, IDesignAtomicWriteResultCodec<T>? resultCodec = null) =>
             Task.FromResult(new DesignAtomicWriteResult<T>(DesignAtomicWriteStatus.Replayed, default));
     }
+    private sealed class FailingTransaction(Exception rollbackFailure, Exception disposeFailure) : IDbContextTransaction
+    {
+        public Guid TransactionId { get; } = Guid.NewGuid();
+        public bool SupportsSavepoints => false;
+        public DbTransaction GetDbTransaction() => throw new NotSupportedException();
+        public void Commit() => throw new NotSupportedException();
+        public Task CommitAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public void Rollback() => throw rollbackFailure;
+        public Task RollbackAsync(CancellationToken cancellationToken = default) => Task.FromException(rollbackFailure);
+        public void CreateSavepoint(string name) => throw new NotSupportedException();
+        public Task CreateSavepointAsync(string name, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public void RollbackToSavepoint(string name) => throw new NotSupportedException();
+        public Task RollbackToSavepointAsync(string name, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public void ReleaseSavepoint(string name) => throw new NotSupportedException();
+        public Task ReleaseSavepointAsync(string name, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public void Dispose() => throw disposeFailure;
+        public ValueTask DisposeAsync() => ValueTask.FromException(disposeFailure);
+    }
     private sealed class TestLockProvider : IDistributedLockProvider
     {
         public IDistributedSynchronizationHandle AcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
@@ -1245,6 +1357,9 @@ public sealed class EfWorkflowDesignPersistenceTests
         var material = $"{Encoding.UTF8.GetByteCount(identity)}:{identity}{Encoding.UTF8.GetByteCount(operationKind)}:{operationKind}1:1{Encoding.UTF8.GetByteCount(canonical)}:{canonical}";
         return $"sha256:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(material)))}";
     }
+
+    private static string LegacyFingerprint(string operationKind, string json) =>
+        $"sha256:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"elsa-design-material:v1\n{operationKind}\n{json}")))}";
 
     private static void WriteCanonical(Utf8JsonWriter writer, JsonElement element)
     {

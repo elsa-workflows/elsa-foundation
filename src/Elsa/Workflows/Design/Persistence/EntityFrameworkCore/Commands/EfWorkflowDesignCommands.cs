@@ -243,21 +243,23 @@ public sealed class EfDiscardDraftCommand(WorkflowsDesignDbContext db, IPersiste
     public async Task Execute(DesignOperationKey key, string draftId, CancellationToken ct = default) { ArgumentException.ThrowIfNullOrWhiteSpace(draftId); if (lockProvider is null) throw new InvalidOperationException("Workflow draft discard requires a distributed lock provider."); await using var handle = await lockProvider.AcquireLockAsync(WorkflowDesignPersistenceLockKeys.DraftKey(draftId), null, ct); await ExecuteCore(key, draftId, ct); }
     private async Task ExecuteCore(DesignOperationKey key, string draftId, CancellationToken ct)
     {
+        string? definitionId = null;
         var outcome = await Atomic.ExecuteAsync(key, "workflow.draft.discard.v1", new DiscardDraftRequestMaterial(draftId), [DesignPersistenceUnitNames.Drafts, DesignPersistenceUnitNames.DraftLayouts], async (_, token) =>
         {
             var row = await Scoped(Db.Drafts, x => x.TenantId).SingleOrDefaultAsync(x => x.Id == draftId, token);
             if (row is null)
-                return DesignAtomicWriteStage<DiscardDraftOutcome>.Accepted(new(draftId, null, false));
-            var result = new DiscardDraftOutcome(draftId, row.WorkflowDefinitionId, true);
+                return DesignAtomicWriteStage<bool>.Accepted(false);
+            definitionId = row.WorkflowDefinitionId;
             Db.Drafts.Remove(row);
-            return DesignAtomicWriteStage<DiscardDraftOutcome>.Accepted(result);
+            return DesignAtomicWriteStage<bool>.Accepted(true);
         }, cancellationToken: ct);
         RequireOutcome(outcome, "workflow.draft.discard.v1", key);
-        if (outcome.ShouldPublishPostCommitOutcome && outcome.Value is { WasDiscarded: true, WorkflowDefinitionId: { } definitionId } && deferredEvents is not null)
+        // The result intentionally remains a bool for compatibility with markers written by the
+        // original EF implementation. Legacy replay has no definition id after the draft is gone,
+        // so it cannot publish a duplicate discard event.
+        if (outcome.ShouldPublishPostCommitOutcome && outcome.Value == true && definitionId is not null && deferredEvents is not null)
             await deferredEvents.Publish(new DraftDiscarded(draftId, definitionId), CancellationToken.None);
     }
-
-    private sealed record DiscardDraftOutcome(string DraftId, string? WorkflowDefinitionId, bool WasDiscarded);
 }
 
 public sealed class EfDeleteWorkflowDefinitionPermanentlyCommand(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access, IDesignAtomicWriter atomic, IEnumerable<IWorkflowDefinitionPermanentDeletionGuard>? guards = null) : EfDesignCommand(db, access, atomic), IDeleteWorkflowDefinitionPermanentlyCommand
