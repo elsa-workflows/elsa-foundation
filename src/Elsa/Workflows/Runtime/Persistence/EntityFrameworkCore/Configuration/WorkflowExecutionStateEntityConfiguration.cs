@@ -33,7 +33,10 @@ public sealed class WorkflowExecutionStateEntityConfiguration : IEntityTypeConfi
         // contains the complete identity and is therefore the deterministic
         // tie-breaker.  Do not append the encoded identity to these indexes:
         // the redundant wide columns exceed SQL Server/MySQL key limits.
-        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash }).IsUnique();
+        // Keep the encoded identity on the uniqueness boundary as well as its
+        // hash: this preserves exact identity semantics even if a hash ever
+        // collides, while remaining below SQL Server/MySQL key limits.
+        b.HasIndex(x => new { x.ScopeKeyHash, x.WorkflowExecutionIdHash, x.WorkflowExecutionId }).IsUnique();
         b.HasIndex(x => new { x.ScopeKeyHash, x.SortTimestampUtcTicks, x.WorkflowExecutionIdOrderKey });
         b.HasIndex(x => new { x.ScopeKeyHash, x.TenantIdHash, x.AuthorityPartitionKey, x.WorkflowExecutionIdOrderKey });
         b.HasIndex(x => new { x.ScopeKeyHash, x.ArtifactIdHash });
