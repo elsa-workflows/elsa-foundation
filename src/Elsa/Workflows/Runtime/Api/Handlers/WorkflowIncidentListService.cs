@@ -6,7 +6,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 namespace Elsa.Workflows.Runtime.Api.Handlers;
 
 /// <summary>
-/// Operator-facing incident query (RT-5). Surfaces the incidents recorded for a workflow execution so that a workflow
+/// Operator-facing incident query. Surfaces the incidents recorded for a workflow execution so that a workflow
 /// that has transitioned to <see cref="Core.Models.WorkflowExecutionStatus.Faulted"/> because of a blocking incident is
 /// observable and diagnosable, optionally filtered to blocking incidents only.
 /// </summary>

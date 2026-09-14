@@ -1,7 +1,7 @@
 using Elsa.Activities.Design.Reconciliation.Clr.Contracts;
 using Elsa.Activities.Design.Reconciliation.Clr.Options;
-using Elsa.Activities.Design.Reconciliation.Core;
-using Elsa.Activities.Design.Reconciliation.Core.Models;
+using Elsa.Activities.Design.Core.Reconciliation;
+using Elsa.Activities.Design.Core.Reconciliation.Models;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Activities.Design.Reconciliation.Clr.Services;

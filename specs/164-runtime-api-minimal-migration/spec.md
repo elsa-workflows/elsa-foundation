@@ -4,7 +4,8 @@
 
 **Created**: 2026-08-16
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: #1400 (restatused 2026-09-10 from git evidence)
 
 **Input**: Issue #1375 — migrate the complete 24-registration `Elsa.Workflows.Runtime.Api` owner slice from FastEndpoints to owner-local ASP.NET Core Minimal API mappings.
 

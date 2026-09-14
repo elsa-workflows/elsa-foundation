@@ -57,11 +57,11 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     private readonly string _claimOwnerId = $"scheduler-drainer:{Guid.NewGuid():N}";
 
     /// <summary>
-    /// Creates the drainer. RT-8: the seven telescoping constructors collapsed into this single primary constructor —
+    /// Creates the drainer. The seven telescoping constructors collapsed into this single primary constructor —
     /// five required collaborators (<paramref name="schedulerWorkQueue"/>, <paramref name="handlers"/>,
     /// <paramref name="workflowExecutionStateStore"/>, <paramref name="poisonStore"/>, <paramref name="pauseGate"/>)
     /// followed by optional collaborators that default to their no-op/system implementations. The workflow execution
-    /// state store is <b>required by construction</b> so the W5 terminal-status guard (which stops sibling work once an
+    /// state store is <b>required by construction</b> so the single-writer terminal-status guard (which stops sibling work once an
     /// execution reaches a terminal status) can never be silently disabled by picking a narrower constructor.
     ///
     /// <para>The poison store is <b>required by construction</b> for the same reason (#1271): a handler fault is
@@ -128,7 +128,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // MS-9: the drain-cycle span wraps the whole method. StartDrainCycle returns null when tracing is inactive, so
+        // The drain-cycle span wraps the whole method. StartDrainCycle returns null when tracing is inactive, so
         // no allocation and no ambient Activity is introduced; when active, Activity.Current is set for the scope and
         // restored on dispose. This is trace context only — it is not service location and does not touch the fenced
         // claim->pause->dispatch->complete sequence below.
@@ -189,7 +189,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             ? RuntimeSchedulerDrainStopReason.WorkflowTerminated
             : (RuntimeSchedulerDrainStopReason?)null;
 
-        // MS-9: outcome tags set after the loop, from already-computed values (no pre-computation, no extra work).
+        // Outcome tags set after the loop, from already-computed values (no pre-computation, no extra work).
         if (activity is not null)
         {
             activity.SetTag(WorkflowEngineTelemetry.DrainItemsProcessedTag, results.Count);
@@ -207,8 +207,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 
     private async ValueTask<bool> IsWorkflowTerminatedAsync(string workflowExecutionId, CancellationToken cancellationToken)
     {
-        // RT-7: the terminal-status guard reads the state store injected by construction — no AsyncLocal
-        // service-location in the drain path. The store is required (RT-8), so there is no null fallback.
+        // The terminal-status guard reads the state store injected by construction — no AsyncLocal
+        // service-location in the drain path. The store is required, so there is no null fallback.
         var state = await _workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken);
         return state is not null && state.Status.IsTerminal();
     }
@@ -239,14 +239,14 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         // one that admits an order of magnitude more for the shape production traffic has.
         _admissionLoadSignal?.RecordDispatch();
 
-        // WU-1 / spec 105: stage this dispatch's claim so a checkpoint commit can fold its fence-checked deletion into the
+        // spec 105: stage this dispatch's claim so a checkpoint commit can fold its fence-checked deletion into the
         // commit unit-of-work. When it does, the committer marks it consumed and the separate acknowledgement below is
         // skipped. Owner+token fence is renewal-stable, so the claim captured here stays valid across renewals.
         using var consumeScope = claim is not null && _consumedWorkClaimAccessor is not null
             ? _consumedWorkClaimAccessor.Begin(ConsumedSchedulerWorkItem.FromClaim(claim))
             : null;
 
-        // MS-9: the dispatch span nests under the drain-cycle span via Activity.Current. The activity-execution span
+        // The dispatch span nests under the drain-cycle span via Activity.Current. The activity-execution span
         // (Invoke slot) and the checkpoint-commit span both nest under this one when the pipeline runs. Null when
         // tracing is inactive.
         using var activity = _tracer.StartDispatch(workItem);
@@ -258,7 +258,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 
             // Move 1 (ADR 0029): route dispatch through the runtime execution pipeline when one is wired, running the
             // handler as the pipeline's inner terminal delegate. When absent, dispatch the handler directly — with only
-            // the built-in pass-through middleware registered the two paths are behavior-identical. RT-7: the drain's
+            // the built-in pass-through middleware registered the two paths are behavior-identical. The drain's
             // ambient services flow explicitly into the pipeline dispatcher, which stages them on the dispatch workspace
             // for slot-invoked handlers to read — no AsyncLocal service location in the drain path.
             await DispatchWithClaimRenewalAsync(
@@ -269,7 +269,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                 cancellationToken);
 
             // The handler's effect is now durable. On the atomic path a checkpoint commit already deleted the claimed item
-            // inside its unit-of-work (WU-1 / spec 105), so the separate acknowledgement is redundant and skipped;
+            // inside its unit-of-work (spec 105), so the separate acknowledgement is redundant and skipped;
             // otherwise (legacy/non-atomic provider, or a dispatch that produced no commit) complete the fenced claim or
             // consume the FIFO head for a legacy single-writer provider. A crash before this point leaves the item queued
             // for idempotent re-drive.
@@ -298,7 +298,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         }
         catch (RuntimeSchedulerWorkConsumeConflictException)
         {
-            // The atomic commit's fence-checked consume failed: a successor reclaimed the item (WU-1 / spec 105). Treat it
+            // The atomic commit's fence-checked consume failed: a successor reclaimed the item (spec 105). Treat it
             // exactly like a lost claim — the commit rolled back and persisted nothing, so never acknowledge or poison it.
             throw;
         }
@@ -323,7 +323,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // deterministically-poisoning handler would hot-loop (redeliver forever). Ack-on-fault makes poison delivery
             // bounded. (A process crash — as opposed to a handler fault — never reaches this line, so the item stays
             // queued for idempotent re-drive, which is exactly the redrive-safety this unit adds.)
-            // WU-1 / spec 105: when an earlier checkpoint commit in THIS dispatch already consumed the item durably (a
+            // spec 105: when an earlier checkpoint commit in THIS dispatch already consumed the item durably (a
             // multi-commit handler faulting after its first commit landed), the item is already gone from the queue —
             // poison delivery stays bounded without a second acknowledgement. A CompleteClaimAsync here would fail its
             // fence against the consumed claim and throw a spurious claim-lost out of this catch, skipping poison
@@ -444,7 +444,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     }
 
     // Completes the current fenced claim when the provider supports claim transitions. For a legacy provider, consumes
-    // the FIFO head and enforces the single-writer TOCTOU tripwire (RT-2): the consumed head MUST be the item that was
+    // the FIFO head and enforces the single-writer TOCTOU tripwire: the consumed head MUST be the item that was
     // just dispatched. A mismatch (or empty queue) means another writer interleaved; fail fast.
     private async ValueTask AckAsync(
         RuntimeSchedulerWorkItem dispatchedWorkItem,

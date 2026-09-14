@@ -81,7 +81,7 @@ public static class RuntimeMetadataKeys
     public const string StorageDriverKey = "runtime.storageDriverKey";
 
     /// <summary>
-    /// Passive correlation identifier threaded through stimulus routing (W7). Stamped as metadata on opted-in
+    /// Passive correlation identifier threaded through stimulus routing. Stamped as metadata on opted-in
     /// bookmarks and dispatch envelopes so a caller can scope resume delivery without the engine owning a
     /// correlation subsystem. Published trigger bindings retain their authored value in the dedicated
     /// <c>CorrelationScope</c> field instead; start fan-out does not use this metadata key. Absent when no
@@ -92,7 +92,7 @@ public static class RuntimeMetadataKeys
 
     /// <summary>
     /// Operational-state metadata key carrying the highest execution-ownership fencing token ever issued for a
-    /// workflow execution (RT-2). Preserved across a lease release so a subsequent acquisition always issues a
+    /// workflow execution. Preserved across a lease release so a subsequent acquisition always issues a
     /// strictly greater token and a token is never reused. See
     /// <c>RuntimeExecutionOwnershipService</c> (engine package).
     /// </summary>

@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-incident-state-projection`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #45, #46 (restatused 2026-09-10 from git evidence)
 **Input**: Continue the Runtime Execution Seam after durable value state projection. Checkpoint commits already carry incident state changes; the default in-memory writer should project those changes into an incident state store without implementing incident strategy execution or history persistence.
 
 ## Scenarios & Tests

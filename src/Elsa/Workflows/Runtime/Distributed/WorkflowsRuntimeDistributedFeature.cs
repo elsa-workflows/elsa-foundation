@@ -22,8 +22,8 @@ namespace Elsa.Workflows.Runtime.Distributed;
 /// and runs the placement pump that renews leases and re-drives cross-node backlog.
 /// </summary>
 /// <remarks>
-/// This unit ships in-memory defaults for the two-node harness shape. Persistence features can replace both contracts;
-/// the Groundwork leaf supplies scoped durable implementations using the frozen
+/// This unit ships in-memory defaults for the two-node harness shape. Persistence features can replace either contract;
+/// the Groundwork and EF Core leaves supply scoped durable implementations using the frozen
 /// <c>executionCommandTransport</c> wire format. The pump is an <see cref="IRecurringTask"/>, so this feature depends
 /// on the Tasks feature for its execution lifecycle and opens a fresh operation scope per sweep.
 /// </remarks>
@@ -34,7 +34,7 @@ namespace Elsa.Workflows.Runtime.Distributed;
 [ShellFeature(
     name: "WorkflowsRuntimeDistributed",
     DisplayName = "Workflows Runtime Distributed",
-    Description = "Clusters the workflow-execution actor subsystem: replaces the in-process actor provider with a distributed one that routes commands by per-execution placement lease and a durable cross-node command transport, and runs a placement pump that renews leases and re-drives backlog on failover. Double execution is prevented by W5's fencing token at checkpoint commit. Compose alongside the Tasks feature.",
+    Description = "Clusters the workflow-execution actor subsystem: replaces the in-process actor provider with a distributed one that routes commands by per-execution placement lease and a durable cross-node command transport, and runs a placement pump that renews leases and re-drives backlog on failover. Double execution is prevented by the single-writer fencing token at checkpoint commit. Compose alongside the Tasks feature.",
     DependsOn = new object[] { "Tasks" })]
 public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
 {
@@ -95,14 +95,36 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
         // cluster view. A durable persistence feature replaces the two scoped store contracts.
         services.TryAddSingleton(sp => sp.GetRequiredService<IOptions<ExecutionPlacementOptions>>().Value);
         services.TryAddSingleton<InMemoryExecutionPlacementState>();
-        services.TryAddScoped<IExecutionPlacementStore>(sp => new InMemoryExecutionPlacementStore(
-            sp.GetRequiredService<InMemoryExecutionPlacementState>(),
-            sp.GetRequiredService<IPersistenceAccessContextAccessor>()));
+        var placementBackend = ExecutionPlacementStoreBackend.Find(services);
+        if (placementBackend is not null)
+        {
+            placementBackend.EnsureOwnsRegisteredContract(services);
+        }
+        else if (!ExecutionPlacementStoreBackend.HasRegisteredContract(services))
+        {
+            var placementDescriptor = ServiceDescriptor.Scoped<IExecutionPlacementStore>(sp => new InMemoryExecutionPlacementStore(
+                sp.GetRequiredService<InMemoryExecutionPlacementState>(),
+                sp.GetRequiredService<IPersistenceAccessContextAccessor>()));
+            services.Add(placementDescriptor);
+            ExecutionPlacementStoreBackend.Register(
+                services,
+                new ExecutionPlacementStoreBackend(ExecutionPlacementStoreBackend.InMemory, placementDescriptor));
+        }
         services.TryAddScoped<IExecutionPlacementService, ExecutionPlacementService>();
         services.TryAddSingleton<InMemoryExecutionCommandTransportState>();
-        services.TryAddScoped<IExecutionCommandTransport>(sp => new InMemoryExecutionCommandTransport(
+        var commandDescriptor = ServiceDescriptor.Scoped<IExecutionCommandTransport>(sp => new InMemoryExecutionCommandTransport(
             sp.GetRequiredService<InMemoryExecutionCommandTransportState>(),
             sp.GetRequiredService<IPersistenceAccessContextAccessor>()));
+        var commandBackend = ExecutionCommandTransportBackend.Find(services);
+        if (commandBackend is not null)
+            commandBackend.EnsureOwnsRegisteredContract(services);
+        else if (!ExecutionCommandTransportBackend.HasRegisteredContract(services))
+        {
+            services.Add(commandDescriptor);
+            ExecutionCommandTransportBackend.Register(
+                services,
+                new ExecutionCommandTransportBackend(ExecutionCommandTransportBackend.InMemory, commandDescriptor));
+        }
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IWorkflowDispatchDurabilityEvidence, ProcessLocalDistributionEvidence>());
         // The in-memory defaults remain usable for local routing, but they do not claim a provider-admitted

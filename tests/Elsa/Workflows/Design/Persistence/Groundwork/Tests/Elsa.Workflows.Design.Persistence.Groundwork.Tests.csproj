@@ -12,8 +12,8 @@
     <PackageReference Include="Groundwork.Kernel" />
     <PackageReference Include="Groundwork.Query.Model" />
     <PackageReference Include="Groundwork.Store" />
-    <PackageReference Include="Groundwork.Testing" VersionOverride="0.4.0-preview.29" />
-    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.4.0-preview.29" />
+    <PackageReference Include="Groundwork.Testing" VersionOverride="0.4.0-preview.30" />
+    <PackageReference Include="Groundwork.Sqlite" VersionOverride="0.4.0-preview.30" />
   </ItemGroup>
 
   <ItemGroup>
@@ -21,6 +21,7 @@
     <!-- The current-schema proof applies both design catalogs to one database. -->
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\..\..\Persistence\Groundwork\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
 
 </Project>

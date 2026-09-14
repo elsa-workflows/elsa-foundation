@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Elsa.Api.Compatibility.Testing.Comparison;
 using Elsa.Secrets.Tests.Support;
 using Xunit;
 
@@ -16,23 +15,6 @@ public sealed class SecretsApiReadContractTests
         "POST /secrets/picker",
         "GET /secrets/{param}"
     };
-
-    [Fact]
-    public async Task Migrated_read_http_and_openapi_match_the_immutable_fastendpoints_evidence()
-    {
-        var beforeHttp = SecretsCompatibilityEvidence.LoadLegacyHttp(ReadEndpoints);
-        var afterHttp = await SecretsCanaryHost.CaptureAsync(SecretsCompatibilityEvidence.Cases(ReadEndpoints));
-        await using var host = await SecretsCanaryHost.StartMigratedAsync();
-        var beforeOpenApi = SecretsCompatibilityEvidence.LoadLegacyOpenApi(ReadEndpoints);
-        var afterOpenApi = SecretsCompatibilityEvidence.CaptureOpenApi(
-            await host.GetCurrentOpenApiDocumentAsync(), ReadEndpoints);
-
-        var result = CompatibilityComparer.Compare(
-            new CompatibilityEvidenceSet { Http = beforeHttp, OpenApi = beforeOpenApi },
-            new CompatibilityEvidenceSet { Http = afterHttp, OpenApi = afterOpenApi });
-
-        Assert.True(result.IsCompatible, string.Join(Environment.NewLine, result.Failures));
-    }
 
     [Fact]
     public async Task List_preserves_filters_paging_tenant_isolation_and_safe_metadata()

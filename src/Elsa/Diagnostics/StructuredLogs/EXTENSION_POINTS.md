@@ -57,6 +57,21 @@ construct and register the adapter with their selected Groundwork provider and a
 it installs this concrete feature, replaces the in-memory store, and contributes its diagnostic-record stream
 to the combined Groundwork deployment manifest.
 
+### EF Core Structured Logs (opt-in, issue #1695)
+
+`Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore` is the opt-in repository-first
+adapter for `IStructuredLogStore` delivered by #1695. Its production project is provider-neutral and
+depends only on EF Core, Relational, the shared Elsa persistence helpers, and Structured Logs/
+Diagnostics contracts. Hosts and tests supply provider packages: SQLite is used by the behavioral
+suite, while SQL Server, PostgreSQL, and MySQL are exercised by focused live-provider smoke tests.
+
+The adapter owns its structured-log records, scope/binding identity, opaque cursor encoding, lifetime
+high-water state, and append-operation ledger. It reuses `DiagnosticsDrain` and the shared
+`ReplaceDiagnosticsStore` registration semantics, so it does not introduce a second queue/retry
+pipeline or a competing store marker. The default remains Groundwork until later migration,
+default-flip, and deletion gates supply the required evidence; migration
+artifacts and host-wide composition changes are explicitly deferred from #1695.
+
 ---
 
 ## Notes

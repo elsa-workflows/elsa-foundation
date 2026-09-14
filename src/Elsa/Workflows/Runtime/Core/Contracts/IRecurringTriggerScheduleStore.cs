@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
 /// Durable store for <see cref="RecurringTriggerSchedule"/> documents — the recurring-start counterpart to
-/// <see cref="IDurableTimerStore"/> (W16). The default in-memory implementation keeps schedules only for the
+/// <see cref="IDurableTimerStore"/>. The default in-memory implementation keeps schedules only for the
 /// process lifetime; a durable persistence provider (the Groundwork bridge) swaps in a restart-surviving
 /// implementation so a Timer/Cron start trigger keeps firing across process restarts.
 /// </summary>
@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <see cref="TryAdvanceAsync"/> is the compare-and-swap that claims an occurrence: it advances the cursor only
 /// if the stored <see cref="RecurringTriggerSchedule.NextOccurrence"/> still equals the caller's expected value,
 /// so at most one worker fires a given occurrence. This is the seam a future clustered store keeps to make the
-/// pump cluster-safe (W20) without changing the pump.
+/// pump cluster-safe without changing the pump.
 /// </para>
 /// </remarks>
 public interface IRecurringTriggerScheduleStore

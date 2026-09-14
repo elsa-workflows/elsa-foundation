@@ -19,11 +19,8 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// the recovery population or accumulating an unbounded emitted-identity set. Candidate correlation is performed
 /// against current five-store state before emission; candidate payloads never cross the trust boundary.
 /// </remarks>
-public sealed class GroundworkV2RuntimeRecoveryScanner : IRuntimeRecoveryPagedScanner
+public sealed class GroundworkV2RuntimeRecoveryScanner : GroundworkV2RuntimeStoreBase, IRuntimeRecoveryPagedScanner
 {
-    private readonly IGroundworkStorageSessionSource sessions;
-    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
-    private readonly string? targetName;
     private readonly GroundworkV2RuntimeLivenessContext context;
     private readonly StorageUnit workflowExecutionUnit;
     private readonly StorageUnit incidentUnit;
@@ -54,20 +51,16 @@ public sealed class GroundworkV2RuntimeRecoveryScanner : IRuntimeRecoveryPagedSc
         IPersistenceAccessContextAccessor accessContextAccessor,
         string? targetName = null,
         IRuntimeRecoveryContinuationCodec? continuationCodec = null)
+        : base(sessions, accessContextAccessor, GroundworkTargetNames.Normalize(targetName), "recovery", null)
     {
-        ArgumentNullException.ThrowIfNull(sessions);
-        ArgumentNullException.ThrowIfNull(accessContextAccessor);
-        this.sessions = sessions;
-        this.accessContextAccessor = accessContextAccessor;
-        this.targetName = GroundworkTargetNames.Normalize(targetName);
         this.continuationCodec = continuationCodec ?? throw new ArgumentNullException(
             nameof(continuationCodec),
             "Groundwork recovery paging requires an injected configured continuation codec.");
-        context = new GroundworkV2RuntimeLivenessContext(sessions, accessContextAccessor, this.targetName);
-        workflowExecutionUnit = sessions.Unit(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind, this.targetName);
-        incidentUnit = sessions.Unit(ElsaRuntimeV2StorageManifest.IncidentStateDocumentKind, this.targetName);
-        schedulerUnit = sessions.Unit(ElsaRuntimeV2StorageManifest.SchedulerStateDocumentKind, this.targetName);
-        workflowHoldUnit = sessions.Unit(ElsaRuntimeV2StorageManifest.WorkflowHoldStateDocumentKind, this.targetName);
+        context = new GroundworkV2RuntimeLivenessContext(Sessions, AccessContextAccessor, TargetName);
+        workflowExecutionUnit = UnitFor(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind);
+        incidentUnit = UnitFor(ElsaRuntimeV2StorageManifest.IncidentStateDocumentKind);
+        schedulerUnit = UnitFor(ElsaRuntimeV2StorageManifest.SchedulerStateDocumentKind);
+        workflowHoldUnit = UnitFor(ElsaRuntimeV2StorageManifest.WorkflowHoldStateDocumentKind);
     }
 
     private static IRuntimeRecoveryContinuationCodec CompatibilityCodec() =>
@@ -359,7 +352,7 @@ public sealed class GroundworkV2RuntimeRecoveryScanner : IRuntimeRecoveryPagedSc
         // Workflow execution state has a stable runtime row key. Use the admitted point lookup rather than a
         // history projection query: this keeps the correlation read bounded and avoids relying on an index that
         // was designed for history ordering rather than current-state identity.
-        var entry = Open(workflowExecutionUnit).Read(GroundworkRuntimeRowStore.Key(workflowExecutionId));
+        var entry = OpenScoped(workflowExecutionUnit).Read(GroundworkRuntimeRowStore.Key(workflowExecutionId));
         cancellationToken.ThrowIfCancellationRequested();
         if (entry is null)
             return null;
@@ -411,7 +404,7 @@ public sealed class GroundworkV2RuntimeRecoveryScanner : IRuntimeRecoveryPagedSc
     {
         var table = new TableId(incidentUnit.Name);
         var workflow = Column(incidentUnit, table, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField);
-        var rows = Open(incidentUnit).Query(new QueryRequest(
+        var rows = OpenScoped(incidentUnit).Query(new QueryRequest(
             table,
             Equal(workflow, workflowExecutionId),
             [new OrderTerm(workflow, OrderDirection.Ascending, NullOrder.Last)],
@@ -426,7 +419,7 @@ public sealed class GroundworkV2RuntimeRecoveryScanner : IRuntimeRecoveryPagedSc
         var table = new TableId(schedulerUnit.Name);
         var collection = Column(schedulerUnit, table, ElsaRuntimeV2StorageManifest.CollectionField);
         var workflow = Column(schedulerUnit, table, ElsaRuntimeV2StorageManifest.IdField);
-        var rows = Open(schedulerUnit).Query(new QueryRequest(
+        var rows = OpenScoped(schedulerUnit).Query(new QueryRequest(
             table,
             And(
                 Equal(collection, ElsaRuntimeV2StorageManifest.SchedulerStateDocumentKind),
@@ -454,7 +447,7 @@ public sealed class GroundworkV2RuntimeRecoveryScanner : IRuntimeRecoveryPagedSc
         // bounded page per pending candidate and carries no new persisted projection or schema requirement.
         if (continuationToken is not null)
         {
-            var recheckRows = Open(workflowHoldUnit).Query(new QueryRequest(
+            var recheckRows = OpenScoped(workflowHoldUnit).Query(new QueryRequest(
                 table,
                 And(
                     Equal(collection, ElsaRuntimeV2StorageManifest.WorkflowHoldStateDocumentKind),
@@ -473,7 +466,7 @@ public sealed class GroundworkV2RuntimeRecoveryScanner : IRuntimeRecoveryPagedSc
                 return new(true, null);
         }
 
-        var result = Open(workflowHoldUnit).Query(new QueryRequest(
+        var result = OpenScoped(workflowHoldUnit).Query(new QueryRequest(
             table,
             And(
                 Equal(collection, ElsaRuntimeV2StorageManifest.WorkflowHoldStateDocumentKind),
@@ -501,22 +494,6 @@ public sealed class GroundworkV2RuntimeRecoveryScanner : IRuntimeRecoveryPagedSc
             RuntimeStorePageRequest.ValidateContinuationToken(
                 result.NextContinuationToken,
                 nameof(result.NextContinuationToken)));
-    }
-
-    private IStorageSession Open(StorageUnit storageUnit)
-    {
-        var context = accessContextAccessor.Current ??
-                      throw new InvalidOperationException("Groundwork recovery persistence access context is missing.");
-        if (context.Scope is null || context.AcrossScopes)
-        {
-            throw new InvalidOperationException(
-                "Groundwork recovery requires one explicit persistence scope; global and across-scope access are refused.");
-        }
-
-        return sessions.Open(
-            storageUnit.Id.Value,
-            StorageAccess.Scoped(new StorageScope(context.Scope.Value)),
-            targetName);
     }
 
     private static RuntimeRecoveryCandidate WithCorrelationMetadata(
@@ -643,7 +620,7 @@ public sealed class GroundworkV2RuntimeRecoveryScanner : IRuntimeRecoveryPagedSc
     private static DateTimeOffset HeartbeatDueAt(RuntimeHeartbeat heartbeat, RuntimeRecoveryScanRequest request) =>
         heartbeat.RecordedAt.Add(request.HeartbeatTimeout);
 
-    private static IReadOnlyList<RecoveryRoute> Routes(RuntimeRecoveryScanRequest request, StorageUnit unit)
+    private IReadOnlyList<RecoveryRoute> Routes(RuntimeRecoveryScanRequest request, StorageUnit unit)
     {
         var table = new TableId(unit.Name);
         var status = Column(unit, table, ElsaRuntimeV2StorageManifest.RecoveryInterruptedStatusField);
@@ -688,30 +665,8 @@ public sealed class GroundworkV2RuntimeRecoveryScanner : IRuntimeRecoveryPagedSc
 
     private static Predicate And(params Predicate[] predicates) => new Predicate.And(predicates);
 
-    private static Predicate Equal(ColumnRef column, object value) =>
-        new Predicate.Equal(column, QueryConstant.Of(column, value));
-
     private static Predicate Due(ColumnRef column, DateTimeOffset value) =>
         new Predicate.Range(column, null, Bound.Inclusive(QueryConstant.Of(column, value)));
-
-    private static ColumnRef Column(StorageUnit unit, TableId table, string name)
-    {
-        var definition = unit.Columns.SingleOrDefault(column =>
-            StringComparer.Ordinal.Equals(column.Name, name))
-            ?? throw new InvalidOperationException(
-                $"Groundwork recovery unit '{unit.Id.Value}' does not declare query column '{name}'.");
-        var type = definition.Type switch
-        {
-            PortableType.String => QueryType.String,
-            PortableType.DateTimeOffset => QueryType.DateTimeOffset,
-            PortableType.Int32 => QueryType.Int32,
-            PortableType.Int64 => QueryType.Int64,
-            PortableType.Boolean => QueryType.Boolean,
-            _ => throw new InvalidOperationException(
-                $"Groundwork recovery query column '{name}' has unsupported type '{definition.Type}'.")
-        };
-        return new ColumnRef(table, name, type, definition.IsNullable, definition.MaxLength);
-    }
 
     private string EncodeContinuation(
         IReadOnlyList<RouteCursor> cursors,
@@ -814,15 +769,14 @@ public sealed class GroundworkV2RuntimeRecoveryScanner : IRuntimeRecoveryPagedSc
 
     private string Binding(RuntimeRecoveryScanRequest request, int routeCount)
     {
-        var accessContext = accessContextAccessor.Current ??
-                            throw new InvalidOperationException("Groundwork recovery persistence access context is missing.");
+        var accessContext = AccessContext;
         if (accessContext.Scope is null || accessContext.AcrossScopes)
         {
             throw new InvalidOperationException(
                 "Groundwork recovery requires one explicit persistence scope; global and across-scope access are refused.");
         }
 
-        return $"recovery|{routeCount}|{request.Now.UtcTicks}|{request.LeaseTimeout.Ticks}|{request.HeartbeatTimeout.Ticks}|{request.OwnerId}|{accessContext.Scope.Value}|{targetName ?? "<default>"}";
+        return $"recovery|{routeCount}|{request.Now.UtcTicks}|{request.LeaseTimeout.Ticks}|{request.HeartbeatTimeout.Ticks}|{request.OwnerId}|{accessContext.Scope.Value}|{TargetName ?? "<default>"}";
     }
 
     private sealed record RecoveryContinuation(

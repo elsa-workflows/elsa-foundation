@@ -19,6 +19,7 @@ public sealed class GitHubCopilotAgentFeature : IShellFeature
 {
     public bool Enabled { get; set; }
 
+    [ManifestSetting(Secret = true)]
     public string? GitHubToken { get; set; }
 
     public string? GitHubTokenEnvironmentVariable { get; set; } = "COPILOT_GITHUB_TOKEN";
@@ -27,6 +28,7 @@ public sealed class GitHubCopilotAgentFeature : IShellFeature
 
     public string? RuntimeUrl { get; set; }
 
+    [ManifestSetting(Secret = true)]
     public string? RuntimeConnectionToken { get; set; }
 
     public string? BaseDirectory { get; set; }

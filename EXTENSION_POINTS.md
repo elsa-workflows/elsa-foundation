@@ -88,8 +88,10 @@ not automatic constitution violations.
 | Domain | Catalog |
 |---|---|
 | Agent core (sessions, policy, context, proposals, provider facade, audit) | [`src/Elsa/Agent/Core/EXTENSION_POINTS.md`](src/Elsa/Agent/Core/EXTENSION_POINTS.md) |
-| Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities, security guards) | [`src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md) |
+| Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities) | [`src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md) |
 | Foundation Identity ASP.NET Core Identity Groundwork provider (concrete Groundwork authority, schema CLI, topology) | [`src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/README.md`](src/Elsa/Foundation/Identity/AspNetCoreIdentity/Groundwork/README.md) |
+| Foundation Identity ASP.NET Core Identity EF adapter (opt-in framework stores, authentication, session invalidation, and seeding over the shared EF authority) | [`src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md) |
+| Foundation Identity EF persistence (opt-in complete IAM authority and provider-configuration backend; OpenIddict boundary) | [`src/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/README.md`](src/Elsa/Foundation/Identity/Persistence/EntityFrameworkCore/README.md) |
 | Workflow Agent (workflow explain/troubleshoot/change-proposal contribution) | [`src/Elsa/Agent/Workflows/EXTENSION_POINTS.md`](src/Elsa/Agent/Workflows/EXTENSION_POINTS.md) |
 
 ### Secrets
@@ -97,7 +99,8 @@ not automatic constitution violations.
 | Domain | Catalog |
 |---|---|
 | Secrets core (contracts — manager, resolver, repository, store, type provider, audit sink) | [`src/Elsa/Secrets/Core/EXTENSION_POINTS.md`](src/Elsa/Secrets/Core/EXTENSION_POINTS.md) |
-| Secrets (default services + shell feature registration; service overrides for repository, value protector, audit sink, stores, type providers) | [`src/Elsa/Secrets/EXTENSION_POINTS.md`](src/Elsa/Secrets/EXTENSION_POINTS.md) |
+| Secrets (default services + shell feature registration; Groundwork vs EF gate ownership is per selected composition) | [`src/Elsa/Secrets/EXTENSION_POINTS.md`](src/Elsa/Secrets/EXTENSION_POINTS.md) |
+| Secrets Entity Framework Core persistence (existing opt-in implementation and first ADR 0073 migration slice; Workbench catalogs it while the default flip remains pending) | [`src/Elsa/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](src/Elsa/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 
 ### Persistence
 
@@ -105,7 +108,8 @@ not automatic constitution violations.
 |---|---|
 | Provider-neutral persistence access and scope selection | [`src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md) |
 | Groundwork runtime persistence (document serializer + schema-version upcasters) | [`src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md) |
-| Foundation Identity Groundwork persistence (durable users/roles/external-identities/memberships; Identity schema selection) | [`src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md) |
+| Entity Framework persistence policy (history table, provider guard, migrate vs validate; shared policy under ADR 0073) | [`src/Elsa/Persistence/EntityFramework/EXTENSION_POINTS.md`](src/Elsa/Persistence/EntityFramework/EXTENSION_POINTS.md) |
+| Foundation Identity persistence (Groundwork authority plus independently selectable EF provider-configuration and application/credential backends) | [`src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md) |
 
 ### Activities
 
@@ -145,6 +149,7 @@ not automatic constitution violations.
 | Workflows runtime (canonical domain catalog: Core contracts, composition root, engine implementations, trigger publication, recurring schedules) | [`src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md) |
 | Workflows runtime API — executable inspection and diagnostics services | [`src/Elsa/Workflows/Runtime/Api/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Api/EXTENSION_POINTS.md) |
 | Workflows runtime distributed Groundwork persistence | [`src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/EXTENSION_POINTS.md) |
+| Workflows runtime distributed EF Core placement persistence | [`src/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Workflows runtime — HTTP endpoint behaviour | [`src/Elsa/Workflows/Runtime/Http/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Http/EXTENSION_POINTS.md) |
 | Workflows runtime — durable resumption (sweep service, recurring pump, feature gating) | [`src/Elsa/Workflows/Runtime/Resumption/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Resumption/EXTENSION_POINTS.md) |
 

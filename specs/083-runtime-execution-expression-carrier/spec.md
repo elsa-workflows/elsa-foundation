@@ -4,7 +4,8 @@
 
 **Created**: 2026-07-02
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: #367, #440, #444 (restatused 2026-09-10 from git evidence)
 
 **Input**: Implement [ADR 0030](../../docs/adr/0030-runtime-expression-evaluation-uses-a-parameter-threaded-live-carrier.md). Introduce a live execution-time expression carrier (a narrow marker interface mirroring `IMaterializationExpressionState`) that runtime JavaScript pre/post-processors read via the passed `IExpressionExecutionContext` parameter, never via dependency injection. Re-point the five dead `IWorkflowExecutionContext` processors onto the carrier and strip their constructor dependencies; populate the carrier from the scheduler work handler; keep all four accessor surfaces (execution-time identity functions, named pascalized accessors, execution-time activity-output accessors, and JavaScript variable write-back); fold JavaScript variable write-back into the existing durable-value write-back at the checkpoint-commit boundary; retire `IWorkflowExecutionContext` as a DI dependency; and add a guardrail test that enables the JavaScript workflows runtime feature, resolves every registered script pre-processor, and runs an end-to-end smoke evaluation. Re-base [spec 064](../064-runtime-workflow-execution-context/spec.md) FR-001…FR-005 onto the carrier.
 

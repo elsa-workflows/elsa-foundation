@@ -32,7 +32,7 @@
 - [x] T017 Add endpoint manifest assertions for exactly one owner, Minimal authoring, Foundation security disposition, catalog provenance, operation IDs/tags, and schema refs.
 - [x] T018 Replace temporary capture with committed before/after `CompatibilityComparer` tests that fail unapproved and unused deltas.
 - [x] T019 Remove unused owner FastEndpoints project/package references and delete exactly 13 transition entries; rebase Wave 1 and ratchet 156 to 143.
-- [x] T020 Publish `docs/reports/wave-2-minimal-api-migration-2026-08.md` with evidence, risks, unloadability findings, and #1323 separation.
+- [x] T020 Publish `docs/reports/archive/wave-2-minimal-api-migration-2026-08.md` with evidence, risks, unloadability findings, and #1323 separation.
 
 ## Phase 5: Repository Gates
 

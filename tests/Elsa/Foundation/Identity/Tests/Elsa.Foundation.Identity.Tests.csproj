@@ -14,7 +14,7 @@
 		<PackageReference Include="Microsoft.AspNetCore.OpenApi" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
 		<PackageReference Include="OpenIddict.EntityFrameworkCore" />
-		<PackageReference Include="Groundwork.Sqlite" VersionOverride="0.4.0-preview.29" />
+		<PackageReference Include="Groundwork.Sqlite" VersionOverride="0.4.0-preview.30" />
 		<PackageReference Include="Microsoft.NET.Test.Sdk" />
 		<PackageReference Include="xunit" />
 		<PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
@@ -36,13 +36,6 @@
 		<ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
 		<ProjectReference Include="..\..\..\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
 		<ProjectReference Include="..\..\..\..\..\benchmarks\Elsa.Groundwork.StorePerformance.Benchmarks\Elsa.Groundwork.StorePerformance.Benchmarks.csproj" />
-	</ItemGroup>
-
-	<ItemGroup>
-		<None Include="Baselines\identity-http-fastendpoints.json" CopyToOutputDirectory="PreserveNewest" />
-		<None Include="Baselines\identity-openapi-fastendpoints.json" CopyToOutputDirectory="PreserveNewest" />
-		<None Include="Baselines\identity-openapi-fastendpoints.raw.json" CopyToOutputDirectory="PreserveNewest" />
-		<None Include="Baselines\identity-approved-differences.json" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
 
 	<ItemGroup>

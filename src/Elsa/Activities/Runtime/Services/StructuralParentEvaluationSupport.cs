@@ -253,6 +253,180 @@ internal static class StructuralParentEvaluationSupport
             cancelledStates.Select(state => state.Execution.ActivityExecutionId).ToArray());
     }
 
+    /// <summary>
+    /// What a structural parent-evaluation commit takes from its source work item: the parent's pinned identity,
+    /// the checkpoint/commit metadata the handler assembled (each handler records its own key set), and the
+    /// command metadata the derived child-schedule and upward-completion work items inherit.
+    /// </summary>
+    internal sealed record ParentEvaluationCommitSource(
+        RuntimeSchedulerWorkItem WorkItem,
+        WorkflowExecutableIdentity PinnedExecutable,
+        string ExecutableNodeId,
+        string ActivityExecutionId,
+        IReadOnlyDictionary<string, string> Metadata,
+        IReadOnlyDictionary<string, string> DerivedCommandMetadata);
+
+    /// <summary>
+    /// Commits a structural parent that stays running after evaluating a child: persists the parent (and any
+    /// <paramref name="processedChildStates"/> the evaluation marked), captures its inspection projection, and
+    /// enqueues the newly scheduled children followed by <paramref name="followUpWorkItems"/> after the commit
+    /// lands, all in one checkpoint alongside the staged subtree cancellations.
+    /// </summary>
+    public static async ValueTask CommitDeferredParentActivityAsync(
+        RuntimeCheckpointCommitter checkpointCommitter,
+        IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
+        IRuntimeExecutionIdGenerator idGenerator,
+        TimeProvider timeProvider,
+        ParentEvaluationCommitSource source,
+        ActivityExecutionState parentState,
+        IReadOnlyCollection<ActivityExecutionState> processedChildStates,
+        IReadOnlyCollection<RuntimeChildActivityScheduleRequest> scheduleRequests,
+        IReadOnlyCollection<RuntimeSchedulerWorkItem> followUpWorkItems,
+        IReadOnlyCollection<ActivitySubtreeCancellationPlan> subtreeCancellations,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
+        CancellationToken cancellationToken)
+    {
+        var occurredAt = timeProvider.GetUtcNow();
+        var (workItem, activityExecutionId, metadata) = (source.WorkItem, source.ActivityExecutionId, source.Metadata);
+        var checkpointId = $"checkpoint:{workItem.WorkItemId}:activity-inspection-captured:{activityExecutionId}";
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>> inspectionChanges = inspectionAccumulator is null
+            ? []
+            :
+            [
+                new RuntimeStateChange<ActivityExecutionInspectionProjection>(
+                    StateId: activityExecutionId,
+                    Operation: RuntimeStateChangeOperation.Upsert,
+                    State: await inspectionAccumulator.BuildProjectionAsync(
+                        parentState, checkpointId, occurredAt, valueSnapshots: valueSnapshots, metadata: metadata, cancellationToken: cancellationToken),
+                    Metadata: metadata)
+            ];
+        var childWorkItems = SchedulerWorkItems.NewChildActivityScheduleWorkItems(
+            timeProvider, idGenerator, workItem, source.PinnedExecutable, activityExecutionId, scheduleRequests, source.DerivedCommandMetadata).ToArray();
+        var cancellationChanges = await BuildSubtreeCancellationChangesAsync(
+            inspectionAccumulator, subtreeCancellations, checkpointId, occurredAt, metadata, cancellationToken);
+        var commit = new RuntimeCheckpointCommit(
+            CommitId: $"commit:{workItem.WorkItemId}:activity-inspection-captured:{activityExecutionId}",
+            Checkpoint: new RuntimeCheckpoint(
+                CheckpointId: checkpointId,
+                Name: RuntimeCheckpointNames.ActivityInspectionCaptured,
+                WorkflowExecutionId: workItem.WorkflowExecutionId,
+                OccurredAt: occurredAt,
+                ActivityExecutionIds:
+                [
+                    activityExecutionId,
+                    .. processedChildStates.Select(state => state.Execution.ActivityExecutionId),
+                    .. cancellationChanges.CancelledActivityExecutionIds
+                ],
+                Metadata: metadata),
+            StateChanges: new RuntimeCheckpointStateChangeSet(
+                workflowExecution: null,
+                scheduler: null,
+                activityExecutions:
+                [
+                    new RuntimeStateChange<ActivityExecutionState>(
+                        StateId: activityExecutionId,
+                        Operation: RuntimeStateChangeOperation.Upsert,
+                        State: parentState,
+                        Metadata: metadata),
+                    .. processedChildStates.Select(state => new RuntimeStateChange<ActivityExecutionState>(
+                        StateId: state.Execution.ActivityExecutionId,
+                        Operation: RuntimeStateChangeOperation.Upsert,
+                        State: state,
+                        Metadata: metadata)),
+                    .. cancellationChanges.ActivityExecutions
+                ],
+                bookmarks: [],
+                durableValues: [],
+                incidents: cancellationChanges.Incidents,
+                operational: [],
+                activityExecutionInspections: [.. inspectionChanges, .. cancellationChanges.Inspections],
+                activityScopeCleanups: cancellationChanges.Cleanups),
+            PostCommitIntents: childWorkItems
+                .Concat(followUpWorkItems)
+                .Select(item => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(workItem, activityExecutionId, item, occurredAt))
+                .ToArray(),
+            Metadata: metadata);
+
+        await checkpointCommitter.CommitAsync(commit, cancellationToken);
+    }
+
+    /// <summary>
+    /// Commits a structural parent that completed after evaluating a child: persists the completed parent with its
+    /// inspection projection, durable-value changes and workflow-variable write-back, and enqueues its upward
+    /// completion work item followed by <paramref name="parentNotifications"/> after the commit lands, all in one
+    /// checkpoint alongside the staged subtree cancellations.
+    /// </summary>
+    public static async ValueTask CommitCompletedParentActivityAsync(
+        RuntimeCheckpointCommitter checkpointCommitter,
+        IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
+        TimeProvider timeProvider,
+        ParentEvaluationCommitSource source,
+        ActivityExecutionState completedParentState,
+        IReadOnlyCollection<string> outcomeNames,
+        IReadOnlyCollection<ActivitySubtreeCancellationPlan> subtreeCancellations,
+        IReadOnlyCollection<RuntimeSchedulerWorkItem> parentNotifications,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
+        RuntimeStateChange<WorkflowExecutionState>? workflowVariableWriteBack,
+        CancellationToken cancellationToken)
+    {
+        var occurredAt = timeProvider.GetUtcNow();
+        var (workItem, activityExecutionId, metadata) = (source.WorkItem, source.ActivityExecutionId, source.Metadata);
+        var checkpointId = $"checkpoint:{workItem.WorkItemId}:parent-activity-completed:{activityExecutionId}";
+        var inspection = inspectionAccumulator is null
+            ? null
+            : await inspectionAccumulator.BuildProjectionAsync(
+                completedParentState, checkpointId, occurredAt, outcomeNames: outcomeNames, valueSnapshots: valueSnapshots, metadata: metadata, cancellationToken: cancellationToken);
+        var completionWorkItem = SchedulerWorkItems.NewCompletionWorkItem(
+            timeProvider, workItem, source.PinnedExecutable, source.ExecutableNodeId, activityExecutionId, completedParentState, commandMetadata: source.DerivedCommandMetadata);
+        var cancellationChanges = await BuildSubtreeCancellationChangesAsync(
+            inspectionAccumulator, subtreeCancellations, checkpointId, occurredAt, metadata, cancellationToken);
+        var commit = new RuntimeCheckpointCommit(
+            CommitId: $"commit:{workItem.WorkItemId}:parent-activity-completed:{activityExecutionId}",
+            Checkpoint: new RuntimeCheckpoint(
+                CheckpointId: checkpointId,
+                Name: RuntimeCheckpointNames.ActivityCompleted,
+                WorkflowExecutionId: workItem.WorkflowExecutionId,
+                OccurredAt: occurredAt,
+                ActivityExecutionIds: [activityExecutionId, .. cancellationChanges.CancelledActivityExecutionIds],
+                Metadata: metadata),
+            StateChanges: new RuntimeCheckpointStateChangeSet(
+                workflowExecution: workflowVariableWriteBack,
+                scheduler: null,
+                activityExecutions:
+                [
+                    new RuntimeStateChange<ActivityExecutionState>(
+                        StateId: activityExecutionId,
+                        Operation: RuntimeStateChangeOperation.Upsert,
+                        State: completedParentState,
+                        Metadata: metadata),
+                    .. cancellationChanges.ActivityExecutions
+                ],
+                bookmarks: [],
+                durableValues: durableValueChanges,
+                incidents: cancellationChanges.Incidents,
+                operational: [],
+                activityExecutionInspections: inspection is null
+                    ? [.. cancellationChanges.Inspections]
+                    :
+                    [
+                        new RuntimeStateChange<ActivityExecutionInspectionProjection>(
+                            StateId: activityExecutionId,
+                            Operation: RuntimeStateChangeOperation.Upsert,
+                            State: inspection,
+                            Metadata: metadata),
+                        .. cancellationChanges.Inspections
+                    ],
+                activityScopeCleanups: cancellationChanges.Cleanups),
+            PostCommitIntents: new[] { completionWorkItem }
+                .Concat(parentNotifications)
+                .Select(item => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(workItem, activityExecutionId, item, occurredAt))
+                .ToArray(),
+            Metadata: metadata);
+
+        await checkpointCommitter.CommitAsync(commit, cancellationToken);
+    }
+
     internal sealed record SubtreeCancellationCommitChanges(
         IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>> ActivityExecutions,
         IReadOnlyCollection<RuntimeStateChange<IncidentState>> Incidents,

@@ -3,7 +3,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
-/// Cross-execution index over durable bookmark state keyed by external stimulus identity (W7, E3-5).
+/// Cross-execution index over durable bookmark state keyed by external stimulus identity.
 /// Unlike the workflow-scoped <see cref="IBookmarkStateStore.ListPageAsync"/> contract, which is scoped to a single workflow execution,
 /// this pages bookmarks waiting for a stimulus <em>across all executions</em>, which is what
 /// makes external-event fan-in to N waiting instances possible. It is a narrow read contract implemented

@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Core.Services.Coalescing;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -383,7 +384,7 @@ public sealed class RuntimeCancellationContractTests
             IReadOnlyCollection<RuntimePostCommitIntentHandlerContribution>? intentHandlerContributions = null)
         {
             _now = now;
-            _timeProvider = new FixedTimeProvider(now);
+            _timeProvider = new FakeTimeProvider(now);
             _persistencePolicy = persistencePolicy ?? new ImmediateRuntimeCheckpointPersistencePolicy();
             _enrichers = enrichers ?? [];
             _intentHandlerContributions = intentHandlerContributions ?? [];
@@ -542,11 +543,6 @@ public sealed class RuntimeCancellationContractTests
 
         private static WorkflowExecutableIdentity NewIdentity() =>
             new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private sealed class DispatchCancellationEnricher(

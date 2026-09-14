@@ -240,7 +240,7 @@ public sealed class GroundworkActivityPublicationCommand(
             [],
             ActivitiesDesignStorageManifest.ActivityDefinitionVersionOrder,
             cancellationToken);
-        var richOptions = GroundworkActivitiesDesignDocumentSerialization.Create(payloadSerializer);
+        var richOptions = GroundworkActivitiesDesignDocumentSerialization.Get(payloadSerializer);
         foreach (var envelope in documents)
         {
             var document = JsonSerializer.Deserialize<GroundworkV2ActivityDesignDocument<ActivityDefinitionVersion>>(envelope.ContentJson, richOptions)
@@ -403,7 +403,7 @@ public sealed class GroundworkActivityPublicationCommand(
             collection,
             ActivitiesDesignStorageManifest.SchemaVersion,
             entity,
-            GroundworkActivitiesDesignDocumentSerialization.Create(payloadSerializer))
+            GroundworkActivitiesDesignDocumentSerialization.Get(payloadSerializer))
             with { ExpectedVersion = expectedVersion };
 
     private static InvalidOperationException Conflict(string message, Exception? innerException = null) => new(message, innerException);

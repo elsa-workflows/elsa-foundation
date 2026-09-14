@@ -1,8 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Testing;
-using Elsa.Workflows.Primitives.Models;
-using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;

@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
 /// Ambient, explicitly-scoped accessor for the live drain that currently owns post-commit intent delivery for an
-/// execution (WU-2, spec 105-runtime-live-drain-delivery). Mirrors the push/pop shape of
+/// execution (spec 105-runtime-live-drain-delivery). Mirrors the push/pop shape of
 /// <see cref="IRuntimeCoalescingSessionAccessor"/>: the drain orchestrator establishes a delivery scope for the
 /// duration of an Immediate-mode drain, and the post-commit outbox processor resolves it to deliver
 /// <c>EnqueueSchedulerWork</c> intents for the owning execution in-memory (idempotent enqueue + direct Delivered mark)

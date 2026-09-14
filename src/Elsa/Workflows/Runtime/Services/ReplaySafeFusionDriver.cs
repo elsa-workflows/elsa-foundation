@@ -218,7 +218,7 @@ public sealed class ReplaySafeFusionDriver
 
                 _diagnostics?.RecordInlineCascadeDispatch();
 
-                // W5 parity with the drain loop: never dispatch sibling work past a terminal status.
+                // Parity with the drain loop's single-writer guard: never dispatch sibling work past a terminal status.
                 if (workflowExecutionStateStore is not null)
                 {
                     var workflowState = await workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken);

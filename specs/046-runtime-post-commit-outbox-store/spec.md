@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-post-commit-outbox-store`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #48, #49 (restatused 2026-09-10 from git evidence)
 **Input**: Continue the Runtime Execution Seam after scheduler state projection. The runtime already defines post-commit outbox contracts; this slice adds the default in-memory store without implementing a full outbox processor.
 
 ## Scenarios & Tests

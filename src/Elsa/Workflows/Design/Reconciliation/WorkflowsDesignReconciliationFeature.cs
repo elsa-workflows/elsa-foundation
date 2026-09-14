@@ -2,7 +2,7 @@ using CShells.Features;
 using Elsa.Events.Core.Extensions;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Design.Reconciliation.Contracts;
-using Elsa.Workflows.Design.Reconciliation.Core;
+using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Design.Reconciliation.Options;
 using Elsa.Workflows.Design.Reconciliation.Services;
 using Microsoft.Extensions.DependencyInjection;

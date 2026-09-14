@@ -1,6 +1,8 @@
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -307,6 +309,22 @@ public sealed class RuntimeRecoveryScannerTests
             })));
     }
 
+    // The scanner is only driven by the background resumption sweep, so this startup task is what turns an
+    // unusable key into an activation failure instead of a sweep that fails forever behind a growing backoff.
+    [Fact]
+    public void RecoveryContinuationStartupTask_FailsStartupWhenDurablePagingHasNoStableKey()
+    {
+        Assert.Throws<InvalidOperationException>(() => ResolveDurableRecoveryStartupTasks(signingKey: null));
+    }
+
+    [Fact]
+    public async Task RecoveryContinuationStartupTask_SucceedsOnAConfiguredKey()
+    {
+        var task = Assert.Single(ResolveDurableRecoveryStartupTasks("startup-validated-recovery-signing-key-32-bytes"));
+
+        await task.ExecuteAsync(CancellationToken.None);
+    }
+
     [Fact]
     public void RecoverySweepCursorStore_DoesNotLeakOrEvictAReinsertedGeneration()
     {
@@ -406,6 +424,23 @@ public sealed class RuntimeRecoveryScannerTests
             limit: limit,
             ownerId: ownerId,
             continuationToken: continuationToken);
+
+    private static IStartupTask[] ResolveDurableRecoveryStartupTasks(string? signingKey)
+    {
+        var services = new ServiceCollection();
+        services.AddOptions<RuntimeRecoveryContinuationOptions>()
+            .Configure(options =>
+            {
+                options.SigningKey = signingKey;
+                options.AllowEphemeralDevelopmentKey = false;
+            });
+        services.AddSingleton<IRuntimeRecoveryContinuationCodec, HmacRuntimeRecoveryContinuationCodec>();
+        services.AddScoped<IStartupTask, ValidateRuntimeRecoveryContinuationCodecStartupTask>();
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        return scope.ServiceProvider.GetServices<IStartupTask>().ToArray();
+    }
 
     private static IRuntimeRecoveryContinuationCodec RecoveryCodec(string signingKey) =>
         new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions

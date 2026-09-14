@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// <summary>
 /// Dispatch scaffold shared by the payload-typed scheduler work handlers: deserialize the work item's
 /// payload once, then run the handler body either against the pipeline's ambient services (staged
-/// explicitly by the dispatcher — RT-7 replaced the AsyncLocal service locator) or against a fresh
+/// explicitly by the dispatcher, replacing an earlier AsyncLocal service locator) or against a fresh
 /// scope for direct no-pipeline dispatch. Derivations own payload deserialization, <see cref="CanHandle"/>,
 /// and the body; commit semantics stay entirely theirs.
 /// </summary>
@@ -39,7 +39,7 @@ public abstract class RuntimeSchedulerWorkHandlerBase<TPayload> : IWorkflowSched
     }
 
     /// <summary>
-    /// Pipeline dispatch (Move 2 / RT-7): run in the Invoke slot reading the drain's ambient services from
+    /// Pipeline dispatch (Move 2): run in the Invoke slot reading the drain's ambient services from
     /// the workspace (staged explicitly by the dispatcher) instead of an AsyncLocal service locator.
     /// </summary>
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken cancellationToken = default)

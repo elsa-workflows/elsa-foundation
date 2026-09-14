@@ -35,7 +35,7 @@ public class ActivitiesPrimitivesFeature : IShellFeature
                 WellKnownRuntimeActivityConsumers.ClrActivity,
                 [RuntimeActivityDescriptor.InitialSchemaVersion])));
 
-        // Contribute the Event start-trigger's stimulus provider (W7, E3-1) so the publish-time trigger extractor
+        // Contribute the Event start-trigger's stimulus provider so the publish-time trigger extractor
         // can recognize published Event nodes and index them. Enumerable so other activity features add their own.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityTriggerStimulusProvider, EventTriggerStimulusProvider>());
 

@@ -7,7 +7,7 @@ lifecycle anchored at `Elsa.Activities.Design.Reconciliation`; it owns no catalo
 
 ## Contributions to other domains
 
-### `IActivityReconciliationSource` *(Core contract — `Elsa.Activities.Design.Reconciliation.Core`)*
+### `IActivityReconciliationSource` *(Core contract — `Elsa.Activities.Design.Core`)*
 - **Implementation:** `ClrActivityReconciliationSource` (`SourceKind => "CLR"`).
 - **What it does:** scans `ClrReconciliationOptions.FolderPath` via `ClrAssemblyScanner` and returns
   one `ActivityVersionReconciliationModel` per discovered `IActivity` implementation.

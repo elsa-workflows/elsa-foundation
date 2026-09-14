@@ -96,7 +96,7 @@ then the W16/W17/W19/W21 parallel wave ([#465](https://github.com/elsa-workflows
   tracing + API error contract. MS-9 introduces the first `ActivitySource` in the repo — an
   `IWorkflowEngineTracer` replacement contract (`Elsa.Workflows.Runtime.Core.Diagnostics`)
   whose allocation-free no-op default (`NullWorkflowEngineTracer`) is swapped by the opt-in
-  `WorkflowsRuntimeTracing` shell feature (`Elsa.Workflows.Runtime.Tracing`) for the real
+  `WorkflowsRuntimeTracing` shell feature (`Elsa.Workflows.Runtime`) for the real
   `ActivitySourceWorkflowEngineTracer`. Four behaviour-preserving span sites on source
   `Elsa.Workflows.Runtime` (drain → dispatch → activity.execute / checkpoint.commit): no new
   awaits in the fenced drain/commit sequences, no W12 slot reordering, tags set only via
@@ -207,7 +207,7 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
 
 - **Ratified:** the MD-5 minimum-project-size amendment (applied as framework §2.16.1,
   v3.0.0 → v3.1.0, Elsa cascade v3.2.0 → v3.3.0 — see the
-  [amendment index](../reports/constitution-amendment-index.md)) and
+  amendment index, retired 2026-09-10 and recoverable from git history) and
   [ADR 0033](../adr/0033-runtime-core-splits-contracts-from-engine.md) (accepted; execution is W28).
 - **Wave A — COMPLETE 2026-07-05.** All five correctness units + the #378 hotfix merged,
   22 issues closed, every unit failing-test-first with control-room QA (detached-worktree

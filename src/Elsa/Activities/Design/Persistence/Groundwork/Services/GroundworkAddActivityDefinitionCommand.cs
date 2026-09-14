@@ -52,7 +52,7 @@ public sealed class GroundworkAddActivityDefinitionCommand(
         accessContext.EnsureTenantScope(definition.TenantId);
         accessContext.EnsureTenantScope(version.TenantId);
 
-        var versionJson = GroundworkActivitiesDesignDocumentSerialization.Create(payloadSerializer);
+        var versionJson = GroundworkActivitiesDesignDocumentSerialization.Get(payloadSerializer);
         var requestMaterial = new CreateRequestMaterial(
             new DefinitionMaterial(
                 definition.ActivityTypeKey,

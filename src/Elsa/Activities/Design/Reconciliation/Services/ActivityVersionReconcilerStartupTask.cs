@@ -1,4 +1,4 @@
-using Elsa.Activities.Design.Reconciliation.Core;
+using Elsa.Activities.Design.Core.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Options;
 using Elsa.Locking.Core;
 using Elsa.Tasks.Core;

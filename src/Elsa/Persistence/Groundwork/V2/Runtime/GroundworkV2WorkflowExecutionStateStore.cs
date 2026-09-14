@@ -10,24 +10,14 @@ using System.Text.Json;
 namespace Elsa.Persistence.Groundwork.Runtime;
 
 /// <summary>Current-only Groundwork v2 workflow-execution state store.</summary>
-public sealed class GroundworkV2WorkflowExecutionStateStore : IWorkflowExecutionStateStore
+public sealed class GroundworkV2WorkflowExecutionStateStore : GroundworkV2RuntimeStoreBase, IWorkflowExecutionStateStore
 {
-    private readonly IGroundworkStorageSessionSource sessions;
-    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
-    private readonly string? targetName;
-    private readonly StorageUnit unit;
-
     public GroundworkV2WorkflowExecutionStateStore(
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,
         string? targetName = null)
+        : base(sessions, accessContextAccessor, targetName, "workflow-execution state", ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind)
     {
-        ArgumentNullException.ThrowIfNull(sessions);
-        ArgumentNullException.ThrowIfNull(accessContextAccessor);
-        this.sessions = sessions;
-        this.accessContextAccessor = accessContextAccessor;
-        this.targetName = targetName;
-        unit = sessions.Unit(ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind, targetName);
     }
 
     public ValueTask<WorkflowExecutionState> SaveAsync(
@@ -122,7 +112,7 @@ public sealed class GroundworkV2WorkflowExecutionStateStore : IWorkflowExecution
         cancellationToken.ThrowIfCancellationRequested();
         AccessContext.EnsureTenantScope(query.TenantId);
 
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var predicates = BuildHistoryPredicates(table, query);
         var sortTicks = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutionHistorySortTicksField);
         var executionId = Column(
@@ -162,7 +152,7 @@ public sealed class GroundworkV2WorkflowExecutionStateStore : IWorkflowExecution
         cancellationToken.ThrowIfCancellationRequested();
         AccessContext.EnsureTenantScope(query.TenantPartition);
 
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var predicates = BuildSelectorPredicates(table, query.Selector);
         AddEqual(
             predicates,
@@ -198,7 +188,7 @@ public sealed class GroundworkV2WorkflowExecutionStateStore : IWorkflowExecution
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var collection = Column(table, ElsaRuntimeV2StorageManifest.CollectionField);
         var artifact = Column(
             table,
@@ -244,27 +234,7 @@ public sealed class GroundworkV2WorkflowExecutionStateStore : IWorkflowExecution
         return ValueTask.FromResult<IReadOnlyCollection<string>>(artifactIds);
     }
 
-    private IStorageSession Open()
-    {
-        var context = AccessContext;
-        if (context.Scope is null || context.AcrossScopes)
-        {
-            throw new InvalidOperationException(
-                "Groundwork workflow-execution state requires one explicit persistence scope; " +
-                "global and across-scope access are refused.");
-        }
-
-        return sessions.Open(
-            unit.Id.Value,
-            StorageAccess.Scoped(new StorageScope(context.Scope.Value)),
-            targetName);
-    }
-
-    private PersistenceAccessContext AccessContext => accessContextAccessor.Current ??
-        throw new InvalidOperationException(
-            "Groundwork workflow-execution persistence access context is missing.");
-
-    private static WriteOutcome UpdateExisting(
+    private WriteOutcome UpdateExisting(
         IStorageSession session,
         StorageValues values,
         StoredEntry existing,
@@ -275,13 +245,7 @@ public sealed class GroundworkV2WorkflowExecutionStateStore : IWorkflowExecution
             workflowExecutionId);
         var version = existing.Version ?? throw new InvalidDataException(
             "Groundwork workflow-execution row did not return an optimistic revision.");
-        if (session is not IConcurrencyStorageSession concurrency)
-        {
-            throw new NotSupportedException(
-                "The selected Groundwork provider does not advertise optimistic workflow-execution concurrency.");
-        }
-
-        return concurrency.ConditionalUpsert(values, WriteOptions.IfVersion(version));
+        return ConditionalUpsert(session, values, version);
     }
 
     private static void EnsureIdentity(WorkflowExecutionState state, string expectedId)
@@ -292,12 +256,6 @@ public sealed class GroundworkV2WorkflowExecutionStateStore : IWorkflowExecution
                 "Groundwork workflow-execution row identity does not match its requested key.");
         }
     }
-
-    private static bool IsSaved(WriteOutcomeStatus status) =>
-        status is WriteOutcomeStatus.Inserted or
-        WriteOutcomeStatus.Updated or
-        WriteOutcomeStatus.Upserted or
-        WriteOutcomeStatus.Replayed;
 
     private WorkflowExecutionState ReadAndValidateTenant(IReadOnlyDictionary<string, object?> values)
     {
@@ -455,35 +413,4 @@ public sealed class GroundworkV2WorkflowExecutionStateStore : IWorkflowExecution
         var column = Column(table, field);
         predicates.Add(new Predicate.Equal(column, QueryConstant.Of(column, value)));
     }
-
-    private static Predicate Combine(IReadOnlyList<Predicate> predicates) => predicates.Count switch
-    {
-        0 => Predicate.AlwaysTrue.Instance,
-        1 => predicates[0],
-        _ => new Predicate.And(predicates)
-    };
-
-    private ColumnRef Column(TableId table, string name)
-    {
-        var definition = unit.Columns.SingleOrDefault(column =>
-            StringComparer.Ordinal.Equals(column.Name, name))
-            ?? throw new InvalidOperationException(
-                $"Groundwork workflow-execution unit '{unit.Id.Value}' does not declare query column '{name}'.");
-        var type = definition.Type switch
-        {
-            PortableType.String => QueryType.String,
-            PortableType.DateTimeOffset => QueryType.DateTimeOffset,
-            PortableType.Int32 => QueryType.Int32,
-            PortableType.Int64 => QueryType.Int64,
-            PortableType.Boolean => QueryType.Boolean,
-            _ => throw new InvalidOperationException(
-                $"Groundwork workflow-execution query column '{name}' has unsupported type '{definition.Type}'.")
-        };
-        return new ColumnRef(table, name, type, definition.IsNullable, definition.MaxLength);
-    }
-
-    private static Paging PagingFor(int limit, string? continuationToken) =>
-        continuationToken is null
-            ? Paging.Keyset(limit)
-            : Paging.Continuation(continuationToken, limit);
 }

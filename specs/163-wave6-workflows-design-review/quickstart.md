@@ -16,4 +16,4 @@ The maps check must report no stale generated files.
 For backend E2E, follow `e2e-tests/README.md`: rebuild Workbench, stop it, create a fresh SQLite DB,
 apply the reference-composition schema, start the HTTP profile, and run the Workflows Design backend
 scenario. Record the exact command, commit, database reset, server URL, and result in
-`docs/reports/workflows-design-api-migration-2026-08.md`.
+`docs/reports/archive/workflows-design-api-migration-2026-08.md`.

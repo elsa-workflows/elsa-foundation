@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Services;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
@@ -621,7 +622,7 @@ public sealed class WorkflowActivationCoordinatorTests
             Authority = new(new InMemoryWorkflowActivationAuthority(), Calls);
             Observer = new(Calls);
             Lease = new(Calls);
-            Coordinator = new(Authority, References, Lease, new FixedTimeProvider(Now), Indexer, Bindings, triggerObservers: [Observer]);
+            Coordinator = new(Authority, References, Lease, new FakeTimeProvider(Now), Indexer, Bindings, triggerObservers: [Observer]);
         }
 
         public List<string> Calls { get; } = [];
@@ -704,11 +705,6 @@ public sealed class WorkflowActivationCoordinatorTests
             Now,
             new Dictionary<string, string>(),
             IncidentStrategyBuiltIns.FaultReference);
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 
     private sealed class RecordingLease(List<string> calls) : IWorkflowExecutableRootWriteLeaseManager

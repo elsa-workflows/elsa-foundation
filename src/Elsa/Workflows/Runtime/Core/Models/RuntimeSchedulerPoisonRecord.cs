@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// A durable record of a scheduler work handler crash. When a handler throws, the drainer no longer drops the
 /// already-dequeued work item silently: it records the fault here (honoring <see cref="Contracts.IRuntimeDomainRetryPolicy"/>)
 /// so an operator or a recovery pump can inspect poisoned work and, when the policy asks to retry, the item is
-/// re-enqueued instead of lost (RT-1 gap b).
+/// re-enqueued instead of lost.
 /// </summary>
 public sealed record RuntimeSchedulerPoisonRecord
 {

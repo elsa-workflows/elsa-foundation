@@ -1,5 +1,12 @@
 # Research: Zero-EF Final Removal
 
+> **Historical artifact — superseded 2026-09-12.** This file belongs to superseded Work Unit 144
+> and is preserved only as provenance. Do not use its Groundwork gates, performance prerequisites,
+> or deletion dispositions as current instructions. [ADR 0073](../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
+> and [Program #1665](../../docs/program-goals/ef-core-persistence.md) govern the opposite all-EF
+> direction; only timing-independent correctness requirements survive when mapped into the current
+> completion ledger.
+
 ## Decision 1: Final deletion is a gated integration lane
 
 **Decision**: Treat #642 diagnostics, #643 OpenIddict, #646 performance, and #932 dashboard provider parity as hard prerequisites. Verify their accepted evidence on remote `main` before deleting any EF oracle they use.

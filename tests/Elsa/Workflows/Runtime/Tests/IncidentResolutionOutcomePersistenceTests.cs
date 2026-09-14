@@ -1,4 +1,4 @@
-using Elsa.Workflows.Primitives.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -69,10 +69,39 @@ public sealed class IncidentResolutionOutcomePersistenceTests
             (await store.FindAsync("wf-1", "incident-1"))!.ResolutionOutcome!.ActionKind);
     }
 
+    [Fact]
+    public async Task Checkpoint_rejects_an_outcome_rewrite_before_projecting_any_other_state()
+    {
+        // The commit store checks write-once outcomes before the apply phase. The incident store's own SaveAsync would
+        // still reject the rewrite, but only after the bookmark that is applied ahead of incidents had been written.
+        var incidents = new InMemoryIncidentStateStore();
+        await incidents.SaveAsync(Incident(Outcome(IncidentResolutionActionKinds.FaultWorkflow)));
+        var bookmarks = new InMemoryBookmarkStateStore();
+        var writer = new InMemoryRuntimeCheckpointCommitStore(bookmarkStateStore: bookmarks, incidentStateStore: incidents);
+        var bookmark = new BookmarkState(
+            BookmarkId: "bookmark-1",
+            WorkflowExecutionId: "wf-1",
+            ActivityExecutionId: "activity-1",
+            ExecutableNodeId: "node-1",
+            ResumeTargetId: "node-1",
+            StimulusType: "Test.Stimulus",
+            StimulusHash: "sha256:test",
+            Payload: null,
+            Metadata: new Dictionary<string, string>(),
+            CreatedAt: Now,
+            ExpiresAt: null);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            writer.CommitAsync(Commit("commit-rewrite", Incident(outcome: null), bookmark), Decision).AsTask());
+
+        Assert.Empty(writer.ListCommits());
+        Assert.Null(await bookmarks.FindAsync("wf-1", "bookmark-1"));
+    }
+
     private static readonly RuntimeCheckpointPersistenceDecision Decision =
         new(RuntimeCheckpointPersistenceMode.Immediate);
 
-    private static RuntimeCheckpointCommit Commit(string commitId, IncidentState incident) =>
+    private static RuntimeCheckpointCommit Commit(string commitId, IncidentState incident, params BookmarkState[] bookmarks) =>
         new(
             commitId,
             new RuntimeCheckpoint(
@@ -86,7 +115,13 @@ public sealed class IncidentResolutionOutcomePersistenceTests
                 workflowExecution: null,
                 scheduler: null,
                 activityExecutions: [],
-                bookmarks: [],
+                bookmarks: bookmarks
+                    .Select(bookmark => new RuntimeStateChange<BookmarkState>(
+                        bookmark.BookmarkId,
+                        RuntimeStateChangeOperation.Upsert,
+                        bookmark,
+                        new Dictionary<string, string>()))
+                    .ToArray(),
                 durableValues: [],
                 incidents:
                 [

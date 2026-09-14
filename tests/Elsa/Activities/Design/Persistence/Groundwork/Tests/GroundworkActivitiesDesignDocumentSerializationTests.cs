@@ -11,10 +11,10 @@ namespace Elsa.Activities.Design.Persistence.Groundwork.Tests;
 public sealed class GroundworkActivitiesDesignDocumentSerializationTests
 {
     [Fact]
-    public void Create_clones_payload_options_and_wraps_payload_resolver()
+    public void Get_clones_payload_options_and_wraps_payload_resolver()
     {
         var serializer = new TrackingPayloadSerializer();
-        var options = GroundworkActivitiesDesignDocumentSerialization.Create(serializer);
+        var options = GroundworkActivitiesDesignDocumentSerialization.Get(serializer);
         var json = JsonSerializer.Serialize(GraphProbe.Populated(), options);
 
         Assert.IsType<ExcludingJsonTypeInfoResolver>(options.TypeInfoResolver);

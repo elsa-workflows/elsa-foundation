@@ -4,7 +4,8 @@
 
 **Feature Branch**: `codex/runtime-activity-input-resolution`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #63, #64 (restatused 2026-09-10 from git evidence)
 **Input**: Continue Runtime Execution Seam Slice 6 after active output publication and durable capture. Activity invocation must materialize compiled runtime input bindings from literal, active activity output, and durable value sources without loading authored Design models or history output snapshots.
 
 ## Scenarios & Tests

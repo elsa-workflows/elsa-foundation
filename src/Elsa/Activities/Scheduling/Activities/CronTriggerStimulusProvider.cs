@@ -4,7 +4,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Activities.Scheduling.Activities;
 
 /// <summary>
-/// The <see cref="IActivityTriggerStimulusProvider"/> for the <see cref="Cron"/> start trigger (W16). It
+/// The <see cref="IActivityTriggerStimulusProvider"/> for the <see cref="Cron"/> start trigger. It
 /// recognizes published <see cref="Cron"/> nodes and derives their stimulus identity from the authored
 /// <see cref="Cron.Expression"/> literal, so the trigger extractor indexes the cron trigger at publish time over
 /// the pinned artifact and the recurring-trigger pump's dispatched stimulus routes to a start.

@@ -9,6 +9,7 @@ using Elsa.Agent.GitHubCopilot.Services;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Elsa.Testing;
 
 namespace Elsa.Agent.Tests;
 
@@ -31,7 +32,7 @@ public sealed class AgentProviderLogRedactionTests
     [Fact]
     public async Task Anthropic_streaming_failure_does_not_leak_the_api_key_to_the_log_sink()
     {
-        var logger = new CapturingLogger<AnthropicAgentProvider>();
+        var logger = new RecordingLogger<AnthropicAgentProvider>();
         var options = Options.Create(new AnthropicAgentOptions { Enabled = true, ApiKey = AnthropicSecret, Model = "claude-test" });
         var provider = new AnthropicAgentProvider(
             new ThrowingChatClientFactory(new Exception($"401 Unauthorized: invalid x-api-key '{AnthropicSecret}'.")),
@@ -97,7 +98,7 @@ public sealed class AgentProviderLogRedactionTests
     public async Task Copilot_redacts_the_runtime_connection_token_from_the_log_sink()
     {
         const string runtimeSecret = "rt-conn-SECRET-9191";
-        var logger = new CapturingLogger<GitHubCopilotAgentProvider>();
+        var logger = new RecordingLogger<GitHubCopilotAgentProvider>();
         var provider = BuildCopilotProvider(
             new GitHubCopilotAgentOptions { Enabled = true, GitHubToken = "ghp_unused", RuntimeConnectionToken = runtimeSecret },
             logger,
@@ -116,7 +117,7 @@ public sealed class AgentProviderLogRedactionTests
         Environment.SetEnvironmentVariable(envVar, envSecret);
         try
         {
-            var logger = new CapturingLogger<GitHubCopilotAgentProvider>();
+            var logger = new RecordingLogger<GitHubCopilotAgentProvider>();
             var provider = BuildCopilotProvider(
                 new GitHubCopilotAgentOptions { Enabled = true, GitHubToken = null, GitHubTokenEnvironmentVariable = envVar },
                 logger,
@@ -143,7 +144,7 @@ public sealed class AgentProviderLogRedactionTests
         Environment.SetEnvironmentVariable(envVar, envSecret);
         try
         {
-            var logger = new CapturingLogger<AnthropicAgentProvider>();
+            var logger = new RecordingLogger<AnthropicAgentProvider>();
             var options = Options.Create(new AnthropicAgentOptions { Enabled = true, ApiKey = null, ApiKeyEnvironmentVariable = envVar, Model = "claude-test" });
             var provider = new AnthropicAgentProvider(
                 new ThrowingChatClientFactory(new Exception($"401 Unauthorized: invalid x-api-key '{envSecret}'.")),
@@ -173,7 +174,7 @@ public sealed class AgentProviderLogRedactionTests
     /// exception's ToString including inner exceptions and stack) contains the raw secret, and the
     /// redaction marker proves the failure was still logged with its diagnostic content.
     /// </summary>
-    private static void AssertSinkRedacted(CapturingLogger logger, string secret)
+    private static void AssertSinkRedacted(RecordingLogger logger, string secret)
     {
         Assert.NotEmpty(logger.Entries);
 
@@ -188,11 +189,11 @@ public sealed class AgentProviderLogRedactionTests
 
     // --- Builders ---
 
-    private static (GitHubCopilotAgentProvider Provider, CapturingLogger<GitHubCopilotAgentProvider> Logger, ScriptableCopilotClient Client) BuildCopilot(
+    private static (GitHubCopilotAgentProvider Provider, RecordingLogger<GitHubCopilotAgentProvider> Logger, ScriptableCopilotClient Client) BuildCopilot(
         Exception? resumeException = null,
         Exception? pingException = null)
     {
-        var logger = new CapturingLogger<GitHubCopilotAgentProvider>();
+        var logger = new RecordingLogger<GitHubCopilotAgentProvider>();
         var client = new ScriptableCopilotClient { ResumeException = resumeException, PingException = pingException };
         var provider = BuildCopilotProvider(new GitHubCopilotAgentOptions { Enabled = true, GitHubToken = CopilotSecret }, logger, client);
         return (provider, logger, client);
@@ -200,7 +201,7 @@ public sealed class AgentProviderLogRedactionTests
 
     private static GitHubCopilotAgentProvider BuildCopilotProvider(
         GitHubCopilotAgentOptions options,
-        CapturingLogger<GitHubCopilotAgentProvider> logger,
+        RecordingLogger<GitHubCopilotAgentProvider> logger,
         ScriptableCopilotClient client)
     {
         var audit = new InMemoryAgentAuditStore();
@@ -218,24 +219,6 @@ public sealed class AgentProviderLogRedactionTests
             list.Add(item);
         return list;
     }
-
-    // --- Capturing logger ---
-
-    public record LogEntry(LogLevel Level, string Message, Exception? Exception);
-
-    public class CapturingLogger : ILogger
-    {
-        public List<LogEntry> Entries { get; } = [];
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-            => Entries.Add(new LogEntry(logLevel, formatter(state, exception), exception));
-    }
-
-    public sealed class CapturingLogger<T> : CapturingLogger, ILogger<T>;
 
     // --- Anthropic fakes ---
 

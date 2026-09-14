@@ -44,7 +44,7 @@ tests/Elsa/Architecture/
 ├── Baselines/wave2-http-fastendpoints.json
 ├── Baselines/wave2-openapi-fastendpoints.json
 └── Wave2*Tests.cs
-docs/reports/wave-2-minimal-api-migration-2026-08.md
+docs/reports/archive/wave-2-minimal-api-migration-2026-08.md
 ```
 
 ## Design

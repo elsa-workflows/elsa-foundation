@@ -9,7 +9,8 @@
 
 **Created**: 2026-06-10
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: #17 (restatused 2026-09-10 from git evidence)
 
 **Input**: User description: "Create a complete plan and implement an end-to-end vertical slice so a demo can invoke a few REST API endpoints to define and execute a workflow. The slice should allow creating a design-time workflow definition from JSON, compiling it into a WorkflowExecutable, and executing it through REST without taking too many shortcuts."
 

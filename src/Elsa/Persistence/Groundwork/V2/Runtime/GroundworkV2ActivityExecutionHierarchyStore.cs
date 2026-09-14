@@ -16,12 +16,8 @@ namespace Elsa.Persistence.Groundwork.Runtime;
 /// the public query contract, while the provider supplies bounded continuation and the adapter verifies the
 /// signed logical boundary and page ordering.
 /// </remarks>
-public sealed class GroundworkV2ActivityExecutionHierarchyStore : IActivityExecutionHierarchyStore
+public sealed class GroundworkV2ActivityExecutionHierarchyStore : GroundworkV2RuntimeStoreBase, IActivityExecutionHierarchyStore
 {
-    private readonly IGroundworkStorageSessionSource sessions;
-    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
-    private readonly string? targetName;
-    private readonly StorageUnit unit;
     private readonly IActivityExecutionHierarchyCursorCodec? cursorCodec;
 
     public GroundworkV2ActivityExecutionHierarchyStore(
@@ -29,14 +25,9 @@ public sealed class GroundworkV2ActivityExecutionHierarchyStore : IActivityExecu
         IPersistenceAccessContextAccessor accessContextAccessor,
         IActivityExecutionHierarchyCursorCodec? cursorCodec = null,
         string? targetName = null)
+        : base(sessions, accessContextAccessor, targetName, "activity-execution hierarchy", ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyDocumentKind)
     {
-        ArgumentNullException.ThrowIfNull(sessions);
-        ArgumentNullException.ThrowIfNull(accessContextAccessor);
-        this.sessions = sessions;
-        this.accessContextAccessor = accessContextAccessor;
         this.cursorCodec = cursorCodec;
-        this.targetName = targetName;
-        unit = sessions.Unit(ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyDocumentKind, targetName);
     }
 
     public ValueTask SaveAsync(
@@ -317,7 +308,7 @@ public sealed class GroundworkV2ActivityExecutionHierarchyStore : IActivityExecu
         string workflowExecutionId,
         CancellationToken cancellationToken)
     {
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var workflow = Column(table, ElsaRuntimeV2StorageManifest.WorkflowExecutionIdField);
         var sequence = Column(table, ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyExecutionSequenceField);
         var activityId = Column(table, ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyActivityExecutionIdField);
@@ -376,7 +367,7 @@ public sealed class GroundworkV2ActivityExecutionHierarchyStore : IActivityExecu
         string? continuation,
         CancellationToken cancellationToken)
     {
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var sequence = Column(table, ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyExecutionSequenceField);
         var activityId = Column(table, ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyActivityExecutionIdField);
         var result = QueryWithBoundCursor(
@@ -402,7 +393,7 @@ public sealed class GroundworkV2ActivityExecutionHierarchyStore : IActivityExecu
         string? continuation,
         CancellationToken cancellationToken)
     {
-        var table = new TableId(unit.Name);
+        var table = new TableId(Unit.Name);
         var sequence = Column(table, ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyExecutionSequenceField);
         var activityId = Column(table, ElsaRuntimeV2StorageManifest.ActivityExecutionHierarchyActivityExecutionIdField);
         var predicates = new List<Predicate>
@@ -452,16 +443,6 @@ public sealed class GroundworkV2ActivityExecutionHierarchyStore : IActivityExecu
         return record;
     }
 
-    private IStorageSession Open()
-    {
-        var context = RequireScopedContext();
-
-        return sessions.Open(
-            unit.Id.Value,
-            StorageAccess.Scoped(new StorageScope(context.Scope!.Value)),
-            targetName);
-    }
-
     private void EnsureQueryScope(ActivityExecutionHierarchyQuery query)
     {
         var context = RequireScopedContext();
@@ -471,21 +452,6 @@ public sealed class GroundworkV2ActivityExecutionHierarchyStore : IActivityExecu
             throw new InvalidOperationException(
                 "The requested hierarchy tenant scope does not match the current persistence scope.");
         }
-    }
-
-    private PersistenceAccessContext RequireScopedContext()
-    {
-        var context = accessContextAccessor.Current ??
-                      throw new InvalidOperationException(
-                          "Groundwork activity-execution hierarchy persistence access context is missing.");
-        if (context.Scope is null || context.AcrossScopes)
-        {
-            throw new InvalidOperationException(
-                "Groundwork activity-execution hierarchy requires one explicit persistence scope; " +
-                "global and across-scope access are refused.");
-        }
-
-        return context;
     }
 
     private static void EnsureProviderPageProgress(QueryMaterializedResult result, int limit)
@@ -558,7 +524,7 @@ public sealed class GroundworkV2ActivityExecutionHierarchyStore : IActivityExecu
             Recoverable: true,
             RecoveryAction: "restart-from-first-page");
 
-    private static WriteOutcome UpdateExisting(
+    private WriteOutcome UpdateExisting(
         IStorageSession session,
         StorageValues values,
         StoredEntry existing,
@@ -568,13 +534,7 @@ public sealed class GroundworkV2ActivityExecutionHierarchyStore : IActivityExecu
         EnsureIdentity(previous, record.WorkflowExecutionId, record.ActivityExecutionId);
         var version = existing.Version ?? throw new InvalidDataException(
             "Groundwork activity-execution hierarchy row did not return an optimistic revision.");
-        if (session is not IConcurrencyStorageSession concurrency)
-        {
-            throw new NotSupportedException(
-                "The selected Groundwork provider does not advertise optimistic activity-execution hierarchy concurrency.");
-        }
-
-        return concurrency.ConditionalUpsert(values, WriteOptions.IfVersion(version));
+        return ConditionalUpsert(session, values, version);
     }
 
     private QueryMaterializedResult QueryWithBoundCursor(QueryRequest request, string? cursor)
@@ -646,40 +606,6 @@ public sealed class GroundworkV2ActivityExecutionHierarchyStore : IActivityExecu
             ? ActivityExecutionCursorBindingState.Matched
             : ActivityExecutionCursorBindingState.Mismatched;
 
-    private ColumnRef Column(TableId table, string name)
-    {
-        var definition = unit.Columns.SingleOrDefault(column =>
-            StringComparer.Ordinal.Equals(column.Name, name))
-            ?? throw new InvalidOperationException(
-                $"Groundwork activity-execution hierarchy unit '{unit.Id.Value}' does not declare query column '{name}'.");
-        var type = definition.Type switch
-        {
-            PortableType.String => QueryType.String,
-            PortableType.DateTimeOffset => QueryType.DateTimeOffset,
-            PortableType.Int32 => QueryType.Int32,
-            PortableType.Int64 => QueryType.Int64,
-            PortableType.Boolean => QueryType.Boolean,
-            _ => throw new InvalidOperationException(
-                $"Groundwork activity-execution hierarchy query column '{name}' has unsupported type '{definition.Type}'.")
-        };
-        return new ColumnRef(table, name, type, definition.IsNullable, definition.MaxLength);
-    }
-
-    private static Predicate Equal(ColumnRef column, object value) =>
-        new Predicate.Equal(column, QueryConstant.Of(column, value));
-
-    private static Predicate Combine(IReadOnlyList<Predicate> predicates) => predicates.Count switch
-    {
-        0 => Predicate.AlwaysTrue.Instance,
-        1 => predicates[0],
-        _ => new Predicate.And(predicates)
-    };
-
-    private static Paging PagingFor(int limit, string? continuation) =>
-        continuation is null
-            ? Paging.Keyset(limit)
-            : Paging.Continuation(continuation, limit);
-
     private static void ValidateIdentity(string workflowExecutionId, string activityExecutionId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
@@ -701,10 +627,4 @@ public sealed class GroundworkV2ActivityExecutionHierarchyStore : IActivityExecu
                 "Groundwork activity-execution hierarchy row identity does not match its requested key.");
         }
     }
-
-    private static bool IsSaved(WriteOutcomeStatus status) =>
-        status is WriteOutcomeStatus.Inserted or
-        WriteOutcomeStatus.Updated or
-        WriteOutcomeStatus.Upserted or
-        WriteOutcomeStatus.Replayed;
 }

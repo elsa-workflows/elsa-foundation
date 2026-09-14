@@ -6,7 +6,7 @@ tracing conventions.
 
 | | **Engine telemetry** (this page, MS-9) | **OpenTelemetry ingestion domain** |
 |---|---|---|
-| Package | `Elsa.Workflows.Runtime.Core` (contract) + `Elsa.Workflows.Runtime.Tracing` (feature) | `Elsa.Diagnostics.OpenTelemetry(.Core)` |
+| Package | `Elsa.Workflows.Runtime.Core` (contract) + `Elsa.Workflows.Runtime` (feature) | `Elsa.Diagnostics.OpenTelemetry(.Core)` |
 | Direction | **Emits** — the workflow engine instruments *its own* execution | **Receives** — an OTLP collector endpoint ingesting telemetry pushed by *other* processes |
 | Mechanism | `System.Diagnostics.ActivitySource` spans | OTLP/HTTP protobuf parser + in-memory store + query/live-feed API |
 | Consumer | Any `ActivityListener` / an OpenTelemetry SDK `AddSource("Elsa.Workflows.Runtime")` in the host | Dashboards/queries reading the ingested store |

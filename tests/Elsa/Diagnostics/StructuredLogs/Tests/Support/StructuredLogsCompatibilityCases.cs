@@ -4,7 +4,7 @@ using Elsa.Api.Compatibility.Testing.Manifests;
 namespace Elsa.Diagnostics.StructuredLogs.Tests.Support;
 
 /// <summary>
-/// Stable, named requests used to capture the current FastEndpoints surface. The request set deliberately
+/// Stable, named requests used to capture the current Structured Logs HTTP surface. The request set deliberately
 /// contains the binding and stream boundaries that are easy for a framework migration to change silently.
 /// </summary>
 public static class StructuredLogsCompatibilityCases

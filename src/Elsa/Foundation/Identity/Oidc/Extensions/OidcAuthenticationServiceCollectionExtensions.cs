@@ -36,9 +36,10 @@ public static class OidcAuthenticationServiceCollectionExtensions
         // with a 500 before authorization can produce the intended 401. It is only usable once a
         // provider is configured (ClientId + Authority), so we register it only when a ClientId is
         // present. Without it, bearer-token validation (JwtBearer) remains the default challenge and
-        // unauthenticated API calls return 401 as designed. Binding a real provider from shell
-        // configuration (so ClientId/Authority arrive without an explicit configure delegate) is
-        // W18 scope, not W4.
+        // unauthenticated API calls return 401 as designed. Only the configure delegate is seen
+        // here, which is why OidcAuthenticationFeature applies its shell settings through it; a
+        // ClientId supplied via services.Configure<OidcAuthenticationOptions> alone does not
+        // register the handler.
         if (!string.IsNullOrWhiteSpace(options.ClientId))
             authentication.AddOpenIdConnect(options.AuthenticationScheme, _ => { });
 

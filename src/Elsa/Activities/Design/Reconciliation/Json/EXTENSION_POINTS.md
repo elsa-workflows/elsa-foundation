@@ -7,7 +7,7 @@ lifecycle anchored at `Elsa.Activities.Design.Reconciliation`; it owns no catalo
 
 ## Contributions to other domains
 
-### `IActivityReconciliationSource` *(Core contract — `Elsa.Activities.Design.Reconciliation.Core`)*
+### `IActivityReconciliationSource` *(Core contract — `Elsa.Activities.Design.Core`)*
 - **Implementation:** `JsonActivityReconciliationSource` (`SourceKind => "Json"`).
 - **What it does:** reads either the single `JsonReconciliationOptions.FilePath` or each
   `JsonReconciliationOptions.Files` entry (in ascending `Order`) via `IJsonActivityCatalogReader` and

@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-volatile-wait-policy`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #53, #54 (restatused 2026-09-10 from git evidence)
 **Input**: Continue the Runtime Execution Seam after volatile wait contracts exist. Add an overridable default volatile wait policy that keeps volatile waits distinct from durable suspension/bookmark resume.
 
 ## Scenarios & Tests

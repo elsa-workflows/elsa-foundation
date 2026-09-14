@@ -16,6 +16,8 @@ Modules should stay opt-in. A shell composes only the capabilities it needs, and
 
 ## Start here
 
+- The process entry point is [`src/Apps/Elsa.Workbench/Program.cs`](src/Apps/Elsa.Workbench/Program.cs); which features it composes is decided by [`src/Apps/Elsa.Workbench/shells.json`](src/Apps/Elsa.Workbench/shells.json).
+- [How a workflow executes](docs/how-a-workflow-executes.md) traces one request from that entry point to a durable checkpoint, file by file.
 - [AGENTS.md](AGENTS.md) is the provider-neutral entrypoint for AI agents and engineers.
 - [docs/README.md](docs/README.md) routes to glossary, skills, maps, reports, and architecture orientation.
 - `.specify/memory/constitution-framework.md` and `.specify/memory/constitution.md` are the two-layer constitution and should be treated as quality gates, not as the primary learning path.

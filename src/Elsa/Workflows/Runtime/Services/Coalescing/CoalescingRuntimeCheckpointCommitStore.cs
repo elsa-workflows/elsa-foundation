@@ -5,7 +5,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
 
 /// <summary>
-/// Coalescing decorator for <see cref="IRuntimeCheckpointCommitStore"/> (E3-6, RT-10). While a coalescing session owns
+/// Coalescing decorator for <see cref="IRuntimeCheckpointCommitStore"/>. While a coalescing session owns
 /// the target workflow execution, deferred checkpoints are buffered into an in-memory working set and folded into a
 /// single atomic durable commit at a flush boundary (attempt activation, suspension/fault/cancellation/completion, an
 /// operational or bookmark write, the per-segment hop cap, or the end-of-drain quiescence flush). A durable attempt
@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Core.Services.Coalescing;
 /// is completely unaffected.
 /// </summary>
 /// <remarks>
-/// This decorator never bypasses W5 ownership fencing: the folded flush is routed back through
+/// This decorator never bypasses single-writer ownership fencing: the folded flush is routed back through
 /// <see cref="RuntimeCheckpointCommitter"/> (via the drain scope's quiescence flush), and every boundary commit reaching
 /// this store has already been fenced by the committer for the same workflow execution. The durable scheduler queue is
 /// advanced only after the folded commit lands (condition B), so a crash mid-segment replays from the last flushed state.

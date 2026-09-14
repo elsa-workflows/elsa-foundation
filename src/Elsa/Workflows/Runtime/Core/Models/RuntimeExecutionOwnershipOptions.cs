@@ -1,7 +1,7 @@
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// Options for the runtime execution ownership service (single-writer fencing, RT-2).
+/// Options for the runtime execution ownership service (single-writer fencing).
 /// </summary>
 public sealed class RuntimeExecutionOwnershipOptions
 {

@@ -5,7 +5,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Services;
 
 /// <summary>
-/// RT-11: a per-work-item memo of the parsed <see cref="RuntimeCompleteActivityCommandPayload"/>.
+/// A per-work-item memo of the parsed <see cref="RuntimeCompleteActivityCommandPayload"/>.
 /// <para>
 /// A CompleteActivity work item's payload is inspected up to four times for a single dispatch — the routing selector,
 /// both claiming handlers' <c>CanHandle</c>, and the winning handler's body — each of which deserialized the payload

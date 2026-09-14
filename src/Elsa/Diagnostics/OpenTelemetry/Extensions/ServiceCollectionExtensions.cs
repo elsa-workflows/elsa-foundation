@@ -24,8 +24,11 @@ public static class ServiceCollectionExtensions
         services.AddOptions<OpenTelemetryDiagnosticsOptions>();
         services.TryAddSingleton<IOpenTelemetrySourceRegistry, OpenTelemetrySourceRegistry>();
         services.TryAddSingleton<IOpenTelemetryRedactor, OpenTelemetryRedactor>();
-        services.TryAddSingleton<InMemoryOpenTelemetryStore>();
-        services.TryAddSingleton<IOpenTelemetryStore>(sp => sp.GetRequiredService<InMemoryOpenTelemetryStore>());
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IOpenTelemetryStore)))
+        {
+            services.TryAddSingleton<InMemoryOpenTelemetryStore>();
+            services.AddSingleton<IOpenTelemetryStore>(sp => sp.GetRequiredService<InMemoryOpenTelemetryStore>());
+        }
         services.TryAddSingleton<InMemoryOpenTelemetryLiveFeed>();
         services.TryAddSingleton<IOpenTelemetryLiveFeed>(sp => sp.GetRequiredService<InMemoryOpenTelemetryLiveFeed>());
         services.TryAddSingleton<IOpenTelemetryIngestor, OpenTelemetryIngestor>();

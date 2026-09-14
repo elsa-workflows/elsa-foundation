@@ -55,10 +55,6 @@ public static class FoundationIdentityServiceCollectionExtensions
         services.TryAddScoped<IClaimMappingRuleEvaluator, ClaimMappingRuleEvaluator>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IPermissionContributor, DefaultIdentityPermissionCatalog>());
         EnsureReplacement<IPermissionCatalog, CompositePermissionCatalog>(services, ServiceLifetime.Singleton);
-        services.TryAddScoped<ISecurityDefaultGuardEvaluator, SecurityDefaultGuardEvaluator>();
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<ISecurityDefaultGuard, SigningKeySecurityDefaultGuard>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<ISecurityDefaultGuard, HttpsMetadataSecurityDefaultGuard>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<ISecurityDefaultGuard, SecretHashSecurityDefaultGuard>());
 
         return services;
     }
@@ -97,16 +93,58 @@ public static class FoundationIdentityServiceCollectionExtensions
             descriptor = services.Last(x => x.ServiceType == typeof(TContract));
         }
 
-        if (!services.Any(item => item.ServiceType == typeof(FoundationIdentityReplacementRegistration) &&
-                                 item.ImplementationInstance is FoundationIdentityReplacementRegistration marker &&
-                                 marker.ContractType == typeof(TContract)))
-        {
-            services.AddSingleton(new FoundationIdentityReplacementRegistration(
-                typeof(TContract),
-                descriptor.ImplementationType ?? descriptor.ImplementationInstance?.GetType() ?? typeof(TDefault),
-                descriptor));
-        }
+        var markerDescriptors = services
+            .Where(item => item.ServiceType == typeof(FoundationIdentityReplacementRegistration) &&
+                           item.ImplementationInstance is FoundationIdentityReplacementRegistration marker &&
+                           marker.ContractType == typeof(TContract))
+            .ToArray();
+        if (markerDescriptors.Length > 1)
+            throw new InvalidOperationException(
+                $"Replacement contract '{typeof(TContract).FullName}' has conflicting registration markers.");
 
+        var marker = markerDescriptors.SingleOrDefault()?.ImplementationInstance as FoundationIdentityReplacementRegistration;
+        if (FoundationIdentityRegistrationValidator.DescriptorMatches(descriptor, marker))
+            return services;
+
+        if (markerDescriptors.Length == 1)
+            services.Remove(markerDescriptors[0]);
+        services.AddSingleton(new FoundationIdentityReplacementRegistration(
+            typeof(TContract),
+            descriptor.ImplementationType ?? descriptor.ImplementationInstance?.GetType() ?? typeof(TDefault),
+            descriptor));
+
+        return services;
+    }
+
+    /// <summary>
+    /// Tags the complete tenant-local IAM authority as one replacement group while retaining
+    /// the individual contract markers consumed by the standard registration validator.
+    /// </summary>
+    public static IServiceCollection EnsureIdentityAuthorityReplacementContracts<
+        TUserStore,
+        TRoleStore,
+        TClaimMappingStore,
+        TExternalIdentityStore,
+        TTenantMembershipStore>(this IServiceCollection services)
+        where TUserStore : class, IUserStore, IRevisionAwareUserStore
+        where TRoleStore : class, IRoleStore, IRevisionAwareRoleStore, IPagedRoleStore
+        where TClaimMappingStore : class, IClaimMappingStore, IRevisionAwareClaimMappingStore, IPagedClaimMappingStore
+        where TExternalIdentityStore : class, IExternalIdentityStore, IRevisionAwareExternalIdentityStore, IPagedExternalIdentityStore
+        where TTenantMembershipStore : class, ITenantMembershipStore, IRevisionAwareTenantMembershipStore
+    {
+        services.EnsureReplacementContract<IUserStore, TUserStore>();
+        services.EnsureReplacementContract<IRevisionAwareUserStore, TUserStore>();
+        services.EnsureReplacementContract<IRoleStore, TRoleStore>();
+        services.EnsureReplacementContract<IRevisionAwareRoleStore, TRoleStore>();
+        services.EnsureReplacementContract<IPagedRoleStore, TRoleStore>();
+        services.EnsureReplacementContract<IClaimMappingStore, TClaimMappingStore>();
+        services.EnsureReplacementContract<IRevisionAwareClaimMappingStore, TClaimMappingStore>();
+        services.EnsureReplacementContract<IPagedClaimMappingStore, TClaimMappingStore>();
+        services.EnsureReplacementContract<IExternalIdentityStore, TExternalIdentityStore>();
+        services.EnsureReplacementContract<IRevisionAwareExternalIdentityStore, TExternalIdentityStore>();
+        services.EnsureReplacementContract<IPagedExternalIdentityStore, TExternalIdentityStore>();
+        services.EnsureReplacementContract<ITenantMembershipStore, TTenantMembershipStore>();
+        services.EnsureReplacementContract<IRevisionAwareTenantMembershipStore, TTenantMembershipStore>();
         return services;
     }
 

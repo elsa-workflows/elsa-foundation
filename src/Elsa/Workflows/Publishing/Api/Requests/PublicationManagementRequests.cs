@@ -5,6 +5,8 @@ using Elsa.Workflows.Publishing.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Requests;
 
+public sealed record GetPublicationRecord(string PublicationId);
+
 public sealed record GetWorkflowPublicationPolicy(string DefinitionId);
 
 public sealed record SetWorkflowPublicationPolicy(

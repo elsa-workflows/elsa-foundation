@@ -70,6 +70,8 @@ public static class OpenTelemetryEndpointRouteBuilderExtensions
                 new TagsAttribute("OpenTelemetry"),
                 new ProducesResponseTypeMetadata(StatusCodes.Status204NoContent, typeof(void), []))
             .WithSecurityDisposition(EndpointSecurityDispositionMetadata.HostCredential(TransportCredential, OpenTelemetryPermissions.OwnerId))
+            // Deliberately anonymous to ASP.NET Core authorization: collectors carry no user principal, and
+            // OtlpHttpIngestionHandler authenticates the OTLP API key or loopback before reading the body.
             .AllowAnonymous();
     }
 

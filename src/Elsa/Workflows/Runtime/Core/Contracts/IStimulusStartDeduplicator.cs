@@ -1,7 +1,7 @@
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
-/// Narrow deduplicator for the stimulus START path (W7, Condition A). In an at-least-once delivery world a
+/// Narrow deduplicator for the stimulus START path (Condition A). In an at-least-once delivery world a
 /// stimulus can be delivered more than once; when the caller supplies an idempotency key the router asks this
 /// service whether a start for that key has already been admitted, so a duplicate delivery does not silently
 /// double-start a workflow.

@@ -12,7 +12,6 @@
     <ProjectReference Include="..\..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
     <ProjectReference Include="..\Core\Elsa.Workflows.Design.Core.csproj" />
     <ProjectReference Include="..\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
-    <ProjectReference Include="Core\Elsa.Workflows.Design.Reconciliation.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

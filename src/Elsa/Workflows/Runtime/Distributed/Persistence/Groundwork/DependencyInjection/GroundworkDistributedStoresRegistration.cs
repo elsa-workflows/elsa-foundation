@@ -14,22 +14,63 @@ public static class GroundworkDistributedStoresRegistration
     public static IServiceCollection AddGroundworkDistributedRuntimeStores(this IServiceCollection services, string? targetName = null)
     {
         ArgumentNullException.ThrowIfNull(services);
-        foreach (var unit in DistributedGroundworkStorageManifest.CreateUnits())
-            services.AddGroundworkStorageUnit(unit, targetName);
+        var existingBackend = ExecutionPlacementStoreBackend.Find(services);
+        if (existingBackend is not null)
+            existingBackend.EnsureOwnsRegisteredContract(services);
+        else if (ExecutionPlacementStoreBackend.HasRegisteredContract(services))
+            throw new InvalidOperationException("An explicit IExecutionPlacementStore is already registered; Groundwork placement persistence refuses to replace it implicitly.");
+        var existingCommandBackend = ExecutionCommandTransportBackend.Find(services);
+        existingCommandBackend?.EnsureOwnsRegisteredContract(services);
+        if (ExecutionCommandTransportBackend.HasRegisteredContract(services) && existingCommandBackend is null)
+            throw new InvalidOperationException("An explicit IExecutionCommandTransport is already registered; Groundwork command transport persistence refuses to replace it implicitly.");
 
-        services.RemoveAll<IExecutionPlacementStore>();
-        services.AddScoped<IExecutionPlacementStore>(provider => new GroundworkExecutionPlacementStore(
-            provider.GetRequiredService<IGroundworkStorageSessionSource>(),
-            provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
-            targetName));
-        services.RemoveAll<IExecutionCommandTransport>();
-        services.AddScoped<IExecutionCommandTransport>(provider => new GroundworkExecutionCommandTransport(
-            provider.GetRequiredService<IGroundworkStorageSessionSource>(),
-            provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
-            targetName));
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkDistributionDurabilityEvidence>());
-        services.Replace(ServiceDescriptor.Singleton<IWorkflowExecutionLeaseFencingCapability>(
-            GroundworkDistributionLeaseFencingCapability.Instance));
+        if (!string.Equals(existingBackend?.Name, ExecutionPlacementStoreBackend.EntityFramework, StringComparison.Ordinal))
+            services.AddGroundworkStorageUnit(DistributedGroundworkStorageManifest.CreatePlacementUnit(), targetName);
+
+        if (!string.Equals(existingBackend?.Name, ExecutionPlacementStoreBackend.EntityFramework, StringComparison.Ordinal))
+        {
+            services.RemoveAll<ExecutionPlacementStoreBackend>();
+            services.RemoveAll<IExecutionPlacementStore>();
+            var placementDescriptor = ServiceDescriptor.Scoped<IExecutionPlacementStore>(provider => new GroundworkExecutionPlacementStore(
+                provider.GetRequiredService<IGroundworkStorageSessionSource>(),
+                provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
+                targetName));
+            services.Add(placementDescriptor);
+            ExecutionPlacementStoreBackend.Register(
+                services,
+                new ExecutionPlacementStoreBackend(
+                    ExecutionPlacementStoreBackend.Groundwork,
+                    placementDescriptor,
+                    collection => collection.RemoveGroundworkStorageUnit(DistributedGroundworkStorageManifest.PlacementUnitId)));
+        }
+        if (!string.Equals(existingCommandBackend?.Name, ExecutionCommandTransportBackend.EntityFramework, StringComparison.Ordinal))
+        {
+            existingCommandBackend?.RemoveOwnedArtifacts(services);
+            services.AddGroundworkStorageUnit(DistributedGroundworkStorageManifest.CreateCommandStreamHeadUnit(), targetName);
+            services.AddGroundworkStorageUnit(DistributedGroundworkStorageManifest.CreateCommandTransportUnit(), targetName);
+            services.RemoveAll<ExecutionCommandTransportBackend>();
+            services.RemoveAll<IExecutionCommandTransport>();
+            var commandDescriptor = ServiceDescriptor.Scoped<IExecutionCommandTransport>(provider => new GroundworkExecutionCommandTransport(
+                provider.GetRequiredService<IGroundworkStorageSessionSource>(),
+                provider.GetRequiredService<IPersistenceAccessContextAccessor>(),
+                targetName));
+            services.Add(commandDescriptor);
+            var durabilityEvidenceDescriptor = ServiceDescriptor.Scoped<IWorkflowDispatchDurabilityEvidence, GroundworkDistributionDurabilityEvidence>();
+            ExecutionCommandTransportBackend.Register(
+                services,
+                new ExecutionCommandTransportBackend(
+                    ExecutionCommandTransportBackend.Groundwork,
+                    commandDescriptor,
+                    collection =>
+                    {
+                        collection.RemoveGroundworkStorageUnit(DistributedGroundworkStorageManifest.CommandStreamHeadUnitId);
+                        collection.RemoveGroundworkStorageUnit(DistributedGroundworkStorageManifest.CommandTransportUnitId);
+                        collection.Remove(durabilityEvidenceDescriptor);
+                    }));
+            services.Add(durabilityEvidenceDescriptor);
+            services.Replace(ServiceDescriptor.Singleton<IWorkflowExecutionLeaseFencingCapability>(
+                GroundworkDistributionLeaseFencingCapability.Instance));
+        }
         return services;
     }
 }

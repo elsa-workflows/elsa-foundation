@@ -1,8 +1,10 @@
+using CShells.Lifecycle;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using OpenIddict.Server;
 using OpenIddict.Validation.AspNetCore;
@@ -30,6 +32,10 @@ public static class OpenIddictBehaviorServiceCollectionExtensions
         services.TryAddScoped<ITokenService, OpenIddictTokenService>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<OpenIddictServerOptions>, ConfigureOpenIddictServerOptions>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<AuthenticationOptions>, ConfigureOpenIddictDefaultAuthenticationSchemes>());
+        // The server options are otherwise first built by a request, so a missing or malformed signing key would
+        // leave the shell active and every authenticated request failing. Build them at activation instead.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IShellInitializer, SigningKeyActivationGuard>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, SigningKeyActivationGuard>());
 
         services.AddOpenIddict()
             .AddServer(server => server.AllowCustomFlow(OpenIddictIdentityDefaults.FirstPartyGrantType))

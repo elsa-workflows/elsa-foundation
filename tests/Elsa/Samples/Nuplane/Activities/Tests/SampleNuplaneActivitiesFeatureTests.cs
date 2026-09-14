@@ -1,4 +1,4 @@
-using global::Elsa.Activities.Design.Reconciliation.Core;
+using global::Elsa.Activities.Design.Core.Reconciliation;
 using global::Elsa.Activities.Runtime.Core.Models;
 using global::Elsa.Primitives.Models;
 using global::Elsa.Samples.Nuplane.Activities;

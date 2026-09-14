@@ -2,7 +2,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Models;
-using Elsa.Activities.Design.Reconciliation.Core.Models;
+using Elsa.Activities.Design.Core.Reconciliation.Models;
 using Elsa.Primitives.Models;
 
 namespace Elsa.Activities.Design.Tests.Contracts;

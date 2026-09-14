@@ -3,7 +3,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
-/// Establishes and enforces single-writer ownership of a workflow execution (RT-2).
+/// Establishes and enforces single-writer ownership of a workflow execution.
 /// </summary>
 /// <remarks>
 /// Ownership is expressed as a monotonically increasing fencing token. Each acquisition issues a strictly greater

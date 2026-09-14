@@ -5,7 +5,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 namespace Elsa.Activities.Primitives.Activities;
 
 /// <summary>
-/// A named-event trigger with a dual role (W7 start half; spec 116 adds the mid-flow wait form):
+/// A named-event trigger with a dual role (start half; spec 116 adds the mid-flow wait form):
 /// as a start trigger, the publish-time trigger extractor reads its <see cref="EventName"/> and records a
 /// durable trigger binding keyed by the event's stimulus so the stimulus router starts a new instance when a
 /// matching event arrives; scheduled mid-flow, it suspends with a typed trigger registration on the same
@@ -14,7 +14,7 @@ namespace Elsa.Activities.Primitives.Activities;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Deliberately minimal per the W7 ruling: the trigger is keyed by event name plus an optional authored
+/// Deliberately minimal: the trigger is keyed by event name plus an optional authored
 /// correlation value, with no payload schema or filters. On a mid-flow wait, a nonblank correlation is retained
 /// as bookmark metadata so correlated delivery narrows resume fan-in; null or blank preserves broadcast behavior.
 /// When a workflow is started by the event, the activity returns the event name in one atomic result so the run
@@ -24,7 +24,7 @@ namespace Elsa.Activities.Primitives.Activities;
 /// Role selection mirrors <c>HttpEndpoint</c>: the activity completes when the run's start trigger delivery
 /// targeted this node, or on direct invocation while <see cref="CanStartWorkflow"/> is <c>true</c> (the
 /// default, preserving the activity's start-first identity). In every other case it suspends until the named
-/// event stimulus resumes it. The cross-execution fan-in resume path (E3-5) is exercised through the stimulus
+/// event stimulus resumes it. The cross-execution fan-in resume path is exercised through the stimulus
 /// router against waiting bookmarks.
 /// </para>
 /// </remarks>

@@ -3,6 +3,14 @@ using Elsa.Workflows.Runtime.Distributed.Models;
 namespace Elsa.Workflows.Runtime.Distributed.Contracts;
 
 /// <summary>
+/// Declares <see cref="IExecutionPlacementStore"/> as a single-implementation replacement contract.
+/// </summary>
+[AttributeUsage(AttributeTargets.Interface, Inherited = false)]
+public sealed class ExecutionPlacementStoreReplacementContractAttribute : Attribute
+{
+}
+
+/// <summary>
 /// Durable, cluster-shared placement authority for execution leases. This is the atomicity boundary for placement:
 /// implementations coordinate through shared backing state or storage and apply <see cref="TryClaimAsync"/> as a
 /// compare-and-swap so two nodes cannot both hold a live placement lease for the same execution. The per-node
@@ -10,9 +18,10 @@ namespace Elsa.Workflows.Runtime.Distributed.Contracts;
 /// </summary>
 /// <remarks>
 /// Placement is routing, not correctness — see <see cref="ExecutionPlacementLease"/>. A default in-memory
-/// implementation ships for single-process composition and the two-node test harness. The opt-in Groundwork persistence
-/// feature supplies a durable implementation behind this contract without touching Runtime.Core.
+/// implementation ships for single-process composition and the two-node test harness. The opt-in Groundwork or
+/// EF Core placement persistence features supply durable implementations behind this contract without touching Runtime.Core.
 /// </remarks>
+[ExecutionPlacementStoreReplacementContract]
 public interface IExecutionPlacementStore
 {
     /// <summary>Returns the current placement lease for the execution, or <see langword="null"/> when unplaced.</summary>

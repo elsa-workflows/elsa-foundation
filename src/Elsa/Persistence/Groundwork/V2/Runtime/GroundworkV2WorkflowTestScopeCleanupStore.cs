@@ -10,7 +10,7 @@ using System.Text;
 namespace Elsa.Persistence.Groundwork.Runtime;
 
 /// <summary>Atomically reconciles detached test-scope dispatches and deterministic cancellation outbox work.</summary>
-public sealed class GroundworkV2WorkflowTestScopeCleanupStore : IWorkflowTestScopeCleanupStore
+public sealed class GroundworkV2WorkflowTestScopeCleanupStore : GroundworkV2RuntimeStoreBase, IWorkflowTestScopeCleanupStore
 {
     private const int MaximumPageSize = GroundworkV2WorkflowTestScopeStore.MaximumPageSize;
     private const int MaximumContinuationTokenLength = 1024;
@@ -19,10 +19,6 @@ public sealed class GroundworkV2WorkflowTestScopeCleanupStore : IWorkflowTestSco
     private const int ContinuationHeaderLength = 1 + ScopeBindingLength + sizeof(long);
     private static readonly Encoding StrictUtf8 = new UTF8Encoding(false, true);
 
-    private readonly IGroundworkStorageSessionSource sessions;
-    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
-    private readonly string? targetName;
-    private readonly StorageUnit scopeUnit;
     private readonly StorageUnit dispatchUnit;
     private readonly StorageUnit outboxUnit;
 
@@ -30,15 +26,10 @@ public sealed class GroundworkV2WorkflowTestScopeCleanupStore : IWorkflowTestSco
         IGroundworkStorageSessionSource sessions,
         IPersistenceAccessContextAccessor accessContextAccessor,
         string? targetName = null)
+        : base(sessions, accessContextAccessor, targetName, "workflow test-scope cleanup", ElsaRuntimeV2StorageManifest.WorkflowTestScopeDocumentKind)
     {
-        ArgumentNullException.ThrowIfNull(sessions);
-        ArgumentNullException.ThrowIfNull(accessContextAccessor);
-        this.sessions = sessions;
-        this.accessContextAccessor = accessContextAccessor;
-        this.targetName = targetName;
-        scopeUnit = sessions.Unit(ElsaRuntimeV2StorageManifest.WorkflowTestScopeDocumentKind, targetName);
-        dispatchUnit = sessions.Unit(ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind, targetName);
-        outboxUnit = sessions.Unit(ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind, targetName);
+        dispatchUnit = UnitFor(ElsaRuntimeV2StorageManifest.WorkflowDispatchDocumentKind);
+        outboxUnit = UnitFor(ElsaRuntimeV2StorageManifest.PostCommitOutboxDocumentKind);
     }
 
     public async ValueTask<WorkflowTestScopeCleanupResult> CleanupAsync(
@@ -71,7 +62,7 @@ public sealed class GroundworkV2WorkflowTestScopeCleanupStore : IWorkflowTestSco
         if (page.Length > 0)
         {
             using var unitOfWork = BeginAtomicUnitOfWork();
-            var scopeSession = unitOfWork.OpenSession(scopeUnit);
+            var scopeSession = unitOfWork.OpenSession(Unit);
             var dispatchSession = unitOfWork.OpenSession(dispatchUnit);
             var outboxSession = unitOfWork.OpenSession(outboxUnit);
             var scopeKey = GroundworkRuntimeRowStore.Key(
@@ -89,7 +80,7 @@ public sealed class GroundworkV2WorkflowTestScopeCleanupStore : IWorkflowTestSco
             // The same-value scope CAS is the durable fence shared by cleanup and child admission.
             StageConditionalUpsert(
                 unitOfWork,
-                scopeUnit,
+                Unit,
                 GroundworkV2WorkflowTestScopeStorageConventions.Values(scopeRecord),
                 scopeEntry);
 
@@ -220,7 +211,7 @@ public sealed class GroundworkV2WorkflowTestScopeCleanupStore : IWorkflowTestSco
         CancellationToken cancellationToken)
     {
         var records = new Dictionary<string, WorkflowDispatchRecord>(StringComparer.Ordinal);
-        var dispatchStore = new GroundworkV2WorkflowDispatchStore(sessions, accessContextAccessor, targetName);
+        var dispatchStore = new GroundworkV2WorkflowDispatchStore(Sessions, AccessContextAccessor, TargetName);
         foreach (var status in new[] { WorkflowDispatchStatus.Pending, WorkflowDispatchStatus.Started })
         {
             var afterCreatedAt = continuation?.CreatedAt;
@@ -267,7 +258,7 @@ public sealed class GroundworkV2WorkflowTestScopeCleanupStore : IWorkflowTestSco
     private async ValueTask<int> CountLiveAsync(WorkflowTestScope scope, CancellationToken cancellationToken)
     {
         var count = 0;
-        var dispatchStore = new GroundworkV2WorkflowDispatchStore(sessions, accessContextAccessor, targetName);
+        var dispatchStore = new GroundworkV2WorkflowDispatchStore(Sessions, AccessContextAccessor, TargetName);
         foreach (var status in new[] { WorkflowDispatchStatus.Pending, WorkflowDispatchStatus.Started })
         {
             DateTimeOffset? afterCreatedAt = null;
@@ -370,15 +361,11 @@ public sealed class GroundworkV2WorkflowTestScopeCleanupStore : IWorkflowTestSco
 
     private sealed record DispatchContinuation(DateTimeOffset CreatedAt, string DispatchId);
 
-    private IUnitOfWork BeginAtomicUnitOfWork() => sessions.BeginUnitOfWork(
-        Access,
-        BatchWriteOptions.Exact,
-        [scopeUnit.Id.Value, dispatchUnit.Id.Value, outboxUnit.Id.Value],
-        targetName);
+    private IUnitOfWork BeginAtomicUnitOfWork() => BeginAtomicUnitOfWork([Unit.Id.Value, dispatchUnit.Id.Value, outboxUnit.Id.Value]);
 
     private void EnsureClosing(WorkflowTestScope scope)
     {
-        var entry = sessions.Open(scopeUnit.Id.Value, Access, targetName).Read(
+        var entry = Open().Read(
             GroundworkRuntimeRowStore.Key(
                 GroundworkV2WorkflowTestScopeStorageConventions.PhysicalId(scope.ScopeId)));
         if (entry is null)
@@ -394,29 +381,10 @@ public sealed class GroundworkV2WorkflowTestScopeCleanupStore : IWorkflowTestSco
 
     private void RequireAtomicCommit()
     {
-        if (sessions is not IGroundworkStorageCapabilitySource capabilitySource ||
-            !capabilitySource.Capabilities(targetName).Any(capability =>
-                capability.Id.Equals(WellKnownCapabilities.AtomicCommit)))
-        {
+        if (!HasAtomicCommit)
             throw new NotSupportedException(
                 "Groundwork workflow test-scope cleanup requires the provider's evidenced atomic-commit capability.");
-        }
     }
-
-    private StorageAccess Access
-    {
-        get
-        {
-            var context = accessContextAccessor.Current ??
-                          throw new InvalidOperationException("Groundwork workflow test-scope persistence access context is missing.");
-            if (context.Scope is null || context.AcrossScopes)
-                throw new InvalidOperationException(
-                    "Groundwork workflow test-scope cleanup requires one explicit persistence scope; global and across-scope access are refused.");
-            return StorageAccess.Scoped(new StorageScope(context.Scope.Value));
-        }
-    }
-
-    private void EnsureTenant(string? tenantId) => accessContextAccessor.Current.EnsureTenantScope(tenantId);
 
     private static WorkflowTestScopeRecord ReadScope(StoredEntry entry, string scopeId)
     {

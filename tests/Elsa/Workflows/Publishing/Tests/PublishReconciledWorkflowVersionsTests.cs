@@ -1,9 +1,10 @@
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Versioning;
+using Elsa.Testing;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
-using Elsa.Workflows.Design.Reconciliation.Core;
+using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
@@ -77,7 +78,7 @@ public sealed class PublishReconciledWorkflowVersionsTests
     [Fact]
     public async Task Warns_and_skips_when_the_claimed_version_row_is_missing()
     {
-        var logger = new CapturingLogger<PublishReconciledWorkflowVersions>();
+        var logger = new RecordingLogger<PublishReconciledWorkflowVersions>();
         var sender = new SpySender();
         var handler = NewHandler(sender, definitions: [Definition("wf-a")], versions: [], logger: logger);
 
@@ -90,7 +91,7 @@ public sealed class PublishReconciledWorkflowVersionsTests
     [Fact]
     public async Task Warns_and_skips_when_the_definition_is_missing_from_the_store()
     {
-        var logger = new CapturingLogger<PublishReconciledWorkflowVersions>();
+        var logger = new RecordingLogger<PublishReconciledWorkflowVersions>();
         var sender = new SpySender();
         var handler = NewHandler(sender, definitions: [], versions: [], logger: logger);
 
@@ -243,7 +244,7 @@ public sealed class PublishReconciledWorkflowVersionsTests
     [Fact]
     public async Task A_failing_definition_is_logged_and_does_not_stop_the_others()
     {
-        var logger = new CapturingLogger<PublishReconciledWorkflowVersions>();
+        var logger = new RecordingLogger<PublishReconciledWorkflowVersions>();
         var sender = new SpySender { FailFor = "ver-a" };
         var handler = NewHandler(
             sender,
@@ -256,6 +257,54 @@ public sealed class PublishReconciledWorkflowVersionsTests
 
         Assert.Contains(sender.Sent.OfType<PublishWorkflow>(), r => r.VersionId == "ver-b");
         Assert.Contains(logger.Entries, e => e.Level == LogLevel.Error && e.Message.Contains("wf-a"));
+    }
+
+    [Fact]
+    public async Task A_target_slot_owned_by_a_foreign_source_serving_the_same_artifact_is_logged_not_silently_replayed()
+    {
+        // Before the preflight owner check, PublishWorkflow's same-artifact no-op ran before ownership was
+        // consulted and journaled an Active record the slot never pointed at, on every boot. It now refuses
+        // with slot_owner_conflict like any other foreign-owned target (reviewed on #1659); reconcile must
+        // surface that refusal through its existing catch/log/continue contract rather than treat it as the
+        // "replayed unchanged" success it used to be. PublishWorkflowRequestHandlerTests pins that no
+        // executable, source reference, or publication record is written for this case.
+        var logger = new RecordingLogger<PublishReconciledWorkflowVersions>();
+        var conflict = new PublicationActivationException(new PublicationFailure(
+            PublicationFailureCodes.SlotOwnerConflict, "slot 'default' is owned by another activation source; it already serves this artifact"));
+        var sender = new SpySender { FailFor = "ver-a", FailWith = conflict };
+        var handler = NewHandler(
+            sender,
+            definitions: [Definition("wf-a"), Definition("wf-b")],
+            versions: [Version("wf-a", "1.0.0", "ver-a"), Version("wf-b", "1.0.0", "ver-b")],
+            logger: logger);
+
+        await handler.Handle(Reconciled(Claim("wf-a", "1.0.0"), Claim("wf-b", "1.0.0")), CancellationToken.None);
+
+        Assert.Contains(sender.Sent.OfType<PublishWorkflow>(), r => r.VersionId == "ver-b");
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Error && e.Message.Contains("wf-a") && e.Exception == conflict);
+    }
+
+    [Fact]
+    public async Task A_target_slot_owned_by_a_foreign_source_serving_a_different_artifact_is_logged_and_processing_continues()
+    {
+        // This shape already failed at activation before #1659 (a foreign owner serving a different artifact
+        // was never a no-op); the preflight change only moves the same refusal ahead of the writes. Reconcile's
+        // catch/log/continue must still hold for it, and PublishWorkflowRequestHandlerTests pins that it too now
+        // leaves no executable, source reference, or publication record behind.
+        var logger = new RecordingLogger<PublishReconciledWorkflowVersions>();
+        var conflict = new PublicationActivationException(new PublicationFailure(
+            PublicationFailureCodes.SlotOwnerConflict, "slot 'default' is owned by another activation source"));
+        var sender = new SpySender { FailFor = "ver-a", FailWith = conflict };
+        var handler = NewHandler(
+            sender,
+            definitions: [Definition("wf-a"), Definition("wf-b")],
+            versions: [Version("wf-a", "1.0.0", "ver-a"), Version("wf-b", "1.0.0", "ver-b")],
+            logger: logger);
+
+        await handler.Handle(Reconciled(Claim("wf-a", "1.0.0"), Claim("wf-b", "1.0.0")), CancellationToken.None);
+
+        Assert.Contains(sender.Sent.OfType<PublishWorkflow>(), r => r.VersionId == "ver-b");
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Error && e.Message.Contains("wf-a") && e.Exception == conflict);
     }
 
     [Fact]
@@ -277,7 +326,7 @@ public sealed class PublishReconciledWorkflowVersionsTests
     {
         // A dependency throwing OCE on its own (token not cancelled) is an operational failure, not a
         // shutdown signal — the catch-all fallback keeps shell activation alive (reviewed on #1161).
-        var logger = new CapturingLogger<PublishReconciledWorkflowVersions>();
+        var logger = new RecordingLogger<PublishReconciledWorkflowVersions>();
         var sender = new SpySender { FailFor = "ver-a", FailWith = new OperationCanceledException() };
         var handler = NewHandler(
             sender,
@@ -309,9 +358,9 @@ public sealed class PublishReconciledWorkflowVersionsTests
         IReadOnlyList<WorkflowActivationSlot>? slots = null,
         IReadOnlyList<PublicationRecord>? records = null,
         IReadOnlyList<PublicationPolicy>? policies = null,
-        CapturingLogger<PublishReconciledWorkflowVersions>? logger = null) =>
+        RecordingLogger<PublishReconciledWorkflowVersions>? logger = null) =>
         new(
-            logger ?? new CapturingLogger<PublishReconciledWorkflowVersions>(),
+            logger ?? new RecordingLogger<PublishReconciledWorkflowVersions>(),
             new StubDefinitionStore(definitions),
             new StubVersionStore(versions),
             new StubPolicyStore(policies ?? []),
@@ -442,16 +491,5 @@ public sealed class PublishReconciledWorkflowVersionsTests
         public ValueTask SaveAsync(PublicationRecord publication, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
         public ValueTask<IReadOnlyCollection<PublicationRecord>> ListBySlotAsync(string slotId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
         public ValueTask<bool> TryTransitionAsync(PublicationRecord publication, PublicationStatus expectedStatus, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Unused);
-    }
-
-    private sealed class CapturingLogger<T> : ILogger<T>
-    {
-        public List<(LogLevel Level, string Message)> Entries { get; } = [];
-        public IDisposable BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
-        public bool IsEnabled(LogLevel logLevel) => true;
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-            => Entries.Add((logLevel, formatter(state, exception)));
-
-        private sealed class NullScope : IDisposable { public static readonly NullScope Instance = new(); public void Dispose() { } }
     }
 }

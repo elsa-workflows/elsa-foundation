@@ -173,8 +173,10 @@ derives errors on demand from the already-loaded draft through the shielded vali
 
 ## Cross-references
 
-- The EF Core design persistence implementation is removed by spec 093 US4; Groundwork is the sole
-  workflow-design persistence provider.
+- The former EF Core design persistence implementation was removed by spec 093 US4. Groundwork is
+  therefore the only currently shipped workflow-design provider, but accepted
+  [ADR 0073](../../../../../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
+  requires an evidence-gated EF replacement; this statement is inventory, not policy.
 - Validation extension points: [`../../Validations/EXTENSION_POINTS.md`](../../Validations/EXTENSION_POINTS.md)
 - Provider connection and target composition: [`../../../../Persistence/Groundwork/EXTENSION_POINTS.md`](../../../../Persistence/Groundwork/EXTENSION_POINTS.md)
 - Repo-wide index: [`../../../../../../EXTENSION_POINTS.md`](../../../../../../EXTENSION_POINTS.md)

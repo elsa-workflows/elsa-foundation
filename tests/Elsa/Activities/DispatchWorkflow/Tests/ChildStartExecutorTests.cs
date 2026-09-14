@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.Options;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Activities.DispatchWorkflow.Tests;
 
@@ -27,7 +28,7 @@ public sealed class ChildStartExecutorTests
         var executor = new ChildStartExecutor(
             startDispatcher,
             dispatchStore,
-            new FixedTimeProvider(DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1)));
+            new FakeTimeProvider(DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1)));
 
         await executor.HandleAsync(NewOutboxItem().Intent);
 
@@ -51,7 +52,7 @@ public sealed class ChildStartExecutorTests
         var executor = new ChildStartExecutor(
             startDispatcher,
             dispatchStore,
-            new FixedTimeProvider(DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1)));
+            new FakeTimeProvider(DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1)));
 
         await executor.HandleAsync(NewOutboxItem(runKind: WorkflowRunKind.TestRun, testScope: scope).Intent);
 
@@ -77,7 +78,7 @@ public sealed class ChildStartExecutorTests
         var executor = new ChildStartExecutor(
             startDispatcher,
             dispatchStore,
-            new FixedTimeProvider(DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1)));
+            new FakeTimeProvider(DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1)));
 
         await executor.HandleAsync(NewOutboxItem().Intent);
 
@@ -95,7 +96,7 @@ public sealed class ChildStartExecutorTests
         var processor = new RuntimePostCommitOutboxProcessor(
             store,
             new HandlerIntentDispatcher(new ChildStartExecutor(startDispatcher)),
-            new FixedTimeProvider(DispatchWorkflowRuntimeTestFixture.Now));
+            new FakeTimeProvider(DispatchWorkflowRuntimeTestFixture.Now));
 
         var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(limit: 10));
 
@@ -134,7 +135,7 @@ public sealed class ChildStartExecutorTests
         var processor = new RuntimePostCommitOutboxProcessor(
             store,
             new HandlerIntentDispatcher(new ChildStartExecutor(startDispatcher)),
-            new FixedTimeProvider(DispatchWorkflowRuntimeTestFixture.Now));
+            new FakeTimeProvider(DispatchWorkflowRuntimeTestFixture.Now));
 
         var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(limit: 10));
 
@@ -164,7 +165,7 @@ public sealed class ChildStartExecutorTests
         var processor = new RuntimePostCommitOutboxProcessor(
             store,
             new HandlerIntentDispatcher(new ChildStartExecutor(startDispatcher)),
-            new FixedTimeProvider(DispatchWorkflowRuntimeTestFixture.Now));
+            new FakeTimeProvider(DispatchWorkflowRuntimeTestFixture.Now));
 
         var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(limit: 10));
 
@@ -248,7 +249,7 @@ public sealed class ChildStartExecutorTests
         var processor = new RuntimePostCommitOutboxProcessor(
             store,
             new HandlerIntentDispatcher(new ChildStartExecutor(startDispatcher)),
-            new FixedTimeProvider(DispatchWorkflowRuntimeTestFixture.Now));
+            new FakeTimeProvider(DispatchWorkflowRuntimeTestFixture.Now));
 
         var result = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(limit: 10));
 
@@ -295,7 +296,7 @@ public sealed class ChildStartExecutorTests
         var executor = new ChildStartExecutor(
             new StubStartDispatcher(WorkflowExecutionCommandDispatchStatus.Accepted),
             new ThrowingAdmissionStore(),
-            new FixedTimeProvider(DispatchWorkflowRuntimeTestFixture.Now));
+            new FakeTimeProvider(DispatchWorkflowRuntimeTestFixture.Now));
 
         var exception = await Assert.ThrowsAsync<RuntimePostCommitDeliveryException>(
             () => executor.HandleAsync(NewOutboxItem().Intent).AsTask());
@@ -339,7 +340,7 @@ public sealed class ChildStartExecutorTests
         var executor = new ChildStartExecutor(
             startDispatcher,
             dispatchStore,
-            new FixedTimeProvider(DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1)));
+            new FakeTimeProvider(DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1)));
         var item = NewOutboxItem(tenantId: "tenant-tampered");
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -524,10 +525,5 @@ public sealed class ChildStartExecutorTests
             string dispatchId,
             DateTimeOffset admittedAt,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

@@ -4,7 +4,8 @@
 
 **Created**: 2026-07-16
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: a46ed228e, #752 (restatused 2026-09-10 from git evidence)
 
 **Input**: GitHub issue #682, "Preserve test-run dispatch scope", including its complete current body and zero comments, under parent #674.
 

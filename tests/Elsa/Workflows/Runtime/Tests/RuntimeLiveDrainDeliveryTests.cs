@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
@@ -75,7 +76,7 @@ public sealed class RuntimeLiveDrainDeliveryTests
         var store = new InMemoryRuntimeCheckpointCommitStore();
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var dispatcher = new RuntimeSchedulerPostCommitIntentDispatcher(queue);
-        var processor = new RuntimePostCommitOutboxProcessor(store, dispatcher, new FixedTimeProvider(Now));
+        var processor = new RuntimePostCommitOutboxProcessor(store, dispatcher, new FakeTimeProvider(Now));
 
         // Pre-crash: the continuation work item was durably enqueued, but the outbox item stayed Pending (mark lost).
         var workItem = NewWorkItem("work-hop-0");
@@ -100,7 +101,7 @@ public sealed class RuntimeLiveDrainDeliveryTests
         new(
             store,
             new RuntimeSchedulerPostCommitIntentDispatcher(queue),
-            new FixedTimeProvider(Now),
+            new FakeTimeProvider(Now),
             DefaultRuntimeFaultCapturePolicy.CreateDefault(),
             workflowDispatchStore: null,
             logger: null,
@@ -119,7 +120,7 @@ public sealed class RuntimeLiveDrainDeliveryTests
             ownershipContextAccessor: new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
             options: new WorkflowDrainOrchestratorOptions(),
             liveDrainDeliveryAccessor: liveDrain,
-            timeProvider: new FixedTimeProvider(Now));
+            timeProvider: new FakeTimeProvider(Now));
 
     private static RuntimeSchedulerWorkItem NewWorkItem(string workItemId) =>
         new(
@@ -195,10 +196,5 @@ public sealed class RuntimeLiveDrainDeliveryTests
                 completedAt: Now,
                 items: []);
         }
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }

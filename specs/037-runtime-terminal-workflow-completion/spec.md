@@ -2,7 +2,8 @@
 
 **Feature Branch**: `codex/runtime-terminal-workflow-completion`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented
+Implemented: #39, #40 (restatused 2026-09-10 from git evidence)
 **Input**: Continue deterministic completion propagation after root completions reach continuation scheduling.
 
 ## Scenarios & Tests

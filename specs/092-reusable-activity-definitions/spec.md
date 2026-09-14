@@ -4,7 +4,8 @@
 
 **Created**: 2026-07-15
 
-**Status**: Draft
+**Status**: Implemented
+Implemented: 449ef331c, #729 (restatused 2026-09-10 from git evidence)
 
 **Input**: [Backend PRD #671](https://github.com/elsa-workflows/elsa-foundation/issues/671): "First-class reusable activity definitions and graph-backed execution"
 

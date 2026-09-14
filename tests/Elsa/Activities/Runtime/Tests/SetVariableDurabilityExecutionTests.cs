@@ -14,6 +14,7 @@ using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Activities.Runtime.Tests;
 
@@ -381,7 +382,7 @@ public sealed class SetVariableDurabilityExecutionTests
             new RuntimeInputBindingResolver(),
             new InMemoryDurableValueStateStore(),
             new RuntimeActivityExecutionInspectionAccumulator(inspectionStore),
-            new FixedTimeProvider(Now),
+            new FakeTimeProvider(Now),
             portableExpressionEvaluator: portableExpressionEvaluator);
         var services = new ServiceCollection();
         services.AddScoped(_ => executor);
@@ -392,7 +393,7 @@ public sealed class SetVariableDurabilityExecutionTests
             queue,
             committer,
             new RuntimeActivityExecutionInspectionAccumulator(inspectionStore),
-            new FixedTimeProvider(Now),
+            new FakeTimeProvider(Now),
             serviceProvider.GetRequiredService<IServiceScopeFactory>());
         return new Harness(
             handler,
@@ -466,11 +467,6 @@ public sealed class SetVariableDurabilityExecutionTests
 
     private static ValueEnvelope Envelope(string value) =>
         ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline);
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 
     private sealed class RecordingPortableEvaluator : IPortableExpressionEvaluator
     {

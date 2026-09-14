@@ -231,7 +231,7 @@ matters to their task. If they want to focus on unratified material, route that 
 [Constitution Readiness](docs/program-goals/constitution-readiness.md) and use
 [Critical Constitution Review](docs/skills/catalog.md#critical-constitution-review) or
 [Work Unit Planner](docs/skills/catalog.md#work-unit-planner). Draft history belongs in
-[docs/reports/constitution-draft-history.md](docs/reports/constitution-draft-history.md); current
+[docs/reports/archive/constitution-draft-history.md](docs/reports/archive/constitution-draft-history.md); current
 gaps belong in [docs/reports/knowledge-inventory.md](docs/reports/knowledge-inventory.md) and
 [docs/reports/unfinished-work.md](docs/reports/unfinished-work.md).
 

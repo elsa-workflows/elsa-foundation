@@ -43,12 +43,10 @@ feature), which defines the contracts both planes speak:
 | `IClaimsNormalizer` / `IClaimMappingRule` | IAM | Map raw provider claims (roles, group memberships) into Elsa `elsa.identity.role` / `elsa.identity.permission` claims. |
 | `IPermissionCatalog` / `IPermissionEvaluator` / `IPermissionAuthorizationService` | IAM | The permission model: catalog, implication expansion, and canonical policy or request-internal evaluation. |
 | `IUserStore` / `IRoleStore` / `IExternalIdentityStore` / `ITenantMembershipStore` | IAM | User/role/link/tenant persistence. |
-| `ISecurityDefaultGuard` | cross-cutting | Refuse weak/missing keys and non-HTTPS metadata outside development. |
 
-Because these contracts are provider-agnostic, Minimal APIs use `RequirePermission(...)`,
-`RequireAnyPermission(...)`, or `RequireAllPermissions(...)`; transitional FastEndpoints bases
-translate their existing `ConfigurePermissions(...)` calls into the same ASP.NET Core policies.
-Both paths reach one Foundation Identity evaluator and resource-handler pipeline.
+Because these contracts are provider-agnostic, first-party routes use `RequirePermission(...)`,
+`RequireAnyPermission(...)`, or `RequireAllPermissions(...)`, which all reach one Foundation Identity evaluator and
+resource-handler pipeline.
 
 The provider plane must put a *trusted normalized principal* onto the request. Normalization strips
 incoming Elsa-internal claims, applies only mapping rules for the current tenant/provider, and then
@@ -79,7 +77,7 @@ The stack is a set of composable CShells features. You enable them per shell in 
 
 | Feature (shells.json key) | Assembly | What it is | Plane |
 |---|---|---|---|
-| `FoundationIdentityAbstractions` | `…Identity.Abstractions` | Contracts + default implementations: permission catalog, claims normalizer, provider resolver, security guards. **Always on** (every other identity feature registers it). | seam |
+| `FoundationIdentityAbstractions` | `…Identity.Abstractions` | Contracts + default implementations: permission catalog, claims normalizer, provider resolver. **Always on** (every other identity feature registers it). | seam |
 | `FoundationIdentityAspNetCoreIdentity` | `…Identity.AspNetCoreIdentity` | The provider-neutral IAM domain: contracts, user/role managers, the Elsa principal factory, the first-party sign-in service, the local provider module, and antiforgery. | IAM |
 | `FoundationIdentityAspNetCoreIdentityGroundwork` | `…AspNetCoreIdentity.Groundwork` | The first-party durable Groundwork user/role store, ASP.NET Core Identity core (`SignInManager`, token providers), the **cookie sign-in scheme**, the **backend login page**, and configured admin seeding. | IAM / protocol |
 | `FoundationIdentityOpenIddict` | `…Identity.OpenIddict` | **Be your own IdP:** first-party JWT issuance (`ITokenService` over the OpenIddict pipeline) + local bearer validation, plus the composite scheme selector. | protocol |
@@ -161,9 +159,8 @@ mounted (OpenIddict's server is registered with only a custom flow marker,
 `401` (which the Studio client reads as "no token") rather than a `302` redirect to the login page —
 the handler itself refuses to issue a token to an unauthenticated principal.
 
-FastEndpoints remains available for unrelated transitional endpoints during the migration. Those
-endpoints and these Minimal API routes both consume the same normalized-principal and permission
-policy services; the identity protocol owner no longer installs a FastEndpoints claim-type bridge.
+The identity API routes read the same normalized principal as every other first-party route; there is no
+FastEndpoints claim-type bridge.
 
 ### The scheme selector
 
@@ -302,17 +299,24 @@ ConsoleStream SignalR hub via an access-token factory.
 
 ## 7. Security posture
 
-**Everything requires auth by default.** The selector/JwtBearer scheme is the default challenge
-scheme, so an unauthenticated API call is rejected with `401`. A host-chosen `DefaultScheme` always
-wins if you want to override.
+**API routes are secured per route.** No fallback authorization policy is registered, so a route is protected
+only by the security it declares. Each first-party route declares a security disposition as endpoint metadata
+(`ElsaEndpointConventions`, plus Foundation Identity's `RequirePermission(...)`): a public route opts out
+individually with `AllowPublic(category, reason)`, and every other route requires a permission, a named policy, or a
+host credential. In the hosts and API slices they capture, the endpoint-manifest checks in the test suite reject a
+route with no disposition or more than one. When `FoundationIdentityOpenIddict`, or `FoundationIdentityOidc` with
+`IsDefault`, is composed, the selector or OIDC JwtBearer scheme becomes the default challenge scheme, so an
+unauthenticated call to a permission- or policy-protected route gets `401`. A host-chosen `DefaultScheme` always
+wins if you want to override. Host-credential routes, such as the management API and the OTLP receiver, answer
+from their own credential check (an endpoint filter or the handler) instead.
 
-**The `ApiSecurity.AllowAnonymous` kill-switch is Development-only.** Setting it disables endpoint
-security for the remaining FastEndpoints surface in a shell — but this is honored **only when the host
-environment is `Development`**. Outside Development the flag is **ignored** (the shell stays secure) and
-a prominent warning is logged naming the shell and telling you to remove it. This is a locked product
-decision: there is no auth off-switch in production. Transitional FastEndpoints routes enforce the flag
-through `ApiSecurityFastEndpointsConfigurator`; migrated Minimal API routes use their standard ASP.NET Core
-authorization metadata and Foundation Identity policies and are not governed by that configurator.
+**There is no auth off-switch for API routes.** The `ApiSecurity.AllowAnonymous` kill-switch was removed with the
+FastEndpoints surface ([#1405](https://github.com/elsa-workflows/elsa-foundation/pull/1405)), and no setting
+replaces it. An `ApiSecurity` entry left in a shell's feature list names a feature that no longer exists; CShells
+logs a warning and activates the shell without it. Workflow-defined HTTP endpoints are separate: they are anonymous
+unless their `HttpEndpoint` activity sets `Authorize` (optionally with a `Policy`). For those that do, the
+`WorkflowsRuntimeHttp` feature's `AuthorizationHandlerType` setting chooses how the check runs, and pointing it at
+`AllowAnonymousHttpEndpointAuthorizationHandler` lets every such request through.
 
 **Antiforgery on the login form.** The backend login page embeds an antiforgery token (form field
 `__csrf`) and the paired cookie; the `POST /_elsa/identity/login` HTML-form flow validates it before
@@ -323,13 +327,22 @@ checking credentials. JSON API callers never carry the field/cookie and are unaf
 browser drops the cookie. Host the Studio SPA **same-origin** so the cookie flows with
 `credentials: include`; cross-origin needs CORS + `SameSite=None; Secure`.
 
-**Production key requirements.** Outside `IsDevelopmentOrDemo`, startup **fails fast** if the
-OpenIddict signing/encryption key is missing — a missing key never silently degrades to an insecure
-default. The `SigningKey` must be a base64-encoded PKCS#8 RSA private key (RS256). The `SecurityDefaultGuard`s
-additionally reject short or well-known weak keys, and non-HTTPS provider metadata when HTTPS metadata
-is required. **Recommendation: set a distinct `EncryptionKey` from `SigningKey` in production** — the
-encryption key otherwise defaults to a value domain-separated from the signing key, and separating them
-is stronger.
+**Production key requirements.** Outside `IsDevelopmentOrDemo`, a missing, malformed, or short OpenIddict
+signing key fails startup, which for a shell host means shell activation (see
+[`FoundationIdentityOpenIddict`](identity-configuration.md#foundationidentityopeniddict)). A missing key never
+silently degrades to an insecure default.
+The `SigningKey` must be a base64-encoded PKCS#8 RSA private key (RS256) of at least 2048 bits. Placeholder
+values such as `changeme` or `secret` fail because they do not decode to an RSA key, and a well-formed key
+under 2048 bits is refused by size. Generate one with the
+[command in the configuration guide](identity-configuration.md#foundationidentityopeniddict).
+Non-HTTPS provider metadata is refused by ASP.NET Core's own OpenID Connect and JWT bearer handlers while
+`OidcAuthenticationOptions.RequireHttpsMetadata` is `true` (the default). That check runs when a handler's options
+are first built, not at shell activation: `/health/ready` stays green, and requests that authenticate through the
+OIDC handlers fail with an `InvalidOperationException` saying the metadata address must use HTTPS. When the OIDC
+scheme is the shell's default, or its interactive handler is registered, that is every request.
+**Recommendation: set a distinct
+`EncryptionKey` from `SigningKey` in production** — the encryption key otherwise defaults to a value
+domain-separated from the signing key, and separating them is stronger.
 
 For the exact settings, generation command, and the full **go-live checklist**, see
 [`identity-configuration.md`](identity-configuration.md).
@@ -338,21 +351,30 @@ For the exact settings, generation command, and the full **go-live checklist**, 
 
 ## 8. Per-IdP recipes for the Oidc module
 
-The Oidc module binds `OidcAuthenticationOptions` from the `FoundationIdentityOidc` feature. It
-configures the standard ASP.NET Core `OpenIdConnect` handler (`ResponseType = "code"`, `SaveTokens`)
-and a `JwtBearer` handler for API validation. The options it actually exposes:
+The `FoundationIdentityOidc` feature applies its shell settings to `OidcAuthenticationOptions`. The
+module configures the standard ASP.NET Core `OpenIdConnect` handler (`ResponseType = "code"`,
+`SaveTokens`) and a `JwtBearer` handler for API validation. The options, and which of them are
+`shells.json` settings:
 
-| Option | Meaning | Default |
-|---|---|---|
-| `Authority` | The IdP's issuer / discovery authority (`.well-known/openid-configuration` base). | — (required) |
-| `ClientId` | The OAuth client id registered with the IdP; also the JwtBearer audience. | — (required to enable the interactive handler) |
-| `ClientSecret` | Client secret for the confidential code flow. | — |
-| `RequireHttpsMetadata` | Require HTTPS for IdP metadata. Keep `true` in production. | `true` |
-| `AuthenticationScheme` | The interactive OpenIdConnect scheme name. | `Elsa.Identity.Oidc` |
-| `JwtBearerScheme` | The API bearer-validation scheme name. | `Elsa.Identity.Oidc.Jwt` |
-| `ProviderId` / `DisplayName` | Identity of the provider in `bootstrap`/`capabilities`. | `oidc` / `External OIDC` |
-| `ChallengePath` | The challenge redirect path. | `/_elsa/identity/challenge/oidc` |
-| `TenantId` / `Enabled` / `IsDefault` | Tenant scoping, enablement, default-scheme election. | `null` / `true` / `true` |
+| Option | Shell setting | Meaning | Default |
+|---|---|---|---|
+| `Authority` | yes | The IdP's issuer / discovery authority (`.well-known/openid-configuration` base). | — (required) |
+| `ClientId` | yes | The OAuth client id registered with the IdP; also the JwtBearer audience, so a bearer token's `aud` must include it. | — (required to enable the interactive handler) |
+| `ClientSecret` | yes (secret) | Client secret for the confidential code flow. | — |
+| `RequireHttpsMetadata` | yes | Require HTTPS for IdP metadata. Keep `true` in production. | `true` |
+| `IsDefault` | yes | Default-scheme election and the default provider in `bootstrap`. | `true` |
+| `AuthenticationScheme` | no | The interactive OpenIdConnect scheme name. | `Elsa.Identity.Oidc` |
+| `JwtBearerScheme` | no | The API bearer-validation scheme name. | `Elsa.Identity.Oidc.Jwt` |
+| `ProviderId` / `DisplayName` | no | Identity of the provider in `bootstrap`/`capabilities`. | `oidc` / `External OIDC` |
+| `ChallengePath` | no | The challenge redirect path. | `/_elsa/identity/challenge/oidc` |
+| `TenantId` / `Enabled` | no | Tenant scoping, enablement. | `null` / `true` |
+
+A key under `FoundationIdentityOidc` that is not a shell setting is silently ignored, not rejected.
+Code-only options are set through `AddFoundationIdentityOidc(configure)` when a host composes the
+module in code instead of through the feature. Only that delegate is read at registration time, so
+`ClientId` and the two scheme names must come from it (or from the feature's settings): a `ClientId`
+supplied through `services.Configure<OidcAuthenticationOptions>` alone does not register the
+interactive handler.
 
 ### Keycloak
 
@@ -366,7 +388,10 @@ and a `JwtBearer` handler for API validation. The options it actually exposes:
 ```
 
 The realm URL is the authority; discovery resolves at `{Authority}/.well-known/openid-configuration`.
-Map Keycloak realm/client roles to Elsa permissions via the claim-mapping seam (see the gap below).
+Keycloak does not put the client id in an access token's `aud` by default, so add an audience mapper
+for `elsa-server` or bearer validation refuses the token. For a local Keycloak served over plain
+HTTP, set `RequireHttpsMetadata` to `false`. Map Keycloak realm/client roles to Elsa permissions via
+the claim-mapping seam (see the gap below).
 
 ### Microsoft Entra ID
 
