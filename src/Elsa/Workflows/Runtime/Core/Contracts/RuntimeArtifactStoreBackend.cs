@@ -120,7 +120,12 @@ public sealed class RuntimeArtifactStoreBackend
         try
         {
             foreach (var descriptor in descriptors)
-                services.Remove(descriptor);
+            {
+                // Bookmark EF may reuse this context and records the same descriptor as a sibling owner.
+                // Keep it alive while replacing only the artifact backend; the bookmark backend remains valid.
+                if (BookmarkStateStoreBackend.Find(services)?.Owns(descriptor) != true)
+                    services.Remove(descriptor);
+            }
             for (var index = services.Count - 1; index >= 0; index--)
             {
                 if (ReferenceEquals(services[index].ImplementationInstance, this))

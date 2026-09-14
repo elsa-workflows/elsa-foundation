@@ -34,7 +34,14 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                     !string.Equals(existing.ConnectionString, options.ConnectionString, StringComparison.Ordinal) ||
                     !string.Equals(existing.ConnectionName, options.ConnectionName, StringComparison.Ordinal))
                     throw new InvalidOperationException("Runtime artifacts EF persistence is already registered with different provider options.");
-                BookmarkStateEfContextRegistration.EnsureContextIsAvailable(services, provider, registeredBackend.Owns, "Runtime artifacts");
+                BookmarkStateEfContextRegistration.EnsureContextIsAvailable(
+                    services,
+                    provider,
+                    "Runtime artifacts",
+                    registeredBackend.Owns,
+                    BookmarkStateStoreBackend.Find(services) is { Name: BookmarkStateStoreBackend.EntityFramework } siblingBookmarksBackend
+                        ? siblingBookmarksBackend.Owns
+                        : null);
                 return services;
             }
 

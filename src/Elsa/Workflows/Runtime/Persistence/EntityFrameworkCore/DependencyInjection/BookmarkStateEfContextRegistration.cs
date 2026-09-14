@@ -24,6 +24,19 @@ internal static class BookmarkStateEfContextRegistration
     public static void EnsureContextIsAvailable(
         IServiceCollection services,
         string provider,
+        string owner,
+        params Func<ServiceDescriptor, bool>?[] owners)
+    {
+        var contextRegistrations = ContextRegistrations(services, provider);
+        if (contextRegistrations.Count > 0 &&
+            (owners.Length == 0 || contextRegistrations.Any(descriptor => !owners.Any(predicate => predicate?.Invoke(descriptor) == true))))
+            throw new InvalidOperationException(
+                $"A {contextRegistrations.First().ServiceType.Name} registration already exists; {owner} EF persistence refuses to reuse or replace an unowned context.");
+    }
+
+    public static void EnsureContextIsAvailable(
+        IServiceCollection services,
+        string provider,
         Func<ServiceDescriptor, bool>? ownsExistingContext,
         string owner)
     {
@@ -36,6 +49,16 @@ internal static class BookmarkStateEfContextRegistration
             default: throw new ArgumentException($"Unknown Runtime EF provider '{provider}'.", nameof(provider));
         }
     }
+
+    public static IReadOnlyCollection<ServiceDescriptor> ContextRegistrations(IServiceCollection services, string provider) =>
+        EfRelationalProviderBinding.Normalize(provider) switch
+        {
+            "sqlite" => services.Where(IsContextRegistration<BookmarkStateSqliteDbContext>).ToArray(),
+            "sqlserver" => services.Where(IsContextRegistration<BookmarkStateSqlServerDbContext>).ToArray(),
+            "postgresql" => services.Where(IsContextRegistration<BookmarkStatePostgreSqlDbContext>).ToArray(),
+            "mysql" => services.Where(IsContextRegistration<BookmarkStateMySqlDbContext>).ToArray(),
+            _ => throw new ArgumentException($"Unknown Runtime EF provider '{provider}'.", nameof(provider))
+        };
 
     private static bool IsContextRegistration<TContext>(ServiceDescriptor descriptor)
         where TContext : BookmarkStateDbContext

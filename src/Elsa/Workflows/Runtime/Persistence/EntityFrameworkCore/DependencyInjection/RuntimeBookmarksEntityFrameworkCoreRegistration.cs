@@ -50,8 +50,11 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
                 BookmarkStateEfContextRegistration.EnsureContextIsAvailable(
                     services,
                     provider,
+                    "Runtime bookmarks",
                     existingBackend.Owns,
-                    "Runtime bookmarks");
+                    RuntimeArtifactStoreBackend.Find(services) is { Name: RuntimeArtifactStoreBackend.EntityFramework } siblingArtifactsBackend
+                        ? siblingArtifactsBackend.Owns
+                        : null);
                 return services;
             }
 
@@ -75,6 +78,9 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
             var optionsDescriptor = ServiceDescriptor.Singleton(configured);
             services.Add(optionsDescriptor);
             ownedArtifacts.Add(optionsDescriptor);
+            if (artifactsOwnContext)
+                ownedArtifacts.AddRange(BookmarkStateEfContextRegistration.ContextRegistrations(services, provider)
+                    .Where(artifactsBackend!.Owns));
             if (!artifactsOwnContext)
                 switch (provider)
                 {
@@ -147,7 +153,12 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
             throw new InvalidOperationException("Runtime bookmarks EF persistence no longer exclusively owns its auxiliary registrations.");
 
         foreach (var descriptor in ownedArtifacts)
-            services.Remove(descriptor);
+        {
+            // Artifact EF may reuse this context and records the same descriptor as a sibling owner.
+            // Keep it alive while replacing only the bookmark backend; the artifact backend remains valid.
+            if (RuntimeArtifactStoreBackend.Find(services)?.Owns(descriptor) != true)
+                services.Remove(descriptor);
+        }
     }
 }
 

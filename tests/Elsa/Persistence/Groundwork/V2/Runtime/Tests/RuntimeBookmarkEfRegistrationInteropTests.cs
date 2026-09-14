@@ -192,6 +192,104 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(EfBookmarkStateStore));
     }
 
+    [Theory]
+    [InlineData("bookmarks-first")]
+    [InlineData("artifacts-first")]
+    public void Combined_runtime_ef_registration_is_idempotent_when_each_sibling_is_repeated(string first)
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+
+        if (first == "bookmarks-first")
+        {
+            services.AddRuntimeBookmarksEntityFrameworkCore(EfOptions);
+            services.AddRuntimeArtifactsEntityFrameworkCore(ArtifactEfOptions);
+            services.AddRuntimeBookmarksEntityFrameworkCore(EfOptions);
+            services.AddRuntimeArtifactsEntityFrameworkCore(ArtifactEfOptions);
+        }
+        else
+        {
+            services.AddRuntimeArtifactsEntityFrameworkCore(ArtifactEfOptions);
+            services.AddRuntimeBookmarksEntityFrameworkCore(EfOptions);
+            services.AddRuntimeArtifactsEntityFrameworkCore(ArtifactEfOptions);
+            services.AddRuntimeBookmarksEntityFrameworkCore(EfOptions);
+        }
+
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStateStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStimulusIndex));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutableStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+    }
+
+    [Fact]
+    public void Artifact_context_ownership_remains_with_bookmark_ef_when_artifact_backend_withdraws()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddRuntimeArtifactsEntityFrameworkCore(ArtifactEfOptions);
+        services.AddRuntimeBookmarksEntityFrameworkCore(EfOptions);
+
+        var artifactBackend = RuntimeArtifactStoreBackend.Find(services);
+        Assert.NotNull(artifactBackend);
+        artifactBackend!.RemoveOwnedArtifacts(services);
+
+        Assert.Equal(BookmarkStateStoreBackend.EntityFramework, BookmarkStateStoreBackend.Find(services)!.Name);
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(EfWorkflowExecutableStore));
+
+        services.AddRuntimeArtifactsEntityFrameworkCore(ArtifactEfOptions);
+        Assert.Equal(RuntimeArtifactStoreBackend.EntityFramework, RuntimeArtifactStoreBackend.Find(services)!.Name);
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfWorkflowExecutableStore));
+    }
+
+    [Fact]
+    public void Bookmark_context_ownership_remains_with_artifact_ef_when_bookmark_backend_withdraws()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddRuntimeArtifactsEntityFrameworkCore(ArtifactEfOptions);
+        services.AddRuntimeBookmarksEntityFrameworkCore(EfOptions);
+
+        var bookmarkBackend = BookmarkStateStoreBackend.Find(services);
+        Assert.NotNull(bookmarkBackend);
+        bookmarkBackend!.RemoveOwnedArtifacts(services);
+
+        Assert.Equal(RuntimeArtifactStoreBackend.EntityFramework, RuntimeArtifactStoreBackend.Find(services)!.Name);
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfWorkflowExecutableStore));
+
+        services.AddRuntimeBookmarksEntityFrameworkCore(EfOptions);
+        Assert.Equal(BookmarkStateStoreBackend.EntityFramework, BookmarkStateStoreBackend.Find(services)!.Name);
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfBookmarkStateStore));
+    }
+
+    [Fact]
+    public void Combined_ef_backends_withdraw_through_groundwork_and_can_be_restored_in_the_same_order()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddRuntimeArtifactsEntityFrameworkCore(ArtifactEfOptions);
+        services.AddRuntimeBookmarksEntityFrameworkCore(EfOptions);
+
+        services.AddGroundworkV2RuntimeStores();
+
+        Assert.Equal(RuntimeArtifactStoreBackend.Groundwork, RuntimeArtifactStoreBackend.Find(services)!.Name);
+        Assert.Equal(BookmarkStateStoreBackend.Groundwork, BookmarkStateStoreBackend.Find(services)!.Name);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(EfWorkflowExecutableStore));
+
+        services.AddRuntimeArtifactsEntityFrameworkCore(ArtifactEfOptions);
+        services.AddRuntimeBookmarksEntityFrameworkCore(EfOptions);
+
+        Assert.Equal(RuntimeArtifactStoreBackend.EntityFramework, RuntimeArtifactStoreBackend.Find(services)!.Name);
+        Assert.Equal(BookmarkStateStoreBackend.EntityFramework, BookmarkStateStoreBackend.Find(services)!.Name);
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfWorkflowExecutableStore));
+    }
+
     [Fact]
     public void Ef_artifacts_then_groundwork_then_ef_artifacts_removes_and_recreates_owned_context()
     {
