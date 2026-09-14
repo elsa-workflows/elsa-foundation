@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Reconciliation.Json.Contracts;
 using Elsa.Workflows.Design.Reconciliation.Json.Exceptions;
@@ -20,39 +19,12 @@ public sealed class JsonWorkflowCatalogReader(
 {
     public IReadOnlyList<WorkflowVersionReconciliationModel> Read(string filePath, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(filePath))
-            throw new InvalidWorkflowCatalogJsonException(filePath ?? string.Empty, "no file path was configured.");
-
-        if (!File.Exists(filePath))
-            throw new InvalidWorkflowCatalogJsonException(filePath, "the file does not exist.");
-
-        string json;
-
-        try
-        {
-            json = File.ReadAllText(filePath);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            throw new InvalidWorkflowCatalogJsonException(filePath, "the file could not be read.", exception);
-        }
-
-        WorkflowVersionReconciliationModel[]? models;
-
-        try
-        {
-            models = payloadSerializer.Deserialize<WorkflowVersionReconciliationModel[]>(json);
-        }
-        catch (JsonException exception)
-        {
-            throw new InvalidWorkflowCatalogJsonException(filePath, "the file is not a valid JSON array of reconciliation models.", exception);
-        }
-
-        if (models is null)
-            throw new InvalidWorkflowCatalogJsonException(filePath, "the file deserialized to null.");
+        var models = PayloadCatalogFile.ReadArray<WorkflowVersionReconciliationModel>(
+            filePath,
+            payloadSerializer,
+            static (path, reason, inner) => new InvalidWorkflowCatalogJsonException(path, reason, inner));
 
         logger.LogDebug("Read {Count} workflow reconciliation model(s) from JSON catalog '{FilePath}'.", models.Length, filePath);
-
         return models;
     }
 }

@@ -13,8 +13,8 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork;
 /// authoring catalog lives there alone; leave it unset and design shares the default target as before.
 /// </para>
 /// <para>
-/// The workflows-design and activities-design lanes share one design-operation ledger, so both must name the
-/// same target. Naming different ones is rejected when the manifest binding is recorded.
+/// This lane owns a private <c>workflowDesignOperation</c> ledger. The activities-design lane owns a
+/// separate <c>activityDesignOperation</c> ledger, so the two catalogs may bind to different targets.
 /// </para>
 /// </summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
@@ -29,7 +29,7 @@ public class WorkflowsDesignGroundworkPersistenceFeature : IShellFeature
 {
     [ManifestSetting(
         DisplayName = "Target",
-        Description = "The Groundwork target holding the workflow-design catalog. Defaults to 'default'. The activities-design lane must name the same target, because the two share one design-operation ledger.",
+        Description = "The Groundwork target holding the workflow-design catalog. Defaults to 'default'. Independent of the activities-design lane's target; each catalog owns its own operation ledger.",
         Category = "Persistence")]
     public string? Target { get; set; }
 
