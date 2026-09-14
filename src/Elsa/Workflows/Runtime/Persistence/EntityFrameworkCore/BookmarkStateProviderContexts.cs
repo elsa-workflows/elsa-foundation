@@ -36,6 +36,11 @@ file static class BookmarkStateProviderModel
         modelBuilder.Entity<BookmarkStateEntity>().Property(row => row.ContentJson).HasColumnType(type);
         modelBuilder.Entity<BookmarkStateEntity>().Property(row => row.MetadataJson).HasColumnType(type);
         foreach (var entity in new[] { typeof(WorkflowExecutableEntity), typeof(WorkflowExecutableCoordinationEntity), typeof(ExecutableActivityTemplateEntity), typeof(ExecutableActivityTemplateHashClaimEntity), typeof(WorkflowExecutableSourceReferenceEntity) })
+        {
             modelBuilder.Entity(entity).Property("ContentJson").HasColumnType(type);
+            modelBuilder.Entity(entity).Property("ScopeKey").HasColumnType(type);
+            if (entity == typeof(WorkflowExecutableSourceReferenceEntity))
+                modelBuilder.Entity(entity).Property("ScopeKeyOrderKey").HasColumnType(type);
+        }
     }
 }

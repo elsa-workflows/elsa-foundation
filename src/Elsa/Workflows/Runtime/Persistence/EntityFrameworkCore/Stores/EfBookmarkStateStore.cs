@@ -2,6 +2,7 @@ using System.Data.Common;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Security.Cryptography;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -30,7 +31,7 @@ public sealed class EfBookmarkStateStore(
             var existing = await context.Bookmarks.SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
             if (existing is null)
             {
-                context.Bookmarks.Add(ToEntity(state, scope, id, 1));
+                context.Bookmarks.Add(ToEntity(state, scope, id, NewRevision()));
             }
             else
             {
@@ -276,9 +277,20 @@ public sealed class EfBookmarkStateStore(
 
     private static BookmarkStateEntity ToEntity(BookmarkState state, string scope, string id, long revision)
     {
-        var row = new BookmarkStateEntity { Id = id, IncarnationId = Guid.NewGuid().ToString("N") };
+        var row = new BookmarkStateEntity { Id = id };
         CopyToEntity(row, state, scope, id, revision);
         return row;
+    }
+
+    // R01's schema only has a numeric concurrency token. Use a fresh positive token for
+    // each insertion so a stale delete cannot match a delete-and-recreate successor that
+    // happens to reuse the same logical key and revision sequence.
+    private static long NewRevision()
+    {
+        Span<byte> bytes = stackalloc byte[sizeof(long)];
+        RandomNumberGenerator.Fill(bytes);
+        var value = BitConverter.ToInt64(bytes) & (long.MaxValue >> 1);
+        return value == 0 ? 1 : value;
     }
 
     private static void CopyToEntity(BookmarkStateEntity row, BookmarkState state, string scope, string id, long revision)
@@ -319,7 +331,7 @@ public sealed class EfBookmarkStateStore(
                 row.WorkflowExecutionIdHash != Hash(row.WorkflowExecutionId) || row.BookmarkIdHash != Hash(row.BookmarkId) ||
                 row.WorkflowExecutionIdOrderKey != OrdinalKey(row.WorkflowExecutionId) || row.BookmarkIdOrderKey != OrdinalKey(row.BookmarkId) ||
                 (expectedWorkflow is not null && row.WorkflowExecutionId != expectedWorkflow) ||
-                (expectedBookmark is not null && row.BookmarkId != expectedBookmark) || string.IsNullOrWhiteSpace(row.MetadataJson) || row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId))
+                (expectedBookmark is not null && row.BookmarkId != expectedBookmark) || string.IsNullOrWhiteSpace(row.MetadataJson) || row.Revision <= 0)
                 throw new InvalidDataException("The persisted EF bookmark row is corrupt.");
 
             var state = JsonSerializer.Deserialize<BookmarkState>(row.ContentJson, Json)

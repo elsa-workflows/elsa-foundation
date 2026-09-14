@@ -28,5 +28,4 @@ public sealed class BookmarkStateEntity
     public long? ExpiresAtUtcTicks { get; set; }
     public int? ExpiresAtOffsetMinutes { get; set; }
     public long Revision { get; set; }
-    public string IncarnationId { get; set; } = null!;
 }

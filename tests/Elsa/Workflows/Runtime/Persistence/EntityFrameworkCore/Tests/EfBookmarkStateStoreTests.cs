@@ -23,6 +23,55 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 public sealed class EfBookmarkStateStoreTests
 {
     [Fact]
+    public async Task Existing_R01_schema_without_incarnation_column_remains_usable()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = $"""
+                CREATE TABLE "{BookmarkStateEfModule.TableName}" (
+                    "Id" TEXT NOT NULL PRIMARY KEY,
+                    "ScopeKey" TEXT NOT NULL,
+                    "ScopeKeyHash" TEXT NOT NULL,
+                    "WorkflowExecutionId" TEXT NOT NULL,
+                    "WorkflowExecutionIdHash" TEXT NOT NULL,
+                    "WorkflowExecutionIdOrderKey" TEXT NOT NULL,
+                    "BookmarkId" TEXT NOT NULL,
+                    "BookmarkIdHash" TEXT NOT NULL,
+                    "BookmarkIdOrderKey" TEXT NOT NULL,
+                    "ActivityExecutionId" TEXT NOT NULL,
+                    "ExecutableNodeId" TEXT NOT NULL,
+                    "ResumeTargetId" TEXT NOT NULL,
+                    "StimulusType" TEXT NOT NULL,
+                    "StimulusHash" TEXT NOT NULL,
+                    "StimulusLookupKey" TEXT NOT NULL,
+                    "StimulusTypeLookupKey" TEXT NOT NULL,
+                    "PayloadJson" TEXT NULL,
+                    "ContentJson" TEXT NOT NULL,
+                    "MetadataJson" TEXT NOT NULL,
+                    "SchemaVersion" TEXT NOT NULL,
+                    "CreatedAtUtcTicks" INTEGER NOT NULL,
+                    "CreatedAtOffsetMinutes" INTEGER NOT NULL,
+                    "ExpiresAtUtcTicks" INTEGER NULL,
+                    "ExpiresAtOffsetMinutes" INTEGER NULL,
+                    "Revision" INTEGER NOT NULL
+                )
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        await using var context = new BookmarkStateSqliteDbContext(
+            new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(connection).Options);
+        var store = new EfBookmarkStateStore(context, new Accessor("tenant-a"));
+
+        await store.SaveAsync(State("r01-workflow", "r01-bookmark", "Event", "r01-hash"));
+
+        var roundTrip = await store.FindAsync("r01-workflow", "r01-bookmark");
+        Assert.Equal("r01-hash", roundTrip!.StimulusHash);
+    }
+
+    [Fact]
     public async Task Saves_round_trips_composite_identity_scope_and_lossless_payload()
     {
         await using var fixture = await Fixture.CreateAsync("tenant-a");

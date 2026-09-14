@@ -255,11 +255,11 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
-    public async Task Definition_version_pages_order_scopes_longer_than_artifact_identity_bound()
+    public async Task Definition_version_pages_order_scopes_beyond_artifact_bound_with_supplementary_unicode()
     {
         await using var database = await Database.CreateAsync();
-        var firstScope = "scope-" + new string('a', RuntimeArtifactEfModule.IdentityMaximumLength + 1);
-        var secondScope = "scope-" + new string('b', RuntimeArtifactEfModule.IdentityMaximumLength + 1);
+        var firstScope = "scope-" + new string('a', 200);
+        var secondScope = "scope-" + string.Concat(Enumerable.Repeat("😀", 100));
         await using var first = database.Open(firstScope);
         await using var second = database.Open(secondScope);
         await first.Store.SaveAsync(Reference("same-ref", "artifact-a") with { DefinitionVersionId = "shared-version", TenantId = firstScope });

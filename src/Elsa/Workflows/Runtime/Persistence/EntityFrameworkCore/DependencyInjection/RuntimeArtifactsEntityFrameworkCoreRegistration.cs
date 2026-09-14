@@ -45,25 +45,31 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
             options.ConnectionName,
             RuntimeArtifactEfModule.DefaultSqliteConnectionString);
         var configured = new RuntimeArtifactsEntityFrameworkCoreOptions { Provider = options.Provider, ConnectionString = options.ConnectionString, ConnectionName = options.ConnectionName };
-        services.TryAddSingleton(configured);
+        var optionsStart = services.Count;
+        services.AddSingleton(configured);
+        var ownedInfrastructure = new List<ServiceDescriptor> { services[optionsStart] };
         var bookmarksOwnContext = BookmarkStateEfContextRegistration.IsOwnedByBookmarks(services);
         switch (provider)
         {
             case "sqlite":
                 BookmarkStateEfContextRegistration.EnsureContextIsAvailable<BookmarkStateSqliteDbContext>(services, bookmarksOwnContext, "Runtime artifacts");
-                AddContext<BookmarkStateSqliteDbContext>(services, configured, EfRelationalProviderBinding.UseSqlite);
+                if (!bookmarksOwnContext)
+                    ownedInfrastructure.AddRange(AddContext<BookmarkStateSqliteDbContext>(services, configured, EfRelationalProviderBinding.UseSqlite));
                 break;
             case "sqlserver":
                 BookmarkStateEfContextRegistration.EnsureContextIsAvailable<BookmarkStateSqlServerDbContext>(services, bookmarksOwnContext, "Runtime artifacts");
-                AddContext<BookmarkStateSqlServerDbContext>(services, configured, EfRelationalProviderBinding.UseSqlServer);
+                if (!bookmarksOwnContext)
+                    ownedInfrastructure.AddRange(AddContext<BookmarkStateSqlServerDbContext>(services, configured, EfRelationalProviderBinding.UseSqlServer));
                 break;
             case "postgresql":
                 BookmarkStateEfContextRegistration.EnsureContextIsAvailable<BookmarkStatePostgreSqlDbContext>(services, bookmarksOwnContext, "Runtime artifacts");
-                AddContext<BookmarkStatePostgreSqlDbContext>(services, configured, EfRelationalProviderBinding.UseNpgsql);
+                if (!bookmarksOwnContext)
+                    ownedInfrastructure.AddRange(AddContext<BookmarkStatePostgreSqlDbContext>(services, configured, EfRelationalProviderBinding.UseNpgsql));
                 break;
             case "mysql":
                 BookmarkStateEfContextRegistration.EnsureContextIsAvailable<BookmarkStateMySqlDbContext>(services, bookmarksOwnContext, "Runtime artifacts");
-                AddContext<BookmarkStateMySqlDbContext>(services, configured, EfRelationalProviderBinding.UseMySql);
+                if (!bookmarksOwnContext)
+                    ownedInfrastructure.AddRange(AddContext<BookmarkStateMySqlDbContext>(services, configured, EfRelationalProviderBinding.UseMySql));
                 break;
             default:
                 throw new ArgumentException($"Unknown Runtime artifacts EF provider '{options.Provider}'.", nameof(options));
@@ -101,12 +107,18 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
                                     serviceType == typeof(IWorkflowExecutableSourceReferenceStore) ||
                                     serviceType == typeof(IWorkflowExecutableSourceReferenceReader) ||
                                     serviceType == typeof(IWorkflowExecutableSourceReferenceWriter)))
+                .Concat(ownedInfrastructure)
                 .ToArray()));
         return services;
     }
     public static IServiceCollection AddRuntimeExecutableArtifactsEntityFrameworkCore(this IServiceCollection services, RuntimeArtifactsEntityFrameworkCoreOptions options) => services.AddRuntimeArtifactsEntityFrameworkCore(options);
-    private static void AddContext<T>(IServiceCollection services, RuntimeArtifactsEntityFrameworkCoreOptions options, Action<DbContextOptionsBuilder, string, string, string?> bind) where T : BookmarkStateDbContext
-    { services.AddDbContext<T>((provider, builder) => bind(builder, Resolve(provider, options), RuntimeArtifactEfModule.HistoryTableName, typeof(BookmarkStateDbContext).Assembly.GetName().Name)); services.TryAddScoped<BookmarkStateDbContext>(p => p.GetRequiredService<T>()); }
+    private static IReadOnlyCollection<ServiceDescriptor> AddContext<T>(IServiceCollection services, RuntimeArtifactsEntityFrameworkCoreOptions options, Action<DbContextOptionsBuilder, string, string, string?> bind) where T : BookmarkStateDbContext
+    {
+        var start = services.Count;
+        services.AddDbContext<T>((provider, builder) => bind(builder, Resolve(provider, options), RuntimeArtifactEfModule.HistoryTableName, typeof(BookmarkStateDbContext).Assembly.GetName().Name));
+        services.TryAddScoped<BookmarkStateDbContext>(p => p.GetRequiredService<T>());
+        return services.Skip(start).ToArray();
+    }
     private static string Resolve(IServiceProvider provider, RuntimeArtifactsEntityFrameworkCoreOptions options) { if (!string.IsNullOrWhiteSpace(options.ConnectionString)) return options.ConnectionString!; var cfg = provider.GetService<IConfiguration>(); if (!string.IsNullOrWhiteSpace(options.ConnectionName)) return cfg?.GetConnectionString(options.ConnectionName!) ?? throw new InvalidOperationException($"Runtime artifacts EF connection '{options.ConnectionName}' was not found."); var fallback = cfg?.GetConnectionString(RuntimeArtifactEfModule.DefaultConnectionName); if (!string.IsNullOrWhiteSpace(fallback)) return fallback!; if (EfRelationalProviderBinding.Normalize(options.Provider) == "sqlite") return RuntimeArtifactEfModule.DefaultSqliteConnectionString; throw new InvalidOperationException("Runtime artifacts EF requires ConnectionString or ConnectionName for a non-Sqlite provider."); }
     private static bool HasArtifactContractRegistration(IServiceCollection services) => services.Any(descriptor =>
         descriptor.ServiceType == typeof(IWorkflowExecutableStore) ||

@@ -18,6 +18,12 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
         ConnectionString = "Data Source=:memory:"
     };
 
+    private static readonly RuntimeArtifactsEntityFrameworkCoreOptions ArtifactEfOptions = new()
+    {
+        Provider = "Sqlite",
+        ConnectionString = "Data Source=:memory:"
+    };
+
     [Fact]
     public void Groundwork_then_ef_withdraws_only_the_groundwork_bookmark_backend()
     {
@@ -138,6 +144,43 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(EfBookmarkStateStore));
+    }
+
+    [Fact]
+    public void Ef_artifacts_then_groundwork_then_ef_artifacts_removes_and_recreates_owned_context()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddRuntimeArtifactsEntityFrameworkCore(ArtifactEfOptions);
+
+        services.AddGroundworkV2RuntimeStores();
+
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(RuntimeArtifactsEntityFrameworkCoreOptions));
+
+        services.AddRuntimeArtifactsEntityFrameworkCore(ArtifactEfOptions);
+
+        Assert.Equal(RuntimeArtifactStoreBackend.EntityFramework, RuntimeArtifactStoreBackend.Find(services)!.Name);
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfWorkflowExecutableStore));
+    }
+
+    [Fact]
+    public void Groundwork_then_ef_artifacts_then_groundwork_removes_ef_context_and_options()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddGroundworkV2RuntimeStores();
+        services.AddRuntimeArtifactsEntityFrameworkCore(ArtifactEfOptions);
+
+        services.AddGroundworkV2RuntimeStores();
+
+        Assert.Equal(RuntimeArtifactStoreBackend.Groundwork, RuntimeArtifactStoreBackend.Find(services)!.Name);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(RuntimeArtifactsEntityFrameworkCoreOptions));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowExecutableStore));
     }
 
     [Fact]
