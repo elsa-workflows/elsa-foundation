@@ -151,6 +151,10 @@ public sealed record WorkflowExecutableSourceReference(
     public IReadOnlyList<WorkflowExecutableActivityPresentationRecord> ActivityPresentation { get; init; } =
         ActivityPresentation ?? [];
 
+    /// <summary>Provider-owned incarnation identity used to reject stale conditional writes after recreation.</summary>
+    [JsonIgnore]
+    public string? ConcurrencyToken { get; init; }
+
     /// <summary>Preserves the pre-tenant positional deconstruction shape including the reusable-activity layout sidecar.</summary>
     public void Deconstruct(
         out string sourceReferenceId,

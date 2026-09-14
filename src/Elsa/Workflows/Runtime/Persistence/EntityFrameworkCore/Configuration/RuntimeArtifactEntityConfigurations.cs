@@ -18,6 +18,7 @@ public sealed class WorkflowExecutableEntityConfiguration : IEntityTypeConfigura
         b.Property(x => x.ArtifactIdOrderKey).HasMaxLength(655).IsRequired();
         b.Property(x => x.ContentJson).IsRequired();
         b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();
+        b.Property(x => x.IncarnationId).HasMaxLength(64).IsRequired().IsConcurrencyToken();
         b.HasIndex(x => new { x.ScopeKeyHash, x.ArtifactIdHash, x.ArtifactId }).IsUnique();
     }
 }
@@ -35,6 +36,7 @@ public sealed class WorkflowExecutableCoordinationEntityConfiguration : IEntityT
         b.Property(x => x.ContentJson).IsRequired();
         b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();
         b.Property(x => x.Revision).IsConcurrencyToken().IsRequired();
+        b.Property(x => x.IncarnationId).HasMaxLength(64).IsRequired().IsConcurrencyToken();
         b.HasIndex(x => new { x.ScopeKeyHash, x.ArtifactIdHash, x.ArtifactId }).IsUnique();
     }
 }
@@ -54,6 +56,7 @@ public sealed class ExecutableActivityTemplateEntityConfiguration : IEntityTypeC
         b.Property(x => x.ContentJson).IsRequired();
         b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();
         b.Property(x => x.Revision).IsConcurrencyToken().IsRequired();
+        b.Property(x => x.IncarnationId).HasMaxLength(64).IsRequired().IsConcurrencyToken();
         b.HasIndex(x => new { x.ScopeKeyHash, x.TemplateIdHash, x.TemplateId }).IsUnique();
     }
 }
@@ -72,6 +75,7 @@ public sealed class ExecutableActivityTemplateHashClaimEntityConfiguration : IEn
         b.Property(x => x.ContentJson).IsRequired();
         b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();
         b.Property(x => x.Revision).IsConcurrencyToken().IsRequired();
+        b.Property(x => x.IncarnationId).HasMaxLength(64).IsRequired().IsConcurrencyToken();
         b.HasIndex(x => new { x.ScopeKeyHash, x.TemplateHashHash, x.TemplateHash }).IsUnique();
     }
 }
@@ -97,6 +101,7 @@ public sealed class WorkflowExecutableSourceReferenceEntityConfiguration : IEnti
         b.Property(x => x.ContentJson).IsRequired();
         b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();
         b.Property(x => x.Revision).IsConcurrencyToken().IsRequired();
+        b.Property(x => x.IncarnationId).HasMaxLength(64).IsRequired().IsConcurrencyToken();
         b.HasIndex(x => new { x.ScopeKeyHash, x.ArtifactIdHash, x.ArtifactId });
         b.HasIndex(x => new { x.ScopeKeyHash, x.DefinitionVersionIdHash, x.DefinitionVersionId });
         b.HasIndex(x => new { x.ScopeKeyHash, x.DefinitionIdHash, x.DefinitionId });

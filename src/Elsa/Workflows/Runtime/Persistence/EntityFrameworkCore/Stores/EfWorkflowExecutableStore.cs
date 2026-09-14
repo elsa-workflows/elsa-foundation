@@ -43,12 +43,14 @@ public sealed class EfWorkflowExecutableStore(
                 var coordination = await FindCoordinationAsync(scope, artifactId, id, cancellationToken);
                 if (artifact is null && coordination is null)
                 {
+                    var incarnationId = NewIncarnationId();
                     context.WorkflowExecutables.Add(ToEntity(
                         item,
                         scope,
                         id,
-                        RuntimeArtifactJson.Serialize(item)));
-                    context.WorkflowExecutableCoordinations.Add(ToCoordinationEntity(artifactId, scope, id));
+                        RuntimeArtifactJson.Serialize(item),
+                        incarnationId));
+                    context.WorkflowExecutableCoordinations.Add(ToCoordinationEntity(artifactId, scope, id, incarnationId));
                 }
                 else if (artifact is null || coordination is null)
                 {
@@ -124,7 +126,15 @@ public sealed class EfWorkflowExecutableStore(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         cancellationToken.ThrowIfCancellationRequested();
-        return await DeletePairAsync(RequireScope(), artifactId, null, default, cancellationToken);
+        var scope = RequireScope();
+        var pair = await LoadPairAsync(scope, artifactId, cancellationToken);
+        return pair is not null && await DeletePairAsync(
+            scope,
+            artifactId,
+            null,
+            default,
+            pair.Value.Artifact.IncarnationId,
+            cancellationToken);
     }
     public async ValueTask<WorkflowExecutableRootWriteLease?> TryAcquireRootWriteLeaseAsync(
         string artifactId,
@@ -266,7 +276,15 @@ public sealed class EfWorkflowExecutableStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(guard.OperationId);
         ArgumentException.ThrowIfNullOrWhiteSpace(guard.ConcurrencyToken);
         cancellationToken.ThrowIfCancellationRequested();
-        return await DeletePairAsync(RequireScope(), guard.ArtifactId, guard, now, cancellationToken);
+        var scope = RequireScope();
+        var pair = await LoadPairAsync(scope, guard.ArtifactId, cancellationToken);
+        return pair is not null && await DeletePairAsync(
+            scope,
+            guard.ArtifactId,
+            guard,
+            now,
+            pair.Value.Artifact.IncarnationId,
+            cancellationToken);
     }
 
     private async Task<bool> DeletePairAsync(
@@ -274,6 +292,7 @@ public sealed class EfWorkflowExecutableStore(
         string artifactId,
         WorkflowExecutableDeletionGuard? guard,
         DateTimeOffset now,
+        string expectedIncarnationId,
         CancellationToken cancellationToken)
     {
         var id = CreateId(scope, artifactId);
@@ -296,6 +315,12 @@ public sealed class EfWorkflowExecutableStore(
 
                 if (artifact is null || coordination is null)
                     throw new InvalidDataException($"Workflow executable '{id}' has incomplete persisted state.");
+
+                if (artifact.IncarnationId != expectedIncarnationId || coordination.IncarnationId != expectedIncarnationId)
+                {
+                    await transaction.CommitAsync(cancellationToken);
+                    return false;
+                }
 
                 _ = Read(artifact, scope, artifactId, id);
                 var state = ReadCoordination(coordination, scope, artifactId, id);
@@ -384,6 +409,8 @@ public sealed class EfWorkflowExecutableStore(
             return null;
         if (artifact is null || coordination is null)
             throw new InvalidDataException($"Workflow executable '{id}' has incomplete persisted state.");
+        if (artifact.IncarnationId != coordination.IncarnationId)
+            throw new InvalidDataException($"Workflow executable '{id}' has mismatched incarnation identities.");
 
         _ = Read(artifact, scope, artifactId, id);
         _ = ReadCoordination(coordination, scope, artifactId, id);
@@ -415,7 +442,8 @@ public sealed class EfWorkflowExecutableStore(
         WorkflowExecutable executable,
         string scope,
         string id,
-        string json) => new()
+        string json,
+        string incarnationId) => new()
         {
             Id = id,
             ScopeKey = Encode(scope),
@@ -424,13 +452,15 @@ public sealed class EfWorkflowExecutableStore(
             ArtifactIdHash = Hash(executable.Identity.ArtifactId),
             ArtifactIdOrderKey = OrderKey(executable.Identity.ArtifactId),
             ContentJson = json,
-            SchemaVersion = RuntimeArtifactEfModule.SchemaVersion
+            SchemaVersion = RuntimeArtifactEfModule.SchemaVersion,
+            IncarnationId = incarnationId
         };
 
     private static WorkflowExecutableCoordinationEntity ToCoordinationEntity(
         string artifactId,
         string scope,
-        string id) => new()
+        string id,
+        string incarnationId) => new()
         {
             Id = id,
             ScopeKey = Encode(scope),
@@ -439,7 +469,8 @@ public sealed class EfWorkflowExecutableStore(
             ArtifactIdHash = Hash(artifactId),
             ContentJson = RuntimeArtifactJson.Serialize(CoordinationState.Empty),
             SchemaVersion = RuntimeArtifactEfModule.SchemaVersion,
-            Revision = 1
+            Revision = 1,
+            IncarnationId = incarnationId
         };
 
     private static WorkflowExecutable Read(
@@ -450,7 +481,8 @@ public sealed class EfWorkflowExecutableStore(
     {
         if (row.Id != id || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
             row.ArtifactId != expected || row.ArtifactIdHash != Hash(expected) ||
-            row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion || row.ArtifactIdOrderKey != OrderKey(expected))
+            row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion || row.ArtifactIdOrderKey != OrderKey(expected) ||
+            string.IsNullOrWhiteSpace(row.IncarnationId))
             throw new InvalidDataException("The persisted workflow executable row is corrupt.");
         try
         {
@@ -470,7 +502,8 @@ public sealed class EfWorkflowExecutableStore(
     {
         if (row.Id != id || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
             row.ArtifactId != expected || row.ArtifactIdHash != Hash(expected) ||
-            row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion || row.Revision <= 0)
+            row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion || row.Revision <= 0 ||
+            string.IsNullOrWhiteSpace(row.IncarnationId))
             throw new InvalidDataException("The persisted workflow executable coordination row is corrupt.");
 
         try
@@ -575,6 +608,8 @@ public sealed class EfWorkflowExecutableStore(
     }
     private static string CreateId(string scope, string artifactId) =>
         Hash($"{scope.Length}:{scope}{artifactId.Length}:{artifactId}");
+
+    private static string NewIncarnationId() => Guid.NewGuid().ToString("N");
 
     private static string Hash(string x) => EfRelationalIdentity.Hash(x);
 

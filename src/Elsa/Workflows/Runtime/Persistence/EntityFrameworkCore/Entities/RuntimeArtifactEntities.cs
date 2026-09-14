@@ -10,6 +10,7 @@ public sealed class WorkflowExecutableEntity
     public string ArtifactIdOrderKey { get; set; } = null!;
     public string ContentJson { get; set; } = null!;
     public string SchemaVersion { get; set; } = null!;
+    public string IncarnationId { get; set; } = null!;
 }
 
 public sealed class WorkflowExecutableCoordinationEntity
@@ -22,6 +23,7 @@ public sealed class WorkflowExecutableCoordinationEntity
     public string ContentJson { get; set; } = null!;
     public string SchemaVersion { get; set; } = null!;
     public long Revision { get; set; }
+    public string IncarnationId { get; set; } = null!;
 }
 
 public sealed class ExecutableActivityTemplateEntity
@@ -36,6 +38,7 @@ public sealed class ExecutableActivityTemplateEntity
     public string ContentJson { get; set; } = null!;
     public string SchemaVersion { get; set; } = null!;
     public long Revision { get; set; }
+    public string IncarnationId { get; set; } = null!;
 }
 
 public sealed class ExecutableActivityTemplateHashClaimEntity
@@ -49,6 +52,7 @@ public sealed class ExecutableActivityTemplateHashClaimEntity
     public string ContentJson { get; set; } = null!;
     public string SchemaVersion { get; set; } = null!;
     public long Revision { get; set; }
+    public string IncarnationId { get; set; } = null!;
 }
 
 public sealed class WorkflowExecutableSourceReferenceEntity
@@ -71,4 +75,5 @@ public sealed class WorkflowExecutableSourceReferenceEntity
     public string ContentJson { get; set; } = null!;
     public string SchemaVersion { get; set; } = null!;
     public long Revision { get; set; }
+    public string IncarnationId { get; set; } = null!;
 }

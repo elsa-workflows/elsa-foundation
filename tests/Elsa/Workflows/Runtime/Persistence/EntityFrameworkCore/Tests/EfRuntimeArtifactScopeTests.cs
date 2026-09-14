@@ -183,6 +183,103 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Definition_version_pages_allow_only_authorized_across_scope_reads_with_collision_safe_ordering()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var tenantA = database.Open("tenant-a");
+        await using var tenantB = database.Open("tenant-b");
+        var version = "shared-definition-version";
+        await tenantA.Store.SaveAsync(Reference("same-ref", "artifact-a") with { DefinitionVersionId = version, TenantId = "tenant-a" });
+        await tenantB.Store.SaveAsync(Reference("same-ref", "artifact-b") with { DefinitionVersionId = version, TenantId = "tenant-b" });
+
+        var ordinary = await tenantA.Store.ListByDefinitionVersionPageAsync(new(version, 10));
+        Assert.Equal(["tenant-a"], ordinary.Items.Select(item => item.TenantId));
+
+        await using var across = database.Open(PersistenceAccessContext.PrivilegedAcrossScopes(new PersistenceAccessPurpose("definition-export")));
+        var first = await across.Store.ListByDefinitionVersionPageAsync(new(version, 1));
+        Assert.Single(first.Items);
+        Assert.NotNull(first.NextContinuationToken);
+        var second = await across.Store.ListByDefinitionVersionPageAsync(new(version, 1, first.NextContinuationToken));
+        Assert.Single(second.Items);
+        Assert.Null(second.NextContinuationToken);
+        Assert.Equal(["tenant-a", "tenant-b"], new[] { first.Items[0].TenantId, second.Items[0].TenantId }.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task Definition_version_pages_reject_global_access_and_cross_shape_continuations()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var tenant = database.Open("tenant-a");
+        await tenant.Store.SaveAsync(Reference("ref-a", "artifact-a"));
+        var scoped = await tenant.Store.ListByDefinitionVersionPageAsync(new("definition-version", 1));
+        Assert.Null(scoped.NextContinuationToken);
+
+        await using var global = database.Open(PersistenceAccessContext.Global);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => global.Store.ListByDefinitionVersionPageAsync(new("definition", 1)).AsTask());
+
+        await tenant.Store.SaveAsync(Reference("ref-b", "artifact-b") with { DefinitionVersionId = "definition-version" });
+        scoped = await tenant.Store.ListByDefinitionVersionPageAsync(new("definition-version", 1));
+        Assert.NotNull(scoped.NextContinuationToken);
+        await using var across = database.Open(PersistenceAccessContext.PrivilegedAcrossScopes(new PersistenceAccessPurpose("definition-export")));
+        await Assert.ThrowsAsync<ArgumentException>(() => across.Store.ListByDefinitionVersionPageAsync(new("definition-version", 1, scoped.NextContinuationToken)).AsTask());
+    }
+
+    [Fact]
+    public async Task Source_reference_stale_conditional_update_cannot_touch_a_recreated_successor()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var original = Reference("recreated-ref", "artifact-a");
+        await fixture.Store.SaveAsync(original);
+        var stale = await fixture.Store.FindAsync(original.SourceReferenceId);
+        Assert.NotNull(stale?.ConcurrencyToken);
+
+        Assert.True(await fixture.Store.DeleteAsync(original.SourceReferenceId));
+        await fixture.Store.SaveAsync(original);
+        var successor = await fixture.Store.FindAsync(original.SourceReferenceId);
+        Assert.NotEqual(stale!.ConcurrencyToken, successor!.ConcurrencyToken);
+
+        Assert.False(await fixture.Store.TryRetireAsync(stale, stale.Retire(DateTimeOffset.UtcNow, "stale")));
+        Assert.Null((await fixture.Store.FindAsync(original.SourceReferenceId))!.DeletedAt);
+    }
+
+    [Fact]
+    public async Task Workflow_executable_stale_pair_delete_cannot_touch_a_recreated_successor()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var stale = database.Open("tenant-a");
+        await using var current = database.Open("tenant-a");
+        await current.Executable.SaveAsync(Executable("recreated-artifact"));
+        var staleArtifact = await stale.Context.WorkflowExecutables.SingleAsync();
+        var staleCoordination = await stale.Context.WorkflowExecutableCoordinations.SingleAsync();
+
+        Assert.True(await current.Executable.DeleteAsync("recreated-artifact"));
+        await current.Executable.SaveAsync(Executable("recreated-artifact"));
+        stale.Context.RemoveRange(staleArtifact, staleCoordination);
+
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => stale.Context.SaveChangesAsync());
+        Assert.NotNull(await current.Executable.FindAsync("recreated-artifact"));
+    }
+
+    [Fact]
+    public async Task Template_stale_pair_delete_cannot_touch_a_recreated_successor()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var stale = database.Open("tenant-a");
+        await using var current = database.Open("tenant-a");
+        await current.Template.SaveAsync(Template("recreated-template", "recreated-hash"));
+        var staleTemplate = await stale.Context.ExecutableActivityTemplates.SingleAsync();
+        var staleClaim = await stale.Context.ExecutableActivityTemplateHashClaims.SingleAsync();
+
+        Assert.True(await current.Template.DeleteAsync("recreated-template"));
+        await current.Template.SaveAsync(Template("recreated-template", "recreated-hash"));
+        stale.Context.RemoveRange(staleTemplate, staleClaim);
+
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => stale.Context.SaveChangesAsync());
+        Assert.NotNull(await current.Template.FindAsync("recreated-template"));
+    }
+
+    [Fact]
     public async Task Executable_save_is_idempotent_and_batch_failure_rolls_back_new_rows()
     {
         await using var database = await Database.CreateAsync();

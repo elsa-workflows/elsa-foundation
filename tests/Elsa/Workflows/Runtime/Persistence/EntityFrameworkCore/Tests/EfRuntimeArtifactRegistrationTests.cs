@@ -56,4 +56,30 @@ public sealed class EfRuntimeArtifactRegistrationTests
         Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<IRuntimeRecoveryContinuationCodec>());
         Assert.Throws<InvalidOperationException>(() => provider.GetServices<IStartupTask>().ToArray());
     }
+
+    [Fact]
+    public void Feature_can_be_extended_without_replacing_its_registration_contract()
+    {
+        var feature = new ExtensibleFeature
+        {
+            RecoveryContinuationSigningKey = SigningKey
+        };
+        var services = new ServiceCollection();
+
+        feature.ConfigureServices(services);
+
+        Assert.True(feature.WasConfigured);
+        Assert.IsAssignableFrom<RuntimeArtifactsEntityFrameworkCoreFeature>(feature);
+    }
+
+    private sealed class ExtensibleFeature : RuntimeArtifactsEntityFrameworkCoreFeature
+    {
+        public bool WasConfigured { get; private set; }
+
+        public override void ConfigureServices(IServiceCollection services)
+        {
+            WasConfigured = true;
+            base.ConfigureServices(services);
+        }
+    }
 }

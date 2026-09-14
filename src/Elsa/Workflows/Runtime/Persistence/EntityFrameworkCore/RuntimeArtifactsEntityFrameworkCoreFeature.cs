@@ -15,7 +15,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
     DisplayName = "Workflows Runtime EF Core Executable Artifact Persistence",
     Description = "Opt-in EF Core persistence for runtime executable artifacts, templates and source references against a fresh schema. Migration lifecycle is deferred; Groundwork remains the default.",
     DependsOn = new object[] { "WorkflowsRuntime" })]
-public sealed class RuntimeArtifactsEntityFrameworkCoreFeature : IShellFeature
+public class RuntimeArtifactsEntityFrameworkCoreFeature : IShellFeature
 {
     public string? Provider { get; set; }
     public string? ConnectionString { get; set; }
@@ -27,7 +27,7 @@ public sealed class RuntimeArtifactsEntityFrameworkCoreFeature : IShellFeature
         Secret = true)]
     public string? RecoveryContinuationSigningKey { get; set; }
 
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
         services.Configure<RuntimeRecoveryContinuationOptions>(options =>

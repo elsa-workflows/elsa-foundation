@@ -41,6 +41,8 @@ public sealed class EfExecutableActivityTemplateStore(
                 {
                     var existing = Read(current, identity);
                     EnsureOwnedClaim(claim, identity);
+                    if (claim!.IncarnationId != current.IncarnationId)
+                        throw new InvalidDataException("Executable activity template and its hash claim have mismatched incarnation identities.");
                     EnsureSameIdentityAndContent(existing, template);
                     await transaction.CommitAsync(cancellationToken);
                     return;
@@ -54,8 +56,9 @@ public sealed class EfExecutableActivityTemplateStore(
                 }
                 if (byHash.Count > 0)
                     throw HashCollision(template, byHash[0].TemplateId);
-                context.ExecutableActivityTemplates.Add(ToEntity(template, identity, json));
-                context.ExecutableActivityTemplateHashClaims.Add(ToClaimEntity(template, identity));
+                var incarnationId = NewIncarnationId();
+                context.ExecutableActivityTemplates.Add(ToEntity(template, identity, json, incarnationId));
+                context.ExecutableActivityTemplateHashClaims.Add(ToClaimEntity(template, identity, incarnationId));
                 await context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 return;
@@ -102,6 +105,8 @@ public sealed class EfExecutableActivityTemplateStore(
         var templateIdentity = identity with { TemplateId = readClaim.TemplateId };
         var row = await FindRowByIdAsync(templateIdentity, cancellationToken)
                   ?? throw new InvalidDataException("Executable activity template hash claim points to a missing template.");
+        if (row.IncarnationId != claim.IncarnationId)
+            throw new InvalidDataException("Executable activity template and its hash claim have mismatched incarnation identities.");
         return Read(row, templateIdentity);
     }
 
@@ -130,6 +135,16 @@ public sealed class EfExecutableActivityTemplateStore(
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         var identity = new TemplateIdentity(scope, templateId, null);
+        context.ChangeTracker.Clear();
+        var initialRow = await FindRowByIdAsync(identity, cancellationToken);
+        if (initialRow is null)
+            return false;
+        var initialTemplate = Read(initialRow, identity);
+        var fullIdentity = identity with { TemplateHash = initialTemplate.TemplateHash };
+        var initialClaim = await FindClaimRowAsync(fullIdentity, cancellationToken)
+                           ?? throw new InvalidDataException("Executable activity template has no hash claim.");
+        EnsureOwnedClaim(initialClaim, fullIdentity);
+        var expectedIncarnationId = initialRow.IncarnationId;
         for (var attempt = 0; attempt < MaximumDeleteAttempts; attempt++)
         {
             context.ChangeTracker.Clear();
@@ -137,10 +152,11 @@ public sealed class EfExecutableActivityTemplateStore(
             if (row is null)
                 return false;
             var template = Read(row, identity);
-            var fullIdentity = identity with { TemplateHash = template.TemplateHash };
             var claim = await FindClaimRowAsync(fullIdentity, cancellationToken)
                         ?? throw new InvalidDataException("Executable activity template has no hash claim.");
             EnsureOwnedClaim(claim, fullIdentity);
+            if (row.IncarnationId != expectedIncarnationId || claim.IncarnationId != expectedIncarnationId)
+                return false;
             try
             {
                 await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
@@ -220,24 +236,24 @@ public sealed class EfExecutableActivityTemplateStore(
         return current.Scope.Value;
     }
 
-    private static ExecutableActivityTemplateEntity ToEntity(ExecutableActivityTemplate template, TemplateIdentity identity, string json) => new()
+    private static ExecutableActivityTemplateEntity ToEntity(ExecutableActivityTemplate template, TemplateIdentity identity, string json, string incarnationId) => new()
     {
         Id = CreateId(identity.Scope, template.TemplateId), ScopeKey = Encode(identity.Scope), ScopeKeyHash = Hash(identity.Scope), TemplateId = template.TemplateId,
         TemplateIdHash = Hash(template.TemplateId), TemplateHash = template.TemplateHash, TemplateIdOrderKey = OrderKey(template.TemplateId), ContentJson = json,
-        SchemaVersion = RuntimeArtifactEfModule.SchemaVersion, Revision = 1
+        SchemaVersion = RuntimeArtifactEfModule.SchemaVersion, Revision = 1, IncarnationId = incarnationId
     };
 
-    private static ExecutableActivityTemplateHashClaimEntity ToClaimEntity(ExecutableActivityTemplate template, TemplateIdentity identity) => new()
+    private static ExecutableActivityTemplateHashClaimEntity ToClaimEntity(ExecutableActivityTemplate template, TemplateIdentity identity, string incarnationId) => new()
     {
         Id = HashClaimId(identity.Scope, template.TemplateHash), ScopeKey = Encode(identity.Scope), ScopeKeyHash = Hash(identity.Scope), TemplateHash = template.TemplateHash,
         TemplateHashHash = Hash(template.TemplateHash), TemplateId = template.TemplateId, ContentJson = RuntimeArtifactJson.Serialize(new HashClaim(template.TemplateHash, template.TemplateId)),
-        SchemaVersion = RuntimeArtifactEfModule.SchemaVersion, Revision = 1
+        SchemaVersion = RuntimeArtifactEfModule.SchemaVersion, Revision = 1, IncarnationId = incarnationId
     };
 
     private static ExecutableActivityTemplate Read(ExecutableActivityTemplateEntity row, TemplateIdentity identity)
     {
         if (identity.TemplateId is null || row.Id != CreateId(identity.Scope, identity.TemplateId) || row.ScopeKey != Encode(identity.Scope) || row.ScopeKeyHash != Hash(identity.Scope) ||
-            row.TemplateId != identity.TemplateId || row.TemplateIdHash != Hash(identity.TemplateId) || row.TemplateIdOrderKey != OrderKey(identity.TemplateId) || row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion || row.Revision <= 0)
+            row.TemplateId != identity.TemplateId || row.TemplateIdHash != Hash(identity.TemplateId) || row.TemplateIdOrderKey != OrderKey(identity.TemplateId) || row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion || row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId))
             throw new InvalidDataException("The persisted executable activity template row is corrupt.");
         try
         {
@@ -258,7 +274,7 @@ public sealed class EfExecutableActivityTemplateStore(
     private static HashClaim ReadClaim(ExecutableActivityTemplateHashClaimEntity row, TemplateIdentity identity)
     {
         if (identity.TemplateHash is null || row.Id != HashClaimId(identity.Scope, identity.TemplateHash) || row.ScopeKey != Encode(identity.Scope) || row.ScopeKeyHash != Hash(identity.Scope) ||
-            row.TemplateHash != identity.TemplateHash || row.TemplateHashHash != Hash(identity.TemplateHash) || string.IsNullOrWhiteSpace(row.TemplateId) || row.TemplateId.Length > RuntimeArtifactEfModule.IdentityMaximumLength || row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion || row.Revision <= 0)
+            row.TemplateHash != identity.TemplateHash || row.TemplateHashHash != Hash(identity.TemplateHash) || string.IsNullOrWhiteSpace(row.TemplateId) || row.TemplateId.Length > RuntimeArtifactEfModule.IdentityMaximumLength || row.SchemaVersion != RuntimeArtifactEfModule.SchemaVersion || row.Revision <= 0 || string.IsNullOrWhiteSpace(row.IncarnationId))
             throw new InvalidDataException("The persisted executable activity template hash claim is corrupt.");
         try
         {
@@ -322,6 +338,7 @@ public sealed class EfExecutableActivityTemplateStore(
     private static InvalidOperationException HashCollision(ExecutableActivityTemplate template, string owner) => new($"Template hash '{template.TemplateHash}' is already bound to id '{owner}', not '{template.TemplateId}'.");
     private static void Validate(ExecutableActivityTemplate value) { ArgumentNullException.ThrowIfNull(value); ArgumentException.ThrowIfNullOrWhiteSpace(value.TemplateId); ArgumentException.ThrowIfNullOrWhiteSpace(value.TemplateHash); if (value.TemplateId.Length > RuntimeArtifactEfModule.IdentityMaximumLength) throw new ArgumentOutOfRangeException(nameof(value.TemplateId)); if (value.TemplateHash.Length > 450) throw new ArgumentOutOfRangeException(nameof(value.TemplateHash)); }
     private static string CreateId(string scope, string value) => Hash($"{scope.Length}:{scope}{value.Length}:{value}");
+    private static string NewIncarnationId() => Guid.NewGuid().ToString("N");
     private static string Hash(string value) => EfRelationalIdentity.Hash(value);
     private static string Encode(string value) => EfRelationalIdentity.Encode(value);
     private static string HashClaimId(string scope, string hash) => CreateId(scope, $"templateHash:{Hash(hash)}");
