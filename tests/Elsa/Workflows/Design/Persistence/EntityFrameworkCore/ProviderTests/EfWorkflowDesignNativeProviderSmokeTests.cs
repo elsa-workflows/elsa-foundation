@@ -1,0 +1,239 @@
+using Elsa.Primitives.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Models;
+using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Serialization.Core;
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Testcontainers.MsSql;
+using Testcontainers.MySql;
+using Testcontainers.PostgreSql;
+using Xunit;
+
+namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests;
+
+[Collection(WorkflowsDesignPostgreSqlFixture.CollectionName)]
+public sealed class WorkflowsDesignPostgreSqlSmokeTests(WorkflowsDesignPostgreSqlFixture fixture)
+{
+    [SkippableFact]
+    public Task PostgreSql_live_workflows_design_w01_w05_smoke() => WorkflowsDesignNativeProviderSmoke.RunAsync(
+        fixture,
+        connection => new WorkflowsDesignPostgreSqlDbContext(new DbContextOptionsBuilder<WorkflowsDesignPostgreSqlDbContext>().UseNpgsql(connection).Options),
+        WorkflowsDesignPostgreSqlDbContext.ExpectedProviderName);
+}
+
+[Collection(WorkflowsDesignSqlServerFixture.CollectionName)]
+public sealed class WorkflowsDesignSqlServerSmokeTests(WorkflowsDesignSqlServerFixture fixture)
+{
+    [SkippableFact]
+    public Task SqlServer_live_workflows_design_w01_w05_smoke() => WorkflowsDesignNativeProviderSmoke.RunAsync(
+        fixture,
+        connection => new WorkflowsDesignSqlServerDbContext(new DbContextOptionsBuilder<WorkflowsDesignSqlServerDbContext>().UseSqlServer(connection).Options),
+        WorkflowsDesignSqlServerDbContext.ExpectedProviderName);
+}
+
+[Collection(WorkflowsDesignMySqlFixture.CollectionName)]
+public sealed class WorkflowsDesignMySqlSmokeTests(WorkflowsDesignMySqlFixture fixture)
+{
+    [SkippableFact]
+    public Task MySql_live_workflows_design_w01_w05_smoke() => WorkflowsDesignNativeProviderSmoke.RunAsync(
+        fixture,
+        connection => new WorkflowsDesignMySqlDbContext(new DbContextOptionsBuilder<WorkflowsDesignMySqlDbContext>().UseMySQL(connection).Options),
+        WorkflowsDesignMySqlDbContext.ExpectedProviderName);
+}
+
+internal static class WorkflowsDesignNativeProviderSmoke
+{
+    private static readonly DateTimeOffset Now = new(2026, 9, 14, 10, 0, 0, TimeSpan.Zero);
+
+    public static async Task RunAsync(
+        WorkflowsDesignProviderFixture fixture,
+        Func<string, WorkflowsDesignDbContext> createContext,
+        string expectedProviderName)
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker/native provider is unavailable.");
+        var tenant = $"provider-tenant-{Guid.NewGuid():N}";
+        var definitionId = $"provider-definition-{Guid.NewGuid():N}";
+        var versionId = $"provider-version-{Guid.NewGuid():N}";
+        var draftId = $"provider-draft-{Guid.NewGuid():N}";
+        var access = new FixedAccess(PersistenceAccessContext.Scoped(new PersistenceScope(tenant)));
+
+        await using (var context = createContext(fixture.ConnectionString))
+        {
+            Assert.Equal(expectedProviderName, context.Database.ProviderName);
+            await context.Database.EnsureCreatedAsync();
+            Assert.Equal(WorkflowsDesignEfModule.DefinitionTable, context.Model.FindEntityType(typeof(WorkflowDefinition))!.GetTableName());
+            Assert.Equal(WorkflowsDesignEfModule.VersionTable, context.Model.FindEntityType(typeof(WorkflowDefinitionVersion))!.GetTableName());
+            Assert.Equal(WorkflowsDesignEfModule.DraftTable, context.Model.FindEntityType(typeof(WorkflowDefinitionDraft))!.GetTableName());
+
+            // W01: definition CRUD/query through the provider store.
+            context.Definitions.Add(new WorkflowDefinition { Id = definitionId, TenantId = tenant, Name = "Native provider definition" });
+            await context.SaveChangesAsync();
+            var definitions = new EfWorkflowDefinitionStore(context, access);
+            Assert.Equal(definitionId, (await definitions.FindByIdAsync(definitionId))!.Id);
+            Assert.Single(await definitions.ListAsync(new() { Name = "Native provider definition" }));
+
+            // W02: immutable version and ordered latest-version query.
+            context.Versions.Add(new WorkflowDefinitionVersion(definitionId, "1.0.0", "{}")
+            {
+                Id = versionId, TenantId = tenant, CreatedAt = Now, LastModifiedAt = Now
+            });
+            await context.SaveChangesAsync();
+            var versions = new EfWorkflowDefinitionVersionStore(context, new NativeProviderSerializer(), definitions, access);
+            Assert.Equal(versionId, (await versions.FindLatestVersionAsync(definitionId))!.Id);
+
+            // W03: mutable draft read and W04: version-layout read.
+            context.Drafts.Add(new WorkflowDefinitionDraft
+            {
+                Id = draftId, TenantId = tenant, WorkflowDefinitionId = definitionId, StateSource = "{}",
+                CreatedAt = Now, LastModifiedAt = Now
+            });
+            var layout = new WorkflowDefinitionVersionLayout
+            {
+                Id = $"provider-layout-{Guid.NewGuid():N}", TenantId = tenant, WorkflowDefinitionVersionId = versionId,
+                CreatedAt = Now, LastModifiedAt = Now
+            };
+            context.VersionLayouts.Add(layout);
+            await context.SaveChangesAsync();
+            var drafts = new EfWorkflowDefinitionDraftStore(context, new NativeProviderSerializer(), access);
+            Assert.Equal(draftId, (await drafts.FindByWorkflowDefinitionIdAsync(definitionId))!.Id);
+            Assert.NotNull(await new EfWorkflowDefinitionVersionLayoutStore(context, access).FindByVersionIdAsync(versionId));
+
+            // W05: the operation ledger commits atomically with its staged mutation and replays.
+            var writer = new EfDesignAtomicWriter(context, access);
+            var operationKey = new DesignOperationKey($"provider-operation-{Guid.NewGuid():N}");
+            var operationId = await writer.ExecuteAsync(operationKey, "provider.design.smoke.v1", new { definitionId }, ["definitions"], async token =>
+            {
+                var committed = new WorkflowDefinition { Id = $"{definitionId}-operation", TenantId = tenant, Name = "Operation definition" };
+                context.Definitions.Add(committed);
+                await context.SaveChangesAsync(token);
+                return committed.Id;
+            });
+            Assert.Equal($"{definitionId}-operation", operationId);
+            Assert.Equal(operationId, await writer.ExecuteAsync(operationKey, "provider.design.smoke.v1", new { definitionId }, ["definitions"], _ => Task.FromResult(operationId)));
+        }
+
+        var rollbackId = $"provider-rollback-{Guid.NewGuid():N}";
+        await using (var transactionContext = createContext(fixture.ConnectionString))
+        {
+            await using var transaction = await transactionContext.Database.BeginTransactionAsync();
+            transactionContext.Definitions.Add(new WorkflowDefinition { Id = rollbackId, TenantId = tenant, Name = "Rolled back" });
+            await transactionContext.SaveChangesAsync();
+            await transaction.RollbackAsync();
+        }
+        await using (var reopened = createContext(fixture.ConnectionString))
+            Assert.Null(await reopened.Definitions.SingleOrDefaultAsync(x => x.TenantId == tenant && x.Id == rollbackId));
+
+        var concurrentId = $"provider-concurrent-{Guid.NewGuid():N}";
+        await using var left = createContext(fixture.ConnectionString);
+        await using var right = createContext(fixture.ConnectionString);
+        left.Definitions.Add(new WorkflowDefinition { Id = concurrentId, TenantId = tenant, Name = "Concurrent left" });
+        await left.SaveChangesAsync();
+        right.Definitions.Add(new WorkflowDefinition { Id = concurrentId, TenantId = tenant, Name = "Concurrent right" });
+        await Assert.ThrowsAsync<DbUpdateException>(() => right.SaveChangesAsync());
+    }
+
+    private sealed class FixedAccess(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
+    {
+        public PersistenceAccessContext Current { get; } = current;
+    }
+}
+
+internal sealed class NativeProviderSerializer : IPayloadSerializer
+{
+    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
+    public string Serialize(object payload) => JsonSerializer.Serialize(payload, Options);
+    public JsonElement SerializeToElement(object payload) => JsonSerializer.SerializeToElement(payload, Options);
+    public object Deserialize(string serializedData) => JsonSerializer.Deserialize<object>(serializedData, Options)!;
+    public object Deserialize(string serializedData, Type type) => JsonSerializer.Deserialize(serializedData, type, Options)!;
+    public object Deserialize(JsonElement serializedData) => serializedData.Deserialize<object>(Options)!;
+    public T Deserialize<T>(string serializedData) => JsonSerializer.Deserialize<T>(serializedData, Options)!;
+    public T Deserialize<T>(JsonElement serializedData) => serializedData.Deserialize<T>(Options)!;
+    public JsonSerializerOptions GetOptions() => Options;
+}
+
+public abstract class WorkflowsDesignProviderFixture : IAsyncLifetime
+{
+    protected string? ConnectionStringValue;
+    public bool IsAvailable { get; private protected set; }
+    public string? SkipReason { get; private protected set; }
+    public string ConnectionString => ConnectionStringValue ?? throw new InvalidOperationException("Provider is unavailable.");
+    protected abstract string EnvironmentVariable { get; }
+    protected abstract Task StartContainerAsync();
+    protected abstract Task DisposeContainerAsync();
+
+    public async Task InitializeAsync()
+    {
+        ConnectionStringValue = Environment.GetEnvironmentVariable(EnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(ConnectionStringValue))
+        {
+            IsAvailable = true;
+            return;
+        }
+        try
+        {
+            await StartContainerAsync();
+            IsAvailable = true;
+        }
+        catch (Exception exception) when (exception.GetType().Name.Contains("Docker", StringComparison.OrdinalIgnoreCase) || exception.InnerException?.GetType().Name.Contains("Docker", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            SkipReason = $"Docker container unavailable for {EnvironmentVariable}: {exception.Message}";
+        }
+    }
+
+    public Task DisposeAsync() => DisposeContainerAsync();
+}
+
+public sealed class WorkflowsDesignPostgreSqlFixture : WorkflowsDesignProviderFixture
+{
+    private PostgreSqlContainer? container;
+    public const string CollectionName = "workflows-design-ef-postgresql";
+    protected override string EnvironmentVariable => "ELSA_WORKFLOWS_DESIGN_EF_POSTGRESQL_TEST_CONNECTION_STRING";
+    protected override async Task StartContainerAsync()
+    {
+        container = new PostgreSqlBuilder("postgres:16-alpine").WithDatabase("elsa_workflows_design").WithUsername("postgres").WithPassword("postgres").Build();
+        await container.StartAsync();
+        ConnectionStringValue = container.GetConnectionString();
+    }
+    protected override async Task DisposeContainerAsync() { if (container is not null) await container.DisposeAsync(); }
+}
+
+public sealed class WorkflowsDesignSqlServerFixture : WorkflowsDesignProviderFixture
+{
+    private MsSqlContainer? container;
+    public const string CollectionName = "workflows-design-ef-sqlserver";
+    protected override string EnvironmentVariable => "ELSA_WORKFLOWS_DESIGN_EF_SQLSERVER_TEST_CONNECTION_STRING";
+    protected override async Task StartContainerAsync()
+    {
+        container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-CU18-ubuntu-22.04").Build();
+        await container.StartAsync();
+        ConnectionStringValue = container.GetConnectionString();
+    }
+    protected override async Task DisposeContainerAsync() { if (container is not null) await container.DisposeAsync(); }
+}
+
+public sealed class WorkflowsDesignMySqlFixture : WorkflowsDesignProviderFixture
+{
+    private const string Image = "mysql:8.4.11@sha256:85b9bf2e29cf836ecb8c2a15a935d4ba0c606631dff1dd79531a11983c638f2a";
+    private MySqlContainer? container;
+    public const string CollectionName = "workflows-design-ef-mysql";
+    protected override string EnvironmentVariable => "ELSA_WORKFLOWS_DESIGN_EF_MYSQL_TEST_CONNECTION_STRING";
+    protected override async Task StartContainerAsync()
+    {
+        container = new MySqlBuilder(Image).WithDatabase("elsa_workflows_design").WithUsername("root").WithPassword("root").Build();
+        await container.StartAsync();
+        ConnectionStringValue = container.GetConnectionString();
+    }
+    protected override async Task DisposeContainerAsync() { if (container is not null) await container.DisposeAsync(); }
+}
+
+[CollectionDefinition(WorkflowsDesignPostgreSqlFixture.CollectionName)]
+public sealed class WorkflowsDesignPostgreSqlCollection : ICollectionFixture<WorkflowsDesignPostgreSqlFixture>;
+
+[CollectionDefinition(WorkflowsDesignSqlServerFixture.CollectionName)]
+public sealed class WorkflowsDesignSqlServerCollection : ICollectionFixture<WorkflowsDesignSqlServerFixture>;
+
+[CollectionDefinition(WorkflowsDesignMySqlFixture.CollectionName)]
+public sealed class WorkflowsDesignMySqlCollection : ICollectionFixture<WorkflowsDesignMySqlFixture>;

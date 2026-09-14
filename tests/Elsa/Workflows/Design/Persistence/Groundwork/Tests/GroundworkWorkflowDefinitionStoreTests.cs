@@ -71,6 +71,31 @@ public sealed class GroundworkWorkflowDefinitionStoreTests
     }
 
     [Fact]
+    public async Task FindById_rejects_a_valid_payload_whose_embedded_identity_differs_from_the_projected_identity()
+    {
+        using var raw = new DesignGroundworkTestPersistence();
+        var embedded = new WorkflowDefinition { Id = "embedded-id", Name = "Definition" };
+        var options = GroundworkDesignDocumentSerialization.Create(new FakePayloadSerializer());
+        var values = GroundworkDesignStorage.Values(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind,
+            embedded,
+            options,
+            WorkflowsDesignStorageManifest.WorkflowDefinitionCollection)
+            .Values
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        values[WorkflowsDesignStorageManifest.IdField] = "requested-id";
+        values[WorkflowsDesignStorageManifest.DefinitionIdField] = "requested-id";
+        values[WorkflowsDesignStorageManifest.DefinitionIdSearchKeyField] = QuerySearchKeys.Encode("requested-id", QuerySearchKeyPolicy.UnicodeOrdinalIgnoreCase);
+        values[WorkflowsDesignStorageManifest.DefinitionIdLookupHashField] = LookupHash(values[WorkflowsDesignStorageManifest.DefinitionIdSearchKeyField]!.ToString()!);
+        raw.InsertRaw(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind, new StorageValues(values));
+
+        var store = new GroundworkWorkflowDefinitionStore(raw, DesignGroundworkTestAccess.DefaultAccessContextAccessor);
+
+        var exception = await Assert.ThrowsAsync<GroundworkQueryReadinessException>(() => store.FindByIdAsync("requested-id"));
+        Assert.Contains("does not match", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task FindById_returns_null_when_absent()
     {
         var (store, raw) = Seeded(Sample());

@@ -2,6 +2,12 @@ using Elsa.Workflows.Design.Persistence.Core.Models;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 
+/// <summary>Marks a workflow-design persistence contract as a single-implementation replacement seam.</summary>
+[AttributeUsage(AttributeTargets.Interface, Inherited = false)]
+public sealed class DesignPersistenceReplacementContractAttribute : Attribute
+{
+}
+
 /// <summary>
 /// Replacement contract. Provider-neutral atomic boundary for design mutations. Exactly one
 /// implementation is selected per application; use an explicit DI replacement operation when
@@ -9,6 +15,7 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 /// marker in the same transaction as staged changes and must make replay, conflict, and result
 /// integrity decisions before invoking volatile source reads.
 /// </summary>
+[DesignPersistenceReplacementContract]
 public interface IDesignAtomicWriter
 {
     Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(

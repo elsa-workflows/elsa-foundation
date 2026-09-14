@@ -48,6 +48,7 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         services.TryAddScoped<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
         services.TryAddScoped<IWorkflowDefinitionDraftFactory, WorkflowDefinitionDraftFactory>();
         services.TryAddScoped<IWorkflowDefinitionVersionFactory, WorkflowDefinitionVersionFactory>();
+        services.TryAddScoped<IWorkflowDefinitionLookup, WorkflowDefinitionLookup>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateDesignPersistenceReplacementContractsStartupTask>());
         services.AddScoped<EfWorkflowDefinitionStore>(); services.AddScoped<IWorkflowDefinitionStore>(sp => sp.GetRequiredService<EfWorkflowDefinitionStore>());
         services.AddScoped<EfWorkflowDefinitionVersionStore>(); services.AddScoped<IWorkflowDefinitionVersionStore>(sp => sp.GetRequiredService<EfWorkflowDefinitionVersionStore>());
@@ -98,6 +99,7 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         typeof(WorkflowsDesignPostgreSqlDbContext),
         typeof(WorkflowsDesignMySqlDbContext),
         typeof(IDesignAtomicWriter),
+        typeof(IWorkflowDefinitionLookup),
         typeof(EfWorkflowDefinitionStore),
         typeof(EfWorkflowDefinitionVersionStore),
         typeof(EfWorkflowDefinitionDraftStore),

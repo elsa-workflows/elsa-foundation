@@ -100,6 +100,7 @@ public static class GroundworkWorkflowsDesignStoreRegistration
     [
         typeof(GroundworkDesignStorage),
         typeof(IDesignAtomicWriter),
+        typeof(IWorkflowDefinitionLookup),
         typeof(IWorkflowDefinitionStore),
         typeof(IWorkflowDefinitionVersionStore),
         typeof(IWorkflowDefinitionDraftStore),

@@ -312,13 +312,15 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.IsType<WorkflowDefinitionFactory>(serviceProvider.GetRequiredService<IWorkflowDefinitionFactory>());
         Assert.IsType<WorkflowDefinitionDraftFactory>(serviceProvider.GetRequiredService<IWorkflowDefinitionDraftFactory>());
         Assert.IsType<WorkflowDefinitionVersionFactory>(serviceProvider.GetRequiredService<IWorkflowDefinitionVersionFactory>());
+        Assert.IsType<WorkflowDefinitionLookup>(serviceProvider.GetRequiredService<IWorkflowDefinitionLookup>());
+        Assert.True(typeof(IDesignAtomicWriter).IsDefined(typeof(DesignPersistenceReplacementContractAttribute), inherit: false));
         _ = serviceProvider.GetRequiredService<WorkflowsDesignDbContext>();
         _ = serviceProvider.GetRequiredService<WorkflowsDesignSqliteDbContext>();
         foreach (var serviceType in new[]
                  {
                      typeof(EfWorkflowDefinitionStore), typeof(EfWorkflowDefinitionVersionStore), typeof(EfWorkflowDefinitionDraftStore),
                      typeof(EfWorkflowDefinitionVersionLayoutStore), typeof(EfWorkflowDefinitionListProjectionStore),
-                     typeof(IWorkflowDefinitionStore), typeof(IWorkflowDefinitionVersionStore), typeof(IWorkflowDefinitionDraftStore),
+                     typeof(IWorkflowDefinitionLookup), typeof(IWorkflowDefinitionStore), typeof(IWorkflowDefinitionVersionStore), typeof(IWorkflowDefinitionDraftStore),
                      typeof(IWorkflowDefinitionVersionLayoutStore), typeof(IWorkflowDefinitionListProjectionStore),
                      typeof(IAddWorkflowDefinitionCommand), typeof(IAddWorkflowDefinitionVersionCommand), typeof(ICreateDraftCommand),
                      typeof(ICloneDraftFromVersionCommand), typeof(IDeleteWorkflowDefinitionPermanentlyCommand), typeof(IDiscardDraftCommand),
@@ -327,6 +329,53 @@ public sealed class EfWorkflowDesignPersistenceTests
                      typeof(IUpdateDraftCommand)
                  })
             Assert.NotNull(serviceProvider.GetRequiredService(serviceType));
+    }
+
+    [Fact]
+    public async Task Ef_registration_lookup_reads_a_definition_through_the_provider_store()
+    {
+        var databasePath = Path.Combine(Path.GetTempPath(), $"elsa-workflows-design-lookup-{Guid.NewGuid():N}.db");
+        var services = new ServiceCollection();
+        services.AddSingleton<IPayloadSerializer, TestSerializer>();
+        services.AddSingleton<IIdentityGenerator, TestIdentity>();
+        services.AddSingleton<IActivityStructureService, EmptyActivityStructureService>();
+        services.AddWorkflowsDesignEntityFrameworkCore(new WorkflowsDesignEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = $"Data Source={databasePath}"
+        });
+
+        try
+        {
+            using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+            using var scope = provider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>();
+            await db.Database.EnsureCreatedAsync();
+            db.Definitions.Add(new WorkflowDefinition { Id = "lookup-definition", TenantId = "default", Name = "Lookup definition" });
+            await db.SaveChangesAsync();
+
+            var lookup = scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionLookup>();
+            var definition = await lookup.GetDefinition("lookup-definition");
+
+            Assert.Equal("lookup-definition", definition.Id);
+            Assert.Equal("Lookup definition", definition.Name);
+        }
+        finally
+        {
+            File.Delete(databasePath);
+        }
+    }
+
+    [Fact]
+    public void Ef_model_table_names_distinguish_the_groundwork_v2_register_from_ef_tables()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var db = Create(connection);
+
+        Assert.Equal(WorkflowsDesignEfModule.DefinitionTable, db.Model.FindEntityType(typeof(WorkflowDefinition))!.GetTableName());
+        Assert.Equal(WorkflowsDesignEfModule.VersionTable, db.Model.FindEntityType(typeof(WorkflowDefinitionVersion))!.GetTableName());
+        Assert.Equal(WorkflowsDesignEfModule.DraftTable, db.Model.FindEntityType(typeof(WorkflowDefinitionDraft))!.GetTableName());
     }
 
     [Fact]
