@@ -48,10 +48,10 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
 
         switch (provider)
         {
-            case "sqlite": EnsureContextIsUnregistered<BookmarkStateSqliteDbContext>(services); break;
-            case "sqlserver": EnsureContextIsUnregistered<BookmarkStateSqlServerDbContext>(services); break;
-            case "postgresql": EnsureContextIsUnregistered<BookmarkStatePostgreSqlDbContext>(services); break;
-            case "mysql": EnsureContextIsUnregistered<BookmarkStateMySqlDbContext>(services); break;
+            case "sqlite": BookmarkStateEfContextRegistration.EnsureContextIsAvailable<BookmarkStateSqliteDbContext>(services, BookmarkStateEfContextRegistration.IsOwnedByArtifacts(services), "Runtime bookmarks"); break;
+            case "sqlserver": BookmarkStateEfContextRegistration.EnsureContextIsAvailable<BookmarkStateSqlServerDbContext>(services, BookmarkStateEfContextRegistration.IsOwnedByArtifacts(services), "Runtime bookmarks"); break;
+            case "postgresql": BookmarkStateEfContextRegistration.EnsureContextIsAvailable<BookmarkStatePostgreSqlDbContext>(services, BookmarkStateEfContextRegistration.IsOwnedByArtifacts(services), "Runtime bookmarks"); break;
+            case "mysql": BookmarkStateEfContextRegistration.EnsureContextIsAvailable<BookmarkStateMySqlDbContext>(services, BookmarkStateEfContextRegistration.IsOwnedByArtifacts(services), "Runtime bookmarks"); break;
             default: throw new ArgumentException($"Unknown Runtime bookmarks EF provider '{options.Provider}'. Expected Sqlite, SqlServer, PostgreSql, or MySql.", nameof(options));
         }
 
@@ -104,15 +104,6 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
         services.AddDbContext<TContext>((provider, builder) => bind(builder, ResolveConnectionString(provider, options), BookmarkStateEfModule.HistoryTableName, typeof(BookmarkStateDbContext).Assembly.GetName().Name));
         services.AddScoped<BookmarkStateDbContext>(provider => provider.GetRequiredService<TContext>());
         return services.Skip(start).ToArray();
-    }
-
-    private static void EnsureContextIsUnregistered<TContext>(IServiceCollection services)
-        where TContext : BookmarkStateDbContext
-    {
-        if (services.Any(descriptor => descriptor.ServiceType == typeof(TContext) ||
-                                       descriptor.ServiceType == typeof(DbContextOptions<TContext>) ||
-                                       descriptor.ServiceType == typeof(BookmarkStateDbContext)))
-            throw new InvalidOperationException($"A {typeof(TContext).Name} registration already exists; Runtime bookmarks EF persistence refuses to reuse or replace an unowned context.");
     }
 
     private static string ResolveConnectionString(IServiceProvider provider, RuntimeBookmarksEntityFrameworkCoreOptions options)

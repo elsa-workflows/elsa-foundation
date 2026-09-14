@@ -41,18 +41,23 @@ public static class RuntimeArtifactsEntityFrameworkCoreRegistration
             RuntimeArtifactEfModule.DefaultSqliteConnectionString);
         var configured = new RuntimeArtifactsEntityFrameworkCoreOptions { Provider = options.Provider, ConnectionString = options.ConnectionString, ConnectionName = options.ConnectionName };
         services.TryAddSingleton(configured);
+        var bookmarksOwnContext = BookmarkStateEfContextRegistration.IsOwnedByBookmarks(services);
         switch (provider)
         {
             case "sqlite":
+                BookmarkStateEfContextRegistration.EnsureContextIsAvailable<BookmarkStateSqliteDbContext>(services, bookmarksOwnContext, "Runtime artifacts");
                 AddContext<BookmarkStateSqliteDbContext>(services, configured, EfRelationalProviderBinding.UseSqlite);
                 break;
             case "sqlserver":
+                BookmarkStateEfContextRegistration.EnsureContextIsAvailable<BookmarkStateSqlServerDbContext>(services, bookmarksOwnContext, "Runtime artifacts");
                 AddContext<BookmarkStateSqlServerDbContext>(services, configured, EfRelationalProviderBinding.UseSqlServer);
                 break;
             case "postgresql":
+                BookmarkStateEfContextRegistration.EnsureContextIsAvailable<BookmarkStatePostgreSqlDbContext>(services, bookmarksOwnContext, "Runtime artifacts");
                 AddContext<BookmarkStatePostgreSqlDbContext>(services, configured, EfRelationalProviderBinding.UseNpgsql);
                 break;
             case "mysql":
+                BookmarkStateEfContextRegistration.EnsureContextIsAvailable<BookmarkStateMySqlDbContext>(services, bookmarksOwnContext, "Runtime artifacts");
                 AddContext<BookmarkStateMySqlDbContext>(services, configured, EfRelationalProviderBinding.UseMySql);
                 break;
             default:

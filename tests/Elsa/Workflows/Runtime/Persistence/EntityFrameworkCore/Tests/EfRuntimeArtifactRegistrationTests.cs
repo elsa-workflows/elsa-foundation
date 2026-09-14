@@ -85,6 +85,15 @@ public sealed class EfRuntimeArtifactRegistrationTests
     }
 
     [Fact]
+    public void Artifact_registration_rejects_an_unowned_provider_context()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<BookmarkStateSqliteDbContext>(_ => throw new NotSupportedException());
+
+        Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(new()));
+    }
+
+    [Fact]
     public void Artifact_registration_is_idempotent_only_for_equivalent_options()
     {
         var options = new RuntimeArtifactsEntityFrameworkCoreOptions

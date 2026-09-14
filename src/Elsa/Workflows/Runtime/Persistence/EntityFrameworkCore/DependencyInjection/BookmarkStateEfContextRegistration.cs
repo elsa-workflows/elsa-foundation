@@ -1,10 +1,42 @@
 using Elsa.Persistence.EntityFramework;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 
 internal static class BookmarkStateEfContextRegistration
 {
+    public static void EnsureContextIsAvailable<TContext>(
+        IServiceCollection services,
+        bool existingContextIsOwnedBySibling,
+        string owner)
+        where TContext : BookmarkStateDbContext
+    {
+        var hasContextRegistration = services.Any(descriptor =>
+            descriptor.ServiceType == typeof(TContext) ||
+            descriptor.ServiceType == typeof(DbContextOptions<TContext>) ||
+            descriptor.ServiceType == typeof(BookmarkStateDbContext));
+        if (hasContextRegistration && !existingContextIsOwnedBySibling)
+            throw new InvalidOperationException(
+                $"A {typeof(TContext).Name} registration already exists; {owner} EF persistence refuses to reuse or replace an unowned context.");
+    }
+
+    public static bool IsOwnedByArtifacts(IServiceCollection services) =>
+        services.Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<RuntimeArtifactsEntityFrameworkCoreOptions>()
+            .Any() &&
+        services.Any(descriptor =>
+            descriptor.ServiceType == typeof(EfWorkflowExecutableStore) &&
+            descriptor.ImplementationType == typeof(EfWorkflowExecutableStore));
+
+    public static bool IsOwnedByBookmarks(IServiceCollection services) =>
+        services.Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<RuntimeBookmarksEntityFrameworkCoreOptions>()
+            .Any() &&
+        BookmarkStateStoreBackend.Find(services)?.Name == BookmarkStateStoreBackend.EntityFramework;
+
     public static void EnsureCompatible(
         IServiceCollection services,
         string provider,
