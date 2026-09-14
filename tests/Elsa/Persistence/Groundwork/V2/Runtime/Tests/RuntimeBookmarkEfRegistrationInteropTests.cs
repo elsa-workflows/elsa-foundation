@@ -10,6 +10,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Groundwork.Store;
 using Groundwork.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -36,6 +37,80 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
         HierarchyCursorSigningKey = "ef-runtime-activity-switch-hierarchy-key-32-bytes",
         RecoveryContinuationSigningKey = "ef-runtime-activity-switch-signing-key-32-bytes"
     };
+
+    private static readonly RuntimeWorkflowExecutionEntityFrameworkCoreOptions WorkflowEfOptions = new()
+    {
+        Provider = "Sqlite",
+        ConnectionString = "Data Source=:memory:",
+        RecoveryContinuationSigningKey = "ef-runtime-workflow-switch-signing-key-32-bytes"
+    };
+
+    [Fact]
+    public void Workflow_execution_backend_switches_both_directions_without_duplicate_markers()
+    {
+        var groundworkFirst = new ServiceCollection().AddWorkflowRuntime();
+        groundworkFirst.AddGroundworkV2RuntimeStores();
+        groundworkFirst.AddRuntimeWorkflowExecutionEntityFrameworkCore(WorkflowEfOptions);
+        Assert.Equal(WorkflowExecutionStateStoreBackend.EntityFramework, WorkflowExecutionStateStoreBackend.Find(groundworkFirst)!.Name);
+        Assert.Single(groundworkFirst, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionStateStore));
+        Assert.DoesNotContain(groundworkFirst, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowExecutionStateStore));
+
+        var efFirst = new ServiceCollection().AddWorkflowRuntime();
+        efFirst.AddRuntimeWorkflowExecutionEntityFrameworkCore(WorkflowEfOptions);
+        efFirst.AddGroundworkV2RuntimeStores();
+        Assert.Equal(WorkflowExecutionStateStoreBackend.Groundwork, WorkflowExecutionStateStoreBackend.Find(efFirst)!.Name);
+        Assert.Single(efFirst, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionStateStore));
+        Assert.DoesNotContain(efFirst, descriptor => descriptor.ServiceType == typeof(EfWorkflowExecutionStateStore));
+        Assert.Single(efFirst, descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowExecutionStateStore));
+    }
+
+    [Theory]
+    [InlineData("workflow-artifacts-bookmarks-activity")]
+    [InlineData("activity-bookmarks-artifacts-workflow")]
+    public void All_runtime_ef_siblings_share_one_context_in_reverse_registration_orders(string order)
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        if (order.StartsWith("workflow", StringComparison.Ordinal))
+        {
+            services.AddRuntimeWorkflowExecutionEntityFrameworkCore(WorkflowEfOptions);
+            services.AddRuntimeArtifactsEntityFrameworkCore(ArtifactEfOptions);
+            services.AddRuntimeBookmarksEntityFrameworkCore(EfOptions);
+            services.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions);
+        }
+        else
+        {
+            services.AddRuntimeActivityExecutionEntityFrameworkCore(ActivityEfOptions);
+            services.AddRuntimeBookmarksEntityFrameworkCore(EfOptions);
+            services.AddRuntimeArtifactsEntityFrameworkCore(ArtifactEfOptions);
+            services.AddRuntimeWorkflowExecutionEntityFrameworkCore(WorkflowEfOptions);
+        }
+
+        Assert.Equal(4, services.Count(descriptor => descriptor.ImplementationInstance is
+            RuntimeWorkflowExecutionEntityFrameworkCoreOptions or
+            RuntimeArtifactsEntityFrameworkCoreOptions or
+            RuntimeBookmarksEntityFrameworkCoreOptions or
+            RuntimeActivityExecutionEntityFrameworkCoreOptions));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+        Assert.Equal(WorkflowExecutionStateStoreBackend.EntityFramework, WorkflowExecutionStateStoreBackend.Find(services)!.Name);
+        Assert.Equal(RuntimeArtifactStoreBackend.EntityFramework, RuntimeArtifactStoreBackend.Find(services)!.Name);
+        Assert.Equal(BookmarkStateStoreBackend.EntityFramework, BookmarkStateStoreBackend.Find(services)!.Name);
+        Assert.Equal(RuntimeActivityExecutionStoreBackend.EntityFramework, RuntimeActivityExecutionStoreBackend.Find(services)!.Name);
+    }
+
+    [Fact]
+    public void Workflow_execution_ef_replaces_an_owned_custom_inmemory_backend_once()
+    {
+        var services = new ServiceCollection();
+        var custom = ServiceDescriptor.Singleton<IWorkflowExecutionStateStore, CustomWorkflowExecutionStateStore>();
+        ((IServiceCollection)services).Add(custom);
+        WorkflowExecutionStateStoreBackend.Register(services, new WorkflowExecutionStateStoreBackend(
+            WorkflowExecutionStateStoreBackend.InMemory, [custom]));
+        services.AddRuntimeWorkflowExecutionEntityFrameworkCore(WorkflowEfOptions);
+        Assert.Equal(WorkflowExecutionStateStoreBackend.EntityFramework, WorkflowExecutionStateStoreBackend.Find(services)!.Name);
+        Assert.DoesNotContain(services, descriptor => ReferenceEquals(descriptor, custom));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionStateStore));
+    }
 
     [Fact]
     public void Groundwork_then_ef_withdraws_only_the_groundwork_bookmark_backend()
@@ -393,6 +468,16 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
         public ValueTask<RuntimeStorePage<BookmarkState>> ListByStimulusTypePageAsync(
             BookmarkStimulusTypePageQuery query,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class CustomWorkflowExecutionStateStore : IWorkflowExecutionStateStore
+    {
+        public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class UnownedStateStore : IBookmarkStateStore

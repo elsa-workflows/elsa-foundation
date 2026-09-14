@@ -126,9 +126,10 @@ public static class GroundworkV2RuntimeRegistration
             typeof(IWorkflowExecutionStateStore));
         services.RemoveAll<WorkflowExecutionStateStoreBackend>();
         var groundworkExecutionDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionStateStore));
+        var groundworkExecutionConcreteDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2WorkflowExecutionStateStore));
         WorkflowExecutionStateStoreBackend.Register(services, new WorkflowExecutionStateStoreBackend(
             WorkflowExecutionStateStoreBackend.Groundwork,
-            [groundworkExecutionDescriptor]));
+            [groundworkExecutionDescriptor, groundworkExecutionConcreteDescriptor]));
         ReplaceScoped<GroundworkV2WorkflowAlterationStore>(services, Standard<GroundworkV2WorkflowAlterationStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IWorkflowAlterationStore));
         ReplaceScoped<GroundworkV2WorkflowTestScopeStore>(services, Standard<GroundworkV2WorkflowTestScopeStore>(target, static (sessions, access, target) => new(sessions, access, target)),
