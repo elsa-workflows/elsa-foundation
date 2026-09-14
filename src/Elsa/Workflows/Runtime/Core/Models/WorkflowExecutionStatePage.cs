@@ -1,6 +1,5 @@
+using System.Buffers.Binary;
 using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -76,18 +75,49 @@ public static class WorkflowExecutionStateHistory
     /// <summary>Returns a deterministic fingerprint over every filter that defines a result set.</summary>
     public static string Scope(WorkflowExecutionStatePageQuery query)
     {
-        var json = JsonSerializer.Serialize(new object?[]
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        AppendString(hash, query.TenantId);
+        AppendString(hash, query.DefinitionId);
+        AppendInt32(hash, query.Status is { } status ? (int)status : null);
+        AppendInt32(hash, query.RunKind is { } runKind ? (int)runKind : null);
+        AppendInt64(hash, query.From?.UtcTicks);
+        AppendInt64(hash, query.To?.UtcTicks);
+        AppendString(hash, query.CorrelationId);
+        AppendString(hash, query.WorkflowExecutionId);
+        AppendString(hash, query.ArtifactId);
+        return Convert.ToHexString(hash.GetHashAndReset());
+    }
+
+    private static void AppendString(IncrementalHash hash, string? value)
+    {
+        Span<byte> frame = stackalloc byte[sizeof(byte) + sizeof(int)];
+        frame[0] = value is null ? (byte)0 : (byte)1;
+        BinaryPrimitives.WriteInt32BigEndian(frame[sizeof(byte)..], value?.Length ?? 0);
+        hash.AppendData(frame);
+        if (value is null)
+            return;
+
+        Span<byte> codeUnit = stackalloc byte[sizeof(char)];
+        foreach (var character in value)
         {
-            query.TenantId,
-            query.DefinitionId,
-            query.Status is { } status ? (int)status : null,
-            query.RunKind is { } runKind ? (int)runKind : null,
-            query.From?.UtcTicks,
-            query.To?.UtcTicks,
-            query.CorrelationId,
-            query.WorkflowExecutionId,
-            query.ArtifactId
-        });
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
+            BinaryPrimitives.WriteUInt16BigEndian(codeUnit, character);
+            hash.AppendData(codeUnit);
+        }
+    }
+
+    private static void AppendInt32(IncrementalHash hash, int? value)
+    {
+        Span<byte> frame = stackalloc byte[sizeof(byte) + sizeof(int)];
+        frame[0] = value.HasValue ? (byte)1 : (byte)0;
+        BinaryPrimitives.WriteInt32BigEndian(frame[sizeof(byte)..], value ?? 0);
+        hash.AppendData(frame);
+    }
+
+    private static void AppendInt64(IncrementalHash hash, long? value)
+    {
+        Span<byte> frame = stackalloc byte[sizeof(byte) + sizeof(long)];
+        frame[0] = value.HasValue ? (byte)1 : (byte)0;
+        BinaryPrimitives.WriteInt64BigEndian(frame[sizeof(byte)..], value ?? 0);
+        hash.AppendData(frame);
     }
 }

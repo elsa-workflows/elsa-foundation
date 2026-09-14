@@ -166,6 +166,28 @@ public sealed class EfWorkflowExecutionStateStoreTests
     }
 
     [Fact]
+    public async Task History_cursor_rejects_distinct_lone_surrogate_definition_filters()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        const string firstDefinition = "\uD800";
+        const string secondDefinition = "\uD801";
+        var timestamp = DateTimeOffset.UtcNow;
+        var first = State("history-a", "tenant-a", timestamp) with { PinnedExecutable = new("artifact-a", firstDefinition, "version", "1", "hash") };
+        var second = State("history-b", "tenant-a", timestamp) with { PinnedExecutable = new("artifact-b", firstDefinition, "version", "1", "hash") };
+        await fixture.Store.SaveAsync(first);
+        await fixture.Store.SaveAsync(second);
+
+        var firstQuery = new WorkflowExecutionStatePageQuery(1, DefinitionId: firstDefinition);
+        var secondQuery = new WorkflowExecutionStatePageQuery(1, DefinitionId: secondDefinition);
+        var page = await fixture.Store.QueryPageAsync(firstQuery);
+
+        Assert.NotNull(page.NextCursor);
+        Assert.NotEqual(WorkflowExecutionStateHistory.Scope(firstQuery), WorkflowExecutionStateHistory.Scope(secondQuery));
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.QueryPageAsync(secondQuery with { Cursor = page.NextCursor }).AsTask());
+    }
+
+    [Fact]
     public async Task History_and_alteration_capture_pages_reject_sizes_above_the_provider_bound()
     {
         await using var database = await Database.CreateAsync();
