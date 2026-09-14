@@ -11,18 +11,21 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 public enum EfDesignOperationStatus { Committed, Reconciled, Replayed, Conflict, Rejected }
 public sealed record EfDesignOperationResult(EfDesignOperationStatus Status, string? ResultJson = null);
 
-public sealed class EfDesignAtomicWriter(WorkflowsDesignDbContext db, TimeProvider? timeProvider = null, IPersistenceAccessContextAccessor? access = null) : IDesignAtomicWriter
+public sealed class EfDesignAtomicWriter(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access, TimeProvider? timeProvider = null) : IDesignAtomicWriter
 {
     private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
 
-    public async Task<T> ExecuteAsync<T>(DesignOperationKey key, string operationKind, object request, Func<CancellationToken, Task<T>> stage, CancellationToken cancellationToken = default)
+    public Task<T> ExecuteAsync<T>(DesignOperationKey key, string operationKind, object request, Func<CancellationToken, Task<T>> stage, CancellationToken cancellationToken = default) =>
+        ExecuteAttemptAsync(key, operationKind, request, stage, cancellationToken, 0);
+
+    private async Task<T> ExecuteAttemptAsync<T>(DesignOperationKey key, string operationKind, object request, Func<CancellationToken, Task<T>> stage, CancellationToken cancellationToken, int attempt)
     {
         ArgumentNullException.ThrowIfNull(key);
         ArgumentException.ThrowIfNullOrWhiteSpace(operationKind);
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(stage);
-        var tenantId = access?.Current.Scope?.Value ?? string.Empty;
-        if (access is not null && access.Current.Scope is null)
+        var tenantId = access.Current.Scope?.Value ?? throw new InvalidOperationException("Workflow design mutations require an explicit persistence scope.");
+        if (access.Current.Scope is null)
             throw new InvalidOperationException("Workflow design mutations require an explicit persistence scope.");
         var requestFingerprint = EfDesignSupport.Fingerprint(operationKind, request);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
@@ -38,7 +41,16 @@ public sealed class EfDesignAtomicWriter(WorkflowsDesignDbContext db, TimeProvid
             return EfDesignSupport.ReadJson<T>(existing.ResultJson);
         }
 
-        var value = await stage(cancellationToken);
+        T value;
+        try
+        {
+            value = await stage(cancellationToken);
+        }
+        catch
+        {
+            db.ChangeTracker.Clear();
+            throw;
+        }
         var resultJson = EfDesignSupport.Json(value);
         db.Operations.Add(new DesignOperationEntity
         {
@@ -58,8 +70,12 @@ public sealed class EfDesignAtomicWriter(WorkflowsDesignDbContext db, TimeProvid
         }
         catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsTransientWriteConflict(exception))
         {
+            try { await transaction.RollbackAsync(CancellationToken.None); } catch { }
             db.ChangeTracker.Clear();
-            throw;
+            if (attempt >= 3)
+                throw;
+            await Task.Delay(TimeSpan.FromMilliseconds(25 * (attempt + 1)), cancellationToken);
+            return await ExecuteAttemptAsync(key, operationKind, request, stage, cancellationToken, attempt + 1);
         }
         catch (DbUpdateException)
         {
@@ -73,6 +89,12 @@ public sealed class EfDesignAtomicWriter(WorkflowsDesignDbContext db, TimeProvid
                     throw new InvalidDataException("The authoritative design-operation result fingerprint does not match its payload.");
                 return EfDesignSupport.ReadJson<T>(winner.ResultJson);
             }
+            throw;
+        }
+        catch
+        {
+            try { await transaction.RollbackAsync(CancellationToken.None); } catch { }
+            db.ChangeTracker.Clear();
             throw;
         }
     }
