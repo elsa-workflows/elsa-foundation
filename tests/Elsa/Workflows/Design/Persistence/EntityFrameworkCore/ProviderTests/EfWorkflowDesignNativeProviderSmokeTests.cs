@@ -127,12 +127,37 @@ internal static class WorkflowsDesignNativeProviderSmoke
             Assert.Null(await reopened.Definitions.SingleOrDefaultAsync(x => x.TenantId == tenant && x.Id == rollbackId));
 
         var concurrentId = $"provider-concurrent-{Guid.NewGuid():N}";
-        await using var left = createContext(fixture.ConnectionString);
-        await using var right = createContext(fixture.ConnectionString);
-        left.Definitions.Add(new WorkflowDefinition { Id = concurrentId, TenantId = tenant, Name = "Concurrent left" });
-        await left.SaveChangesAsync();
-        right.Definitions.Add(new WorkflowDefinition { Id = concurrentId, TenantId = tenant, Name = "Concurrent right" });
-        await Assert.ThrowsAsync<DbUpdateException>(() => right.SaveChangesAsync());
+        var startGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var leftReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var rightReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var leftCommit = InsertConcurrentDefinitionAsync("left", leftReady);
+        var rightCommit = InsertConcurrentDefinitionAsync("right", rightReady);
+        await Task.WhenAll(leftReady.Task, rightReady.Task);
+        startGate.SetResult(true);
+
+        var commitResults = await Task.WhenAll(leftCommit, rightCommit);
+        Assert.Single(commitResults, exception => exception is null);
+        Assert.Single(commitResults, exception => exception is DbUpdateException);
+
+        await using var persisted = createContext(fixture.ConnectionString);
+        Assert.Equal(1, await persisted.Definitions.CountAsync(definition => definition.TenantId == tenant && definition.Id == concurrentId));
+
+        async Task<Exception?> InsertConcurrentDefinitionAsync(string side, TaskCompletionSource<bool> ready)
+        {
+            await using var context = createContext(fixture.ConnectionString);
+            context.Definitions.Add(new WorkflowDefinition { Id = concurrentId, TenantId = tenant, Name = $"Concurrent {side}" });
+            ready.SetResult(true);
+            await startGate.Task;
+            try
+            {
+                await context.SaveChangesAsync();
+                return null;
+            }
+            catch (Exception exception)
+            {
+                return exception;
+            }
+        }
     }
 
     private sealed class FixedAccess(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
