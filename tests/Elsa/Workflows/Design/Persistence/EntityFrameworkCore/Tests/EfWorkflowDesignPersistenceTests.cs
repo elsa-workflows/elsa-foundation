@@ -1312,6 +1312,59 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Committed_draft_commands_publish_once_when_caller_cancels_after_commit()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = Create(connection);
+        await db.Database.EnsureCreatedAsync();
+        var accessor = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var serializer = new TestSerializer();
+        db.Definitions.Add(new WorkflowDefinition { Id = "definition", TenantId = "tenant-a", Name = "Definition" });
+        var cloneState = State() with { RootActivity = new ActivityNode("cloned-root", "activity", [], []) };
+        db.Versions.Add(new WorkflowDefinitionVersion("definition", "1.0.0")
+        {
+            Id = "source-version",
+            TenantId = "tenant-a",
+            State = cloneState,
+            StateSource = serializer.Serialize(cloneState)
+        });
+        await db.SaveChangesAsync();
+
+        var events = new CapturingDeferredEventPublisher();
+        var createdState = State() with { RootActivity = new ActivityNode("created-root", "activity", [], []) };
+        using var createCancellation = new CancellationTokenSource();
+        var createdId = await new EfCreateDraftCommand(
+                db, accessor, new CancellingAfterCommitAtomicWriter(new EfDesignAtomicWriter(db, accessor), createCancellation),
+                new TestIdentity("created"), serializer, new TestLockProvider(), deferredEvents: events)
+            .Execute(new DesignOperationKey("cancel-after-create-commit"), "definition", createdState, ct: createCancellation.Token);
+
+        using var cloneCancellation = new CancellationTokenSource();
+        var clonedId = await new EfCloneDraftFromVersionCommand(
+                db, accessor, new CancellingAfterCommitAtomicWriter(new EfDesignAtomicWriter(db, accessor), cloneCancellation),
+                new TestIdentity("cloned"), serializer, new TestLockProvider(), deferredEvents: events)
+            .Execute(new DesignOperationKey("cancel-after-clone-commit"), "source-version", cloneCancellation.Token);
+
+        using var updateCancellation = new CancellationTokenSource();
+        var updatedState = State() with { RootActivity = new ActivityNode("updated-root", "activity", [], []) };
+        await new EfUpdateDraftCommand(
+                db, accessor, new CancellingAfterCommitAtomicWriter(new EfDesignAtomicWriter(db, accessor), updateCancellation),
+                serializer, new EmptyActivityStructureService(), new TestLockProvider(), deferredEvents: events)
+            .Execute(new DesignOperationKey("cancel-after-update-commit"), new UpdateDraftRequest(createdId, updatedState, []), updateCancellation.Token);
+
+        Assert.True(createCancellation.IsCancellationRequested);
+        Assert.True(cloneCancellation.IsCancellationRequested);
+        Assert.True(updateCancellation.IsCancellationRequested);
+        Assert.Equal(2, events.Events.Count(@event => @event is DraftCreated));
+        Assert.Equal(3, events.Events.Count(@event => @event is DraftValidated));
+        Assert.Equal(1, events.Events.Count(@event => @event is DraftCreated created && created.DraftId == createdId));
+        Assert.Equal(1, events.Events.Count(@event => @event is DraftCreated created && created.DraftId == clonedId));
+        Assert.Equal(1, events.Events.Count(@event => @event is DraftValidated validated && validated.Draft.Id == createdId && validated.Draft.State.RootActivity?.NodeId == "created-root"));
+        Assert.Equal(1, events.Events.Count(@event => @event is DraftValidated validated && validated.Draft.Id == createdId && validated.Draft.State.RootActivity?.NodeId == "updated-root"));
+        Assert.Equal(1, events.Events.Count(@event => @event is DraftValidated validated && validated.Draft.Id == clonedId && validated.Draft.State.RootActivity?.NodeId == "cloned-root"));
+    }
+
+    [Fact]
     public async Task Submit_creates_the_normalized_draft_layout_sibling_atomically()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
@@ -2200,6 +2253,15 @@ public sealed class EfWorkflowDesignPersistenceTests
     {
         public Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(DesignOperationKey operationKey, string operationKind, object requestMaterial, IReadOnlyCollection<string> mutatedUnits, Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage, Func<CancellationToken, Task>? beforeAttempt = null, CancellationToken cancellationToken = default, IDesignAtomicWriteResultCodec<T>? resultCodec = null) =>
             Task.FromResult(new DesignAtomicWriteResult<T>(DesignAtomicWriteStatus.Replayed, default));
+    }
+    private sealed class CancellingAfterCommitAtomicWriter(IDesignAtomicWriter inner, CancellationTokenSource cancellation) : IDesignAtomicWriter
+    {
+        public async Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(DesignOperationKey operationKey, string operationKind, object requestMaterial, IReadOnlyCollection<string> mutatedUnits, Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage, Func<CancellationToken, Task>? beforeAttempt = null, CancellationToken cancellationToken = default, IDesignAtomicWriteResultCodec<T>? resultCodec = null)
+        {
+            var result = await inner.ExecuteAsync(operationKey, operationKind, requestMaterial, mutatedUnits, stage, beforeAttempt, cancellationToken, resultCodec);
+            cancellation.Cancel();
+            return result;
+        }
     }
     private sealed class RetryingVersionAllocationAtomicWriter(WorkflowsDesignSqliteDbContext db) : IDesignAtomicWriter
     {

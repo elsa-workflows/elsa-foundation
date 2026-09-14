@@ -122,7 +122,7 @@ public sealed class EfCreateDraftCommand(WorkflowsDesignDbContext db, IPersisten
         var result = RequireOutcome(outcome, "workflow.draft.create.v1", key);
         if (outcome.ShouldPublishPostCommitOutcome && deferredEvents is not null)
         {
-            var persistedEntity = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId).SingleAsync(x => x.Id == result, ct);
+            var persistedEntity = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId).SingleAsync(x => x.Id == result, CancellationToken.None);
             var persisted = EfDesignSupport.MapDraft(serializer, persistedEntity);
             await deferredEvents.Publish(new DraftCreated(persisted.Id, persisted.WorkflowDefinitionId, persisted.SourceVersionId), CancellationToken.None);
             await deferredEvents.Publish(new DraftValidated(persisted, errors), CancellationToken.None);
@@ -164,7 +164,7 @@ public sealed class EfCloneDraftFromVersionCommand(WorkflowsDesignDbContext db, 
             result = RequireOutcome(outcome, "workflow.draft.clone-from-version.v1", key);
             if (outcome.ShouldPublishPostCommitOutcome && deferredEvents is not null)
             {
-                var persistedEntity = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId).SingleAsync(x => x.Id == result, ct);
+                var persistedEntity = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId).SingleAsync(x => x.Id == result, CancellationToken.None);
                 var persisted = EfDesignSupport.MapDraft(serializer, persistedEntity);
                 await deferredEvents.Publish(new DraftCreated(result, persisted.WorkflowDefinitionId, persisted.SourceVersionId), CancellationToken.None);
                 await deferredEvents.Publish(new DraftValidated(persisted, errors), CancellationToken.None);
@@ -279,7 +279,7 @@ public sealed class EfUpdateDraftCommand(WorkflowsDesignDbContext db, IPersisten
         RequireOutcome(outcome, "workflow.draft.replace.v1", key);
         if (outcome.ShouldPublishPostCommitOutcome && deferredEvents is not null)
         {
-            var persistedEntity = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId).SingleAsync(x => x.Id == request.DraftId, ct);
+            var persistedEntity = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId).SingleAsync(x => x.Id == request.DraftId, CancellationToken.None);
             var persisted = EfDesignSupport.MapDraft(serializer, persistedEntity);
             await deferredEvents.Publish(new DraftValidated(persisted, errors), CancellationToken.None);
         }
