@@ -185,6 +185,35 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
     }
 
     [Fact]
+    public async Task Groundwork_registration_keeps_replacement_validation_when_an_unrelated_startup_task_precedes_it()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IStartupTask, UnrelatedStartupTask>();
+        services.AddGroundworkWorkflowsDesignStores();
+        services.AddScoped<IWorkflowDefinitionStore>(_ => throw new NotSupportedException());
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var validator = Assert.Single(scope.ServiceProvider.GetServices<IStartupTask>(),
+            task => task is ValidateDesignPersistenceReplacementContractsStartupTask);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => validator.ExecuteAsync(CancellationToken.None));
+        Assert.Contains(nameof(IWorkflowDefinitionStore), exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Groundwork_repeated_registration_does_not_duplicate_replacement_validator()
+    {
+        var services = new ServiceCollection();
+        services.AddGroundworkWorkflowsDesignStores();
+        services.AddGroundworkWorkflowsDesignStores();
+
+        Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(IStartupTask) &&
+            descriptor.ImplementationType == typeof(ValidateDesignPersistenceReplacementContractsStartupTask));
+    }
+
+    [Fact]
     public void Repeated_registration_keeps_scoped_commands_and_stores_registered_once()
     {
         var services = new ServiceCollection();
@@ -241,6 +270,11 @@ public sealed class GroundworkWorkflowsDesignRegistrationTests
     private sealed class PriorDesignAtomicWriter : IDesignAtomicWriter
     {
         public Task<DesignAtomicWriteResult<T>> ExecuteAsync<T>(DesignOperationKey operationKey, string operationKind, object requestMaterial, IReadOnlyCollection<string> mutatedUnits, Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage, Func<CancellationToken, Task>? beforeAttempt = null, CancellationToken cancellationToken = default, IDesignAtomicWriteResultCodec<T>? resultCodec = null) => throw new NotSupportedException();
+    }
+
+    private sealed class UnrelatedStartupTask : IStartupTask
+    {
+        public Task ExecuteAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class StubEventPublisher : IInlineEventPublisher, IDeferredEventPublisher

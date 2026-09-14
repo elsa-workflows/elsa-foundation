@@ -74,7 +74,7 @@ public static class GroundworkWorkflowsDesignStoreRegistration
         services.TryAddScoped<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
         services.TryAddScoped<IWorkflowDefinitionVersionFactory, WorkflowDefinitionVersionFactory>();
         services.TryAddScoped<IWorkflowDefinitionDraftFactory, WorkflowDefinitionDraftFactory>();
-        services.TryAddScoped<IStartupTask, ValidateDesignPersistenceReplacementContractsStartupTask>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateDesignPersistenceReplacementContractsStartupTask>());
         DesignPersistenceBackend.Register(services, new DesignPersistenceBackend(
             DesignPersistenceBackend.Groundwork,
             services.Where(IsOwnedDescriptor).ToArray()));

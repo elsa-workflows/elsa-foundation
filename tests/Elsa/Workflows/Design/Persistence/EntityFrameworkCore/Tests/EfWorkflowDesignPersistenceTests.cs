@@ -30,6 +30,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Serialization.Core;
 using Elsa.Locking.Core;
+using Elsa.Tasks.Core;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -326,6 +327,44 @@ public sealed class EfWorkflowDesignPersistenceTests
                      typeof(IUpdateDraftCommand)
                  })
             Assert.NotNull(serviceProvider.GetRequiredService(serviceType));
+    }
+
+    [Fact]
+    public async Task Ef_registration_keeps_replacement_validation_when_an_unrelated_startup_task_precedes_it()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IStartupTask, UnrelatedStartupTask>();
+        services.AddWorkflowsDesignEntityFrameworkCore(new WorkflowsDesignEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        });
+        services.AddScoped<IWorkflowDefinitionStore>(_ => throw new NotSupportedException());
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var validator = Assert.Single(scope.ServiceProvider.GetServices<IStartupTask>(),
+            task => task is ValidateDesignPersistenceReplacementContractsStartupTask);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => validator.ExecuteAsync(CancellationToken.None));
+        Assert.Contains(nameof(IWorkflowDefinitionStore), exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Ef_repeated_registration_does_not_duplicate_replacement_validator()
+    {
+        var services = new ServiceCollection();
+        var options = new WorkflowsDesignEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = "Data Source=:memory:"
+        };
+        services.AddWorkflowsDesignEntityFrameworkCore(options);
+        services.AddWorkflowsDesignEntityFrameworkCore(options);
+
+        Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(IStartupTask) &&
+            descriptor.ImplementationType == typeof(ValidateDesignPersistenceReplacementContractsStartupTask));
     }
 
     [Theory]
@@ -2074,6 +2113,10 @@ public sealed class EfWorkflowDesignPersistenceTests
             Events.Add(@event);
             return Task.CompletedTask;
         }
+    }
+    private sealed class UnrelatedStartupTask : IStartupTask
+    {
+        public Task ExecuteAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
     private sealed class TestSerializer(JsonSerializerOptions? serializerOptions = null) : IPayloadSerializer
     {
