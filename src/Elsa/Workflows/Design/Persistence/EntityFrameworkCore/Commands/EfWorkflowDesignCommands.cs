@@ -70,8 +70,8 @@ public sealed class EfCreateDraftCommand(WorkflowsDesignDbContext db, IPersisten
     }
     private async Task<string> ExecuteLocked(DesignOperationKey key, string definitionId, string? sourceVersionId, WorkflowDefinitionDraft draft, IReadOnlyCollection<DesignMetadataRecord> layout, CancellationToken ct)
     {
-        if (lockProvider is not null) { await using var handle = await lockProvider.AcquireLockAsync(WorkflowDesignPersistenceLockKeys.DraftKey(draft.Id), null, ct); return await ExecuteCore(key, definitionId, sourceVersionId, draft, layout, ct); }
-        return await ExecuteCore(key, definitionId, sourceVersionId, draft, layout, ct);
+        if (lockProvider is null) throw new InvalidOperationException("Workflow design draft creation requires a distributed lock provider.");
+        await using var handle = await lockProvider.AcquireLockAsync(WorkflowDesignPersistenceLockKeys.DraftKey(draft.Id), null, ct); return await ExecuteCore(key, definitionId, sourceVersionId, draft, layout, ct);
     }
     private async Task<string> ExecuteCore(DesignOperationKey key, string definitionId, string? sourceVersionId, WorkflowDefinitionDraft draft, IReadOnlyCollection<DesignMetadataRecord> layout, CancellationToken ct)
     {
@@ -87,6 +87,7 @@ public sealed class EfCloneDraftFromVersionCommand(WorkflowsDesignDbContext db, 
     public async Task<string> Execute(DesignOperationKey key, string sourceVersionId, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceVersionId); Serializer = serializer;
+        if (lockProvider is null) throw new InvalidOperationException("Workflow draft cloning requires a distributed lock provider.");
         IReadOnlyList<ValidationError> errors = []; var staged = false;
         IDistributedSynchronizationHandle? draftLock = null;
         string result;
@@ -119,7 +120,7 @@ public sealed class EfAddWorkflowDefinitionVersionCommand(WorkflowsDesignDbConte
     public async Task<WorkflowDefinitionVersionAdded> Execute(DesignOperationKey key, string definitionId, WorkflowDefinitionState state, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(definitionId); ArgumentNullException.ThrowIfNull(state); Serializer = serializer;
-        if (lockProvider is null) return await ExecuteCore(key, definitionId, state, ct);
+        if (lockProvider is null) throw new InvalidOperationException("Workflow version allocation requires a distributed lock provider.");
         await using var handle = await lockProvider.AcquireLockAsync(WorkflowDesignPersistenceLockKeys.DefinitionKey(definitionId), null, ct);
         return await ExecuteCore(key, definitionId, state, ct);
     }
@@ -133,7 +134,7 @@ public sealed class EfMaterializeWorkflowDefinitionVersionCommand(WorkflowsDesig
 
 public sealed class EfUpdateDraftCommand(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access, IDesignAtomicWriter atomic, IPayloadSerializer serializer, IDistributedLockProvider? lockProvider = null, IInlineEventPublisher? inlineEvents = null, IDeferredEventPublisher? deferredEvents = null) : EfDesignCommand(db, access, atomic), IUpdateDraftCommand
 {
-    public async Task Execute(DesignOperationKey key, UpdateDraftRequest request, CancellationToken ct = default) { ArgumentNullException.ThrowIfNull(request); Serializer = serializer; var normalized = request with { ActivityPresentation = ActivityPresentationRecord.NormalizeCollection(request.ActivityPresentation).ToArray() }; if (lockProvider is null) { await ExecuteCore(key, normalized, ct); return; } await using var handle = await lockProvider.AcquireLockAsync(WorkflowDesignPersistenceLockKeys.DraftKey(request.DraftId), null, ct); await ExecuteCore(key, normalized, ct); }
+    public async Task Execute(DesignOperationKey key, UpdateDraftRequest request, CancellationToken ct = default) { ArgumentNullException.ThrowIfNull(request); Serializer = serializer; var normalized = request with { ActivityPresentation = ActivityPresentationRecord.NormalizeCollection(request.ActivityPresentation).ToArray() }; if (lockProvider is null) throw new InvalidOperationException("Workflow draft updates require a distributed lock provider."); await using var handle = await lockProvider.AcquireLockAsync(WorkflowDesignPersistenceLockKeys.DraftKey(request.DraftId), null, ct); await ExecuteCore(key, normalized, ct); }
     private async Task ExecuteCore(DesignOperationKey key, UpdateDraftRequest request, CancellationToken ct)
     {
         IReadOnlyList<ValidationError> errors = []; var staged = false;
@@ -144,7 +145,7 @@ public sealed class EfUpdateDraftCommand(WorkflowsDesignDbContext db, IPersisten
 
 public sealed class EfDiscardDraftCommand(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access, IDesignAtomicWriter atomic, IDistributedLockProvider? lockProvider = null, IDeferredEventPublisher? deferredEvents = null) : EfDesignCommand(db, access, atomic), IDiscardDraftCommand
 {
-    public async Task Execute(DesignOperationKey key, string draftId, CancellationToken ct = default) { ArgumentException.ThrowIfNullOrWhiteSpace(draftId); if (lockProvider is null) { await ExecuteCore(key, draftId, ct); return; } await using var handle = await lockProvider.AcquireLockAsync(WorkflowDesignPersistenceLockKeys.DraftKey(draftId), null, ct); await ExecuteCore(key, draftId, ct); }
+    public async Task Execute(DesignOperationKey key, string draftId, CancellationToken ct = default) { ArgumentException.ThrowIfNullOrWhiteSpace(draftId); if (lockProvider is null) throw new InvalidOperationException("Workflow draft discard requires a distributed lock provider."); await using var handle = await lockProvider.AcquireLockAsync(WorkflowDesignPersistenceLockKeys.DraftKey(draftId), null, ct); await ExecuteCore(key, draftId, ct); }
     private async Task ExecuteCore(DesignOperationKey key, string draftId, CancellationToken ct) { string? definitionId = null; var removed = false; await Atomic.ExecuteAsync(key, "workflow.draft.discard.v1", new { draftId }, async token => { var row = await Scoped(Db.Drafts, x => x.TenantId).SingleOrDefaultAsync(x => x.Id == draftId, token); if (row is not null) { definitionId = row.WorkflowDefinitionId; removed = true; Db.Drafts.Remove(row); } return true; }, ct); if (removed && deferredEvents is not null) await deferredEvents.Publish(new DraftDiscarded(draftId, definitionId!), CancellationToken.None); }
 }
 
@@ -156,7 +157,7 @@ public sealed class EfDeleteWorkflowDefinitionPermanentlyCommand(WorkflowsDesign
 public sealed class EfPromoteDraftToVersionCommand(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access, IDesignAtomicWriter atomic, IPayloadSerializer serializer, IIdentityGenerator identities, IDistributedLockProvider? lockProvider = null, IInlineEventPublisher? inlineEvents = null) : EfDesignCommand(db, access, atomic), IPromoteDraftToVersionCommand
 {
     public Task<string> Execute(DesignOperationKey key, string draftId, CancellationToken ct = default) => Execute(key, draftId, null, ct);
-    public async Task<string> Execute(DesignOperationKey key, string draftId, string? requestedVersion, CancellationToken ct = default) { Serializer = serializer; if (lockProvider is null) return await ExecuteCore(key, draftId, requestedVersion, ct); await using var handle = await lockProvider.AcquireLockAsync(WorkflowDesignPersistenceLockKeys.DraftKey(draftId), null, ct); return await ExecuteCore(key, draftId, requestedVersion, ct); }
+    public async Task<string> Execute(DesignOperationKey key, string draftId, string? requestedVersion, CancellationToken ct = default) { Serializer = serializer; if (lockProvider is null) throw new InvalidOperationException("Workflow draft promotion requires a distributed lock provider."); await using var handle = await lockProvider.AcquireLockAsync(WorkflowDesignPersistenceLockKeys.DraftKey(draftId), null, ct); return await ExecuteCore(key, draftId, requestedVersion, ct); }
     private Task<string> ExecuteCore(DesignOperationKey key, string draftId, string? requestedVersion, CancellationToken ct) => Atomic.ExecuteAsync(key, "workflow.draft.promote.v1", new { draftId, requestedVersion = requestedVersion?.Trim() }, async token => { var draft = await Scoped(Db.Drafts.AsNoTracking(), x => x.TenantId).SingleOrDefaultAsync(x => x.Id == draftId, token) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionDraft), draftId); draft = EfDesignSupport.MapDraft(serializer, draft); if (inlineEvents is not null) { var errors = await inlineEvents.DeriveValidationErrorsAsync(draft, token); if (errors.Count > 0) throw new DraftHasValidationErrorsException(draftId, errors); } var latest = await Scoped(Db.Versions.AsNoTracking(), x => x.TenantId).Where(x => x.DefinitionId == draft.WorkflowDefinitionId).OrderByDescending(x => x.SemVerSortKey).FirstOrDefaultAsync(token); var version = requestedVersion?.Trim() ?? WorkflowVersionNumbering.NextMajor(latest?.Version); if (!SemVer.TryParse(version, out var parsed)) throw new WorkflowVersionSelectionException("invalid-version", "The requested version must be a valid semantic version."); if (latest is not null && SemVer.TryParse(latest.Version, out var current) && parsed <= current) throw new WorkflowVersionSelectionException("not-forward", "The requested version must be greater than the latest immutable version."); var row = new WorkflowDefinitionVersion(draft.WorkflowDefinitionId, version) { Id = identities.Generate(), TenantId = draft.TenantId, SourceDraftId = draft.Id, StateSource = draft.StateSource, State = draft.State, CreatedAt = Now, LastModifiedAt = Now }; var draftLayout = await Scoped(Db.DraftLayouts, x => x.TenantId).SingleOrDefaultAsync(x => x.WorkflowDefinitionDraftId == draft.Id, token); var layout = new WorkflowDefinitionVersionLayout { Id = identities.Generate(), TenantId = draft.TenantId, WorkflowDefinitionVersionId = row.Id, Records = draftLayout is null ? [] : EfDesignSupport.ReadLayout(Db.Entry(draftLayout).Property<string>("RecordsJson").CurrentValue), ActivityPresentation = draftLayout is null ? [] : EfDesignSupport.ReadPresentation(Db.Entry(draftLayout).Property<string>("ActivityPresentationJson").CurrentValue) }; Db.Versions.Add(row); EfDesignSupport.SetLayout(Db, layout, layout.Records.ToArray(), layout.ActivityPresentation.ToArray()); Db.VersionLayouts.Add(layout); return row.Id; }, ct);
 }
 

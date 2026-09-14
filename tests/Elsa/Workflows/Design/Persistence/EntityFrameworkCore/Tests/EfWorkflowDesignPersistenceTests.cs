@@ -11,6 +11,7 @@ using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Serialization.Core;
+using Elsa.Locking.Core;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -31,7 +32,7 @@ public sealed class EfWorkflowDesignPersistenceTests
             var add = new EfAddWorkflowDefinitionCommand(db, accessor, atomic, serializer, identities); await add.Execute(new DesignOperationKey("create-1"), definition, draft, [new DesignMetadataRecord("root", 1, 2)]);
             var definitions = new EfWorkflowDefinitionStore(db, accessor); Assert.Single(await definitions.ListAsync(new WorkflowDefinitionFilter { SearchTerm = "ord" }));
             var drafts = new EfWorkflowDefinitionDraftStore(db, serializer, accessor); var loadedLayout = await drafts.FindWithLayoutByIdAsync(draft.Id); Assert.NotNull(loadedLayout); Assert.Single(loadedLayout!.Layout);
-            var version = new EfAddWorkflowDefinitionVersionCommand(db, accessor, atomic, serializer, identities); var added = await version.Execute(new DesignOperationKey("version-1"), definition.Id, State()); Assert.Equal("1.0.0", added.Version);
+            var version = new EfAddWorkflowDefinitionVersionCommand(db, accessor, atomic, serializer, identities, new TestLockProvider()); var added = await version.Execute(new DesignOperationKey("version-1"), definition.Id, State()); Assert.Equal("1.0.0", added.Version);
         }
         await using (var reopened = Create(connection))
         {
@@ -95,7 +96,7 @@ public sealed class EfWorkflowDesignPersistenceTests
         var definition = new WorkflowDefinition { Id = "definition", TenantId = "tenant-a", Name = "Definition" };
         var draft = new WorkflowDefinitionDraft { Id = "draft", TenantId = "tenant-a", WorkflowDefinitionId = definition.Id, State = State() };
         await new EfAddWorkflowDefinitionCommand(db, accessor, writer, serializer, identities).Execute(new DesignOperationKey("add"), definition, draft, [new DesignMetadataRecord("root", 3, 4)], [new ActivityPresentationRecord("root", "Root", "Description")]);
-        var versionId = await new EfPromoteDraftToVersionCommand(db, accessor, writer, serializer, identities).Execute(new DesignOperationKey("promote"), draft.Id, "1.0.0");
+        var versionId = await new EfPromoteDraftToVersionCommand(db, accessor, writer, serializer, identities, new TestLockProvider()).Execute(new DesignOperationKey("promote"), draft.Id, "1.0.0");
         var layout = await new EfWorkflowDefinitionVersionLayoutStore(db, accessor).FindByVersionIdAsync(versionId);
         Assert.NotNull(layout); Assert.Single(layout!.Records);
         Assert.Single(layout.ActivityPresentation);
@@ -121,6 +122,14 @@ public sealed class EfWorkflowDesignPersistenceTests
     private static WorkflowsDesignSqliteDbContext Create(SqliteConnection connection) => new(new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>().UseSqlite(connection).Options);
     private static WorkflowDefinitionState State() => new([], null, [], [], null);
     private sealed class TestIdentity : IIdentityGenerator { private int n; public string Generate() => $"generated-{Interlocked.Increment(ref n)}"; }
+    private sealed class TestLockProvider : IDistributedLockProvider
+    {
+        public IDistributedSynchronizationHandle AcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
+        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle>(new Handle());
+        public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
+        public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());
+        private sealed class Handle : IDistributedSynchronizationHandle { public CancellationToken HandleLostToken => CancellationToken.None; public void Dispose() { } public ValueTask DisposeAsync() => ValueTask.CompletedTask; }
+    }
     private sealed class TestAccessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current => current; }
     private sealed class TestSerializer : IPayloadSerializer
     {
