@@ -3,7 +3,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Elsa.Events.Core.Contracts;
 using Elsa.Primitives.Contracts;
+using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -475,12 +477,15 @@ public sealed class EfWorkflowDesignPersistenceTests
         db.Definitions.Add(new WorkflowDefinition { Id = "Stored-Definition", TenantId = "tenant-a", Name = "Definition" });
         await db.SaveChangesAsync();
 
-        var command = new EfCreateDraftCommand(db, accessor, new EfDesignAtomicWriter(db, accessor), new TestIdentity(), serializer, new TestLockProvider());
+        var events = new CapturingDeferredEventPublisher();
+        var command = new EfCreateDraftCommand(db, accessor, new EfDesignAtomicWriter(db, accessor), new TestIdentity(), serializer, new TestLockProvider(), deferredEvents: events);
         var draftId = await command.Execute(new DesignOperationKey("create-canonical-draft"), "stored-definition");
         var draft = await db.Drafts.SingleAsync(x => x.Id == draftId);
+        var created = Assert.Single(events.Events.OfType<DraftCreated>());
 
         Assert.Equal("Stored-Definition", draft.WorkflowDefinitionId);
         Assert.Equal("tenant-a", draft.TenantId);
+        Assert.Equal("Stored-Definition", created.WorkflowDefinitionId);
     }
 
     [Fact]
@@ -1263,6 +1268,15 @@ public sealed class EfWorkflowDesignPersistenceTests
     {
         public string? SeenDefinitionId { get; private set; }
         public Task EnsureCanDeleteAsync(string definitionId, CancellationToken cancellationToken = default) { SeenDefinitionId = definitionId; return Task.CompletedTask; }
+    }
+    private sealed class CapturingDeferredEventPublisher : IDeferredEventPublisher
+    {
+        public List<IEvent> Events { get; } = [];
+        public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
+        {
+            Events.Add(@event);
+            return Task.CompletedTask;
+        }
     }
     private sealed class TestSerializer(JsonSerializerOptions? serializerOptions = null) : IPayloadSerializer
     {
