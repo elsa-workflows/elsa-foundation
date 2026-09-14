@@ -313,7 +313,11 @@ public sealed class EfWorkflowExecutionStateStoreTests
             Context = new BookmarkStateSqliteDbContext(new DbContextOptionsBuilder<BookmarkStateSqliteDbContext>().UseSqlite(_connection).Options);
             Store = new EfWorkflowExecutionStateStore(Context, new Accessor(scope), new HmacRuntimeRecoveryContinuationCodec(Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "01234567890123456789012345678901" })));
         }
-        public async ValueTask DisposeAsync() { await Context.DisposeAsync(); }
+        public async ValueTask DisposeAsync()
+        {
+            try { await Context.DisposeAsync(); }
+            finally { await _connection.DisposeAsync(); }
+        }
     }
     private sealed class Accessor(string value) : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new PersistenceScope(value)); }
 }
