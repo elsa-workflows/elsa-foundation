@@ -93,10 +93,10 @@ public sealed class EfWorkflowExecutionStateStoreTests
     {
         await using var database = await Database.CreateAsync();
         await using var fixture = database.Open("tenant-a");
-        await fixture.Store.SaveAsync(State("one", "tenant-a", DateTimeOffset.UtcNow) with { PinnedExecutable = new("artifact-a", "definition", "version", "1", "hash") });
-        await fixture.Store.SaveAsync(State("two", "tenant-a", DateTimeOffset.UtcNow) with { PinnedExecutable = new("artifact-a", "definition", "version", "1", "hash") });
-        await fixture.Store.SaveAsync(State("three", "tenant-a", DateTimeOffset.UtcNow) with { PinnedExecutable = new("artifact-b", "definition", "version", "1", "hash") });
-        Assert.Equal(["artifact-a", "artifact-b"], (await fixture.Store.ListPinnedExecutableArtifactIdsAsync()).Order(StringComparer.Ordinal));
+        var artifacts = new[] { "😀😀", "😀a", "😀", "\uE000", "😀" };
+        for (var index = 0; index < artifacts.Length; index++)
+            await fixture.Store.SaveAsync(State($"execution-{index}", "tenant-a", DateTimeOffset.UtcNow) with { PinnedExecutable = new(artifacts[index], "definition", "version", "1", "hash") });
+        Assert.Equal(["😀", "😀a", "😀😀", "\uE000"], await fixture.Store.ListPinnedExecutableArtifactIdsAsync());
     }
 
     [Fact]

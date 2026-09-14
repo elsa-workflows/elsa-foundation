@@ -167,15 +167,15 @@ public sealed class EfWorkflowExecutionStateStore(
             var scope = RequireScope();
             var rows = await context.WorkflowExecutionStates.AsNoTracking()
                 .Where(x => x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope))
-                .Select(x => new { x.ArtifactId, x.ArtifactIdHash })
+                .Select(x => new { x.ArtifactId, x.ArtifactIdHash, x.ArtifactIdOrderKey })
                 .Distinct()
-                .OrderBy(x => x.ArtifactId)
+                .OrderBy(x => x.ArtifactIdOrderKey)
                 .ToArrayAsync(cancellationToken);
             var ids = new HashSet<string>(StringComparer.Ordinal);
             foreach (var row in rows)
             {
                 var id = Decode(row.ArtifactId);
-                if (row.ArtifactIdHash != Hash(id)) throw new InvalidDataException("The persisted workflow execution artifact projection is corrupt.");
+                if (row.ArtifactIdHash != Hash(id) || row.ArtifactIdOrderKey != OrderKey(id)) throw new InvalidDataException("The persisted workflow execution artifact projection is corrupt.");
                 ids.Add(id);
             }
             return ids.ToArray();
