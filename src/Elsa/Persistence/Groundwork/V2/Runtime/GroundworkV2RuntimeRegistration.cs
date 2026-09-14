@@ -56,8 +56,26 @@ public static class GroundworkV2RuntimeRegistration
             services.AddGroundworkStorageUnit(unit, target);
 
         RegisterExecutableStore(services, cacheOptions, target);
+        var existingBookmarkBackend = BookmarkStateStoreBackend.Find(services);
+        if (existingBookmarkBackend is null)
+        {
+            BookmarkStateStoreBackend.EnsureRuntimeDefaultsOwnRegisteredContracts(services);
+            BookmarkStateStoreBackend.RemoveDefaultStimulusIndex(services);
+            BookmarkStateStoreBackend.RemoveDefaultStateStore(services);
+        }
+        else
+            existingBookmarkBackend.RemoveOwnedArtifacts(services);
+        services.RemoveAll<BookmarkStateStoreBackend>();
         ReplaceScoped<GroundworkV2BookmarkStateStore>(services, Standard<GroundworkV2BookmarkStateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IBookmarkStateStore), typeof(IBookmarkStimulusIndex));
+        var ownedBookmarkStoreRegistration = services.Last(descriptor => descriptor.ServiceType == typeof(GroundworkV2BookmarkStateStore));
+        var bookmarkDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IBookmarkStateStore));
+        var bookmarkIndexDescriptor = services.Last(descriptor => descriptor.ServiceType == typeof(IBookmarkStimulusIndex));
+        BookmarkStateStoreBackend.Register(services, new BookmarkStateStoreBackend(
+            BookmarkStateStoreBackend.Groundwork,
+            bookmarkDescriptor,
+            bookmarkIndexDescriptor,
+            collection => RemoveGroundworkBookmarkArtifacts(collection, ownedBookmarkStoreRegistration)));
         ReplaceScoped<GroundworkV2ExecutableActivityTemplateStore>(services, Standard<GroundworkV2ExecutableActivityTemplateStore>(target, static (sessions, access, target) => new(sessions, access, target)),
             typeof(IExecutableActivityTemplateStore), typeof(IExecutableActivityTemplateReader), typeof(IExecutableActivityTemplateWriter));
         ReplaceScoped<GroundworkV2WorkflowExecutableSourceReferenceStore>(services, Standard<GroundworkV2WorkflowExecutableSourceReferenceStore>(target, static (sessions, access, target) => new(sessions, access, target)),
@@ -259,6 +277,19 @@ public static class GroundworkV2RuntimeRegistration
             if (descriptor.ServiceType == typeof(TContract) && descriptor.IsKeyedService && Equals(descriptor.ServiceKey, key))
                 services.RemoveAt(index);
         }
+    }
+
+    private static void RemoveGroundworkBookmarkArtifacts(
+        IServiceCollection services,
+        ServiceDescriptor ownedStoreRegistration)
+    {
+        var storeRegistrations = services
+            .Where(descriptor => descriptor.ServiceType == typeof(GroundworkV2BookmarkStateStore))
+            .ToArray();
+        if (storeRegistrations.Length != 1 || !ReferenceEquals(storeRegistrations[0], ownedStoreRegistration))
+            throw new InvalidOperationException("The Groundwork bookmark backend no longer exclusively owns its concrete implementation registration.");
+
+        services.Remove(ownedStoreRegistration);
     }
 }
 

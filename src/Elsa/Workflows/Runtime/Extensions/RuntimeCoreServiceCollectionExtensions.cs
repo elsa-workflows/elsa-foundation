@@ -139,7 +139,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IActivityExecutionInspectionStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryActivityExecutionInspectionStore>());
         services.TryAddSingleton<IActivityExecutionInspectionWriter>(serviceProvider => serviceProvider.GetRequiredService<InMemoryActivityExecutionInspectionStore>());
         services.TryAddScoped<IRuntimeActivityExecutionInspectionAccumulator, RuntimeActivityExecutionInspectionAccumulator>();
-        services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
+        BookmarkStateStoreBackend.TryRegisterDefaultStateStore(
+            services,
+            ServiceDescriptor.Singleton<IBookmarkStateStore, InMemoryBookmarkStateStore>());
         services.TryAddScoped<IBookmarkStimulusLookup, BookmarkStimulusLookup>();
         services.TryAddSingleton<IBookmarkResumeResolver, BookmarkResumeResolver>();
         services.TryAddScoped<IBookmarkResumeDispatcher, BookmarkResumeDispatcher>();

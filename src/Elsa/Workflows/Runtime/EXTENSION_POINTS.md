@@ -267,7 +267,7 @@ adapters validate and translate the selected context at their own persistence bo
 - **Kind:** Replacement (narrow cross-execution read surface over bookmark state; segregated from `IBookmarkStateStore` so it can be widened/replaced independently).
 - **Signature:** `ListByStimulusPageAsync(BookmarkStimulusPageQuery, ...)`; `ListByStimulusTypePageAsync(BookmarkStimulusTypePageQuery, ...)` *(spec 089 D)*.
 - **Usage:** returns finite, continuation-bearing pages of raw `BookmarkState` records matching a stimulus **across every workflow execution** (E3-5 fan-in), unlike `IBookmarkStimulusLookup` which is scoped to one `workflowExecutionId`. Exact-stimulus and type-only lookups are provider-filtered and ordered by `(workflowExecutionId, bookmarkId)` over dedicated composite physical indexes. Neither filters expiry or correlation; that stays in `IGlobalBookmarkStimulusLookup`. Callers that truly require the complete fan-in opt into `ListAllByStimulusAsync` or `ListAllByStimulusTypeAsync`, which explicitly traverse bounded pages.
-- **Default implementation:** `InMemoryBookmarkStateStore` / `GroundworkBookmarkStateStore` *(each also implements this interface)*.
+- **Default implementation:** `InMemoryBookmarkStateStore` / `GroundworkV2BookmarkStateStore` *(each also implements this interface)*. The opt-in `WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence` feature selects `EfBookmarkStateStore`, which implements the same bounded index over the Runtime-owned EF model.
 
 ### `IGlobalBookmarkStimulusLookup` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one cross-execution lookup surface finds every waiting bookmark for a stimulus).
@@ -488,7 +488,7 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - **Kind:** Replacement (one store owns split continuation state for durable bookmark resume handles in a runtime composition).
 - **Signature:** `SaveAsync(BookmarkState state, ...)`, `DeleteAsync(string workflowExecutionId, string bookmarkId, ...)`, `FindAsync(string workflowExecutionId, string bookmarkId, ...)`, `ListAsync(string workflowExecutionId, ...)`.
 - **Usage:** stores `BookmarkState` keyed by `WorkflowExecutionId` and `BookmarkId`. The in-memory checkpoint writer projects bookmark upserts and deletes from accepted checkpoint commits into this store. Stimulus lookup indexes and resume dispatch behavior are separate runtime surfaces and are not part of this store boundary.
-- **Default implementation:** `InMemoryBookmarkStateStore` *(single-node in-memory default for the current runtime slice)*.
+- **Default implementation:** `InMemoryBookmarkStateStore` *(single-node in-memory default for the current runtime slice)*. The opt-in `WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence` feature selects `EfBookmarkStateStore`; Groundwork remains the default durable composition until the EF program default flip.
 
 ### `IDurableValueStateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns split continuation state for declared durable runtime values in a runtime composition).
