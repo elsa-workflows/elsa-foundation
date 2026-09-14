@@ -188,7 +188,8 @@ public static class RuntimeBookmarksEntityFrameworkCoreRegistration
 
         foreach (var descriptor in ownedArtifacts.Where(descriptor =>
                      RuntimeArtifactStoreBackend.Find(services)?.Owns(descriptor) != true &&
-                     RuntimeActivityExecutionStoreBackend.Find(services)?.Owns(descriptor) != true))
+                     RuntimeActivityExecutionStoreBackend.Find(services)?.Owns(descriptor) != true &&
+                     WorkflowExecutionStateStoreBackend.Find(services)?.Owns(descriptor) != true))
         {
             // Artifact EF may reuse this context and records the same descriptor as a sibling owner.
             // Keep it alive while replacing only the bookmark backend; the artifact backend remains valid.

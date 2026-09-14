@@ -158,6 +158,21 @@ public sealed class EfWorkflowExecutionStateStoreTests
     }
 
     [Fact]
+    public async Task Malformed_encoded_projection_is_reported_as_invalid_data_without_poisoning_the_tracker()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var state = State("execution", "tenant-a", DateTimeOffset.UtcNow);
+        await fixture.Store.SaveAsync(state);
+        var row = await fixture.Context.WorkflowExecutionStates.SingleAsync();
+        row.ArtifactId = "not-base64";
+        await fixture.Context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Store.ListPinnedExecutableArtifactIdsAsync().AsTask());
+        Assert.Empty(fixture.Context.ChangeTracker.Entries());
+    }
+
+    [Fact]
     public async Task Concurrent_create_race_leaves_one_authoritative_row_and_recoverable_contexts()
     {
         await using var database = await Database.CreateAsync();

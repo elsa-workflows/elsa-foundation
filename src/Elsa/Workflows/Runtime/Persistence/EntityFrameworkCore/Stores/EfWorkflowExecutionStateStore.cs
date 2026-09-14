@@ -171,17 +171,18 @@ public sealed class EfWorkflowExecutionStateStore(
                 .Distinct()
                 .OrderBy(x => x.ArtifactIdOrderKey)
                 .ToArrayAsync(cancellationToken);
-            var ids = new HashSet<string>(StringComparer.Ordinal);
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var ids = new List<string>(rows.Length);
             foreach (var row in rows)
             {
                 var id = Decode(row.ArtifactId);
                 if (row.ArtifactIdHash != Hash(id) || row.ArtifactIdOrderKey != OrderKey(id)) throw new InvalidDataException("The persisted workflow execution artifact projection is corrupt.");
-                ids.Add(id);
+                if (seen.Add(id)) ids.Add(id);
             }
             return ids.ToArray();
         }
         catch (OperationCanceledException) { throw; }
-        catch (InvalidDataException) { throw; }
+        catch (InvalidDataException) { context.ChangeTracker.Clear(); throw; }
         catch (DbException exception) { throw Normalize("listing pinned artifacts for", "<all>", exception); }
     }
 
@@ -261,6 +262,19 @@ public sealed class EfWorkflowExecutionStateStore(
 
     private static WorkflowExecutionState ReadChecked(WorkflowExecutionStateEntity row, string scope, string expectedId)
     {
+        try
+        {
+            return ReadCheckedCore(row, scope, expectedId);
+        }
+        catch (InvalidDataException) { throw; }
+        catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
+        {
+            throw new InvalidDataException("The persisted workflow execution state is not valid current data.", exception);
+        }
+    }
+
+    private static WorkflowExecutionState ReadCheckedCore(WorkflowExecutionStateEntity row, string scope, string expectedId)
+    {
         if (row.SchemaVersion != RuntimeWorkflowExecutionEfModule.SchemaVersion || row.Id != CreateId(scope, expectedId) || row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) || row.Revision <= 0)
             throw new InvalidDataException("The persisted workflow execution state envelope is corrupt.");
         WorkflowExecutionState state;
@@ -314,7 +328,14 @@ public sealed class EfWorkflowExecutionStateStore(
 
     private static void ValidateIdentity(string value, string name) { ArgumentException.ThrowIfNullOrWhiteSpace(value); if (value.Length > RuntimeWorkflowExecutionEfModule.IdentityMaximumLength) throw new ArgumentException($"The {name} value cannot exceed {RuntimeWorkflowExecutionEfModule.IdentityMaximumLength} characters.", name); }
     private static string Encode(string value) => EfRelationalIdentity.Encode(value);
-    private static string Decode(string value) => EfRelationalIdentity.Decode(value);
+    private static string Decode(string value)
+    {
+        try { return EfRelationalIdentity.Decode(value); }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        {
+            throw new InvalidDataException("The persisted workflow execution identity projection is not valid.", exception);
+        }
+    }
     private static string Hash(string value) => EfRelationalIdentity.Hash(value);
     private static string OrderKey(string value) => Convert.ToHexString(EfRelationalIdentity.CreateOrderKey(value, RuntimeWorkflowExecutionEfModule.IdentityMaximumLength));
     private static string CreateId(string scope, string id) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"workflow-execution:{scope.Length}:{scope}{id.Length}:{id}")));

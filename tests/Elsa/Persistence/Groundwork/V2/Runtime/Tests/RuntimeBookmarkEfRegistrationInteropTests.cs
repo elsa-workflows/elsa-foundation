@@ -251,11 +251,13 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
 
         services.AddRuntimeBookmarksEntityFrameworkCore(EfOptions);
         services.AddRuntimeArtifactsEntityFrameworkCore(ArtifactEfOptions);
+        services.AddRuntimeWorkflowExecutionEntityFrameworkCore(WorkflowEfOptions);
 
         var registry = Registry(services);
         Assert.DoesNotContain(registry.Registrations, registration =>
             registration.TargetName == "runtime" &&
             (registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.BookmarkStateDocumentKind ||
+             registration.Unit.Id.Value == ElsaRuntimeV2StorageManifest.WorkflowExecutionStateDocumentKind ||
              ArtifactUnitIds.Contains(registration.Unit.Id.Value, StringComparer.Ordinal)));
         Assert.Contains(registry.Registrations, registration =>
             registration.TargetName == "other" &&
@@ -384,6 +386,39 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
         services.AddRuntimeBookmarksEntityFrameworkCore(EfOptions);
         Assert.Equal(BookmarkStateStoreBackend.EntityFramework, BookmarkStateStoreBackend.Find(services)!.Name);
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfBookmarkStateStore));
+    }
+
+    [Theory]
+    [InlineData("workflow-artifacts-bookmarks")]
+    [InlineData("bookmarks-artifacts-workflow")]
+    public void Shared_context_survives_each_ef_sibling_withdrawal_in_reverse_load_orders(string order)
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        if (order.StartsWith("workflow", StringComparison.Ordinal))
+        {
+            services.AddRuntimeWorkflowExecutionEntityFrameworkCore(WorkflowEfOptions);
+            services.AddRuntimeArtifactsEntityFrameworkCore(ArtifactEfOptions);
+            services.AddRuntimeBookmarksEntityFrameworkCore(EfOptions);
+        }
+        else
+        {
+            services.AddRuntimeBookmarksEntityFrameworkCore(EfOptions);
+            services.AddRuntimeArtifactsEntityFrameworkCore(ArtifactEfOptions);
+            services.AddRuntimeWorkflowExecutionEntityFrameworkCore(WorkflowEfOptions);
+        }
+
+        var workflowBackend = WorkflowExecutionStateStoreBackend.Find(services)!;
+        workflowBackend.PrepareRemoveOwnedArtifacts(services)?.Invoke(services);
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+
+        RuntimeArtifactStoreBackend.Find(services)!.RemoveOwnedArtifacts(services);
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+
+        BookmarkStateStoreBackend.Find(services)!.RemoveOwnedArtifacts(services);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
     }
 
     [Fact]
