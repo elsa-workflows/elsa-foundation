@@ -52,6 +52,69 @@ internal static class EfDesignSupport
         return $"sha256:{Convert.ToHexStringLower(bytes)}";
     }
 
+    public static bool IsResultFingerprintValid(string operationKind, string fingerprint, string json)
+    {
+        if (StringComparer.Ordinal.Equals(fingerprint, FingerprintJson(operationKind, json)))
+            return true;
+
+        // Groundwork's provider-neutral atomic command supplies authoritative result markers
+        // using its framed material identity. Accept that format so the same command remains
+        // usable with the EF writer without coupling this provider to Groundwork.
+        return StringComparer.Ordinal.Equals(fingerprint, GroundworkFingerprintJson(operationKind, json));
+    }
+
+    private static string FingerprintJson(string operationKind, string json)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"elsa-design-material:v1\n{operationKind}\n{json}"));
+        return $"sha256:{Convert.ToHexStringLower(bytes)}";
+    }
+
+    private static string GroundworkFingerprintJson(string operationKind, string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        var canonical = Canonical(document.RootElement);
+        var material = string.Concat(
+            Frame("elsa-design-material:v1"),
+            Frame(operationKind),
+            Frame("1"),
+            Frame(canonical));
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(material));
+        return $"sha256:{Convert.ToHexStringLower(bytes)}";
+    }
+
+    private static string Frame(string value) => $"{Encoding.UTF8.GetByteCount(value)}:{value}";
+
+    private static string Canonical(JsonElement element)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+            WriteCanonical(writer, element);
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    private static void WriteCanonical(Utf8JsonWriter writer, JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            writer.WriteStartObject();
+            foreach (var property in element.EnumerateObject().OrderBy(property => property.Name, StringComparer.Ordinal))
+            {
+                writer.WritePropertyName(property.Name);
+                WriteCanonical(writer, property.Value);
+            }
+            writer.WriteEndObject();
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            writer.WriteStartArray();
+            foreach (var item in element.EnumerateArray())
+                WriteCanonical(writer, item);
+            writer.WriteEndArray();
+        }
+        else
+            element.WriteTo(writer);
+    }
+
     public static string OperationKey(string operationKind, string operationKey) => operationKind + "\u001f" + operationKey;
 
     public static WorkflowDefinition MapDefinition(WorkflowDefinition row) => row;

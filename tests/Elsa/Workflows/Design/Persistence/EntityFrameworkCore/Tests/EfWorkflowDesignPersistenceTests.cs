@@ -1,5 +1,8 @@
 using System.Data.Common;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -190,6 +193,35 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Ef_honors_custom_result_codec_for_authoritative_validation_and_replay()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
+        await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
+        var access = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        IDesignAtomicWriter writer = new EfDesignAtomicWriter(db, access);
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.Converters.Add(new JsonStringEnumConverter());
+        var value = new CustomResult(CustomResultStatus.Ready);
+        var json = JsonSerializer.Serialize(value, options);
+        var fingerprint = GroundworkFingerprint("test.op.result", json);
+        var codec = new CustomResultCodec(options);
+
+        var committed = await writer.ExecuteAsync(
+            new DesignOperationKey("custom-codec"), "test.op", new { Value = 1 }, ["test"],
+            (_, _) => Task.FromResult(DesignAtomicWriteStage<CustomResult>.Accepted(value, fingerprint, json)),
+            resultCodec: codec);
+        var replayed = await writer.ExecuteAsync<CustomResult>(
+            new DesignOperationKey("custom-codec"), "test.op", new { Value = 1 }, ["test"],
+            (_, _) => throw new InvalidOperationException("replay must not restage"),
+            resultCodec: codec);
+
+        Assert.Equal(DesignAtomicWriteStatus.Committed, committed.Status);
+        Assert.Equal(DesignAtomicWriteStatus.Replayed, replayed.Status);
+        Assert.Equal(value, committed.Value);
+        Assert.Equal(value, replayed.Value);
+    }
+
+    [Fact]
     public async Task Ef_reconciles_a_commit_acknowledgement_failure_without_rerunning_stage()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
@@ -264,6 +296,20 @@ public sealed class EfWorkflowDesignPersistenceTests
     }
     private sealed class TestAccessor(PersistenceAccessContext current) : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current => current; }
     private sealed record ResultValue(string Value);
+    private enum CustomResultStatus { Ready }
+    private sealed record CustomResult(CustomResultStatus Status);
+    private sealed class CustomResultCodec(JsonSerializerOptions options) : IDesignAtomicWriteResultCodec<CustomResult>
+    {
+        public CustomResult Deserialize(string json) => JsonSerializer.Deserialize<CustomResult>(json, options)!;
+        public bool Equivalent(CustomResult left, CustomResult right) => left == right;
+    }
+
+    private static string GroundworkFingerprint(string operationKind, string json)
+    {
+        var identity = "elsa-design-material:v1";
+        var material = $"{identity.Length}:{identity}{operationKind.Length}:{operationKind}1:1{json.Length}:{json}";
+        return $"sha256:{Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(material)))}";
+    }
     private sealed class ProtocolScope : IDisposable { public bool Disposed { get; private set; } public void Dispose() => Disposed = true; }
     private sealed class ProtocolMarker { }
     private sealed record ProtocolStage(bool Accepted);

@@ -44,7 +44,8 @@ public sealed class EfDesignAtomicWriter(
             throw new ArgumentException("A design operation must declare at least one mutated unit.", nameof(mutatedUnits));
         if (timeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(reconciliationTimeout));
-        return ExecuteAttemptAsync(key, operationKind, request, stage, beforeAttempt, cancellationToken, 0);
+        resultCodec ??= new DefaultResultCodec<T>();
+        return ExecuteAttemptAsync(key, operationKind, request, stage, beforeAttempt, cancellationToken, resultCodec, 0);
     }
 
     private async Task<DesignAtomicWriteResult<T>> ExecuteAttemptAsync<T>(
@@ -54,6 +55,7 @@ public sealed class EfDesignAtomicWriter(
         Func<IDesignAtomicWriteContext, CancellationToken, Task<DesignAtomicWriteStage<T>>> stage,
         Func<CancellationToken, Task>? beforeAttempt,
         CancellationToken cancellationToken,
+        IDesignAtomicWriteResultCodec<T> resultCodec,
         int attempt)
     {
         ArgumentNullException.ThrowIfNull(key);
@@ -67,7 +69,7 @@ public sealed class EfDesignAtomicWriter(
             x => x.TenantId == tenantId && x.OperationKind == operationKind && x.OperationKey == key.Value,
             cancellationToken);
         if (existing is not null)
-            return ResolveExisting<T>(existing, operationKind, requestFingerprint, DesignAtomicWriteStatus.Replayed);
+            return ResolveExisting(existing, operationKind, requestFingerprint, DesignAtomicWriteStatus.Replayed, resultCodec);
         if (attempt == 0 && beforeAttempt is not null)
             await beforeAttempt(cancellationToken);
 
@@ -95,7 +97,7 @@ public sealed class EfDesignAtomicWriter(
         var resultFingerprint = staged.ResultFingerprint ?? EfDesignSupport.Fingerprint(operationKind + ".result", value);
         try
         {
-            ValidateAuthoritativeResult(staged, value, operationKind, resultJson, resultFingerprint);
+            ValidateAuthoritativeResult(staged, value, operationKind, resultJson, resultFingerprint, resultCodec);
         }
         catch
         {
@@ -124,7 +126,7 @@ public sealed class EfDesignAtomicWriter(
                 await transaction.DisposeAsync();
                 db.ChangeTracker.Clear();
                 return await ReconcileAfterCommitAsync<T>(
-                    tenantId, operationKind, key.Value, requestFingerprint, exception);
+                    tenantId, operationKind, key.Value, requestFingerprint, exception, resultCodec);
             }
             return new DesignAtomicWriteResult<T>(DesignAtomicWriteStatus.Committed, value, resultFingerprint, resultJson);
         }
@@ -136,7 +138,7 @@ public sealed class EfDesignAtomicWriter(
                 throw;
             await Task.Delay(TimeSpan.FromMilliseconds(25 * (attempt + 1)), cancellationToken);
             await transaction.DisposeAsync();
-            return await ExecuteAttemptAsync(key, operationKind, request, stage, beforeAttempt, cancellationToken, attempt + 1);
+            return await ExecuteAttemptAsync(key, operationKind, request, stage, beforeAttempt, cancellationToken, resultCodec, attempt + 1);
         }
         catch (DbUpdateException)
         {
@@ -146,7 +148,7 @@ public sealed class EfDesignAtomicWriter(
                 x => x.TenantId == tenantId && x.OperationKind == operationKind && x.OperationKey == key.Value,
                 cancellationToken);
             if (winner is not null)
-                return ResolveExisting<T>(winner, operationKind, requestFingerprint, DesignAtomicWriteStatus.Reconciled);
+                return ResolveExisting(winner, operationKind, requestFingerprint, DesignAtomicWriteStatus.Reconciled, resultCodec);
             throw;
         }
         catch
@@ -162,7 +164,8 @@ public sealed class EfDesignAtomicWriter(
         string operationKind,
         string operationKey,
         string requestFingerprint,
-        Exception commitException)
+        Exception commitException,
+        IDesignAtomicWriteResultCodec<T> resultCodec)
     {
         using var timeoutSource = new CancellationTokenSource(timeout);
         while (true)
@@ -174,7 +177,7 @@ public sealed class EfDesignAtomicWriter(
                     x => x.TenantId == tenantId && x.OperationKind == operationKind && x.OperationKey == operationKey,
                     timeoutSource.Token);
                 if (winner is not null)
-                    return ResolveExisting<T>(winner, operationKind, requestFingerprint, DesignAtomicWriteStatus.Reconciled);
+                    return ResolveExisting(winner, operationKind, requestFingerprint, DesignAtomicWriteStatus.Reconciled, resultCodec);
             }
             catch (Exception exception) when (exception is InvalidDataException or JsonException)
             {
@@ -203,13 +206,14 @@ public sealed class EfDesignAtomicWriter(
         DesignOperationEntity existing,
         string operationKind,
         string requestFingerprint,
-        DesignAtomicWriteStatus matchingStatus)
+        DesignAtomicWriteStatus matchingStatus,
+        IDesignAtomicWriteResultCodec<T> resultCodec)
     {
         if (!StringComparer.Ordinal.Equals(existing.RequestFingerprint, requestFingerprint))
             return new DesignAtomicWriteResult<T>(DesignAtomicWriteStatus.Conflict, default);
-        var value = EfDesignSupport.ReadJson<T>(existing.ResultJson);
-        var expectedResultFingerprint = EfDesignSupport.Fingerprint(operationKind + ".result", value);
-        if (!StringComparer.Ordinal.Equals(existing.ResultFingerprint, expectedResultFingerprint))
+        var value = DeserializeResult(resultCodec, existing.ResultJson);
+        if (!EfDesignSupport.IsResultFingerprintValid(operationKind + ".result", existing.ResultFingerprint, existing.ResultJson)
+            && !StringComparer.Ordinal.Equals(existing.ResultFingerprint, EfDesignSupport.Fingerprint(operationKind + ".result", value)))
             throw new InvalidDataException("The authoritative design-operation result fingerprint does not match its payload.");
         return new DesignAtomicWriteResult<T>(matchingStatus, value, existing.ResultFingerprint, existing.ResultJson);
     }
@@ -219,21 +223,45 @@ public sealed class EfDesignAtomicWriter(
         T value,
         string operationKind,
         string resultJson,
-        string resultFingerprint)
+        string resultFingerprint,
+        IDesignAtomicWriteResultCodec<T> resultCodec)
     {
         if ((staged.ResultFingerprint is null) != (staged.ResultJson is null))
             throw new InvalidDataException("An accepted design operation must provide both result fingerprint and result payload.");
-        var expectedJson = EfDesignSupport.Json(value);
-        var expectedFingerprint = EfDesignSupport.Fingerprint(operationKind + ".result", value);
-        if (!StringComparer.Ordinal.Equals(resultFingerprint, expectedFingerprint) || !JsonEquivalent(resultJson, expectedJson))
+        var suppliedValue = DeserializeResult(resultCodec, resultJson);
+        if (!EfDesignSupport.IsResultFingerprintValid(operationKind + ".result", resultFingerprint, resultJson)
+            && !StringComparer.Ordinal.Equals(resultFingerprint, EfDesignSupport.Fingerprint(operationKind + ".result", suppliedValue)))
+            throw new InvalidDataException("The accepted design-operation result fingerprint does not match its payload.");
+        if (!resultCodec.Equivalent(value, suppliedValue))
             throw new InvalidDataException("The accepted design-operation result must match its staged value.");
     }
 
-    private static bool JsonEquivalent(string left, string right)
+    private static T DeserializeResult<T>(IDesignAtomicWriteResultCodec<T> resultCodec, string json)
     {
-        using var leftDocument = JsonDocument.Parse(left);
-        using var rightDocument = JsonDocument.Parse(right);
-        return JsonElement.DeepEquals(leftDocument.RootElement, rightDocument.RootElement);
+        try
+        {
+            return resultCodec.Deserialize(json);
+        }
+        catch (InvalidDataException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException or NotSupportedException)
+        {
+            throw new InvalidDataException("The authoritative design-operation result could not be deserialized.", exception);
+        }
+    }
+
+    private sealed class DefaultResultCodec<T> : IDesignAtomicWriteResultCodec<T>
+    {
+        public T Deserialize(string json) => EfDesignSupport.ReadJson<T>(json);
+
+        public bool Equivalent(T left, T right)
+        {
+            using var leftDocument = JsonDocument.Parse(EfDesignSupport.Json(left));
+            using var rightDocument = JsonDocument.Parse(EfDesignSupport.Json(right));
+            return JsonElement.DeepEquals(leftDocument.RootElement, rightDocument.RootElement);
+        }
     }
 
     private sealed class EmptyContext : IDesignAtomicWriteContext
