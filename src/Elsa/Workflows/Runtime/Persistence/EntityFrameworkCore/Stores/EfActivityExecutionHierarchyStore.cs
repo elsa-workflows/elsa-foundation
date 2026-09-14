@@ -96,8 +96,6 @@ public sealed class EfActivityExecutionHierarchyStore(
             return null;
         }
         var rootRecord = ReadChecked(rootRow, scope, query.WorkflowExecutionId, query.RootActivityExecutionId);
-        if (!rootRow.IsScopeRoot)
-            throw new InvalidDataException("The requested activity execution is not a committed hierarchy scope root.");
         var fingerprint = SnapshotFingerprint(rootRecord);
         if (cursor is not null && !StringComparer.Ordinal.Equals(cursor.RootSnapshotFingerprint, fingerprint))
             throw ExpiredCursor("The committed hierarchy snapshot root is no longer available.");
@@ -142,7 +140,7 @@ public sealed class EfActivityExecutionHierarchyStore(
         foreach (var record in records)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            items.Add(await ProjectItemAsync(record, query.RootActivityExecutionId, rootRecord.ExecutionScopeId, scope, query.Include, watermark, cache, depths, cancellationToken));
+            items.Add(await ProjectItemAsync(record, query.RootActivityExecutionId, scope, query.Include, watermark, cache, depths, cancellationToken));
         }
         var last = records.LastOrDefault();
         var next = hasMore && last is not null
@@ -272,11 +270,11 @@ public sealed class EfActivityExecutionHierarchyStore(
         return records;
     }
 
-    private async ValueTask<ActivityExecutionHierarchyItem> ProjectItemAsync(ActivityExecutionHierarchyRecord record, string rootActivityExecutionId, string rootExecutionScopeId, string persistenceScope,
+    private async ValueTask<ActivityExecutionHierarchyItem> ProjectItemAsync(ActivityExecutionHierarchyRecord record, string rootActivityExecutionId, string persistenceScope,
         IReadOnlySet<ActivityExecutionHierarchyInclude> include, long watermark,
         IDictionary<string, ActivityExecutionHierarchyRecord> cache, IDictionary<string, int> depths, CancellationToken cancellationToken)
     {
-        var depth = await ResolveDepthAsync(record, rootActivityExecutionId, rootExecutionScopeId, persistenceScope, cache, depths, cancellationToken);
+        var depth = await ResolveDepthAsync(record, rootActivityExecutionId, persistenceScope, cache, depths, cancellationToken);
         var boundary = await BuildBoundary(record, watermark, ActivityExecutionEfSupport.RequireScope(accessContextAccessor), cancellationToken);
         return record.Item with
         {
@@ -289,7 +287,7 @@ public sealed class EfActivityExecutionHierarchyStore(
         };
     }
 
-    private async ValueTask<int> ResolveDepthAsync(ActivityExecutionHierarchyRecord record, string rootActivityExecutionId, string rootExecutionScopeId, string persistenceScope,
+    private async ValueTask<int> ResolveDepthAsync(ActivityExecutionHierarchyRecord record, string rootActivityExecutionId, string persistenceScope,
         IDictionary<string, ActivityExecutionHierarchyRecord> cache,
         IDictionary<string, int> depths, CancellationToken cancellationToken)
     {
@@ -301,7 +299,7 @@ public sealed class EfActivityExecutionHierarchyStore(
         var baseDepth = 0;
         while (true)
         {
-            if (!StringComparer.Ordinal.Equals(current.ExecutionScopeId, rootExecutionScopeId))
+            if (!StringComparer.Ordinal.Equals(current.ExecutionScopeId, rootActivityExecutionId))
                 throw new InvalidDataException("Committed activity execution hierarchy contains an ancestor from another execution scope.");
             if (!seen.Add(current.ActivityExecutionId))
                 throw new InvalidDataException("Committed activity execution hierarchy contains a parent cycle.");
@@ -328,7 +326,7 @@ public sealed class EfActivityExecutionHierarchyStore(
                 parent = ReadChecked(parentRow, persistenceScope, current.WorkflowExecutionId, parentId);
                 cache[parentId] = parent;
             }
-            if (!StringComparer.Ordinal.Equals(parent.ExecutionScopeId, rootExecutionScopeId))
+            if (!StringComparer.Ordinal.Equals(parent.ExecutionScopeId, rootActivityExecutionId))
                 throw new InvalidDataException("Committed activity execution hierarchy contains an ancestor from another execution scope.");
             current = parent;
         }

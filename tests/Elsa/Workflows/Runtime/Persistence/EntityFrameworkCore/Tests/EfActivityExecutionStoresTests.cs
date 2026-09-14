@@ -249,6 +249,29 @@ public sealed class EfActivityExecutionStoresTests
     }
 
     [Fact]
+    public async Task Hierarchy_store_expands_a_nested_boundary_through_its_own_execution_scope()
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-nested", "outer", 1, "outer", null, true));
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-nested", "nested", 2, "outer", "outer", true));
+        await fixture.Hierarchy.SaveAsync(HierarchyProjection("wf-nested", "nested-child", 3, "nested", "nested"));
+
+        var outerPage = await fixture.Hierarchy.ReadPageAsync(new ActivityExecutionHierarchyQuery(
+            "wf-nested", "outer", null, 100, new HashSet<ActivityExecutionHierarchyInclude>(), "profile", "tenant:tenant-a"));
+        var nestedBoundary = Assert.Single(outerPage!.Items);
+        Assert.Equal("nested", nestedBoundary.ActivityExecutionId);
+        Assert.NotNull(nestedBoundary.Boundary);
+        Assert.Equal(1, nestedBoundary.Boundary!.CommittedDescendantCount);
+        Assert.DoesNotContain(outerPage.Items, item => item.ActivityExecutionId == "nested-child");
+
+        var nestedPage = await fixture.Hierarchy.ReadPageAsync(new ActivityExecutionHierarchyQuery(
+            "wf-nested", "nested", null, 100, new HashSet<ActivityExecutionHierarchyInclude>(), "profile", "tenant:tenant-a"));
+        var nestedChild = Assert.Single(nestedPage!.Items);
+        Assert.Equal("nested-child", nestedChild.ActivityExecutionId);
+        Assert.Equal(1, nestedChild.RelativeDepth);
+    }
+
+    [Fact]
     public async Task Hierarchy_store_continues_equal_sequence_boundaries_and_attempts_by_activity_id()
     {
         await using var fixture = await Fixture.CreateAsync("tenant-a");
