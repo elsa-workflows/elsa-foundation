@@ -162,10 +162,10 @@ public sealed class EfBookmarkStateStore(
     public ValueTask<RuntimeStorePage<BookmarkState>> ListPageAsync(BookmarkStatePageQuery query, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         ValidateBound(query.WorkflowExecutionId, BookmarkStateEfModule.WorkflowIdentityMaximumLength, nameof(query.WorkflowExecutionId));
         var cursor = DecodeCursor(query.ContinuationToken, CursorKind.Workflow, scope, query.WorkflowExecutionId);
-        cancellationToken.ThrowIfCancellationRequested();
         return ReadPage(
             context.Bookmarks.AsNoTracking()
                 .Where(row => row.ScopeKeyHash == Hash(scope) && row.WorkflowExecutionIdHash == Hash(query.WorkflowExecutionId) &&
@@ -182,13 +182,13 @@ public sealed class EfBookmarkStateStore(
     public ValueTask<RuntimeStorePage<BookmarkState>> ListByStimulusPageAsync(BookmarkStimulusPageQuery query, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         ValidateBound(query.StimulusType, BookmarkStateEfModule.StimulusTypeMaximumLength, nameof(query.StimulusType));
         ValidateBound(query.StimulusHash, BookmarkStateEfModule.StimulusHashMaximumLength, nameof(query.StimulusHash));
         var lookup = StimulusLookupKey(query.StimulusType, query.StimulusHash);
         var binding = StimulusBinding(query.StimulusType, query.StimulusHash);
         var cursor = DecodeCursor(query.ContinuationToken, CursorKind.Stimulus, scope, binding);
-        cancellationToken.ThrowIfCancellationRequested();
         return ReadPage(
             context.Bookmarks.AsNoTracking()
                 .Where(row => row.ScopeKeyHash == Hash(scope) && row.StimulusLookupKey == lookup &&
@@ -207,11 +207,11 @@ public sealed class EfBookmarkStateStore(
     public ValueTask<RuntimeStorePage<BookmarkState>> ListByStimulusTypePageAsync(BookmarkStimulusTypePageQuery query, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
+        cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
         ValidateBound(query.StimulusType, BookmarkStateEfModule.StimulusTypeMaximumLength, nameof(query.StimulusType));
         var lookup = StimulusTypeLookupKey(query.StimulusType);
         var cursor = DecodeCursor(query.ContinuationToken, CursorKind.StimulusType, scope, query.StimulusType);
-        cancellationToken.ThrowIfCancellationRequested();
         return ReadPage(
             context.Bookmarks.AsNoTracking()
                 .Where(row => row.ScopeKeyHash == Hash(scope) && row.StimulusTypeLookupKey == lookup &&

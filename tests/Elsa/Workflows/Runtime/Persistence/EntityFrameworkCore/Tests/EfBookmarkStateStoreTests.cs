@@ -204,6 +204,29 @@ public sealed class EfBookmarkStateStoreTests
     }
 
     [Fact]
+    public async Task Paging_observes_cancellation_before_scope_and_continuation_validation()
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            fixture.Store.ListPageAsync(new BookmarkStatePageQuery("wf", 1, "not-base64"), cancelled.Token).AsTask());
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            fixture.Store.ListByStimulusPageAsync(new BookmarkStimulusPageQuery("Event", "hash", 1, "not-base64"), cancelled.Token).AsTask());
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            fixture.Store.ListByStimulusTypePageAsync(new BookmarkStimulusTypePageQuery("Event", 1, "not-base64"), cancelled.Token).AsTask());
+
+        var globalStore = new EfBookmarkStateStore(fixture.Context, new Accessor(PersistenceAccessContext.Global));
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            globalStore.ListPageAsync(new BookmarkStatePageQuery("wf"), cancelled.Token).AsTask());
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            globalStore.ListByStimulusPageAsync(new BookmarkStimulusPageQuery("Event", "hash"), cancelled.Token).AsTask());
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            globalStore.ListByStimulusTypePageAsync(new BookmarkStimulusTypePageQuery("Event"), cancelled.Token).AsTask());
+    }
+
+    [Fact]
     public async Task Rejects_privileged_scoped_access_before_database_access()
     {
         await using var fixture = await Fixture.CreateAsync("tenant-a");

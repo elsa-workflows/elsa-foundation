@@ -83,6 +83,29 @@ public sealed class RuntimeBookmarkEfRegistrationInteropTests
     }
 
     [Fact]
+    public void Groundwork_then_ef_refuses_a_replaced_concrete_backend_without_removing_it()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddGroundworkV2RuntimeStores();
+        var ownedImplementation = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(GroundworkV2BookmarkStateStore));
+        services.Remove(ownedImplementation);
+        var hostOwnedImplementation = ServiceDescriptor.Scoped<GroundworkV2BookmarkStateStore>(_ =>
+            throw new NotSupportedException());
+        ((IServiceCollection)services).Add(hostOwnedImplementation);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            services.AddRuntimeBookmarksEntityFrameworkCore(EfOptions));
+
+        Assert.Equal(BookmarkStateStoreBackend.Groundwork, BookmarkStateStoreBackend.Find(services)!.Name);
+        Assert.Contains(services, descriptor => ReferenceEquals(descriptor, hostOwnedImplementation));
+        Assert.DoesNotContain(services, descriptor => ReferenceEquals(descriptor, ownedImplementation));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(EfBookmarkStateStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStateStore));
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStimulusIndex));
+    }
+
+    [Fact]
     public void Ef_then_groundwork_withdraws_only_the_ef_bookmark_backend()
     {
         var services = new ServiceCollection();
