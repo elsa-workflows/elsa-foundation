@@ -134,6 +134,38 @@ public sealed class EfWorkflowExecutionStateStoreTests
     }
 
     [Fact]
+    public async Task Workflow_execution_ids_with_distinct_lone_surrogates_do_not_collide()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var first = State("\uD800", "tenant-a", DateTimeOffset.UtcNow);
+        var second = State("\uD801", "tenant-a", DateTimeOffset.UtcNow.AddMinutes(1));
+
+        await fixture.Store.SaveAsync(first);
+        await fixture.Store.SaveAsync(second);
+
+        Assert.Equal(first.WorkflowExecutionId, (await fixture.Store.FindAsync(first.WorkflowExecutionId))!.WorkflowExecutionId);
+        Assert.Equal(second.WorkflowExecutionId, (await fixture.Store.FindAsync(second.WorkflowExecutionId))!.WorkflowExecutionId);
+        Assert.Equal(2, await fixture.Context.WorkflowExecutionStates.CountAsync());
+    }
+
+    [Fact]
+    public async Task History_cursor_round_trips_lone_surrogate_execution_ids()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var timestamp = DateTimeOffset.UtcNow;
+        await fixture.Store.SaveAsync(State("\uD800", "tenant-a", timestamp));
+        await fixture.Store.SaveAsync(State("\uD801", "tenant-a", timestamp));
+
+        var first = await fixture.Store.QueryPageAsync(new WorkflowExecutionStatePageQuery(1));
+        var second = await fixture.Store.QueryPageAsync(new WorkflowExecutionStatePageQuery(1, Cursor: first.NextCursor));
+
+        Assert.Equal("\uD800", first.Items[0].WorkflowExecutionId);
+        Assert.Equal("\uD801", second.Items[0].WorkflowExecutionId);
+    }
+
+    [Fact]
     public async Task History_and_alteration_capture_pages_reject_sizes_above_the_provider_bound()
     {
         await using var database = await Database.CreateAsync();
@@ -184,15 +216,18 @@ public sealed class EfWorkflowExecutionStateStoreTests
     {
         await using var database = await Database.CreateAsync();
         await using var fixture = database.Open("tenant-a");
-        var authority = new WorkflowExecutionAuthoritySnapshot("system", "root", new Dictionary<string, string> { ["region"] = "eu" });
+        var authorityMetadata = new Dictionary<string, string> { ["region"] = "eu\uD800" };
+        var authority = new WorkflowExecutionAuthoritySnapshot("system", "root", authorityMetadata);
         await fixture.Store.SaveAsync(State("a", "tenant-a", DateTimeOffset.UtcNow) with { Authority = authority });
         await fixture.Store.SaveAsync(State("b", "tenant-a", DateTimeOffset.UtcNow) with { Authority = authority });
-        var query = new WorkflowExecutionAlterationCaptureQuery("tenant-a", "system", "root", new Dictionary<string, string> { ["region"] = "eu" }, new WorkflowAlterationQuerySelector(matchAllAuthorized: true), 1);
+        var query = new WorkflowExecutionAlterationCaptureQuery("tenant-a", "system", "root", authorityMetadata, new WorkflowAlterationQuerySelector(matchAllAuthorized: true), 1);
         var first = await fixture.Store.QueryAlterationCapturePageAsync(query);
         await fixture.Store.SaveAsync(State("a", "tenant-a", DateTimeOffset.UtcNow.AddMinutes(2)) with { Authority = authority });
-        var second = await fixture.Store.QueryAlterationCapturePageAsync(new WorkflowExecutionAlterationCaptureQuery("tenant-a", "system", "root", new Dictionary<string, string> { ["region"] = "eu" }, new WorkflowAlterationQuerySelector(matchAllAuthorized: true), 1, first.NextCursor));
+        var second = await fixture.Store.QueryAlterationCapturePageAsync(new WorkflowExecutionAlterationCaptureQuery("tenant-a", "system", "root", authorityMetadata, new WorkflowAlterationQuerySelector(matchAllAuthorized: true), 1, first.NextCursor));
         Assert.Equal("a", first.Items[0].WorkflowExecutionId);
         Assert.Equal("b", second.Items[0].WorkflowExecutionId);
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.QueryAlterationCapturePageAsync(new WorkflowExecutionAlterationCaptureQuery("tenant-a", "system", "root", new Dictionary<string, string> { ["region"] = "us\uD800" }, new WorkflowAlterationQuerySelector(matchAllAuthorized: true), 1, first.NextCursor)).AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.QueryAlterationCapturePageAsync(new WorkflowExecutionAlterationCaptureQuery("tenant-a", "system", "root", authorityMetadata, new WorkflowAlterationQuerySelector(definitionId: "definition", matchAllAuthorized: true), 1, first.NextCursor)).AsTask());
     }
 
     [Fact]

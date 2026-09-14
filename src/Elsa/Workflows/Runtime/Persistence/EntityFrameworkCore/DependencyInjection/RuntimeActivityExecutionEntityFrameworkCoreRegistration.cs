@@ -216,7 +216,8 @@ public static class RuntimeActivityExecutionEntityFrameworkCoreRegistration
             throw new InvalidOperationException("Runtime activity execution EF persistence no longer exclusively owns its infrastructure registrations.");
         foreach (var descriptor in ownedInfrastructure.Where(descriptor =>
                      BookmarkStateStoreBackend.Find(services)?.Owns(descriptor) != true &&
-                     RuntimeArtifactStoreBackend.Find(services)?.Owns(descriptor) != true))
+                     RuntimeArtifactStoreBackend.Find(services)?.Owns(descriptor) != true &&
+                     WorkflowExecutionStateStoreBackend.Find(services)?.Owns(descriptor) != true))
             services.Remove(descriptor);
     }
 }

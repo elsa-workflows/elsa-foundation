@@ -554,6 +554,38 @@ public sealed class EfActivityExecutionStoresTests
     }
 
     [Fact]
+    public void Activity_execution_withdrawal_preserves_workflow_execution_shared_context()
+    {
+        const string connectionString = "Data Source=shared-runtime-workflow.db";
+        var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
+        services.AddRuntimeWorkflowExecutionEntityFrameworkCore(new RuntimeWorkflowExecutionEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = connectionString,
+            RecoveryContinuationSigningKey = "ef-runtime-workflow-withdrawal-signing-key-32-bytes"
+        });
+        services.AddRuntimeActivityExecutionEntityFrameworkCore(new RuntimeActivityExecutionEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite",
+            ConnectionString = connectionString,
+            HierarchyCursorSigningKey = "ef-runtime-activity-withdrawal-hierarchy-key-32-bytes",
+            RecoveryContinuationSigningKey = "ef-runtime-activity-withdrawal-signing-key-32-bytes"
+        });
+
+        var activityBackend = Assert.IsType<RuntimeActivityExecutionStoreBackend>(RuntimeActivityExecutionStoreBackend.Find(services));
+        activityBackend.RemoveOwnedArtifacts(services);
+
+        Assert.Equal(WorkflowExecutionStateStoreBackend.EntityFramework, WorkflowExecutionStateStoreBackend.Find(services)!.Name);
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateDbContext));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(BookmarkStateSqliteDbContext));
+        using var provider = services.BuildServiceProvider(validateScopes: true);
+        using var scope = provider.CreateScope();
+        Assert.IsType<EfWorkflowExecutionStateStore>(scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
+        Assert.IsType<BookmarkStateSqliteDbContext>(scope.ServiceProvider.GetRequiredService<BookmarkStateDbContext>());
+    }
+
+    [Fact]
     public void Activity_execution_ef_owns_only_ef_surfaces_in_every_registration_order()
     {
         var orders = new Action<ServiceCollection>[]
